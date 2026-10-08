@@ -233,6 +233,7 @@ dependencies = [
  "dartr_link",
  "dartr_parser",
  "dartr_project",
+ "dartr_server",
  "dartr_syntax",
  "dartr_typesystem",
  "indexmap",
@@ -371,6 +372,20 @@ dependencies = [
  "fancy-regex",
  "pretty_assertions",
  "saphyr-parser",
+ "serde_json",
+]
+
+[[package]]
+name = "dartr_server"
+version = "0.1.0"
+dependencies = [
+ "dartr_ast",
+ "dartr_ast_builder",
+ "dartr_diagnostics",
+ "dartr_project",
+ "dartr_syntax",
+ "pretty_assertions",
+ "rayon",
  "serde_json",
 ]
 
