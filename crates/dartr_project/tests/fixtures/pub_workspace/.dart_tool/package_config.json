@@ -1,0 +1,10 @@
+{
+  "configVersion": 2,
+  "packages": [
+    {"name": "a", "rootUri": "../pkgs/a", "packageUri": "lib/", "languageVersion": "3.6"},
+    {"name": "b", "rootUri": "../pkgs/b", "packageUri": "lib/", "languageVersion": "3.7"},
+    {"name": "lints", "rootUri": "../../shared/lints", "packageUri": "lib/", "languageVersion": "3.0"},
+    {"name": "flutter_lints", "rootUri": "../../shared/flutter_lints", "packageUri": "lib/", "languageVersion": "3.0"}
+  ],
+  "generator": "pub"
+}

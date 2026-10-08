@@ -1,0 +1,13 @@
+include:
+  - options/base.yaml
+  - options/missing.yaml
+  - options/malformed.yaml
+  - dart:core
+  - ""
+analyzer:
+  exclude: [lib/excluded/**]
+  errors:
+    base_code: error
+linter:
+  rules:
+    - prefer_const_constructors

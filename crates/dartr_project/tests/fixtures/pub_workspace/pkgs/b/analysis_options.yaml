@@ -1,0 +1,20 @@
+include:
+  - package:flutter_lints/flutter.yaml
+  - package:missing/options.yaml
+analyzer:
+  plugins:
+    legacy_plugin_two:
+      enabled: true
+plugins:
+  my_plugin: ^1.0.0
+  local_plugin:
+    path: ../../tools/plugin
+    diagnostics:
+      rule_a: true
+      rule_b: false
+  git_plugin:
+    git:
+      url: https://example.com/x.git
+      ref: main
+  dependency_overrides:
+    dep: ^2.0.0

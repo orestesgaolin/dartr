@@ -1,0 +1,7 @@
+include: package:lints/core.yaml
+
+linter:
+  rules:
+    - annotate_overrides
+    - avoid_init_to_null
+    - prefer_final_fields

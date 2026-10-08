@@ -3,5 +3,16 @@ name = "dartr_project"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Project model of dartr: context discovery, workspaces, package_config.json, analysis_options.yaml, SDK location."
 
 [dependencies]
+saphyr-parser = "0.1.0"
+fancy-regex = "0.19.2"
+serde_json.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+
+[[bin]]
+name = "dartr-contexts"
+path = "src/bin/dartr_contexts.rs"

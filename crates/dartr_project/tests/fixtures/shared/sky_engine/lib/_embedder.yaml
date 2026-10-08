@@ -1,0 +1,4 @@
+embedded_libs:
+  "dart:core": "core/core.dart"
+  "dart:ui": "ui/ui.dart"
+  "not_dart:x": "x.dart"

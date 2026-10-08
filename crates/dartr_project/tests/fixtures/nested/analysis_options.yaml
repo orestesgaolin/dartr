@@ -1,0 +1,44 @@
+include: package:lints/recommended.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - "**/*.g.dart"
+    - lib/generated/*.dart
+  errors:
+    unused_import: warning
+    todo: ignore
+    dead_code: false
+    missing_return: error
+    invalid_assignment: info
+    unknown_value: maybe
+    deprecated_member_use: true
+  language:
+    strict-casts: true
+    strict-inference: false
+    strict-raw-types: "TRUE"
+  enable-experiment:
+    - macros
+    - no-variance
+    - not-an-experiment
+  cannot-ignore:
+    - unused_import
+    - Dead_Code
+  optional-checks:
+    chrome-os-manifest-checks: true
+
+formatter:
+  page_width: 100
+  trailing_commas: preserve
+
+code-style:
+  format: true
+
+linter:
+  rules:
+    avoid_init_to_null: false
+    always_declare_return_types: true
+    prefer_single_quotes: error
+    style:
+      camel_case_types: true
+      avoid_print: ignore

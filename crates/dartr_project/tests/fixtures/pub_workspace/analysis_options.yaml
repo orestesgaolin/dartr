@@ -1,0 +1,4 @@
+include: package:lints/core.yaml
+analyzer:
+  plugins:
+    - legacy_plugin_one
