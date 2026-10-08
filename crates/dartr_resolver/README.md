@@ -242,7 +242,25 @@ The diagnostic checks (`check_for_yield_of_invalid_type`,
   the resolver for top-level inference and constant initializers (C10,
   design §1 order). C10 can call the resolver from `dartr_link` directly,
   or through a hook the driver passes, whichever keeps the crates acyclic.
-- Patterns, switch statements and expressions, if-case and pattern
-  declarations are stubs (`pattern_resolver.rs`, `resolver/patterns.rs`).
+- Patterns, switch statements and expressions, if-case statements, pattern
+  variable declarations and pattern assignments are ported
+  (`pattern_resolver.rs`, `resolver/patterns.rs`,
+  `list_pattern_resolver.rs`). They read from the binding passes:
+  `declared_fragment` of each `DeclaredVariablePattern` (a
+  `BindPatternVariable` element; its fragment has `pattern.node` and
+  `pattern.join`), the join variables (`JoinPatternVariable`, with
+  `pattern.variables`, `inconsistency`, `references`), `element` of each
+  `AssignedVariablePattern`, `annotation_type` of type annotations and
+  `element` of `NamedType`s, and the tables
+  `ResolverTables::guarded_pattern_variables` (Dart
+  `GuardedPatternImpl.variables`) and `ResolverTables::switch_group_variables`
+  (Dart `SwitchStatementCaseGroup.variables`, keyed by the last member of
+  the group). When the two tables are not written, the pattern resolver
+  computes them from the bound variables. If-case collection elements and
+  pattern for-in loops (`typed_literal_resolver.rs`, `for_resolver.rs`) can
+  use `pattern_resolver::guarded_pattern_variables`.
+- `checkPatternNeverMatchesValueType` needs `TypeSystem.canBeSubtypeOf`
+  (not ported in `dartr_typesystem`): `pattern_never_matches_value_type` is
+  not reported yet.
 - The library-wide steps of the library analyzer (constants, verifiers,
   imports, ignore comments) are wave D.
