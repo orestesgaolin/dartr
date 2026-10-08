@@ -139,6 +139,11 @@ pub struct TypeResolution {
     pub pending_bounds: IndexMap<EId<TypeParameterElement>, LType>,
     /// `TypeParameterElementImpl.defaultType` set before it is built.
     pub pending_defaults: IndexMap<EId<TypeParameterElement>, LType>,
+    /// The `boundNode.type = dynamic` of `_breakSelfCycles` and
+    /// `_breakRawTypeCycles`: Dart overwrites `node.type`, and the builder
+    /// sets it again when it is built, so it affects only the default
+    /// types.
+    pub bound_overrides: IndexMap<NodeKey, LType>,
 }
 
 /// The AST of a unit of the cycle.
@@ -180,6 +185,14 @@ impl TypeResolution {
             },
             t => t,
         })
+    }
+
+    /// `node.type` as `DefaultTypesBuilder` reads it.
+    fn default_node_type(&self, key: NodeKey) -> Option<LType> {
+        match self.bound_overrides.get(&key) {
+            Some(&t) => Some(t),
+            None => self.node_type(key),
+        }
     }
 
     /// The bound of [p] (pending or set).
@@ -1300,7 +1313,7 @@ impl TypeResolution {
                 }
             }
             if current.is_some() {
-                self.node_types.insert((lib, unit, bound.raw()), LType::Built(TypeId::DYNAMIC));
+                self.bound_overrides.insert((lib, unit, bound.raw()), LType::Built(TypeId::DYNAMIC));
             }
         }
     }
@@ -1319,7 +1332,7 @@ impl TypeResolution {
         let mut all_cycles: Vec<Vec<NodeKey>> = Vec::new();
         for &parameter in ast.list(ast.get(list).type_parameters) {
             let Some(bound) = ast.get(parameter).bound else { continue };
-            let Some(t) = self.node_type((lib, unit, bound.raw())) else { continue };
+            let Some(t) = self.default_node_type((lib, unit, bound.raw())) else { continue };
             let mut visited = IndexSet::new();
             let cycles = self.find_raw_type_paths(lk, ctx, (lib, unit, parameter.raw()), t, declaration, &mut visited);
             all_cycles.extend(cycles);
@@ -1329,7 +1342,7 @@ impl TypeResolution {
                 let ast = unit_ast(lk, parameter.0, parameter.1);
                 let p = ast.cast::<TypeParameter>(parameter.2).unwrap();
                 if let Some(bound) = ast.get(p).bound {
-                    self.node_types
+                    self.bound_overrides
                         .insert((parameter.0, parameter.1, bound.raw()), LType::Built(TypeId::DYNAMIC));
                 }
             }
@@ -1377,7 +1390,7 @@ impl TypeResolution {
                             let ast = unit_ast(lk, l as u32, u as u32);
                             let Some(p) = ast.cast::<TypeParameter>(node) else { continue };
                             let Some(bound) = ast.get(p).bound else { continue };
-                            let Some(bt) = self.node_type((l as u32, u as u32, bound.raw())) else {
+                            let Some(bt) = self.default_node_type((l as u32, u as u32, bound.raw())) else {
                                 continue;
                             };
                             let tails = self.find_raw_type_paths(lk, ctx, (l as u32, u as u32, node), bt, end, visited);
@@ -1430,7 +1443,7 @@ impl TypeResolution {
             let bound = ast
                 .get(node)
                 .bound
-                .and_then(|b| self.node_type((lib, unit, b.raw())))
+                .and_then(|b| self.default_node_type((lib, unit, b.raw())))
                 .unwrap_or(LType::Built(TypeId::DYNAMIC));
             bounds.push(bound);
         }

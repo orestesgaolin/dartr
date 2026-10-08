@@ -188,6 +188,8 @@ pub fn link_cycle(
         LibraryBuilder::collect_mixin_super_invoked_names(&mut linker, index);
     }
     set_library_and_enclosing(&mut linker.core.store);
+    // _detachNodes
+    crate::detach_nodes::detach_nodes(&mut linker.core);
 
     let Linker { core, builders, .. } = linker;
     let LinkerCore {

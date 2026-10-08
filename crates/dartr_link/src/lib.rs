@@ -13,6 +13,7 @@
 //! - [`dump`]: the `elements` dump (`tools/oracle/bin/elements.dart`).
 
 pub mod ast_util;
+pub mod detach_nodes;
 pub mod dump;
 pub mod element_builder;
 pub mod export;
