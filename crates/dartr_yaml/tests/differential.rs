@@ -133,8 +133,25 @@ fn oracle_dumps(cases: &[(&str, bool)]) -> Vec<Value> {
             PathBuf::from(&packages).display()
         )
     });
+    let config: Value = serde_json::from_str(&package_config).expect("parse oracle package_config");
+    let root_uri = config["packages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|package| package["name"] == "yaml")
+        .and_then(|package| package["rootUri"].as_str())
+        .expect("package:yaml rootUri");
+    let yaml_root = if let Some(path) = root_uri.strip_prefix("file://") {
+        PathBuf::from(path)
+    } else {
+        PathBuf::from(&packages).parent().unwrap().join(root_uri)
+    };
+    let yaml_pubspec = std::fs::read_to_string(yaml_root.join("pubspec.yaml"))
+        .expect("read package:yaml pubspec.yaml");
     assert!(
-        package_config.contains("yaml-3.1.4"),
+        yaml_pubspec
+            .lines()
+            .any(|line| line.trim() == "version: 3.1.4"),
         "YAML oracle must resolve package:yaml 3.1.4"
     );
     let version = Command::new(&dart)
@@ -335,6 +352,12 @@ fn package_yaml_3_1_4_parity() {
         ("!<foo%E0%80%80> value\n", false),
         ("!<foo%ED%A0%80> value\n", false),
         ("!<foo%F4%90%80%80> value\n", false),
+        ("!<%EF%BB%BFfoo> value\n", false),
+        ("!<prefix%EF%BB%BF> value\n", false),
+        ("%TAG !x! %EF%BB%BFtag:\n--- !x!foo value\n", false),
+        ("%TAG !x! prefix%EF%BB%BF\n--- !x!foo value\n", false),
+        ("!<prefix%C0%80> value\n", false),
+        ("!<prefix%C3> value\n", false),
         ("%YAML 999999999999999999999999999999.2\n---\nx\n", false),
         ("%UNKNOWN value\rone: two\r", false),
         ("one: two\rone: three\r", false),
@@ -493,4 +516,34 @@ fn fvm_and_pub_cache_corpus_parity() {
         paths.len(),
         cases.len()
     );
+}
+
+#[test]
+fn error_listener_matches_package_yaml() {
+    let cases = [
+        ("dependencies:\n  one: any\n  two\n  three:\n  four\n", true),
+        ("one: any\ntwo\nthree: *missing\n", true),
+        ("a: [", true),
+        ("[1, 2]", true),
+    ];
+    let expected = oracle_dumps(&cases);
+    for ((text, _), expected) in cases.iter().zip(expected) {
+        let mut errors = Vec::new();
+        let result = dartr_yaml::load_yaml_node_with_listener(text, &mut |e: &YamlException| {
+            errors.push(e.clone());
+        });
+        let loaded = match result {
+            Ok(node) => Some(node),
+            Err(fatal) => {
+                errors.push(fatal);
+                None
+            }
+        };
+        let actual = json!({
+            "node": loaded.as_ref().map(node),
+            "errors": errors.iter().map(error).collect::<Vec<_>>(),
+        });
+        assert_eq!(actual, expected, "listener parity input: {text:?}");
+    }
+    eprintln!("error listener parity: {0}/{0} comparisons", cases.len());
 }

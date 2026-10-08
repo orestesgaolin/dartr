@@ -1355,7 +1355,13 @@ fn decode_percent(raw: &str) -> Result<String, String> {
         }
     }
     validate_utf8(&out)?;
-    Ok(String::from_utf8(out).expect("validated UTF-8"))
+    let decoded = String::from_utf8(out).expect("validated UTF-8");
+    // dart:convert's UTF-8 decoder strips a BOM only when it is the first
+    // decoded code point. A BOM later in the URI remains part of the value.
+    Ok(decoded
+        .strip_prefix('\u{feff}')
+        .unwrap_or(&decoded)
+        .to_string())
 }
 
 fn validate_utf8(bytes: &[u8]) -> Result<(), String> {

@@ -5,7 +5,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use dartr_yaml::{YamlWarning, load_yaml_node_with_options};
+use dartr_yaml::{YamlWarning, load_yaml_node_with_warning_callback};
 use serde_json::{Value, json};
 
 fn location(location: &dartr_yaml::SourceLocation) -> Value {
@@ -22,7 +22,13 @@ fn warning(warning: &YamlWarning) -> Value {
 }
 
 fn rust_result(text: &str, recover: bool) -> Value {
-    let result = load_yaml_node_with_options(text, recover);
+    let mut warnings = Vec::new();
+    let result = load_yaml_node_with_warning_callback(text, recover, &mut |message, span| {
+        warnings.push(YamlWarning {
+            message: message.to_owned(),
+            span,
+        });
+    });
     let fatal = result
         .node
         .is_none()
@@ -30,7 +36,7 @@ fn rust_result(text: &str, recover: bool) -> Value {
         .flatten();
     let recovered_errors = result.errors.len() - usize::from(fatal.is_some());
     json!({
-        "warnings": result.warnings.iter().map(warning).collect::<Vec<_>>(),
+        "warnings": warnings.iter().map(warning).collect::<Vec<_>>(),
         "recoveredErrors": recovered_errors,
         "fatal": fatal,
     })
@@ -92,4 +98,5 @@ fn warnings_match_package_yaml() {
             "warning parity case {index}, recover={recover}, input={text:?}"
         );
     }
+    eprintln!("warning callback parity: {0}/{0} comparisons", cases.len());
 }
