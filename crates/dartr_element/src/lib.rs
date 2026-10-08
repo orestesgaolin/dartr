@@ -24,6 +24,8 @@
 //! - [`resolution`]: the [`ResolutionTables`].
 //! - [`diagnostics`]: type and element arguments for
 //!   `dartr_diagnostics::DiagnosticReporter`.
+//! - [`display_string`]: display strings of types and elements
+//!   (`getDisplayString`, `displayString`).
 //!
 //! # Regenerating
 //!
@@ -41,6 +43,7 @@
 pub mod ctx;
 pub mod data;
 pub mod diagnostics;
+pub mod display_string;
 pub mod element;
 pub mod fragment;
 pub mod ids;
@@ -64,6 +67,10 @@ pub use ctx::{
     Ctx, FeatureSet, Generation, LocalArena, NoopSink, Requirement, RequirementSink, WorldSnapshot,
 };
 pub use data::*;
+pub use display_string::{
+    DisplayOptions, element_display_string_with, type_display_string_with,
+    type_parameter_display_string,
+};
 pub use element::*;
 pub use flags::{ElementFlags, FragmentFlags};
 pub use fragment::*;
