@@ -11,6 +11,12 @@
 //! `dartr_element::display_string`, because diagnostics in `dartr_element`
 //! need them and they need no type algorithm.
 //!
+//! Type inference (unit A6): [`type_constraint_gatherer`] (the analyzer's
+//! `TypeConstraintGatherer` over the shared constraint generation of
+//! `dartr_type_analyzer`), [`generic_inferrer`] (`GenericInferrer`) and
+//! [`type_system_operations`] (`TypeSystemOperations`, the analyzer's
+//! implementation of the shared operations traits of `dartr_flow`).
+//!
 //! [`test_support`] is a port of the analyzer test helpers
 //! (`test_library_builder.dart`, `mock_sdk_elements.dart`,
 //! `type_system_base.dart`): it builds the mock SDK and test libraries from
@@ -19,6 +25,7 @@
 pub mod class_hierarchy;
 pub mod element_type;
 pub mod equality;
+pub mod generic_inferrer;
 pub mod greatest_lower_bound;
 pub mod least_greatest_closure;
 pub mod least_upper_bound;
@@ -30,10 +37,13 @@ pub mod subtype;
 pub mod test_support;
 pub mod top_merge;
 pub mod type_algebra;
+pub mod type_constraint_gatherer;
+pub mod type_demotion;
 pub mod type_ext;
 pub mod type_schema;
 pub mod type_schema_elimination;
 pub mod type_system;
+pub mod type_system_operations;
 pub mod type_visitor;
 
 pub use type_algebra::{FreshTypeParameters, MapSubstitution, Substitution};
