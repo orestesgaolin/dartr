@@ -100,10 +100,17 @@ impl MapSubstitution {
     }
 
     /// `Substitution.fromPairs2(parameters, types)`.
-    pub fn from_pairs(parameters: &[EId<TypeParameterElement>], types: &[TypeId]) -> MapSubstitution {
+    pub fn from_pairs(
+        parameters: &[EId<TypeParameterElement>],
+        types: &[TypeId],
+    ) -> MapSubstitution {
         assert_eq!(parameters.len(), types.len());
         MapSubstitution {
-            map: parameters.iter().copied().zip(types.iter().copied()).collect(),
+            map: parameters
+                .iter()
+                .copied()
+                .zip(types.iter().copied())
+                .collect(),
         }
     }
 
@@ -149,13 +156,21 @@ impl MapSubstitution {
     }
 
     /// `substituteType(type, contravariant: contravariant)`.
-    pub fn substitute_type_contravariant(&self, ctx: &Ctx<'_>, t: TypeId, contravariant: bool) -> TypeId {
+    pub fn substitute_type_contravariant(
+        &self,
+        ctx: &Ctx<'_>,
+        t: TypeId,
+        contravariant: bool,
+    ) -> TypeId {
         substitute_type(ctx, self, t, contravariant)
     }
 
     /// `mapInterfaceTypes(types)`.
     pub fn map_types(&self, ctx: &Ctx<'_>, types: &[TypeId]) -> Vec<TypeId> {
-        types.iter().map(|&t| self.substitute_type(ctx, t)).collect()
+        types
+            .iter()
+            .map(|&t| self.substitute_type(ctx, t))
+            .collect()
     }
 }
 
@@ -219,7 +234,10 @@ pub fn combine<'s>(
         };
     }
     if second.is_empty_substitution() {
-        return CombinedSubstitution { first, second: first };
+        return CombinedSubstitution {
+            first,
+            second: first,
+        };
     }
     CombinedSubstitution { first, second }
 }
@@ -266,7 +284,13 @@ impl FreshTypeParameters {
             })
             .collect();
         let ret = self.substitute(ctx, f.ret);
-        ctx.function_type(&self.fresh_type_parameters, &params, ret, f.nullability, None)
+        ctx.function_type(
+            &self.fresh_type_parameters,
+            &params,
+            ret,
+            f.nullability,
+            None,
+        )
     }
 
     /// `substitute(type)`.
@@ -486,7 +510,9 @@ impl TypeSubstitutor<'_, '_> {
                 }
                 ctx.record_type(&positional, &named, nullability, alias)
             }
-            TypeKind::TypeParameter { param, nullability, .. } => {
+            TypeKind::TypeParameter {
+                param, nullability, ..
+            } => {
                 let Some(argument) = self.get_substitute(param) else {
                     return t;
                 };

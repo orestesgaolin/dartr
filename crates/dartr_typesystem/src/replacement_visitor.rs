@@ -13,8 +13,8 @@
 //! Rust type model and are not ported.
 
 use dartr_element::{
-    AliasId, AliasRef, Ctx, EId, FnParam, NamedType, Nullability,
-    ParameterKind, TypeId, TypeKind, TypeParameterElement,
+    AliasId, AliasRef, Ctx, EId, FnParam, NamedType, Nullability, ParameterKind, TypeId, TypeKind,
+    TypeParameterElement,
 };
 use indexmap::IndexMap;
 
@@ -73,11 +73,21 @@ pub trait ReplacementVisitor<'a> {
         new_type_arguments: Option<Vec<TypeId>>,
         new_nullability: Option<Nullability>,
     ) -> Option<TypeId> {
-        super_create_interface_type(&self.ctx(), t, new_alias, new_type_arguments, new_nullability)
+        super_create_interface_type(
+            &self.ctx(),
+            t,
+            new_alias,
+            new_type_arguments,
+            new_nullability,
+        )
     }
 
     /// `createNeverType(...)`.
-    fn create_never_type(&mut self, t: TypeId, new_nullability: Option<Nullability>) -> Option<TypeId> {
+    fn create_never_type(
+        &mut self,
+        t: TypeId,
+        new_nullability: Option<Nullability>,
+    ) -> Option<TypeId> {
         let n = new_nullability?;
         Some(self.ctx().with_nullability(t, n))
     }
@@ -89,7 +99,12 @@ pub trait ReplacementVisitor<'a> {
         new_nullability: Option<Nullability>,
         new_promoted_bound: Option<TypeId>,
     ) -> Option<TypeId> {
-        super_create_promoted_type_parameter_type(&self.ctx(), t, new_nullability, new_promoted_bound)
+        super_create_promoted_type_parameter_type(
+            &self.ctx(),
+            t,
+            new_nullability,
+            new_promoted_bound,
+        )
     }
 
     /// `createTypeParameterType(...)`.

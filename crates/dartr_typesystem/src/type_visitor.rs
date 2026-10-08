@@ -81,7 +81,10 @@ fn maybe_type_alias_arguments<'a, V: RecursiveTypeVisitor<'a> + ?Sized>(
 }
 
 /// The base `visitDartType`.
-pub fn super_visit_dart_type<'a, V: RecursiveTypeVisitor<'a> + ?Sized>(v: &mut V, t: TypeId) -> bool {
+pub fn super_visit_dart_type<'a, V: RecursiveTypeVisitor<'a> + ?Sized>(
+    v: &mut V,
+    t: TypeId,
+) -> bool {
     let args = maybe_type_alias_arguments(v, t);
     v.visit_children(args);
     true

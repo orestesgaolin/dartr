@@ -19,8 +19,8 @@
 use dartr_element::{
     AliasId, AliasRef, ClassElement, Ctx, EId, ElementData, ElementId, ElementStore,
     ExtensionTypeElement, FnParam, FunctionTypeData, InterfaceElement, LibraryElement,
-    MixinElement, Name, NamedType, Nullability, ParameterKind, TypeAliasElement, TypeId,
-    TypeKind, TypeList, TypeParameterElement, TypeParameterFragment, Variance,
+    MixinElement, Name, NamedType, Nullability, ParameterKind, TypeAliasElement, TypeId, TypeKind,
+    TypeList, TypeParameterElement, TypeParameterFragment, Variance,
 };
 use dartr_element::{FragmentData, TypeAliasFragment};
 
@@ -148,7 +148,12 @@ pub trait TypeExt<'a> {
     fn element_superclass_constraints(&self, element: EId<InterfaceElement>) -> &'a [TypeId] {
         let ctx = self.ctx();
         match element.cast::<MixinElement>() {
-            Some(mixin) => ctx.list(ctx.get(mixin).superclass_constraints.get().unwrap_or_default()),
+            Some(mixin) => ctx.list(
+                ctx.get(mixin)
+                    .superclass_constraints
+                    .get()
+                    .unwrap_or_default(),
+            ),
             None => &[],
         }
     }
@@ -160,7 +165,10 @@ pub trait TypeExt<'a> {
 
     /// `TypeParameterElementImpl.variance` (covariant when not declared).
     fn type_parameter_variance(&self, param: EId<TypeParameterElement>) -> Variance {
-        self.ctx().get(param).variance.unwrap_or(Variance::Covariant)
+        self.ctx()
+            .get(param)
+            .variance
+            .unwrap_or(Variance::Covariant)
     }
 
     /// `TypeParameterElementImpl.isLegacyCovariant`.
@@ -688,7 +696,9 @@ pub trait TypeExt<'a> {
     /// `isDartCoreEnum` (a class element named `Enum` in `dart:core`).
     fn is_dart_core_enum(&self, t: TypeId) -> bool {
         match self.interface_element(t) {
-            Some(e) => e.raw().is::<ClassElement>() && self.is_element(e.raw(), "dart.core", "Enum"),
+            Some(e) => {
+                e.raw().is::<ClassElement>() && self.is_element(e.raw(), "dart.core", "Enum")
+            }
             None => false,
         }
     }

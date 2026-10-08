@@ -85,8 +85,9 @@ impl<'a> TypeSystem<'a> {
     pub fn eliminate_type_variables(&self, t: TypeId) -> TypeId {
         let top = self.object_question();
         let bottom = TypeId::NEVER;
-        let eliminator =
-            FnSubstitution(move |_, upper_bound: bool| Some(if upper_bound { bottom } else { top }));
+        let eliminator = FnSubstitution(move |_, upper_bound: bool| {
+            Some(if upper_bound { bottom } else { top })
+        });
         substitute_type(&self.ctx, &eliminator, t, false)
     }
 
@@ -315,7 +316,10 @@ impl<'a> TypeSystem<'a> {
             found?
         };
         let method_type = crate::element_type::executable_type(&ctx, method.upcast());
-        Some(MapSubstitution::from_interface_type(&ctx, owner_type).substitute_type(&ctx, method_type))
+        Some(
+            MapSubstitution::from_interface_type(&ctx, owner_type)
+                .substitute_type(&ctx, method_type),
+        )
     }
 
     /// `getFreeParameters(rootType, candidates:)`.
@@ -338,7 +342,8 @@ impl<'a> TypeSystem<'a> {
             s.visited.push(t);
             match *ctx.ty(t) {
                 TypeKind::TypeParameter { param, .. } => {
-                    if s.candidates.is_none_or(|c| c.contains(&param)) && !s.bound.contains(&param) {
+                    if s.candidates.is_none_or(|c| c.contains(&param)) && !s.bound.contains(&param)
+                    {
                         s.parameters.get_or_insert_with(Vec::new).push(param);
                     }
                 }
@@ -385,7 +390,11 @@ impl<'a> TypeSystem<'a> {
     }
 
     /// `greatestClosure(type, typeParameters)`.
-    pub fn greatest_closure(&self, t: TypeId, type_parameters: &[EId<TypeParameterElement>]) -> TypeId {
+    pub fn greatest_closure(
+        &self,
+        t: TypeId,
+        type_parameters: &[EId<TypeParameterElement>],
+    ) -> TypeId {
         crate::least_greatest_closure::LeastGreatestClosureHelper::new(
             *self,
             self.object_question(),
@@ -485,7 +494,8 @@ impl<'a> TypeSystem<'a> {
                         break;
                     }
                     Some(free) if free.iter().all(|f| defaults.contains_key(f)) => {
-                        let s = MapSubstitution::from_map(defaults.clone()).substitute_type(&ctx, value);
+                        let s = MapSubstitution::from_map(defaults.clone())
+                            .substitute_type(&ctx, value);
                         defaults.insert(parameter, s);
                         partials.shift_remove(&parameter);
                         has_progress = true;
@@ -562,8 +572,13 @@ impl<'a> TypeSystem<'a> {
             TypeKind::Record {
                 positional, named, ..
             } => {
-                ctx.list(positional).iter().all(|&f| self.is_always_exhaustive(f))
-                    && ctx.list(named).iter().all(|f| self.is_always_exhaustive(f.ty))
+                ctx.list(positional)
+                    .iter()
+                    .all(|&f| self.is_always_exhaustive(f))
+                    && ctx
+                        .list(named)
+                        .iter()
+                        .all(|f| self.is_always_exhaustive(f.ty))
             }
             _ => false,
         }
@@ -975,7 +990,11 @@ impl<'a> TypeSystem<'a> {
     }
 
     /// `leastClosure(type, typeParameters)`.
-    pub fn least_closure(&self, t: TypeId, type_parameters: &[EId<TypeParameterElement>]) -> TypeId {
+    pub fn least_closure(
+        &self,
+        t: TypeId,
+        type_parameters: &[EId<TypeParameterElement>],
+    ) -> TypeId {
         crate::least_greatest_closure::LeastGreatestClosureHelper::new(
             *self,
             self.object_question(),
@@ -1037,7 +1056,11 @@ impl<'a> TypeSystem<'a> {
             // NonNull(X & T) = X & NonNull(T)
             if let Some(promoted_bound) = promoted_bound {
                 let promoted_bound = self.promote_to_non_null(promoted_bound);
-                return ctx.promoted_type_parameter_type(param, Nullability::None, Some(promoted_bound));
+                return ctx.promoted_type_parameter_type(
+                    param,
+                    Nullability::None,
+                    Some(promoted_bound),
+                );
             }
             // NonNull(X) = X & NonNull(B), where B is the bound of X
             let bound = ctx.type_parameter_bound(param);
@@ -1072,9 +1095,12 @@ impl<'a> TypeSystem<'a> {
     ) -> TypeId {
         match operator_element {
             None => current_type,
-            Some(m) => {
-                self.refine_numeric_invocation_type_null_safe(left_type, m, &[right_type], current_type)
-            }
+            Some(m) => self.refine_numeric_invocation_type_null_safe(
+                left_type,
+                m,
+                &[right_type],
+                current_type,
+            ),
         }
     }
 
@@ -1088,9 +1114,12 @@ impl<'a> TypeSystem<'a> {
         current_type: TypeId,
     ) -> TypeId {
         match (target_type, method_element) {
-            (Some(t), Some(m)) => {
-                self.refine_numeric_invocation_context_null_safe(t, m, invocation_context, current_type)
-            }
+            (Some(t), Some(m)) => self.refine_numeric_invocation_context_null_safe(
+                t,
+                m,
+                invocation_context,
+                current_type,
+            ),
             _ => current_type,
         }
     }
@@ -1128,8 +1157,10 @@ impl<'a> TypeSystem<'a> {
         if type_parameters1.is_empty() {
             return Some(RelatedTypeParameters::default());
         }
-        let fresh: Vec<EId<TypeParameterElement>> =
-            type_parameters1.iter().map(|&p| ctx.fresh_copy(p)).collect();
+        let fresh: Vec<EId<TypeParameterElement>> = type_parameters1
+            .iter()
+            .map(|&p| ctx.fresh_copy(p))
+            .collect();
         let fresh_types: Vec<TypeId> = fresh
             .iter()
             .map(|&p| ctx.type_parameter_type(p, Nullability::None))
@@ -1360,7 +1391,8 @@ impl<'a> TypeSystem<'a> {
             let t2 = argument_types[0];
             let t3 = argument_types[1];
             let num_type_question = tp.num_type_question();
-            if self.is_subtype_of(t, num_type_question) && !ctx.is_bottom(t2) && !ctx.is_bottom(t3) {
+            if self.is_subtype_of(t, num_type_question) && !ctx.is_bottom(t2) && !ctx.is_bottom(t3)
+            {
                 let int_type_question = tp.int_type_question();
                 if self.is_subtype_of(t, int_type_question)
                     && self.is_subtype_of(t2, int_type_question)
@@ -1399,7 +1431,8 @@ fn promoted_type_parameter_type_nullability(
     if nullability_of_type == Nullability::Question && nullability_of_bound == Nullability::None {
         return Nullability::None;
     }
-    if nullability_of_type == Nullability::Question && nullability_of_bound == Nullability::Question {
+    if nullability_of_type == Nullability::Question && nullability_of_bound == Nullability::Question
+    {
         return Nullability::Question;
     }
     // Intersection with a non-nullable type always yields a non-nullable type.
@@ -1419,7 +1452,9 @@ impl<'a> ReplacementVisitor<'a> for ExtensionTypeErasure<'a> {
     fn visit_interface_type(&mut self, t: TypeId) -> Option<TypeId> {
         let ctx = self.ctx;
         if let Some(representation_type) = ctx.representation_type(t) {
-            let erased = self.visit(representation_type).unwrap_or(representation_type);
+            let erased = self
+                .visit(representation_type)
+                .unwrap_or(representation_type);
             // If the extension type is nullable, apply it to the erased.
             if ctx.nullability_suffix(t) == Nullability::Question {
                 return Some(ctx.with_nullability(erased, Nullability::Question));

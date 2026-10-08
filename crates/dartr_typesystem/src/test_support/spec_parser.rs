@@ -197,7 +197,10 @@ impl TokenStream {
             "Expected \"{expected}\" but found end of stream."
         );
         let token = self.consume();
-        assert_eq!(token, expected, "Expected \"{expected}\" but found \"{token}\".");
+        assert_eq!(
+            token, expected,
+            "Expected \"{expected}\" but found \"{token}\"."
+        );
     }
 
     fn match_(&mut self, expected: &str) -> bool {
@@ -316,7 +319,10 @@ impl SpecParser {
         }
     }
 
-    fn parse_executable_header(&mut self, context: ExecutableHeaderContext) -> ParsedExecutableHeader {
+    fn parse_executable_header(
+        &mut self,
+        context: ExecutableHeaderContext,
+    ) -> ParsedExecutableHeader {
         let return_type = self.parse_type_();
         let name = self.parse_executable_name(context);
         let type_parameters = self.parse_optional_type_parameters(match context {
@@ -593,7 +599,10 @@ impl SpecParser {
         }
     }
 
-    fn parse_type_parameters_rest(&mut self, context: TypeParameterContext) -> Vec<ParsedTypeParameter> {
+    fn parse_type_parameters_rest(
+        &mut self,
+        context: TypeParameterContext,
+    ) -> Vec<ParsedTypeParameter> {
         assert!(
             !self.stream.peek_is(">"),
             "Type parameter clause cannot be empty."
@@ -692,7 +701,8 @@ impl SpecParser {
         };
         let mut parser = SpecParser::new(&input);
         parser.stream.expect("<");
-        let type_parameters = parser.parse_type_parameters_rest(TypeParameterContext::ClassDeclaration);
+        let type_parameters =
+            parser.parse_type_parameters_rest(TypeParameterContext::ClassDeclaration);
         parser.expect_end("Unexpected trailing tokens in type parameters.");
         type_parameters
     }

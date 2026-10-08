@@ -339,9 +339,9 @@ impl<'a> SubtypeHelper<'a> {
                         return false;
                     }
                 }
-                Variance::Unrelated => panic!(
-                    "Type parameter has unknown variance unrelated for subtype checking."
-                ),
+                Variance::Unrelated => {
+                    panic!("Type parameter has unknown variance unrelated for subtype checking.")
+                }
             }
         }
         true
@@ -506,7 +506,8 @@ impl<'a> SubtypeHelper<'a> {
         else {
             unreachable!()
         };
-        let (sub_positional, super_positional) = (ctx.list(sub_positional), ctx.list(super_positional));
+        let (sub_positional, super_positional) =
+            (ctx.list(sub_positional), ctx.list(super_positional));
         if sub_positional.len() != super_positional.len() {
             return false;
         }

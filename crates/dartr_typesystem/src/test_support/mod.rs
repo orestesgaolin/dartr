@@ -38,16 +38,16 @@ use std::sync::Arc;
 use dartr_element::{
     BoolSlot, ClassElement, ClassFragment, ConstructorElement, ConstructorFragment, Ctx,
     DisplayOptions, EId, ElementData, ElementFlags, ElementId, ElementStore, ElementType,
-    EnumElement, EnumFragment, ExecutableElementData, ExecutableFragmentData,
-    ExtensionTypeElement, ExtensionTypeFragment, FId, FeatureSet, FieldElement, FieldFragment,
-    FnParam, FormalParameterElement, FormalParameterFragment, FragmentData, FragmentFlags,
-    FragmentId, Generation, InterfaceElement, InterfaceElementData, InterfaceFragmentData,
-    LibraryElement, LibraryFragment, LibraryLanguageVersion, Metadata, MethodElement,
-    MethodFragment, MixinElement, MixinFragment, Name, NamedType, NoopSink, Nullability,
-    OnceSlot, PropertyInducingElementData, PropertyInducingFragmentData, SourceRef, Tag,
-    TopLevelFunctionElement, TopLevelFunctionFragment, TypeAliasElement, TypeAliasFragment,
-    TypeId, TypeKind, TypeList, TypeParameterElement, TypeParameterFragment, TypeProvider,
-    VarSlot, VariableElementData, VariableFragmentData, Version, WorldSnapshot,
+    EnumElement, EnumFragment, ExecutableElementData, ExecutableFragmentData, ExtensionTypeElement,
+    ExtensionTypeFragment, FId, FeatureSet, FieldElement, FieldFragment, FnParam,
+    FormalParameterElement, FormalParameterFragment, FragmentData, FragmentFlags, FragmentId,
+    Generation, InterfaceElement, InterfaceElementData, InterfaceFragmentData, LibraryElement,
+    LibraryFragment, LibraryLanguageVersion, Metadata, MethodElement, MethodFragment, MixinElement,
+    MixinFragment, Name, NamedType, NoopSink, Nullability, OnceSlot, PropertyInducingElementData,
+    PropertyInducingFragmentData, SourceRef, Tag, TopLevelFunctionElement,
+    TopLevelFunctionFragment, TypeAliasElement, TypeAliasFragment, TypeId, TypeKind, TypeList,
+    TypeParameterElement, TypeParameterFragment, TypeProvider, VarSlot, VariableElementData,
+    VariableFragmentData, Version, WorldSnapshot,
 };
 use indexmap::IndexMap;
 
@@ -462,15 +462,18 @@ impl Creator<'_> {
         parsed: &[ParsedTypeParameter],
         enclosing: ElementId,
         enclosing_fragment: FragmentId,
-    ) -> (Vec<FId<TypeParameterFragment>>, Vec<EId<TypeParameterElement>>) {
+    ) -> (
+        Vec<FId<TypeParameterFragment>>,
+        Vec<EId<TypeParameterElement>>,
+    ) {
         let mut fragments = Vec::new();
         let mut elements = Vec::new();
         for p in parsed {
-            let fragment = self
-                .store
-                .add_fragment::<TypeParameterFragment>(TypeParameterFragment {
-                    fragment: self.fragment_data(Some(&p.name), enclosing_fragment),
-                });
+            let fragment =
+                self.store
+                    .add_fragment::<TypeParameterFragment>(TypeParameterFragment {
+                        fragment: self.fragment_data(Some(&p.name), enclosing_fragment),
+                    });
             let mut element = TypeParameterElement::new(self.element_data(
                 Some(&p.name),
                 fragment.raw(),
@@ -500,13 +503,13 @@ impl Creator<'_> {
                 FragmentFlags::FORMAL_PARAMETER_FRAGMENT_IS_EXPLICITLY_COVARIANT,
                 p.is_covariant,
             );
-            let fragment = self
-                .store
-                .add_fragment::<FormalParameterFragment>(FormalParameterFragment {
-                    variable: VariableFragmentData::new(fd),
-                    parameter_kind: p.kind,
-                    private_name: None,
-                });
+            let fragment =
+                self.store
+                    .add_fragment::<FormalParameterFragment>(FormalParameterFragment {
+                        variable: VariableFragmentData::new(fd),
+                        parameter_kind: p.kind,
+                        private_name: None,
+                    });
             let data = self.element_data(p.name.as_deref(), fragment.raw(), enclosing);
             data.flags.set(
                 ElementFlags::FORMAL_PARAMETER_ELEMENT_IS_COVARIANT,
@@ -529,8 +532,10 @@ impl Creator<'_> {
     fn class(&mut self, spec: &ClassSpec) -> Declaration {
         let header = SpecParser::parse_class_header(&spec.header);
         let fd = self.fragment_data(Some(&header.name), self.unit.raw());
-        fd.flags
-            .set(FragmentFlags::CLASS_FRAGMENT_IS_ABSTRACT, header.is_abstract);
+        fd.flags.set(
+            FragmentFlags::CLASS_FRAGMENT_IS_ABSTRACT,
+            header.is_abstract,
+        );
         fd.flags
             .set(FragmentFlags::CLASS_FRAGMENT_IS_SEALED, header.is_sealed);
         let fragment = self.store.add_fragment::<ClassFragment>(ClassFragment {
@@ -542,7 +547,10 @@ impl Creator<'_> {
         let element: EId<ClassElement> = self.store.add(ClassElement {
             interface: InterfaceElementData::new(data),
         });
-        self.store.fragment(fragment).element.set_once(element.raw());
+        self.store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
 
         let (tp_fragments, tp_elements) =
             self.type_parameters(&header.type_parameters, element.raw(), fragment.raw());
@@ -577,12 +585,18 @@ impl Creator<'_> {
     ) -> Executable {
         let header = SpecParser::parse_constructor_header(spec);
         let fd = self.fragment_data(Some(&header.name), class_fragment.raw());
-        fd.flags
-            .set(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_DECLARATION, true);
-        fd.flags
-            .set(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_CONST, header.is_const);
-        fd.flags
-            .set(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_FACTORY, header.is_factory);
+        fd.flags.set(
+            FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_DECLARATION,
+            true,
+        );
+        fd.flags.set(
+            FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_CONST,
+            header.is_const,
+        );
+        fd.flags.set(
+            FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_FACTORY,
+            header.is_factory,
+        );
         let fragment = self
             .store
             .add_fragment::<ConstructorFragment>(ConstructorFragment {
@@ -602,7 +616,10 @@ impl Creator<'_> {
             redirected_constructor: VarSlot::new(),
             super_constructor: VarSlot::new(),
         });
-        self.store.fragment(fragment).element.set_once(element.raw());
+        self.store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
         let (p_fragments, params) =
             self.formal_parameters(&header.formal_parameters, element.raw(), fragment.raw());
         self.store.fragment_mut(fragment).formal_params = p_fragments;
@@ -637,7 +654,10 @@ impl Creator<'_> {
             is_operator_equal_with_parameter_type_from_object: BoolSlot::new(false),
             type_inference_error: OnceSlot::new(),
         });
-        self.store.fragment(fragment).element.set_once(element.raw());
+        self.store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
         let (tp_fragments, tps) =
             self.type_parameters(&header.type_parameters, element.raw(), fragment.raw());
         let (p_fragments, params) =
@@ -653,7 +673,10 @@ impl Creator<'_> {
             e.formal_params = params.iter().map(|(_, e)| *e).collect();
         }
         self.store.get_mut(class).methods.push(element);
-        self.store.fragment_mut(class_fragment).methods.push(fragment);
+        self.store
+            .fragment_mut(class_fragment)
+            .methods
+            .push(fragment);
         Executable {
             element: element.raw(),
             type_parameters: (header.type_parameters, tps),
@@ -665,16 +688,19 @@ impl Creator<'_> {
     fn top_level_function(&mut self, spec: &str) -> Declaration {
         let header = SpecParser::parse_top_level_function_header(spec);
         let fd = self.fragment_data(Some(&header.name), self.unit.raw());
-        let fragment = self
-            .store
-            .add_fragment::<TopLevelFunctionFragment>(TopLevelFunctionFragment {
-                executable: ExecutableFragmentData::new(fd),
-            });
+        let fragment =
+            self.store
+                .add_fragment::<TopLevelFunctionFragment>(TopLevelFunctionFragment {
+                    executable: ExecutableFragmentData::new(fd),
+                });
         let data = self.element_data(Some(&header.name), fragment.raw(), self.library.raw());
         let element: EId<TopLevelFunctionElement> = self.store.add(TopLevelFunctionElement {
             executable: ExecutableElementData::new(data),
         });
-        self.store.fragment(fragment).element.set_once(element.raw());
+        self.store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
         let (tp_fragments, tps) =
             self.type_parameters(&header.type_parameters, element.raw(), fragment.raw());
         let (p_fragments, params) =
@@ -721,7 +747,10 @@ impl Creator<'_> {
         let element: EId<FieldElement> = self.store.add(FieldElement {
             property: PropertyInducingElementData::new(data),
         });
-        self.store.fragment(fragment).element.set_once(element.raw());
+        self.store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
         (element, fragment)
     }
 
@@ -735,16 +764,24 @@ impl Creator<'_> {
         let element: EId<EnumElement> = self.store.add(EnumElement {
             interface: InterfaceElementData::new(data),
         });
-        self.store.fragment(fragment).element.set_once(element.raw());
+        self.store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
         for name in &spec.constants {
             let (field, field_fragment) = self.field(name, element.raw(), fragment.raw());
             let ff = self.store.fragment(field_fragment);
             ff.flags
                 .set(FragmentFlags::FIELD_FRAGMENT_IS_ENUM_CONSTANT, true);
-            ff.flags
-                .set(FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_DECLARATION, true);
+            ff.flags.set(
+                FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_DECLARATION,
+                true,
+            );
             self.store.get_mut(element).fields.push(field);
-            self.store.fragment_mut(fragment).fields.push(field_fragment);
+            self.store
+                .fragment_mut(fragment)
+                .fields
+                .push(field_fragment);
         }
         self.store.get_mut(self.library).enums.push(element);
         self.store.fragment_mut(self.unit).enums.push(fragment);
@@ -770,7 +807,10 @@ impl Creator<'_> {
             has_implements_self_reference: BoolSlot::new(false),
             type_erasure: OnceSlot::new(),
         });
-        self.store.fragment(fragment).element.set_once(element.raw());
+        self.store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
         let (tp_fragments, tps) =
             self.type_parameters(&header.type_parameters, element.raw(), fragment.raw());
         self.store.fragment_mut(fragment).type_params = tp_fragments;
@@ -782,7 +822,10 @@ impl Creator<'_> {
             true,
         );
         self.store.get_mut(element).fields.push(field);
-        self.store.fragment_mut(fragment).fields.push(field_fragment);
+        self.store
+            .fragment_mut(fragment)
+            .fields
+            .push(field_fragment);
         self.store
             .get_mut(self.library)
             .extension_types
@@ -812,7 +855,10 @@ impl Creator<'_> {
             interface: InterfaceElementData::new(data),
             superclass_constraints: VarSlot::new(),
         });
-        self.store.fragment(fragment).element.set_once(element.raw());
+        self.store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
         let (tp_fragments, tps) =
             self.type_parameters(&header.type_parameters, element.raw(), fragment.raw());
         self.store.fragment_mut(fragment).type_params = tp_fragments;
@@ -843,7 +889,10 @@ impl Creator<'_> {
             type_params: Vec::new(),
             aliased_type: VarSlot::new(),
         });
-        self.store.fragment(fragment).element.set_once(element.raw());
+        self.store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
         let (tp_fragments, tps) =
             self.type_parameters(&header.type_parameters, element.raw(), fragment.raw());
         self.store.fragment_mut(fragment).type_params = tp_fragments;
@@ -880,7 +929,8 @@ fn resolve_declaration(ctx: &Ctx<'_>, declaration: &Declaration, library_scope: 
             let mut scope = library_scope.clone();
             resolve_type_parameters(ctx, &type_parameters.0, &type_parameters.1, &mut scope);
             let data = ctx.get(*element);
-            data.supertype.set(Some(materialize(ctx, supertype, &scope)));
+            data.supertype
+                .set(Some(materialize(ctx, supertype, &scope)));
             data.mixins.set(Some(materialize_list(ctx, mixins, &scope)));
             data.interfaces
                 .set(Some(materialize_list(ctx, interfaces, &scope)));
@@ -1128,11 +1178,8 @@ impl TypeSystemTest {
     fn add_library(&mut self, spec: &LibrarySpec) -> (EId<LibraryElement>, FId<LibraryFragment>) {
         let names = &self.world.generation.names;
         let index = self.store.fragments.units.len() as u32;
-        let unit = FId::<LibraryFragment>::from_raw(FragmentId::new(
-            self.store.id,
-            Tag::Library,
-            index,
-        ));
+        let unit =
+            FId::<LibraryFragment>::from_raw(FragmentId::new(self.store.id, Tag::Library, index));
         // `LibraryElementImpl(..., libraryUriStr.replaceAll(':', '.'), ...)`.
         let name = spec.uri.replace(':', ".");
         let element = ElementData::new(Some(names.intern(&name)), unit.raw());
@@ -1233,7 +1280,8 @@ impl TypeSystemTest {
         let object = instantiate(tp.object_element(), &[], none);
         let null = instantiate(tp.null_element(), &[], none);
         tp.enum_type.set_once(None);
-        tp.bool_type.set_once(instantiate(tp.bool_element(), &[], none));
+        tp.bool_type
+            .set_once(instantiate(tp.bool_element(), &[], none));
         tp.double_type
             .set_once(instantiate(tp.double_element(), &[], none));
         tp.double_type_question
@@ -1246,17 +1294,22 @@ impl TypeSystemTest {
             .set_once(instantiate(tp.future_element(), &[null], none));
         tp.future_or_null_type
             .set_once(instantiate(tp.future_or_element(), &[null], none));
-        tp.int_type.set_once(instantiate(tp.int_element(), &[], none));
+        tp.int_type
+            .set_once(instantiate(tp.int_element(), &[], none));
         tp.int_type_question
             .set_once(instantiate(tp.int_element(), &[], question));
-        tp.iterable_dynamic_type
-            .set_once(instantiate(tp.iterable_element(), &[TypeId::DYNAMIC], none));
+        tp.iterable_dynamic_type.set_once(instantiate(
+            tp.iterable_element(),
+            &[TypeId::DYNAMIC],
+            none,
+        ));
         tp.iterable_object_type
             .set_once(instantiate(tp.iterable_element(), &[object], none));
         tp.map_object_object_type
             .set_once(instantiate(tp.map_element(), &[object, object], none));
         tp.null_type.set_once(null);
-        tp.num_type.set_once(instantiate(tp.num_element(), &[], none));
+        tp.num_type
+            .set_once(instantiate(tp.num_element(), &[], none));
         tp.num_type_question
             .set_once(instantiate(tp.num_element(), &[], question));
         tp.object_type.set_once(object);
@@ -1268,7 +1321,8 @@ impl TypeSystemTest {
             .set_once(instantiate(tp.string_element(), &[], none));
         tp.symbol_type
             .set_once(instantiate(tp.symbol_element(), &[], none));
-        tp.type_type.set_once(instantiate(tp.type_element(), &[], none));
+        tp.type_type
+            .set_once(instantiate(tp.type_element(), &[], none));
     }
 
     // ---------------------------------------------------------- lookups
@@ -1503,8 +1557,7 @@ impl TypeParsingScope<'_> {
         let ctx = self.test.ctx();
         let parsed = SpecParser::parse_type_parameters(spec);
         let mut scope = self.spec_scope();
-        let new_type_parameters =
-            materialize_type_parameters_standalone(&ctx, &parsed, &mut scope);
+        let new_type_parameters = materialize_type_parameters_standalone(&ctx, &parsed, &mut scope);
         let mut type_parameters = self.type_parameters.clone();
         type_parameters.extend(new_type_parameters);
         operation(&TypeParsingScope {

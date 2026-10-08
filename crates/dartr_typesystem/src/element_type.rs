@@ -19,7 +19,9 @@ pub fn formal_parameter_as_fn_param(ctx: &Ctx<'_>, param: EId<FormalParameterEle
         name: data.name,
         kind: data.kind,
         ty: data.type_.get().unwrap_or(TypeId::INVALID),
-        covariant: data.flags.has(ElementFlags::FORMAL_PARAMETER_ELEMENT_IS_COVARIANT),
+        covariant: data
+            .flags
+            .has(ElementFlags::FORMAL_PARAMETER_ELEMENT_IS_COVARIANT),
         element: Some(ElemRef::Base(param.raw())),
     }
 }

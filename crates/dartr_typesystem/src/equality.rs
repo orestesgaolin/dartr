@@ -27,7 +27,11 @@ use crate::type_ext::{TypeExt, is_named, is_optional, is_positional};
 
 /// Dart `left == right` for types.
 pub fn dart_eq(ctx: &Ctx<'_>, a: TypeId, b: TypeId) -> bool {
-    Eq { ctx, pairs: Vec::new() }.eq(a, b)
+    Eq {
+        ctx,
+        pairs: Vec::new(),
+    }
+    .eq(a, b)
 }
 
 /// Dart `TypeImpl.equalArrays`.

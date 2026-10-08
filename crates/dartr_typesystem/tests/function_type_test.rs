@@ -322,9 +322,7 @@ fn hash_nullability_suffix() {
 #[test]
 fn hash_optional_named_parameter_name() {
     let f = FunctionTypeTest::new();
-    let types = generate_types(|i| {
-        f.parse_function_type(&format!("void Function({{int p{i}}})"))
-    });
+    let types = generate_types(|i| f.parse_function_type(&format!("void Function({{int p{i}}})")));
     check_hashes_sometimes_differ(&f, &types);
 }
 
@@ -371,9 +369,8 @@ fn hash_positional_parameter_optionality() {
 #[test]
 fn hash_required_named_parameter_name() {
     let f = FunctionTypeTest::new();
-    let types = generate_types(|i| {
-        f.parse_function_type(&format!("void Function({{required int p{i}}})"))
-    });
+    let types =
+        generate_types(|i| f.parse_function_type(&format!("void Function({{required int p{i}}})")));
     check_hashes_sometimes_differ(&f, &types);
 }
 
