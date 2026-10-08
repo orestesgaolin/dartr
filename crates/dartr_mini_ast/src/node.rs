@@ -1230,7 +1230,8 @@ impl Var {
 
     /// `write(value)`.
     #[track_caller]
-    pub fn write(self, value: Node) -> Node {
+    pub fn write(self, value: impl IntoNode) -> Node {
+        let value = value.into_node();
         let lhs = self.expr();
         Node::alloc(
             NodeKind::Write {
@@ -1239,6 +1240,157 @@ impl Var {
             },
             Location::caller(),
         )
+    }
+
+    // ------------------------------------- ProtoExpression methods of Var
+    //
+    // Dart `Var` mixes in `ProtoExpression`: these methods read the
+    // variable (`asExpression`) and call the [`Node`] method.
+
+    /// `x!` (Dart getter `nonNullAssert`).
+    #[track_caller]
+    pub fn non_null_assert(self) -> Node {
+        self.expr().non_null_assert()
+    }
+
+    /// `!x` (Dart getter `not`).
+    #[track_caller]
+    pub fn not(self) -> Node {
+        self.expr().not()
+    }
+
+    /// `(x)` (Dart getter `parenthesized`).
+    #[track_caller]
+    pub fn parenthesized(self) -> Node {
+        self.expr().parenthesized()
+    }
+
+    /// `x && other`.
+    #[track_caller]
+    pub fn and(self, other: impl IntoNode) -> Node {
+        self.expr().and(other)
+    }
+
+    /// `x || other`.
+    #[track_caller]
+    pub fn or(self, other: impl IntoNode) -> Node {
+        self.expr().or(other)
+    }
+
+    /// `x as type`.
+    #[track_caller]
+    pub fn as_(self, type_str: &str) -> Node {
+        self.expr().as_(type_str)
+    }
+
+    /// `x.cascade(sections, isNullAware: ...)`.
+    #[track_caller]
+    pub fn cascade(self, sections: Vec<Box<dyn Fn(Node) -> Node>>, is_null_aware: bool) -> Node {
+        self.expr().cascade(sections, is_null_aware)
+    }
+
+    /// `x ? ifTrue : ifFalse`.
+    #[track_caller]
+    pub fn conditional(self, if_true: impl IntoNode, if_false: impl IntoNode) -> Node {
+        self.expr().conditional(if_true, if_false)
+    }
+
+    /// `x == other`.
+    #[track_caller]
+    pub fn eq(self, other: impl IntoNode) -> Node {
+        self.expr().eq(other)
+    }
+
+    /// `x ?? other`.
+    #[track_caller]
+    pub fn if_null(self, other: impl IntoNode) -> Node {
+        self.expr().if_null(other)
+    }
+
+    /// `x.invokeMethod(name, arguments, isNullAware: ...)`.
+    #[track_caller]
+    pub fn invoke_method(self, name: &str, arguments: Vec<Node>, is_null_aware: bool) -> Node {
+        self.expr().invoke_method(name, arguments, is_null_aware)
+    }
+
+    /// `x.invokeAnonymousMethod(body, returnType:, isNullAware:,
+    /// isParameterless:, parameter:)`.
+    #[track_caller]
+    pub fn invoke_anonymous_method(
+        self,
+        body: Vec<Node>,
+        return_type: &str,
+        is_null_aware: bool,
+        is_parameterless: bool,
+        parameter: Option<Var>,
+    ) -> Node {
+        self.expr().invoke_anonymous_method(
+            body,
+            return_type,
+            is_null_aware,
+            is_parameterless,
+            parameter,
+        )
+    }
+
+    /// `x is type`.
+    #[track_caller]
+    pub fn is_(self, type_str: &str) -> Node {
+        self.expr().is_(type_str)
+    }
+
+    /// `x is! type`.
+    #[track_caller]
+    pub fn is_not(self, type_str: &str) -> Node {
+        self.expr().is_not(type_str)
+    }
+
+    /// `x != other`.
+    #[track_caller]
+    pub fn not_eq(self, other: impl IntoNode) -> Node {
+        self.expr().not_eq(other)
+    }
+
+    /// `x.property(name, isNullAware: ...)`.
+    #[track_caller]
+    pub fn property(self, name: &str, is_null_aware: bool) -> Node {
+        self.expr().property(name, is_null_aware)
+    }
+
+    /// `x.thenStmt(stmt)`.
+    #[track_caller]
+    pub fn then_stmt(self, stmt: impl IntoNode) -> Node {
+        self.expr().then_stmt(stmt)
+    }
+
+    /// `x.checkType(expectedType)`.
+    #[track_caller]
+    pub fn check_type(self, expected_type: &str) -> Node {
+        self.expr().check_type(expected_type)
+    }
+
+    /// `x.checkSchema(expectedSchema)`.
+    #[track_caller]
+    pub fn check_schema(self, expected_schema: &str) -> Node {
+        self.expr().check_schema(expected_schema)
+    }
+
+    /// `x.checkIR(expectedIR)`.
+    #[track_caller]
+    pub fn check_ir(self, expected_ir: &str) -> Node {
+        self.expr().check_ir(expected_ir)
+    }
+
+    /// `x.getExpressionInfo(callback)`.
+    #[track_caller]
+    pub fn get_expression_info(self, callback: impl Fn(Option<ExprInfo>) + 'static) -> Node {
+        self.expr().get_expression_info(callback)
+    }
+
+    /// `x.whyNotPromoted(callback)`.
+    #[track_caller]
+    pub fn why_not_promoted(self, callback: impl Fn(WhyNotPromotedMap) + 'static) -> Node {
+        self.expr().why_not_promoted(callback)
     }
 }
 
@@ -1265,6 +1417,61 @@ pub fn inconsistency_name(inconsistency: JoinedPatternVariableInconsistency) -> 
 }
 
 // ========================================================= proto conversions
+
+/// Something that can be used where an expression (or a statement, or a
+/// collection element) is expected: a [`Node`], or a [`Var`] (which
+/// becomes a read of the variable, Dart `Var.asExpression`). All builder
+/// parameters of type `impl IntoNode` accept both; lists use
+/// [`nodes!`](crate::nodes).
+pub trait IntoNode {
+    /// The node (a [`Var`] becomes a new variable reference).
+    #[track_caller]
+    fn into_node(self) -> Node;
+}
+
+impl IntoNode for Node {
+    fn into_node(self) -> Node {
+        self
+    }
+}
+
+impl IntoNode for Var {
+    #[track_caller]
+    fn into_node(self) -> Node {
+        self.expr()
+    }
+}
+
+/// An optional [`IntoNode`] argument (Dart `ProtoExpression?`): `None`, or
+/// anything that implements [`IntoNode`].
+pub trait IntoOptNode {
+    /// The node, if any.
+    #[track_caller]
+    fn into_opt_node(self) -> Option<Node>;
+}
+
+impl<T: IntoNode> IntoOptNode for T {
+    #[track_caller]
+    fn into_opt_node(self) -> Option<Node> {
+        Some(self.into_node())
+    }
+}
+
+impl IntoOptNode for Option<Node> {
+    fn into_opt_node(self) -> Option<Node> {
+        self
+    }
+}
+
+/// A `Vec<Node>` from nodes and variables (Dart lists of
+/// `ProtoStatement`/`ProtoExpression`/`ProtoCollectionElement`): a [`Var`]
+/// becomes a read of the variable.
+#[macro_export]
+macro_rules! nodes {
+    ($($e:expr),* $(,)?) => {
+        vec![$($crate::node::IntoNode::into_node($e)),*]
+    };
+}
 
 /// Dart `asExpression`: `node` must be an expression.
 pub fn as_expression(node: Node) -> Node {
@@ -1363,7 +1570,9 @@ pub fn this_() -> Node {
 
 /// `assert_(condition, [message])`.
 #[track_caller]
-pub fn assert_(condition: Node, message: Option<Node>) -> Node {
+pub fn assert_(condition: impl IntoNode, message: impl IntoOptNode) -> Node {
+    let condition = condition.into_node();
+    let message = message.into_opt_node();
     Node::alloc(
         NodeKind::Assert {
             condition: as_expression(condition),
@@ -1375,7 +1584,8 @@ pub fn assert_(condition: Node, message: Option<Node>) -> Node {
 
 /// `await_(operand)`.
 #[track_caller]
-pub fn await_(operand: Node) -> Node {
+pub fn await_(operand: impl IntoNode) -> Node {
+    let operand = operand.into_node();
     Node::alloc(
         NodeKind::Await {
             operand: as_expression(operand),
@@ -1425,11 +1635,14 @@ pub fn check_not_promoted(promotable: impl Into<Promotable>) -> Node {
 
 /// `checkPromoted(promotable, expectedTypeStr)`.
 #[track_caller]
-pub fn check_promoted(promotable: impl Into<Promotable>, expected: Option<&str>) -> Node {
+pub fn check_promoted<'a>(
+    promotable: impl Into<Promotable>,
+    expected: impl Into<Option<&'a str>>,
+) -> Node {
     Node::alloc(
         NodeKind::CheckPromoted {
             promotable: promotable.into(),
-            expected: expected.map(str::to_string),
+            expected: expected.into().map(str::to_string),
         },
         Location::caller(),
     )
@@ -1488,7 +1701,8 @@ pub fn declare(variable: Var) -> Node {
 
 /// `do_(body, condition)`.
 #[track_caller]
-pub fn do_(body: Vec<Node>, condition: Node) -> Node {
+pub fn do_(body: Vec<Node>, condition: impl IntoNode) -> Node {
+    let condition = condition.into_node();
     let location = Location::caller();
     Node::alloc(
         NodeKind::Do {
@@ -1524,12 +1738,15 @@ pub fn expr(type_str: &str) -> Node {
 /// `for_(initializer, condition, updater, body, {forCollection})`.
 #[track_caller]
 pub fn for_(
-    initializer: Option<Node>,
-    condition: Option<Node>,
-    updater: Option<Node>,
+    initializer: impl IntoOptNode,
+    condition: impl IntoOptNode,
+    updater: impl IntoOptNode,
     body: Vec<Node>,
     for_collection: bool,
 ) -> Node {
+    let initializer = initializer.into_opt_node();
+    let condition = condition.into_opt_node();
+    let updater = updater.into_opt_node();
     let location = Location::caller();
     Node::alloc(
         NodeKind::For {
@@ -1545,7 +1762,8 @@ pub fn for_(
 
 /// `forEachWithNonVariable(iterable, body)`.
 #[track_caller]
-pub fn for_each_with_non_variable(iterable: Node, body: Vec<Node>) -> Node {
+pub fn for_each_with_non_variable(iterable: impl IntoNode, body: Vec<Node>) -> Node {
+    let iterable = iterable.into_node();
     let location = Location::caller();
     Node::alloc(
         NodeKind::ForEach {
@@ -1560,7 +1778,8 @@ pub fn for_each_with_non_variable(iterable: Node, body: Vec<Node>) -> Node {
 
 /// `forEachWithVariableDecl(variable, iterable, body)`.
 #[track_caller]
-pub fn for_each_with_variable_decl(variable: Var, iterable: Node, body: Vec<Node>) -> Node {
+pub fn for_each_with_variable_decl(variable: Var, iterable: impl IntoNode, body: Vec<Node>) -> Node {
+    let iterable = iterable.into_node();
     let location = Location::caller();
     Node::alloc(
         NodeKind::ForEach {
@@ -1575,7 +1794,8 @@ pub fn for_each_with_variable_decl(variable: Var, iterable: Node, body: Vec<Node
 
 /// `forEachWithVariableSet(variable, iterable, body)`.
 #[track_caller]
-pub fn for_each_with_variable_set(variable: Var, iterable: Node, body: Vec<Node>) -> Node {
+pub fn for_each_with_variable_set(variable: Var, iterable: impl IntoNode, body: Vec<Node>) -> Node {
+    let iterable = iterable.into_node();
     let location = Location::caller();
     Node::alloc(
         NodeKind::ForEach {
@@ -1590,7 +1810,8 @@ pub fn for_each_with_variable_set(variable: Var, iterable: Node, body: Vec<Node>
 
 /// `if_(condition, ifTrue)`.
 #[track_caller]
-pub fn if_(condition: Node, if_true: Vec<Node>) -> Node {
+pub fn if_(condition: impl IntoNode, if_true: Vec<Node>) -> Node {
+    let condition = condition.into_node();
     let location = Location::caller();
     Node::alloc(
         NodeKind::If {
@@ -1604,7 +1825,8 @@ pub fn if_(condition: Node, if_true: Vec<Node>) -> Node {
 
 /// `if_(condition, ifTrue, ifFalse)`.
 #[track_caller]
-pub fn if_else(condition: Node, if_true: Vec<Node>, if_false: Vec<Node>) -> Node {
+pub fn if_else(condition: impl IntoNode, if_true: Vec<Node>, if_false: Vec<Node>) -> Node {
+    let condition = condition.into_node();
     let location = Location::caller();
     Node::alloc(
         NodeKind::If {
@@ -1619,11 +1841,13 @@ pub fn if_else(condition: Node, if_true: Vec<Node>, if_false: Vec<Node>) -> Node
 /// `ifCase(expression, pattern, ifTrue, [ifFalse])`.
 #[track_caller]
 pub fn if_case(
-    expression: Node,
-    pattern: Node,
+    expression: impl IntoNode,
+    pattern: impl IntoNode,
     if_true: Vec<Node>,
     if_false: Option<Vec<Node>>,
 ) -> Node {
+    let expression = expression.into_node();
+    let pattern = pattern.into_node();
     let location = Location::caller();
     let guarded = as_guarded_pattern(pattern);
     let NodeKind::GuardedPattern { pattern, guard, .. } = guarded.kind() else {
@@ -1645,11 +1869,15 @@ pub fn if_case(
 /// `ifCaseElement(expression, pattern, ifTrue, [ifFalse])`.
 #[track_caller]
 pub fn if_case_element(
-    expression: Node,
-    pattern: Node,
-    if_true: Node,
-    if_false: Option<Node>,
+    expression: impl IntoNode,
+    pattern: impl IntoNode,
+    if_true: impl IntoNode,
+    if_false: impl IntoOptNode,
 ) -> Node {
+    let expression = expression.into_node();
+    let pattern = pattern.into_node();
+    let if_true = if_true.into_node();
+    let if_false = if_false.into_opt_node();
     let location = Location::caller();
     let guarded = as_guarded_pattern(pattern);
     let NodeKind::GuardedPattern { pattern, guard, .. } = guarded.kind() else {
@@ -1670,7 +1898,10 @@ pub fn if_case_element(
 
 /// `ifElement(condition, ifTrue, [ifFalse])`.
 #[track_caller]
-pub fn if_element(condition: Node, if_true: Node, if_false: Option<Node>) -> Node {
+pub fn if_element(condition: impl IntoNode, if_true: impl IntoNode, if_false: impl IntoOptNode) -> Node {
+    let condition = condition.into_node();
+    let if_true = if_true.into_node();
+    let if_false = if_false.into_opt_node();
     let location = Location::caller();
     Node::alloc(
         NodeKind::IfElement {
@@ -1731,7 +1962,9 @@ pub fn local_function(body: Vec<Node>) -> Node {
 
 /// `mapEntry(key, value, {isKeyNullAware})`.
 #[track_caller]
-pub fn map_entry(key: Node, value: Node, is_key_null_aware: bool) -> Node {
+pub fn map_entry(key: impl IntoNode, value: impl IntoNode, is_key_null_aware: bool) -> Node {
+    let key = key.into_node();
+    let value = value.into_node();
     Node::alloc(
         NodeKind::MapEntry {
             key: as_expression(key),
@@ -1781,7 +2014,9 @@ pub fn map_pattern(elements: Vec<Node>, key_type: Option<&str>, value_type: Opti
 
 /// `mapPatternEntry(key, value)`.
 #[track_caller]
-pub fn map_pattern_entry(key: Node, value: Node) -> Node {
+pub fn map_pattern_entry(key: impl IntoNode, value: impl IntoNode) -> Node {
+    let key = key.into_node();
+    let value = value.into_node();
     Node::alloc(
         NodeKind::MapPatternEntry {
             key: as_expression(key),
@@ -1825,7 +2060,9 @@ pub fn object_pattern(required_type: &str, fields: Vec<Node>) -> Node {
 
 /// `patternForIn(pattern, expression, body, {hasAwait})`.
 #[track_caller]
-pub fn pattern_for_in(pattern: Node, expression: Node, body: Vec<Node>, has_await: bool) -> Node {
+pub fn pattern_for_in(pattern: impl IntoNode, expression: impl IntoNode, body: Vec<Node>, has_await: bool) -> Node {
+    let pattern = pattern.into_node();
+    let expression = expression.into_node();
     let location = Location::caller();
     Node::alloc(
         NodeKind::PatternForIn {
@@ -1841,11 +2078,14 @@ pub fn pattern_for_in(pattern: Node, expression: Node, body: Vec<Node>, has_awai
 /// `patternForInElement(pattern, expression, body, {hasAwait})`.
 #[track_caller]
 pub fn pattern_for_in_element(
-    pattern: Node,
-    expression: Node,
-    body: Node,
+    pattern: impl IntoNode,
+    expression: impl IntoNode,
+    body: impl IntoNode,
     has_await: bool,
 ) -> Node {
+    let pattern = pattern.into_node();
+    let expression = expression.into_node();
+    let body = body.into_node();
     let location = Location::caller();
     Node::alloc(
         NodeKind::PatternForInElement {
@@ -1860,7 +2100,9 @@ pub fn pattern_for_in_element(
 
 /// `patternVariableDeclaration(pattern, initializer, {isFinal})`.
 #[track_caller]
-pub fn pattern_variable_declaration(pattern: Node, initializer: Node, is_final: bool) -> Node {
+pub fn pattern_variable_declaration(pattern: impl IntoNode, initializer: impl IntoNode, is_final: bool) -> Node {
+    let pattern = pattern.into_node();
+    let initializer = initializer.into_node();
     Node::alloc(
         NodeKind::PatternVariableDeclaration {
             pattern,
@@ -1880,7 +2122,8 @@ pub fn record_pattern(fields: Vec<Node>) -> Node {
 /// `relationalPattern(operator, operand)`; use [`Node::error_id`] for the
 /// Dart named parameter `errorId`.
 #[track_caller]
-pub fn relational_pattern(operator: &str, operand: Node) -> Node {
+pub fn relational_pattern(operator: &str, operand: impl IntoNode) -> Node {
+    let operand = operand.into_node();
     Node::alloc(
         NodeKind::RelationalPattern {
             operator: operator.to_string(),
@@ -1892,7 +2135,8 @@ pub fn relational_pattern(operator: &str, operand: Node) -> Node {
 
 /// `restPattern([subPattern])`.
 #[track_caller]
-pub fn rest_pattern(sub_pattern: Option<Node>) -> Node {
+pub fn rest_pattern(sub_pattern: impl IntoOptNode) -> Node {
+    let sub_pattern = sub_pattern.into_opt_node();
     Node::alloc(NodeKind::RestPattern { sub_pattern }, Location::caller())
 }
 
@@ -1904,7 +2148,9 @@ pub fn return_() -> Node {
 
 /// `second(first, second)`.
 #[track_caller]
-pub fn second(first: Node, second: Node) -> Node {
+pub fn second(first: impl IntoNode, second: impl IntoNode) -> Node {
+    let first = first.into_node();
+    let second = second.into_node();
     Node::alloc(
         NodeKind::Second {
             first: as_expression(first),
@@ -1929,7 +2175,8 @@ pub fn super_property(name: &str) -> Node {
 /// `switch_(expression, cases)`; use `with_legacy_exhaustive` and the
 /// `expect_...` methods for the Dart named parameters.
 #[track_caller]
-pub fn switch_(expression: Node, cases: Vec<Node>) -> Node {
+pub fn switch_(expression: impl IntoNode, cases: Vec<Node>) -> Node {
+    let expression = expression.into_node();
     Node::alloc(
         NodeKind::SwitchStatement {
             scrutinee: as_expression(expression),
@@ -1947,7 +2194,8 @@ pub fn switch_(expression: Node, cases: Vec<Node>) -> Node {
 
 /// `switchExpr(expression, cases)`.
 #[track_caller]
-pub fn switch_expr(expression: Node, cases: Vec<Node>) -> Node {
+pub fn switch_expr(expression: impl IntoNode, cases: Vec<Node>) -> Node {
+    let expression = expression.into_node();
     Node::alloc(
         NodeKind::SwitchExpression {
             scrutinee: as_expression(expression),
@@ -1986,7 +2234,8 @@ pub fn this_property(name: &str) -> Node {
 
 /// `throw_(operand)`.
 #[track_caller]
-pub fn throw_(operand: Node) -> Node {
+pub fn throw_(operand: impl IntoNode) -> Node {
+    let operand = operand.into_node();
     Node::alloc(
         NodeKind::Throw {
             operand: as_expression(operand),
@@ -2011,7 +2260,8 @@ pub fn try_(body: Vec<Node>) -> Node {
 
 /// `while_(condition, body)`.
 #[track_caller]
-pub fn while_(condition: Node, body: Vec<Node>) -> Node {
+pub fn while_(condition: impl IntoNode, body: Vec<Node>) -> Node {
+    let condition = condition.into_node();
     let location = Location::caller();
     Node::alloc(
         NodeKind::While {
@@ -2037,7 +2287,8 @@ pub fn wildcard() -> Node {
 
 /// `yield_(operand, {isYieldStar})`.
 #[track_caller]
-pub fn yield_(operand: Node, is_yield_star: bool) -> Node {
+pub fn yield_(operand: impl IntoNode, is_yield_star: bool) -> Node {
+    let operand = operand.into_node();
     Node::alloc(
         NodeKind::YieldStatement {
             operand: as_expression(operand),
@@ -2068,7 +2319,8 @@ impl Label {
 
     /// `thenStmt(statement)`: binds the label to `statement`.
     #[track_caller]
-    pub fn then_stmt(self, statement: Node) -> Node {
+    pub fn then_stmt(self, statement: impl IntoNode) -> Node {
+        let statement = statement.into_node();
         match self.0.kind() {
             NodeKind::UnboundLabel => panic!("Unbound labels can't be bound"),
             NodeKind::BoundLabel { .. } => {
@@ -2198,7 +2450,8 @@ impl Node {
     }
 
     /// Dart named parameter `initializer:` of `declare`.
-    pub fn with_initializer(self, value: Node) -> Node {
+    pub fn with_initializer(self, value: impl IntoNode) -> Node {
+        let value = value.into_node();
         let value = as_expression(value);
         self.update_kind(|k| match k {
             NodeKind::VariableDeclaration { initializer, .. } => *initializer = Some(value),
@@ -2363,7 +2616,8 @@ impl Node {
     /// `and(other)`: `x && other` for expressions, a logical-and pattern for
     /// patterns.
     #[track_caller]
-    pub fn and(self, other: Node) -> Node {
+    pub fn and(self, other: impl IntoNode) -> Node {
+        let other = other.into_node();
         if self.category() == Category::Pattern {
             Node::alloc(
                 NodeKind::LogicalAndPattern {
@@ -2387,7 +2641,8 @@ impl Node {
     /// `or(other)`: `x || other` for expressions, a logical-or pattern for
     /// patterns.
     #[track_caller]
-    pub fn or(self, other: Node) -> Node {
+    pub fn or(self, other: impl IntoNode) -> Node {
+        let other = other.into_node();
         if self.category() == Category::Pattern {
             Node::alloc(
                 NodeKind::LogicalOrPattern {
@@ -2452,7 +2707,9 @@ impl Node {
 
     /// `conditional(ifTrue, ifFalse)`.
     #[track_caller]
-    pub fn conditional(self, if_true: Node, if_false: Node) -> Node {
+    pub fn conditional(self, if_true: impl IntoNode, if_false: impl IntoNode) -> Node {
+        let if_true = if_true.into_node();
+        let if_false = if_false.into_node();
         Node::alloc(
             NodeKind::Conditional {
                 condition: as_expression(self),
@@ -2465,7 +2722,8 @@ impl Node {
 
     /// `eq(other)`.
     #[track_caller]
-    pub fn eq(self, other: Node) -> Node {
+    pub fn eq(self, other: impl IntoNode) -> Node {
+        let other = other.into_node();
         Node::alloc(
             NodeKind::Equal {
                 lhs: as_expression(self),
@@ -2478,7 +2736,8 @@ impl Node {
 
     /// `ifNull(other)`.
     #[track_caller]
-    pub fn if_null(self, other: Node) -> Node {
+    pub fn if_null(self, other: impl IntoNode) -> Node {
+        let other = other.into_node();
         Node::alloc(
             NodeKind::IfNull {
                 lhs: as_expression(self),
@@ -2567,7 +2826,8 @@ impl Node {
 
     /// `notEq(other)`.
     #[track_caller]
-    pub fn not_eq(self, other: Node) -> Node {
+    pub fn not_eq(self, other: impl IntoNode) -> Node {
+        let other = other.into_node();
         Node::alloc(
             NodeKind::Equal {
                 lhs: as_expression(self),
@@ -2593,7 +2853,8 @@ impl Node {
 
     /// `thenStmt(stmt)`: evaluation of `this` followed by `stmt`.
     #[track_caller]
-    pub fn then_stmt(self, stmt: Node) -> Node {
+    pub fn then_stmt(self, stmt: impl IntoNode) -> Node {
+        let stmt = stmt.into_node();
         let location = Location::caller();
         Node::alloc(
             NodeKind::WrappedExpression {
@@ -2607,7 +2868,8 @@ impl Node {
 
     /// `LValue.write(value)` (for properties).
     #[track_caller]
-    pub fn write(self, value: Node) -> Node {
+    pub fn write(self, value: impl IntoNode) -> Node {
+        let value = value.into_node();
         Node::alloc(
             NodeKind::Write {
                 lhs: as_expression(self),
@@ -2658,7 +2920,8 @@ impl Node {
 
     /// `assign(rhs)`: a pattern assignment.
     #[track_caller]
-    pub fn assign(self, rhs: Node) -> Node {
+    pub fn assign(self, rhs: impl IntoNode) -> Node {
+        let rhs = rhs.into_node();
         self.expect_category(Category::Pattern, "assign");
         Node::alloc(
             NodeKind::PatternAssignment {
@@ -2683,7 +2946,8 @@ impl Node {
     }
 
     /// `when(guard)`.
-    pub fn when(self, guard: Option<Node>) -> Node {
+    pub fn when(self, guard: impl IntoOptNode) -> Node {
+        let guard = guard.into_opt_node();
         self.expect_category(Category::Pattern, "when");
         Node::alloc(
             NodeKind::GuardedPattern {
@@ -2713,7 +2977,8 @@ impl Node {
 
     /// `thenExpr(body)`: a switch expression case.
     #[track_caller]
-    pub fn then_expr(self, body: Node) -> Node {
+    pub fn then_expr(self, body: impl IntoNode) -> Node {
+        let body = body.into_node();
         let guarded_pattern = match self.kind() {
             NodeKind::SwitchHeadDefault => None,
             NodeKind::SwitchHeadCase { guarded_pattern } => Some(guarded_pattern),
