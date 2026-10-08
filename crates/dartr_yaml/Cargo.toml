@@ -1,0 +1,12 @@
+[package]
+name = "dartr_yaml"
+version.workspace = true
+edition.workspace = true
+license = "MIT"
+description = "Faithful Rust port of package:yaml 3.1.4."
+
+[dependencies]
+indexmap.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

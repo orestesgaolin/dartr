@@ -7,7 +7,7 @@ description = "Project model of dartr: context discovery, workspaces, package_co
 
 [dependencies]
 dartr_diagnostics.workspace = true
-saphyr-parser = "0.1.0"
+dartr_yaml.workspace = true
 fancy-regex = "0.19.2"
 serde_json.workspace = true
 
