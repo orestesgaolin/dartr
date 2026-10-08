@@ -125,6 +125,10 @@ impl SharedTypeOperations for ToyOps {
     type TypeParameter = char;
     type Name = &'static str;
 
+    fn compare_names(&self, name1: &'static str, name2: &'static str) -> std::cmp::Ordering {
+        name1.cmp(name2)
+    }
+
     fn shared_type_kind(&self, ty: Ty) -> SharedTypeKind {
         match ty {
             Dynamic => SharedTypeKind::Dynamic,

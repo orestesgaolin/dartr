@@ -27,6 +27,12 @@ pub enum DumpMode {
     Resolved,
     /// Element model of each library (docs/design/semantics.md §5.1).
     Elements,
+    /// Interfaces of the classes of each library (docs/design/semantics.md
+    /// §5.2, `tools/oracle/bin/interface.dart`). Skeleton: every path gives
+    /// `{"path":..,"error":"not implemented"}` until the linker builds the
+    /// library elements; then each line is
+    /// `dartr_typesystem::interface_dump::interface_library_json`.
+    Interface,
 }
 
 /// Runs `dump` for [files], or for the paths on stdin (one per line) when
@@ -49,7 +55,8 @@ pub fn run(mode: DumpMode, files: Vec<PathBuf>) -> anyhow::Result<()> {
     let paths: Vec<String> = paths
         .iter()
         .map(|p| {
-            // A `dart:` library URI (mode `elements`) is kept as it is.
+            // A `dart:` library URI (modes `elements`, `interface`) is kept
+            // as it is.
             if p.is_absolute() || p.to_str().is_some_and(|s| s.starts_with("dart:")) {
                 p.to_string_lossy().into_owned()
             } else {
@@ -61,13 +68,13 @@ pub fn run(mode: DumpMode, files: Vec<PathBuf>) -> anyhow::Result<()> {
     let dump: fn(&str) -> String = match mode {
         DumpMode::Tokens => dump_tokens,
         DumpMode::Events => dump_events,
-        DumpMode::Elements => {
+        DumpMode::Elements | DumpMode::Interface => {
             // All inputs at once: they share the analysis contexts and the
             // linked library cycles.
             let pool = rayon::ThreadPoolBuilder::new()
                 .stack_size(256 << 20)
                 .build()?;
-            let lines = pool.install(|| crate::elements::dump_elements_all(&paths));
+            let lines = pool.install(|| crate::elements::dump_elements_all(&paths, mode == DumpMode::Interface));
             let stdout = io::stdout();
             let mut out = io::BufWriter::new(stdout.lock());
             for line in lines {

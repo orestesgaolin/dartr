@@ -39,19 +39,45 @@ pub fn link_ctx<'a>(lk: &'a Linker<'_>, tp: &'a TypeProvider, features: &'a Feat
 /// Dart `elementFactory.createTypeProviders(dartCore, dartAsync)`: the
 /// classes of `dart:core` and `dart:async` by name.
 pub fn create_type_provider(lk: &Linker<'_>) -> TypeProvider {
-    let tp = TypeProvider::default();
-    let features = FeatureSet::default();
     let library = |uri: &str| -> Option<EId<LibraryElement>> {
         if let Some(&b) = lk.builder_by_uri.get(uri) {
             return Some(lk.builders[b].element);
         }
         lk.core.world.libraries.get(uri).copied()
     };
-    let (Some(core), Some(async_)) = (library("dart:core"), library("dart:async")) else {
+    type_provider_for(lk.core.world, Some(&lk.core.store), library("dart:core"), library("dart:async"))
+}
+
+/// A [`TypeProvider`] for the world (the libraries of linked cycles).
+pub fn world_type_provider(world: &WorldSnapshot) -> TypeProvider {
+    type_provider_for(
+        world,
+        None,
+        world.libraries.get("dart:core").copied(),
+        world.libraries.get("dart:async").copied(),
+    )
+}
+
+fn type_provider_for(
+    world: &WorldSnapshot,
+    current: Option<&ElementStore>,
+    core: Option<EId<LibraryElement>>,
+    async_: Option<EId<LibraryElement>>,
+) -> TypeProvider {
+    let tp = TypeProvider::default();
+    let features = FeatureSet::default();
+    let (Some(core), Some(async_)) = (core, async_) else {
         return tp;
     };
     {
-        let ctx = link_ctx(lk, &tp, &features);
+        let ctx = Ctx {
+            world,
+            current,
+            local: None,
+            tp: &tp,
+            features: &features,
+            req: &NoopSink,
+        };
         let class = |library: EId<LibraryElement>, name: &str| -> Option<EId<ClassElement>> {
             ctx.get(library)
                 .classes

@@ -11,13 +11,9 @@
 //!
 //! Not ported yet (open points):
 //! - `canBeSubtypeOf` (needs `ClassElementImpl.allSubtypes` and enum
-//!   constants), `demoteType` (type_demotion.dart), `isWellBounded`
-//!   (well_bounded.dart), `setupGenericTypeInference`,
-//!   `inferFunctionTypeInstantiation`, `matchSupertypeConstraints` (unit A6).
-//! - `getCallMethodType` uses a direct member search (the declared `call`
-//!   method of the class, else of the first supertype in `allSupertypes`
-//!   order that declares one) until the inheritance manager (unit A7) is
-//!   ported.
+//!   constants), `isWellBounded` (well_bounded.dart).
+//! - `getCallMethodType` uses `InterfaceTypeImpl.lookUpMethod`
+//!   ([`crate::lookup::type_look_up_method`], unit A7).
 
 use dartr_element::{
     ClassElement, Ctx, EId, EnumElement, ExtensionElement, ExtensionTypeElement, FragmentFlags,
@@ -79,6 +75,13 @@ impl<'a> TypeSystem<'a> {
             return self.accepts_function_type(ctx.type_arguments(t)[0]);
         }
         matches!(ctx.ty(t), TypeKind::Function(_)) || ctx.is_dart_core_function(t)
+    }
+
+    /// `demoteType(type)`: [t] in which all promoted type variables have been
+    /// replaced with their unpromoted equivalents.
+    pub fn demote_type(&self, t: TypeId) -> TypeId {
+        let mut visitor = crate::type_demotion::DemotionVisitor { ctx: self.ctx };
+        visitor.visit(t).unwrap_or(t)
     }
 
     /// `eliminateTypeVariables(type)`.
@@ -291,35 +294,20 @@ impl<'a> TypeSystem<'a> {
             .collect()
     }
 
-    /// `getCallMethodType(t)` (interim lookup, see the module
-    /// documentation).
+    /// `getCallMethodType(t)`: the type of the `call` method of an
+    /// interface type (`t.lookUpMethod('call', t.element.library)?.type`).
     pub fn get_call_method_type(&self, t: TypeId) -> Option<TypeId> {
         let ctx = self.ctx;
         let element = ctx.interface_element(t)?;
-        let find = |e: EId<InterfaceElement>| -> Option<EId<MethodElement>> {
-            ctx.interface(e)
-                .methods
-                .iter()
-                .copied()
-                .find(|&m| ctx.element_name(m.raw()) == Some("call"))
-        };
-        let (owner_type, method) = if let Some(m) = find(element) {
-            (t, m)
-        } else {
-            let mut found = None;
-            for s in ctx.all_supertypes(t) {
-                if let Some(m) = find(ctx.interface_element(s).unwrap()) {
-                    found = Some((s, m));
-                    break;
-                }
-            }
-            found?
-        };
-        let method_type = crate::element_type::executable_type(&ctx, method.upcast());
-        Some(
-            MapSubstitution::from_interface_type(&ctx, owner_type)
-                .substitute_type(&ctx, method_type),
-        )
+        let library = ctx.element_data(element.raw())?.library?;
+        let method = crate::lookup::type_look_up_method(
+            &ctx,
+            t,
+            "call",
+            library,
+            crate::lookup::LookUpOptions::default(),
+        )?;
+        Some(crate::member::type_(&ctx, method))
     }
 
     /// `getFreeParameters(rootType, candidates:)`.
@@ -420,6 +408,56 @@ impl<'a> TypeSystem<'a> {
     pub fn greatest_lower_bound(&self, t1: TypeId, t2: TypeId) -> TypeId {
         crate::greatest_lower_bound::GreatestLowerBoundHelper::new(*self)
             .get_greatest_lower_bound(t1, t2)
+    }
+
+    /// `inferFunctionTypeInstantiation(contextType, fnType, ...)`: given a
+    /// generic function type `F<T0, T1, ... Tn>` and a context type C, infers
+    /// an instantiation of F, such that `F<S0, S1, ..., Sn>` <: C.
+    ///
+    /// This is similar to [setup_generic_type_inference](Self::setup_generic_type_inference),
+    /// but the return type is also considered as part of the solution.
+    /// (Dart also takes `strictCasts`, which it does not use.)
+    // A port of a Dart method with many named parameters.
+    #[allow(clippy::too_many_arguments)]
+    pub fn infer_function_type_instantiation(
+        &self,
+        context_type: TypeId,
+        fn_type: TypeId,
+        diagnostic_reporter: Option<&mut dartr_diagnostics::DiagnosticReporter<'_>>,
+        error_node: Option<crate::generic_inferrer::InferenceErrorEntity>,
+        type_system_operations: crate::type_system_operations::TypeSystemOperations<'a>,
+        flags: crate::generic_inferrer::InferenceFlags,
+        data_for_testing: Option<
+            &mut crate::type_constraint_gatherer::TypeConstraintGenerationDataForTesting,
+        >,
+        node_for_testing: Option<dartr_ast::NodeId>,
+    ) -> Vec<TypeId> {
+        let ctx = self.ctx;
+        let type_parameters = |t: TypeId| match *ctx.ty(t) {
+            TypeKind::Function(f) => ctx.list(f.type_params),
+            _ => panic!("not a function type: {t:?}"),
+        };
+        if !type_parameters(context_type).is_empty() || type_parameters(fn_type).is_empty() {
+            return Vec::new();
+        }
+
+        // Create a TypeSystem that will allow certain type parameters to be
+        // inferred. It will optimistically assume these type parameters can
+        // be subtypes (or supertypes) as necessary, and track the constraints
+        // that are implied by this.
+        let mut inferrer = crate::generic_inferrer::GenericInferrer::new(
+            *self,
+            type_parameters(fn_type),
+            diagnostic_reporter,
+            error_node,
+            flags,
+            type_system_operations,
+            data_for_testing,
+        );
+        inferrer.constrain_generic_function_in_context(fn_type, context_type, node_for_testing);
+
+        // Infer and instantiate the resulting type.
+        inferrer.choose_final_types()
     }
 
     /// `instantiateInterfaceToBounds(element, nullabilitySuffix)`.
@@ -1021,6 +1059,54 @@ impl<'a> TypeSystem<'a> {
         crate::least_upper_bound::LeastUpperBoundHelper::new(*self).get_least_upper_bound(t1, t2)
     }
 
+    /// `matchSupertypeConstraints(typeParameters, srcTypes, destTypes, ...)`:
+    /// attempts to find the appropriate substitution for the
+    /// [type_parameters] that can be applied to [src_types] to make it equal
+    /// to [dest_types]. If no such substitution can be found, `None` is
+    /// returned. (Dart also takes `strictCasts`, which it does not use.)
+    pub fn match_supertype_constraints(
+        &self,
+        type_parameters: &[EId<TypeParameterElement>],
+        src_types: &[TypeId],
+        dest_types: &[TypeId],
+        type_system_operations: crate::type_system_operations::TypeSystemOperations<'a>,
+        flags: crate::generic_inferrer::InferenceFlags,
+    ) -> Option<Vec<TypeId>> {
+        let ctx = self.ctx;
+        let mut inferrer = crate::generic_inferrer::GenericInferrer::new(
+            *self,
+            type_parameters,
+            None,
+            None,
+            flags,
+            type_system_operations,
+            None,
+        );
+        for i in 0..src_types.len() {
+            inferrer.constrain_return_type(src_types[i], dest_types[i], None);
+            inferrer.constrain_return_type(dest_types[i], src_types[i], None);
+        }
+
+        let inferred_types: Vec<TypeId> = inferrer
+            .choose_final_types()
+            .into_iter()
+            .map(|t| self.remove_bounds_of_generic_function_types(t))
+            .collect();
+        let substitution = MapSubstitution::from_pairs(type_parameters, &inferred_types);
+
+        for i in 0..src_types.len() {
+            let src_type = substitution.substitute_type(&ctx, src_types[i]);
+            let dest_type = dest_types[i];
+            // Dart: `!=`.
+            if !self.dart_eq(src_type, dest_type) {
+                // Failed to find an appropriate substitution
+                return None;
+            }
+        }
+
+        Some(inferred_types)
+    }
+
     /// `makeNullable(type)`.
     pub fn make_nullable(&self, t: TypeId) -> TypeId {
         self.ctx.with_nullability(t, Nullability::Question)
@@ -1222,6 +1308,50 @@ impl<'a> TypeSystem<'a> {
     /// `runtimeTypesEqual(T1, T2)`.
     pub fn runtime_types_equal(&self, t1: TypeId, t2: TypeId) -> bool {
         crate::runtime_type_equality::RuntimeTypeEqualityHelper::new(*self).equal(t1, t2)
+    }
+
+    /// `setupGenericTypeInference(...)`: prepares to infer type arguments for
+    /// a generic type, function, method, or list/map literal, initializing a
+    /// [GenericInferrer](crate::generic_inferrer::GenericInferrer) using the
+    /// downward context type. (Dart also takes `strictCasts`, which it does
+    /// not use.)
+    // A port of a Dart method with many named parameters.
+    #[allow(clippy::too_many_arguments)]
+    pub fn setup_generic_type_inference<'r, 'l>(
+        &self,
+        type_parameters: &[EId<TypeParameterElement>],
+        declared_return_type: TypeId,
+        mut context_return_type: TypeId,
+        diagnostic_reporter: Option<&'r mut dartr_diagnostics::DiagnosticReporter<'l>>,
+        error_entity: Option<crate::generic_inferrer::InferenceErrorEntity>,
+        flags: crate::generic_inferrer::InferenceFlags,
+        is_const: bool,
+        type_system_operations: crate::type_system_operations::TypeSystemOperations<'a>,
+        data_for_testing: Option<
+            &'r mut crate::type_constraint_gatherer::TypeConstraintGenerationDataForTesting,
+        >,
+        node_for_testing: Option<dartr_ast::NodeId>,
+    ) -> crate::generic_inferrer::GenericInferrer<'a, 'r, 'l> {
+        // Create a GenericInferrer that will allow certain type parameters to
+        // be inferred. It will optimistically assume these type parameters
+        // can be subtypes (or supertypes) as necessary, and track the
+        // constraints that are implied by this.
+        let mut inferrer = crate::generic_inferrer::GenericInferrer::new(
+            *self,
+            type_parameters,
+            diagnostic_reporter,
+            error_entity,
+            flags,
+            type_system_operations,
+            data_for_testing,
+        );
+
+        if is_const {
+            context_return_type = self.eliminate_type_variables(context_return_type);
+        }
+        inferrer.constrain_return_type(declared_return_type, context_return_type, node_for_testing);
+
+        inferrer
     }
 
     /// `topMerge(T, S)`. Panics where Dart throws (the types cannot be

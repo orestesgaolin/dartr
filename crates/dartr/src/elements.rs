@@ -15,7 +15,7 @@ use dartr_driver::driver::Driver;
 use dartr_driver::file_state::{FileConfig, FileId, FileSystemState, SourceFactory};
 use dartr_driver::uri::Uri;
 use dartr_element::{
-    ConstExprId, Ctx, FeatureSet, Generation, NoopSink, StoreId, TypeProvider,
+    ConstExprId, Ctx, FeatureSet, Generation, NoopSink, StoreId,
 };
 use dartr_link::dump::{DumpSources, error_json, library_json};
 use dartr_parser::experimental_flags::ExperimentalFlag;
@@ -29,7 +29,7 @@ enum Input {
 }
 
 /// One line per input path, in input order.
-pub fn dump_elements_all(inputs: &[String]) -> Vec<String> {
+pub fn dump_elements_all(inputs: &[String], interface: bool) -> Vec<String> {
     let generation = Arc::new(Generation::new(0));
     let sdk_path = dartr_project::sdk::find_sdk_path();
 
@@ -102,7 +102,6 @@ pub fn dump_elements_all(inputs: &[String]) -> Vec<String> {
         driver.link_libraries(&libraries[d]);
     }
 
-    let tp = TypeProvider::default();
     let features = FeatureSet::default();
     let sink = NoopSink;
     inputs
@@ -116,6 +115,7 @@ pub fn dump_elements_all(inputs: &[String]) -> Vec<String> {
                 let Some(library) = driver.state.world.libraries.get(uri).copied() else {
                     return error_json(p, "NotLinked");
                 };
+                let tp = dartr_link::types_builder::world_type_provider(&driver.state.world);
                 let ctx = Ctx {
                     world: &driver.state.world,
                     current: None,
@@ -124,6 +124,9 @@ pub fn dump_elements_all(inputs: &[String]) -> Vec<String> {
                     features: &features,
                     req: &sink,
                 };
+                if interface {
+                    return dartr_typesystem::interface_dump::interface_library_json(&ctx, p, library);
+                }
                 let sources = Sources { driver };
                 library_json(&ctx, &sources, p, library)
             }

@@ -147,8 +147,12 @@ Output may never depend on id values or on hash iteration order.
 
 ## 7. Placeholders for later units
 
-- `todo!("<Dart name>")` bodies: `TypeProviderBase.isObjectGetter` /
-  `isObjectMethod` (A7), `FieldElementImpl.declaringFormalParameter` (B4).
+- `todo!("<Dart name>")` bodies: `FieldElementImpl.declaringFormalParameter` (B4).
+- Inheritance (A7, done): `dartr_typesystem::inheritance_manager3` caches the
+  interface of each interface element in `InterfaceElementData.inheritance`
+  (an [`ElementCache`]); substituted members (`ElemRef::Member`) are read
+  through `dartr_typesystem::member`, whose lazy member types are cached in
+  the interner (`Ctx::member_type_cached`).
 - Display strings (A1, done): `display_string.rs` (`type_display_string_with`,
   `element_display_string_with`). The type algorithms (substitution,
   subtyping, LUB, ...) are in `dartr_typesystem`.

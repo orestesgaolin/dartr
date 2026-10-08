@@ -234,6 +234,7 @@ dependencies = [
  "dartr_parser",
  "dartr_project",
  "dartr_syntax",
+ "dartr_typesystem",
  "indexmap",
  "rayon",
 ]
@@ -371,10 +372,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "dartr_type_analyzer"
+version = "0.1.0"
+dependencies = [
+ "dartr_flow",
+ "indexmap",
+]
+
+[[package]]
 name = "dartr_typesystem"
 version = "0.1.0"
 dependencies = [
+ "dartr_ast",
+ "dartr_ast_builder",
+ "dartr_diagnostics",
  "dartr_element",
+ "dartr_flow",
+ "dartr_syntax",
+ "dartr_type_analyzer",
  "indexmap",
 ]
 
