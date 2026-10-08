@@ -181,6 +181,9 @@ pub fn link_cycle(
     // _createTypeSystem, _resolveTypes
     let type_provider = crate::types_builder::create_type_provider(&linker);
     crate::types_builder::resolve_types(&mut linker, &type_provider);
+    // _MixinsInference._resetHierarchies: hierarchies computed during mixin
+    // inference may have seen mixins that were not inferred yet.
+    clear_interface_caches(&mut linker.core.store, true);
 
     // _computeHasNonFinalField ... buildExtensionTypes
     crate::outline::build_outlines(&mut linker, &type_provider);
