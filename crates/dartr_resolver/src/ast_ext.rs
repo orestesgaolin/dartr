@@ -2,7 +2,7 @@
 // getters of the *Impl node classes that resolution uses:
 // SimpleIdentifierImpl.inGetterContext / inSetterContext,
 // IndexExpressionImpl.inGetterContext / inSetterContext,
-// ExpressionImpl.unParenthesized, ...)
+// ExpressionImpl.unParenthesized, SwitchStatementImpl.memberGroups, ...)
 
 //! Dart AST getters that are computed from the syntax (not resolution
 //! results). Add a function here when a ported file needs another one; keep
@@ -10,8 +10,9 @@
 
 use dartr_ast::{
     Ast, AssignmentExpression, ConstructorFieldInitializer, Expression, ForEachPartsWithIdentifier,
-    Id, IndexExpression, Label, NodeId, ParenthesizedExpression, PostfixExpression,
-    PrefixExpression, PrefixedIdentifier, PropertyAccess, SimpleIdentifier,
+    Id, IndexExpression, Label, NodeId, NodeList, ParenthesizedExpression, PostfixExpression,
+    PrefixExpression, PrefixedIdentifier, PropertyAccess, SimpleIdentifier, Statement, SwitchCase,
+    SwitchDefault, SwitchMember, SwitchPatternCase, SwitchStatement,
 };
 use dartr_syntax::TokenType;
 
@@ -137,4 +138,78 @@ pub fn un_parenthesized(ast: &Ast, mut node: Id<Expression>) -> Id<Expression> {
         node = ast[p].expression;
     }
     node
+}
+
+/// Dart `SwitchMember.labels`.
+pub fn switch_member_labels(ast: &Ast, member: Id<SwitchMember>) -> NodeList<Label> {
+    let node: NodeId = member.raw();
+    if let Some(m) = ast.cast::<SwitchCase>(node) {
+        ast[m].labels
+    } else if let Some(m) = ast.cast::<SwitchDefault>(node) {
+        ast[m].labels
+    } else if let Some(m) = ast.cast::<SwitchPatternCase>(node) {
+        ast[m].labels
+    } else {
+        unreachable!("unknown SwitchMember {:?}", ast.kind(node))
+    }
+}
+
+/// Dart `SwitchMember.statements`.
+pub fn switch_member_statements(ast: &Ast, member: Id<SwitchMember>) -> NodeList<Statement> {
+    let node: NodeId = member.raw();
+    if let Some(m) = ast.cast::<SwitchCase>(node) {
+        ast[m].statements
+    } else if let Some(m) = ast.cast::<SwitchDefault>(node) {
+        ast[m].statements
+    } else if let Some(m) = ast.cast::<SwitchPatternCase>(node) {
+        ast[m].statements
+    } else {
+        unreachable!("unknown SwitchMember {:?}", ast.kind(node))
+    }
+}
+
+/// Dart `SwitchStatementCaseGroup` (without the `variables`, which are
+/// resolution data).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SwitchStatementCaseGroup {
+    pub members: Vec<Id<SwitchMember>>,
+    pub has_labels: bool,
+}
+
+impl SwitchStatementCaseGroup {
+    /// Dart `SwitchStatementCaseGroup.statements`: the statements of the
+    /// last member.
+    pub fn statements(&self, ast: &Ast) -> NodeList<Statement> {
+        let last = *self.members.last().expect("a group has members");
+        switch_member_statements(ast, last)
+    }
+}
+
+/// Dart `SwitchStatementImpl.memberGroups`: the members, grouped so that
+/// the members of one group share the statements of the last one.
+pub fn switch_statement_member_groups(
+    ast: &Ast,
+    node: Id<SwitchStatement>,
+) -> Vec<SwitchStatementCaseGroup> {
+    let mut groups = Vec::new();
+    let mut group_members = Vec::new();
+    let mut group_has_labels = false;
+    for &member in ast.list(ast[node].members) {
+        group_members.push(member);
+        group_has_labels |= !switch_member_labels(ast, member).is_empty();
+        if !switch_member_statements(ast, member).is_empty() {
+            groups.push(SwitchStatementCaseGroup {
+                members: std::mem::take(&mut group_members),
+                has_labels: group_has_labels,
+            });
+            group_has_labels = false;
+        }
+    }
+    if !group_members.is_empty() {
+        groups.push(SwitchStatementCaseGroup {
+            members: group_members,
+            has_labels: group_has_labels,
+        });
+    }
+    groups
 }
