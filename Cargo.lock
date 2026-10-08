@@ -385,6 +385,7 @@ dependencies = [
 name = "dartr_project"
 version = "0.1.0"
 dependencies = [
+ "dartr_diagnostics",
  "fancy-regex",
  "pretty_assertions",
  "saphyr-parser",

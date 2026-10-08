@@ -10,6 +10,9 @@
 //! - `pubspec.yaml` ([pubspec]);
 //! - `analysis_options.yaml` with includes and merging ([analysis_options]),
 //!   YAML with spans ([yaml]), exclude globs ([glob]);
+//! - non-Dart diagnostics ([options_validator], [pubspec_validator],
+//!   [manifest_validator]), server dispatch and configured severities
+//!   ([non_dart]);
 //! - the Dart SDK: location, version, `dart:` libraries ([sdk]);
 //! - experiments ([experiments]) and the names of the lint rules
 //!   ([lint_rules]);
@@ -27,12 +30,17 @@ pub mod experiments;
 pub mod fs;
 pub mod glob;
 pub mod lint_rules;
+pub mod manifest_validator;
+pub mod non_dart;
+pub mod options_validator;
 pub mod package_config;
 pub mod paths;
 pub mod pubspec;
+pub mod pubspec_validator;
 pub mod sdk;
 pub mod workspace;
 pub mod yaml;
+mod yaml_errors;
 
 pub use analysis_options::{AnalysisOptions, OptionsParseSession};
 pub use collection::{

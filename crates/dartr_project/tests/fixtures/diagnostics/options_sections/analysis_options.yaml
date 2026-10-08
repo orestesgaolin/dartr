@@ -1,0 +1,18 @@
+analyzer:
+  cannot-ignore: [not_a_code, warning, 42]
+  enable-experiment: [not_an_experiment]
+  exclude: 12
+  errors:
+    unused_import: bananas
+    omit_local_variable_types: warning
+  strong-mode:
+    implicit-casts: false
+    implicit-dynamic: false
+  language:
+    strict-inference: [true]
+    strict-raw-types: 42
+  optional-checks:
+    unknown: true
+formatter:
+  page_width: wrong
+  trailing_commas: sometimes

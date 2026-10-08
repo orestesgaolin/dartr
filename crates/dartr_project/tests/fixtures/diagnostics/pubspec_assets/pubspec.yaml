@@ -1,0 +1,9 @@
+name: fixture_assets
+flutter:
+  assets:
+    - absent.png
+    - absent/
+    - 42
+    - path: absent2.png
+    - wrong: whatever
+    - path: 42

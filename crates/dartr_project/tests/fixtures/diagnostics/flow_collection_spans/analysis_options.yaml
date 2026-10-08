@@ -1,0 +1,1 @@
+analyzer: {language: {strict-casts: [true]}}

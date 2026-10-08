@@ -1,0 +1,2 @@
+linter:
+  rules: [avoid_null_checks_in_equality_operators, always_require_non_null_named_parameters, prefer_iterable_whereType]

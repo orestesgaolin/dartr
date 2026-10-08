@@ -1,0 +1,2 @@
+name: span_fixture
+platforms: {android: [true], ios: {bad: true}}

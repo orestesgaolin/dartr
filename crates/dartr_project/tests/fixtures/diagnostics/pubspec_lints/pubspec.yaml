@@ -1,0 +1,10 @@
+name: fixture_lints
+dependencies:
+  zebra: any
+  alpha: any
+  web_dep:
+    hosted: http://example.com
+  git_dep:
+    git: http://example.com/repo.git
+dependency_overrides:
+  zebra: any

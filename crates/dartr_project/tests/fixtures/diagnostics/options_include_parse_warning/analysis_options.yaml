@@ -1,0 +1,4 @@
+include: broken.yaml
+analyzer:
+  errors:
+    included_file_parse_error: warning

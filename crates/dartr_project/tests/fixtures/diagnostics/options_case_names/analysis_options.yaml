@@ -1,0 +1,5 @@
+analyzer:
+  errors:
+    UNUSED_IMPORT: warning
+linter:
+  rules: [no_runtimeType_toString, prefer_for_elements_to_map_fromIterable, prefer_iterable_whereType, AVOID_PRINT]

@@ -1,0 +1,4 @@
+analyzer: [invalid]
+linter: 42
+formatter: [invalid]
+plugins: [invalid]

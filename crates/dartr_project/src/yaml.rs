@@ -195,6 +195,7 @@ pub fn load_yaml_node(text: &str) -> Result<YamlNode, YamlError> {
 }
 
 struct Loader<'a> {
+    text: &'a str,
     parser: Parser<'a, saphyr_parser::StrInput<'a>>,
     /// Byte offset of each character index, plus the end.
     char_to_byte: Vec<usize>,
@@ -208,6 +209,7 @@ impl<'a> Loader<'a> {
         let mut char_to_byte: Vec<usize> = text.char_indices().map(|(i, _)| i).collect();
         char_to_byte.push(text.len());
         Loader {
+            text,
             parser: Parser::new_from_str(text),
             char_to_byte,
             anchors: Default::default(),
@@ -236,15 +238,16 @@ impl<'a> Loader<'a> {
             Some(Err(error)) => {
                 let marker = error.marker();
                 let offset = self.byte(marker.index());
-                Err(YamlError {
-                    message: error.info().to_string(),
-                    span: Some(Span {
+                Err(crate::yaml_errors::normalize_error(
+                    self.text,
+                    error.info(),
+                    Span {
                         start: offset,
                         end: offset,
                         line: marker.line().saturating_sub(1),
                         column: marker.col(),
-                    }),
-                })
+                    },
+                ))
             }
             None => Err(YamlError {
                 message: "Unexpected end of input.".into(),
@@ -261,6 +264,12 @@ impl<'a> Loader<'a> {
                 Event::StreamStart | Event::Nothing | Event::DocumentEnd => {}
                 Event::StreamEnd => break,
                 Event::DocumentStart(_) => {
+                    if let Some(error) = crate::yaml_errors::incompatible_yaml_version(
+                        self.text,
+                        self.byte(span.start.index()),
+                    ) {
+                        return Err(error);
+                    }
                     if result.is_some() {
                         return Err(YamlError {
                             message: "Only expected one document.".into(),
@@ -346,7 +355,11 @@ impl<'a> Loader<'a> {
                 }
                 // Block collections end at their last child; the end event of
                 // a block collection is at the start of the next token.
-                let end = nodes.last().map_or(end, |n| n.span.end);
+                let end = if self.text.as_bytes().get(start.start) == Some(&b'[') {
+                    end
+                } else {
+                    nodes.last().map_or(end, |n| n.span.end)
+                };
                 let node = YamlNode {
                     kind: NodeKind::List(nodes),
                     span: Span {
@@ -380,7 +393,11 @@ impl<'a> Loader<'a> {
                     }
                     entries.push((key, value));
                 }
-                let end = entries.last().map_or(end, |(_, v)| v.span.end);
+                let end = if self.text.as_bytes().get(start.start) == Some(&b'{') {
+                    end
+                } else {
+                    entries.last().map_or(end, |(_, v)| v.span.end)
+                };
                 let node = YamlNode {
                     kind: NodeKind::Map(entries),
                     span: Span {
