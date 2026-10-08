@@ -145,9 +145,15 @@ def parse_params(text):
     return params
 
 
+def strip_line_comments(src):
+    # Remove `//` comment lines (not `///` docs): they can contain
+    # parentheses inside parameter lists.
+    return re.sub(r'\n[ \t]*//(?!/)[^\n]*', '', src)
+
+
 def parse(src):
     start = src.index('abstract class Listener')
-    body = src[start:]
+    body = strip_line_comments(src[start:])
     methods = []
     pat = re.compile(r'((?:\n  ///[^\n]*)*)(?:\n  //[^\n]*)*\n  void (\w+)\(([^)]*)\)', re.S)
     for m in pat.finditer(body):
@@ -792,7 +798,7 @@ def main():
     src = open(SRC).read()
     methods = parse(src)
     # Keep the Dart parameter lists for the Dart recorder.
-    body = src[src.index('abstract class Listener'):]
+    body = strip_line_comments(src[src.index('abstract class Listener'):])
     for m in methods:
         mm = re.search(r'\n  void ' + m.name + r'\(([^)]*)\)', body, re.S)
         sig = re.sub(r'//[^\n]*', '', mm.group(1))

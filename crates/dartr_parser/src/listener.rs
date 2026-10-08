@@ -247,6 +247,10 @@ pub trait Listener {
 
     fn begin_primary_constructor_body(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
+    /// - metadata
+    /// - initializers
+    /// - async marker
+    /// - body
     fn end_primary_constructor_body(&mut self, tokens: &mut Tokens, begin_token: TokenId, begin_initializers: Option<TokenId>, end_token: TokenId) {}
 
     fn begin_combinators(&mut self, tokens: &mut Tokens, token: TokenId) {}
@@ -1282,7 +1286,7 @@ pub trait Listener {
     /// a comma-separated sequence of patterns, and a `]`.
     fn handle_list_pattern(&mut self, tokens: &mut Tokens, count: i32, left_bracket: TokenId, right_bracket: TokenId) {}
 
-    fn handle_literal_set_or_map(&mut self, tokens: &mut Tokens, count: i32, left_brace: TokenId, const_keyword: Option<TokenId>, right_brace: TokenId) {}
+    fn handle_literal_set_or_map(&mut self, tokens: &mut Tokens, count: i32, left_brace: TokenId, const_keyword: Option<TokenId>, right_brace: TokenId, has_set_entry: bool) {}
 
     /// Called after the parser has consumed a map pattern, consisting of a `{`,
     /// a comma-separated sequence of mapPatternEntry, and a `}`.

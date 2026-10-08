@@ -5,6 +5,8 @@ use std::fmt::Write as _;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
+use dartr_parser::event_recorder::EventRecorder;
+use dartr_parser::parse_for_analyzer;
 use dartr_syntax::{Diagnostic, TokenId, Tokens, scan_for_analyzer, strip_bom};
 use rayon::prelude::*;
 
@@ -14,6 +16,9 @@ use crate::json::write_string;
 pub enum DumpMode {
     /// Token stream and scanner diagnostics.
     Tokens,
+    /// Parser events: every listener call of the parser, the recoverable
+    /// errors and the token stream after parsing.
+    Events,
     /// Unresolved AST and parse diagnostics (not implemented yet).
     Ast,
     /// Resolved diagnostics and expression types (not implemented yet).
@@ -50,16 +55,21 @@ pub fn run(mode: DumpMode, files: Vec<PathBuf>) -> anyhow::Result<()> {
 
     let dump: fn(&str) -> String = match mode {
         DumpMode::Tokens => dump_tokens,
+        DumpMode::Events => dump_events,
         DumpMode::Ast | DumpMode::Resolved => {
             anyhow::bail!("dump mode {mode:?} is not implemented yet")
         }
     };
 
+    // The parser recurses deeply on deeply nested code; use large stacks.
+    let pool = rayon::ThreadPoolBuilder::new()
+        .stack_size(256 << 20)
+        .build()?;
     let stdout = io::stdout();
     let mut out = io::BufWriter::new(stdout.lock());
     // Bounded chunks keep the output order and limit memory.
-    for chunk in paths.chunks(512) {
-        let lines: Vec<String> = chunk.par_iter().map(|p| dump(p)).collect();
+    for chunk in paths.chunks(64) {
+        let lines: Vec<String> = pool.install(|| chunk.par_iter().map(|p| dump(p)).collect());
         for line in lines {
             out.write_all(line.as_bytes())?;
             out.write_all(b"\n")?;
@@ -121,6 +131,43 @@ pub fn dump_tokens(path: &str) -> String {
             out.push(',');
         }
         write_diagnostic(&mut out, d);
+    }
+    out.push_str("]}");
+    out
+}
+
+/// One line of `dump events` (`tools/oracle/bin/events.dart`).
+pub fn dump_events(path: &str) -> String {
+    let source = match read_source(path) {
+        Ok(s) => s,
+        Err(e) => return error_json(path, e),
+    };
+    let result = parse_for_analyzer(&source, EventRecorder::new());
+    let tokens = &result.tokens;
+    let recorder = &result.listener;
+    let mut out = String::with_capacity(recorder.out.len() + source.len() * 2 + 64);
+    out.push_str("{\"path\":");
+    write_string(&mut out, path);
+    out.push_str(",\"events\":[");
+    out.push_str(&recorder.out);
+    out.push_str("],\"errors\":[");
+    out.push_str(&recorder.errors);
+    out.push_str("],\"stream\":[");
+    let mut first = true;
+    for id in tokens.iter_from(tokens.next(result.before_first)) {
+        if !first {
+            out.push(',');
+        }
+        first = false;
+        let t = tokens.get(id);
+        let _ = write!(out, "[{},", t.offset as i32);
+        write_string(&mut out, tokens.lexeme(id));
+        if t.is_synthetic() {
+            out.push_str(",\"");
+            out.push_str(t.ty.name());
+            out.push('"');
+        }
+        out.push(']');
     }
     out.push_str("]}");
     out

@@ -2277,12 +2277,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_literal_set_or_map(&mut self, tokens: &mut Tokens, count: i32, left_brace: TokenId, const_keyword: Option<TokenId>, right_brace: TokenId) {
+    fn handle_literal_set_or_map(&mut self, tokens: &mut Tokens, count: i32, left_brace: TokenId, const_keyword: Option<TokenId>, right_brace: TokenId, has_set_entry: bool) {
         self.begin("handleLiteralSetOrMap");
         self.int(count as i64);
         self.token(tokens, left_brace);
         self.opt_token(tokens, const_keyword);
         self.token(tokens, right_brace);
+        self.bool(has_set_entry);
         self.end();
     }
 

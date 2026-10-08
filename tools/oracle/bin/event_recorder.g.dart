@@ -1545,8 +1545,8 @@ class EventRecorder extends Listener {
   }
 
   @override
-  void handleLiteralSetOrMap(int count, Token leftBrace, Token? constKeyword, Token rightBrace,) {
-    events.add(['handleLiteralSetOrMap', count, t(leftBrace), t(constKeyword), t(rightBrace)]);
+  void handleLiteralSetOrMap(int count, Token leftBrace, Token? constKeyword, Token rightBrace, bool hasSetEntry,) {
+    events.add(['handleLiteralSetOrMap', count, t(leftBrace), t(constKeyword), t(rightBrace), hasSetEntry]);
   }
 
   @override

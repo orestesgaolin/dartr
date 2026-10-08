@@ -2648,11 +2648,11 @@ impl<L: Listener> ListenerStack<L> {
     }
 
     #[inline]
-    pub fn handle_literal_set_or_map(&mut self, count: i32, left_brace: TokenId, const_keyword: Option<TokenId>, right_brace: TokenId) {
+    pub fn handle_literal_set_or_map(&mut self, count: i32, left_brace: TokenId, const_keyword: Option<TokenId>, right_brace: TokenId, has_set_entry: bool) {
         if !self.layers.is_empty() && !self.route(Route::Other) {
             return;
         }
-        self.primary.handle_literal_set_or_map(&mut self.tokens, count, left_brace, const_keyword, right_brace);
+        self.primary.handle_literal_set_or_map(&mut self.tokens, count, left_brace, const_keyword, right_brace, has_set_entry);
     }
 
     #[inline]

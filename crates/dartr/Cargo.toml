@@ -8,6 +8,7 @@ license.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 dartr_syntax.workspace = true
+dartr_parser.workspace = true
 rayon.workspace = true
 
 [dev-dependencies]

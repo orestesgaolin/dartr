@@ -166,6 +166,7 @@ dependencies = [
  "anyhow",
  "clap",
  "dartr_difftest",
+ "dartr_parser",
  "dartr_syntax",
  "rayon",
 ]

@@ -6,8 +6,8 @@
 //! The parser is event based (Dart "fasta" parser): [`Parser`] reads the
 //! token stream of `dartr_syntax` and calls the methods of a [`Listener`]
 //! (`begin_x` / `end_x` / `handle_x`). The listener is a generic parameter
-//! (static dispatch). [`parse_compilation_unit`] parses a file the way the
-//! analyzer does (`parseString`).
+//! (static dispatch). [`parse_for_analyzer`] scans and parses a file the way
+//! the analyzer does (`parseString`).
 //!
 //! # Port conventions
 //!
@@ -39,6 +39,7 @@
     clippy::new_without_default
 )]
 
+pub mod analyzer;
 pub mod assert;
 pub mod async_modifier;
 pub mod block_kind;
@@ -67,6 +68,7 @@ pub mod type_info;
 pub mod type_info_impl;
 pub mod util;
 
+pub use analyzer::{AnalyzerParseResult, parse_for_analyzer};
 pub use experimental_features::{ExperimentalFeatures, ExperimentalFlag};
 pub use listener::Listener;
 pub use listener_stack::ListenerStack;
