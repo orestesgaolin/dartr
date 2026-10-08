@@ -3,8 +3,8 @@
 //! Port of `inheritance_manager3_test.dart`. Each test keeps the Dart source
 //! of the original test; `support::SourceTest` builds the declarations with
 //! the real parser and the `test_support` builder (see `support/mod.rs`).
-//! Tests whose source needs inference (implicit types) are `#[ignore]`d with
-//! the reason "needs the linker".
+//! Tests whose source needs inference (implicit types, inherited
+//! covariance) build it with the real linker (`SourceTest::linked`).
 
 mod support;
 
@@ -1152,10 +1152,9 @@ abstract class C extends B {}
     }
 
     /// Dart: `test_getMember_concrete_noSuchMethod`.
-    #[ignore = "needs the linker: implicit member types (override inference, unit B5)"]
     #[test]
     fn test_get_member_concrete_no_such_method() {
-        let r = SourceTest::new(
+        let r = SourceTest::linked(
             r#"class A {
   void foo() {}
 }
@@ -1184,10 +1183,9 @@ abstract class C extends B {}
     }
 
     /// Dart: `test_getMember_concrete_noSuchMethod_mixin`.
-    #[ignore = "needs the linker: implicit member types (override inference, unit B5)"]
     #[test]
     fn test_get_member_concrete_no_such_method_mixin() {
-        let r = SourceTest::new(
+        let r = SourceTest::linked(
             r#"class A {
   void foo();
 
@@ -1201,10 +1199,9 @@ abstract class B extends Object with A {}
     }
 
     /// Dart: `test_getMember_concrete_noSuchMethod_moreSpecificSignature`.
-    #[ignore = "needs the linker: implicit member types (override inference, unit B5)"]
     #[test]
     fn test_get_member_concrete_no_such_method_more_specific_signature() {
-        let r = SourceTest::new(
+        let r = SourceTest::linked(
             r#"class A {
   void foo() {}
 }
@@ -1407,10 +1404,9 @@ class C {
     }
 
     /// Dart: `test_getMember_method_covariantByDeclaration_inherited`.
-    #[ignore = "needs the linker: inherited parameter covariance is set by override inference (unit B5)"]
     #[test]
     fn test_get_member_method_covariant_by_declaration_inherited() {
-        let r = SourceTest::new(
+        let r = SourceTest::linked(
             r#"
 abstract class A {
   void foo(covariant num a);
@@ -1763,10 +1759,9 @@ class X extends A implements I {
     }
 
     /// Dart: `test_getMember_setter_covariantByDeclaration_inherited`.
-    #[ignore = "needs the linker: inherited parameter covariance is set by override inference (unit B5)"]
     #[test]
     fn test_get_member_setter_covariant_by_declaration_inherited() {
-        let r = SourceTest::new(
+        let r = SourceTest::linked(
             r#"
 abstract class A {
   set foo(covariant num a);
@@ -1833,10 +1828,9 @@ class C extends B implements A {}
     }
 
     /// Dart: `test_getMember_super_abstract`.
-    #[ignore = "needs the linker: implicit member types (override inference, unit B5)"]
     #[test]
     fn test_get_member_super_abstract() {
-        let r = SourceTest::new(
+        let r = SourceTest::linked(
             r#"abstract class A {
   void foo();
 }
@@ -1891,7 +1885,7 @@ mixin M on A {}
 class A {}
 "#,
         );
-        let object = r.t.tp.object_element().upcast::<InterfaceElement>();
+        let object = r.ctx().tp.object_element().upcast::<InterfaceElement>();
         let member = r.manager().get_member_with(
             object,
             r.name("hashCode"),
@@ -1960,10 +1954,9 @@ class B extends A {}
     }
 
     /// Dart: `test_getMember_super_noSuchMember`.
-    #[ignore = "needs the linker: implicit member types (override inference, unit B5)"]
     #[test]
     fn test_get_member_super_no_such_member() {
-        let r = SourceTest::new(
+        let r = SourceTest::linked(
             r#"class A {
   void foo();
   noSuchMethod(_) {}
@@ -2308,10 +2301,9 @@ inheritedMap
     }
 
     /// Dart: `test_declareGetter_implementClass_withSetter`.
-    #[ignore = "needs the linker: implicit member types (override inference, unit B5)"]
     #[test]
     fn test_declare_getter_implement_class_with_setter() {
-        let r = SourceTest::new(
+        let r = SourceTest::linked(
             r#"class A {
   set foo(_) {}
 }
@@ -2588,10 +2580,9 @@ inheritedMap
     }
 
     /// Dart: `test_declareMethod_implementClass_precludeSetter`.
-    #[ignore = "needs the linker: implicit member types (override inference, unit B5)"]
     #[test]
     fn test_declare_method_implement_class_preclude_setter() {
-        let r = SourceTest::new(
+        let r = SourceTest::linked(
             r#"class A {
   set foo(_) {}
 }
@@ -2746,10 +2737,9 @@ inheritedMap
     }
 
     /// Dart: `test_declareMethod_implementExtensionType_precludeSetter`.
-    #[ignore = "needs the linker: implicit member types (override inference, unit B5)"]
     #[test]
     fn test_declare_method_implement_extension_type_preclude_setter() {
-        let r = SourceTest::new(
+        let r = SourceTest::linked(
             r#"extension type A(int it) {
   set foo(_) {}
 }
@@ -2835,10 +2825,9 @@ declared
     }
 
     /// Dart: `test_declareSetter_implementClass_withGetter`.
-    #[ignore = "needs the linker: implicit member types (override inference, unit B5)"]
     #[test]
     fn test_declare_setter_implement_class_with_getter() {
-        let r = SourceTest::new(
+        let r = SourceTest::linked(
             r#"class A {
   int get foo => 0;
 }
@@ -2874,10 +2863,9 @@ inheritedMap
     }
 
     /// Dart: `test_declareSetter_implementClass_withMethod`.
-    #[ignore = "needs the linker: implicit member types (override inference, unit B5)"]
     #[test]
     fn test_declare_setter_implement_class_with_method() {
-        let r = SourceTest::new(
+        let r = SourceTest::linked(
             r#"class A {
   void foo() {}
 }
@@ -2912,10 +2900,9 @@ inheritedMap
     }
 
     /// Dart: `test_declareSetter_implementExtensionType_withGetter`.
-    #[ignore = "needs the linker: implicit member types (override inference, unit B5)"]
     #[test]
     fn test_declare_setter_implement_extension_type_with_getter() {
-        let r = SourceTest::new(
+        let r = SourceTest::linked(
             r#"extension type A(int it) {
   int get foo => 0;
 }
@@ -2952,10 +2939,9 @@ inheritedMap
     }
 
     /// Dart: `test_declareSetter_implementExtensionType_withMethod`.
-    #[ignore = "needs the linker: implicit member types (override inference, unit B5)"]
     #[test]
     fn test_declare_setter_implement_extension_type_with_method() {
-        let r = SourceTest::new(
+        let r = SourceTest::linked(
             r#"extension type A(int it) {
   void foo() {}
 }
