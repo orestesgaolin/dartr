@@ -16,9 +16,7 @@
 //! `TypeConstraintGatherer`) needs it. So it lives here; the resolver uses
 //! it as it is.
 //!
-//! Not ported yet (they need element getters that the resolver units port):
-//! `isFinal`, `isVariableFinal`, `variableType`, `isPropertyPromotable`,
-//! `whyPropertyIsNotPromotable` (they are `todo!()`). Dart throws
+//! Dart throws
 //! `UnimplementedError` for `doubleType`, `intType` and
 //! `lookupMemberTypeInternal`; so does this port (`unimplemented!()`).
 
@@ -26,8 +24,9 @@ use std::cmp::Ordering;
 
 use dartr_ast::NodeId;
 use dartr_element::{
-    EId, ElemRef, InterfaceElement, Name, NamedType, Nullability, PromotableElement, TypeId,
-    TypeKind, TypeParameterElement,
+    AnyElement, Ctx, EId, ElemRef, ElementId, FieldElement, FragmentFlags, InterfaceElement, Name,
+    NamedType, Nullability, PromotableElement, PropertyAccessorElement, Tag, TypeId, TypeKind,
+    TypeParameterElement,
 };
 use dartr_flow::flow_analysis_operations::{
     FlowAnalysisOperations, FlowAnalysisTypeOperations, PropertyNonPromotabilityReason,
@@ -42,6 +41,7 @@ use dartr_flow::type_analyzer_operations::{
 };
 use dartr_flow::type_constraint::TypeConstraintGenerationDataForTesting;
 
+use crate::member;
 use crate::type_algebra::MapSubstitution;
 use crate::type_constraint_gatherer::TypeConstraintGatherer;
 use crate::type_ext::{TypeExt, is_named, is_required_named};
@@ -346,29 +346,109 @@ impl<'a> FlowAnalysisOperations for TypeSystemOperations<'a> {
     }
 
     fn is_final(&self, variable: EId<PromotableElement>) -> bool {
-        let _ = variable;
-        todo!("TypeSystemOperations.isFinal (resolver unit C2: PromotableElementImpl.isFinal)")
+        promotable_is_final(&self.ctx(), variable)
     }
 
+    /// Dart: `property is PropertyAccessorElement`, `property.variable is
+    /// FieldElement`, `field.isPromotable`.
     fn is_property_promotable(&self, property: &ElemRef) -> bool {
-        let _ = property;
-        todo!(
-            "TypeSystemOperations.isPropertyPromotable (resolver unit C2: FieldElement.isPromotable)"
-        )
+        let ctx = self.ctx();
+        let Some(field) = accessor_field(&ctx, *property) else {
+            return false;
+        };
+        first_fragment_flags(&ctx, field).contains(FragmentFlags::FIELD_FRAGMENT_IS_PROMOTABLE)
     }
 
     fn variable_type(&self, variable: EId<PromotableElement>) -> SharedTypeView<TypeId> {
-        let _ = variable;
-        todo!("TypeSystemOperations.variableType (resolver unit C2: PromotableElementImpl.type)")
+        SharedTypeView::new(promotable_type(&self.ctx(), variable))
     }
 
     fn why_property_is_not_promotable(
         &self,
         property: &ElemRef,
     ) -> Option<PropertyNonPromotabilityReason> {
-        let _ = property;
-        todo!("TypeSystemOperations.whyPropertyIsNotPromotable (resolver unit C2)")
+        let ctx = self.ctx();
+        // `property.isPublic` (a substituted member answers for its base).
+        let base = member::base_element(&ctx, *property);
+        if element_is_public(&ctx, base) {
+            return Some(PropertyNonPromotabilityReason::IsNotPrivate);
+        }
+        if base.cast::<PropertyAccessorElement>().is_none() {
+            return Some(PropertyNonPromotabilityReason::IsNotField);
+        }
+        let Some(field) = accessor_field(&ctx, *property) else {
+            return Some(PropertyNonPromotabilityReason::IsNotField);
+        };
+        let flags = first_fragment_flags(&ctx, field);
+        if flags.contains(FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_GETTER_SETTER) {
+            // The field is synthetic but not the property; this means that
+            // what was declared by the user was the property (the getter).
+            return Some(PropertyNonPromotabilityReason::IsNotField);
+        }
+        if flags.contains(FragmentFlags::FIELD_FRAGMENT_IS_PROMOTABLE) {
+            return None;
+        }
+        if flags.contains(FragmentFlags::VARIABLE_FRAGMENT_IS_EXTERNAL) {
+            return Some(PropertyNonPromotabilityReason::IsExternal);
+        }
+        if !flags.contains(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL) {
+            return Some(PropertyNonPromotabilityReason::IsNotFinal);
+        }
+        // Non-promotion reason must be due to a conflict with some other
+        // declaration, or because field promotion is disabled.
+        None
     }
+}
+
+/// The flags of the first fragment of [e] (the `_firstFragment.isX`
+/// getters of the elements).
+fn first_fragment_flags(ctx: &Ctx<'_>, e: ElementId) -> FragmentFlags {
+    ctx.element_data(e)
+        .and_then(|data| ctx.fragment_data(data.first_fragment))
+        .map_or(FragmentFlags::EMPTY, |f| f.flags.get())
+}
+
+/// Dart `ElementImpl.isPublic`: `!isPrivate`, where an element without a
+/// name is private.
+fn element_is_public(ctx: &Ctx<'_>, e: ElementId) -> bool {
+    match ctx.element_name(e) {
+        None => false,
+        Some(name) => !name.starts_with('_'),
+    }
+}
+
+/// The base field element of [property] when [property] is a property
+/// accessor whose `variable` is a `FieldElement` (Dart
+/// `property is PropertyAccessorElement` and `property.variable is
+/// FieldElement`). A substituted field answers its getters through its
+/// base element, so the base element is enough here.
+fn accessor_field(ctx: &Ctx<'_>, property: ElemRef) -> Option<ElementId> {
+    let accessor = member::base_element(ctx, property).cast::<PropertyAccessorElement>()?;
+    let variable = ctx.property_accessor(accessor).variable.get()?.raw();
+    variable.is::<FieldElement>().then_some(variable)
+}
+
+/// Dart `PromotableElementImpl.isFinal`: `true` for field formal and super
+/// formal parameters (`FieldFormalParameterElementImpl.isFinal`,
+/// `SuperFormalParameterElementImpl.isFinal`), else
+/// `VariableElementImpl.isFinal` (`_firstFragment.isFinal`).
+pub fn promotable_is_final(ctx: &Ctx<'_>, variable: EId<PromotableElement>) -> bool {
+    let e = variable.raw();
+    match e.tag() {
+        Tag::FieldFormalParameter | Tag::SuperFormalParameter => true,
+        _ => first_fragment_flags(ctx, e).contains(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL),
+    }
+}
+
+/// Dart `PromotableElementImpl.type` (`VariableElementImpl.type`);
+/// `InvalidType` when the type is not set yet.
+pub fn promotable_type(ctx: &Ctx<'_>, variable: EId<PromotableElement>) -> TypeId {
+    let t = match ctx.any(variable.raw()) {
+        AnyElement::LocalVariable(v) => v.type_.get(),
+        AnyElement::FormalParameter(p) => p.type_.get(),
+        _ => None,
+    };
+    t.unwrap_or(TypeId::INVALID)
 }
 
 // =================================================== TypeAnalyzerOperations
@@ -573,10 +653,7 @@ impl<'a> TypeAnalyzerOperations for TypeSystemOperations<'a> {
     }
 
     fn is_variable_final(&self, node: EId<PromotableElement>) -> bool {
-        let _ = node;
-        todo!(
-            "TypeSystemOperations.isVariableFinal (resolver unit C2: PromotableElementImpl.isFinal)"
-        )
+        promotable_is_final(&self.ctx(), node)
     }
 
     fn iterable_type_schema(
