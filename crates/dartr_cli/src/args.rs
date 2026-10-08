@@ -197,6 +197,11 @@ pub fn parse(argv: &[String]) -> Result<AnalyzeArgs, UsageError> {
                         Some((n, Some(Kind::Flag(true)))) if value.is_none() => {
                             set_flag(&mut args, n, false)
                         }
+                        Some((n, Some(Kind::Option | Kind::MultiOption))) => {
+                            return Err(UsageError(format!(
+                                "Cannot negate non-flag option \"--no-{n}\"."
+                            )));
+                        }
                         Some((n, Some(Kind::Flag(false)))) => {
                             return Err(UsageError(format!(
                                 "Cannot negate option \"--no-{n}\"."

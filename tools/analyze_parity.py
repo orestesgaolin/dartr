@@ -34,8 +34,12 @@ import time
 IGNORE_CODES = {"duplicate_ignore", "unignorable_ignore"}
 
 
-def is_syntactic(d):
-    return d["type"] == "SYNTACTIC_ERROR" or d["code"] in IGNORE_CODES
+def is_syntactic(d, parse_codes=frozenset()):
+    """Whether [d] is a diagnostic that the parse-only pipeline can report:
+    type SYNTACTIC_ERROR, an ignore-comment code, or one of [parse_codes]
+    (codes that the parser reports with another type, for example
+    `built_in_identifier_as_type`, collected from the dartr output)."""
+    return d["type"] == "SYNTACTIC_ERROR" or d["code"] in IGNORE_CODES or d["code"] in parse_codes
 
 
 def run(cmd, cwd):
@@ -101,17 +105,24 @@ def main():
     real = by_file(json.loads(out_d)["diagnostics"])
     mine = by_file(json.loads(out_r)["diagnostics"])
 
+    parse_codes = frozenset(d["code"] for v in mine.values() for d in v)
     files = sorted(set(real) | set(mine))
     total_real = sum(len(v) for v in real.values())
-    syntactic_real = sum(1 for v in real.values() for d in v if is_syntactic(d))
+    syntactic_real = sum(1 for v in real.values() for d in v if is_syntactic(d, parse_codes))
     mismatched = []
     for f in files:
-        expected = sorted(key(d) for d in real.get(f, []) if is_syntactic(d))
+        expected = sorted(key(d) for d in real.get(f, []) if is_syntactic(d, parse_codes))
         actual = sorted(key(d) for d in mine.get(f, []))
         if expected != actual:
             mismatched.append((f, expected, actual))
     print(f"real diagnostics: {total_real}, syntactic: {syntactic_real}; dartr: {sum(len(v) for v in mine.values())}")
     print(f"files with diagnostics: {len(files)}; filtered mismatches: {len(mismatched)}")
+    codes = {}
+    for f, e, a in mismatched:
+        for d in set(e) ^ set(a):
+            codes[(d[0], "dart" if d in e else "dartr")] = codes.get((d[0], "dart" if d in e else "dartr"), 0) + 1
+    for (c, side), count in sorted(codes.items()):
+        print(f"  only in {side}: {c} x{count}")
     for f, e, a in mismatched[:20]:
         print(f"  MISMATCH {f}")
         for d in sorted(set(e) - set(a))[:3]:
@@ -120,7 +131,7 @@ def main():
             print(f"    only dartr: {d}")
 
     # Exact comparison on the pure files.
-    pure = [f for f in files if f in real and all(is_syntactic(d) for d in real[f])
+    pure = [f for f in files if f in real and all(is_syntactic(d, parse_codes) for d in real[f])
             and f not in {m[0] for m in mismatched}]
     subset = os.path.join(work, "subset")
     failures = 0
@@ -133,7 +144,7 @@ def main():
             shutil.copyfile(f, target)
         _, out, _, _ = run(["dart", "analyze", "--format=json", subset], work)
         diags = json.loads(out)["diagnostics"]
-        impure = {d["location"]["file"] for d in diags if not is_syntactic(d)}
+        impure = {d["location"]["file"] for d in diags if not is_syntactic(d, parse_codes)}
         if not impure:
             break
         drop = {os.path.join(full, os.path.relpath(f, subset)) for f in impure}
