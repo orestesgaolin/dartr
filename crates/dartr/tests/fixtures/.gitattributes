@@ -1,0 +1,2 @@
+# Fixtures keep their exact bytes (CR, CRLF, BOM, control characters).
+* -text
