@@ -14,9 +14,15 @@
 //! | [`api_part1`] | 37-1005 | `API` (first part) |
 //! | [`state_part1`] | 3721-3884 | `State` (first part) |
 //! | [`patterns_part1`] | 7038-7330 | `Patterns:` (first part) |
+//! | [`sound_flow_analysis_part2`] | 12239-12882 | `Sound flow analysis:` (second part) |
+//! | [`demotion`] | 12884-13064 | `Demotion and type of interest promotion:` |
+//! | [`anonymous_methods`] | 13066-13303 | `Anonymous methods:` |
 
 mod common;
 
+mod anonymous_methods;
 mod api_part1;
+mod demotion;
 mod patterns_part1;
+mod sound_flow_analysis_part2;
 mod state_part1;
