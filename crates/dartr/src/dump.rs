@@ -28,6 +28,12 @@ pub enum DumpMode {
     /// Element model of each library (docs/design/semantics.md §5.1).
     /// Skeleton: every path gives `{"path":..,"error":"not implemented"}`.
     Elements,
+    /// Interfaces of the classes of each library (docs/design/semantics.md
+    /// §5.2, `tools/oracle/bin/interface.dart`). Skeleton: every path gives
+    /// `{"path":..,"error":"not implemented"}` until the linker builds the
+    /// library elements; then each line is
+    /// `dartr_typesystem::interface_dump::interface_library_json`.
+    Interface,
 }
 
 /// Runs `dump` for [files], or for the paths on stdin (one per line) when
@@ -50,7 +56,8 @@ pub fn run(mode: DumpMode, files: Vec<PathBuf>) -> anyhow::Result<()> {
     let paths: Vec<String> = paths
         .iter()
         .map(|p| {
-            // A `dart:` library URI (mode `elements`) is kept as it is.
+            // A `dart:` library URI (modes `elements`, `interface`) is kept
+            // as it is.
             if p.is_absolute() || p.to_str().is_some_and(|s| s.starts_with("dart:")) {
                 p.to_string_lossy().into_owned()
             } else {
@@ -63,6 +70,7 @@ pub fn run(mode: DumpMode, files: Vec<PathBuf>) -> anyhow::Result<()> {
         DumpMode::Tokens => dump_tokens,
         DumpMode::Events => dump_events,
         DumpMode::Elements => dump_elements,
+        DumpMode::Interface => dump_interface,
         DumpMode::Ast => dump_ast,
         DumpMode::Resolved => {
             anyhow::bail!("dump mode {mode:?} is not implemented yet")
@@ -116,6 +124,15 @@ fn error_json(path: &str, error: &str) -> String {
 /// One line of `dump elements`. Not implemented yet: the element model is
 /// built in `dartr_element` (phase 5).
 pub fn dump_elements(path: &str) -> String {
+    error_json(path, "not implemented")
+}
+
+/// One line of `dump interface`. Not implemented yet: it needs the library
+/// elements from the linker (unit B6). The line writer is
+/// `dartr_typesystem::interface_dump::interface_library_json(ctx, path,
+/// library)`; it matches the oracle byte for byte on
+/// `crates/dartr_typesystem/tests/fixtures/interface/sample.dart`.
+pub fn dump_interface(path: &str) -> String {
     error_json(path, "not implemented")
 }
 

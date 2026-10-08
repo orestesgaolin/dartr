@@ -41,6 +41,8 @@ writes JSON Lines. `dartr dump <mode>` writes the same format.
 | `events`   | parser events: every listener call of the shared parser, recoverable errors, token stream after parsing (`tools/oracle/bin/events.dart`) |
 | `ast`      | unresolved AST as ordered child entities (`childEntities`), parse diagnostics |
 | `resolved` | diagnostics of the resolved unit, static type of each expression  |
+| `elements` | element model of each library (`tools/oracle/bin/elements.dart`, design §5.1) |
+| `interface`| `InheritanceManager3` interfaces of the classes of each library (`tools/oracle/bin/interface.dart`, design §5.2) |
 
 The test corpus:
 
