@@ -151,7 +151,11 @@ pub fn un_parenthesized(ast: &Ast, mut node: Id<Expression>) -> Id<Expression> {
 /// or `None` when it is empty (a synthetic identifier).
 pub fn name_if_not_empty(ast: &Ast, token: TokenId) -> Option<&str> {
     let lexeme = ast.tokens.lexeme(token);
-    if lexeme.is_empty() { None } else { Some(lexeme) }
+    if lexeme.is_empty() {
+        None
+    } else {
+        Some(lexeme)
+    }
 }
 
 /// Dart `Token.offsetIfNotEmpty` (element_binding_visitor.dart).
@@ -312,7 +316,10 @@ fn ancestor_cascade_target(ast: &Ast, node: NodeId) -> Option<Id<Expression>> {
 }
 
 /// Dart `MethodInvocationImpl.realTarget`.
-pub fn method_invocation_real_target(ast: &Ast, node: Id<MethodInvocation>) -> Option<Id<Expression>> {
+pub fn method_invocation_real_target(
+    ast: &Ast,
+    node: Id<MethodInvocation>,
+) -> Option<Id<Expression>> {
     if method_invocation_is_cascaded(ast, node) {
         return ancestor_cascade_target(ast, node.raw());
     }
@@ -337,7 +344,9 @@ pub fn in_constant_context(ast: &Ast, node: NodeId) -> bool {
                 return true;
             }
             NodeKind::ConstantPattern => {
-                return ast[Id::<ConstantPattern>::from_raw(p)].const_keyword.is_some();
+                return ast[Id::<ConstantPattern>::from_raw(p)]
+                    .const_keyword
+                    .is_some();
             }
             NodeKind::DotShorthandConstructorInvocation => {
                 if ast[Id::<DotShorthandConstructorInvocation>::from_raw(p)]
@@ -354,7 +363,10 @@ pub fn in_constant_context(ast: &Ast, node: NodeId) -> bool {
                 }
             }
             NodeKind::RecordLiteral => {
-                if ast[Id::<RecordLiteral>::from_raw(p)].const_keyword.is_some() {
+                if ast[Id::<RecordLiteral>::from_raw(p)]
+                    .const_keyword
+                    .is_some()
+                {
                     return true;
                 }
             }
@@ -364,7 +376,10 @@ pub fn in_constant_context(ast: &Ast, node: NodeId) -> bool {
                 }
             }
             NodeKind::SetOrMapLiteral => {
-                if ast[Id::<SetOrMapLiteral>::from_raw(p)].const_keyword.is_some() {
+                if ast[Id::<SetOrMapLiteral>::from_raw(p)]
+                    .const_keyword
+                    .is_some()
+                {
                     return true;
                 }
             }

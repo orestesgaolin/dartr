@@ -336,14 +336,24 @@ impl LibraryScopes {
         // Dart `accessibleExtensions`.
         let mut extensions: IndexSet<EId<ExtensionElement>> = IndexSet::new();
         extensions.extend(self.declarations.extensions.iter().copied());
-        extensions.extend(self.prefix_scopes[no_prefix_scope as usize].extensions.iter().copied());
+        extensions.extend(
+            self.prefix_scopes[no_prefix_scope as usize]
+                .extensions
+                .iter()
+                .copied(),
+        );
         for prefix in prefix_elements.values() {
             if let Some(&s) = self.prefix_scope_of.get(prefix) {
                 extensions.extend(self.prefix_scopes[s as usize].extensions.iter().copied());
             }
         }
         if let Some(p) = parent {
-            extensions.extend(self.fragment_scopes[&p].accessible_extensions.iter().copied());
+            extensions.extend(
+                self.fragment_scopes[&p]
+                    .accessible_extensions
+                    .iter()
+                    .copied(),
+            );
         }
 
         self.fragment_scopes.insert(
@@ -641,7 +651,10 @@ impl LibraryScopes {
     }
 
     /// Dart `LibraryFragmentScope.accessibleExtensions`.
-    pub fn accessible_extensions(&self, fragment: FId<LibraryFragment>) -> &[EId<ExtensionElement>] {
+    pub fn accessible_extensions(
+        &self,
+        fragment: FId<LibraryFragment>,
+    ) -> &[EId<ExtensionElement>] {
         self.fragment_scopes
             .get(&fragment)
             .map(|s| s.accessible_extensions.as_slice())
@@ -667,7 +680,12 @@ impl LibraryScopes {
             );
             for prefix in scope.prefix_elements.values() {
                 if let Some(&s) = self.prefix_scope_of.get(prefix) {
-                    result.extend(self.prefix_scopes[s as usize].imported_libraries.iter().copied());
+                    result.extend(
+                        self.prefix_scopes[s as usize]
+                            .imported_libraries
+                            .iter()
+                            .copied(),
+                    );
                 }
             }
             current = scope.parent;
@@ -677,7 +695,10 @@ impl LibraryScopes {
 
     /// Dart `LibraryFragmentImpl.enclosingFragment` of a fragment of the
     /// library: the fragment with the `part` directive that includes it.
-    pub fn enclosing_fragment(&self, fragment: FId<LibraryFragment>) -> Option<FId<LibraryFragment>> {
+    pub fn enclosing_fragment(
+        &self,
+        fragment: FId<LibraryFragment>,
+    ) -> Option<FId<LibraryFragment>> {
         self.fragment_scopes.get(&fragment)?.parent
     }
 
@@ -837,7 +858,10 @@ impl<'a> EnclosedScope<'a> {
     ) -> EnclosedScope<'a> {
         let mut scope = EnclosedScope::new(EnclosedScopeKind::FormalParameter, wildcard_variables);
         for &e in elements {
-            if matches!(e.raw().tag(), Tag::FieldFormalParameter | Tag::SuperFormalParameter) {
+            if matches!(
+                e.raw().tag(),
+                Tag::FieldFormalParameter | Tag::SuperFormalParameter
+            ) {
                 continue;
             }
             if wildcard_variables && lookup_name(ctx, e.raw()) == Some("_") {
@@ -905,8 +929,10 @@ impl<'a> EnclosedScope<'a> {
         element: EId<ConstructorElement>,
         wildcard_variables: bool,
     ) -> EnclosedScope<'a> {
-        let mut scope =
-            EnclosedScope::new(EnclosedScopeKind::ConstructorInitializer, wildcard_variables);
+        let mut scope = EnclosedScope::new(
+            EnclosedScopeKind::ConstructorInitializer,
+            wildcard_variables,
+        );
         for &p in &ctx.get(element).formal_params {
             if wildcard_variables && lookup_name(ctx, p.raw()) == Some("_") {
                 continue;
@@ -939,7 +965,10 @@ impl<'a> EnclosedScope<'a> {
             if wildcard_variables && lookup_name(ctx, p.raw()) == Some("_") {
                 continue;
             }
-            if matches!(p.raw().tag(), Tag::FieldFormalParameter | Tag::SuperFormalParameter) {
+            if matches!(
+                p.raw().tag(),
+                Tag::FieldFormalParameter | Tag::SuperFormalParameter
+            ) {
                 continue;
             }
             scope.add_getter(ctx, p.raw());
@@ -1012,7 +1041,12 @@ impl LabelScopes {
     }
 
     /// Dart `LabelScope.lookup(targetLabel)`.
-    pub fn lookup(&self, ctx: &Ctx<'_>, scope: Option<usize>, target_label: &str) -> Option<LabelScope> {
+    pub fn lookup(
+        &self,
+        ctx: &Ctx<'_>,
+        scope: Option<usize>,
+        target_label: &str,
+    ) -> Option<LabelScope> {
         let mut current = scope;
         while let Some(i) = current {
             let s = self.scopes[i];

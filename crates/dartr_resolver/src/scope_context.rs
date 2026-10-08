@@ -162,7 +162,10 @@ impl<'a> ScopeContext<'a> {
     }
 
     /// Dart `withConstructorInitializerScope(element, ...)`, the start.
-    pub fn push_constructor_initializer_scope(&mut self, element: EId<ConstructorElement>) -> usize {
+    pub fn push_constructor_initializer_scope(
+        &mut self,
+        element: EId<ConstructorElement>,
+    ) -> usize {
         let scope = EnclosedScope::constructor_initializer_scope(
             &self.ctx,
             element,
@@ -314,7 +317,11 @@ impl<'a> ResolutionVisitor<'_, 'a> {
     }
 
     /// Dart `ScopeContext.visitClassDeclaration`.
-    pub(crate) fn scope_visit_class_declaration(&mut self, ast: &mut Ast, node: Id<ClassDeclaration>) {
+    pub(crate) fn scope_visit_class_declaration(
+        &mut self,
+        ast: &mut Ast,
+        node: Id<ClassDeclaration>,
+    ) {
         let n = &ast[node];
         let (metadata, name_part, extends, with, implements, native, doc, body) = (
             n.metadata,
@@ -328,7 +335,8 @@ impl<'a> ResolutionVisitor<'_, 'a> {
         );
         self.visit_list(ast, metadata);
         let type_parameters = self.declared_type_parameters(node.raw());
-        self.scope_context.push_type_parameter_scope(&type_parameters);
+        self.scope_context
+            .push_type_parameter_scope(&type_parameters);
         let name_part_type_parameters = class_name_part_type_parameters(ast, name_part.raw());
         self.visit_opt(ast, name_part_type_parameters);
         self.visit_opt(ast, extends);
@@ -394,9 +402,12 @@ impl<'a> ResolutionVisitor<'_, 'a> {
         self.visit_list(ast, metadata);
         self.visit_opt(ast, type_name);
         self.visit(ast, parameters);
-        let element = self.declared_element(node.raw()).and_then(|e| e.cast::<ConstructorElement>());
+        let element = self
+            .declared_element(node.raw())
+            .and_then(|e| e.cast::<ConstructorElement>());
         if let Some(element) = element {
-            self.scope_context.push_constructor_initializer_scope(element);
+            self.scope_context
+                .push_constructor_initializer_scope(element);
             self.visit_list(ast, initializers);
             self.visit_opt(ast, doc);
             self.scope_context.pop();
@@ -406,7 +417,8 @@ impl<'a> ResolutionVisitor<'_, 'a> {
         }
         self.visit_opt(ast, redirected);
         let formal_parameters = self.declared_formal_parameters(node.raw());
-        self.scope_context.push_formal_parameter_scope(&formal_parameters);
+        self.scope_context
+            .push_formal_parameter_scope(&formal_parameters);
         self.visit(ast, body);
         self.scope_context.pop();
     }
@@ -420,7 +432,11 @@ impl<'a> ResolutionVisitor<'_, 'a> {
     }
 
     /// Dart `ScopeContext.visitEnumDeclaration`.
-    pub(crate) fn scope_visit_enum_declaration(&mut self, ast: &mut Ast, node: Id<EnumDeclaration>) {
+    pub(crate) fn scope_visit_enum_declaration(
+        &mut self,
+        ast: &mut Ast,
+        node: Id<EnumDeclaration>,
+    ) {
         let n = &ast[node];
         let (metadata, name_part, with, implements, doc, body) = (
             n.metadata,
@@ -432,7 +448,8 @@ impl<'a> ResolutionVisitor<'_, 'a> {
         );
         self.visit_list(ast, metadata);
         let type_parameters = self.declared_type_parameters(node.raw());
-        self.scope_context.push_type_parameter_scope(&type_parameters);
+        self.scope_context
+            .push_type_parameter_scope(&type_parameters);
         let name_part_type_parameters = class_name_part_type_parameters(ast, name_part.raw());
         self.visit_opt(ast, name_part_type_parameters);
         self.visit_opt(ast, with);
@@ -494,7 +511,8 @@ impl<'a> ResolutionVisitor<'_, 'a> {
         );
         self.visit_list(ast, metadata);
         let type_parameters = self.declared_type_parameters(node.raw());
-        self.scope_context.push_type_parameter_scope(&type_parameters);
+        self.scope_context
+            .push_type_parameter_scope(&type_parameters);
         let name_part_type_parameters = class_name_part_type_parameters(ast, name_part.raw());
         self.visit_opt(ast, name_part_type_parameters);
         self.visit_opt(ast, implements);
@@ -523,7 +541,11 @@ impl<'a> ResolutionVisitor<'_, 'a> {
     }
 
     /// Dart `ScopeContext.visitFieldDeclaration`.
-    pub(crate) fn scope_visit_field_declaration(&mut self, ast: &mut Ast, node: Id<FieldDeclaration>) {
+    pub(crate) fn scope_visit_field_declaration(
+        &mut self,
+        ast: &mut Ast,
+        node: Id<FieldDeclaration>,
+    ) {
         let is_static = ast[node].static_keyword.is_some();
         let outer = self.scope_context.set_in_static_member(is_static);
         self.visit_children(ast, node.raw());
@@ -559,8 +581,12 @@ impl<'a> ResolutionVisitor<'_, 'a> {
         node: Id<FunctionDeclaration>,
     ) {
         let n = &ast[node];
-        let (metadata, return_type, expression, doc) =
-            (n.metadata, n.return_type, n.function_expression, n.documentation_comment);
+        let (metadata, return_type, expression, doc) = (
+            n.metadata,
+            n.return_type,
+            n.function_expression,
+            n.documentation_comment,
+        );
         let (type_parameters, parameters, body) = {
             let e = &ast[expression];
             (e.type_parameters, e.parameters, e.body)
@@ -572,7 +598,8 @@ impl<'a> ResolutionVisitor<'_, 'a> {
         self.visit_opt(ast, type_parameters);
         self.visit_opt(ast, parameters);
         let formal_parameters = self.declared_formal_parameters(node.raw());
-        self.scope_context.push_formal_parameter_scope(&formal_parameters);
+        self.scope_context
+            .push_formal_parameter_scope(&formal_parameters);
         self.visit_opt(ast, doc);
         self.visit(ast, body);
         self.scope_context.pop();
@@ -593,7 +620,8 @@ impl<'a> ResolutionVisitor<'_, 'a> {
         self.visit_opt(ast, type_parameters);
         self.visit_opt(ast, parameters);
         let formal_parameters = self.declared_formal_parameters(node.raw());
-        self.scope_context.push_formal_parameter_scope(&formal_parameters);
+        self.scope_context
+            .push_formal_parameter_scope(&formal_parameters);
         self.visit(ast, body);
         self.scope_context.pop();
         if pushed {
@@ -647,10 +675,18 @@ impl<'a> ResolutionVisitor<'_, 'a> {
     }
 
     /// Dart `ScopeContext.visitGenericTypeAlias`.
-    pub(crate) fn scope_visit_generic_type_alias(&mut self, ast: &mut Ast, node: Id<GenericTypeAlias>) {
+    pub(crate) fn scope_visit_generic_type_alias(
+        &mut self,
+        ast: &mut Ast,
+        node: Id<GenericTypeAlias>,
+    ) {
         let n = &ast[node];
-        let (metadata, type_parameters, type_, doc) =
-            (n.metadata, n.type_parameters, n.type_, n.documentation_comment);
+        let (metadata, type_parameters, type_, doc) = (
+            n.metadata,
+            n.type_parameters,
+            n.type_,
+            n.documentation_comment,
+        );
         self.visit_list(ast, metadata);
         let elements = self.declared_type_parameters(node.raw());
         self.scope_context.push_type_parameter_scope(&elements);
@@ -659,8 +695,10 @@ impl<'a> ResolutionVisitor<'_, 'a> {
         // The type node may be rewritten? No: type annotations are not
         // rewritten, so `type_` is still the child.
         if let Some(function_type) = ast.cast::<GenericFunctionType>(type_) {
-            let (ft_type_parameters, ft_parameters) =
-                (ast[function_type].type_parameters, ast[function_type].parameters);
+            let (ft_type_parameters, ft_parameters) = (
+                ast[function_type].type_parameters,
+                ast[function_type].parameters,
+            );
             let pushed = self.push_type_parameter_list(ast, ft_type_parameters);
             let scope = self.scope_context.push_local_scope();
             self.add_formal_parameter_list(ast, scope, ft_parameters);
@@ -676,7 +714,11 @@ impl<'a> ResolutionVisitor<'_, 'a> {
     }
 
     /// Dart `ScopeContext.visitMethodDeclaration`.
-    pub(crate) fn scope_visit_method_declaration(&mut self, ast: &mut Ast, node: Id<MethodDeclaration>) {
+    pub(crate) fn scope_visit_method_declaration(
+        &mut self,
+        ast: &mut Ast,
+        node: Id<MethodDeclaration>,
+    ) {
         let n = &ast[node];
         let (metadata, modifier, return_type, type_parameters, parameters, doc, body) = (
             n.metadata,
@@ -696,7 +738,8 @@ impl<'a> ResolutionVisitor<'_, 'a> {
         self.visit_opt(ast, type_parameters);
         self.visit_opt(ast, parameters);
         let formal_parameters = self.declared_formal_parameters(node.raw());
-        self.scope_context.push_formal_parameter_scope(&formal_parameters);
+        self.scope_context
+            .push_formal_parameter_scope(&formal_parameters);
         self.visit_opt(ast, doc);
         self.visit(ast, body);
         self.scope_context.pop();
@@ -705,7 +748,11 @@ impl<'a> ResolutionVisitor<'_, 'a> {
     }
 
     /// Dart `ScopeContext.visitMixinDeclaration`.
-    pub(crate) fn scope_visit_mixin_declaration(&mut self, ast: &mut Ast, node: Id<MixinDeclaration>) {
+    pub(crate) fn scope_visit_mixin_declaration(
+        &mut self,
+        ast: &mut Ast,
+        node: Id<MixinDeclaration>,
+    ) {
         let n = &ast[node];
         let (metadata, type_parameters, on_clause, implements, doc, body) = (
             n.metadata,
@@ -774,7 +821,9 @@ impl<'a> ResolutionVisitor<'_, 'a> {
 
         // Use different scope for instance non-late field initializers.
         let mut pushed = false;
-        if let Some(field_declaration) = ast.parent(node).and_then(|p| ast.cast::<FieldDeclaration>(p))
+        if let Some(field_declaration) = ast
+            .parent(node)
+            .and_then(|p| ast.cast::<FieldDeclaration>(p))
         {
             if ast[field_declaration].static_keyword.is_none() && late.is_none() {
                 let primary_constructor = self
@@ -821,7 +870,10 @@ fn class_name_part_type_parameters(ast: &Ast, name_part: NodeId) -> Option<Id<Ty
 }
 
 /// Dart `element.typeParameters` for the elements that have them.
-pub(crate) fn element_type_parameters(ctx: &Ctx<'_>, e: ElementId) -> Vec<EId<TypeParameterElement>> {
+pub(crate) fn element_type_parameters(
+    ctx: &Ctx<'_>,
+    e: ElementId,
+) -> Vec<EId<TypeParameterElement>> {
     use dartr_element::AnyElement as A;
     match ctx.any(e) {
         A::Class(x) => x.type_params.clone(),

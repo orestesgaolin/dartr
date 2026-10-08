@@ -68,7 +68,9 @@ pub fn analyze(files: &[(&str, &str)]) -> Option<Analyzed> {
     let library = driver
         .analyze_library(main, AnalysisOptions::default())
         .expect("linked library");
-    let tp = Arc::new(dartr_link::types_builder::world_type_provider(&driver.state.world));
+    let tp = Arc::new(dartr_link::types_builder::world_type_provider(
+        &driver.state.world,
+    ));
     Some(Analyzed {
         driver,
         library,
@@ -133,8 +135,13 @@ impl Analyzed {
             .unwrap_or_else(|| panic!("{search:?} #{n} not found"))
             .0
             + delta;
-        find_node(&self.unit().ast, self.unit().unit.raw(), kind, offset as u32)
-            .unwrap_or_else(|| panic!("no {kind:?} at {offset} ({search:?})"))
+        find_node(
+            &self.unit().ast,
+            self.unit().unit.raw(),
+            kind,
+            offset as u32,
+        )
+        .unwrap_or_else(|| panic!("no {kind:?} at {offset} ({search:?})"))
     }
 
     /// The element of [node] (`ResolutionTables.element`), as a base

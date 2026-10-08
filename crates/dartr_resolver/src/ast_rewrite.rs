@@ -35,8 +35,7 @@ use dartr_syntax::TokenId;
 use dartr_typesystem::inheritance_manager3::{InheritanceManager3, Name};
 
 use crate::ast_ext::{
-    identifier_name, method_invocation_real_target, property_access_is_cascaded,
-    token_is_synthetic,
+    identifier_name, method_invocation_real_target, property_access_is_cascaded, token_is_synthetic,
 };
 use crate::scope::NameScope;
 use crate::scope_context::ScopeContext;
@@ -153,7 +152,8 @@ impl<'a> AstRewriter<'_, 'a> {
                 if let Some(e) = element {
                     if is_executable(e) {
                         let function = Self::simple_identifier(ast, name_token).upcast();
-                        return self.to_method_invocation_of_function_reference(ast, node, function);
+                        return self
+                            .to_method_invocation_of_function_reference(ast, node, function);
                     } else if let Some(alias) = self.is_function_type_alias(e) {
                         return self.to_method_invocation_of_aliased_type_literal(ast, node, alias);
                     }
@@ -170,9 +170,11 @@ impl<'a> AstRewriter<'_, 'a> {
                         if e.tag() == Tag::TopLevelFunction {
                             let function =
                                 Self::prefixed_identifier(ast, prefix_token, period, name_token);
-                            return self.to_method_invocation_of_function_reference(ast, node, function);
+                            return self
+                                .to_method_invocation_of_function_reference(ast, node, function);
                         } else if let Some(alias) = self.is_function_type_alias(e) {
-                            return self.to_method_invocation_of_aliased_type_literal(ast, node, alias);
+                            return self
+                                .to_method_invocation_of_aliased_type_literal(ast, node, alias);
                         }
                     }
                     // A class, a type alias of an interface type, a type
@@ -252,7 +254,8 @@ impl<'a> AstRewriter<'_, 'a> {
                             );
                         } else if let Some(prefix) = e.cast::<PrefixElement>() {
                             // Possible cases: p.C() or p.C<>()
-                            let prefixed_element = self.prefix_lookup_getter(prefix, &method_name_text);
+                            let prefixed_element =
+                                self.prefix_lookup_getter(prefix, &method_name_text);
                             if let Some(pe) = prefixed_element {
                                 if pe.is::<InterfaceElement>() {
                                     return self.to_instance_creation_prefix_type(
@@ -267,9 +270,7 @@ impl<'a> AstRewriter<'_, 'a> {
                                         name: target_token,
                                         period: operator,
                                     });
-                                    self.tables
-                                        .element
-                                        .insert(import_prefix, ElemRef::Base(e));
+                                    self.tables.element.insert(import_prefix, ElemRef::Base(e));
                                     let (type_arguments, argument_list) =
                                         (ast[node].type_arguments, ast[node].argument_list);
                                     let extension_override = ast.add(ExtensionOverride {
@@ -318,7 +319,8 @@ impl<'a> AstRewriter<'_, 'a> {
                             self.tables.element.remove(prefix);
                         }
                     }
-                    if let Some(prefix_element) = prefix_element.and_then(|e| e.cast::<PrefixElement>())
+                    if let Some(prefix_element) =
+                        prefix_element.and_then(|e| e.cast::<PrefixElement>())
                     {
                         let prefixed_name =
                             identifier_name(ast, ast[target].identifier).to_string();
@@ -351,7 +353,11 @@ impl<'a> AstRewriter<'_, 'a> {
 
     /// Dart `prefixedIdentifier`: possibly rewrites `List.filled` as a
     /// `ConstructorReference`, or `p.C` as a `TypeLiteral`.
-    pub fn prefixed_identifier_node(&mut self, ast: &mut Ast, node: Id<PrefixedIdentifier>) -> NodeId {
+    pub fn prefixed_identifier_node(
+        &mut self,
+        ast: &mut Ast,
+        node: Id<PrefixedIdentifier>,
+    ) -> NodeId {
         let Some(parent) = ast.parent(node) else {
             return node.raw();
         };
@@ -612,11 +618,8 @@ impl<'a> AstRewriter<'_, 'a> {
     ) -> NodeId {
         let identifier = ast[node].identifier;
         let name = identifier_name(ast, identifier).to_string();
-        let constructor = dartr_typesystem::lookup::get_named_constructor(
-            &self.ctx,
-            class_element,
-            &name,
-        );
+        let constructor =
+            dartr_typesystem::lookup::get_named_constructor(&self.ctx, class_element, &name);
         if constructor.is_none() {
             return node.raw();
         }
@@ -649,11 +652,8 @@ impl<'a> AstRewriter<'_, 'a> {
     ) -> NodeId {
         let property_name = ast[node].property_name;
         let name = identifier_name(ast, property_name).to_string();
-        let constructor = dartr_typesystem::lookup::get_named_constructor(
-            &self.ctx,
-            class_element,
-            &name,
-        );
+        let constructor =
+            dartr_typesystem::lookup::get_named_constructor(&self.ctx, class_element, &name);
         if constructor.is_none() && type_arguments.is_none() {
             // No constructor by this name and no type arguments: do not
             // rewrite. With type arguments (`prefix.C<int>.name`) it looks

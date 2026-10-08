@@ -56,26 +56,45 @@ int f(int a) {
         let ctx = a.ctx(unit);
         let first = ctx.element_data(y).unwrap().first_fragment;
         assert!(dartr_resolver::element_ext::is_final(&ctx, y));
-        assert!(!ctx.fragment_data(first).unwrap().flags.has(
-            dartr_element::FragmentFlags::VARIABLE_FRAGMENT_HAS_IMPLICIT_TYPE
-        ));
+        assert!(
+            !ctx.fragment_data(first)
+                .unwrap()
+                .flags
+                .has(dartr_element::FragmentFlags::VARIABLE_FRAGMENT_HAS_IMPLICIT_TYPE)
+        );
     }
 
     // `a` in the initializer of `x`: the linked parameter of `f`.
     let a_ref = a.node_at(NodeKind::SimpleIdentifier, "a;", 0, 0);
-    let lookup = a.unit().rt.scope_lookup_result.get(a_ref).copied().expect("looked up");
+    let lookup = a
+        .unit()
+        .rt
+        .scope_lookup_result
+        .get(a_ref)
+        .copied()
+        .expect("looked up");
     let a_param = lookup.getter.expect("a found");
     assert_eq!(a_param.tag(), Tag::FormalParameter);
     assert_eq!(a.element_name(a_param).as_deref(), Some("a"));
-    assert_eq!(a.element_of(a_ref), Some(a_param), "promotable: element set");
+    assert_eq!(
+        a.element_of(a_ref),
+        Some(a_param),
+        "promotable: element set"
+    );
 
     // `x` in `return x`: the local element.
     let x_ref = a.node_at(NodeKind::SimpleIdentifier, "x;", 0, 0);
-    assert_eq!(a.unit().rt.scope_lookup_result.get(x_ref).unwrap().getter, Some(x));
+    assert_eq!(
+        a.unit().rt.scope_lookup_result.get(x_ref).unwrap().getter,
+        Some(x)
+    );
 
     // `List<String>`: the named type has the class element and the type.
     let list_type = a.node_at(NodeKind::NamedType, "List<String>", 0, 0);
-    assert_eq!(a.annotation_type_str(list_type).as_deref(), Some("List<String>"));
+    assert_eq!(
+        a.annotation_type_str(list_type).as_deref(),
+        Some("List<String>")
+    );
     let list_element = a.element_of(list_type).expect("List element");
     assert_eq!(a.element_name(list_element).as_deref(), Some("List"));
 }
@@ -100,7 +119,10 @@ void f() {
         panic!("local function");
     };
     assert_eq!(data.type_params.len(), 1);
-    assert_eq!(a.element_name(data.type_params[0].raw()).as_deref(), Some("T"));
+    assert_eq!(
+        a.element_name(data.type_params[0].raw()).as_deref(),
+        Some("T")
+    );
     let params: Vec<String> = data
         .formal_params
         .iter()
@@ -116,7 +138,10 @@ void f() {
     assert_eq!(a.declared_element(expression), Some(g));
     // `g` in `g(1)` finds the local function.
     let g_ref = a.node_at(NodeKind::SimpleIdentifier, "g(1)", 0, 0);
-    assert_eq!(unit.rt.scope_lookup_result.get(g_ref).unwrap().getter, Some(g));
+    assert_eq!(
+        unit.rt.scope_lookup_result.get(g_ref).unwrap().getter,
+        Some(g)
+    );
 }
 
 #[test]
@@ -129,12 +154,22 @@ void g(void Function<T>(T) callback, int h(String s)) {}
     let Some(a) = run(&[("main.dart", source)]) else {
         return;
     };
-    let function_type = a.node_at(NodeKind::GenericFunctionType, "int Function(String s)?", 0, 0);
+    let function_type = a.node_at(
+        NodeKind::GenericFunctionType,
+        "int Function(String s)?",
+        0,
+        0,
+    );
     assert_eq!(
         a.annotation_type_str(function_type).as_deref(),
         Some("int Function(String)?")
     );
-    let record = a.node_at(NodeKind::RecordTypeAnnotation, "(int, {String name})?", 0, 0);
+    let record = a.node_at(
+        NodeKind::RecordTypeAnnotation,
+        "(int, {String name})?",
+        0,
+        0,
+    );
     assert_eq!(
         a.annotation_type_str(record).as_deref(),
         Some("(int, {String name})?")
@@ -147,7 +182,10 @@ void g(void Function<T>(T) callback, int h(String s)) {}
     // A function-typed formal parameter: the explicit fragment type is on
     // the formal parameter node.
     let h = a.node_at(NodeKind::RegularFormalParameter, "int h(String s)", 0, 0);
-    assert_eq!(a.annotation_type_str(h).as_deref(), Some("int Function(String)"));
+    assert_eq!(
+        a.annotation_type_str(h).as_deref(),
+        Some("int Function(String)")
+    );
 }
 
 #[test]
@@ -160,7 +198,10 @@ async.Future<int>? v;
         return;
     };
     let named_type = a.node_at(NodeKind::NamedType, "async.Future<int>?", 0, 0);
-    assert_eq!(a.annotation_type_str(named_type).as_deref(), Some("Future<int>?"));
+    assert_eq!(
+        a.annotation_type_str(named_type).as_deref(),
+        Some("Future<int>?")
+    );
     let future = a.element_of(named_type).expect("Future element");
     assert_eq!(a.element_name(future).as_deref(), Some("Future"));
     let import_prefix = a.node_at(NodeKind::ImportPrefixReference, "async.Future", 0, 0);
@@ -193,7 +234,10 @@ void f() {
     let named_type = a.node_at(NodeKind::NamedType, "C? c1", 0, 0);
     let element = a.element_of(named_type).expect("an element");
     assert_eq!(element.tag(), Tag::MultiplyDefined);
-    assert_eq!(a.annotation_type_str(named_type).as_deref(), Some("InvalidType"));
+    assert_eq!(
+        a.annotation_type_str(named_type).as_deref(),
+        Some("InvalidType")
+    );
     {
         let unit = a.unit();
         let ctx = a.ctx(unit);
@@ -215,8 +259,14 @@ void f() {
     let first = a.node_at(NodeKind::SimpleIdentifier, "C;", 0, 0);
     let second = a.node_at(NodeKind::SimpleIdentifier, "C;", 1, 0);
     let rt = &a.unit().rt;
-    assert_eq!(rt.scope_lookup_result.get(first).unwrap().getter, Some(element));
-    assert_eq!(rt.scope_lookup_result.get(second).unwrap().getter, Some(element));
+    assert_eq!(
+        rt.scope_lookup_result.get(first).unwrap().getter,
+        Some(element)
+    );
+    assert_eq!(
+        rt.scope_lookup_result.get(second).unwrap().getter,
+        Some(element)
+    );
 }
 
 #[test]
@@ -243,7 +293,12 @@ class A {
     assert_eq!(x_lookup.setter, None);
     // A static member is found.
     let s_ref = a.node_at(NodeKind::SimpleIdentifier, "s;", 0, 0);
-    let s = rt.scope_lookup_result.get(s_ref).unwrap().getter.expect("s");
+    let s = rt
+        .scope_lookup_result
+        .get(s_ref)
+        .unwrap()
+        .getter
+        .expect("s");
     assert_eq!(s.tag(), Tag::Getter);
     assert_eq!(a.element_name(s).as_deref(), Some("s"));
 }
@@ -263,10 +318,14 @@ var a = A.named();
     // creation with the class as the type.
     let creation = a.node_at(NodeKind::InstanceCreationExpression, "A.named();\n", 1, 0);
     let ast = &a.unit().ast;
-    let constructor_name = ast[dartr_ast::Id::<dartr_ast::InstanceCreationExpression>::from_raw(creation)]
-        .constructor_name;
+    let constructor_name = ast
+        [dartr_ast::Id::<dartr_ast::InstanceCreationExpression>::from_raw(creation)]
+    .constructor_name;
     let named_type = ast[constructor_name].type_;
-    assert_eq!(a.annotation_type_str(named_type.raw()).as_deref(), Some("A"));
+    assert_eq!(
+        a.annotation_type_str(named_type.raw()).as_deref(),
+        Some("A")
+    );
     assert!(
         support::find_node(
             ast,
@@ -301,7 +360,11 @@ void f() {
     let break_statement = a.node_at(NodeKind::BreakStatement, "break outer", 0, 0);
     let while_statement = a.node_at(NodeKind::WhileStatement, "while (true)", 0, 0);
     assert_eq!(
-        a.unit().rt.break_continue_target.get(break_statement).copied(),
+        a.unit()
+            .rt
+            .break_continue_target
+            .get(break_statement)
+            .copied(),
         Some(while_statement)
     );
     let label_reference = a.node_at(NodeKind::LabelReference, "outer;", 0, 0);
@@ -310,7 +373,8 @@ void f() {
     assert_eq!(a.element_name(label).as_deref(), Some("outer"));
     let offset = a.source().find("undefined").unwrap();
     assert!(
-        a.diagnostic_names().contains(&format!("label_undefined@{offset}")),
+        a.diagnostic_names()
+            .contains(&format!("label_undefined@{offset}")),
         "{:?}",
         a.diagnostic_names()
     );
@@ -337,7 +401,10 @@ void f(Object o) {
     let in_guard = a.node_at(NodeKind::SimpleIdentifier, "i > 0", 0, 0);
     let in_body = a.node_at(NodeKind::SimpleIdentifier, "i;", 0, 0);
     let rt = &a.unit().rt;
-    assert_eq!(rt.scope_lookup_result.get(in_guard).unwrap().getter, Some(i));
+    assert_eq!(
+        rt.scope_lookup_result.get(in_guard).unwrap().getter,
+        Some(i)
+    );
     assert_eq!(rt.scope_lookup_result.get(in_body).unwrap().getter, Some(i));
 
     let p_pattern = a.node_at(NodeKind::DeclaredVariablePattern, "p, q", 0, 0);
@@ -345,8 +412,14 @@ void f(Object o) {
     let p_ref = a.node_at(NodeKind::SimpleIdentifier, "p;", 0, 0);
     assert_eq!(rt.scope_lookup_result.get(p_ref).unwrap().getter, Some(p));
     let declaration = a.node_at(NodeKind::PatternVariableDeclaration, "var (p, q)", 0, 0);
-    let elements = rt.pattern_variable_declaration_elements.get(declaration).unwrap();
-    let names: Vec<String> = elements.iter().map(|&e| a.element_name(e).unwrap()).collect();
+    let elements = rt
+        .pattern_variable_declaration_elements
+        .get(declaration)
+        .unwrap();
+    let names: Vec<String> = elements
+        .iter()
+        .map(|&e| a.element_name(e).unwrap())
+        .collect();
     assert_eq!(names, ["p", "q"]);
 }
 
@@ -363,10 +436,19 @@ v w;
     let undefined = a.source().find("Undefined").unwrap();
     let not_a_type = a.source().find("v w").unwrap();
     let names = a.diagnostic_names();
-    assert!(names.contains(&format!("undefined_class@{undefined}")), "{names:?}");
-    assert!(names.contains(&format!("not_a_type@{not_a_type}")), "{names:?}");
+    assert!(
+        names.contains(&format!("undefined_class@{undefined}")),
+        "{names:?}"
+    );
+    assert!(
+        names.contains(&format!("not_a_type@{not_a_type}")),
+        "{names:?}"
+    );
     let named_type = a.node_at(NodeKind::NamedType, "Undefined", 0, 0);
-    assert_eq!(a.annotation_type_str(named_type).as_deref(), Some("InvalidType"));
+    assert_eq!(
+        a.annotation_type_str(named_type).as_deref(),
+        Some("InvalidType")
+    );
 }
 
 #[test]
@@ -392,8 +474,14 @@ void f() {
     let inner_ref = a.node_at(NodeKind::SimpleIdentifier, "g;", 1, 0);
     let function = a.declared_element(a.node_at(NodeKind::FunctionDeclaration, "void g()", 0, 0));
     let variable = a.declared_element(a.node_at(NodeKind::VariableDeclaration, "g = 1", 0, 0));
-    assert_eq!(rt.scope_lookup_result.get(outer_ref).unwrap().getter, function);
-    assert_eq!(rt.scope_lookup_result.get(inner_ref).unwrap().getter, variable);
+    assert_eq!(
+        rt.scope_lookup_result.get(outer_ref).unwrap().getter,
+        function
+    );
+    assert_eq!(
+        rt.scope_lookup_result.get(inner_ref).unwrap().getter,
+        variable
+    );
     assert_ne!(function, variable);
 }
 
@@ -411,14 +499,22 @@ class A<T> {
     let Some(a) = run(&[("main.dart", source)]) else {
         return;
     };
-    let class = a.declared_element(a.node_at(NodeKind::ClassDeclaration, "class A", 0, 0)).unwrap();
+    let class = a
+        .declared_element(a.node_at(NodeKind::ClassDeclaration, "class A", 0, 0))
+        .unwrap();
     assert_eq!(class.tag(), Tag::Class);
     assert_eq!(a.element_str(class), "class A<T>");
-    let getter = a.declared_element(a.node_at(NodeKind::MethodDeclaration, "T get v", 0, 0)).unwrap();
+    let getter = a
+        .declared_element(a.node_at(NodeKind::MethodDeclaration, "T get v", 0, 0))
+        .unwrap();
     assert_eq!(getter.tag(), Tag::Getter);
-    let setter = a.declared_element(a.node_at(NodeKind::MethodDeclaration, "set v", 0, 0)).unwrap();
+    let setter = a
+        .declared_element(a.node_at(NodeKind::MethodDeclaration, "set v", 0, 0))
+        .unwrap();
     assert_eq!(setter.tag(), Tag::Setter);
-    let method = a.declared_element(a.node_at(NodeKind::MethodDeclaration, "void m", 0, 0)).unwrap();
+    let method = a
+        .declared_element(a.node_at(NodeKind::MethodDeclaration, "void m", 0, 0))
+        .unwrap();
     assert_eq!(method.tag(), Tag::Method);
     let field_formal = a
         .declared_element(a.node_at(NodeKind::FieldFormalParameter, "this.value", 0, 0))
@@ -443,7 +539,12 @@ fn diagnostics_match_dart_analyze() {
         return;
     };
     // Codes of other passes (unused elements, dead code, assignments).
-    let other_passes = ["UNUSED_ELEMENT", "UNUSED_LOCAL_VARIABLE", "DEAD_CODE", "INVALID_ASSIGNMENT"];
+    let other_passes = [
+        "UNUSED_ELEMENT",
+        "UNUSED_LOCAL_VARIABLE",
+        "DEAD_CODE",
+        "INVALID_ASSIGNMENT",
+    ];
     let line_starts: Vec<usize> = std::iter::once(0)
         .chain(source.match_indices('\n').map(|(i, _)| i + 1))
         .collect();
@@ -489,7 +590,8 @@ fn diagnostics_match_dart_analyze() {
 #[test]
 fn part_file_sees_the_imports_of_its_library() {
     let main = "import 'dart:async';\npart 'part.dart';\nclass Base {}\n";
-    let part = "part of 'main.dart';\nclass A extends Base {\n  int foo = 1;\n  Future<int>? f;\n}\n";
+    let part =
+        "part of 'main.dart';\nclass A extends Base {\n  int foo = 1;\n  Future<int>? f;\n}\n";
     let Some(a) = run(&[("main.dart", main), ("part.dart", part)]) else {
         return;
     };

@@ -66,20 +66,19 @@ use dartr_ast::{
     TopLevelVariableDeclaration, TypeParameter, VariableDeclaration, VariableDeclarationList,
 };
 use dartr_element::{
-    ConstExprId, Ctx, EId, ElemRef, ElementAnnotation,
-    ElementData, ElementFlags, ElementId, ElementStore, ExecutableElementData,
-    ExecutableFragmentData, FId, FormalParameterElement, FormalParameterFragment, FragmentData,
-    FragmentFlags, FragmentId, GenericFunctionTypeElement, GenericFunctionTypeFragment,
-    LabelElement, LabelFragment, LibraryElement, LibraryFragment, LocalFunctionElement,
-    LocalFunctionFragment, LocalVariableElement, LocalVariableFragment, Metadata, Name,
-    ParameterKind, PatternVariableFragmentData, ResolutionTables, Tag, TypeId,
+    ConstExprId, Ctx, EId, ElemRef, ElementAnnotation, ElementData, ElementFlags, ElementId,
+    ElementStore, ExecutableElementData, ExecutableFragmentData, FId, FormalParameterElement,
+    FormalParameterFragment, FragmentData, FragmentFlags, FragmentId, GenericFunctionTypeElement,
+    GenericFunctionTypeFragment, LabelElement, LabelFragment, LibraryElement, LibraryFragment,
+    LocalFunctionElement, LocalFunctionFragment, LocalVariableElement, LocalVariableFragment,
+    Metadata, Name, ParameterKind, PatternVariableFragmentData, ResolutionTables, Tag, TypeId,
     TypeParameterElement, TypeParameterFragment, VarSlot, VariableElementData,
     VariableFragmentData,
 };
 
 use crate::ast_ext::{
-    formal_parameter_parts, function_body_is_asynchronous, function_body_is_generator,
-    is_keyword, name_if_not_empty, offset_if_not_empty, token_end,
+    formal_parameter_parts, function_body_is_asynchronous, function_body_is_generator, is_keyword,
+    name_if_not_empty, offset_if_not_empty, token_end,
 };
 use crate::element_walker::ElementWalker;
 use crate::tables::ResolverTables;
@@ -182,7 +181,12 @@ impl Staging {
         }
     }
 
-    fn push<T>(store: dartr_element::StoreId, staged: &mut Staged<T>, tag: Tag, item: T) -> FragmentId {
+    fn push<T>(
+        store: dartr_element::StoreId,
+        staged: &mut Staged<T>,
+        tag: Tag,
+        item: T,
+    ) -> FragmentId {
         let index = staged.base + staged.items.len() as u32;
         staged.items.push((tag, item));
         FragmentId::new(store, tag, index)
@@ -301,9 +305,17 @@ impl Staging {
     /// The element of the staged fragment [id] (the element that
     /// [Staging::commit] creates for it).
     fn element_of(&self, id: FragmentId) -> Option<ElementId> {
-        fn of<T>(staged: &Staged<T>, store: dartr_element::StoreId, id: FragmentId) -> Option<ElementId> {
+        fn of<T>(
+            staged: &Staged<T>,
+            store: dartr_element::StoreId,
+            id: FragmentId,
+        ) -> Option<ElementId> {
             let p = staged.position(id)?;
-            Some(ElementId::new(store, id.tag(), staged.element_base + p as u32))
+            Some(ElementId::new(
+                store,
+                id.tag(),
+                staged.element_base + p as u32,
+            ))
         }
         if id.store() != self.store {
             return None;
@@ -334,7 +346,8 @@ impl Staging {
     /// Adds the staged fragments and their elements to the local store.
     fn commit(self, ctx: &Ctx<'_>, store: &ElementStore, library: EId<LibraryElement>) {
         let enclosing_of = |f: &FragmentData| -> Option<ElementId> {
-            f.enclosing_fragment.and_then(|e| self.element_of_any(ctx, e))
+            f.enclosing_fragment
+                .and_then(|e| self.element_of_any(ctx, e))
         };
         let element_data = |f: &FragmentData, first: FragmentId, enclosing: Option<ElementId>| {
             let mut data = ElementData::new(f.name, first);
@@ -367,7 +380,11 @@ impl Staging {
         }
         let mut function_elements = Vec::new();
         for (i, (_, f)) in self.local_functions.items.iter().enumerate() {
-            let id = FragmentId::new(self.store, Tag::LocalFunction, self.local_functions.base + i as u32);
+            let id = FragmentId::new(
+                self.store,
+                Tag::LocalFunction,
+                self.local_functions.base + i as u32,
+            );
             // Dart `LocalFunctionElementImpl.enclosingElement` is `null`.
             let mut executable = ExecutableElementData::new(element_data(f, id, None));
             executable.type_params = elements_of(&f.type_params);
@@ -399,8 +416,16 @@ impl Staging {
         }
         let mut type_param_elements = Vec::new();
         for (i, (_, f)) in self.type_params.items.iter().enumerate() {
-            let id = FragmentId::new(self.store, Tag::TypeParameter, self.type_params.base + i as u32);
-            type_param_elements.push(TypeParameterElement::new(element_data(f, id, enclosing_of(f))));
+            let id = FragmentId::new(
+                self.store,
+                Tag::TypeParameter,
+                self.type_params.base + i as u32,
+            );
+            type_param_elements.push(TypeParameterElement::new(element_data(
+                f,
+                id,
+                enclosing_of(f),
+            )));
         }
         let mut gft_elements = Vec::new();
         for (i, (_, f)) in self.generic_function_types.items.iter().enumerate() {
@@ -424,26 +449,39 @@ impl Staging {
             debug_assert_eq!(expected, actual, "staged fragment id mismatch");
         };
 
-        for (i, ((tag, f), (etag, e))) in self.locals.items.into_iter().zip(local_elements).enumerate() {
+        for (i, ((tag, f), (etag, e))) in self
+            .locals
+            .items
+            .into_iter()
+            .zip(local_elements)
+            .enumerate()
+        {
             let expected = FragmentId::new(self.store, tag, self.locals.base + i as u32);
             let fid = match tag {
-                Tag::BindPatternVariable => {
-                    store.add_fragment::<dartr_element::BindPatternVariableFragment>(f).raw()
-                }
-                Tag::PatternVariable => store.add_fragment::<dartr_element::PatternVariableFragment>(f).raw(),
+                Tag::BindPatternVariable => store
+                    .add_fragment::<dartr_element::BindPatternVariableFragment>(f)
+                    .raw(),
+                Tag::PatternVariable => store
+                    .add_fragment::<dartr_element::PatternVariableFragment>(f)
+                    .raw(),
                 _ => store.add_fragment::<LocalVariableFragment>(f).raw(),
             };
             check(expected, fid);
             let eid = match etag {
-                Tag::BindPatternVariable => {
-                    store.add::<dartr_element::BindPatternVariableElement>(e).raw()
-                }
+                Tag::BindPatternVariable => store
+                    .add::<dartr_element::BindPatternVariableElement>(e)
+                    .raw(),
                 Tag::PatternVariable => store.add::<dartr_element::PatternVariableElement>(e).raw(),
                 _ => store.add::<LocalVariableElement>(e).raw(),
             };
             fragment_ids.push((fid, eid));
         }
-        for (f, e) in self.local_functions.items.into_iter().zip(function_elements) {
+        for (f, e) in self
+            .local_functions
+            .items
+            .into_iter()
+            .zip(function_elements)
+        {
             let fid = store.add_fragment::<LocalFunctionFragment>(f.1).raw();
             let eid = store.add::<LocalFunctionElement>(e).raw();
             fragment_ids.push((fid, eid));
@@ -459,13 +497,17 @@ impl Staging {
                     store
                         .add_fragment::<dartr_element::FieldFormalParameterFragment>(f)
                         .raw(),
-                    store.add::<dartr_element::FieldFormalParameterElement>(e).raw(),
+                    store
+                        .add::<dartr_element::FieldFormalParameterElement>(e)
+                        .raw(),
                 ),
                 Tag::SuperFormalParameter => (
                     store
                         .add_fragment::<dartr_element::SuperFormalParameterFragment>(f)
                         .raw(),
-                    store.add::<dartr_element::SuperFormalParameterElement>(e).raw(),
+                    store
+                        .add::<dartr_element::SuperFormalParameterElement>(e)
+                        .raw(),
                 ),
                 _ => (
                     store.add_fragment::<FormalParameterFragment>(f).raw(),
@@ -473,8 +515,10 @@ impl Staging {
                 ),
             };
             if let Some(data) = store.element_data(eid) {
-                data.flags
-                    .set(ElementFlags::FORMAL_PARAMETER_ELEMENT_IS_COVARIANT, covariant);
+                data.flags.set(
+                    ElementFlags::FORMAL_PARAMETER_ELEMENT_IS_COVARIANT,
+                    covariant,
+                );
             }
             fragment_ids.push((fid, eid));
         }
@@ -483,7 +527,12 @@ impl Staging {
             let eid = store.add::<TypeParameterElement>(e).raw();
             fragment_ids.push((fid, eid));
         }
-        for (f, e) in self.generic_function_types.items.into_iter().zip(gft_elements) {
+        for (f, e) in self
+            .generic_function_types
+            .items
+            .into_iter()
+            .zip(gft_elements)
+        {
             let fid = store.add_fragment::<GenericFunctionTypeFragment>(f.1).raw();
             let eid = store.add::<GenericFunctionTypeElement>(e).raw();
             fragment_ids.push((fid, eid));
@@ -571,7 +620,11 @@ impl<'c, 'a> ElementBindingVisitor<'c, 'a> {
     }
 
     /// Dart `_withElementWalker`.
-    fn with_walker<R>(&mut self, walker: Option<ElementWalker>, f: impl FnOnce(&mut Self) -> R) -> R {
+    fn with_walker<R>(
+        &mut self,
+        walker: Option<ElementWalker>,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
         let previous = std::mem::replace(&mut self.walker, walker);
         let r = f(self);
         self.walker = previous;
@@ -698,12 +751,18 @@ impl<'c, 'a> ElementBindingVisitor<'c, 'a> {
             f.variable.fragment.enclosing_fragment = Some(self.holder.fragment);
             set_code_range(&mut f.variable.fragment, ast.offset(node), ast.length(node));
             let flags = &f.variable.fragment.flags;
-            flags.set(FragmentFlags::VARIABLE_FRAGMENT_IS_CONST, parts.is_const(ast));
+            flags.set(
+                FragmentFlags::VARIABLE_FRAGMENT_IS_CONST,
+                parts.is_const(ast),
+            );
             flags.set(
                 FragmentFlags::FORMAL_PARAMETER_FRAGMENT_IS_EXPLICITLY_COVARIANT,
                 parts.covariant_keyword.is_some(),
             );
-            flags.set(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL, parts.is_final(ast));
+            flags.set(
+                FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL,
+                parts.is_final(ast),
+            );
             let id = self.staging.add_param(tag, f);
             self.holder.formal_parameters.push(FId::from_raw(id));
             id
@@ -753,7 +812,9 @@ impl<'c, 'a> ElementBindingVisitor<'c, 'a> {
         name: Option<dartr_syntax::TokenId>,
         kind: ParameterKind,
     ) -> FormalParameterFragment {
-        let name_text = name.and_then(|t| name_if_not_empty(ast, t)).map(|n| self.name(n));
+        let name_text = name
+            .and_then(|t| name_if_not_empty(ast, t))
+            .map(|n| self.name(n));
         let name_offset = name.and_then(|t| offset_if_not_empty(ast, t));
         let mut fragment = FragmentData::new(name_text, name_offset);
         fragment.first_token_offset = Some(ast.offset(node));
@@ -789,14 +850,25 @@ impl AstVisitor for ElementBindingVisitor<'_, '_> {
         self.with_walker(None, |v| ast.visit_children(node, v));
     }
 
-    fn visit_anonymous_method_invocation(&mut self, ast: &Ast, node: Id<AnonymousMethodInvocation>) {
+    fn visit_anonymous_method_invocation(
+        &mut self,
+        ast: &Ast,
+        node: Id<AnonymousMethodInvocation>,
+    ) {
         let mut f = local_function_fragment(None, ast.offset(node));
         f.executable.fragment.enclosing_fragment = Some(self.holder.fragment);
         let flags = &f.executable.fragment.flags;
-        flags.set(FragmentFlags::EXECUTABLE_FRAGMENT_HAS_IMPLICIT_RETURN_TYPE, true);
+        flags.set(
+            FragmentFlags::EXECUTABLE_FRAGMENT_HAS_IMPLICIT_RETURN_TYPE,
+            true,
+        );
         flags.set(FragmentFlags::EXECUTABLE_FRAGMENT_IS_ASYNCHRONOUS, false);
         flags.set(FragmentFlags::EXECUTABLE_FRAGMENT_IS_GENERATOR, false);
-        set_code_range(&mut f.executable.fragment, ast.offset(node), ast.length(node));
+        set_code_range(
+            &mut f.executable.fragment,
+            ast.offset(node),
+            ast.length(node),
+        );
         let fragment = self.staging.add_local_function(f);
         self.set_declared(node, fragment);
 
@@ -812,8 +884,11 @@ impl AstVisitor for ElementBindingVisitor<'_, '_> {
     fn visit_catch_clause(&mut self, ast: &Ast, node: Id<CatchClause>) {
         self.with_walker(None, |v| {
             let n = &ast[node];
-            let (exception_type, exception_parameter, stack_trace_parameter) =
-                (n.exception_type, n.exception_parameter, n.stack_trace_parameter);
+            let (exception_type, exception_parameter, stack_trace_parameter) = (
+                n.exception_type,
+                n.exception_parameter,
+                n.stack_trace_parameter,
+            );
             if let Some(exception_node) = exception_parameter {
                 let name_token = ast[exception_node].name;
                 let name = name_if_not_empty(ast, name_token).map(|n| v.name(n));
@@ -912,8 +987,14 @@ impl AstVisitor for ElementBindingVisitor<'_, '_> {
         f.variable.fragment.name_offset = offset_if_not_empty(ast, name_token);
         f.variable.fragment.enclosing_fragment = Some(self.holder.fragment);
         let flags = &f.variable.fragment.flags;
-        flags.set(FragmentFlags::VARIABLE_FRAGMENT_IS_CONST, is_keyword(ast, keyword, "const"));
-        flags.set(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL, is_keyword(ast, keyword, "final"));
+        flags.set(
+            FragmentFlags::VARIABLE_FRAGMENT_IS_CONST,
+            is_keyword(ast, keyword, "const"),
+        );
+        flags.set(
+            FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL,
+            is_keyword(ast, keyword, "final"),
+        );
         if type_.is_none() {
             flags.set(FragmentFlags::VARIABLE_FRAGMENT_HAS_IMPLICIT_TYPE, true);
         }
@@ -933,10 +1014,10 @@ impl AstVisitor for ElementBindingVisitor<'_, '_> {
             f.pattern.node = Some(node.raw());
             f.variable.fragment.name_offset = Some(ast.tokens.offset(name_token));
             f.variable.fragment.enclosing_fragment = Some(self.holder.fragment);
-            f.variable
-                .fragment
-                .flags
-                .set(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL, is_keyword(ast, keyword, "final"));
+            f.variable.fragment.flags.set(
+                FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL,
+                is_keyword(ast, keyword, "final"),
+            );
             let offset = ast.tokens.offset(name_token);
             set_code_range(
                 &mut f.variable.fragment,
@@ -985,7 +1066,12 @@ impl AstVisitor for ElementBindingVisitor<'_, '_> {
             .get(index)
             .map(|e| e.directive.metadata.annotations.len());
         if let Some(count) = count {
-            self.set_element_annotations(ast, ast[node].metadata, count, self.library_fragment.raw());
+            self.set_element_annotations(
+                ast,
+                ast[node].metadata,
+                count,
+                self.library_fragment.raw(),
+            );
         }
         self.with_walker(None, |v| ast.visit_children(node, v));
     }
@@ -1060,10 +1146,19 @@ impl AstVisitor for ElementBindingVisitor<'_, '_> {
                     flags.set(FragmentFlags::EXECUTABLE_FRAGMENT_IS_EXTERNAL, true);
                 }
                 flags.set(FragmentFlags::FRAGMENT_IS_COMPLETE, is_complete);
-                flags.set(FragmentFlags::EXECUTABLE_FRAGMENT_IS_ASYNCHRONOUS, is_asynchronous);
-                flags.set(FragmentFlags::EXECUTABLE_FRAGMENT_IS_GENERATOR, is_generator);
+                flags.set(
+                    FragmentFlags::EXECUTABLE_FRAGMENT_IS_ASYNCHRONOUS,
+                    is_asynchronous,
+                );
+                flags.set(
+                    FragmentFlags::EXECUTABLE_FRAGMENT_IS_GENERATOR,
+                    is_generator,
+                );
                 if return_type.is_none() {
-                    flags.set(FragmentFlags::EXECUTABLE_FRAGMENT_HAS_IMPLICIT_RETURN_TYPE, true);
+                    flags.set(
+                        FragmentFlags::EXECUTABLE_FRAGMENT_HAS_IMPLICIT_RETURN_TYPE,
+                        true,
+                    );
                 }
             }
             fragment
@@ -1129,7 +1224,10 @@ impl AstVisitor for ElementBindingVisitor<'_, '_> {
         let mut f = local_function_fragment(None, ast.offset(node));
         f.executable.fragment.enclosing_fragment = Some(self.holder.fragment);
         let flags = &f.executable.fragment.flags;
-        flags.set(FragmentFlags::EXECUTABLE_FRAGMENT_HAS_IMPLICIT_RETURN_TYPE, true);
+        flags.set(
+            FragmentFlags::EXECUTABLE_FRAGMENT_HAS_IMPLICIT_RETURN_TYPE,
+            true,
+        );
         flags.set(
             FragmentFlags::EXECUTABLE_FRAGMENT_IS_ASYNCHRONOUS,
             function_body_is_asynchronous(ast, body.raw()),
@@ -1138,7 +1236,11 @@ impl AstVisitor for ElementBindingVisitor<'_, '_> {
             FragmentFlags::EXECUTABLE_FRAGMENT_IS_GENERATOR,
             function_body_is_generator(ast, body.raw()),
         );
-        set_code_range(&mut f.executable.fragment, ast.offset(node), ast.length(node));
+        set_code_range(
+            &mut f.executable.fragment,
+            ast.offset(node),
+            ast.length(node),
+        );
         let fragment = self.staging.add_local_function(f);
         self.set_declared(node, fragment);
 
@@ -1187,12 +1289,14 @@ impl AstVisitor for ElementBindingVisitor<'_, '_> {
         // Dart `_libraryFragment.encloseElement(fragment)`.
         fragment_data.enclosing_fragment = Some(self.library_fragment.raw());
         set_code_range(&mut fragment_data, ast.offset(node), ast.length(node));
-        let fragment = self.staging.add_generic_function_type(GenericFunctionTypeFragment {
-            fragment: fragment_data,
-            type_params: Vec::new(),
-            formal_params: Vec::new(),
-            is_nullable: ast[node].question.is_some(),
-        });
+        let fragment = self
+            .staging
+            .add_generic_function_type(GenericFunctionTypeFragment {
+                fragment: fragment_data,
+                type_params: Vec::new(),
+                formal_params: Vec::new(),
+                is_nullable: ast[node].question.is_some(),
+            });
         self.set_declared(node, fragment);
 
         let holder = self.with_holder(ElementHolder::new(fragment), |v| {
@@ -1218,10 +1322,18 @@ impl AstVisitor for ElementBindingVisitor<'_, '_> {
         let index = self.import_index;
         self.import_index += 1;
         let ctx = self.ctx;
-        let import = ctx.fragment(self.library_fragment).library_imports.get(index);
+        let import = ctx
+            .fragment(self.library_fragment)
+            .library_imports
+            .get(index);
         if let Some(import) = import {
             let count = import.directive.metadata.annotations.len();
-            self.set_element_annotations(ast, ast[node].metadata, count, self.library_fragment.raw());
+            self.set_element_annotations(
+                ast,
+                ast[node].metadata,
+                count,
+                self.library_fragment.raw(),
+            );
             // Dart `LibraryAnalyzer._resolveLibraryImportDirective`:
             // `directive.prefix?.element = element.prefix?.element`.
             if let Some(prefix_node) = ast[node].prefix {
@@ -1245,7 +1357,12 @@ impl AstVisitor for ElementBindingVisitor<'_, '_> {
         self.library_directive_index += 1;
         if self.library_directive_index == 1 {
             let count = self.ctx.get(self.library).metadata.annotations.len();
-            self.set_element_annotations(ast, ast[node].metadata, count, self.library_fragment.raw());
+            self.set_element_annotations(
+                ast,
+                ast[node].metadata,
+                count,
+                self.library_fragment.raw(),
+            );
         }
         self.with_walker(None, |v| ast.visit_children(node, v));
     }
@@ -1299,7 +1416,12 @@ impl AstVisitor for ElementBindingVisitor<'_, '_> {
             .get(index)
             .map(|p| p.directive.metadata.annotations.len());
         if let Some(count) = count {
-            self.set_element_annotations(ast, ast[node].metadata, count, self.library_fragment.raw());
+            self.set_element_annotations(
+                ast,
+                ast[node].metadata,
+                count,
+                self.library_fragment.raw(),
+            );
         }
         self.with_walker(None, |v| ast.visit_children(node, v));
     }
@@ -1389,7 +1511,9 @@ impl AstVisitor for ElementBindingVisitor<'_, '_> {
             f.first_token_offset = Some(ast.offset(node));
             f.enclosing_fragment = Some(self.holder.fragment);
             set_code_range(&mut f, ast.offset(node), ast.length(node));
-            let id = self.staging.add_type_param(TypeParameterFragment { fragment: f });
+            let id = self
+                .staging
+                .add_type_param(TypeParameterFragment { fragment: f });
             self.holder.type_parameters.push(FId::from_raw(id));
             id
         };
@@ -1410,8 +1534,13 @@ impl AstVisitor for ElementBindingVisitor<'_, '_> {
             return;
         };
         let list = &ast[variable_list];
-        let (list_type, list_keyword, list_late, list_metadata, list_variables) =
-            (list.type_, list.keyword, list.late_keyword, list.metadata, list.variables);
+        let (list_type, list_keyword, list_late, list_metadata, list_variables) = (
+            list.type_,
+            list.keyword,
+            list.late_keyword,
+            list.metadata,
+            list.variables,
+        );
 
         let fragment: FragmentId = if let Some(walker) = self.walker.as_mut() {
             match walker.get_variable() {
@@ -1424,14 +1553,26 @@ impl AstVisitor for ElementBindingVisitor<'_, '_> {
             let mut f = local_variable_fragment(name, ast.offset(node));
             f.variable.fragment.enclosing_fragment = Some(self.holder.fragment);
             let flags = &f.variable.fragment.flags;
-            flags.set(FragmentFlags::VARIABLE_FRAGMENT_HAS_IMPLICIT_TYPE, list_type.is_none());
+            flags.set(
+                FragmentFlags::VARIABLE_FRAGMENT_HAS_IMPLICIT_TYPE,
+                list_type.is_none(),
+            );
             flags.set(
                 FragmentFlags::NON_PARAMETER_VARIABLE_FRAGMENT_HAS_INITIALIZER,
                 ast[node].initializer.is_some(),
             );
-            flags.set(FragmentFlags::VARIABLE_FRAGMENT_IS_CONST, is_keyword(ast, list_keyword, "const"));
-            flags.set(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL, is_keyword(ast, list_keyword, "final"));
-            flags.set(FragmentFlags::VARIABLE_FRAGMENT_IS_LATE, list_late.is_some());
+            flags.set(
+                FragmentFlags::VARIABLE_FRAGMENT_IS_CONST,
+                is_keyword(ast, list_keyword, "const"),
+            );
+            flags.set(
+                FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL,
+                is_keyword(ast, list_keyword, "final"),
+            );
+            flags.set(
+                FragmentFlags::VARIABLE_FRAGMENT_IS_LATE,
+                list_late.is_some(),
+            );
             f.variable.fragment.name_offset = offset_if_not_empty(ast, name_token);
             self.staging.add_local(Tag::LocalVariable, f)
         };

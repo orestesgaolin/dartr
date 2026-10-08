@@ -54,7 +54,10 @@ pub fn positional_field_index(name: &str) -> Option<usize> {
 
 /// Dart `RecordLiteralResolver.isForbiddenNameForRecordField`.
 pub fn is_forbidden_name_for_record_field(name: &str) -> bool {
-    matches!(name, "hashCode" | "runtimeType" | "noSuchMethod" | "toString")
+    matches!(
+        name,
+        "hashCode" | "runtimeType" | "noSuchMethod" | "toString"
+    )
 }
 
 impl RecordTypeAnnotationResolver<'_, '_> {
@@ -70,15 +73,26 @@ impl RecordTypeAnnotationResolver<'_, '_> {
             && self.is_wild_card_variables_enabled()
     }
 
-    fn report_at_token(&mut self, ast: &Ast, d: dartr_diagnostics::LocatableDiagnostic, token: TokenId) {
+    fn report_at_token(
+        &mut self,
+        ast: &Ast,
+        d: dartr_diagnostics::LocatableDiagnostic,
+        token: TokenId,
+    ) {
         let offset = ast.tokens.offset(token);
         let length = token_end(ast, token) - offset;
-        self.diagnostics
-            .push(d.at_offset(offset as usize, length as usize).into_diagnostic());
+        self.diagnostics.push(
+            d.at_offset(offset as usize, length as usize)
+                .into_diagnostic(),
+        );
     }
 
     /// Dart `reportDuplicateFieldDefinitions`.
-    pub fn report_duplicate_field_definitions(&mut self, ast: &Ast, node: Id<RecordTypeAnnotation>) {
+    pub fn report_duplicate_field_definitions(
+        &mut self,
+        ast: &Ast,
+        node: Id<RecordTypeAnnotation>,
+    ) {
         let mut used_names: IndexMap<String, NodeId> = IndexMap::new();
         for field in ast.record_type_fields(node) {
             let Some(name_token) = field_name(ast, field) else {

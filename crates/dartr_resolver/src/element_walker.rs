@@ -110,7 +110,13 @@ fn origin_constructors(
     items
         .iter()
         .copied()
-        .filter(|f| has(ctx, f.raw(), FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_DECLARATION))
+        .filter(|f| {
+            has(
+                ctx,
+                f.raw(),
+                FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_DECLARATION,
+            )
+        })
         .collect()
 }
 
@@ -142,7 +148,10 @@ impl ElementWalker {
     pub fn for_class(ctx: &Ctx<'_>, fragment: FId<ClassFragment>) -> ElementWalker {
         let f = ctx.fragment(fragment);
         let mut w = ElementWalker::empty(fragment.raw());
-        w.constructors = if f.flags.has(FragmentFlags::CLASS_FRAGMENT_IS_MIXIN_APPLICATION) {
+        w.constructors = if f
+            .flags
+            .has(FragmentFlags::CLASS_FRAGMENT_IS_MIXIN_APPLICATION)
+        {
             Cursor::none()
         } else {
             Cursor::of(origin_constructors(ctx, &f.constructors))

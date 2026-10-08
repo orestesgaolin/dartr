@@ -67,7 +67,10 @@ fn c1_passes_do_not_panic_on_corpus() {
         FileSystemState::new(source_factory, config_for),
         Arc::new(Generation::new(0)),
     );
-    let ids: Vec<_> = files.iter().map(|f| driver.fs.get_file_for_path(f)).collect();
+    let ids: Vec<_> = files
+        .iter()
+        .map(|f| driver.fs.get_file_for_path(f))
+        .collect();
     driver.fs.discover();
     let libraries: Vec<_> = ids
         .into_iter()
@@ -118,7 +121,8 @@ fn c1_passes_do_not_panic_on_corpus() {
             features: &library_features,
             ..global
         };
-        let scopes = match catch_unwind(AssertUnwindSafe(|| LibraryScopes::build(&global, library))) {
+        let scopes = match catch_unwind(AssertUnwindSafe(|| LibraryScopes::build(&global, library)))
+        {
             Ok(s) => s,
             Err(_) => {
                 let at = locations.lock().unwrap().pop().unwrap_or_default();
@@ -169,13 +173,27 @@ fn c1_passes_do_not_panic_on_corpus() {
             }));
             units_done += 1;
             lookups += (0..ast.node_count())
-                .filter(|&i| rt.scope_lookup_result.get(dartr_ast::NodeId::from_index(i)).is_some())
+                .filter(|&i| {
+                    rt.scope_lookup_result
+                        .get(dartr_ast::NodeId::from_index(i))
+                        .is_some()
+                })
                 .count();
             declared += (0..ast.node_count())
-                .filter(|&i| tables.declared_fragment.get(dartr_ast::NodeId::from_index(i)).is_some())
+                .filter(|&i| {
+                    tables
+                        .declared_fragment
+                        .get(dartr_ast::NodeId::from_index(i))
+                        .is_some()
+                })
                 .count();
             annotated += (0..ast.node_count())
-                .filter(|&i| tables.annotation_type.get(dartr_ast::NodeId::from_index(i)).is_some())
+                .filter(|&i| {
+                    tables
+                        .annotation_type
+                        .get(dartr_ast::NodeId::from_index(i))
+                        .is_some()
+                })
                 .count();
             reported += diagnostics.len();
             if std::env::var_os("DARTR_C1_DUMP").is_some() {
@@ -186,7 +204,10 @@ fn c1_passes_do_not_panic_on_corpus() {
                 for d in &diagnostics {
                     // Offsets are UTF-16; the corpus is ASCII almost
                     // everywhere, which is enough for this comparison.
-                    let line = line_starts.iter().rposition(|&s| s <= d.offset).unwrap_or(0);
+                    let line = line_starts
+                        .iter()
+                        .rposition(|&s| s <= d.offset)
+                        .unwrap_or(0);
                     let column = d.offset - line_starts[line] + 1;
                     dump.push(format!(
                         "{}|{}|{}|{}",
@@ -230,12 +251,24 @@ fn c1_passes_do_not_panic_on_corpus() {
                 );
                 // The name of the fragment is at the name of the node.
                 let name_token = match kind {
-                    K::MethodDeclaration => Some(ast[dartr_ast::Id::<dartr_ast::MethodDeclaration>::from_raw(n)].name),
-                    K::FunctionDeclaration => Some(ast[dartr_ast::Id::<dartr_ast::FunctionDeclaration>::from_raw(n)].name),
-                    K::VariableDeclaration => Some(ast[dartr_ast::Id::<dartr_ast::VariableDeclaration>::from_raw(n)].name),
-                    K::TypeParameter => Some(ast[dartr_ast::Id::<dartr_ast::TypeParameter>::from_raw(n)].name),
-                    K::EnumConstantDeclaration => Some(ast[dartr_ast::Id::<dartr_ast::EnumConstantDeclaration>::from_raw(n)].name),
-                    K::RegularFormalParameter => ast[dartr_ast::Id::<dartr_ast::RegularFormalParameter>::from_raw(n)].name,
+                    K::MethodDeclaration => {
+                        Some(ast[dartr_ast::Id::<dartr_ast::MethodDeclaration>::from_raw(n)].name)
+                    }
+                    K::FunctionDeclaration => {
+                        Some(ast[dartr_ast::Id::<dartr_ast::FunctionDeclaration>::from_raw(n)].name)
+                    }
+                    K::VariableDeclaration => {
+                        Some(ast[dartr_ast::Id::<dartr_ast::VariableDeclaration>::from_raw(n)].name)
+                    }
+                    K::TypeParameter => {
+                        Some(ast[dartr_ast::Id::<dartr_ast::TypeParameter>::from_raw(n)].name)
+                    }
+                    K::EnumConstantDeclaration => Some(
+                        ast[dartr_ast::Id::<dartr_ast::EnumConstantDeclaration>::from_raw(n)].name,
+                    ),
+                    K::RegularFormalParameter => {
+                        ast[dartr_ast::Id::<dartr_ast::RegularFormalParameter>::from_raw(n)].name
+                    }
                     _ => None,
                 };
                 if let (Some(token), Some(&f)) = (name_token, tables.declared_fragment.get(n)) {

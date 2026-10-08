@@ -112,7 +112,12 @@ impl NamedTypeResolver {
 
     /// Dart `resolve(node)`: resolves the given [node] (its children must
     /// be resolved already).
-    pub fn resolve(&mut self, env: &mut NamedTypeEnv<'_, '_>, ast: &mut Ast, node: Id<dartr_ast::NamedType>) {
+    pub fn resolve(
+        &mut self,
+        env: &mut NamedTypeEnv<'_, '_>,
+        ast: &mut Ast,
+        node: Id<dartr_ast::NamedType>,
+    ) {
         self.rewrite_result = None;
         self.has_error_reported = false;
 
@@ -156,7 +161,14 @@ impl NamedTypeResolver {
             };
 
             if prefix_element.is::<InterfaceElement>() || prefix_element.tag() == Tag::TypeAlias {
-                self.rewrite_to_constructor_name(env, ast, node, import_prefix, prefix_element, name_token);
+                self.rewrite_to_constructor_name(
+                    env,
+                    ast,
+                    node,
+                    import_prefix,
+                    prefix_element,
+                    name_token,
+                );
                 return;
             }
 
@@ -173,7 +185,9 @@ impl NamedTypeResolver {
 
             let offset = ast.tokens.offset(prefix_token) as usize;
             let length = (token_end(ast, prefix_token) - ast.tokens.offset(prefix_token)) as usize;
-            env.report(diag::prefix_shadowed_by_local_declaration(&prefix_name).at_offset(offset, length));
+            env.report(
+                diag::prefix_shadowed_by_local_declaration(&prefix_name).at_offset(offset, length),
+            );
             env.tables.annotation_type.insert(node, TypeId::INVALID);
         } else {
             if ast.tokens.lexeme(name_token) == "void" {
@@ -299,11 +313,13 @@ impl NamedTypeResolver {
         if let Some(argument_list) = ast[node].type_arguments {
             if let Some(e) = element.cast::<InterfaceElement>() {
                 let count = ctx.interface_type_parameters(e).len();
-                let args = self.build_type_arguments(env, ast, node, argument_list, count, element_name);
+                let args =
+                    self.build_type_arguments(env, ast, node, argument_list, count, element_name);
                 return ctx.instantiate_interface(e, &args, nullability);
             } else if let Some(e) = element.cast::<TypeAliasElement>() {
                 let count = ctx.get(e).type_params.len();
-                let args = self.build_type_arguments(env, ast, node, argument_list, count, element_name);
+                let args =
+                    self.build_type_arguments(env, ast, node, argument_list, count, element_name);
                 let t = ctx.instantiate_type_alias(e, &args, nullability);
                 return self.verify_type_alias_for_context(env, ast, node, e, t);
             } else if is_instance_creation(ast, node) {
@@ -343,9 +359,12 @@ impl NamedTypeResolver {
             if ErrorHelper::is_redirecting_constructor(ast, node) {
                 return self.infer_redirected_constructor(env, e, node.raw());
             }
-            env.type_system.instantiate_interface_to_bounds(e, nullability)
+            env.type_system
+                .instantiate_interface_to_bounds(e, nullability)
         } else if let Some(e) = element.cast::<TypeAliasElement>() {
-            let t = env.type_system.instantiate_type_alias_to_bounds(e, nullability);
+            let t = env
+                .type_system
+                .instantiate_type_alias_to_bounds(e, nullability);
             self.verify_type_alias_for_context(env, ast, node, e, t)
         } else if is_instance_creation(ast, node) {
             ErrorHelper::report_new_with_non_type(env, ast, node);
@@ -394,7 +413,13 @@ impl NamedTypeResolver {
                 ast,
                 node,
             ) {
-                ErrorHelper::report_null_or_non_type_element(env, &self.source_path, ast, node, None);
+                ErrorHelper::report_null_or_non_type_element(
+                    env,
+                    &self.source_path,
+                    ast,
+                    node,
+                    None,
+                );
             }
             return;
         };
@@ -420,7 +445,9 @@ impl NamedTypeResolver {
         import_prefix_element: ElementId,
         name_token: dartr_syntax::TokenId,
     ) {
-        let constructor_name = ast.parent(node).and_then(|p| ast.cast::<ConstructorName>(p));
+        let constructor_name = ast
+            .parent(node)
+            .and_then(|p| ast.cast::<ConstructorName>(p));
         if let Some(constructor_name) = constructor_name {
             if ast[constructor_name].name.is_none() {
                 let prefix_token = ast[import_prefix].name;
@@ -440,7 +467,9 @@ impl NamedTypeResolver {
                         .parent(constructor_name)
                         .and_then(|p| ast.cast::<InstanceCreationExpression>(p))
                     {
-                        ast.modify(instance_creation, |n| n.type_arguments = Some(type_arguments));
+                        ast.modify(instance_creation, |n| {
+                            n.type_arguments = Some(type_arguments)
+                        });
                     }
                 }
 
@@ -478,10 +507,18 @@ impl NamedTypeResolver {
                         .map(|e| e.raw());
                 }
                 found = found
-                    .or_else(|| crate::element_ext::get_field(&ctx, instance, &name).map(|e| e.raw()))
-                    .or_else(|| dartr_typesystem::lookup::get_getter(&ctx, instance, &name).map(|e| e.raw()))
-                    .or_else(|| dartr_typesystem::lookup::get_method(&ctx, instance, &name).map(|e| e.raw()))
-                    .or_else(|| dartr_typesystem::lookup::get_setter(&ctx, instance, &name).map(|e| e.raw()));
+                    .or_else(|| {
+                        crate::element_ext::get_field(&ctx, instance, &name).map(|e| e.raw())
+                    })
+                    .or_else(|| {
+                        dartr_typesystem::lookup::get_getter(&ctx, instance, &name).map(|e| e.raw())
+                    })
+                    .or_else(|| {
+                        dartr_typesystem::lookup::get_method(&ctx, instance, &name).map(|e| e.raw())
+                    })
+                    .or_else(|| {
+                        dartr_typesystem::lookup::get_setter(&ctx, instance, &name).map(|e| e.raw())
+                    });
                 element = found;
             }
             let prefix_token = ast[import_prefix].name;
@@ -494,7 +531,10 @@ impl NamedTypeResolver {
                     ast.tokens.lexeme(name_token)
                 ))
                 .with_context_messages(context)
-                .at_offset(offset as usize, (token_end(ast, name_token) - offset) as usize),
+                .at_offset(
+                    offset as usize,
+                    (token_end(ast, name_token) - offset) as usize,
+                ),
             );
         }
     }
@@ -684,9 +724,9 @@ pub fn should_ignore_undefined(
                 None => true,
                 Some(l) => {
                     let first = ctx.get(l).first_fragment();
-                    ctx.fragment(first)
-                        .flags
-                        .has(dartr_element::FragmentFlags::LIBRARY_FRAGMENT_IS_ORIGIN_NOT_EXISTING_FILE)
+                    ctx.fragment(first).flags.has(
+                        dartr_element::FragmentFlags::LIBRARY_FRAGMENT_IS_ORIGIN_NOT_EXISTING_FILE,
+                    )
                 }
             };
             if !not_existing {
@@ -752,7 +792,9 @@ impl ErrorHelper {
         ast: &Ast,
         node: Id<dartr_ast::NamedType>,
     ) -> bool {
-        let Some(constructor_name) = ast.parent(node).and_then(|p| ast.cast::<ConstructorName>(p))
+        let Some(constructor_name) = ast
+            .parent(node)
+            .and_then(|p| ast.cast::<ConstructorName>(p))
         else {
             return false;
         };
@@ -764,8 +806,7 @@ impl ErrorHelper {
         };
         let (offset, length) = Self::error_range(env, ast, node, true);
         let import_prefix = ast[node].import_prefix;
-        if let Some(import_prefix) =
-            import_prefix.filter(|&p| env.tables.element.get(p).is_none())
+        if let Some(import_prefix) = import_prefix.filter(|&p| env.tables.element.get(p).is_none())
         {
             // The constructor name is in two or three parts and the first
             // part, which is either a prefix or a class name, is
@@ -887,7 +928,10 @@ impl ErrorHelper {
                     }]);
                 }
                 let offset = ast.tokens.offset(name_token);
-                env.report(d.at_offset(offset as usize, (token_end(ast, name_token) - offset) as usize));
+                env.report(d.at_offset(
+                    offset as usize,
+                    (token_end(ast, name_token) - offset) as usize,
+                ));
                 return;
             }
 
@@ -940,7 +984,9 @@ impl ErrorHelper {
 
     /// Dart `_isRedirectingConstructor`.
     fn is_redirecting_constructor(ast: &Ast, node: Id<dartr_ast::NamedType>) -> bool {
-        let Some(constructor_name) = ast.parent(node).and_then(|p| ast.cast::<ConstructorName>(p))
+        let Some(constructor_name) = ast
+            .parent(node)
+            .and_then(|p| ast.cast::<ConstructorName>(p))
         else {
             return false;
         };

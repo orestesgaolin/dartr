@@ -64,16 +64,17 @@ use dartr_ast::{
     SwitchExpression, SwitchStatement, TypeParameter, VariableDeclaration, VariableDeclarationList,
     WhileStatement, WithClause,
 };
-use dartr_diagnostics::{Diagnostic, DiagnosticMessage, LocatableDiagnostic, LocatedDiagnostic, diag};
+use dartr_diagnostics::{
+    Diagnostic, DiagnosticMessage, LocatableDiagnostic, LocatedDiagnostic, diag,
+};
 use dartr_element::diagnostics::type_arg;
 use dartr_element::{
-    AnyElement, Ctx, EId, ElemRef, ElementData, ElementId,
-    ExtensionTypeElement, FId, FnParam, FormalParameterElement, FragmentData, FragmentFlags,
-    FragmentId, GenericFunctionTypeElement, InterfaceElement, JoinPatternVariableElement,
-    JoinPatternVariableFragment, LibraryElement, LibraryFragment, LocalVariableElement,
-    LocalVariableFragment, Name, Nullability, PatternVariableFragment, PatternVariableFragmentData,
-    ResolutionTables, Tag, TypeId, TypeKind, TypeParameterElement, VarSlot, VariableElementData,
-    VariableFragmentData,
+    AnyElement, Ctx, EId, ElemRef, ElementData, ElementId, ExtensionTypeElement, FId, FnParam,
+    FormalParameterElement, FragmentData, FragmentFlags, FragmentId, GenericFunctionTypeElement,
+    InterfaceElement, JoinPatternVariableElement, JoinPatternVariableFragment, LibraryElement,
+    LibraryFragment, LocalVariableElement, LocalVariableFragment, Name, Nullability,
+    PatternVariableFragment, PatternVariableFragmentData, ResolutionTables, Tag, TypeId, TypeKind,
+    TypeParameterElement, VarSlot, VariableElementData, VariableFragmentData,
 };
 use dartr_flow::type_analyzer::{JoinedPatternVariableInconsistency, TypeAnalyzerErrorsBase};
 use dartr_flow::variable_bindings::{VariableBinder, VariableBinderErrors};
@@ -89,10 +90,14 @@ use crate::ast_ext::{
 };
 use crate::ast_rewrite::AstRewriter;
 use crate::element_binding_visitor::switch_member_labels;
-use crate::named_type_resolver::{NamedTypeEnv, NamedTypeResolver, should_ignore_undefined_named_type};
+use crate::named_type_resolver::{
+    NamedTypeEnv, NamedTypeResolver, should_ignore_undefined_named_type,
+};
 use crate::record_type_annotation_resolver::RecordTypeAnnotationResolver;
 use crate::resolver::UnitContext;
-use crate::scope::{LabelScopes, NameScope, UnlabeledBreakContinueContext, library_feature_enabled};
+use crate::scope::{
+    LabelScopes, NameScope, UnlabeledBreakContinueContext, library_feature_enabled,
+};
 use crate::scope_context::ScopeContext;
 use crate::tables::ResolverTables;
 
@@ -428,7 +433,15 @@ impl<'c, 'a> ResolutionVisitor<'c, 'a> {
                 diagnostics: &mut *self.diagnostics,
                 source_path: &self.source_path,
             };
-            bind_pattern_variables(&self.ctx, &self.tables.declared_fragment, ast, pattern, &mut state, &mut binder, &mut errors);
+            bind_pattern_variables(
+                &self.ctx,
+                &self.tables.declared_fragment,
+                ast,
+                pattern,
+                &mut state,
+                &mut binder,
+                &mut errors,
+            );
         }
         let result = state.case_pattern_finish(shared_case_scope_key.as_ref());
         self.pattern_variables = state;
@@ -468,9 +481,9 @@ impl<'c, 'a> ResolutionVisitor<'c, 'a> {
             };
         };
         let label_name = ast.tokens.lexeme(ast[label_node].name).to_string();
-        let Some(defining_scope) = self
-            .label_scopes
-            .lookup(&self.ctx, self.label_scope, &label_name)
+        let Some(defining_scope) =
+            self.label_scopes
+                .lookup(&self.ctx, self.label_scope, &label_name)
         else {
             self.report_at_node(ast, diag::label_undefined(&label_name), label_node);
             return None;
@@ -509,7 +522,10 @@ impl<'c, 'a> ResolutionVisitor<'c, 'a> {
         shared_case_scope_key: Option<JoinKey>,
         then: Option<&mut dyn FnMut(&mut Self, &mut Ast)>,
     ) {
-        let (pattern, when_clause) = (ast[guarded_pattern].pattern, ast[guarded_pattern].when_clause);
+        let (pattern, when_clause) = (
+            ast[guarded_pattern].pattern,
+            ast[guarded_pattern].when_clause,
+        );
         let variables = self.compute_pattern_variables(ast, pattern.raw(), shared_case_scope_key);
         // Matched variables are available in `whenClause`.
         let scope = self.scope_context.push_local_scope();
@@ -567,7 +583,9 @@ impl<'c, 'a> ResolutionVisitor<'c, 'a> {
 
         // Dart `NamedType.isSynthetic`.
         let name_token = ast[named_type].name;
-        if crate::ast_ext::token_is_synthetic(ast, name_token) && ast[named_type].type_arguments.is_none() {
+        if crate::ast_ext::token_is_synthetic(ast, name_token)
+            && ast[named_type].type_arguments.is_none()
+        {
             return;
         }
 
@@ -669,9 +687,16 @@ impl<'c, 'a> ResolutionVisitor<'c, 'a> {
             } else {
                 Nullability::None
             };
-            Some(self.function_type(&type_parameters, &formal_parameters, return_type, nullability))
+            Some(self.function_type(
+                &type_parameters,
+                &formal_parameters,
+                return_type,
+                nullability,
+            ))
         } else {
-            parts.type_.and_then(|t| self.tables.annotation_type.get(t).copied())
+            parts
+                .type_
+                .and_then(|t| self.tables.annotation_type.get(t).copied())
         };
         match result {
             Some(t) => {
@@ -783,7 +808,9 @@ impl<'c, 'a> ResolutionVisitor<'c, 'a> {
             let (iterable, pattern, metadata) = (ast[n].iterable, ast[n].pattern, ast[n].metadata);
             self.visit(ast, iterable);
             let variables = self.compute_declared_pattern_variables(ast, pattern.raw());
-            self.rt.for_each_pattern_variables.insert(n, variables.clone());
+            self.rt
+                .for_each_pattern_variables
+                .insert(n, variables.clone());
             for e in variables {
                 self.scope_context.add_local(scope, e);
             }
@@ -858,7 +885,11 @@ impl AstVisitorMut for ResolutionVisitor<'_, '_> {
         self.visit_children_except(ast, node.raw(), constructor_name);
     }
 
-    fn visit_anonymous_method_invocation(&mut self, ast: &mut Ast, node: Id<AnonymousMethodInvocation>) {
+    fn visit_anonymous_method_invocation(
+        &mut self,
+        ast: &mut Ast,
+        node: Id<AnonymousMethodInvocation>,
+    ) {
         let (target, parameters, body) = (ast[node].target, ast[node].parameters, ast[node].body);
         self.visit_opt(ast, target);
         let scope = self.scope_context.push_local_scope();
@@ -870,7 +901,11 @@ impl AstVisitorMut for ResolutionVisitor<'_, '_> {
         self.scope_context.pop();
     }
 
-    fn visit_assigned_variable_pattern(&mut self, ast: &mut Ast, node: Id<AssignedVariablePattern>) {
+    fn visit_assigned_variable_pattern(
+        &mut self,
+        ast: &mut Ast,
+        node: Id<AssignedVariablePattern>,
+    ) {
         let name_token = ast[node].name;
         let name = ast.tokens.lexeme(name_token).to_string();
         let element = self.scope_context.lookup(&name).getter;
@@ -897,8 +932,9 @@ impl AstVisitorMut for ResolutionVisitor<'_, '_> {
                     .enclosing_instance_element()
                     .and_then(|e| e.raw().cast::<InterfaceElement>());
                 if let Some(enclosing) = enclosing {
-                    let manager =
-                        dartr_typesystem::inheritance_manager3::InheritanceManager3::new(self.ctx.global());
+                    let manager = dartr_typesystem::inheritance_manager3::InheritanceManager3::new(
+                        self.ctx.global(),
+                    );
                     let member_name = dartr_typesystem::inheritance_manager3::Name::for_library(
                         &self.ctx,
                         Some(self.library()),
@@ -907,17 +943,25 @@ impl AstVisitorMut for ResolutionVisitor<'_, '_> {
                     .for_setter(&self.ctx);
                     if let Some(member) = manager.get_member(enclosing, member_name) {
                         self.tables.element.insert(node, member);
-                        self.report_at_token(ast, diag::pattern_assignment_not_local_variable(), name_token);
+                        self.report_at_token(
+                            ast,
+                            diag::pattern_assignment_not_local_variable(),
+                            name_token,
+                        );
                         return;
                     }
                 }
                 self.report_at_token(ast, diag::undefined_identifier(&name), name_token);
             }
             Some(e) => {
-                let is_local_variable_or_parameter = crate::element_ext::is_local_variable(e)
-                    || e.is::<FormalParameterElement>();
+                let is_local_variable_or_parameter =
+                    crate::element_ext::is_local_variable(e) || e.is::<FormalParameterElement>();
                 if !is_local_variable_or_parameter {
-                    self.report_at_token(ast, diag::pattern_assignment_not_local_variable(), name_token);
+                    self.report_at_token(
+                        ast,
+                        diag::pattern_assignment_not_local_variable(),
+                        name_token,
+                    );
                 }
             }
         }
@@ -1006,7 +1050,11 @@ impl AstVisitorMut for ResolutionVisitor<'_, '_> {
         self.scope_visit_constructor_declaration(ast, node);
     }
 
-    fn visit_constructor_field_initializer(&mut self, ast: &mut Ast, node: Id<ConstructorFieldInitializer>) {
+    fn visit_constructor_field_initializer(
+        &mut self,
+        ast: &mut Ast,
+        node: Id<ConstructorFieldInitializer>,
+    ) {
         let field_name = ast[node].field_name.raw();
         self.visit_children_except(ast, node.raw(), Some(field_name));
     }
@@ -1040,7 +1088,11 @@ impl AstVisitorMut for ResolutionVisitor<'_, '_> {
         }
     }
 
-    fn visit_declared_variable_pattern(&mut self, ast: &mut Ast, node: Id<DeclaredVariablePattern>) {
+    fn visit_declared_variable_pattern(
+        &mut self,
+        ast: &mut Ast,
+        node: Id<DeclaredVariablePattern>,
+    ) {
         let type_node = ast[node].type_;
         self.visit_opt(ast, type_node);
 
@@ -1069,15 +1121,16 @@ impl AstVisitorMut for ResolutionVisitor<'_, '_> {
         }
 
         let pattern_context = crate::ast_ext::pattern_context(ast, node.raw());
-        let is_final = if let Some(c) = pattern_context.and_then(|c| ast.cast::<ForEachPartsWithPattern>(c)) {
-            is_keyword(ast, Some(ast[c].keyword), "final")
-        } else if let Some(c) =
-            pattern_context.and_then(|c| ast.cast::<PatternVariableDeclaration>(c))
-        {
-            is_keyword(ast, Some(ast[c].keyword), "final")
-        } else {
-            is_keyword(ast, ast[node].keyword, "final")
-        };
+        let is_final =
+            if let Some(c) = pattern_context.and_then(|c| ast.cast::<ForEachPartsWithPattern>(c)) {
+                is_keyword(ast, Some(ast[c].keyword), "final")
+            } else if let Some(c) =
+                pattern_context.and_then(|c| ast.cast::<PatternVariableDeclaration>(c))
+            {
+                is_keyword(ast, Some(ast[c].keyword), "final")
+            } else {
+                is_keyword(ast, ast[node].keyword, "final")
+            };
         fragment_data
             .flags
             .set(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL, is_final);
@@ -1137,7 +1190,11 @@ impl AstVisitorMut for ResolutionVisitor<'_, '_> {
         self.scope_visit_extension_declaration(ast, node);
     }
 
-    fn visit_extension_type_declaration(&mut self, ast: &mut Ast, node: Id<ExtensionTypeDeclaration>) {
+    fn visit_extension_type_declaration(
+        &mut self,
+        ast: &mut Ast,
+        node: Id<ExtensionTypeDeclaration>,
+    ) {
         let element = self
             .declared_element(node.raw())
             .and_then(|e| e.cast::<InterfaceElement>());
@@ -1158,11 +1215,19 @@ impl AstVisitorMut for ResolutionVisitor<'_, '_> {
     // Dart throws `StateError('Should not be invoked')` in the next
     // methods: the parents visit these nodes. Visit the children to stay
     // robust.
-    fn visit_for_each_parts_with_declaration(&mut self, ast: &mut Ast, node: Id<ForEachPartsWithDeclaration>) {
+    fn visit_for_each_parts_with_declaration(
+        &mut self,
+        ast: &mut Ast,
+        node: Id<ForEachPartsWithDeclaration>,
+    ) {
         self.visit_children(ast, node.raw());
     }
 
-    fn visit_for_each_parts_with_pattern(&mut self, ast: &mut Ast, node: Id<ForEachPartsWithPattern>) {
+    fn visit_for_each_parts_with_pattern(
+        &mut self,
+        ast: &mut Ast,
+        node: Id<ForEachPartsWithPattern>,
+    ) {
         self.visit_children(ast, node.raw());
     }
 
@@ -1240,7 +1305,12 @@ impl AstVisitorMut for ResolutionVisitor<'_, '_> {
         let t = match element {
             Some(e) => {
                 let data = self.ctx.get(e);
-                let t = self.function_type(&data.type_params, &data.formal_params, return_type, nullability);
+                let t = self.function_type(
+                    &data.type_params,
+                    &data.formal_params,
+                    return_type,
+                    nullability,
+                );
                 if self.is_local(e.raw()) {
                     data.return_type.set(Some(return_type));
                     data.type_.set(Some(t));
@@ -1274,8 +1344,12 @@ impl AstVisitorMut for ResolutionVisitor<'_, '_> {
 
     fn visit_if_statement(&mut self, ast: &mut Ast, node: Id<IfStatement>) {
         let n = &ast[node];
-        let (expression, case_clause, then_statement, else_statement) =
-            (n.expression, n.case_clause, n.then_statement, n.else_statement);
+        let (expression, case_clause, then_statement, else_statement) = (
+            n.expression,
+            n.case_clause,
+            n.then_statement,
+            n.else_statement,
+        );
         self.visit(ast, expression);
         match case_clause {
             Some(case_clause) => {
@@ -1305,7 +1379,11 @@ impl AstVisitorMut for ResolutionVisitor<'_, '_> {
         self.visit_children_except(ast, node.raw(), prefix);
     }
 
-    fn visit_instance_creation_expression(&mut self, ast: &mut Ast, node: Id<InstanceCreationExpression>) {
+    fn visit_instance_creation_expression(
+        &mut self,
+        ast: &mut Ast,
+        node: Id<InstanceCreationExpression>,
+    ) {
         let library = self.library();
         let enclosing = self.scope_context.enclosing_instance_element();
         let had_type_arguments = {
@@ -1317,7 +1395,11 @@ impl AstVisitorMut for ResolutionVisitor<'_, '_> {
             .instance_creation_expression(ast, node, library, enclosing);
         if new_node != node.raw() {
             if had_type_arguments
-                && !library_feature_enabled(&self.ctx, library, ExperimentalFlag::ConstructorTearoffs)
+                && !library_feature_enabled(
+                    &self.ctx,
+                    library,
+                    ExperimentalFlag::ConstructorTearoffs,
+                )
             {
                 let is_function_reference_call = ast
                     .cast::<MethodInvocation>(new_node)
@@ -1489,7 +1571,9 @@ impl AstVisitorMut for ResolutionVisitor<'_, '_> {
 
         let name = identifier_name(ast, node).to_string();
         let scope_lookup_result = self.scope_context.lookup(&name);
-        self.rt.scope_lookup_result.insert(node, scope_lookup_result);
+        self.rt
+            .scope_lookup_result
+            .insert(node, scope_lookup_result);
 
         let Some(element) = scope_lookup_result.getter else {
             return;
@@ -1501,9 +1585,7 @@ impl AstVisitorMut for ResolutionVisitor<'_, '_> {
 
         if element.tag() == Tag::JoinPatternVariable {
             if let Some(p) = self.pattern_data(element) {
-                p.references
-                    .lock()
-                    .push(node.raw());
+                p.references.lock().push(node.raw());
             }
         }
 
@@ -1523,7 +1605,11 @@ impl AstVisitorMut for ResolutionVisitor<'_, '_> {
         }
     }
 
-    fn visit_super_constructor_invocation(&mut self, ast: &mut Ast, node: Id<SuperConstructorInvocation>) {
+    fn visit_super_constructor_invocation(
+        &mut self,
+        ast: &mut Ast,
+        node: Id<SuperConstructorInvocation>,
+    ) {
         let skip = ast[node].constructor_name.map(|c| c.raw());
         self.visit_children_except(ast, node.raw(), skip);
     }
@@ -1537,7 +1623,8 @@ impl AstVisitorMut for ResolutionVisitor<'_, '_> {
         let (expression, cases) = (ast[node].expression, ast[node].cases);
         self.visit(ast, expression);
         for case in ast.list(cases).to_vec() {
-            let (guarded_pattern, case_expression) = (ast[case].guarded_pattern, ast[case].expression);
+            let (guarded_pattern, case_expression) =
+                (ast[case].guarded_pattern, ast[case].expression);
             let mut then = |v: &mut Self, ast: &mut Ast| v.visit(ast, case_expression);
             self.resolve_guarded_pattern(ast, guarded_pattern, None, Some(&mut then));
         }
@@ -1639,7 +1726,9 @@ impl AstVisitorMut for ResolutionVisitor<'_, '_> {
     fn visit_variable_declaration(&mut self, ast: &mut Ast, node: Id<VariableDeclaration>) {
         if let Some(e) = self.declared_element(node.raw()) {
             if e.is::<LocalVariableElement>() {
-                let list = ast.parent(node).and_then(|p| ast.cast::<VariableDeclarationList>(p));
+                let list = ast
+                    .parent(node)
+                    .and_then(|p| ast.cast::<VariableDeclarationList>(p));
                 let t = match list.and_then(|l| ast[l].type_) {
                     Some(type_node) => self.annotation_type(type_node),
                     None => TypeId::DYNAMIC,
@@ -1651,7 +1740,11 @@ impl AstVisitorMut for ResolutionVisitor<'_, '_> {
         self.visit_opt(ast, initializer);
     }
 
-    fn visit_variable_declaration_list(&mut self, ast: &mut Ast, node: Id<VariableDeclarationList>) {
+    fn visit_variable_declaration_list(
+        &mut self,
+        ast: &mut Ast,
+        node: Id<VariableDeclarationList>,
+    ) {
         self.scope_visit_variable_declaration_list(ast, node);
     }
 
@@ -1744,9 +1837,8 @@ impl VariableBinder for JoinBuilder<'_> {
             let v = e.cast::<LocalVariableElement>()?;
             Some(&ctx.fragment(ctx.get(v).first_fragment()).pattern)
         };
-        let first_fragment = |e: ElementId| -> Option<FragmentId> {
-            ctx.element_data(e).map(|d| d.first_fragment)
-        };
+        let first_fragment =
+            |e: ElementId| -> Option<FragmentId> { ctx.element_data(e).map(|d| d.first_fragment) };
         let expanded: Vec<ElementId> = match key {
             JoinKey::LogicalOr(_) => {
                 let mut result = Vec::new();
@@ -1756,7 +1848,9 @@ impl VariableBinder for JoinBuilder<'_> {
                             .map(|p| p.variables.clone())
                             .unwrap_or_default();
                         for v in variables {
-                            if let Some(e) = ctx.fragment_data(v.raw()).and_then(|f| f.element.try_get()) {
+                            if let Some(e) =
+                                ctx.fragment_data(v.raw()).and_then(|f| f.element.try_get())
+                            {
                                 result.push(*e);
                             }
                         }
@@ -1774,7 +1868,8 @@ impl VariableBinder for JoinBuilder<'_> {
         for &c in &components {
             if c.tag() == Tag::JoinPatternVariable {
                 if let Some(p) = pattern_data(c) {
-                    let other = from_element_inconsistency(p.inconsistency.get().unwrap_or_default());
+                    let other =
+                        from_element_inconsistency(p.inconsistency.get().unwrap_or_default());
                     result_inconsistency = result_inconsistency.max_with(other);
                 }
             }
@@ -1883,7 +1978,12 @@ impl VariableBinderErrors for BinderErrors<'_, '_> {
     type Variable = ElementId;
     type Name = Name;
 
-    fn duplicate_variable_pattern(&mut self, name: Name, original: ElementId, duplicate: ElementId) {
+    fn duplicate_variable_pattern(
+        &mut self,
+        name: Name,
+        original: ElementId,
+        duplicate: ElementId,
+    ) {
         let ast = self.ast;
         let (Some(duplicate_token), Some(original_token)) =
             (self.name_token(duplicate), self.name_token(original))
@@ -1946,13 +2046,16 @@ fn bind_pattern_variables(
 ) {
     use dartr_ast::NodeKind as K;
     let visit = |n: NodeId,
-                     state: &mut VariableBinderState<Name, ElementId, JoinKey>,
-                     binder: &mut JoinBuilder<'_>,
-                     errors: &mut BinderErrors<'_, '_>| {
+                 state: &mut VariableBinderState<Name, ElementId, JoinKey>,
+                 binder: &mut JoinBuilder<'_>,
+                 errors: &mut BinderErrors<'_, '_>| {
         bind_pattern_variables(ctx, declared_fragment, ast, n, state, binder, errors);
     };
     match ast.kind(node) {
-        K::AssignedVariablePattern | K::ConstantPattern | K::RelationalPattern | K::WildcardPattern => {}
+        K::AssignedVariablePattern
+        | K::ConstantPattern
+        | K::RelationalPattern
+        | K::WildcardPattern => {}
         K::CastPattern => {
             let p = ast[Id::<dartr_ast::CastPattern>::from_raw(node)].pattern;
             visit(p.raw(), state, binder, errors);
