@@ -1,0 +1,9 @@
+[package]
+name = "dartr_flow"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Interfaces of the shared flow analysis and type analyzer (_fe_analyzer_shared)"
+
+[dependencies]
+indexmap.workspace = true
