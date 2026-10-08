@@ -49,6 +49,9 @@ impl<T: Copy> PatternContext<T> {
     }
 }
 
+/// A saved promotion of a logical-or pattern: (before, after the LHS).
+type SavedPromotion<T> = (Option<SharedTypeView<T>>, Option<SharedTypeView<T>>);
+
 /// A flow control construct that joins reachability.
 #[derive(Debug)]
 enum Frame<N> {
@@ -90,7 +93,7 @@ pub struct MiniFlow<O: FlowAnalysisOperations, N> {
     frames: Vec<Frame<N>>,
     pattern_stack: Vec<PatternContext<O::Type>>,
     /// Saved promotions of logical-or patterns: (saved, lhs result).
-    logical_or_stack: Vec<(Option<SharedTypeView<O::Type>>, Option<SharedTypeView<O::Type>>)>,
+    logical_or_stack: Vec<SavedPromotion<O::Type>>,
     next_promotion_key: PromotionKey,
     variable_keys: HashMap<O::Variable, PromotionKey>,
     pattern_variable_infos: Vec<PatternVariableInfo<NameOf<O>, O::Variable>>,

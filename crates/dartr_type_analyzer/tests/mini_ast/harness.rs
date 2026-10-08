@@ -2690,7 +2690,8 @@ impl MiniAstTypeAnalyzer {
                     }
                     None => {
                         self.handle_no_condition(node);
-                        Some(self.flow.boolean_literal(true))
+                        self.flow.boolean_literal(true);
+                        Some(())
                     }
                 };
                 self.flow.for_body_begin(

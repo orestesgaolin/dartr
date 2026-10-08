@@ -558,4 +558,524 @@ mod expressions {
             check("String", false, "int", "1");
         }
     }
+
+    mod switch {
+        use super::*;
+
+        #[test]
+        fn ir() {
+            let (_s, mut h) = set_up();
+            h.run(vec![
+                switch_expr(expr("int"), vec![default_().then_expr(int_literal(0))])
+                    .check_ir("switchExpr(expr(int), case(default, 0))"),
+            ]);
+        }
+
+        #[test]
+        fn scrutinee_expression_schema() {
+            let (_s, mut h) = set_up();
+            h.run(vec![
+                switch_expr(
+                    expr("int").check_schema("_"),
+                    vec![default_().then_expr(int_literal(0))],
+                )
+                .in_type_schema("num"),
+            ]);
+        }
+
+        #[test]
+        fn body_expression_schema() {
+            let (_s, mut h) = set_up();
+            h.run(vec![
+                switch_expr(
+                    expr("int"),
+                    vec![default_().then_expr(null_literal().check_schema("C?"))],
+                )
+                .in_type_schema("C?"),
+            ]);
+        }
+
+        #[test]
+        fn least_upper_bound_behavior() {
+            let (_s, mut h) = set_up();
+            h.run(vec![
+                switch_expr(
+                    expr("int"),
+                    vec![
+                        int_literal(0).pattern().then_expr(expr("int")),
+                        default_().then_expr(expr("double")),
+                    ],
+                )
+                .check_type("num"),
+            ]);
+        }
+
+        #[test]
+        fn no_cases() {
+            let (_s, mut h) = set_up();
+            h.run(vec![switch_expr(expr("A"), vec![]).check_type("Never")]);
+        }
+
+        #[test]
+        fn guard() {
+            let (_s, mut h) = set_up();
+            let i = Var::new("i");
+            h.run(vec![
+                switch_expr(
+                    expr("int"),
+                    vec![i
+                        .pattern()
+                        .when(Some(
+                            i.expr()
+                                .check_type("int")
+                                .eq(expr("num"))
+                                .check_schema("bool"),
+                        ))
+                        .then_expr(expr("String"))],
+                )
+                .check_ir(
+                    "switchExpr(expr(int), case(head(varPattern(i, \
+                     matchedType: int, staticType: int), ==(i, expr(num)), \
+                     variables(i)), expr(String)))",
+                ),
+            ]);
+        }
+
+        mod guard_not_assignable_to_bool {
+            use super::*;
+
+            #[test]
+            fn int() {
+                let (_s, mut h) = set_up();
+                let x = Var::new("x");
+                h.run_with(
+                    vec![switch_expr(
+                        expr("int"),
+                        vec![x
+                            .pattern()
+                            .when(Some(expr("int").error_id("GUARD")))
+                            .then_expr(expr("int"))],
+                    )],
+                    errors(&["nonBooleanCondition(node: GUARD)"]),
+                );
+            }
+
+            #[test]
+            fn bool() {
+                let (_s, mut h) = set_up();
+                let x = Var::new("x");
+                h.run_with(
+                    vec![switch_expr(
+                        expr("int"),
+                        vec![x.pattern().when(Some(expr("bool"))).then_expr(expr("int"))],
+                    )],
+                    errors(&[]),
+                );
+            }
+
+            #[test]
+            fn dynamic() {
+                let (_s, mut h) = set_up();
+                let x = Var::new("x");
+                h.run_with(
+                    vec![switch_expr(
+                        expr("int"),
+                        vec![x.pattern().when(Some(expr("dynamic"))).then_expr(expr("int"))],
+                    )],
+                    errors(&[]),
+                );
+            }
+        }
+
+        mod variables {
+            use super::*;
+
+            mod logical_or {
+                use super::*;
+
+                #[test]
+                fn consistent() {
+                    let (_s, mut h) = set_up();
+                    let x1 = Var::new("x").with_identity("x1");
+                    let x2 = Var::new("x").with_identity("x2");
+                    Var::join("x", vec![x1, x2]);
+                    h.run(vec![
+                        switch_expr(
+                            expr("double"),
+                            vec![
+                                x1.pattern().or(x2.pattern()).then_expr(expr("int")),
+                                default_().then_expr(expr("int")),
+                            ],
+                        )
+                        .check_type("int")
+                        .check_ir(
+                            "switchExpr(expr(double), case(head(logicalOrPattern(\
+                             varPattern(x, matchedType: double, staticType: double), \
+                             varPattern(x, matchedType: double, staticType: double), \
+                             matchedType: double), true, \
+                             variables(double x = [x1, x2])), expr(int)), \
+                             case(default, expr(int)))",
+                        ),
+                    ]);
+                }
+
+                mod not_consistent {
+                    use super::*;
+
+                    #[test]
+                    fn different_finality() {
+                        let (_s, mut h) = set_up();
+                        let x1 = Var::new("x").with_identity("x1").with_final(true);
+                        let x2 = Var::new("x").with_identity("x2").error_id("x2");
+                        Var::join("x", vec![x1, x2]);
+                        h.run_with(
+                            vec![
+                                switch_expr(
+                                    expr("double"),
+                                    vec![
+                                        x1.pattern().or(x2.pattern()).then_expr(expr("int")),
+                                        default_().then_expr(expr("int")),
+                                    ],
+                                )
+                                .check_type("int")
+                                .check_ir(
+                                    "switchExpr(expr(double), case(head(logicalOrPattern(\
+                                     varPattern(x, matchedType: double, staticType: \
+                                     double), varPattern(x, matchedType: double, \
+                                     staticType: double), matchedType: double), true, \
+                                     variables(notConsistent:differentFinalityOrType \
+                                     double x = [x1, x2])), expr(int)), case(default, \
+                                     expr(int)))",
+                                ),
+                            ],
+                            errors(&[
+                                "inconsistentJoinedPatternVariable(variable: x = [x1, x2], \
+                                 component: x2)",
+                            ]),
+                        );
+                    }
+
+                    #[test]
+                    fn different_types() {
+                        let (_s, mut h) = set_up();
+                        let x1 = Var::new("x").with_identity("x1");
+                        let x2 = Var::new("x").with_identity("x2").error_id("x2");
+                        Var::join("x", vec![x1, x2]);
+                        h.run_with(
+                            vec![
+                                switch_expr(
+                                    expr("double"),
+                                    vec![
+                                        x1.pattern()
+                                            .with_declared_type("double")
+                                            .or(x2.pattern().with_declared_type("num"))
+                                            .then_expr(expr("int")),
+                                        default_().then_expr(expr("int")),
+                                    ],
+                                )
+                                .check_type("int")
+                                .check_ir(
+                                    "switchExpr(expr(double), case(head(logicalOrPattern(\
+                                     varPattern(x, matchedType: double, staticType: \
+                                     double), varPattern(x, matchedType: double, \
+                                     staticType: num), matchedType: double), true, \
+                                     variables(notConsistent:differentFinalityOrType error \
+                                     x = [x1, x2])), expr(int)), case(default, expr(int)))",
+                                ),
+                            ],
+                            errors(&[
+                                "inconsistentJoinedPatternVariable(variable: x = [x1, x2], \
+                                 component: x2)",
+                            ]),
+                        );
+                    }
+                }
+            }
+        }
+
+        mod inference_update_3 {
+            use super::*;
+
+            fn setup_types_for_lub(h: &mut Harness) {
+                // Class hierarchy:
+                //    A
+                //    /\
+                //   /  \
+                // B1<T> B2<T>
+                // | \  / |
+                // |  \/  |
+                // |  /\  |
+                // | /  \ |
+                // C1<T> C2<T>
+                let b1 = TypeRegistry::lookup("B1");
+                let b2 = TypeRegistry::lookup("B2");
+                h.add_super_interfaces("A", |_| vec![Type::parse("Object")]);
+                h.add_super_interfaces("B1", |_| vec![Type::parse("A"), Type::parse("Object")]);
+                h.add_super_interfaces("B2", |_| vec![Type::parse("A"), Type::parse("Object")]);
+                h.add_super_interfaces("C1", move |args| {
+                    vec![
+                        PrimaryType::new(b1, args.to_vec()),
+                        PrimaryType::new(b2, args.to_vec()),
+                        Type::parse("A"),
+                        Type::parse("Object"),
+                    ]
+                });
+                h.add_super_interfaces("C2", move |args| {
+                    vec![
+                        PrimaryType::new(b1, args.to_vec()),
+                        PrimaryType::new(b2, args.to_vec()),
+                        Type::parse("A"),
+                        Type::parse("Object"),
+                    ]
+                });
+                h.add_lub("C1<Object?>", "C2<Object?>", "A");
+                h.add_lub("C1<int>", "C2<double>", "A");
+                h.add_lub("B2<Object?>", "C1<Object?>", "B2<Object?>");
+            }
+
+            #[test]
+            fn context_used_instead_of_lub_if_lub_doesn_t_satisfy_context() {
+                let (_s, mut h) = set_up();
+                setup_types_for_lub(&mut h);
+                h.run(vec![
+                    switch_expr(
+                        expr("int"),
+                        vec![
+                            int_literal(0).pattern().then_expr(expr("C1<Object?>")),
+                            wildcard().then_expr(expr("C2<Object?>")),
+                        ],
+                    )
+                    .check_type("B1<Object?>")
+                    .in_type_schema("B1<Object?>"),
+                ]);
+            }
+
+            #[test]
+            fn context_is_converted_to_a_type_using_greatest_closure() {
+                let (_s, mut h) = set_up();
+                setup_types_for_lub(&mut h);
+                h.run(vec![
+                    switch_expr(
+                        expr("int"),
+                        vec![
+                            int_literal(0).pattern().then_expr(expr("C1<int>")),
+                            wildcard().then_expr(expr("C2<double>")),
+                        ],
+                    )
+                    .check_type("B1<Object?>")
+                    .in_type_schema("B1<_>"),
+                ]);
+            }
+
+            #[test]
+            fn context_not_used_if_one_of_the_branches_doesn_t_satisfy_context() {
+                let (_s, mut h) = set_up();
+                setup_types_for_lub(&mut h);
+                h.run(vec![
+                    switch_expr(
+                        expr("int"),
+                        vec![
+                            int_literal(0).pattern().then_expr(expr("C1<Object?>")),
+                            wildcard().then_expr(expr("B2<Object?>")),
+                        ],
+                    )
+                    .check_type("B2<Object?>")
+                    .in_type_schema("B1<Object?>"),
+                ]);
+            }
+
+            #[test]
+            fn when_disabled_lub_always_used_even_if_it_doesn_t_satisfy_context() {
+                let (_s, mut h) = set_up();
+                setup_types_for_lub(&mut h);
+                h.disable_inference_update3();
+                h.run(vec![
+                    switch_expr(
+                        expr("int"),
+                        vec![
+                            int_literal(0).pattern().then_expr(expr("C1<Object?>")),
+                            wildcard().then_expr(expr("C2<Object?>")),
+                        ],
+                    )
+                    .check_type("A")
+                    .in_type_schema("B1<Object?>"),
+                ]);
+            }
+        }
+    }
+
+    mod map {
+        use super::*;
+
+        #[test]
+        fn downward_inference() {
+            let (_s, mut h) = set_up();
+            h.run(vec![map_literal(
+                vec![map_entry(
+                    expr("int").check_schema("num"),
+                    expr("int").check_schema("Object"),
+                    false,
+                )],
+                "num",
+                "Object",
+            )]);
+        }
+
+        #[test]
+        fn upward_inference() {
+            let (_s, mut h) = set_up();
+            h.run(vec![map_literal(vec![], "int", "String").check_type("Map<int, String>")]);
+        }
+
+        #[test]
+        fn ir() {
+            let (_s, mut h) = set_up();
+            h.run(vec![
+                map_literal(vec![map_entry(int_literal(0), null_literal(), false)], "int", "String?")
+                    .check_ir("map(mapEntry(0, null))"),
+            ]);
+        }
+    }
+
+    mod method_invocation {
+        use super::*;
+
+        #[test]
+        fn simple() {
+            let (_s, mut h) = set_up();
+            h.run(vec![
+                int_literal(0)
+                    .check_schema("_")
+                    .invoke_method("toString", vec![], false)
+                    .check_type("String")
+                    .check_ir("toString(0)"),
+            ]);
+        }
+
+        #[test]
+        fn null_aware() {
+            let (_s, mut h) = set_up();
+            let v = Var::new("v");
+            h.run(vec![
+                declare(v).with_declared_type("int?"),
+                v.expr()
+                    .check_schema("_")
+                    .invoke_method("toString", vec![], true)
+                    .check_type("String")
+                    .parenthesized() // Terminates null shorting
+                    .check_type("String?")
+                    .check_ir("let(t0, v, if(==(t0, null), null, toString(t0)))"),
+            ]);
+        }
+
+        mod null_shorting {
+            use super::*;
+
+            #[test]
+            fn simple() {
+                let (_s, mut h) = set_up();
+                let v = Var::new("v");
+                h.run(vec![
+                    declare(v).with_declared_type("int?"),
+                    v.expr()
+                        .invoke_method("abs", vec![], true)
+                        .invoke_method("toString", vec![], false)
+                        .check_type("String")
+                        .parenthesized() // Terminates null shorting
+                        .check_type("String?")
+                        .check_ir("let(t0, v, if(==(t0, null), null, toString(abs(t0))))"),
+                ]);
+            }
+
+            #[test]
+            fn nested() {
+                let (_s, mut h) = set_up();
+                let v = Var::new("v");
+                h.run(vec![
+                    declare(v).with_declared_type("int?"),
+                    v.expr()
+                        .invoke_method("abs", vec![], true)
+                        .invoke_method("toString", vec![], true)
+                        .check_type("String")
+                        .parenthesized() // Terminates null shorting
+                        .check_type("String?")
+                        .check_ir(
+                            "let(t0, v, if(==(t0, null), null, let(t1, abs(t0), \
+                             if(==(t1, null), null, toString(t1)))))",
+                        ),
+                ]);
+            }
+        }
+    }
+
+    mod property_get {
+        use super::*;
+
+        #[test]
+        fn simple() {
+            let (_s, mut h) = set_up();
+            h.run(vec![
+                int_literal(0)
+                    .check_schema("_")
+                    .property("isEven", false)
+                    .check_type("bool")
+                    .check_ir("get_isEven(0)"),
+            ]);
+        }
+
+        #[test]
+        fn null_aware() {
+            let (_s, mut h) = set_up();
+            let v = Var::new("v");
+            h.run(vec![
+                declare(v).with_declared_type("int?"),
+                v.expr()
+                    .check_schema("_")
+                    .property("isEven", true)
+                    .check_type("bool")
+                    .parenthesized() // Terminates null shorting
+                    .check_type("bool?")
+                    .check_ir("let(t0, v, if(==(t0, null), null, get_isEven(t0)))"),
+            ]);
+        }
+
+        mod null_shorting {
+            use super::*;
+
+            #[test]
+            fn simple() {
+                let (_s, mut h) = set_up();
+                let v = Var::new("v");
+                h.run(vec![
+                    declare(v).with_declared_type("int?"),
+                    v.expr()
+                        .invoke_method("abs", vec![], true)
+                        .property("isEven", false)
+                        .check_type("bool")
+                        .parenthesized() // Terminates null shorting
+                        .check_type("bool?")
+                        .check_ir("let(t0, v, if(==(t0, null), null, get_isEven(abs(t0))))"),
+                ]);
+            }
+
+            #[test]
+            fn nested() {
+                let (_s, mut h) = set_up();
+                let v = Var::new("v");
+                h.run(vec![
+                    declare(v).with_declared_type("int?"),
+                    v.expr()
+                        .invoke_method("abs", vec![], true)
+                        .property("isEven", true)
+                        .check_type("bool")
+                        .parenthesized() // Terminates null shorting
+                        .check_type("bool?")
+                        .check_ir(
+                            "let(t0, v, if(==(t0, null), null, let(t1, abs(t0), \
+                             if(==(t1, null), null, get_isEven(t1)))))",
+                        ),
+                ]);
+            }
+        }
+    }
 }
