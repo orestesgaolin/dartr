@@ -16,6 +16,8 @@ dartr_diagnostics = { path = "crates/dartr_diagnostics" }
 dartr_project = { path = "crates/dartr_project" }
 dartr_element = { path = "crates/dartr_element" }
 dartr_flow = { path = "crates/dartr_flow" }
+dartr_mini_ast = { path = "crates/dartr_mini_ast" }
+dartr_type_analyzer = { path = "crates/dartr_type_analyzer" }
 dartr_constant = { path = "crates/dartr_constant" }
 dartr_typesystem = { path = "crates/dartr_typesystem" }
 dartr_type_analyzer = { path = "crates/dartr_type_analyzer" }

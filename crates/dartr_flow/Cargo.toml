@@ -7,3 +7,6 @@ description = "Interfaces of the shared flow analysis and type analyzer (_fe_ana
 
 [dependencies]
 indexmap.workspace = true
+
+[dev-dependencies]
+dartr_mini_ast.workspace = true

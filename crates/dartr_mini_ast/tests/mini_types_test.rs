@@ -1,6 +1,6 @@
 // Dart source: pkg/_fe_analyzer_shared/test/mini_types_test.dart
 
-mod mini_ast;
+use dartr_mini_ast as mini_ast;
 
 use mini_ast::mini_types::*;
 use std::collections::{HashMap, HashSet};

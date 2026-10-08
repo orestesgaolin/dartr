@@ -62,18 +62,23 @@
 //!   (generic associated type). The shared algorithms use all traits as
 //!   generic bounds, not as `dyn`.
 //!
-//! # Left for units A9-A13
+//! # Flow analysis implementation (units A9-A11)
 //!
-//! - A9: `FlowModel`, `PromotionModel`, `SsaNode`, `Reachability`,
-//!   `FlowLink` / `flow_link.dart`, `PromotionInfo`, `NonPromotionHistory`.
-//! - A10: `_FlowAnalysisImpl` (statements and expressions), the
-//!   `_FlowContext` classes, the concrete `ExpressionInfo` (the associated
-//!   type [`FlowAnalysisNullShortingInterface::ExpressionInfo`](flow_analysis::FlowAnalysisNullShortingInterface::ExpressionInfo)),
-//!   `_Reference`, `TrivialVariableReference`, the constructor (Dart
-//!   factory `FlowAnalysis(...)`).
-//! - A11: patterns in flow analysis, `PromotionKeyStore`, the
-//!   implementation of [`AssignedVariables`](assigned_variables::AssignedVariables)
-//!   (+ `AssignedVariablesForTesting`).
+//! | Dart file | module | main items |
+//! |---|---|---|
+//! | `flow_analysis/flow_link.dart` | [`flow_link`] | [`FlowLink`](flow_link::FlowLink), [`FlowLinkReader`](flow_link::FlowLinkReader) |
+//! | `type_inference/promotion_key_store.dart` | [`promotion_key_store`] | [`PromotionKeyStore`](promotion_key_store::PromotionKeyStore) |
+//! | `type_inference/assigned_variables.dart` | [`assigned_variables`] | [`AssignedVariablesImpl`](assigned_variables::AssignedVariablesImpl) (also `AssignedVariablesForTesting`) |
+//! | `flow_analysis/flow_analysis.dart` (data model) | [`flow_analysis_impl::model`] | `FlowModel`, `PromotionModel`, `SsaNode`, `Reachability`, `ExpressionInfo` (+ `_NullInfo`, `_Reference`, `TrivialVariableReference`, `_PropertyReference`), `FlowModelHelper`, `NonPromotionHistory` |
+//! | `flow_analysis/flow_analysis.dart` (`_FlowContext`s) | [`flow_analysis_impl::contexts`] | [`FlowContext`](flow_analysis_impl::contexts::FlowContext) |
+//! | `flow_analysis/flow_analysis.dart` (`_FlowAnalysisImpl`) | [`flow_analysis_impl`] | [`FlowAnalysisImpl`](flow_analysis_impl::FlowAnalysisImpl) |
+//!
+//! The implementation is generic over one parameter
+//! `F:` [`FlowTypes`](flow_analysis_impl::model::FlowTypes) (operations and
+//! node types). Dart object identity becomes `Rc::ptr_eq`.
+//!
+//! # Left for units A12-A13
+//!
 //! - A12: the `analyze...` expression, statement, switch and if-case methods
 //!   of [`TypeAnalyzer`](type_analyzer::TypeAnalyzer).
 //! - A13: the pattern `analyze...` methods, the `TypeAnalyzerOperationsMixin`
@@ -82,8 +87,9 @@
 //!   shared `TypeConstraintGenerator` algorithm (`performSubtypeConstraint...`),
 //!   the `VariableBinder` state and concrete methods.
 //!
-//! Not ported: `FlowAnalysisDebug`, `FlowAnalysis.ssaNodeForTesting` (its
-//! return type is an implementation type), `_dumpState`,
+//! Not ported: `FlowAnalysisDebug`, `_dumpState`
+//! (`FlowAnalysis.ssaNodeForTesting` is the inherent method
+//! `FlowAnalysisImpl::ssa_node_for_testing`),
 //! `shared_inference_log.dart`.
 
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
@@ -91,9 +97,12 @@
 pub mod assigned_variables;
 pub mod body_inference_context;
 pub mod flow_analysis;
+pub mod flow_analysis_impl;
 pub mod flow_analysis_operations;
+pub mod flow_link;
 pub mod null_shorting;
 pub mod nullability_suffix;
+pub mod promotion_key_store;
 pub mod shared_type;
 pub mod type_analysis_result;
 pub mod type_analyzer;

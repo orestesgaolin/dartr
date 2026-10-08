@@ -282,6 +282,16 @@ dependencies = [
 name = "dartr_flow"
 version = "0.1.0"
 dependencies = [
+ "dartr_mini_ast",
+ "indexmap",
+]
+
+[[package]]
+name = "dartr_mini_ast"
+version = "0.1.0"
+dependencies = [
+ "dartr_flow",
+ "dartr_type_analyzer",
  "indexmap",
 ]
 
@@ -315,6 +325,7 @@ name = "dartr_type_analyzer"
 version = "0.1.0"
 dependencies = [
  "dartr_flow",
+ "dartr_mini_ast",
  "indexmap",
 ]
 

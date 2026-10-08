@@ -10,3 +10,4 @@ dartr_flow.workspace = true
 indexmap.workspace = true
 
 [dev-dependencies]
+dartr_mini_ast.workspace = true
