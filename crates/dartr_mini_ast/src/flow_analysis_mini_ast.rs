@@ -224,4 +224,18 @@ impl<'a> SsaNodeHarness<'a> {
     pub fn get(&self, variable: Var) -> Option<SsaNode<MiniAstTypes>> {
         self.flow.ssa_node_for_testing(variable)
     }
+
+    /// The flow analysis being run, as a [`FlowModelHelper`] (for reading
+    /// promotion info inside a `getSsaNodes` callback, where the Dart test
+    /// passes `h`; the harness is borrowed by `h.run` there).
+    pub fn flow(&self) -> &'a FlowAnalysisImpl<MiniAstTypes> {
+        self.flow
+    }
+
+    /// Dart `h.promotionKeyStore.keyForVariable(variable)` inside a
+    /// `getSsaNodes` callback: the promotion key of `variable` in the flow
+    /// analysis being run.
+    pub fn key_for_variable(&self, variable: Var) -> PromotionKey {
+        self.flow.promotion_key_store().key_for_variable(variable)
+    }
 }

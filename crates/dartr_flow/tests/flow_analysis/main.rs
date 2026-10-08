@@ -13,6 +13,7 @@
 //! | [`common`] | 19-35, 13305-13489 | `setUp`, helpers |
 //! | [`api_part1`] | 37-1005 | `API` (first part) |
 //! | [`api_part3`] | 2300-3592 | `API` (third part) |
+//! | [`api_part2`] | 1005-2299 | `API` (second part) |
 //! | [`state_part1`] | 3721-3884 | `State` (first part) |
 //! | [`patterns_part1`] | 7038-7330 | `Patterns:` (first part) |
 //! | [`patterns_part2`] | 7335-8702 | `Patterns:` (second part) |
@@ -30,6 +31,7 @@ mod anonymous_methods;
 mod api_part1;
 mod api_part3;
 mod demotion;
+mod api_part2;
 mod patterns_part1;
 mod patterns_part2;
 mod sound_flow_analysis_part2;
