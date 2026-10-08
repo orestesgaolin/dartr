@@ -387,7 +387,13 @@ impl NamedTypeResolver {
 
         let Some(element) = element else {
             env.tables.annotation_type.insert(node, TypeId::INVALID);
-            if !should_ignore_undefined_named_type(&env.ctx, self.library_fragment, ast, node) {
+            if !should_ignore_undefined_named_type(
+                &env.ctx,
+                env.scope.library_scopes(),
+                self.library_fragment,
+                ast,
+                node,
+            ) {
                 ErrorHelper::report_null_or_non_type_element(env, &self.source_path, ast, node, None);
             }
             return;
@@ -636,6 +642,7 @@ fn declaration_context_message(
 /// Dart `LibraryFragmentImpl.shouldIgnoreUndefinedNamedType(node)`.
 pub fn should_ignore_undefined_named_type(
     ctx: &Ctx<'_>,
+    scopes: &crate::scope::LibraryScopes,
     fragment: FId<LibraryFragment>,
     ast: &Ast,
     node: Id<dartr_ast::NamedType>,
@@ -644,12 +651,13 @@ pub fn should_ignore_undefined_named_type(
         .import_prefix
         .map(|p| ast.tokens.lexeme(ast[p].name));
     let name = ast.tokens.lexeme(ast[node].name);
-    should_ignore_undefined(ctx, fragment, prefix, name)
+    should_ignore_undefined(ctx, scopes, fragment, prefix, name)
 }
 
 /// Dart `LibraryFragmentImpl.shouldIgnoreUndefined(prefix:, name:)`.
 pub fn should_ignore_undefined(
     ctx: &Ctx<'_>,
+    scopes: &crate::scope::LibraryScopes,
     fragment: FId<LibraryFragment>,
     prefix: Option<&str>,
     name: &str,
@@ -703,9 +711,7 @@ pub fn should_ignore_undefined(
                 }
             }
         }
-        current = data
-            .enclosing_fragment
-            .and_then(|p| p.cast::<LibraryFragment>());
+        current = scopes.enclosing_fragment(f);
     }
 
     if prefix.is_none() && name.starts_with("_$") {

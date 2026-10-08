@@ -586,7 +586,13 @@ impl<'c, 'a> ResolutionVisitor<'c, 'a> {
             _ => {}
         }
 
-        if should_ignore_undefined_named_type(&self.ctx, self.library_fragment(), ast, named_type) {
+        if should_ignore_undefined_named_type(
+            &self.ctx,
+            self.scope_context.library_scopes(),
+            self.library_fragment(),
+            ast,
+            named_type,
+        ) {
             return;
         }
 

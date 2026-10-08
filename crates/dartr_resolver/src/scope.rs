@@ -218,25 +218,33 @@ impl std::fmt::Debug for LibraryScopes {
     }
 }
 
-/// The fragments of [library]: the defining unit, then the parts, depth
-/// first in `part` directive order (so that a fragment comes after the
-/// fragment that includes it).
-fn library_fragments(ctx: &Ctx<'_>, library: EId<LibraryElement>) -> Vec<FId<LibraryFragment>> {
-    fn visit(ctx: &Ctx<'_>, unit: FId<LibraryFragment>, out: &mut Vec<FId<LibraryFragment>>) {
+/// The fragments of [library] with the fragment that includes each one
+/// (Dart `LibraryFragmentImpl.enclosingFragment`): the defining unit, then
+/// the parts, depth first in `part` directive order (so that a fragment
+/// comes after the fragment that includes it).
+fn library_fragments(
+    ctx: &Ctx<'_>,
+    library: EId<LibraryElement>,
+) -> Vec<(FId<LibraryFragment>, Option<FId<LibraryFragment>>)> {
+    fn visit(
+        ctx: &Ctx<'_>,
+        unit: FId<LibraryFragment>,
+        out: &mut Vec<(FId<LibraryFragment>, Option<FId<LibraryFragment>>)>,
+    ) {
         for part in &ctx.fragment(unit).parts {
             if let DirectiveUri::Unit {
                 library_fragment, ..
             } = &part.directive.uri
             {
-                if !out.contains(library_fragment) {
-                    out.push(*library_fragment);
+                if !out.iter().any(|(f, _)| f == library_fragment) {
+                    out.push((*library_fragment, Some(unit)));
                     visit(ctx, *library_fragment, out);
                 }
             }
         }
     }
     let first = ctx.get(library).first_fragment();
-    let mut out = vec![first];
+    let mut out = vec![(first, None)];
     visit(ctx, first, &mut out);
     out
 }
@@ -275,8 +283,8 @@ impl LibraryScopes {
             declarations: library_declarations(ctx, library),
             ..LibraryScopes::default()
         };
-        for fragment in library_fragments(ctx, library) {
-            scopes.build_fragment_scope(ctx, library, fragment);
+        for (fragment, parent) in library_fragments(ctx, library) {
+            scopes.build_fragment_scope(ctx, library, fragment, parent);
         }
         scopes
     }
@@ -287,12 +295,11 @@ impl LibraryScopes {
         ctx: &Ctx<'_>,
         library: EId<LibraryElement>,
         fragment: FId<LibraryFragment>,
+        parent: Option<FId<LibraryFragment>>,
     ) {
         let f = ctx.fragment(fragment);
-        let parent = f
-            .enclosing_fragment
-            .and_then(|p| p.cast::<LibraryFragment>())
-            .filter(|p| self.fragment_scopes.contains_key(p));
+        // Dart `fragment.enclosingFragment?.scope`.
+        let parent = parent.filter(|p| self.fragment_scopes.contains_key(p));
         let parent_no_prefix = parent.map(|p| self.fragment_scopes[&p].no_prefix_scope);
         let no_prefix_scope =
             self.build_prefix_scope(ctx, library, fragment, None, parent_no_prefix);
@@ -666,6 +673,12 @@ impl LibraryScopes {
             current = scope.parent;
         }
         result.into_iter().collect()
+    }
+
+    /// Dart `LibraryFragmentImpl.enclosingFragment` of a fragment of the
+    /// library: the fragment with the `part` directive that includes it.
+    pub fn enclosing_fragment(&self, fragment: FId<LibraryFragment>) -> Option<FId<LibraryFragment>> {
+        self.fragment_scopes.get(&fragment)?.parent
     }
 
     /// Dart `LibraryDeclarations.withName(name)`.

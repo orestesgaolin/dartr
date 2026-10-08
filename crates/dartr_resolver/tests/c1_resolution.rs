@@ -485,3 +485,29 @@ fn diagnostics_match_dart_analyze() {
     expected.sort();
     pretty_assertions::assert_eq!(actual, expected);
 }
+
+#[test]
+fn part_file_sees_the_imports_of_its_library() {
+    let main = "import 'dart:async';\npart 'part.dart';\nclass Base {}\n";
+    let part = "part of 'main.dart';\nclass A extends Base {\n  int foo = 1;\n  Future<int>? f;\n}\n";
+    let Some(a) = run(&[("main.dart", main), ("part.dart", part)]) else {
+        return;
+    };
+    let part_unit = &a.library.units[1];
+    let names = support::diagnostic_names(&part_unit.diagnostics);
+    assert!(names.is_empty(), "{names:?}");
+    let ast = &part_unit.ast;
+    let int_type = support::find_node(
+        ast,
+        part_unit.unit.raw(),
+        NodeKind::NamedType,
+        part.find("int foo").unwrap() as u32,
+    )
+    .unwrap();
+    let t = *part_unit.tables.annotation_type.get(int_type).unwrap();
+    let ctx = a.ctx(part_unit);
+    assert_eq!(
+        dartr_element::type_display_string_with(&ctx, t, Default::default()),
+        "int"
+    );
+}
