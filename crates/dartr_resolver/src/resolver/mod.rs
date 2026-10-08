@@ -218,6 +218,27 @@ impl<'a> ResolverVisitor<'a> {
         self.diagnostics.push(diagnostic.into_diagnostic());
     }
 
+    /// Dart `diagnostic.at(node)`: locates [diagnostic] at the offset and
+    /// length of [node].
+    pub fn at(
+        &self,
+        diagnostic: dartr_diagnostics::LocatableDiagnostic,
+        node: impl Into<NodeId>,
+    ) -> LocatedDiagnostic {
+        let node = node.into();
+        diagnostic.at_offset(self.ast.offset(node) as usize, self.ast.length(node) as usize)
+    }
+
+    /// Dart `diagnostic.at(token)`.
+    pub fn at_token(
+        &self,
+        diagnostic: dartr_diagnostics::LocatableDiagnostic,
+        token: dartr_syntax::TokenId,
+    ) -> LocatedDiagnostic {
+        let t = self.ast.tokens.get(token);
+        diagnostic.at_offset(t.offset as usize, (t.end() - t.offset) as usize)
+    }
+
     /// Converts the errors that the shared type analyzer reported since the
     /// last call into diagnostics.
     pub fn flush_type_analyzer_errors(&mut self) {

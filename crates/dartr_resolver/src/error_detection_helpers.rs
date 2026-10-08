@@ -54,6 +54,28 @@ impl<'a> ResolverVisitor<'a> {
         self.report(locatable.at_offset(offset, length));
     }
 
+    /// Dart `nullableDereferenceVerifier.expression(locatableDiagnostic,
+    /// expression, type: type)`: reports [locatable] at [expression] if
+    /// its type (or [ty]) is potentially nullable. Returns whether it
+    /// reported.
+    pub fn nullable_dereference_expression(
+        &mut self,
+        locatable: dartr_diagnostics::LocatableDiagnostic,
+        expression: Id<Expression>,
+        ty: Option<dartr_element::TypeId>,
+    ) -> bool {
+        let receiver_type = ty.unwrap_or_else(|| self.type_or_throw(expression));
+        if matches!(
+            self.ctx.ty(receiver_type),
+            dartr_element::TypeKind::Dynamic | dartr_element::TypeKind::Invalid
+        ) || !self.type_system.is_potentially_nullable(receiver_type)
+        {
+            return false;
+        }
+        self.report_nullable_dereference(locatable, expression.raw(), receiver_type);
+        true
+    }
+
     /// Dart `checkForUseOfVoidResult(expression)`: whether the expression has
     /// type `void` in a place where it is not allowed (reports it).
     pub fn check_for_use_of_void_result(&mut self, expression: Id<Expression>) -> bool {
