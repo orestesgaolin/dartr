@@ -5,7 +5,11 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+dartr_ast.workspace = true
+dartr_diagnostics.workspace = true
 dartr_element.workspace = true
+dartr_flow.workspace = true
+dartr_type_analyzer.workspace = true
 indexmap.workspace = true
 
 [dev-dependencies]
