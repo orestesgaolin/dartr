@@ -48,7 +48,7 @@ use super::mini_ir::{Kind, MiniIrBuilder, MiniIrTmp};
 use super::mini_types::{Name, Type, TypeKind};
 use super::node::{
     loc_str, take_unused_error_ids, CatchClause, CollectionElementContext, ExprResult,
-    ExprResultDetail, Label,
+    ExprResultDetail, Label, StmtResultDetail,
     Node, NodeKind, Promotable, PropertyElement, Var,
 };
 use super::operations::MiniAstOperations;
@@ -1160,6 +1160,7 @@ impl Harness {
             guards: Vec::new(),
             dot_shorthands: Vec::new(),
             pending_detail: None,
+            pending_statement_detail: None,
         };
         type_analyzer.dispatch_statement(b);
         type_analyzer.finish();
@@ -1203,6 +1204,8 @@ pub struct MiniAstTypeAnalyzer {
     /// The subclass fields of the result of the expression being visited
     /// (see [`ExprResultDetail`]).
     pending_detail: Option<ExprResultDetail>,
+    /// The subclass fields of the result of the statement being visited.
+    pending_statement_detail: Option<StmtResultDetail>,
 }
 
 impl TypeAnalysisNullShortingInterface for MiniAstTypeAnalyzer {
@@ -3011,7 +3014,10 @@ impl MiniAstTypeAnalyzer {
                 operand,
                 is_yield_star,
             } => {
-                self.analyze_yield_statement(node, operand, is_yield_star);
+                let result = self.analyze_yield_statement(node, operand, is_yield_star);
+                self.pending_statement_detail = Some(StmtResultDetail {
+                    operand_type: Some(result.operand_type.unwrap_type_view()),
+                });
                 self.ir_builder
                     .apply("yieldStmt", &[Kind::Expression], Kind::Statement, &location, &[]);
             }
@@ -3526,11 +3532,13 @@ impl TypeAnalyzer for MiniAstTypeAnalyzer {
 
     fn dispatch_statement(&mut self, statement: Node) {
         let guard = self.ir_builder.guard_begin();
+        self.pending_statement_detail = None;
         self.visit_statement(statement);
+        let detail = self.pending_statement_detail.take().unwrap_or_default();
         self.ir_builder.guard_end(guard, &|| format!("{statement:?}"));
         let data = statement.data();
         if let Some(checker) = &data.check_statement_result {
-            checker();
+            checker(&detail);
         }
         if let Some(expected_ir) = &data.expected_ir {
             self.ir_builder

@@ -87,6 +87,20 @@ pub struct ExprResultDetail {
     pub pattern_schema: Option<Type>,
 }
 
+/// The result passed to a `checkStatementTypeAnalysisResult` checker.
+///
+/// Dart passes the result object, and tests downcast it to
+/// `YieldStatementResult`. Here the subclass field is optional.
+#[derive(Clone, Debug, Default)]
+pub struct StmtResultDetail {
+    /// `YieldStatementResult.operandType`, for a `yield` statement.
+    pub operand_type: Option<Type>,
+}
+
+/// A checker of a statement analysis result
+/// (`checkStatementTypeAnalysisResult`).
+pub type StmtResultChecker = Rc<dyn Fn(&StmtResultDetail)>;
+
 /// A checker of an expression analysis result
 /// (`checkExpressionTypeAnalysisResult`).
 pub type ExprResultChecker = Rc<dyn Fn(&ExprResultDetail)>;
@@ -125,8 +139,8 @@ pub struct NodeData {
     pub expected_type: Option<String>,
     /// `_checkExpressionTypeAnalysisResult`.
     pub check_expression_result: Option<ExprResultChecker>,
-    /// `_checkStatementTypeAnalysisResult` (the result has no data).
-    pub check_statement_result: Option<Rc<dyn Fn()>>,
+    /// `_checkStatementTypeAnalysisResult`.
+    pub check_statement_result: Option<StmtResultChecker>,
 }
 
 /// A label (Dart `BoundLabel` / `UnboundLabel`).
@@ -1784,7 +1798,10 @@ impl Node {
 
     /// `checkStatementTypeAnalysisResult(checker)`.
     #[track_caller]
-    pub fn check_statement_type_analysis_result(self, checker: impl Fn() + 'static) -> Node {
+    pub fn check_statement_type_analysis_result(
+        self,
+        checker: impl Fn(&StmtResultDetail) + 'static,
+    ) -> Node {
         let statement = as_statement(self, Location::caller());
         statement.update(|d| d.check_statement_result = Some(Rc::new(checker)));
         statement
