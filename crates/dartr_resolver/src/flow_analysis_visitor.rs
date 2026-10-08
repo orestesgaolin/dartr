@@ -31,14 +31,14 @@ use dartr_ast::{
     AnonymousMethodInvocation, AsExpression, AssignedVariablePattern, AssignmentExpression, Ast,
     AstVisitor, BinaryExpression, BreakStatement, CaseClause, CatchClause, CommentReference,
     CompilationUnit, ConditionalExpression, ConstructorDeclaration, ContinueStatement, DartPattern,
-    DeclaredVariablePattern, DoStatement, Expression, FieldDeclaration, ForEachPartsWithDeclaration,
-    ForEachPartsWithIdentifier, ForEachPartsWithPattern, ForElement, ForLoopParts,
-    ForPartsWithDeclarations, ForPartsWithExpression, ForPartsWithPattern, ForStatement,
-    FormalParameter, FunctionDeclaration, FunctionExpression, GuardedPattern, Id, IfElement,
-    IfStatement, IsExpression, Label, LabelReference, LabeledStatement, LogicalOrPattern,
-    MethodDeclaration, NodeId, NodeKind, NodeList, NodeMap, PatternVariableDeclaration,
-    PostfixExpression, PrefixExpression, SimpleIdentifier, Statement, SwitchCase,
-    SwitchExpression, SwitchPatternCase, SwitchStatement, TopLevelVariableDeclaration,
+    DeclaredVariablePattern, DoStatement, Expression, FieldDeclaration,
+    ForEachPartsWithDeclaration, ForEachPartsWithIdentifier, ForEachPartsWithPattern, ForElement,
+    ForLoopParts, ForPartsWithDeclarations, ForPartsWithExpression, ForPartsWithPattern,
+    ForStatement, FormalParameter, FunctionDeclaration, FunctionExpression, GuardedPattern, Id,
+    IfElement, IfStatement, IsExpression, Label, LabelReference, LabeledStatement,
+    LogicalOrPattern, MethodDeclaration, NodeId, NodeKind, NodeList, NodeMap,
+    PatternVariableDeclaration, PostfixExpression, PrefixExpression, SimpleIdentifier, Statement,
+    SwitchCase, SwitchExpression, SwitchPatternCase, SwitchStatement, TopLevelVariableDeclaration,
     TryStatement, VariableDeclaration, VariableDeclarationList, WhileStatement,
 };
 use dartr_element::{
@@ -46,12 +46,12 @@ use dartr_element::{
     PatternVariableFragment, PromotableElement, ResolutionTables, Tag, TypeId,
 };
 use dartr_flow::assigned_variables::{AssignedVariables, AssignedVariablesImpl};
-use dartr_syntax::TokenType;
 use dartr_flow::flow_analysis::FlowAnalysis;
 use dartr_flow::flow_analysis_impl::FlowAnalysisImpl;
 use dartr_flow::flow_analysis_impl::model::{ExpressionInfo, FlowTypes};
 use dartr_flow::shared_type::SharedTypeView;
 use dartr_flow::type_analyzer::TypeAnalyzerOptions;
+use dartr_syntax::TokenType;
 use dartr_typesystem::type_system_operations::TypeSystemOperations;
 
 use crate::{ast_ext, element_ext};
@@ -215,9 +215,7 @@ impl<'a> FlowAnalysisHelper<'a> {
 
     /// Dart `breakStatement`.
     pub fn break_statement(&mut self, ast: &Ast, tables: &ResolutionTables, node: Id<Statement>) {
-        let label = ast
-            .cast::<BreakStatement>(node)
-            .and_then(|b| ast[b].label);
+        let label = ast.cast::<BreakStatement>(node).and_then(|b| ast[b].label);
         let ctx = self.type_operations.type_system.ctx;
         let element = label.and_then(|l| label_reference_element(tables, l));
         let target = get_label_target(ast, tables, &ctx, node.raw(), element, true);
@@ -227,7 +225,12 @@ impl<'a> FlowAnalysisHelper<'a> {
     }
 
     /// Dart `continueStatement`.
-    pub fn continue_statement(&mut self, ast: &Ast, tables: &ResolutionTables, node: Id<Statement>) {
+    pub fn continue_statement(
+        &mut self,
+        ast: &Ast,
+        tables: &ResolutionTables,
+        node: Id<Statement>,
+    ) {
         let label = ast
             .cast::<ContinueStatement>(node)
             .and_then(|c| ast[c].label);
@@ -448,7 +451,10 @@ fn promotable_element(tables: &ResolutionTables, node: NodeId) -> Option<EId<Pro
 }
 
 /// Dart `labelReference.element`.
-fn label_reference_element(tables: &ResolutionTables, label: Id<LabelReference>) -> Option<ElementId> {
+fn label_reference_element(
+    tables: &ResolutionTables,
+    label: Id<LabelReference>,
+) -> Option<ElementId> {
     match tables.element.get(label)? {
         ElemRef::Base(e) => Some(*e),
         ElemRef::Member(_) => None,
@@ -600,9 +606,21 @@ fn collect_pattern_variables(
     } else if let Some(logical_or) = ast.cast::<LogicalOrPattern>(node) {
         // Dart `VariableBinder.logicalOrPatternFinish`.
         let mut left = Vec::new();
-        collect_pattern_variables(ast, tables, ctx, ast[logical_or].left_operand.raw(), &mut left);
+        collect_pattern_variables(
+            ast,
+            tables,
+            ctx,
+            ast[logical_or].left_operand.raw(),
+            &mut left,
+        );
         let mut right = Vec::new();
-        collect_pattern_variables(ast, tables, ctx, ast[logical_or].right_operand.raw(), &mut right);
+        collect_pattern_variables(
+            ast,
+            tables,
+            ctx,
+            ast[logical_or].right_operand.raw(),
+            &mut right,
+        );
         for (name, variable) in left {
             right.retain(|(n, _)| *n != name);
             add_pattern_variable(out, name, join_or_self(ctx, variable));
@@ -721,7 +739,13 @@ impl AssignedVariablesVisitor<'_, '_> {
     }
 
     /// Dart `_handleFor`.
-    fn handle_for(&mut self, ast: &Ast, node: NodeId, for_loop_parts: Id<ForLoopParts>, body: NodeId) {
+    fn handle_for(
+        &mut self,
+        ast: &Ast,
+        node: NodeId,
+        for_loop_parts: Id<ForLoopParts>,
+        body: NodeId,
+    ) {
         let parts: NodeId = for_loop_parts.raw();
         let (condition, updaters) = if let Some(p) = ast.cast::<ForPartsWithExpression>(parts) {
             if let Some(initialization) = ast[p].initialization {
@@ -749,7 +773,9 @@ impl AssignedVariablesVisitor<'_, '_> {
             } else if let Some(p) = ast.cast::<ForEachPartsWithPattern>(parts) {
                 iterable = ast[p].iterable;
                 ast.accept(iterable, self);
-                for variable in declared_pattern_variables(ast, self.tables, self.ctx, ast[p].pattern) {
+                for variable in
+                    declared_pattern_variables(ast, self.tables, self.ctx, ast[p].pattern)
+                {
                     self.declare(variable, false);
                 }
             } else {
@@ -803,7 +829,11 @@ impl AssignedVariablesVisitor<'_, '_> {
 }
 
 impl AstVisitor for AssignedVariablesVisitor<'_, '_> {
-    fn visit_anonymous_method_invocation(&mut self, ast: &Ast, node: Id<AnonymousMethodInvocation>) {
+    fn visit_anonymous_method_invocation(
+        &mut self,
+        ast: &Ast,
+        node: Id<AnonymousMethodInvocation>,
+    ) {
         if let Some(target) = ast[node].target {
             ast.accept(target, self);
         }
@@ -844,7 +874,10 @@ impl AstVisitor for AssignedVariablesVisitor<'_, '_> {
     }
 
     fn visit_catch_clause(&mut self, ast: &Ast, node: Id<CatchClause>) {
-        let parameters = [ast[node].exception_parameter, ast[node].stack_trace_parameter];
+        let parameters = [
+            ast[node].exception_parameter,
+            ast[node].stack_trace_parameter,
+        ];
         for parameter in parameters.into_iter().flatten() {
             if let Some(element) = self.declared_element(parameter.raw()) {
                 self.declare(element, false);
@@ -872,15 +905,28 @@ impl AstVisitor for AssignedVariablesVisitor<'_, '_> {
     }
 
     fn visit_for_element(&mut self, ast: &Ast, node: Id<ForElement>) {
-        self.handle_for(ast, node.raw(), ast[node].for_loop_parts, ast[node].body.raw());
+        self.handle_for(
+            ast,
+            node.raw(),
+            ast[node].for_loop_parts,
+            ast[node].body.raw(),
+        );
     }
 
     fn visit_for_statement(&mut self, ast: &Ast, node: Id<ForStatement>) {
-        self.handle_for(ast, node.raw(), ast[node].for_loop_parts, ast[node].body.raw());
+        self.handle_for(
+            ast,
+            node.raw(),
+            ast[node].for_loop_parts,
+            ast[node].body.raw(),
+        );
     }
 
     fn visit_function_declaration(&mut self, ast: &Ast, node: Id<FunctionDeclaration>) {
-        if ast.parent(node).is_some_and(|p| ast.is::<CompilationUnit>(p)) {
+        if ast
+            .parent(node)
+            .is_some_and(|p| ast.is::<CompilationUnit>(p))
+        {
             panic!("Should not visit top level declarations");
         }
         self.assigned_variables.begin_node();
@@ -890,7 +936,10 @@ impl AstVisitor for AssignedVariablesVisitor<'_, '_> {
     }
 
     fn visit_function_expression(&mut self, ast: &Ast, node: Id<FunctionExpression>) {
-        if ast.parent(node).is_some_and(|p| ast.is::<FunctionDeclaration>(p)) {
+        if ast
+            .parent(node)
+            .is_some_and(|p| ast.is::<FunctionDeclaration>(p))
+        {
             // A FunctionExpression just inside a FunctionDeclaration is an
             // analyzer artifact: it is not a separate closure. So skip the
             // usual processing.
@@ -931,7 +980,11 @@ impl AstVisitor for AssignedVariablesVisitor<'_, '_> {
         panic!("Should not visit top level declarations");
     }
 
-    fn visit_pattern_variable_declaration(&mut self, ast: &Ast, node: Id<PatternVariableDeclaration>) {
+    fn visit_pattern_variable_declaration(
+        &mut self,
+        ast: &Ast,
+        node: Id<PatternVariableDeclaration>,
+    ) {
         for variable in declared_pattern_variables(ast, self.tables, self.ctx, ast[node].pattern) {
             self.declare(variable, false);
         }

@@ -67,7 +67,11 @@ fn build() -> SourceTest {
     ] {
         set_field_flag(&test, name, FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL);
     }
-    set_field_flag(&test, "_external", FragmentFlags::VARIABLE_FRAGMENT_IS_EXTERNAL);
+    set_field_flag(
+        &test,
+        "_external",
+        FragmentFlags::VARIABLE_FRAGMENT_IS_EXTERNAL,
+    );
     for name in ["_promotable", "_generic"] {
         set_field_flag(&test, name, FragmentFlags::FIELD_FRAGMENT_IS_PROMOTABLE);
     }
@@ -165,10 +169,7 @@ fn local_variable(
         pattern: Default::default(),
     });
     let element: EId<LocalVariableElement> = store.add(LocalVariableElement {
-        variable: VariableElementData::new(ElementData::new(
-            Some(ctx.name(name)),
-            fragment.raw(),
-        )),
+        variable: VariableElementData::new(ElementData::new(Some(ctx.name(name)), fragment.raw())),
         type_: match ty {
             Some(ty) => VarSlot::with(ty),
             None => VarSlot::new(),
@@ -209,7 +210,10 @@ fn formal_parameter(
         field: VarSlot::new(),
     });
     let element = ElementId::new(element.store(), tag, element.index());
-    ctx.fragment_data(fragment).unwrap().element.set_once(element);
+    ctx.fragment_data(fragment)
+        .unwrap()
+        .element
+        .set_once(element);
     element.cast::<PromotableElement>().unwrap()
 }
 
@@ -240,7 +244,10 @@ fn is_final_of_local_variables_and_parameters() {
             ),
             false,
         ),
-        (formal_parameter(&test, "p", Tag::FormalParameter, &[], int), false),
+        (
+            formal_parameter(&test, "p", Tag::FormalParameter, &[], int),
+            false,
+        ),
         (
             formal_parameter(
                 &test,
@@ -252,13 +259,27 @@ fn is_final_of_local_variables_and_parameters() {
             true,
         ),
         // `this.x` and `super.x` parameters are always final.
-        (formal_parameter(&test, "x", Tag::FieldFormalParameter, &[], int), true),
-        (formal_parameter(&test, "y", Tag::SuperFormalParameter, &[], int), true),
+        (
+            formal_parameter(&test, "x", Tag::FieldFormalParameter, &[], int),
+            true,
+        ),
+        (
+            formal_parameter(&test, "y", Tag::SuperFormalParameter, &[], int),
+            true,
+        ),
     ];
     for (variable, expected) in cases {
         let name = ctx.name_str(ctx.element_data(variable.raw()).unwrap().name.unwrap());
-        assert_eq!(FlowAnalysisOperations::is_final(&ops, variable), expected, "isFinal({name})");
-        assert_eq!(ops.is_variable_final(variable), expected, "isVariableFinal({name})");
+        assert_eq!(
+            FlowAnalysisOperations::is_final(&ops, variable),
+            expected,
+            "isFinal({name})"
+        );
+        assert_eq!(
+            ops.is_variable_final(variable),
+            expected,
+            "isVariableFinal({name})"
+        );
     }
 }
 
@@ -277,5 +298,8 @@ fn variable_type_of_local_variables_and_parameters() {
 
     assert_eq!(ops.variable_type(local).unwrap_type_view(), int_q);
     assert_eq!(ops.variable_type(parameter).unwrap_type_view(), string);
-    assert_eq!(ops.variable_type(untyped).unwrap_type_view(), TypeId::INVALID);
+    assert_eq!(
+        ops.variable_type(untyped).unwrap_type_view(),
+        TypeId::INVALID
+    );
 }

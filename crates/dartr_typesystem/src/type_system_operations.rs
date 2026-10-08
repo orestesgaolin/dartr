@@ -24,9 +24,9 @@ use std::cmp::Ordering;
 
 use dartr_ast::NodeId;
 use dartr_element::{
-    AnyElement, Ctx, EId, ElemRef, ElementId, FieldElement, FragmentFlags, PropertyAccessorElement,
-    Tag, InterfaceElement, Name, NamedType, Nullability, PromotableElement, TypeId,
-    TypeKind, TypeParameterElement,
+    AnyElement, Ctx, EId, ElemRef, ElementId, FieldElement, FragmentFlags, InterfaceElement, Name,
+    NamedType, Nullability, PromotableElement, PropertyAccessorElement, Tag, TypeId, TypeKind,
+    TypeParameterElement,
 };
 use dartr_flow::flow_analysis_operations::{
     FlowAnalysisOperations, FlowAnalysisTypeOperations, PropertyNonPromotabilityReason,
