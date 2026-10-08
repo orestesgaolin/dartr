@@ -65,6 +65,7 @@ is compiled to `target/oracle/oracle` on first use.
 | `dartr_ast`         | `analyzer/lib/src/dart/ast` (AST nodes, visitors)              |
 | `dartr_parser`      | `_fe_analyzer_shared/lib/src/parser`                           |
 | `dartr_ast_builder` | `analyzer/lib/src/fasta` (`ast_builder.dart`, `doc_comment_builder.dart`, `error_converter.dart`), `stack_listener.dart`, `parseString` |
+| `dartr_yaml`        | `package:yaml` 3.1.4 scanner, parser, loader, node styles and source spans |
 | `dartr_project`     | package_config, pubspec, `analysis_options.yaml`, context discovery, SDK location |
 | `dartr_semantics`   | elements, types, type system, inheritance, resolution, inference, flow analysis, constants, error verifiers |
 | `dartr_lints`       | `pkg/linter` rules                                             |

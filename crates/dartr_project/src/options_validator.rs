@@ -76,9 +76,13 @@ pub fn validate_analysis_options(context: &AnalysisContext, path: &str) -> Vec<D
     let result = session.parse(&context.root.workspace, path);
     match result.content.as_ref() {
         FileContent::Unreadable => Vec::new(),
-        FileContent::Malformed { text, error } => error.span.map_or_else(Vec::new, |span| {
-            vec![at(text, span, diag::parse_error(&error.message))]
-        }),
+        FileContent::Malformed { text, error } => {
+            error
+                .utf16_range(text)
+                .map_or_else(Vec::new, |(offset, length)| {
+                    vec![diag::parse_error(&error.message).to_diagnostic(offset, length)]
+                })
+        }
         FileContent::Parsed { .. } => {
             let graph = result.includes.iter().cloned().collect();
             let known_codes = all_codes()
@@ -149,9 +153,8 @@ impl Validator<'_> {
                         text: malformed_text,
                         error,
                     } = self.session.content(malformed).as_ref()
-                        && let Some(span) = error.span
+                        && let Some((start, length)) = error.utf16_range(malformed_text)
                     {
-                        let (start, length) = utf16_span(malformed_text, span);
                         output.push(at(
                             self.result.content.text().unwrap_or_default(),
                             first,

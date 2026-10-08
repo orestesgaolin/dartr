@@ -40,7 +40,6 @@ pub mod pubspec_validator;
 pub mod sdk;
 pub mod workspace;
 pub mod yaml;
-mod yaml_errors;
 
 pub use analysis_options::{AnalysisOptions, OptionsParseSession};
 pub use collection::{

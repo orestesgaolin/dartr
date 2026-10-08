@@ -14,6 +14,7 @@ dartr_ast = { path = "crates/dartr_ast" }
 dartr_parser = { path = "crates/dartr_parser" }
 dartr_ast_builder = { path = "crates/dartr_ast_builder" }
 dartr_diagnostics = { path = "crates/dartr_diagnostics" }
+dartr_yaml = { path = "crates/dartr_yaml" }
 dartr_project = { path = "crates/dartr_project" }
 dartr_element = { path = "crates/dartr_element" }
 dartr_flow = { path = "crates/dartr_flow" }
