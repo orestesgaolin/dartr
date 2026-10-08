@@ -194,6 +194,10 @@ dependencies = [
 [[package]]
 name = "dartr_parser"
 version = "0.1.0"
+dependencies = [
+ "dartr_diagnostics",
+ "dartr_syntax",
+]
 
 [[package]]
 name = "dartr_project"

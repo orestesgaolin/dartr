@@ -5,3 +5,5 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+dartr_syntax.workspace = true
+dartr_diagnostics.workspace = true
