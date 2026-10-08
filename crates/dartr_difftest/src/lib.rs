@@ -504,3 +504,50 @@ fn tail(s: &str) -> String {
     let lines: Vec<&str> = s.lines().collect();
     lines[lines.len().saturating_sub(3)..].join(" | ")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn diff(o: &str, d: &str) -> Option<Difference> {
+        compare("f.dart", Some(&o.to_string()), Some(&d.to_string()))
+    }
+
+    #[test]
+    fn reports_the_json_path_of_the_first_difference() {
+        let d = diff(
+            r#"{"path":"f","tokens":[{"k":"A","o":0},{"k":"B","o":1}],"diagnostics":[]}"#,
+            r#"{"path":"f","tokens":[{"k":"A","o":0},{"k":"B","o":2}],"diagnostics":[1]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            (d.json_path.as_str(), d.oracle.as_str(), d.dartr.as_str()),
+            ("tokens[1].o", "1", "2")
+        );
+
+        let d = diff(r#"{"t":[1,2,3]}"#, r#"{"t":[1,2]}"#).unwrap();
+        assert_eq!(
+            (d.json_path.as_str(), d.oracle.as_str(), d.dartr.as_str()),
+            ("t[2]", "3", "<missing>")
+        );
+
+        let d = diff(r#"{"t":{"syn":true}}"#, r#"{"t":{}}"#).unwrap();
+        assert_eq!(
+            (d.json_path.as_str(), d.dartr.as_str()),
+            ("t.syn", "<missing>")
+        );
+    }
+
+    #[test]
+    fn key_order_and_escaping_are_differences() {
+        let d = diff(r#"{"a":1,"b":2}"#, r#"{"b":2,"a":1}"#).unwrap();
+        assert_eq!(d.json_path, "");
+        assert!(d.oracle.contains("\"a\", \"b\""), "{}", d.oracle);
+
+        // Same value, different text.
+        let d = diff(r#"{"x":"a/b"}"#, r#"{"x":"a\/b"}"#).unwrap();
+        assert!(d.json_path.starts_with("<text"), "{}", d.json_path);
+
+        assert!(diff(r#"{"a":1}"#, r#"{"a":1}"#).is_none());
+    }
+}
