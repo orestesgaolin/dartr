@@ -297,6 +297,10 @@ impl FlowAnalysisOperations for ToyOps {
         view(INT_Q)
     }
 
+    fn is_private_name(&self, name: Self::Name) -> bool {
+        name.starts_with('_')
+    }
+
     fn why_property_is_not_promotable(
         &self,
         _: &&'static str,
