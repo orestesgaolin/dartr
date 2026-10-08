@@ -100,6 +100,7 @@ pub mod prefix_expression_resolver;
 pub mod prefixed_identifier_resolver;
 pub mod property_element_resolver;
 pub mod record_literal_resolver;
+pub mod resolution_result;
 pub mod type_property_resolver;
 pub mod typed_literal_resolver;
 pub mod yield_statement_resolver;

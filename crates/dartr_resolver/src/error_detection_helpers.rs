@@ -31,6 +31,29 @@ impl<'a> ResolverVisitor<'a> {
         let _ = (body, error_node);
     }
 
+    /// Dart `nullableDereferenceVerifier.report(locatableDiagnostic,
+    /// errorEntity, receiverType, messages: ...)`
+    /// (error/nullable_dereference_verifier.dart). The why-not-promoted
+    /// context messages are not ported yet.
+    pub fn report_nullable_dereference(
+        &mut self,
+        locatable: dartr_diagnostics::LocatableDiagnostic,
+        error_entity: dartr_ast::NodeId,
+        receiver_type: dartr_element::TypeId,
+    ) {
+        // Dart: `receiverType == typeProvider.nullType` (Dart `==`).
+        let locatable = if dartr_typesystem::TypeSystem::new(self.ctx)
+            .dart_eq(receiver_type, self.ctx.tp.null_type())
+        {
+            dartr_diagnostics::diag::invalid_use_of_null_value()
+        } else {
+            locatable
+        };
+        let offset = self.ast.offset(error_entity) as usize;
+        let length = self.ast.length(error_entity) as usize;
+        self.report(locatable.at_offset(offset, length));
+    }
+
     /// Dart `checkForUseOfVoidResult(expression)`: whether the expression has
     /// type `void` in a place where it is not allowed (reports it).
     pub fn check_for_use_of_void_result(&mut self, expression: Id<Expression>) -> bool {

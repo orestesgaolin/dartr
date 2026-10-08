@@ -422,7 +422,9 @@ impl<'a> ResolverVisitor<'a> {
             TypeKind::Function(cf) if self.ctx.list(cf.type_params).is_empty() => {}
             _ => return expression,
         }
-        let type_argument_types = self.infer_function_type_instantiation(context, static_type, expression);
+        // If the constructor-tearoffs feature is enabled, then so is
+        // generic-metadata.
+        let type_argument_types = self.infer_function_type_instantiation(context, static_type, expression, true);
         let mut static_type = static_type;
         if !type_argument_types.is_empty() {
             use dartr_typesystem::TypeExt;
@@ -446,12 +448,11 @@ impl<'a> ResolverVisitor<'a> {
         context: TypeId,
         fn_type: TypeId,
         error_node: Id<Expression>,
+        generic_metadata_is_enabled: bool,
     ) -> Vec<TypeId> {
         use dartr_typesystem::generic_inferrer::{InferenceErrorEntity, InferenceErrorEntityKind, InferenceFlags};
         let flags = InferenceFlags {
-            // If the constructor-tearoffs feature is enabled, then so is
-            // generic-metadata.
-            generic_metadata_is_enabled: true,
+            generic_metadata_is_enabled,
             inference_using_bounds_is_enabled: self.inference_using_bounds_is_enabled(),
             strict_inference: self.unit.options.strict_inference,
         };

@@ -48,6 +48,7 @@ pub fn visit_conditional_expression(
     let s = ts.greatest_closure_of_schema(context_type);
     // Dart `_resolver.definingLibrary.featureSet`: the library features are
     // the features of its defining unit.
+    #[allow(clippy::if_same_then_else)]
     let static_type = if !rv.is_enabled(ExperimentalFlag::InferenceUpdate3) {
         t
     } else if ts.is_subtype_of(t, s) {
@@ -117,15 +118,16 @@ pub fn visit_super_expression(rv: &mut ResolverVisitor<'_>, node: Id<SuperExpres
         .map(|flow| flow.this_or_super(SharedTypeView::new(this_type.unwrap_or(TypeId::DYNAMIC)), true));
     rv.flow_analysis
         .store_expression_info(node.upcast::<Expression>(), info);
-    if this_type.is_none()
-        || rv
-            .ast
-            .this_or_ancestor_of_type::<ExtensionDeclaration>(node)
-            .is_some()
-    {
-        rv.record_static_type(node, TypeId::INVALID);
-    } else {
-        rv.record_static_type(node, this_type.unwrap());
+    match this_type {
+        Some(this_type)
+            if rv
+                .ast
+                .this_or_ancestor_of_type::<ExtensionDeclaration>(node)
+                .is_none() =>
+        {
+            rv.record_static_type(node, this_type);
+        }
+        _ => rv.record_static_type(node, TypeId::INVALID),
     }
 }
 

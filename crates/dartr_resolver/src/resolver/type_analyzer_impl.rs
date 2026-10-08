@@ -75,8 +75,8 @@ impl<'a> TypeAnalysisNullShortingInterface for ResolverVisitor<'a> {
             dartr_flow::flow_analysis::FlowAnalysisNullShortingInterface::null_aware_access_end(
                 self.flow(),
             );
-            let guard = self.guards.pop().expect("null shorting guard");
-            inner_result = self.handle_null_shorting_step(inner_result, guard, inferred_type);
+            self.guards.pop().expect("null shorting guard");
+            inner_result = self.handle_null_shorting_step(inner_result, (), inferred_type);
             if self.guards.len() <= target_depth {
                 break;
             }

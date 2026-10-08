@@ -19,3 +19,27 @@ pub fn visit_extension_override(rv: &mut ResolverVisitor<'_>, node: Id<Extension
     // STUB (C6): fallback.
     rv.fallback_expression(node.upcast());
 }
+
+/// Dart `ExtensionResolutionResult` / `ExtensionResolutionError`: the getter
+/// and setter of the single most specific applicable extension, or
+/// whether the extensions are ambiguous.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ExtensionResolutionResult {
+    pub getter: Option<dartr_element::ElemRef>,
+    pub setter: Option<dartr_element::ElemRef>,
+    /// Dart `ExtensionResolutionError.ambiguous`.
+    pub is_ambiguous: bool,
+}
+
+/// Dart `ExtensionMemberResolver.findExtension(type, nameEntity, name)`:
+/// the extension member [name] applicable to [ty]. [name_entity] is the
+/// node to report an ambiguity on. STUB (C6): no extension is found.
+pub fn find_extension(
+    rv: &mut ResolverVisitor<'_>,
+    ty: TypeId,
+    name_entity: dartr_ast::NodeId,
+    name: &dartr_typesystem::inheritance_manager3::Name,
+) -> ExtensionResolutionResult {
+    let _ = (rv, ty, name_entity, name);
+    ExtensionResolutionResult::default()
+}
