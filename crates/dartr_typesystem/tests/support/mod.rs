@@ -53,8 +53,34 @@ const MOCK_CORE_EXTRA: &str = "dart:_core_extra";
 /// A built test world: the mock SDK, the libraries of the test sources, and
 /// the last library as the test library.
 pub struct SourceTest {
-    pub t: TypeSystemTest,
+    backend: Backend,
     pub library: EId<LibraryElement>,
+}
+
+/// How the elements of a [`SourceTest`] are built.
+enum Backend {
+    /// The mock SDK of `test_support` and the declaration builder of this
+    /// module (no inference).
+    Mock(Box<TypeSystemTest>),
+    /// The real linker (`dartr_link` through `dartr_driver`) with the SDK of
+    /// the `dart` on PATH: override inference and covariance are done.
+    Linked(Box<LinkedWorld>),
+}
+
+/// The world of [`SourceTest::linked`].
+struct LinkedWorld {
+    driver: dartr_driver::driver::Driver,
+    tp: dartr_element::TypeProvider,
+    features: dartr_element::FeatureSet,
+    sink: dartr_element::NoopSink,
+    /// The folder of the test files, removed on drop.
+    dir: std::path::PathBuf,
+}
+
+impl Drop for LinkedWorld {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
 }
 
 /// A member to create, collected from the AST.
@@ -120,11 +146,107 @@ impl SourceTest {
         }
         let library = library.expect("at least one file");
         t.test_library = Some(library);
-        SourceTest { t, library }
+        SourceTest {
+            backend: Backend::Mock(Box::new(t)),
+            library,
+        }
+    }
+
+    /// Links the test library [source] (`package:test/test.dart`) with the
+    /// real linker and the SDK of the `dart` on PATH. For the tests that
+    /// need inference (implicit types, inherited covariance).
+    pub fn linked(source: &str) -> SourceTest {
+        SourceTest::linked_files(&[(TEST_URI, source)])
+    }
+
+    /// [`Self::linked`] for the libraries [files] (`package:test/...` URI,
+    /// source); the last one is the test library.
+    pub fn linked_files(files: &[(&str, &str)]) -> SourceTest {
+        use dartr_driver::driver::Driver;
+        use dartr_driver::file_state::{FileConfig, FileSystemState, SourceFactory};
+        use dartr_project::package_config::{Package, Packages};
+        use dartr_project::{DartSdk, Workspace};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        static COUNTER: AtomicUsize = AtomicUsize::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "dartr_typesystem_test_{}_{}",
+            std::process::id(),
+            COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        let lib = dir.join("lib");
+        std::fs::create_dir_all(&lib).unwrap();
+        let root = dartr_project::paths::normalize(dir.to_str().unwrap());
+        let lib_path = dartr_project::paths::normalize(lib.to_str().unwrap());
+        let mut paths = Vec::new();
+        for (uri, source) in files {
+            let relative = uri
+                .strip_prefix("package:test/")
+                .unwrap_or_else(|| panic!("not a package:test/ URI: {uri}"));
+            let path = lib.join(relative);
+            std::fs::write(&path, source).unwrap();
+            paths.push(dartr_project::paths::normalize(path.to_str().unwrap()));
+        }
+
+        let sdk = dartr_project::sdk::find_sdk_path()
+            .map(|p| DartSdk::new(&p))
+            .expect("a Dart SDK (dart on PATH)");
+        let version = sdk
+            .language_version()
+            .map(|v| (v.major, v.minor))
+            .unwrap_or((3, 13));
+        let packages = Packages::new(vec![Package {
+            name: "test".to_string(),
+            root: root.clone(),
+            lib: lib_path,
+            language_version: None,
+        }]);
+        let source_factory = SourceFactory {
+            workspace: Workspace::basic(packages, &root),
+            sdk: Some(sdk),
+        };
+        let config_for = Box::new(move |_: &str, _: &str| FileConfig {
+            package_language_version: version,
+            experiments: Vec::new(),
+        });
+        let generation = std::sync::Arc::new(dartr_element::Generation::new(0));
+        let mut driver = Driver::new(FileSystemState::new(source_factory, config_for), generation);
+        let file_ids: Vec<_> = paths.iter().map(|p| driver.fs.get_file_for_path(p)).collect();
+        driver.fs.discover();
+        driver.link_libraries(&file_ids);
+        let test_uri = driver.fs.file(*file_ids.last().unwrap()).uri_str.clone();
+        assert_eq!(&*test_uri, TEST_URI);
+        let library = *driver
+            .state
+            .world
+            .libraries
+            .get(&*test_uri)
+            .expect("the test library is linked");
+        let tp = dartr_link::types_builder::world_type_provider(&driver.state.world);
+        SourceTest {
+            backend: Backend::Linked(Box::new(LinkedWorld {
+                driver,
+                tp,
+                features: dartr_element::FeatureSet::default(),
+                sink: dartr_element::NoopSink,
+                dir,
+            })),
+            library,
+        }
     }
 
     pub fn ctx(&self) -> Ctx<'_> {
-        self.t.ctx()
+        match &self.backend {
+            Backend::Mock(t) => t.ctx(),
+            Backend::Linked(w) => Ctx {
+                world: &w.driver.state.world,
+                current: None,
+                local: None,
+                tp: &w.tp,
+                features: &w.features,
+                req: &w.sink,
+            },
+        }
     }
 
     /// `InheritanceManager3()`.
@@ -151,7 +273,10 @@ impl SourceTest {
             .or_else(|| {
                 let ctx = self.ctx();
                 // Libraries of the test store are not in the world map.
-                let store = &self.t.store;
+                let Backend::Mock(t) = &self.backend else {
+                    return None;
+                };
+                let store = &t.store;
                 store
                     .elements
                     .libraries

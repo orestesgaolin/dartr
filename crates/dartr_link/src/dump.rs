@@ -563,6 +563,22 @@ impl Dumper<'_, '_> {
                     self.type_parameters_json(&ctx.executable(executable).type_params),
                 );
                 o.put("params", self.parameters_json(executable));
+                if let Some(method) = e.cast::<dartr_element::MethodElement>() {
+                    let m = ctx.get(method);
+                    if let Some(dartr_element::TopLevelInferenceError::OverrideNoCombinedSuperSignature {
+                        candidate_signatures,
+                    }) = m.type_inference_error.try_get()
+                    {
+                        o.put(
+                            "typeInferenceError",
+                            Json::Str("overrideNoCombinedSuperSignature".to_string()),
+                        );
+                        o.put("candidateSignatures", Json::Str(candidate_signatures.to_string()));
+                    }
+                    if m.is_operator_equal_with_parameter_type_from_object.get() {
+                        o.put("opEqParamFromObject", Json::Bool(true));
+                    }
+                }
             }
             _ => panic!("unexpected element: {e:?}"),
         }
@@ -798,7 +814,7 @@ pub fn fragments(ctx: &Ctx<'_>, e: ElementId) -> Vec<FragmentId> {
     result
 }
 
-fn first_fragment_has(ctx: &Ctx<'_>, e: ElementId, flag: FragmentFlags) -> bool {
+pub fn first_fragment_has(ctx: &Ctx<'_>, e: ElementId, flag: FragmentFlags) -> bool {
     fragment_data(ctx, first_fragment(ctx, e)).flags.has(flag)
 }
 

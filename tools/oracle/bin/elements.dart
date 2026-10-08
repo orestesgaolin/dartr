@@ -30,6 +30,12 @@
 // `hasImplicitType`; for a getter or setter with `isOriginVariable` (induced
 // by a variable) the `hasImplicitType` of that variable; for the `value`
 // parameter of such a setter also the `hasImplicitType` of the variable.
+//
+// A method has `"typeInferenceError":"overrideNoCombinedSuperSignature"` and
+// `"candidateSignatures"` when override inference found no combined
+// signature, and `"opEqParamFromObject":true` when
+// `isOperatorEqualWithParameterTypeFromObject`; the keys are missing
+// otherwise.
 import 'dart:convert';
 import 'dart:io';
 
@@ -469,6 +475,19 @@ Map<String, Object?> elementJson(Element e, {int? unit}) {
       json['inf'] = executableInferred(e);
       json['tp'] = typeParametersJson(e.typeParameters);
       json['params'] = parametersJson(e);
+      if (e is MethodElementImpl) {
+        // Override inference (InstanceMemberInferrer): written only when
+        // set, so that other methods keep their shape.
+        if (e.typeInferenceError
+            case TopLevelInferenceErrorNoCombinedSuperSignature error) {
+          json['typeInferenceError'] =
+              TopLevelInferenceErrorKind.overrideNoCombinedSuperSignature.name;
+          json['candidateSignatures'] = error.candidateSignatures;
+        }
+        if (e.isOperatorEqualWithParameterTypeFromObject) {
+          json['opEqParamFromObject'] = true;
+        }
+      }
     default:
       throw ArgumentError('unexpected element: ${e.runtimeType}');
   }

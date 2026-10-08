@@ -15,4 +15,9 @@ indexmap.workspace = true
 [dev-dependencies]
 dartr_ast.workspace = true
 dartr_ast_builder.workspace = true
+# The inheritance tests that need inference build their libraries with the
+# real linker (`tests/support`, `SourceTest::linked`).
+dartr_driver.workspace = true
+dartr_link.workspace = true
+dartr_project.workspace = true
 dartr_syntax.workspace = true

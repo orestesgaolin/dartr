@@ -1249,7 +1249,15 @@ impl TypeResolution {
             };
             self.break_self_cycles(lk, key.0, key.1, list);
             self.break_raw_type_cycles(lk, ctx, element, key.0, key.1, list);
-            self.compute_default_type(lk, ctx, key.0, key.1, list);
+            // Dart `_TypeParametersGraph` finds the type parameters of a
+            // bound by identity (`Map.identity()`); for a top-level function
+            // the type parameter types in the bounds have other element
+            // objects than `node.declaredFragment!.element` (but `==` ones,
+            // so the replacement still applies), so its graph has no edges.
+            // Observed with the oracle (`tests/language/inference_using_bounds/
+            // f_bounded_mutually_recursive_test.dart`).
+            let graph_edges = !unit_ast(lk, key.0, key.1).is::<FunctionDeclaration>(key.2);
+            self.compute_default_type(lk, ctx, key.0, key.1, list, graph_edges);
         }
         // _buildDefaultTypes
         for &key in &declarations {
@@ -1428,7 +1436,15 @@ impl TypeResolution {
     }
 
     /// `_computeDefaultType`.
-    fn compute_default_type(&mut self, lk: &Linker<'_>, ctx: &Ctx<'_>, lib: u32, unit: u32, list: Id<TypeParameterList>) {
+    fn compute_default_type(
+        &mut self,
+        lk: &Linker<'_>,
+        ctx: &Ctx<'_>,
+        lib: u32,
+        unit: u32,
+        list: Id<TypeParameterList>,
+        graph_edges: bool,
+    ) {
         let ast = unit_ast(lk, lib, unit);
         let nodes = ast.list(ast.get(list).type_parameters);
         let mut elements = Vec::new();
@@ -1448,8 +1464,10 @@ impl TypeResolution {
         let length = elements.len();
         // _TypeParametersGraph
         let mut edges: Vec<Vec<usize>> = vec![Vec::new(); length];
-        for i in 0..length {
-            self.collect_references(ctx, &elements, i, Some(bounds[i]), &mut edges);
+        if graph_edges {
+            for i in 0..length {
+                self.collect_references(ctx, &elements, i, Some(bounds[i]), &mut edges);
+            }
         }
         let components = strong_components(length, &edges);
         for component in components {
@@ -1577,31 +1595,83 @@ impl TypeResolution {
                         nullability,
                         node,
                     } => {
+                        // visitFunctionTypeBuilder: a type parameter whose
+                        // bound changes is replaced by a fresh copy with the
+                        // new bound, and the old type parameters are
+                        // substituted by the new ones.
+                        let mut new_type_params: Option<Vec<EId<TypeParameterElement>>> = None;
+                        let mut new_bounds: Vec<Option<LType>> = vec![None; type_params.len()];
+                        for (i, &tp) in type_params.iter().enumerate() {
+                            if let Some(bound) = self.bound_of(ctx, tp)
+                                && let Some(new_bound) = self.replace_upper_lower(ctx, bound, upper, lower, variance)
+                            {
+                                new_type_params.get_or_insert_with(|| type_params.clone())[i] = ctx.fresh_copy(tp);
+                                new_bounds[i] = Some(new_bound);
+                            }
+                        }
+                        let mut substitution: Option<Vec<(EId<TypeParameterElement>, TypeId)>> = None;
+                        if let Some(new_type_params) = &new_type_params {
+                            let map: Vec<(EId<TypeParameterElement>, TypeId)> = type_params
+                                .iter()
+                                .zip(new_type_params.iter())
+                                .map(|(&old, &new)| (old, ctx.type_parameter_type(new, Nullability::None)))
+                                .collect();
+                            for (i, &new) in new_type_params.iter().enumerate() {
+                                // freshCopy() keeps the bound; `..bound =`
+                                // replaces it with the visited bound.
+                                let bound = match new_bounds[i] {
+                                    Some(b) => Some(b),
+                                    None => self.bound_of(ctx, type_params[i]),
+                                };
+                                if let Some(bound) = bound {
+                                    let bound = self.substitute_ltype(ctx, bound, &map);
+                                    match bound {
+                                        LType::Built(t) => ctx.get(new).bound.set(Some(t)),
+                                        LType::Builder(_) => {
+                                            ctx.get(new).bound.set(None);
+                                            self.pending_bounds.insert(new, bound);
+                                        }
+                                    }
+                                }
+                            }
+                            substitution = Some(map);
+                        }
                         let mut changed = false;
                         let flipped = match variance {
                             Variance::Covariant => Variance::Contravariant,
                             Variance::Contravariant => Variance::Covariant,
                             v => v,
                         };
-                        let mut new_params = params.clone();
-                        for p in new_params.iter_mut() {
-                            if let Some(r) = self.replace_upper_lower(ctx, p.ty, upper, lower, flipped) {
-                                p.ty = r;
-                                changed = true;
+                        // visitType: the visited type (or the type itself),
+                        // substituted when there are new type parameters.
+                        let visit_type = |this: &mut Self, t: LType, v: Variance| -> Option<LType> {
+                            let result = this.replace_upper_lower(ctx, t, upper, lower, v);
+                            match &substitution {
+                                Some(map) => Some(this.substitute_ltype(ctx, result.unwrap_or(t), map)),
+                                None => result,
                             }
-                        }
-                        let new_return = match self.replace_upper_lower(ctx, return_type, upper, lower, variance) {
+                        };
+                        let new_return = match visit_type(self, return_type, variance) {
                             Some(r) => {
                                 changed = true;
                                 r
                             }
                             None => return_type,
                         };
+                        let mut new_params = params.clone();
+                        for p in new_params.iter_mut() {
+                            if let Some(r) = visit_type(self, p.ty, flipped) {
+                                p.ty = r;
+                                changed = true;
+                            }
+                        }
+                        // createFunctionTypeBuilder: new type parameters
+                        // alone do not make a new builder.
                         if !changed {
                             return None;
                         }
                         Some(self.add_builder(BuilderKind::Function {
-                            type_params,
+                            type_params: new_type_params.unwrap_or(type_params),
                             params: new_params,
                             return_type: new_return,
                             nullability,
@@ -1640,6 +1710,83 @@ impl TypeResolution {
                         }))
                     }
                 }
+            }
+        }
+    }
+
+    /// `Substitution.fromMap(map).substituteType(t)` over a linking type:
+    /// built types are substituted, builders are copied when something
+    /// changes.
+    fn substitute_ltype(&mut self, ctx: &Ctx<'_>, t: LType, map: &[(EId<TypeParameterElement>, TypeId)]) -> LType {
+        match t {
+            LType::Built(id) => {
+                let (params, args): (Vec<_>, Vec<_>) = map.iter().copied().unzip();
+                LType::Built(dartr_typesystem::MapSubstitution::from_pairs(&params, &args).substitute_type(ctx, id))
+            }
+            LType::Builder(b) => {
+                let kind = self.builders[b as usize].kind.clone();
+                let new_kind = match kind {
+                    BuilderKind::Named {
+                        element,
+                        arguments,
+                        nullability,
+                        node,
+                    } => {
+                        let new_arguments: Vec<LType> = arguments.iter().map(|&a| self.substitute_ltype(ctx, a, map)).collect();
+                        if new_arguments == arguments {
+                            return t;
+                        }
+                        BuilderKind::Named {
+                            element,
+                            arguments: new_arguments,
+                            nullability,
+                            node,
+                        }
+                    }
+                    BuilderKind::Function {
+                        type_params,
+                        params,
+                        return_type,
+                        nullability,
+                        node,
+                    } => {
+                        let mut new_params = params.clone();
+                        for p in new_params.iter_mut() {
+                            p.ty = self.substitute_ltype(ctx, p.ty, map);
+                        }
+                        let new_return = self.substitute_ltype(ctx, return_type, map);
+                        if new_return == return_type && new_params.iter().zip(params.iter()).all(|(a, b)| a.ty == b.ty) {
+                            return t;
+                        }
+                        BuilderKind::Function {
+                            type_params,
+                            params: new_params,
+                            return_type: new_return,
+                            nullability,
+                            node,
+                        }
+                    }
+                    BuilderKind::Record {
+                        node,
+                        positional,
+                        named,
+                        nullability,
+                    } => {
+                        let new_positional: Vec<LType> = positional.iter().map(|&a| self.substitute_ltype(ctx, a, map)).collect();
+                        let new_named: Vec<(Name, LType)> =
+                            named.iter().map(|&(n, a)| (n, self.substitute_ltype(ctx, a, map))).collect();
+                        if new_positional == positional && new_named == named {
+                            return t;
+                        }
+                        BuilderKind::Record {
+                            node,
+                            positional: new_positional,
+                            named: new_named,
+                            nullability,
+                        }
+                    }
+                };
+                self.add_builder(new_kind)
             }
         }
     }
