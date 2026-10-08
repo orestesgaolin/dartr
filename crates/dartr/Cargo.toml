@@ -7,3 +7,5 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+dartr_syntax.workspace = true
+rayon.workspace = true
