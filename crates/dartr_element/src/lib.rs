@@ -68,7 +68,8 @@ pub use ctx::{
 };
 pub use data::*;
 pub use display_string::{
-    DisplayOptions, element_display_string_with, type_display_string_with,
+    DisplayOptions, element_display_string_with, library_export_display_string,
+    library_import_display_string, part_include_display_string, type_display_string_with,
     type_parameter_display_string,
 };
 pub use element::*;

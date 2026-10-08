@@ -11,6 +11,8 @@
 //! - [`element_display_string_with`] = `ElementImpl.displayString(multiline:, preferTypeAlias:)`.
 //! - [`type_parameter_display_string`] = `TypeParameterElementImpl.displayString()`
 //!   (variance keyword, name and bound).
+//! - [`library_import_display_string`], [`library_export_display_string`],
+//!   [`part_include_display_string`] = `ElementDirectiveImpl.displayString()`.
 //!
 //! # `_uniqueTypeParameters` without new elements
 //!
@@ -52,7 +54,7 @@
 //!   keeps `B` as written.
 
 use crate::ctx::Ctx;
-use crate::data::DirectiveUri;
+use crate::data::{DirectiveUri, LibraryExport, LibraryImport, PartInclude};
 use crate::element::{ElementData, FormalParameterElement, TypeParameterElement};
 use crate::flags::{ElementFlags, FragmentFlags};
 use crate::ids::{EId, ElementId, FId, Tag};
@@ -96,6 +98,35 @@ pub fn type_parameter_display_string(ctx: &Ctx<'_>, element: EId<TypeParameterEl
     let mut builder = ElementDisplayStringBuilder::new(ctx, DisplayOptions::default());
     builder.write_type_parameter_element(element);
     builder.buffer
+}
+
+/// `LibraryImportImpl.displayString()`: `import <uri>`.
+pub fn library_import_display_string(import: &LibraryImport) -> String {
+    directive_display_string("import ", &import.directive.uri)
+}
+
+/// `LibraryExportImpl.displayString()`: `export <uri>`.
+pub fn library_export_display_string(export: &LibraryExport) -> String {
+    directive_display_string("export ", &export.directive.uri)
+}
+
+/// `PartIncludeImpl.displayString()`: `part <uri>`.
+pub fn part_include_display_string(part: &PartInclude) -> String {
+    directive_display_string("part ", &part.directive.uri)
+}
+
+/// `writeLibraryImport` / `writeLibraryExport` / `writePartInclude` with
+/// `_writeDirectiveUri`: the source URI for a `DirectiveUriWithSourceImpl`
+/// (also `DirectiveUriWithLibraryImpl`, its subclass), else `<unknown>`.
+fn directive_display_string(keyword: &str, uri: &DirectiveUri) -> String {
+    let uri = match uri {
+        DirectiveUri::Source { source, .. } | DirectiveUri::Library { source, .. } => &*source.uri,
+        DirectiveUri::None
+        | DirectiveUri::RelativeUriString { .. }
+        | DirectiveUri::RelativeUri { .. }
+        | DirectiveUri::Unit { .. } => "<unknown>",
+    };
+    format!("{keyword}{uri}")
 }
 
 /// Dart `_WriteFormalParameterKind`.

@@ -147,9 +147,11 @@ Output may never depend on id values or on hash iteration order.
 
 ## 7. Placeholders for later units
 
-- `todo!("<Dart name>")` bodies: `TypeImpl.getDisplayString` /
-  `ElementImpl.displayString` (A1), `TypeProviderBase.isObjectGetter` /
+- `todo!("<Dart name>")` bodies: `TypeProviderBase.isObjectGetter` /
   `isObjectMethod` (A7), `FieldElementImpl.declaringFormalParameter` (B4).
+- Display strings (A1, done): `display_string.rs` (`type_display_string_with`,
+  `element_display_string_with`). The type algorithms (substitution,
+  subtyping, LUB, ...) are in `dartr_typesystem`.
 - `FeatureSet` is a minimal stand-in (enabled experiment flags) until a port of
   `dart/analysis/features.dart` (B6).
 - `Namespace` is data only; unit A8 ports the builders.

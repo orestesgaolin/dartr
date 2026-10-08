@@ -201,3 +201,69 @@ impl Eq<'_, '_> {
         true
     }
 }
+
+/// Dart `hashCode` of a type, consistent with [`dart_eq`]: equal types have
+/// equal hashes. Like the Dart hashes, it ignores what Dart `hashCode`
+/// ignores (aliases, positional parameter names and types, the type
+/// arguments of interface types, the field types of records, the bounds of
+/// type formals). For a generic function type Dart hashes the type
+/// instantiated with synthetic formals `T0, T1, ...`; this port hashes the
+/// type formals by their position, which gives the same equivalence
+/// without creating elements. The value itself is not the Dart value.
+pub fn dart_hash(ctx: &Ctx<'_>, t: TypeId) -> u64 {
+    use std::hash::{DefaultHasher, Hasher};
+    let mut h = DefaultHasher::new();
+    hash_into(ctx, t, &mut Vec::new(), &mut h);
+    h.finish()
+}
+
+fn hash_into(
+    ctx: &Ctx<'_>,
+    t: TypeId,
+    formals: &mut Vec<EId<TypeParameterElement>>,
+    h: &mut std::hash::DefaultHasher,
+) {
+    use std::hash::Hash;
+    match *ctx.ty(t) {
+        // InvalidTypeImpl.hashCode => 1, UnknownInferredType.hashCode => 1,
+        // VoidTypeImpl.hashCode => 2, NeverTypeImpl.hashCode => 0.
+        TypeKind::Dynamic => 3u8.hash(h),
+        TypeKind::Invalid | TypeKind::Unknown => 1u8.hash(h),
+        TypeKind::Void => 2u8.hash(h),
+        TypeKind::Never(_) => 0u8.hash(h),
+        // InterfaceTypeImpl.hashCode => element.hashCode
+        TypeKind::Interface { element, .. } => element.hash(h),
+        // TypeParameterTypeImpl.hashCode => element.hashCode
+        TypeKind::TypeParameter { param, .. } => match formals.iter().rposition(|&f| f == param) {
+            Some(i) => ("formal", i).hash(h),
+            None => param.hash(h),
+        },
+        // Object.hash(positionalFields.length, namedFields.length)
+        TypeKind::Record {
+            positional, named, ..
+        } => (ctx.list(positional).len(), ctx.list(named).len()).hash(h),
+        TypeKind::Function(f) => {
+            let type_params = ctx.list(f.type_params);
+            let mark = formals.len();
+            formals.extend_from_slice(type_params);
+            // Object.hash(nullabilitySuffix, returnType,
+            //   requiredPositionalParameterCount, namedParameterInfo)
+            f.nullability.hash(h);
+            hash_into(ctx, f.ret, formals, h);
+            f.required_positional.hash(h);
+            for p in ctx.list(f.params) {
+                if is_named(p.kind) {
+                    crate::type_ext::is_required(p.kind).hash(h);
+                    p.name.map(|n| ctx.name_str(n)).unwrap_or("").hash(h);
+                    // Dart passes `namedParameterInfo` (a new List, so an
+                    // identity hash) to Object.hash: types with named
+                    // parameters practically never hash equal in Dart.
+                    // Hashing the named parameter types keeps the hash
+                    // consistent with `==` and separates such types.
+                    hash_into(ctx, p.ty, formals, h);
+                }
+            }
+            formals.truncate(mark);
+        }
+    }
+}
