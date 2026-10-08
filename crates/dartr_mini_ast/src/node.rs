@@ -1778,7 +1778,11 @@ pub fn for_each_with_non_variable(iterable: impl IntoNode, body: Vec<Node>) -> N
 
 /// `forEachWithVariableDecl(variable, iterable, body)`.
 #[track_caller]
-pub fn for_each_with_variable_decl(variable: Var, iterable: impl IntoNode, body: Vec<Node>) -> Node {
+pub fn for_each_with_variable_decl(
+    variable: Var,
+    iterable: impl IntoNode,
+    body: Vec<Node>,
+) -> Node {
     let iterable = iterable.into_node();
     let location = Location::caller();
     Node::alloc(
@@ -1898,7 +1902,11 @@ pub fn if_case_element(
 
 /// `ifElement(condition, ifTrue, [ifFalse])`.
 #[track_caller]
-pub fn if_element(condition: impl IntoNode, if_true: impl IntoNode, if_false: impl IntoOptNode) -> Node {
+pub fn if_element(
+    condition: impl IntoNode,
+    if_true: impl IntoNode,
+    if_false: impl IntoOptNode,
+) -> Node {
     let condition = condition.into_node();
     let if_true = if_true.into_node();
     let if_false = if_false.into_opt_node();
@@ -2060,7 +2068,12 @@ pub fn object_pattern(required_type: &str, fields: Vec<Node>) -> Node {
 
 /// `patternForIn(pattern, expression, body, {hasAwait})`.
 #[track_caller]
-pub fn pattern_for_in(pattern: impl IntoNode, expression: impl IntoNode, body: Vec<Node>, has_await: bool) -> Node {
+pub fn pattern_for_in(
+    pattern: impl IntoNode,
+    expression: impl IntoNode,
+    body: Vec<Node>,
+    has_await: bool,
+) -> Node {
     let pattern = pattern.into_node();
     let expression = expression.into_node();
     let location = Location::caller();
@@ -2100,7 +2113,11 @@ pub fn pattern_for_in_element(
 
 /// `patternVariableDeclaration(pattern, initializer, {isFinal})`.
 #[track_caller]
-pub fn pattern_variable_declaration(pattern: impl IntoNode, initializer: impl IntoNode, is_final: bool) -> Node {
+pub fn pattern_variable_declaration(
+    pattern: impl IntoNode,
+    initializer: impl IntoNode,
+    is_final: bool,
+) -> Node {
     let pattern = pattern.into_node();
     let initializer = initializer.into_node();
     Node::alloc(
