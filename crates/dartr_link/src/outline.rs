@@ -465,7 +465,6 @@ fn build_mixin_app(lk: &mut Linker<'_>, tp: &TypeProvider, index: usize, class: 
     }
     lk.core.store.get_mut(class).constructors = elements;
     lk.core.store.fragment_mut(first).constructors = fragments;
-    crate::link::set_library_and_enclosing(&mut lk.core.store);
 }
 
 /// Copies a const expression of [store] (this cycle or a linked cycle)

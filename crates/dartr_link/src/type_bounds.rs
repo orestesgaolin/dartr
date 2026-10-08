@@ -470,10 +470,9 @@ impl SbWalker<'_, '_, '_> {
                 rhs.push(n.type_);
             }
             (tps(n.type_parameters), rhs)
-        } else if let Some(n) = ast.cast::<MixinDeclaration>(node) {
-            (tps(ast.get(n).type_parameters), Vec::new())
         } else {
-            return None;
+            let n = ast.cast::<MixinDeclaration>(node)?;
+            (tps(ast.get(n).type_parameters), Vec::new())
         };
         self.nodes.push(SbNode {
             key,

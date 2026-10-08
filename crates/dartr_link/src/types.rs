@@ -369,12 +369,11 @@ impl TypeResolution {
         }
         if let Some(g) = ast.cast::<GenericTypeAlias>(node) {
             let type_node = ast.get(g).type_;
-            let aliased = if lk.builders[lib].is_enabled(ExperimentalFlag::NonfunctionTypeAliases) {
-                match self.node_type(key(type_node.raw())) {
-                    Some(t) => self.build_type(lk, ctx, t),
-                    None => TypeId::DYNAMIC,
-                }
-            } else if ast.is::<GenericFunctionType>(type_node.raw()) {
+            // Dart `_buildAliasedType`: both branches build the node type
+            // when the aliased type is a function type.
+            let aliased = if lk.builders[lib].is_enabled(ExperimentalFlag::NonfunctionTypeAliases)
+                || ast.is::<GenericFunctionType>(type_node.raw())
+            {
                 match self.node_type(key(type_node.raw())) {
                     Some(t) => self.build_type(lk, ctx, t),
                     None => TypeId::DYNAMIC,
@@ -1226,10 +1225,9 @@ impl TypeResolution {
             ast.get(m).type_parameters
         } else if let Some(m) = ast.cast::<MethodDeclaration>(n) {
             ast.get(m).type_parameters
-        } else if let Some(f) = ast.cast::<FunctionDeclaration>(n) {
-            ast.get(ast.get(f).function_expression).type_parameters
         } else {
-            return None;
+            let f = ast.cast::<FunctionDeclaration>(n)?;
+            ast.get(ast.get(f).function_expression).type_parameters
         };
         let fragment = declared_fragment(lk, key)?;
         Some((fragment, list))

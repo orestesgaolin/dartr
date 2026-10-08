@@ -85,10 +85,13 @@ pub fn dump_elements_all(inputs: &[String], interface: bool) -> Vec<String> {
     }
 
     // Discover, check kinds, link.
+    let timings = std::env::var_os("DARTR_TIMINGS").is_some();
+    let start = std::time::Instant::now();
     let mut libraries: Vec<Vec<FileId>> = vec![Vec::new(); drivers.len()];
     for driver in &mut drivers {
         driver.fs.discover();
     }
+    let discovered = start.elapsed();
     for input in &mut resolved {
         if let Input::Library { driver, file } = *input {
             if drivers[driver].fs.file(file).kind().is_part() {
@@ -100,6 +103,16 @@ pub fn dump_elements_all(inputs: &[String], interface: bool) -> Vec<String> {
     }
     for (d, driver) in drivers.iter_mut().enumerate() {
         driver.link_libraries(&libraries[d]);
+    }
+    if timings {
+        let files: usize = drivers.iter().map(|d| d.fs.files().len()).sum();
+        let cycles: usize = drivers.iter().map(|d| d.cycles.len()).sum();
+        eprintln!(
+            "timings: {files} files read and parsed in {:.1} ms; {cycles} cycles linked in {:.1} ms (threads: {})",
+            discovered.as_secs_f64() * 1e3,
+            (start.elapsed() - discovered).as_secs_f64() * 1e3,
+            rayon::current_num_threads()
+        );
     }
 
     let features = FeatureSet::default();

@@ -12,6 +12,13 @@
 //! - [`reference`]: `summary2/reference.dart` (symbolic references).
 //! - [`dump`]: the `elements` dump (`tools/oracle/bin/elements.dart`).
 
+#![allow(
+    // Ported functions keep the parameters and the index loops of the Dart
+    // code.
+    clippy::too_many_arguments,
+    clippy::needless_range_loop
+)]
+
 pub mod ast_util;
 pub mod detach_nodes;
 pub mod dump;

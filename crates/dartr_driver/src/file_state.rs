@@ -67,6 +67,13 @@ pub struct FileConfig {
     pub experiments: Vec<ExperimentalFlag>,
 }
 
+/// The language version and experiments of a file, by path and URI.
+pub type ConfigFor = Box<dyn Fn(&str, &str) -> FileConfig>;
+
+/// A file to read and parse: id, path, whether it is `dart:core`, config,
+/// salt.
+type ParseJob = (FileId, Arc<str>, bool, FileConfig, Vec<u32>);
+
 /// Dart `DirectiveUri` (no `DirectiveUriWithInSummarySource`: there are no
 /// summary inputs).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -244,7 +251,7 @@ pub struct FileSystemState {
     /// Dart `_libraryNameToFiles`.
     library_name_to_files: IndexMap<String, Vec<FileId>>,
     /// The language version and experiments of a file (path, URI).
-    config_for: Box<dyn Fn(&str, &str) -> FileConfig>,
+    config_for: ConfigFor,
     /// Files that are added but not read and parsed yet.
     pending: Vec<FileId>,
 }
@@ -252,7 +259,7 @@ pub struct FileSystemState {
 impl FileSystemState {
     pub fn new(
         source_factory: SourceFactory,
-        config_for: Box<dyn Fn(&str, &str) -> FileConfig>,
+        config_for: ConfigFor,
     ) -> FileSystemState {
         FileSystemState {
             source_factory,
@@ -338,7 +345,7 @@ impl FileSystemState {
     pub fn discover(&mut self) {
         while !self.pending.is_empty() {
             let pending = std::mem::take(&mut self.pending);
-            let jobs: Vec<(FileId, Arc<str>, bool, FileConfig, Vec<u32>)> = pending
+            let jobs: Vec<ParseJob> = pending
                 .iter()
                 .map(|&id| {
                     let f = self.file(id);

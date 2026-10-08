@@ -634,7 +634,8 @@ fn infer_mixin(
             }
             let constraints = TypeSystem::new(*ctx).gather_mixin_supertype_constraints_for_inference(i);
             (tps, constraints)
-        } else if let Some(a) = element.cast::<TypeAliasElement>() {
+        } else {
+            let a = element.cast::<TypeAliasElement>()?;
             let tps = ctx.get(a).type_params.clone();
             if tps.is_empty() {
                 return None;
@@ -650,8 +651,6 @@ fn infer_mixin(
                 .map(|&c| substitution.substitute_type(ctx, c))
                 .collect();
             (tps, constraints)
-        } else {
-            return None;
         };
     let candidates = merger.type_list();
     let mut solution: IndexMap<EId<TypeParameterElement>, TypeId> = IndexMap::new();

@@ -98,11 +98,10 @@ impl ExportScope {
     /// Dart `export`: whether the entry was added.
     pub fn export(&mut self, location: ExportLocation, entry: &ExportEntry) -> bool {
         if let Some(existing) = self.entries_by_name.get_mut(&entry.name) {
-            if existing.element == entry.element {
-                if existing.is_re_exported() {
+            if existing.element == entry.element
+                && existing.is_re_exported() {
                     existing.add_location(location);
                 }
-            }
             return false;
         }
         self.entries_by_name.insert(

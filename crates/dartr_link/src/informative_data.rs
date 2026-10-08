@@ -270,11 +270,10 @@ impl<'a> InfoBuilder<'a> {
                 });
             } else if let Some(n) = ast.cast::<PartDirective>(d) {
                 info.parts.push(ast.tokens.offset(ast.get(n).part_keyword));
-            } else if let Some(n) = ast.cast::<LibraryDirective>(d) {
-                if first_library_directive.is_none() {
+            } else if let Some(n) = ast.cast::<LibraryDirective>(d)
+                && first_library_directive.is_none() {
                     first_library_directive = Some(n);
                 }
-            }
         }
         if let Some(name) = first_library_directive.and_then(|l| ast.get(l).name) {
             info.library_name_offset = ast.offset(name) as i32;

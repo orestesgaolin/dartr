@@ -397,11 +397,7 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
                 Some(ast.get(n).metadata)
             } else if let Some(n) = ast.cast::<ImportDirective>(f) {
                 Some(ast.get(n).metadata)
-            } else if let Some(n) = ast.cast::<PartDirective>(f) {
-                Some(ast.get(n).metadata)
-            } else {
-                None
-            };
+            } else { ast.cast::<PartDirective>(f).map(|n| ast.get(n).metadata) };
             if let Some(list) = metadata {
                 let metadata = self.build_metadata(list);
                 self.store().get_mut(library).metadata = metadata;
@@ -819,7 +815,7 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
         let named_type = dst.add(NamedType {
             import_prefix: None,
             name: type_name,
-            type_arguments: type_arguments.map(|t| dst_cast(t)),
+            type_arguments: type_arguments.map(dst_cast),
             question: None,
         });
         let (period, name) = match &constructor_name {

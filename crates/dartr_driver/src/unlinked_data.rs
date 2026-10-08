@@ -220,8 +220,8 @@ pub fn serialize_ast_unlinked2(parsed: &ParsedUnit, exists: bool, is_dart_core: 
                         },
                     });
                 }
-            } else if let Some(uri) = p.uri {
-                if part_of_uri_directive.is_none() {
+            } else if let Some(uri) = p.uri
+                && part_of_uri_directive.is_none() {
                     part_of_uri_directive = Some(UnlinkedPartOfUriDirective {
                         doc_imports: build_doc_imports(p.documentation_comment),
                         uri: string_value(ast, uri),
@@ -231,7 +231,6 @@ pub fn serialize_ast_unlinked2(parsed: &ParsedUnit, exists: bool, is_dart_core: 
                         },
                     });
                 }
-            }
         }
     }
 

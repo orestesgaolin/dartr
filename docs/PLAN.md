@@ -68,6 +68,7 @@ is compiled to `target/oracle/oracle` on first use.
 | `dartr_project`     | package_config, pubspec, `analysis_options.yaml`, context discovery, SDK location |
 | `dartr_semantics`   | elements, types, type system, inheritance, resolution, inference, flow analysis, constants, error verifiers |
 | `dartr_lints`       | `pkg/linter` rules                                             |
+| `dartr_link`        | `analyzer/lib/src/summary2`: element builder, scopes, type builders, defaults, outlines (`dartr dump elements`) |
 | `dartr_driver`      | analysis driver: file state, caches, library cycles, parallel analysis, incremental updates |
 | `dartr_server`      | LSP server and legacy analysis server protocol                 |
 | `dartr`             | binary: `analyze`, `language-server`, `dump`                   |

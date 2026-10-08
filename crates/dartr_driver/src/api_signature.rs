@@ -118,16 +118,15 @@ pub fn hex(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
 
+    /// The expected value is the output of the Dart `ApiSignature` of
+    /// analyzer 3.13.3 for the same calls.
     #[test]
-    fn md5_of_version_and_string() {
-        // Dart: (ApiSignature()..addString('abc')).toHex()
-        // = md5([0,0,0,0, 3,0,0,0, 0x61,0x62,0x63]).
+    fn same_hash_as_dart() {
         let mut s = ApiSignature::new();
         s.add_string("abc");
-        let expected = {
-            let bytes = [0u8, 0, 0, 0, 3, 0, 0, 0, b'a', b'b', b'c'];
-            hex(&Md5::digest(bytes))
-        };
-        assert_eq!(s.to_hex(), expected);
+        s.add_int(7);
+        s.add_bool(true);
+        s.add_string("é");
+        assert_eq!(s.to_hex(), "1761e9f4c7a1b7b867fc5c81f9b49300");
     }
 }
