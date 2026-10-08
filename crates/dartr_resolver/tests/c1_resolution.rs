@@ -432,3 +432,56 @@ class A<T> {
     assert_eq!(u.tag(), Tag::TypeParameter);
     assert_eq!(a.annotation_type_str(u_type).as_deref(), Some("U"));
 }
+
+/// The diagnostics of the C1 passes on `c1_diagnostics.dart` are the ones
+/// that `dart analyze --format=machine` (3.13.3) reports for these codes:
+/// code, line and column.
+#[test]
+fn diagnostics_match_dart_analyze() {
+    let source = include_str!("c1_diagnostics.dart");
+    let Some(a) = run(&[("main.dart", source)]) else {
+        return;
+    };
+    // Codes of other passes (unused elements, dead code, assignments).
+    let other_passes = ["UNUSED_ELEMENT", "UNUSED_LOCAL_VARIABLE", "DEAD_CODE", "INVALID_ASSIGNMENT"];
+    let line_starts: Vec<usize> = std::iter::once(0)
+        .chain(source.match_indices('\n').map(|(i, _)| i + 1))
+        .collect();
+    let mut actual: Vec<String> = a
+        .unit()
+        .diagnostics
+        .iter()
+        .map(|d| {
+            let line = line_starts.iter().rposition(|&s| s <= d.offset).unwrap();
+            let column = d.offset - line_starts[line] + 1;
+            format!("{} {}:{}", d.code.name.to_uppercase(), line + 1, column)
+        })
+        .filter(|s| !other_passes.iter().any(|c| s.starts_with(c)))
+        .collect();
+    actual.sort();
+    let mut expected = vec![
+        "EXTENDS_NON_CLASS 5:17",
+        "IMPLEMENTS_NON_CLASS 6:20",
+        "MIXIN_OF_NON_CLASS 7:14",
+        "NULLABLE_TYPE_IN_EXTENDS_CLAUSE 8:17",
+        "UNDEFINED_CLASS 9:1",
+        "NOT_A_TYPE 10:1",
+        "WRONG_NUMBER_OF_TYPE_ARGUMENTS 11:1",
+        "UNDEFINED_CLASS 12:1",
+        "LABEL_IN_OUTER_SCOPE 17:13",
+        "CONTINUE_LABEL_INVALID 22:7",
+        "LABEL_UNDEFINED 25:9",
+        "DUPLICATE_VARIABLE_PATTERN 26:26",
+        "MISSING_VARIABLE_PATTERN 27:14",
+        "MISSING_VARIABLE_PATTERN 27:23",
+        "PATTERN_VARIABLE_ASSIGNMENT_INSIDE_GUARD 28:26",
+        "TYPE_TEST_WITH_UNDEFINED_NAME 29:8",
+        "CAST_TO_NON_TYPE 30:8",
+        "NON_TYPE_AS_TYPE_ARGUMENT 31:8",
+        "DUPLICATE_FIELD_NAME 32:27",
+        "INVALID_FIELD_NAME 32:8",
+        "INVALID_FIELD_NAME 33:13",
+    ];
+    expected.sort();
+    pretty_assertions::assert_eq!(actual, expected);
+}
