@@ -271,6 +271,8 @@ pub struct Ast {
     pub(crate) stores: Stores,
     pub(crate) lists: Vec<NodeId>,
     pub(crate) token_lists: Vec<TokenId>,
+    /// A reusable buffer for [`Ast::adopt_children`].
+    scratch: Vec<NodeId>,
 }
 
 impl Ast {
@@ -306,11 +308,13 @@ impl Ast {
     /// `_becomeParentOf`).
     pub fn adopt_children(&mut self, id: impl Into<NodeId>) {
         let id = id.into();
-        let mut children = Vec::new();
+        let mut children = std::mem::take(&mut self.scratch);
+        children.clear();
         self.for_each_child(id, &mut |c| children.push(c));
-        for c in children {
+        for &c in &children {
             self.parents[c.index()] = Some(id);
         }
+        self.scratch = children;
     }
 
     /// Changes a node: runs [f] on it, then [`Ast::adopt_children`].

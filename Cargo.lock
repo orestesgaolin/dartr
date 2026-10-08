@@ -192,6 +192,7 @@ dependencies = [
  "dartr_diagnostics",
  "dartr_parser",
  "dartr_syntax",
+ "rayon",
  "rustc-hash",
 ]
 
