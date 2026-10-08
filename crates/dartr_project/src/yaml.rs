@@ -195,6 +195,7 @@ pub fn load_yaml_node(text: &str) -> Result<YamlNode, YamlError> {
 }
 
 struct Loader<'a> {
+    text: &'a str,
     parser: Parser<'a, saphyr_parser::StrInput<'a>>,
     /// Byte offset of each character index, plus the end.
     char_to_byte: Vec<usize>,
@@ -208,6 +209,7 @@ impl<'a> Loader<'a> {
         let mut char_to_byte: Vec<usize> = text.char_indices().map(|(i, _)| i).collect();
         char_to_byte.push(text.len());
         Loader {
+            text,
             parser: Parser::new_from_str(text),
             char_to_byte,
             anchors: Default::default(),
@@ -346,7 +348,11 @@ impl<'a> Loader<'a> {
                 }
                 // Block collections end at their last child; the end event of
                 // a block collection is at the start of the next token.
-                let end = nodes.last().map_or(end, |n| n.span.end);
+                let end = if self.text.as_bytes().get(start.start) == Some(&b'[') {
+                    end
+                } else {
+                    nodes.last().map_or(end, |n| n.span.end)
+                };
                 let node = YamlNode {
                     kind: NodeKind::List(nodes),
                     span: Span {
@@ -380,7 +386,11 @@ impl<'a> Loader<'a> {
                     }
                     entries.push((key, value));
                 }
-                let end = entries.last().map_or(end, |(_, v)| v.span.end);
+                let end = if self.text.as_bytes().get(start.start) == Some(&b'{') {
+                    end
+                } else {
+                    entries.last().map_or(end, |(_, v)| v.span.end)
+                };
                 let node = YamlNode {
                     kind: NodeKind::Map(entries),
                     span: Span {
