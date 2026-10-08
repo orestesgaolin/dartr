@@ -32,7 +32,7 @@ use dartr_syntax::{TokenId, TokenType};
 use indexmap::{IndexMap, IndexSet};
 
 use crate::ast_util::*;
-use crate::informative_data::{formal_parameter_parts, fragment_data_mut};
+use crate::informative_data::fragment_data_mut;
 use crate::library_builder::{ImplicitEnumNodes, LibraryBuilder};
 use crate::link::{Linker, LinkerCore};
 use crate::reference::{MemberReferenceKind, RefId, TopLevelReferenceKind};
@@ -242,10 +242,6 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
     pub fn finish(self) {
         let declared = self.declared;
         self.lib.units[self.unit_index].declared_fragments.extend(declared);
-    }
-
-    fn ast(&self) -> &Ast {
-        &self.parsed.ast
     }
 
     fn name_of(&self, token: Option<TokenId>) -> Option<Name> {
@@ -2709,13 +2705,14 @@ fn variable_fragment_has_setter(store: &ElementStore, f: FragmentId) -> bool {
     if d.flags.has(FragmentFlags::VARIABLE_FRAGMENT_IS_CONST) {
         return false;
     }
+    let is_final = d.flags.has(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL);
     if d.flags.has(FragmentFlags::VARIABLE_FRAGMENT_IS_LATE) {
-        return true;
+        return !is_final
+            || !d
+                .flags
+                .has(FragmentFlags::NON_PARAMETER_VARIABLE_FRAGMENT_HAS_INITIALIZER);
     }
-    if d.flags.has(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL) {
-        return false;
-    }
-    true
+    !is_final
 }
 
 fn push_constructor_fragment(store: &mut ElementStore, enclosing: FragmentId, f: FId<ConstructorFragment>) {

@@ -228,8 +228,13 @@ dependencies = [
  "dartr_ast",
  "dartr_ast_builder",
  "dartr_difftest",
+ "dartr_driver",
+ "dartr_element",
+ "dartr_link",
  "dartr_parser",
+ "dartr_project",
  "dartr_syntax",
+ "indexmap",
  "rayon",
 ]
 
@@ -298,6 +303,7 @@ dependencies = [
  "dartr_parser",
  "dartr_project",
  "dartr_syntax",
+ "imbl",
  "indexmap",
  "md-5",
  "rayon",
