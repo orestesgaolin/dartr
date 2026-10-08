@@ -14,7 +14,7 @@ mod mini_ast;
 use mini_ast::harness::{BodyContext, Harness, RunOptions};
 #[allow(unused_imports)]
 use mini_ast::mini_types::{
-    type_registry_scope, PrimaryType, Type, TypeRegistry, TypeRegistryScope,
+    PrimaryType, Type, TypeRegistry, TypeRegistryScope, type_registry_scope,
 };
 #[allow(unused_imports)]
 use mini_ast::node::*;
@@ -248,11 +248,16 @@ mod collection_elements {
                 let x = Var::new("x");
                 h.run(vec![list_literal(
                     vec![
-                        pattern_for_in_element(x.pattern(), expr("Iterable<int>"), expr("Object"), false)
-                            .check_ir(
-                                "forEach(expr(Iterable<int>), varPattern(x, \
+                        pattern_for_in_element(
+                            x.pattern(),
+                            expr("Iterable<int>"),
+                            expr("Object"),
+                            false,
+                        )
+                        .check_ir(
+                            "forEach(expr(Iterable<int>), varPattern(x, \
                                  matchedType: int, staticType: int), celt(expr(Object)))",
-                            ),
+                        ),
                     ],
                     "Object",
                 )]);
@@ -297,10 +302,8 @@ mod collection_elements {
                         ],
                         "Object",
                     )],
-                    errors(&[
-                        "patternForInExpressionIsNotIterable(node: FOR, \
-                         expression: EXPRESSION, expressionType: Object)",
-                    ]),
+                    errors(&["patternForInExpressionIsNotIterable(node: FOR, \
+                         expression: EXPRESSION, expressionType: Object)"]),
                 );
             }
         }
@@ -330,7 +333,9 @@ mod collection_elements {
                         ],
                         "Object",
                     )],
-                    errors(&["refutablePatternInIrrefutableContext(pattern: PATTERN, context: FOR)"]),
+                    errors(&[
+                        "refutablePatternInIrrefutableContext(pattern: PATTERN, context: FOR)",
+                    ]),
                 );
             }
 
@@ -356,10 +361,10 @@ mod collection_elements {
                         ],
                         "Object",
                     )],
-                    errors(&[
-                        "patternTypeMismatchInIrrefutableContext(pattern: PATTERN, \
-                         context: FOR, matchedType: int, requiredType: String)",
-                    ]),
+                    errors(
+                        &["patternTypeMismatchInIrrefutableContext(pattern: PATTERN, \
+                         context: FOR, matchedType: int, requiredType: String)"],
+                    ),
                 );
             }
         }
@@ -378,11 +383,11 @@ mod expressions {
             #[test]
             fn operand_type() {
                 let (_s, mut h) = set_up();
-                h.run(vec![await_(expr("int")).check_expression_type_analysis_result(
-                    |result| {
+                h.run(vec![
+                    await_(expr("int")).check_expression_type_analysis_result(|result| {
                         assert_eq!(result.operand_type.unwrap().to_string(), "int");
-                    },
-                )]);
+                    }),
+                ]);
             }
         }
 
@@ -393,7 +398,8 @@ mod expressions {
             fn schema_is_future_or_s() {
                 let (_s, mut h) = set_up();
                 h.run(vec![
-                    await_(expr("int").check_schema("FutureOr<int>")).in_type_schema("FutureOr<int>"),
+                    await_(expr("int").check_schema("FutureOr<int>"))
+                        .in_type_schema("FutureOr<int>"),
                 ]);
             }
 
@@ -401,7 +407,8 @@ mod expressions {
             fn schema_is_future_or_s_nullable() {
                 let (_s, mut h) = set_up();
                 h.run(vec![
-                    await_(expr("int").check_schema("FutureOr<int>?")).in_type_schema("FutureOr<int>?"),
+                    await_(expr("int").check_schema("FutureOr<int>?"))
+                        .in_type_schema("FutureOr<int>?"),
                 ]);
             }
 
@@ -623,15 +630,16 @@ mod expressions {
             h.run(vec![
                 switch_expr(
                     expr("int"),
-                    vec![i
-                        .pattern()
-                        .when(Some(
-                            i.expr()
-                                .check_type("int")
-                                .eq(expr("num"))
-                                .check_schema("bool"),
-                        ))
-                        .then_expr(expr("String"))],
+                    vec![
+                        i.pattern()
+                            .when(Some(
+                                i.expr()
+                                    .check_type("int")
+                                    .eq(expr("num"))
+                                    .check_schema("bool"),
+                            ))
+                            .then_expr(expr("String")),
+                    ],
                 )
                 .check_ir(
                     "switchExpr(expr(int), case(head(varPattern(i, \
@@ -651,10 +659,11 @@ mod expressions {
                 h.run_with(
                     vec![switch_expr(
                         expr("int"),
-                        vec![x
-                            .pattern()
-                            .when(Some(expr("int").error_id("GUARD")))
-                            .then_expr(expr("int"))],
+                        vec![
+                            x.pattern()
+                                .when(Some(expr("int").error_id("GUARD")))
+                                .then_expr(expr("int")),
+                        ],
                     )],
                     errors(&["nonBooleanCondition(node: GUARD)"]),
                 );
@@ -680,7 +689,11 @@ mod expressions {
                 h.run_with(
                     vec![switch_expr(
                         expr("int"),
-                        vec![x.pattern().when(Some(expr("dynamic"))).then_expr(expr("int"))],
+                        vec![
+                            x.pattern()
+                                .when(Some(expr("dynamic")))
+                                .then_expr(expr("int")),
+                        ],
                     )],
                     errors(&[]),
                 );
@@ -748,10 +761,10 @@ mod expressions {
                                      expr(int)))",
                                 ),
                             ],
-                            errors(&[
-                                "inconsistentJoinedPatternVariable(variable: x = [x1, x2], \
-                                 component: x2)",
-                            ]),
+                            errors(
+                                &["inconsistentJoinedPatternVariable(variable: x = [x1, x2], \
+                                 component: x2)"],
+                            ),
                         );
                     }
 
@@ -783,10 +796,10 @@ mod expressions {
                                      x = [x1, x2])), expr(int)), case(default, expr(int)))",
                                 ),
                             ],
-                            errors(&[
-                                "inconsistentJoinedPatternVariable(variable: x = [x1, x2], \
-                                 component: x2)",
-                            ]),
+                            errors(
+                                &["inconsistentJoinedPatternVariable(variable: x = [x1, x2], \
+                                 component: x2)"],
+                            ),
                         );
                     }
                 }
@@ -924,15 +937,21 @@ mod expressions {
         #[test]
         fn upward_inference() {
             let (_s, mut h) = set_up();
-            h.run(vec![map_literal(vec![], "int", "String").check_type("Map<int, String>")]);
+            h.run(vec![
+                map_literal(vec![], "int", "String").check_type("Map<int, String>"),
+            ]);
         }
 
         #[test]
         fn ir() {
             let (_s, mut h) = set_up();
             h.run(vec![
-                map_literal(vec![map_entry(int_literal(0), null_literal(), false)], "int", "String?")
-                    .check_ir("map(mapEntry(0, null))"),
+                map_literal(
+                    vec![map_entry(int_literal(0), null_literal(), false)],
+                    "int",
+                    "String?",
+                )
+                .check_ir("map(mapEntry(0, null))"),
             ]);
         }
     }

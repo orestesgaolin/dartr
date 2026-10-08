@@ -726,7 +726,12 @@ impl<O: FlowAnalysisOperations + 'static, N: Copy + Eq + Hash + Debug + 'static>
 
     fn switch_statement_begin_alternative(&mut self) {
         let scrutinee = *self.pattern_stack.last().expect("scrutinee");
-        if let Some(Frame::Switch { start, .. }) = self.frames.iter().rev().find(|f| matches!(f, Frame::Switch { .. })) {
+        if let Some(Frame::Switch { start, .. }) = self
+            .frames
+            .iter()
+            .rev()
+            .find(|f| matches!(f, Frame::Switch { .. }))
+        {
             self.reachable = *start;
         }
         self.push_pattern(scrutinee.matched);

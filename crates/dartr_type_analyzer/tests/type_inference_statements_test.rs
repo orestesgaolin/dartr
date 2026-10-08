@@ -15,7 +15,7 @@ mod mini_ast;
 use mini_ast::harness::{BodyContext, Harness, RunOptions};
 #[allow(unused_imports)]
 use mini_ast::mini_types::{
-    type_registry_scope, PrimaryType, Type, TypeRegistry, TypeRegistryScope,
+    PrimaryType, Type, TypeRegistry, TypeRegistryScope, type_registry_scope,
 };
 #[allow(unused_imports)]
 use mini_ast::node::*;
@@ -55,18 +55,21 @@ mod statements {
         #[test]
         fn condition_schema() {
             let (_s, mut h) = set_up();
-            h.run(vec![if_(expr("dynamic").check_schema("bool"), vec![expr("Object")])
-                .check_ir("if(expr(dynamic), block(stmt(expr(Object))), noop)")]);
+            h.run(vec![
+                if_(expr("dynamic").check_schema("bool"), vec![expr("Object")])
+                    .check_ir("if(expr(dynamic), block(stmt(expr(Object))), noop)"),
+            ]);
         }
 
         #[test]
         fn with_else() {
             let (_s, mut h) = set_up();
-            h.run(vec![if_else(expr("bool"), vec![expr("Object")], vec![expr("String")])
-                .check_ir(
+            h.run(vec![
+                if_else(expr("bool"), vec![expr("Object")], vec![expr("String")]).check_ir(
                     "if(expr(bool), block(stmt(expr(Object))), \
                      block(stmt(expr(String))))",
-                )]);
+                ),
+            ]);
         }
     }
 
@@ -77,70 +80,78 @@ mod statements {
         fn type_schema() {
             let (_s, mut h) = set_up();
             let x = Var::new("x");
-            h.run(vec![if_case(
-                expr("int").check_schema("_"),
-                x.pattern().with_declared_type("num"),
-                vec![],
-                None,
-            )
-            .check_ir(
-                "ifCase(expr(int), \
+            h.run(vec![
+                if_case(
+                    expr("int").check_schema("_"),
+                    x.pattern().with_declared_type("num"),
+                    vec![],
+                    None,
+                )
+                .check_ir(
+                    "ifCase(expr(int), \
                  varPattern(x, matchedType: int, staticType: num), variables(x), \
                  true, block(), noop)",
-            )]);
+                ),
+            ]);
         }
 
         #[test]
         fn with_else() {
             let (_s, mut h) = set_up();
             let x = Var::new("x");
-            h.run(vec![if_case(
-                expr("num"),
-                x.pattern().with_declared_type("int"),
-                vec![expr("Object")],
-                Some(vec![expr("String")]),
-            )
-            .check_ir(
-                "ifCase(expr(num), \
+            h.run(vec![
+                if_case(
+                    expr("num"),
+                    x.pattern().with_declared_type("int"),
+                    vec![expr("Object")],
+                    Some(vec![expr("String")]),
+                )
+                .check_ir(
+                    "ifCase(expr(num), \
                  varPattern(x, matchedType: num, staticType: int), variables(x), \
                  true, block(stmt(expr(Object))), block(stmt(expr(String))))",
-            )]);
+                ),
+            ]);
         }
 
         #[test]
         fn with_guard() {
             let (_s, mut h) = set_up();
             let x = Var::new("x");
-            h.run(vec![if_case(
-                expr("num"),
-                x.pattern()
-                    .with_declared_type("int")
-                    .when(Some(x.expr().eq(int_literal(0)))),
-                vec![],
-                None,
-            )
-            .check_ir(
-                "ifCase(expr(num), \
+            h.run(vec![
+                if_case(
+                    expr("num"),
+                    x.pattern()
+                        .with_declared_type("int")
+                        .when(Some(x.expr().eq(int_literal(0)))),
+                    vec![],
+                    None,
+                )
+                .check_ir(
+                    "ifCase(expr(num), \
                  varPattern(x, matchedType: num, staticType: int), variables(x), \
                  ==(x, 0), block(), noop)",
-            )]);
+                ),
+            ]);
         }
 
         #[test]
         fn allows_refutable_patterns() {
             let (_s, mut h) = set_up();
             let x = Var::new("x");
-            h.run(vec![if_case(
-                expr("num").check_schema("_"),
-                x.pattern().with_declared_type("int"),
-                vec![],
-                None,
-            )
-            .check_ir(
-                "ifCase(expr(num), \
+            h.run(vec![
+                if_case(
+                    expr("num").check_schema("_"),
+                    x.pattern().with_declared_type("int"),
+                    vec![],
+                    None,
+                )
+                .check_ir(
+                    "ifCase(expr(num), \
                  varPattern(x, matchedType: num, staticType: int), variables(x), \
                  true, block(), noop)",
-            )]);
+                ),
+            ]);
         }
 
         mod guard_not_assignable_to_bool {
@@ -199,89 +210,105 @@ mod statements {
         #[test]
         fn empty() {
             let (_s, mut h) = set_up();
-            h.run(vec![switch_(expr("int"), vec![]).expect_last_case_terminates(true)]);
+            h.run(vec![
+                switch_(expr("int"), vec![]).expect_last_case_terminates(true),
+            ]);
         }
 
         #[test]
         fn exhaustive() {
             let (_s, mut h) = set_up();
             h.add_exhaustiveness("E", true);
-            h.run(vec![switch_(
-                expr("E"),
-                vec![expr("E").pattern().then(vec![break_(None)])],
-            )
-            .expect_is_exhaustive(true)]);
+            h.run(vec![
+                switch_(
+                    expr("E"),
+                    vec![expr("E").pattern().then(vec![break_(None)])],
+                )
+                .expect_is_exhaustive(true),
+            ]);
         }
 
         #[test]
         fn no_default() {
             let (_s, mut h) = set_up();
-            h.run(vec![switch_(
-                expr("int"),
-                vec![int_literal(0).pattern().then(vec![break_(None)])],
-            )
-            .expect_has_default(false)
-            .expect_is_exhaustive(false)]);
+            h.run(vec![
+                switch_(
+                    expr("int"),
+                    vec![int_literal(0).pattern().then(vec![break_(None)])],
+                )
+                .expect_has_default(false)
+                .expect_is_exhaustive(false),
+            ]);
         }
 
         #[test]
         fn has_default() {
             let (_s, mut h) = set_up();
-            h.run(vec![switch_(
-                expr("int"),
-                vec![
-                    int_literal(0).pattern().then(vec![break_(None)]),
-                    default_().then(vec![break_(None)]),
-                ],
-            )
-            .expect_has_default(true)
-            .expect_is_exhaustive(true)]);
+            h.run(vec![
+                switch_(
+                    expr("int"),
+                    vec![
+                        int_literal(0).pattern().then(vec![break_(None)]),
+                        default_().then(vec![break_(None)]),
+                    ],
+                )
+                .expect_has_default(true)
+                .expect_is_exhaustive(true),
+            ]);
         }
 
         #[test]
         fn last_case_terminates() {
             let (_s, mut h) = set_up();
-            h.run(vec![switch_(
-                expr("int"),
-                vec![
-                    int_literal(0).pattern().then(vec![expr("int")]),
-                    int_literal(1).pattern().then(vec![break_(None)]),
-                ],
-            )
-            .expect_last_case_terminates(true)]);
+            h.run(vec![
+                switch_(
+                    expr("int"),
+                    vec![
+                        int_literal(0).pattern().then(vec![expr("int")]),
+                        int_literal(1).pattern().then(vec![break_(None)]),
+                    ],
+                )
+                .expect_last_case_terminates(true),
+            ]);
         }
 
         #[test]
         fn last_case_doesnt_terminate() {
             let (_s, mut h) = set_up();
-            h.run(vec![switch_(
-                expr("int"),
-                vec![
-                    int_literal(0).pattern().then(vec![break_(None)]),
-                    int_literal(1).pattern().then(vec![expr("int")]),
-                ],
-            )
-            .expect_last_case_terminates(false)]);
+            h.run(vec![
+                switch_(
+                    expr("int"),
+                    vec![
+                        int_literal(0).pattern().then(vec![break_(None)]),
+                        int_literal(1).pattern().then(vec![expr("int")]),
+                    ],
+                )
+                .expect_last_case_terminates(false),
+            ]);
         }
 
         #[test]
         fn scrutinee_type() {
             let (_s, mut h) = set_up();
-            h.run(vec![switch_(expr("int"), vec![]).expect_scrutinee_type("int")]);
+            h.run(vec![
+                switch_(expr("int"), vec![]).expect_scrutinee_type("int"),
+            ]);
         }
 
         #[test]
         fn const_pattern() {
             let (_s, mut h) = set_up();
-            h.run(vec![switch_(
-                expr("int").check_schema("_"),
-                vec![int_literal(0).pattern().then(vec![break_(None)])],
-            )
-            .check_ir(
-                "switch(expr(int), case(heads(head(const(0, \
+            h.run(vec![
+                switch_(
+                    expr("int").check_schema("_"),
+                    vec![int_literal(0).pattern().then(vec![break_(None)])],
+                )
+                .check_ir(
+                    "switch(expr(int), case(heads(head(const(0, \
                  matchedType: int), true, variables()), variables()), \
                  block(break())))",
-            )]);
+                ),
+            ]);
         }
 
         mod var_pattern {
@@ -291,33 +318,38 @@ mod statements {
             fn untyped() {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
-                h.run(vec![switch_(
-                    expr("int").check_schema("_"),
-                    vec![x.pattern().then(vec![break_(None)])],
-                )
-                .check_ir(
-                    "switch(expr(int), case(heads(head(varPattern(x, \
+                h.run(vec![
+                    switch_(
+                        expr("int").check_schema("_"),
+                        vec![x.pattern().then(vec![break_(None)])],
+                    )
+                    .check_ir(
+                        "switch(expr(int), case(heads(head(varPattern(x, \
                      matchedType: int, staticType: int), true, variables(x)), \
                      variables(x)), block(break())))",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
             fn typed() {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
-                h.run(vec![switch_(
-                    expr("int").check_schema("_"),
-                    vec![x
-                        .pattern()
-                        .with_declared_type("num")
-                        .then(vec![break_(None)])],
-                )
-                .check_ir(
-                    "switch(expr(int), case(heads(head(varPattern(x, \
+                h.run(vec![
+                    switch_(
+                        expr("int").check_schema("_"),
+                        vec![
+                            x.pattern()
+                                .with_declared_type("num")
+                                .then(vec![break_(None)]),
+                        ],
+                    )
+                    .check_ir(
+                        "switch(expr(int), case(heads(head(varPattern(x, \
                      matchedType: int, staticType: num), true, variables(x)), \
                      variables(x)), block(break())))",
-                )]);
+                    ),
+                ]);
             }
         }
 
@@ -333,42 +365,47 @@ mod statements {
         #[test]
         fn empty_final_case() {
             let (_s, mut h) = set_up();
-            h.run(vec![switch_(
-                expr("int"),
-                vec![
-                    int_literal(0).pattern().then(vec![break_(None)]),
-                    int_literal(1).pattern().then(vec![]),
-                ],
-            )
-            .check_ir(
-                "switch(expr(int), case(heads(head(const(0, \
+            h.run(vec![
+                switch_(
+                    expr("int"),
+                    vec![
+                        int_literal(0).pattern().then(vec![break_(None)]),
+                        int_literal(1).pattern().then(vec![]),
+                    ],
+                )
+                .check_ir(
+                    "switch(expr(int), case(heads(head(const(0, \
                  matchedType: int), true, variables()), variables()), \
                  block(break())), case(heads(head(const(1, matchedType: int), \
                  true, variables()), variables()), block(synthetic-break())))",
-            )]);
+                ),
+            ]);
         }
 
         #[test]
         fn guard() {
             let (_s, mut h) = set_up();
             let i = Var::new("i");
-            h.run(vec![switch_(
-                expr("int"),
-                vec![i
-                    .pattern()
-                    .when(Some(
-                        i.expr()
-                            .check_type("int")
-                            .eq(expr("num"))
-                            .check_schema("bool"),
-                    ))
-                    .then(vec![break_(None)])],
-            )
-            .check_ir(
-                "switch(expr(int), case(heads(head(varPattern(i, \
+            h.run(vec![
+                switch_(
+                    expr("int"),
+                    vec![
+                        i.pattern()
+                            .when(Some(
+                                i.expr()
+                                    .check_type("int")
+                                    .eq(expr("num"))
+                                    .check_schema("bool"),
+                            ))
+                            .then(vec![break_(None)]),
+                    ],
+                )
+                .check_ir(
+                    "switch(expr(int), case(heads(head(varPattern(i, \
                  matchedType: int, staticType: int), ==(i, expr(num)), \
                  variables(i)), variables(i)), block(break())))",
-            )]);
+                ),
+            ]);
         }
 
         mod variables {
@@ -379,20 +416,22 @@ mod statements {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
                 let y = Var::new("y");
-                h.run(vec![switch_(
-                    expr("int"),
-                    vec![
-                        x.pattern().then(vec![break_(None)]),
-                        y.pattern().then(vec![break_(None)]),
-                    ],
-                )
-                .check_ir(
-                    "switch(expr(int), case(heads(head(varPattern(x, \
+                h.run(vec![
+                    switch_(
+                        expr("int"),
+                        vec![
+                            x.pattern().then(vec![break_(None)]),
+                            y.pattern().then(vec![break_(None)]),
+                        ],
+                    )
+                    .check_ir(
+                        "switch(expr(int), case(heads(head(varPattern(x, \
                      matchedType: int, staticType: int), true, variables(x)), \
                      variables(x)), block(break())), case(heads(head(varPattern(y, \
                      matchedType: int, staticType: int), true, variables(y)), \
                      variables(y)), block(break())))",
-                )]);
+                    ),
+                ]);
             }
 
             mod shared_case_scope {
@@ -407,21 +446,23 @@ mod statements {
                         let x1 = Var::new("x").with_identity("x1");
                         let x2 = Var::new("x").with_identity("x2");
                         Var::join("x", vec![x1, x2]);
-                        h.run(vec![switch_(
-                            expr("int"),
-                            vec![switch_statement_member(
-                                vec![x1.pattern(), x2.pattern()],
-                                vec![break_(None)],
-                                false,
-                            )],
-                        )
-                        .check_ir(
-                            "switch(expr(int), case(heads(head(varPattern(x, \
+                        h.run(vec![
+                            switch_(
+                                expr("int"),
+                                vec![switch_statement_member(
+                                    vec![x1.pattern(), x2.pattern()],
+                                    vec![break_(None)],
+                                    false,
+                                )],
+                            )
+                            .check_ir(
+                                "switch(expr(int), case(heads(head(varPattern(x, \
                              matchedType: int, staticType: int), true, variables(x1)), \
                              head(varPattern(x, matchedType: int, staticType: int), \
                              true, variables(x2)), variables(int x = [x1, x2])), \
                              block(break())))",
-                        )]);
+                            ),
+                        ]);
                     }
 
                     #[test]
@@ -432,23 +473,25 @@ mod statements {
                         let x3 = Var::new("x").with_identity("x3");
                         let x4 = Var::join("x", vec![x1, x2]).with_identity("x4");
                         Var::join("x", vec![x4, x3]);
-                        h.run(vec![switch_(
-                            expr("int"),
-                            vec![switch_statement_member(
-                                vec![x1.pattern().or(x2.pattern()), x3.pattern()],
-                                vec![break_(None)],
-                                false,
-                            )],
-                        )
-                        .check_ir(
-                            "switch(expr(int), case(heads(head(logicalOrPattern(\
+                        h.run(vec![
+                            switch_(
+                                expr("int"),
+                                vec![switch_statement_member(
+                                    vec![x1.pattern().or(x2.pattern()), x3.pattern()],
+                                    vec![break_(None)],
+                                    false,
+                                )],
+                            )
+                            .check_ir(
+                                "switch(expr(int), case(heads(head(logicalOrPattern(\
                              varPattern(x, matchedType: int, staticType: int), \
                              varPattern(x, matchedType: int, staticType: int), \
                              matchedType: int), true, variables(int x = [x1, x2])), \
                              head(varPattern(x, matchedType: int, staticType: int), \
                              true, variables(x3)), variables(int x = \
                              [int x = [x1, x2], x3])), block(break())))",
-                        )]);
+                            ),
+                        ]);
                     }
 
                     mod with_different_type {
@@ -460,25 +503,27 @@ mod statements {
                             let x1 = Var::new("x").with_identity("x1");
                             let x2 = Var::new("x").with_identity("x2");
                             Var::join("x", vec![x1, x2]);
-                            h.run(vec![switch_(
-                                expr("int"),
-                                vec![switch_statement_member(
-                                    vec![
-                                        x1.pattern().with_declared_type("num"),
-                                        x2.pattern().with_declared_type("int"),
-                                    ],
-                                    vec![break_(None)],
-                                    false,
-                                )],
-                            )
-                            .check_ir(
-                                "switch(expr(int), case(heads(head(varPattern(x, \
+                            h.run(vec![
+                                switch_(
+                                    expr("int"),
+                                    vec![switch_statement_member(
+                                        vec![
+                                            x1.pattern().with_declared_type("num"),
+                                            x2.pattern().with_declared_type("int"),
+                                        ],
+                                        vec![break_(None)],
+                                        false,
+                                    )],
+                                )
+                                .check_ir(
+                                    "switch(expr(int), case(heads(head(varPattern(x, \
                                  matchedType: int, staticType: num), true, \
                                  variables(x1)), head(varPattern(x, matchedType: int, \
                                  staticType: int), true, variables(x2)), \
                                  variables(notConsistent:differentFinalityOrType error \
                                  x = [x1, x2])), block(break())))",
-                            )]);
+                                ),
+                            ]);
                         }
 
                         #[test]
@@ -487,22 +532,24 @@ mod statements {
                             let x1 = Var::new("x").with_identity("x1");
                             let x2 = Var::new("x").with_identity("x2");
                             Var::join("x", vec![x1, x2]);
-                            h.run(vec![switch_(
-                                expr("int"),
-                                vec![switch_statement_member(
-                                    vec![x1.pattern().with_declared_type("num"), x2.pattern()],
-                                    vec![break_(None)],
-                                    false,
-                                )],
-                            )
-                            .check_ir(
-                                "switch(expr(int), case(heads(head(varPattern(x, \
+                            h.run(vec![
+                                switch_(
+                                    expr("int"),
+                                    vec![switch_statement_member(
+                                        vec![x1.pattern().with_declared_type("num"), x2.pattern()],
+                                        vec![break_(None)],
+                                        false,
+                                    )],
+                                )
+                                .check_ir(
+                                    "switch(expr(int), case(heads(head(varPattern(x, \
                                  matchedType: int, staticType: num), true, variables(\
                                  x1)), head(varPattern(x, matchedType: int, \
                                  staticType: int), true, variables(x2)), \
                                  variables(notConsistent:differentFinalityOrType error \
                                  x = [x1, x2])), block(break())))",
-                            )]);
+                                ),
+                            ]);
                         }
 
                         #[test]
@@ -511,16 +558,17 @@ mod statements {
                             let x1 = Var::new("x").with_identity("x1");
                             let x2 = Var::new("x").with_identity("x2");
                             Var::join("x", vec![x1, x2]);
-                            h.run(vec![switch_(
-                                expr("List<int>"),
-                                vec![switch_statement_member(
-                                    vec![x1.pattern(), list_pattern(vec![x2.pattern()], None)],
-                                    vec![break_(None)],
-                                    false,
-                                )],
-                            )
-                            .check_ir(
-                                "switch(expr(List<int>), case(heads(head(varPattern(x, \
+                            h.run(vec![
+                                switch_(
+                                    expr("List<int>"),
+                                    vec![switch_statement_member(
+                                        vec![x1.pattern(), list_pattern(vec![x2.pattern()], None)],
+                                        vec![break_(None)],
+                                        false,
+                                    )],
+                                )
+                                .check_ir(
+                                    "switch(expr(List<int>), case(heads(head(varPattern(x, \
                                  matchedType: List<int>, staticType: List<int>), true, \
                                  variables(x1)), head(listPattern(varPattern(x, \
                                  matchedType: int, staticType: int), matchedType: \
@@ -528,7 +576,8 @@ mod statements {
                                  variables(x2)), variables(\
                                  notConsistent:differentFinalityOrType error \
                                  x = [x1, x2])), block(break())))",
-                            )]);
+                                ),
+                            ]);
                         }
                     }
 
@@ -538,22 +587,24 @@ mod statements {
                         let x1 = Var::new("x").with_final(true).with_identity("x1");
                         let x2 = Var::new("x").with_identity("x2");
                         Var::join("x", vec![x1, x2]);
-                        h.run(vec![switch_(
-                            expr("int"),
-                            vec![switch_statement_member(
-                                vec![x1.pattern(), x2.pattern()],
-                                vec![break_(None)],
-                                false,
-                            )],
-                        )
-                        .check_ir(
-                            "switch(expr(int), case(heads(head(varPattern(x, \
+                        h.run(vec![
+                            switch_(
+                                expr("int"),
+                                vec![switch_statement_member(
+                                    vec![x1.pattern(), x2.pattern()],
+                                    vec![break_(None)],
+                                    false,
+                                )],
+                            )
+                            .check_ir(
+                                "switch(expr(int), case(heads(head(varPattern(x, \
                              matchedType: int, staticType: int), true, variables(x1)), \
                              head(varPattern(x, matchedType: int, staticType: int), \
                              true, variables(x2)), variables(\
                              notConsistent:differentFinalityOrType int x = [x1, x2])), \
                              block(break())))",
-                        )]);
+                            ),
+                        ]);
                     }
                 }
 
@@ -562,21 +613,23 @@ mod statements {
                     let (_s, mut h) = set_up();
                     let x1 = Var::new("x").with_identity("x1");
                     Var::join("x", vec![x1]);
-                    h.run(vec![switch_(
-                        expr("int"),
-                        vec![switch_statement_member(
-                            vec![x1.pattern(), int_literal(0).pattern()],
-                            vec![break_(None)],
-                            false,
-                        )],
-                    )
-                    .check_ir(
-                        "switch(expr(int), case(heads(head(varPattern(x, \
+                    h.run(vec![
+                        switch_(
+                            expr("int"),
+                            vec![switch_statement_member(
+                                vec![x1.pattern(), int_literal(0).pattern()],
+                                vec![break_(None)],
+                                false,
+                            )],
+                        )
+                        .check_ir(
+                            "switch(expr(int), case(heads(head(varPattern(x, \
                          matchedType: int, staticType: int), true, variables(x1)), \
                          head(const(0, matchedType: int), true, variables()), \
                          variables(notConsistent:sharedCaseAbsent int x = [x1])), \
                          block(break())))",
-                    )]);
+                        ),
+                    ]);
                 }
 
                 #[test]
@@ -584,21 +637,23 @@ mod statements {
                     let (_s, mut h) = set_up();
                     let x1 = Var::new("x").with_identity("x1");
                     Var::join("x", vec![x1]);
-                    h.run(vec![switch_(
-                        expr("int"),
-                        vec![switch_statement_member(
-                            vec![int_literal(0).pattern(), x1.pattern()],
-                            vec![break_(None)],
-                            false,
-                        )],
-                    )
-                    .check_ir(
-                        "switch(expr(int), case(heads(head(const(0, \
+                    h.run(vec![
+                        switch_(
+                            expr("int"),
+                            vec![switch_statement_member(
+                                vec![int_literal(0).pattern(), x1.pattern()],
+                                vec![break_(None)],
+                                false,
+                            )],
+                        )
+                        .check_ir(
+                            "switch(expr(int), case(heads(head(const(0, \
                          matchedType: int), true, variables()), head(varPattern(x, \
                          matchedType: int, staticType: int), true, variables(x1)), \
                          variables(notConsistent:sharedCaseAbsent int x = [x1])), \
                          block(break())))",
-                    )]);
+                        ),
+                    ]);
                 }
 
                 #[test]
@@ -606,20 +661,22 @@ mod statements {
                     let (_s, mut h) = set_up();
                     let x1 = Var::new("x").with_identity("x1");
                     Var::join("x", vec![x1]);
-                    h.run(vec![switch_(
-                        expr("int"),
-                        vec![switch_statement_member(
-                            vec![x1.pattern(), default_()],
-                            vec![break_(None)],
-                            false,
-                        )],
-                    )
-                    .check_ir(
-                        "switch(expr(int), case(heads(head(varPattern(x, \
+                    h.run(vec![
+                        switch_(
+                            expr("int"),
+                            vec![switch_statement_member(
+                                vec![x1.pattern(), default_()],
+                                vec![break_(None)],
+                                false,
+                            )],
+                        )
+                        .check_ir(
+                            "switch(expr(int), case(heads(head(varPattern(x, \
                          matchedType: int, staticType: int), true, variables(x1)), \
                          default, variables(notConsistent:sharedCaseHasLabel int x \
                          = [x1])), block(break())))",
-                    )]);
+                        ),
+                    ]);
                 }
 
                 #[test]
@@ -627,20 +684,22 @@ mod statements {
                     let (_s, mut h) = set_up();
                     let x1 = Var::new("x").with_identity("x1");
                     Var::join("x", vec![x1]);
-                    h.run(vec![switch_(
-                        expr("int"),
-                        vec![switch_statement_member(
-                            vec![x1.pattern()],
-                            vec![break_(None)],
-                            true,
-                        )],
-                    )
-                    .check_ir(
-                        "switch(expr(int), case(heads(head(varPattern(x, \
+                    h.run(vec![
+                        switch_(
+                            expr("int"),
+                            vec![switch_statement_member(
+                                vec![x1.pattern()],
+                                vec![break_(None)],
+                                true,
+                            )],
+                        )
+                        .check_ir(
+                            "switch(expr(int), case(heads(head(varPattern(x, \
                          matchedType: int, staticType: int), true, variables(x1)), \
                          variables(notConsistent:sharedCaseHasLabel int x = \
                          [x1])), block(break())))",
-                    )]);
+                        ),
+                    ]);
                 }
             }
         }
@@ -653,15 +712,17 @@ mod statements {
                 let (_s, mut h) = set_up();
                 h.disable_patterns();
                 h.run_with(
-                    vec![switch_(
-                        expr("int"),
-                        vec![
-                            int_literal(0).pattern().then(vec![expr("int")]),
-                            default_().then(vec![break_(None)]),
-                        ],
-                    )
-                    .with_legacy_exhaustive(true)
-                    .error_id("SWITCH")],
+                    vec![
+                        switch_(
+                            expr("int"),
+                            vec![
+                                int_literal(0).pattern().then(vec![expr("int")]),
+                                default_().then(vec![break_(None)]),
+                            ],
+                        )
+                        .with_legacy_exhaustive(true)
+                        .error_id("SWITCH"),
+                    ],
                     errors(&["switchCaseCompletesNormally(node: SWITCH, caseIndex: 0)"]),
                 );
             }
@@ -671,23 +732,25 @@ mod statements {
                 let (_s, mut h) = set_up();
                 h.disable_patterns();
                 h.run_with(
-                    vec![switch_(
-                        expr("int"),
-                        vec![
-                            switch_statement_member(
-                                vec![
-                                    int_literal(0).pattern(),
-                                    int_literal(1).pattern(),
-                                    int_literal(2).pattern(),
-                                ],
-                                vec![expr("int")],
-                                false,
-                            ),
-                            default_().then(vec![break_(None)]),
-                        ],
-                    )
-                    .with_legacy_exhaustive(true)
-                    .error_id("SWITCH")],
+                    vec![
+                        switch_(
+                            expr("int"),
+                            vec![
+                                switch_statement_member(
+                                    vec![
+                                        int_literal(0).pattern(),
+                                        int_literal(1).pattern(),
+                                        int_literal(2).pattern(),
+                                    ],
+                                    vec![expr("int")],
+                                    false,
+                                ),
+                                default_().then(vec![break_(None)]),
+                            ],
+                        )
+                        .with_legacy_exhaustive(true)
+                        .error_id("SWITCH"),
+                    ],
                     errors(&["switchCaseCompletesNormally(node: SWITCH, caseIndex: 0)"]),
                 );
             }
@@ -697,14 +760,16 @@ mod statements {
                 let (_s, mut h) = set_up();
                 h.disable_patterns();
                 h.run_with(
-                    vec![switch_(
-                        expr("int"),
-                        vec![
-                            int_literal(0).pattern().then(vec![break_(None)]),
-                            default_().then(vec![break_(None)]),
-                        ],
-                    )
-                    .with_legacy_exhaustive(true)],
+                    vec![
+                        switch_(
+                            expr("int"),
+                            vec![
+                                int_literal(0).pattern().then(vec![break_(None)]),
+                                default_().then(vec![break_(None)]),
+                            ],
+                        )
+                        .with_legacy_exhaustive(true),
+                    ],
                     errors(&[]),
                 );
             }
@@ -714,11 +779,13 @@ mod statements {
                 let (_s, mut h) = set_up();
                 h.disable_patterns();
                 h.run_with(
-                    vec![switch_(
-                        expr("int"),
-                        vec![int_literal(0).pattern().then(vec![expr("int")])],
-                    )
-                    .with_legacy_exhaustive(false)],
+                    vec![
+                        switch_(
+                            expr("int"),
+                            vec![int_literal(0).pattern().then(vec![expr("int")])],
+                        )
+                        .with_legacy_exhaustive(false),
+                    ],
                     errors(&[]),
                 );
             }
@@ -751,11 +818,13 @@ mod statements {
                 fn subtype() {
                     let (_s, mut h) = set_up();
                     h.disable_patterns();
-                    h.run(vec![switch_(
-                        expr("num"),
-                        vec![expr("int").pattern().then(vec![break_(None)])],
-                    )
-                    .with_legacy_exhaustive(false)]);
+                    h.run(vec![
+                        switch_(
+                            expr("num"),
+                            vec![expr("int").pattern().then(vec![break_(None)])],
+                        )
+                        .with_legacy_exhaustive(false),
+                    ]);
                 }
 
                 #[test]
@@ -763,14 +832,18 @@ mod statements {
                     let (_s, mut h) = set_up();
                     h.disable_patterns();
                     h.run_with(
-                        vec![switch_(
-                            expr("int").error_id("SCRUTINEE"),
-                            vec![expr("num")
-                                .error_id("EXPRESSION")
-                                .pattern()
-                                .then(vec![break_(None)])],
-                        )
-                        .with_legacy_exhaustive(false)],
+                        vec![
+                            switch_(
+                                expr("int").error_id("SCRUTINEE"),
+                                vec![
+                                    expr("num")
+                                        .error_id("EXPRESSION")
+                                        .pattern()
+                                        .then(vec![break_(None)]),
+                                ],
+                            )
+                            .with_legacy_exhaustive(false),
+                        ],
                         errors(&["caseExpressionTypeMismatch(scrutinee: SCRUTINEE, \
                                   caseExpression: EXPRESSION, scrutineeType: int, \
                                   caseExpressionType: num)"]),
@@ -782,14 +855,18 @@ mod statements {
                     let (_s, mut h) = set_up();
                     h.disable_patterns();
                     h.run_with(
-                        vec![switch_(
-                            expr("int").error_id("SCRUTINEE"),
-                            vec![expr("String")
-                                .error_id("EXPRESSION")
-                                .pattern()
-                                .then(vec![break_(None)])],
-                        )
-                        .with_legacy_exhaustive(false)],
+                        vec![
+                            switch_(
+                                expr("int").error_id("SCRUTINEE"),
+                                vec![
+                                    expr("String")
+                                        .error_id("EXPRESSION")
+                                        .pattern()
+                                        .then(vec![break_(None)]),
+                                ],
+                            )
+                            .with_legacy_exhaustive(false),
+                        ],
                         errors(&["caseExpressionTypeMismatch(scrutinee: SCRUTINEE, \
                                   caseExpression: EXPRESSION, scrutineeType: int, \
                                   caseExpressionType: String)"]),
@@ -800,11 +877,13 @@ mod statements {
                 fn dynamic_scrutinee() {
                     let (_s, mut h) = set_up();
                     h.disable_patterns();
-                    h.run(vec![switch_(
-                        expr("dynamic"),
-                        vec![expr("int").pattern().then(vec![break_(None)])],
-                    )
-                    .with_legacy_exhaustive(false)]);
+                    h.run(vec![
+                        switch_(
+                            expr("dynamic"),
+                            vec![expr("int").pattern().then(vec![break_(None)])],
+                        )
+                        .with_legacy_exhaustive(false),
+                    ]);
                 }
 
                 #[test]
@@ -812,14 +891,18 @@ mod statements {
                     let (_s, mut h) = set_up();
                     h.disable_patterns();
                     h.run_with(
-                        vec![switch_(
-                            expr("int").error_id("SCRUTINEE"),
-                            vec![expr("dynamic")
-                                .error_id("EXPRESSION")
-                                .pattern()
-                                .then(vec![break_(None)])],
-                        )
-                        .with_legacy_exhaustive(false)],
+                        vec![
+                            switch_(
+                                expr("int").error_id("SCRUTINEE"),
+                                vec![
+                                    expr("dynamic")
+                                        .error_id("EXPRESSION")
+                                        .pattern()
+                                        .then(vec![break_(None)]),
+                                ],
+                            )
+                            .with_legacy_exhaustive(false),
+                        ],
                         errors(&["caseExpressionTypeMismatch(scrutinee: SCRUTINEE, \
                                   caseExpression: EXPRESSION, scrutineeType: int, \
                                   caseExpressionType: dynamic)"]),
@@ -887,14 +970,16 @@ mod statements {
                 let (_s, mut h) = set_up();
                 // During CFE error recovery, there can be an empty case.
                 h.run_with(
-                    vec![switch_(
-                        expr("int"),
-                        vec![switch_statement_member(vec![], vec![break_(None)], false)],
-                    )
-                    .check_ir(
-                        "switch(expr(int), case(heads(variables()), \
+                    vec![
+                        switch_(
+                            expr("int"),
+                            vec![switch_statement_member(vec![], vec![break_(None)], false)],
+                        )
+                        .check_ir(
+                            "switch(expr(int), case(heads(variables()), \
                          block(break())))",
-                    )],
+                        ),
+                    ],
                     RunOptions {
                         error_recovery_ok: true,
                         ..RunOptions::default()
@@ -905,20 +990,22 @@ mod statements {
             #[test]
             fn multiple() {
                 let (_s, mut h) = set_up();
-                h.run(vec![switch_(
-                    expr("int"),
-                    vec![switch_statement_member(
-                        vec![int_literal(0).pattern(), int_literal(1).pattern()],
-                        vec![break_(None)],
-                        false,
-                    )],
-                )
-                .check_ir(
-                    "switch(expr(int), case(heads(head(const(0, \
+                h.run(vec![
+                    switch_(
+                        expr("int"),
+                        vec![switch_statement_member(
+                            vec![int_literal(0).pattern(), int_literal(1).pattern()],
+                            vec![break_(None)],
+                            false,
+                        )],
+                    )
+                    .check_ir(
+                        "switch(expr(int), case(heads(head(const(0, \
                      matchedType: int), true, variables()), head(const(1, \
                      matchedType: int), true, variables()), variables()), \
                      block(break())))",
-                )]);
+                    ),
+                ]);
             }
         }
 
@@ -932,10 +1019,11 @@ mod statements {
                 h.run_with(
                     vec![switch_(
                         expr("int"),
-                        vec![x
-                            .pattern()
-                            .when(Some(expr("int").error_id("GUARD")))
-                            .then(vec![break_(None)])],
+                        vec![
+                            x.pattern()
+                                .when(Some(expr("int").error_id("GUARD")))
+                                .then(vec![break_(None)]),
+                        ],
                     )],
                     errors(&["nonBooleanCondition(node: GUARD)"]),
                 );
@@ -948,10 +1036,11 @@ mod statements {
                 h.run_with(
                     vec![switch_(
                         expr("int"),
-                        vec![x
-                            .pattern()
-                            .when(Some(expr("bool")))
-                            .then(vec![break_(None)])],
+                        vec![
+                            x.pattern()
+                                .when(Some(expr("bool")))
+                                .then(vec![break_(None)]),
+                        ],
                     )],
                     errors(&[]),
                 );
@@ -964,10 +1053,11 @@ mod statements {
                 h.run_with(
                     vec![switch_(
                         expr("int"),
-                        vec![x
-                            .pattern()
-                            .when(Some(expr("dynamic")))
-                            .then(vec![break_(None)])],
+                        vec![
+                            x.pattern()
+                                .when(Some(expr("dynamic")))
+                                .then(vec![break_(None)]),
+                        ],
                     )],
                     errors(&[]),
                 );
@@ -981,30 +1071,36 @@ mod statements {
             fn when_a_default_clause_is_present() {
                 let (_s, mut h) = set_up();
                 h.add_exhaustiveness("E", true);
-                h.run(vec![switch_(expr("E"), vec![default_().then(vec![break_(None)])])
-                    .expect_requires_exhaustiveness_validation(false)]);
+                h.run(vec![
+                    switch_(expr("E"), vec![default_().then(vec![break_(None)])])
+                        .expect_requires_exhaustiveness_validation(false),
+                ]);
             }
 
             #[test]
             fn when_the_scrutinee_is_an_always_exhaustive_type() {
                 let (_s, mut h) = set_up();
                 h.add_exhaustiveness("E", true);
-                h.run(vec![switch_(
-                    expr("E"),
-                    vec![expr("E").pattern().then(vec![break_(None)])],
-                )
-                .expect_requires_exhaustiveness_validation(true)]);
+                h.run(vec![
+                    switch_(
+                        expr("E"),
+                        vec![expr("E").pattern().then(vec![break_(None)])],
+                    )
+                    .expect_requires_exhaustiveness_validation(true),
+                ]);
             }
 
             #[test]
             fn when_the_scrutinee_is_not_an_always_exhaustive_type() {
                 let (_s, mut h) = set_up();
                 h.add_exhaustiveness("C", false);
-                h.run(vec![switch_(
-                    expr("C"),
-                    vec![expr("C").pattern().then(vec![break_(None)])],
-                )
-                .expect_requires_exhaustiveness_validation(false)]);
+                h.run(vec![
+                    switch_(
+                        expr("C"),
+                        vec![expr("C").pattern().then(vec![break_(None)])],
+                    )
+                    .expect_requires_exhaustiveness_validation(false),
+                ]);
             }
 
             #[test]
@@ -1012,12 +1108,14 @@ mod statements {
                 let (_s, mut h) = set_up();
                 h.disable_patterns();
                 h.add_exhaustiveness("E", true);
-                h.run(vec![switch_(
-                    expr("E"),
-                    vec![expr("E").pattern().then(vec![break_(None)])],
-                )
-                .with_legacy_exhaustive(true)
-                .expect_requires_exhaustiveness_validation(false)]);
+                h.run(vec![
+                    switch_(
+                        expr("E"),
+                        vec![expr("E").pattern().then(vec![break_(None)])],
+                    )
+                    .with_legacy_exhaustive(true)
+                    .expect_requires_exhaustiveness_validation(false),
+                ]);
             }
         }
     }
@@ -1029,28 +1127,34 @@ mod statements {
         fn initialized_typed() {
             let (_s, mut h) = set_up();
             let x = Var::new("x");
-            h.run(vec![declare(x)
-                .with_declared_type("num")
-                .with_initializer(expr("int").check_schema("num"))
-                .check_ir("declare(x, expr(int), initializerType: int, staticType: num)")]);
+            h.run(vec![
+                declare(x)
+                    .with_declared_type("num")
+                    .with_initializer(expr("int").check_schema("num"))
+                    .check_ir("declare(x, expr(int), initializerType: int, staticType: num)"),
+            ]);
         }
 
         #[test]
         fn initialized_untyped() {
             let (_s, mut h) = set_up();
             let x = Var::new("x");
-            h.run(vec![declare(x)
-                .with_initializer(expr("int").check_schema("_"))
-                .check_ir("declare(x, expr(int), initializerType: int, staticType: int)")]);
+            h.run(vec![
+                declare(x)
+                    .with_initializer(expr("int").check_schema("_"))
+                    .check_ir("declare(x, expr(int), initializerType: int, staticType: int)"),
+            ]);
         }
 
         #[test]
         fn uninitialized_typed() {
             let (_s, mut h) = set_up();
             let x = Var::new("x");
-            h.run(vec![declare(x)
-                .with_declared_type("int")
-                .check_ir("declare(x, staticType: int)")]);
+            h.run(vec![
+                declare(x)
+                    .with_declared_type("int")
+                    .check_ir("declare(x, staticType: int)"),
+            ]);
         }
 
         #[test]
@@ -1065,31 +1169,35 @@ mod statements {
             let (_s, mut h) = set_up();
             TypeRegistry::add_type_parameter("T");
             let x = Var::new("x");
-            h.run(vec![declare(x)
-                .with_initializer(expr("T&int"))
-                .check_ir("declare(x, expr(T&int), initializerType: T&int, staticType: T)")]);
+            h.run(vec![declare(x).with_initializer(expr("T&int")).check_ir(
+                "declare(x, expr(T&int), initializerType: T&int, staticType: T)",
+            )]);
         }
 
         #[test]
         fn legal_late_pattern() {
             let (_s, mut h) = set_up();
             let x = Var::new("x");
-            h.run(vec![declare(x)
-                .with_initializer(int_literal(0))
-                .with_late()
-                .check_ir("declare_late(x, 0, initializerType: int, staticType: int)")]);
+            h.run(vec![
+                declare(x)
+                    .with_initializer(int_literal(0))
+                    .with_late()
+                    .check_ir("declare_late(x, 0, initializerType: int, staticType: int)"),
+            ]);
         }
 
         #[test]
         fn illegal_refutable_pattern() {
             let (_s, mut h) = set_up();
             h.run_with(
-                vec![pattern_variable_declaration(
-                    int_literal(1).pattern().error_id("PATTERN"),
-                    int_literal(0),
-                    false,
-                )
-                .error_id("CONTEXT")],
+                vec![
+                    pattern_variable_declaration(
+                        int_literal(1).pattern().error_id("PATTERN"),
+                        int_literal(0),
+                        false,
+                    )
+                    .error_id("CONTEXT"),
+                ],
                 errors(&["refutablePatternInIrrefutableContext(pattern: PATTERN, \
                           context: CONTEXT)"]),
             );
@@ -1109,32 +1217,36 @@ mod statements {
                 fn pattern_has_type() {
                     let (_s, mut h) = set_up();
                     let x = Var::new("x");
-                    h.run(vec![pattern_for_in(
-                        x.pattern().with_declared_type("num"),
-                        expr("List<int>").check_schema("Iterable<num>"),
-                        vec![],
-                        false,
-                    )
-                    .check_ir(
-                        "forEach(expr(List<int>), varPattern(x, \
+                    h.run(vec![
+                        pattern_for_in(
+                            x.pattern().with_declared_type("num"),
+                            expr("List<int>").check_schema("Iterable<num>"),
+                            vec![],
+                            false,
+                        )
+                        .check_ir(
+                            "forEach(expr(List<int>), varPattern(x, \
                          matchedType: int, staticType: num), block())",
-                    )]);
+                        ),
+                    ]);
                 }
 
                 #[test]
                 fn pattern_does_not_have_type() {
                     let (_s, mut h) = set_up();
                     let x = Var::new("x");
-                    h.run(vec![pattern_for_in(
-                        x.pattern(),
-                        expr("List<int>").check_schema("Iterable<_>"),
-                        vec![],
-                        false,
-                    )
-                    .check_ir(
-                        "forEach(expr(List<int>), varPattern(x, \
+                    h.run(vec![
+                        pattern_for_in(
+                            x.pattern(),
+                            expr("List<int>").check_schema("Iterable<_>"),
+                            vec![],
+                            false,
+                        )
+                        .check_ir(
+                            "forEach(expr(List<int>), varPattern(x, \
                          matchedType: int, staticType: int), block())",
-                    )]);
+                        ),
+                    ]);
                 }
             }
 
@@ -1145,22 +1257,24 @@ mod statements {
                 fn iterable() {
                     let (_s, mut h) = set_up();
                     let x = Var::new("x");
-                    h.run(vec![pattern_for_in(x.pattern(), expr("Iterable<int>"), vec![], false)
-                        .check_ir(
+                    h.run(vec![
+                        pattern_for_in(x.pattern(), expr("Iterable<int>"), vec![], false).check_ir(
                             "forEach(expr(Iterable<int>), varPattern(x, \
                              matchedType: int, staticType: int), block())",
-                        )]);
+                        ),
+                    ]);
                 }
 
                 #[test]
                 fn dynamic() {
                     let (_s, mut h) = set_up();
                     let x = Var::new("x");
-                    h.run(vec![pattern_for_in(x.pattern(), expr("dynamic"), vec![], false)
-                        .check_ir(
+                    h.run(vec![
+                        pattern_for_in(x.pattern(), expr("dynamic"), vec![], false).check_ir(
                             "forEach(expr(dynamic), varPattern(x, \
                              matchedType: dynamic, staticType: dynamic), block())",
-                        )]);
+                        ),
+                    ]);
                 }
 
                 #[test]
@@ -1168,17 +1282,19 @@ mod statements {
                     let (_s, mut h) = set_up();
                     let x = Var::new("x");
                     h.run_with(
-                        vec![pattern_for_in(
-                            x.pattern(),
-                            expr("Object").error_id("EXPRESSION"),
-                            vec![],
-                            false,
-                        )
-                        .error_id("FOR")
-                        .check_ir(
-                            "forEach(expr(Object), varPattern(x, \
+                        vec![
+                            pattern_for_in(
+                                x.pattern(),
+                                expr("Object").error_id("EXPRESSION"),
+                                vec![],
+                                false,
+                            )
+                            .error_id("FOR")
+                            .check_ir(
+                                "forEach(expr(Object), varPattern(x, \
                              matchedType: error, staticType: error), block())",
-                        )],
+                            ),
+                        ],
                         errors(&["patternForInExpressionIsNotIterable(node: FOR, \
                                   expression: EXPRESSION, expressionType: Object)"]),
                     );
@@ -1188,11 +1304,12 @@ mod statements {
                 fn error() {
                     let (_s, mut h) = set_up();
                     let x = Var::new("x");
-                    h.run(vec![pattern_for_in(x.pattern(), expr("error"), vec![], false)
-                        .check_ir(
+                    h.run(vec![
+                        pattern_for_in(x.pattern(), expr("error"), vec![], false).check_ir(
                             "forEach(expr(error), varPattern(x, \
                              matchedType: error, staticType: error), block())",
-                        )]);
+                        ),
+                    ]);
                 }
             }
 
@@ -1204,18 +1321,20 @@ mod statements {
                     let (_s, mut h) = set_up();
                     let x = Var::new("x");
                     h.run_with(
-                        vec![pattern_for_in(
-                            x.pattern().null_check().error_id("PATTERN"),
-                            expr("Iterable<int?>"),
-                            vec![],
-                            false,
-                        )
-                        .error_id("FOR")
-                        .check_ir(
-                            "forEach(expr(Iterable<int?>), nullCheckPattern(\
+                        vec![
+                            pattern_for_in(
+                                x.pattern().null_check().error_id("PATTERN"),
+                                expr("Iterable<int?>"),
+                                vec![],
+                                false,
+                            )
+                            .error_id("FOR")
+                            .check_ir(
+                                "forEach(expr(Iterable<int?>), nullCheckPattern(\
                              varPattern(x, matchedType: int, staticType: int), \
                              matchedType: int?), block())",
-                        )],
+                            ),
+                        ],
                         errors(&["refutablePatternInIrrefutableContext(pattern: PATTERN, \
                                   context: FOR)"]),
                     );
@@ -1226,19 +1345,23 @@ mod statements {
                     let (_s, mut h) = set_up();
                     let x = Var::new("x");
                     h.run_with(
-                        vec![pattern_for_in(
-                            x.pattern().with_declared_type("String").error_id("PATTERN"),
-                            expr("Iterable<int>"),
-                            vec![],
-                            false,
-                        )
-                        .error_id("FOR")
-                        .check_ir(
-                            "forEach(expr(Iterable<int>), varPattern(x, \
+                        vec![
+                            pattern_for_in(
+                                x.pattern().with_declared_type("String").error_id("PATTERN"),
+                                expr("Iterable<int>"),
+                                vec![],
+                                false,
+                            )
+                            .error_id("FOR")
+                            .check_ir(
+                                "forEach(expr(Iterable<int>), varPattern(x, \
                              matchedType: int, staticType: String), block())",
-                        )],
-                        errors(&["patternTypeMismatchInIrrefutableContext(pattern: PATTERN, \
-                                  context: FOR, matchedType: int, requiredType: String)"]),
+                            ),
+                        ],
+                        errors(
+                            &["patternTypeMismatchInIrrefutableContext(pattern: PATTERN, \
+                                  context: FOR, matchedType: int, requiredType: String)"],
+                        ),
                     );
                 }
             }
@@ -1254,32 +1377,36 @@ mod statements {
                 fn pattern_has_type() {
                     let (_s, mut h) = set_up();
                     let x = Var::new("x");
-                    h.run(vec![pattern_for_in(
-                        x.pattern().with_declared_type("num"),
-                        expr("Stream<int>").check_schema("Stream<num>"),
-                        vec![],
-                        true,
-                    )
-                    .check_ir(
-                        "forEach(expr(Stream<int>), varPattern(x, \
+                    h.run(vec![
+                        pattern_for_in(
+                            x.pattern().with_declared_type("num"),
+                            expr("Stream<int>").check_schema("Stream<num>"),
+                            vec![],
+                            true,
+                        )
+                        .check_ir(
+                            "forEach(expr(Stream<int>), varPattern(x, \
                          matchedType: int, staticType: num), block())",
-                    )]);
+                        ),
+                    ]);
                 }
 
                 #[test]
                 fn pattern_does_not_have_type() {
                     let (_s, mut h) = set_up();
                     let x = Var::new("x");
-                    h.run(vec![pattern_for_in(
-                        x.pattern(),
-                        expr("Stream<int>").check_schema("Stream<_>"),
-                        vec![],
-                        true,
-                    )
-                    .check_ir(
-                        "forEach(expr(Stream<int>), varPattern(x, \
+                    h.run(vec![
+                        pattern_for_in(
+                            x.pattern(),
+                            expr("Stream<int>").check_schema("Stream<_>"),
+                            vec![],
+                            true,
+                        )
+                        .check_ir(
+                            "forEach(expr(Stream<int>), varPattern(x, \
                          matchedType: int, staticType: int), block())",
-                    )]);
+                        ),
+                    ]);
                 }
             }
 
@@ -1290,22 +1417,24 @@ mod statements {
                 fn stream() {
                     let (_s, mut h) = set_up();
                     let x = Var::new("x");
-                    h.run(vec![pattern_for_in(x.pattern(), expr("Stream<int>"), vec![], true)
-                        .check_ir(
+                    h.run(vec![
+                        pattern_for_in(x.pattern(), expr("Stream<int>"), vec![], true).check_ir(
                             "forEach(expr(Stream<int>), varPattern(x, \
                              matchedType: int, staticType: int), block())",
-                        )]);
+                        ),
+                    ]);
                 }
 
                 #[test]
                 fn dynamic() {
                     let (_s, mut h) = set_up();
                     let x = Var::new("x");
-                    h.run(vec![pattern_for_in(x.pattern(), expr("dynamic"), vec![], true)
-                        .check_ir(
+                    h.run(vec![
+                        pattern_for_in(x.pattern(), expr("dynamic"), vec![], true).check_ir(
                             "forEach(expr(dynamic), varPattern(x, \
                              matchedType: dynamic, staticType: dynamic), block())",
-                        )]);
+                        ),
+                    ]);
                 }
 
                 #[test]
@@ -1313,17 +1442,19 @@ mod statements {
                     let (_s, mut h) = set_up();
                     let x = Var::new("x");
                     h.run_with(
-                        vec![pattern_for_in(
-                            x.pattern(),
-                            expr("Object").error_id("EXPRESSION"),
-                            vec![],
-                            true,
-                        )
-                        .error_id("FOR")
-                        .check_ir(
-                            "forEach(expr(Object), varPattern(x, \
+                        vec![
+                            pattern_for_in(
+                                x.pattern(),
+                                expr("Object").error_id("EXPRESSION"),
+                                vec![],
+                                true,
+                            )
+                            .error_id("FOR")
+                            .check_ir(
+                                "forEach(expr(Object), varPattern(x, \
                              matchedType: error, staticType: error), block())",
-                        )],
+                            ),
+                        ],
                         errors(&["patternForInExpressionIsNotIterable(node: FOR, \
                                   expression: EXPRESSION, expressionType: Object)"]),
                     );
@@ -1338,18 +1469,20 @@ mod statements {
                     let (_s, mut h) = set_up();
                     let x = Var::new("x");
                     h.run_with(
-                        vec![pattern_for_in(
-                            x.pattern().null_check().error_id("PATTERN"),
-                            expr("Stream<int?>"),
-                            vec![],
-                            true,
-                        )
-                        .error_id("FOR")
-                        .check_ir(
-                            "forEach(expr(Stream<int?>), nullCheckPattern(\
+                        vec![
+                            pattern_for_in(
+                                x.pattern().null_check().error_id("PATTERN"),
+                                expr("Stream<int?>"),
+                                vec![],
+                                true,
+                            )
+                            .error_id("FOR")
+                            .check_ir(
+                                "forEach(expr(Stream<int?>), nullCheckPattern(\
                              varPattern(x, matchedType: int, staticType: int), \
                              matchedType: int?), block())",
-                        )],
+                            ),
+                        ],
                         errors(&["refutablePatternInIrrefutableContext(pattern: PATTERN, \
                                   context: FOR)"]),
                     );
@@ -1360,19 +1493,23 @@ mod statements {
                     let (_s, mut h) = set_up();
                     let x = Var::new("x");
                     h.run_with(
-                        vec![pattern_for_in(
-                            x.pattern().with_declared_type("String").error_id("PATTERN"),
-                            expr("Stream<int>"),
-                            vec![],
-                            true,
-                        )
-                        .error_id("FOR")
-                        .check_ir(
-                            "forEach(expr(Stream<int>), varPattern(x, \
+                        vec![
+                            pattern_for_in(
+                                x.pattern().with_declared_type("String").error_id("PATTERN"),
+                                expr("Stream<int>"),
+                                vec![],
+                                true,
+                            )
+                            .error_id("FOR")
+                            .check_ir(
+                                "forEach(expr(Stream<int>), varPattern(x, \
                              matchedType: int, staticType: String), block())",
-                        )],
-                        errors(&["patternTypeMismatchInIrrefutableContext(pattern: PATTERN, \
-                                  context: FOR, matchedType: int, requiredType: String)"]),
+                            ),
+                        ],
+                        errors(
+                            &["patternTypeMismatchInIrrefutableContext(pattern: PATTERN, \
+                                  context: FOR, matchedType: int, requiredType: String)"],
+                        ),
                     );
                 }
             }
@@ -1395,20 +1532,23 @@ mod statements {
                 #[test]
                 fn yield_() {
                     let (_s, mut h) = set_up();
-                    h.run(vec![crate::mini_ast::node::yield_(expr("int"), false).check_statement_type_analysis_result(
-                        |result| {
-                            assert_eq!(result.operand_type.unwrap().to_string(), "int");
-                        },
-                    )]);
+                    h.run(vec![
+                        crate::mini_ast::node::yield_(expr("int"), false)
+                            .check_statement_type_analysis_result(|result| {
+                                assert_eq!(result.operand_type.unwrap().to_string(), "int");
+                            }),
+                    ]);
                 }
 
                 #[test]
                 fn yield_star() {
                     let (_s, mut h) = set_up();
-                    h.run(vec![crate::mini_ast::node::yield_(expr("List<int>"), true)
-                        .check_statement_type_analysis_result(|result| {
-                            assert_eq!(result.operand_type.unwrap().to_string(), "List<int>");
-                        })]);
+                    h.run(vec![
+                        crate::mini_ast::node::yield_(expr("List<int>"), true)
+                            .check_statement_type_analysis_result(|result| {
+                                assert_eq!(result.operand_type.unwrap().to_string(), "List<int>");
+                            }),
+                    ]);
                 }
             }
         }

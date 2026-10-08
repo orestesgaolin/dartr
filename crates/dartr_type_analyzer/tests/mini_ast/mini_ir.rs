@@ -152,7 +152,11 @@ impl MiniIrBuilder {
     /// Pops the body, iterable and (unless `tmp` is given) the variable of a
     /// for-in loop, and pushes the loop.
     pub fn for_in(&mut self, tmp: Option<&MiniIrTmp>, location: &str, is_asynchronous: bool) {
-        let name = if is_asynchronous { "forIn_async" } else { "forIn" };
+        let name = if is_asynchronous {
+            "forIn_async"
+        } else {
+            "forIn"
+        };
         let body = self.pop(Kind::Statement);
         let iterable = self.pop(Kind::Expression);
         let variable = match tmp {
@@ -209,7 +213,10 @@ impl MiniIrBuilder {
         let if_null = self.pop(Kind::Expression);
         let if_not_null = self.pop(Kind::Expression);
         self.push(IrNode {
-            ir: format!("if(==({}, null), {}, {})", tmp.name, if_null.ir, if_not_null.ir),
+            ir: format!(
+                "if(==({}, null), {}, {})",
+                tmp.name, if_null.ir, if_not_null.ir
+            ),
             kind: Kind::Expression,
             location: location.to_string(),
         });
@@ -379,4 +386,3 @@ impl fmt::Display for MiniIrBuilder {
         write!(f, "{}", parts.join(", "))
     }
 }
-

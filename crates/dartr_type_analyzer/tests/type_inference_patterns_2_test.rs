@@ -14,7 +14,7 @@ mod mini_ast;
 use mini_ast::harness::{BodyContext, Harness, RunOptions};
 #[allow(unused_imports)]
 use mini_ast::mini_types::{
-    type_registry_scope, PrimaryType, Type, TypeRegistry, TypeRegistryScope,
+    PrimaryType, Type, TypeRegistry, TypeRegistryScope, type_registry_scope,
 };
 #[allow(unused_imports)]
 use mini_ast::node::*;
@@ -48,16 +48,21 @@ mod patterns {
             let (_s, mut h) = set_up();
             let x = Var::new("x");
             h.run_with(
-                vec![pattern_variable_declaration(
-                    x.pattern().with_declared_type("int").null_assert().error_id("PATTERN"),
-                    expr("int").check_schema("int?"),
-                    false,
-                )
-                .check_ir(
-                    "match(expr(int), \
+                vec![
+                    pattern_variable_declaration(
+                        x.pattern()
+                            .with_declared_type("int")
+                            .null_assert()
+                            .error_id("PATTERN"),
+                        expr("int").check_schema("int?"),
+                        false,
+                    )
+                    .check_ir(
+                        "match(expr(int), \
                      nullAssertPattern(varPattern(x, matchedType: int, \
                      staticType: int), matchedType: int))",
-                )],
+                    ),
+                ],
                 errors(&["matchedTypeIsStrictlyNonNullable(pattern: PATTERN, \
                           matchedType: int)"]),
             );
@@ -69,30 +74,30 @@ mod patterns {
             #[test]
             fn when_matched_type_is_nullable() {
                 let (_s, mut h) = set_up();
-                h.run(vec![pattern_variable_declaration(
-                    wildcard().null_assert(),
-                    expr("int?"),
-                    false,
-                )
-                .check_ir(
-                    "match(expr(int?), nullAssertPattern(\
+                h.run(vec![
+                    pattern_variable_declaration(wildcard().null_assert(), expr("int?"), false)
+                        .check_ir(
+                            "match(expr(int?), nullAssertPattern(\
                      wildcardPattern(matchedType: int), matchedType: int?))",
-                )]);
+                        ),
+                ]);
             }
 
             #[test]
             fn when_matched_type_is_non_nullable() {
                 let (_s, mut h) = set_up();
                 h.run_with(
-                    vec![pattern_variable_declaration(
-                        wildcard().null_assert().error_id("PATTERN"),
-                        expr("int"),
-                        false,
-                    )
-                    .check_ir(
-                        "match(expr(int), nullAssertPattern(\
+                    vec![
+                        pattern_variable_declaration(
+                            wildcard().null_assert().error_id("PATTERN"),
+                            expr("int"),
+                            false,
+                        )
+                        .check_ir(
+                            "match(expr(int), nullAssertPattern(\
                          wildcardPattern(matchedType: int), matchedType: int))",
-                    )],
+                        ),
+                    ],
                     errors(&["matchedTypeIsStrictlyNonNullable(pattern: PATTERN, \
                               matchedType: int)"]),
                 );
@@ -101,32 +106,32 @@ mod patterns {
             #[test]
             fn when_matched_type_is_dynamic() {
                 let (_s, mut h) = set_up();
-                h.run(vec![pattern_variable_declaration(
-                    wildcard().null_assert(),
-                    expr("dynamic"),
-                    false,
-                )
-                .check_ir(
-                    "match(expr(dynamic), nullAssertPattern(\
+                h.run(vec![
+                    pattern_variable_declaration(wildcard().null_assert(), expr("dynamic"), false)
+                        .check_ir(
+                            "match(expr(dynamic), nullAssertPattern(\
                      wildcardPattern(matchedType: dynamic), \
                      matchedType: dynamic))",
-                )]);
+                        ),
+                ]);
             }
 
             #[test]
             fn sub_refutability() {
                 let (_s, mut h) = set_up();
                 h.run_with(
-                    vec![pattern_variable_declaration(
-                        wildcard()
-                            .with_declared_type("int")
-                            .error_id("INT")
-                            .null_assert()
-                            .error_id("PATTERN"),
-                        expr("num"),
-                        false,
-                    )
-                    .error_id("CONTEXT")],
+                    vec![
+                        pattern_variable_declaration(
+                            wildcard()
+                                .with_declared_type("int")
+                                .error_id("INT")
+                                .null_assert()
+                                .error_id("PATTERN"),
+                            expr("num"),
+                            false,
+                        )
+                        .error_id("CONTEXT"),
+                    ],
                     errors(&[
                         "matchedTypeIsStrictlyNonNullable(pattern: PATTERN, \
                          matchedType: num)",
@@ -143,29 +148,32 @@ mod patterns {
             #[test]
             fn when_matched_type_is_nullable() {
                 let (_s, mut h) = set_up();
-                h.run(vec![if_case(expr("int?"), wildcard().null_assert(), vec![], None)
-                    .check_ir(
+                h.run(vec![
+                    if_case(expr("int?"), wildcard().null_assert(), vec![], None).check_ir(
                         "ifCase(expr(int?), nullAssertPattern(wildcardPattern(\
                          matchedType: int), matchedType: int?), variables(), true, \
                          block(), noop)",
-                    )]);
+                    ),
+                ]);
             }
 
             #[test]
             fn when_matched_type_is_non_nullable() {
                 let (_s, mut h) = set_up();
                 h.run_with(
-                    vec![if_case(
-                        expr("int"),
-                        wildcard().null_assert().error_id("PATTERN"),
-                        vec![],
-                        None,
-                    )
-                    .check_ir(
-                        "ifCase(expr(int), nullAssertPattern(wildcardPattern(\
+                    vec![
+                        if_case(
+                            expr("int"),
+                            wildcard().null_assert().error_id("PATTERN"),
+                            vec![],
+                            None,
+                        )
+                        .check_ir(
+                            "ifCase(expr(int), nullAssertPattern(wildcardPattern(\
                          matchedType: int), matchedType: int), variables(), true, \
                          block(), noop)",
-                    )],
+                        ),
+                    ],
                     errors(&["matchedTypeIsStrictlyNonNullable(pattern: PATTERN, \
                               matchedType: int)"]),
                 );
@@ -181,12 +189,17 @@ mod patterns {
             let (_s, mut h) = set_up();
             let x = Var::new("x");
             h.run_with(
-                vec![pattern_variable_declaration(
-                    x.pattern().with_declared_type("int").null_check().error_id("PATTERN"),
-                    expr("int").check_schema("_"),
-                    false,
-                )
-                .error_id("CONTEXT")],
+                vec![
+                    pattern_variable_declaration(
+                        x.pattern()
+                            .with_declared_type("int")
+                            .null_check()
+                            .error_id("PATTERN"),
+                        expr("int").check_schema("_"),
+                        false,
+                    )
+                    .error_id("CONTEXT"),
+                ],
                 errors(&["refutablePatternInIrrefutableContext(pattern: PATTERN, \
                           context: CONTEXT)"]),
             );
@@ -199,12 +212,14 @@ mod patterns {
             fn when_matched_type_is_nullable() {
                 let (_s, mut h) = set_up();
                 h.run_with(
-                    vec![pattern_variable_declaration(
-                        wildcard().null_check().error_id("PATTERN"),
-                        expr("int?"),
-                        false,
-                    )
-                    .error_id("CONTEXT")],
+                    vec![
+                        pattern_variable_declaration(
+                            wildcard().null_check().error_id("PATTERN"),
+                            expr("int?"),
+                            false,
+                        )
+                        .error_id("CONTEXT"),
+                    ],
                     errors(&["refutablePatternInIrrefutableContext(pattern: PATTERN, \
                               context: CONTEXT)"]),
                 );
@@ -214,12 +229,14 @@ mod patterns {
             fn when_matched_type_is_non_nullable() {
                 let (_s, mut h) = set_up();
                 h.run_with(
-                    vec![pattern_variable_declaration(
-                        wildcard().null_check().error_id("PATTERN"),
-                        expr("int"),
-                        false,
-                    )
-                    .error_id("CONTEXT")],
+                    vec![
+                        pattern_variable_declaration(
+                            wildcard().null_check().error_id("PATTERN"),
+                            expr("int"),
+                            false,
+                        )
+                        .error_id("CONTEXT"),
+                    ],
                     errors(&["refutablePatternInIrrefutableContext(pattern: PATTERN, \
                               context: CONTEXT)"]),
                 );
@@ -229,12 +246,14 @@ mod patterns {
             fn when_matched_type_is_dynamic() {
                 let (_s, mut h) = set_up();
                 h.run_with(
-                    vec![pattern_variable_declaration(
-                        wildcard().null_check().error_id("PATTERN"),
-                        expr("dynamic"),
-                        false,
-                    )
-                    .error_id("CONTEXT")],
+                    vec![
+                        pattern_variable_declaration(
+                            wildcard().null_check().error_id("PATTERN"),
+                            expr("dynamic"),
+                            false,
+                        )
+                        .error_id("CONTEXT"),
+                    ],
                     errors(&["refutablePatternInIrrefutableContext(pattern: PATTERN, \
                               context: CONTEXT)"]),
                 );
@@ -244,12 +263,17 @@ mod patterns {
             fn sub_refutability() {
                 let (_s, mut h) = set_up();
                 h.run_with(
-                    vec![pattern_variable_declaration(
-                        wildcard().with_declared_type("int").null_check().error_id("PATTERN"),
-                        expr("num"),
-                        false,
-                    )
-                    .error_id("CONTEXT")],
+                    vec![
+                        pattern_variable_declaration(
+                            wildcard()
+                                .with_declared_type("int")
+                                .null_check()
+                                .error_id("PATTERN"),
+                            expr("num"),
+                            false,
+                        )
+                        .error_id("CONTEXT"),
+                    ],
                     errors(&["refutablePatternInIrrefutableContext(pattern: PATTERN, \
                               context: CONTEXT)"]),
                 );
@@ -262,29 +286,32 @@ mod patterns {
             #[test]
             fn when_matched_type_is_nullable() {
                 let (_s, mut h) = set_up();
-                h.run(vec![if_case(expr("int?"), wildcard().null_check(), vec![], None)
-                    .check_ir(
+                h.run(vec![
+                    if_case(expr("int?"), wildcard().null_check(), vec![], None).check_ir(
                         "ifCase(expr(int?), nullCheckPattern(wildcardPattern(\
                          matchedType: int), matchedType: int?), variables(), true, \
                          block(), noop)",
-                    )]);
+                    ),
+                ]);
             }
 
             #[test]
             fn when_matched_type_is_non_nullable() {
                 let (_s, mut h) = set_up();
                 h.run_with(
-                    vec![if_case(
-                        expr("int"),
-                        wildcard().null_check().error_id("PATTERN"),
-                        vec![],
-                        None,
-                    )
-                    .check_ir(
-                        "ifCase(expr(int), nullCheckPattern(wildcardPattern(\
+                    vec![
+                        if_case(
+                            expr("int"),
+                            wildcard().null_check().error_id("PATTERN"),
+                            vec![],
+                            None,
+                        )
+                        .check_ir(
+                            "ifCase(expr(int), nullCheckPattern(wildcardPattern(\
                          matchedType: int), matchedType: int), variables(), true, \
                          block(), noop)",
-                    )],
+                        ),
+                    ],
                     errors(&["matchedTypeIsStrictlyNonNullable(pattern: PATTERN, \
                               matchedType: int)"]),
                 );
@@ -308,74 +335,85 @@ mod patterns {
                     vec![PrimaryType::new(a, args.to_vec()), Type::parse("Object")]
                 });
                 h.add_super_interfaces("A", |_| vec![Type::parse("Object")]);
-                h.run(vec![if_case(
-                    expr("A<int>").check_schema("_"),
-                    object_pattern("B", vec![Var::new("foo").pattern().record_field(Some("foo"))]),
-                    vec![],
-                    None,
-                )
-                .check_ir(
-                    "ifCase(expr(A<int>), objectPattern(varPattern(foo, \
+                h.run(vec![
+                    if_case(
+                        expr("A<int>").check_schema("_"),
+                        object_pattern(
+                            "B",
+                            vec![Var::new("foo").pattern().record_field(Some("foo"))],
+                        ),
+                        vec![],
+                        None,
+                    )
+                    .check_ir(
+                        "ifCase(expr(A<int>), objectPattern(varPattern(foo, \
                      matchedType: int, staticType: int), matchedType: A<int>, \
                      requiredType: B<int>), variables(foo), true, block(), noop)",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
             fn dynamic_type() {
                 let (_s, mut h) = set_up();
-                h.run(vec![if_case(
-                    expr("int").check_schema("_"),
-                    object_pattern(
-                        "dynamic",
-                        vec![Var::new("foo").pattern().record_field(Some("foo"))],
-                    ),
-                    vec![],
-                    None,
-                )
-                .check_ir(
-                    "ifCase(expr(int), objectPattern(varPattern(foo, \
+                h.run(vec![
+                    if_case(
+                        expr("int").check_schema("_"),
+                        object_pattern(
+                            "dynamic",
+                            vec![Var::new("foo").pattern().record_field(Some("foo"))],
+                        ),
+                        vec![],
+                        None,
+                    )
+                    .check_ir(
+                        "ifCase(expr(int), objectPattern(varPattern(foo, \
                      matchedType: dynamic, staticType: dynamic), matchedType: int, \
                      requiredType: dynamic), variables(foo), true, block(), noop)",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
             fn error_type() {
                 let (_s, mut h) = set_up();
-                h.run(vec![if_case(
-                    expr("int").check_schema("_"),
-                    object_pattern(
-                        "error",
-                        vec![Var::new("foo").pattern().record_field(Some("foo"))],
-                    ),
-                    vec![],
-                    None,
-                )
-                .check_ir(
-                    "ifCase(expr(int), objectPattern(varPattern(foo, \
+                h.run(vec![
+                    if_case(
+                        expr("int").check_schema("_"),
+                        object_pattern(
+                            "error",
+                            vec![Var::new("foo").pattern().record_field(Some("foo"))],
+                        ),
+                        vec![],
+                        None,
+                    )
+                    .check_ir(
+                        "ifCase(expr(int), objectPattern(varPattern(foo, \
                      matchedType: error, staticType: error), matchedType: int, \
                      requiredType: error), variables(foo), true, block(), noop)",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
             fn never_type() {
                 let (_s, mut h) = set_up();
-                h.run(vec![if_case(
-                    expr("int").check_schema("_"),
-                    object_pattern(
-                        "Never",
-                        vec![Var::new("foo").pattern().record_field(Some("foo"))],
-                    ),
-                    vec![],
-                    None,
-                )
-                .check_ir(
-                    "ifCase(expr(int), objectPattern(varPattern(foo, \
+                h.run(vec![
+                    if_case(
+                        expr("int").check_schema("_"),
+                        object_pattern(
+                            "Never",
+                            vec![Var::new("foo").pattern().record_field(Some("foo"))],
+                        ),
+                        vec![],
+                        None,
+                    )
+                    .check_ir(
+                        "ifCase(expr(int), objectPattern(varPattern(foo, \
                      matchedType: Never, staticType: Never), matchedType: int, \
                      requiredType: Never), variables(foo), true, block(), noop)",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
@@ -417,16 +455,21 @@ mod patterns {
             fn assignable() {
                 let (_s, mut h) = set_up();
                 h.add_member("num", "foo", Some("bool"), false, None);
-                h.run(vec![pattern_variable_declaration(
-                    object_pattern("num", vec![Var::new("foo").pattern().record_field(Some("foo"))]),
-                    expr("int").check_schema("num"),
-                    false,
-                )
-                .check_ir(
-                    "match(expr(int), objectPattern(varPattern(foo, \
+                h.run(vec![
+                    pattern_variable_declaration(
+                        object_pattern(
+                            "num",
+                            vec![Var::new("foo").pattern().record_field(Some("foo"))],
+                        ),
+                        expr("int").check_schema("num"),
+                        false,
+                    )
+                    .check_ir(
+                        "match(expr(int), objectPattern(varPattern(foo, \
                      matchedType: bool, staticType: bool), \
                      matchedType: int, requiredType: num))",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
@@ -434,23 +477,27 @@ mod patterns {
                 let (_s, mut h) = set_up();
                 h.add_member("int", "foo", Some("bool"), false, None);
                 h.run_with(
-                    vec![pattern_variable_declaration(
-                        object_pattern(
-                            "int",
-                            vec![Var::new("foo").pattern().record_field(Some("foo"))],
+                    vec![
+                        pattern_variable_declaration(
+                            object_pattern(
+                                "int",
+                                vec![Var::new("foo").pattern().record_field(Some("foo"))],
+                            )
+                            .error_id("PATTERN"),
+                            expr("num").check_schema("int"),
+                            false,
                         )
-                        .error_id("PATTERN"),
-                        expr("num").check_schema("int"),
-                        false,
-                    )
-                    .error_id("CONTEXT")
-                    .check_ir(
-                        "match(expr(num), objectPattern(varPattern(foo, \
+                        .error_id("CONTEXT")
+                        .check_ir(
+                            "match(expr(num), objectPattern(varPattern(foo, \
                          matchedType: bool, staticType: bool), \
                          matchedType: num, requiredType: int))",
-                    )],
-                    errors(&["patternTypeMismatchInIrrefutableContext(pattern: PATTERN, \
-                              context: CONTEXT, matchedType: num, requiredType: int)"]),
+                        ),
+                    ],
+                    errors(
+                        &["patternTypeMismatchInIrrefutableContext(pattern: PATTERN, \
+                              context: CONTEXT, matchedType: num, requiredType: int)"],
+                    ),
                 );
             }
         }
@@ -511,8 +558,10 @@ mod patterns {
                     ])
                     .assign(expr("(int, int)")),
                 ],
-                errors(&["duplicateAssignmentPatternVariable(variable: x, original: x1, \
-                          duplicate: x2)"]),
+                errors(&[
+                    "duplicateAssignmentPatternVariable(variable: x, original: x1, \
+                          duplicate: x2)",
+                ]),
             );
         }
 
@@ -555,8 +604,10 @@ mod patterns {
                             .assign(expr("String"))
                             .error_id("CONTEXT"),
                     ],
-                    errors(&["patternTypeMismatchInIrrefutableContext(pattern: PATTERN, \
-                              context: CONTEXT, matchedType: String, requiredType: num)"]),
+                    errors(
+                        &["patternTypeMismatchInIrrefutableContext(pattern: PATTERN, \
+                              context: CONTEXT, matchedType: String, requiredType: num)"],
+                    ),
                 );
             }
         }
@@ -574,22 +625,27 @@ mod patterns {
                 #[test]
                 fn refutable() {
                     let (_s, mut h) = set_up();
-                    h.run(vec![if_case(
-                        expr("dynamic").check_schema("_"),
-                        record_pattern(vec![
-                            Var::new("a").pattern().with_declared_type("int").record_field(None),
-                            Var::new("b").pattern().record_field(None),
-                        ]),
-                        vec![],
-                        None,
-                    )
-                    .check_ir(
-                        "ifCase(expr(dynamic), recordPattern(varPattern(a, \
+                    h.run(vec![
+                        if_case(
+                            expr("dynamic").check_schema("_"),
+                            record_pattern(vec![
+                                Var::new("a")
+                                    .pattern()
+                                    .with_declared_type("int")
+                                    .record_field(None),
+                                Var::new("b").pattern().record_field(None),
+                            ]),
+                            vec![],
+                            None,
+                        )
+                        .check_ir(
+                            "ifCase(expr(dynamic), recordPattern(varPattern(a, \
                          matchedType: dynamic, staticType: int), varPattern(b, \
                          matchedType: dynamic, staticType: dynamic), matchedType: \
                          dynamic, requiredType: (Object?, Object?)), \
                          variables(a, b), true, block(), noop)",
-                    )]);
+                        ),
+                    ]);
                 }
             }
 
@@ -599,22 +655,27 @@ mod patterns {
                 #[test]
                 fn refutable() {
                     let (_s, mut h) = set_up();
-                    h.run(vec![if_case(
-                        expr("error").check_schema("_"),
-                        record_pattern(vec![
-                            Var::new("a").pattern().with_declared_type("int").record_field(None),
-                            Var::new("b").pattern().record_field(None),
-                        ]),
-                        vec![],
-                        None,
-                    )
-                    .check_ir(
-                        "ifCase(expr(error), recordPattern(varPattern(a, \
+                    h.run(vec![
+                        if_case(
+                            expr("error").check_schema("_"),
+                            record_pattern(vec![
+                                Var::new("a")
+                                    .pattern()
+                                    .with_declared_type("int")
+                                    .record_field(None),
+                                Var::new("b").pattern().record_field(None),
+                            ]),
+                            vec![],
+                            None,
+                        )
+                        .check_ir(
+                            "ifCase(expr(error), recordPattern(varPattern(a, \
                          matchedType: error, staticType: int), varPattern(b, \
                          matchedType: error, staticType: error), matchedType: \
                          error, requiredType: (Object?, Object?)), \
                          variables(a, b), true, block(), noop)",
-                    )]);
+                        ),
+                    ]);
                 }
             }
 
@@ -627,21 +688,26 @@ mod patterns {
                     #[test]
                     fn irrefutable() {
                         let (_s, mut h) = set_up();
-                        h.run(vec![pattern_variable_declaration(
-                            record_pattern(vec![
-                                Var::new("a").pattern().with_declared_type("int").record_field(None),
-                                Var::new("b").pattern().record_field(None),
-                            ]),
-                            expr("(int, String)").check_schema("(int, _)"),
-                            false,
-                        )
-                        .check_ir(
-                            "match(expr((int, String)), recordPattern(varPattern(a, \
+                        h.run(vec![
+                            pattern_variable_declaration(
+                                record_pattern(vec![
+                                    Var::new("a")
+                                        .pattern()
+                                        .with_declared_type("int")
+                                        .record_field(None),
+                                    Var::new("b").pattern().record_field(None),
+                                ]),
+                                expr("(int, String)").check_schema("(int, _)"),
+                                false,
+                            )
+                            .check_ir(
+                                "match(expr((int, String)), recordPattern(varPattern(a, \
                              matchedType: int, staticType: int), varPattern(b, \
                              matchedType: String, staticType: String), \
                              matchedType: (int, String), \
                              requiredType: (Object?, Object?)))",
-                        )]);
+                            ),
+                        ]);
                     }
                 }
 
@@ -652,27 +718,29 @@ mod patterns {
                     fn irrefutable() {
                         let (_s, mut h) = set_up();
                         h.run_with(
-                            vec![pattern_variable_declaration(
-                                record_pattern(vec![
-                                    Var::new("a")
-                                        .pattern()
-                                        .with_declared_type("int")
-                                        .error_id("VAR(a)")
-                                        .record_field(None),
-                                    Var::new("b").pattern().record_field(None),
-                                ])
-                                .error_id("PATTERN"),
-                                expr("(int,)").check_schema("(int, _)"),
-                                false,
-                            )
-                            .error_id("CONTEXT")
-                            .check_ir(
-                                "match(expr((int,)), recordPattern(varPattern(a, \
+                            vec![
+                                pattern_variable_declaration(
+                                    record_pattern(vec![
+                                        Var::new("a")
+                                            .pattern()
+                                            .with_declared_type("int")
+                                            .error_id("VAR(a)")
+                                            .record_field(None),
+                                        Var::new("b").pattern().record_field(None),
+                                    ])
+                                    .error_id("PATTERN"),
+                                    expr("(int,)").check_schema("(int, _)"),
+                                    false,
+                                )
+                                .error_id("CONTEXT")
+                                .check_ir(
+                                    "match(expr((int,)), recordPattern(varPattern(a, \
                                  matchedType: Object?, staticType: int), \
                                  varPattern(b, matchedType: Object?, staticType: \
                                  Object?), matchedType: (int,), requiredType: \
                                  (Object?, Object?)))",
-                            )],
+                                ),
+                            ],
                             errors(&[
                                 "patternTypeMismatchInIrrefutableContext(pattern: VAR(a), \
                                  context: CONTEXT, matchedType: Object?, \
@@ -690,41 +758,47 @@ mod patterns {
                         #[test]
                         fn too_few() {
                             let (_s, mut h) = set_up();
-                            h.run(vec![if_case(
-                                expr("(int,)").check_schema("_"),
-                                record_pattern(vec![
-                                    Var::new("a").pattern().record_field(None),
-                                    Var::new("b").pattern().record_field(None),
-                                ]),
-                                vec![],
-                                None,
-                            )
-                            .check_ir(
-                                "ifCase(expr((int,)), recordPattern(varPattern(a, \
+                            h.run(vec![
+                                if_case(
+                                    expr("(int,)").check_schema("_"),
+                                    record_pattern(vec![
+                                        Var::new("a").pattern().record_field(None),
+                                        Var::new("b").pattern().record_field(None),
+                                    ]),
+                                    vec![],
+                                    None,
+                                )
+                                .check_ir(
+                                    "ifCase(expr((int,)), recordPattern(varPattern(a, \
                                  matchedType: Object?, staticType: Object?), \
                                  varPattern(b, matchedType: Object?, staticType: \
                                  Object?), matchedType: (int,), requiredType: \
                                  (Object?, Object?)), variables(a, b), true, \
                                  block(), noop)",
-                            )]);
+                                ),
+                            ]);
                         }
 
                         #[test]
                         fn too_many() {
                             let (_s, mut h) = set_up();
-                            h.run(vec![if_case(
-                                expr("(int, String)").check_schema("_"),
-                                record_pattern(vec![Var::new("a").pattern().record_field(None)]),
-                                vec![],
-                                None,
-                            )
-                            .check_ir(
-                                "ifCase(expr((int, String)), \
+                            h.run(vec![
+                                if_case(
+                                    expr("(int, String)").check_schema("_"),
+                                    record_pattern(vec![
+                                        Var::new("a").pattern().record_field(None),
+                                    ]),
+                                    vec![],
+                                    None,
+                                )
+                                .check_ir(
+                                    "ifCase(expr((int, String)), \
                                  recordPattern(varPattern(a, matchedType: Object?, \
                                  staticType: Object?), matchedType: (int, String), \
                                  requiredType: (Object?,)), variables(a), true, \
                                  block(), noop)",
-                            )]);
+                                ),
+                            ]);
                         }
                     }
                 }
@@ -737,22 +811,27 @@ mod patterns {
                 fn refutable() {
                     let (_s, mut h) = set_up();
                     h.add_super_interfaces("X", |_| vec![Type::parse("Object")]);
-                    h.run(vec![if_case(
-                        expr("X").check_schema("_"),
-                        record_pattern(vec![
-                            Var::new("a").pattern().with_declared_type("int").record_field(None),
-                            Var::new("b").pattern().record_field(None),
-                        ]),
-                        vec![],
-                        None,
-                    )
-                    .check_ir(
-                        "ifCase(expr(X), recordPattern(varPattern(a, \
+                    h.run(vec![
+                        if_case(
+                            expr("X").check_schema("_"),
+                            record_pattern(vec![
+                                Var::new("a")
+                                    .pattern()
+                                    .with_declared_type("int")
+                                    .record_field(None),
+                                Var::new("b").pattern().record_field(None),
+                            ]),
+                            vec![],
+                            None,
+                        )
+                        .check_ir(
+                            "ifCase(expr(X), recordPattern(varPattern(a, \
                          matchedType: Object?, staticType: int), varPattern(b, \
                          matchedType: Object?, staticType: Object?), matchedType: X, \
                          requiredType: (Object?, Object?)), variables(a, b), \
                          true, block(), noop)",
-                    )]);
+                        ),
+                    ]);
                 }
             }
         }
@@ -766,22 +845,27 @@ mod patterns {
                 #[test]
                 fn refutable() {
                     let (_s, mut h) = set_up();
-                    h.run(vec![if_case(
-                        expr("dynamic").check_schema("_"),
-                        record_pattern(vec![
-                            Var::new("a").pattern().with_declared_type("int").record_field(Some("a")),
-                            Var::new("b").pattern().record_field(Some("b")),
-                        ]),
-                        vec![],
-                        None,
-                    )
-                    .check_ir(
-                        "ifCase(expr(dynamic), recordPattern(varPattern(a, \
+                    h.run(vec![
+                        if_case(
+                            expr("dynamic").check_schema("_"),
+                            record_pattern(vec![
+                                Var::new("a")
+                                    .pattern()
+                                    .with_declared_type("int")
+                                    .record_field(Some("a")),
+                                Var::new("b").pattern().record_field(Some("b")),
+                            ]),
+                            vec![],
+                            None,
+                        )
+                        .check_ir(
+                            "ifCase(expr(dynamic), recordPattern(varPattern(a, \
                          matchedType: dynamic, staticType: int), varPattern(b, \
                          matchedType: dynamic, staticType: dynamic), matchedType: \
                          dynamic, requiredType: ({Object? a, Object? b})), \
                          variables(a, b), true, block(), noop)",
-                    )]);
+                        ),
+                    ]);
                 }
             }
 
@@ -794,24 +878,26 @@ mod patterns {
                     #[test]
                     fn irrefutable() {
                         let (_s, mut h) = set_up();
-                        h.run(vec![pattern_variable_declaration(
-                            record_pattern(vec![
-                                Var::new("a")
-                                    .pattern()
-                                    .with_declared_type("int")
-                                    .record_field(Some("a")),
-                                Var::new("b").pattern().record_field(Some("b")),
-                            ]),
-                            expr("({int a, String b})").check_schema("({int a, _ b})"),
-                            false,
-                        )
-                        .check_ir(
-                            "match(expr(({int a, String b})), \
+                        h.run(vec![
+                            pattern_variable_declaration(
+                                record_pattern(vec![
+                                    Var::new("a")
+                                        .pattern()
+                                        .with_declared_type("int")
+                                        .record_field(Some("a")),
+                                    Var::new("b").pattern().record_field(Some("b")),
+                                ]),
+                                expr("({int a, String b})").check_schema("({int a, _ b})"),
+                                false,
+                            )
+                            .check_ir(
+                                "match(expr(({int a, String b})), \
                              recordPattern(varPattern(a, matchedType: int, \
                              staticType: int), varPattern(b, matchedType: String, \
                              staticType: String), matchedType: ({int a, String b}), \
                              requiredType: ({Object? a, Object? b})))",
-                        )]);
+                            ),
+                        ]);
                     }
                 }
 
@@ -822,27 +908,29 @@ mod patterns {
                     fn irrefutable() {
                         let (_s, mut h) = set_up();
                         h.run_with(
-                            vec![pattern_variable_declaration(
-                                record_pattern(vec![
-                                    Var::new("a")
-                                        .pattern()
-                                        .with_declared_type("int")
-                                        .error_id("VAR(a)")
-                                        .record_field(Some("a")),
-                                    Var::new("b").pattern().record_field(Some("b")),
-                                ])
-                                .error_id("PATTERN"),
-                                expr("({int a})").check_schema("({int a, _ b})"),
-                                false,
-                            )
-                            .error_id("CONTEXT")
-                            .check_ir(
-                                "match(expr(({int a})), \
+                            vec![
+                                pattern_variable_declaration(
+                                    record_pattern(vec![
+                                        Var::new("a")
+                                            .pattern()
+                                            .with_declared_type("int")
+                                            .error_id("VAR(a)")
+                                            .record_field(Some("a")),
+                                        Var::new("b").pattern().record_field(Some("b")),
+                                    ])
+                                    .error_id("PATTERN"),
+                                    expr("({int a})").check_schema("({int a, _ b})"),
+                                    false,
+                                )
+                                .error_id("CONTEXT")
+                                .check_ir(
+                                    "match(expr(({int a})), \
                                  recordPattern(varPattern(a, matchedType: Object?, \
                                  staticType: int), varPattern(b, matchedType: Object?, \
                                  staticType: Object?), matchedType: ({int a}), \
                                  requiredType: ({Object? a, Object? b})))",
-                            )],
+                                ),
+                            ],
                             errors(&[
                                 "patternTypeMismatchInIrrefutableContext(pattern: VAR(a), \
                                  context: CONTEXT, matchedType: Object?, \
@@ -860,41 +948,47 @@ mod patterns {
                         #[test]
                         fn too_few() {
                             let (_s, mut h) = set_up();
-                            h.run(vec![if_case(
-                                expr("({int a})").check_schema("_"),
-                                record_pattern(vec![
-                                    Var::new("a").pattern().record_field(Some("a")),
-                                    Var::new("b").pattern().record_field(Some("b")),
-                                ]),
-                                vec![],
-                                None,
-                            )
-                            .check_ir(
-                                "ifCase(expr(({int a})), recordPattern(\
+                            h.run(vec![
+                                if_case(
+                                    expr("({int a})").check_schema("_"),
+                                    record_pattern(vec![
+                                        Var::new("a").pattern().record_field(Some("a")),
+                                        Var::new("b").pattern().record_field(Some("b")),
+                                    ]),
+                                    vec![],
+                                    None,
+                                )
+                                .check_ir(
+                                    "ifCase(expr(({int a})), recordPattern(\
                                  varPattern(a, matchedType: Object?, staticType: \
                                  Object?), varPattern(b, matchedType: Object?, \
                                  staticType: Object?), matchedType: ({int a}), \
                                  requiredType: ({Object? a, Object? b})), \
                                  variables(a, b), true, block(), noop)",
-                            )]);
+                                ),
+                            ]);
                         }
 
                         #[test]
                         fn too_many() {
                             let (_s, mut h) = set_up();
-                            h.run(vec![if_case(
-                                expr("({int a, String b})").check_schema("_"),
-                                record_pattern(vec![Var::new("a").pattern().record_field(Some("a"))]),
-                                vec![],
-                                None,
-                            )
-                            .check_ir(
-                                "ifCase(expr(({int a, String b})), \
+                            h.run(vec![
+                                if_case(
+                                    expr("({int a, String b})").check_schema("_"),
+                                    record_pattern(vec![
+                                        Var::new("a").pattern().record_field(Some("a")),
+                                    ]),
+                                    vec![],
+                                    None,
+                                )
+                                .check_ir(
+                                    "ifCase(expr(({int a, String b})), \
                                  recordPattern(varPattern(a, matchedType: Object?, \
                                  staticType: Object?), matchedType: ({int a, String b}), \
                                  requiredType: ({Object? a})), variables(a), true, \
                                  block(), noop)",
-                            )]);
+                                ),
+                            ]);
                         }
                     }
                 }
@@ -907,22 +1001,27 @@ mod patterns {
                 fn refutable() {
                     let (_s, mut h) = set_up();
                     h.add_super_interfaces("X", |_| vec![Type::parse("Object")]);
-                    h.run(vec![if_case(
-                        expr("X").check_schema("_"),
-                        record_pattern(vec![
-                            Var::new("a").pattern().with_declared_type("int").record_field(Some("a")),
-                            Var::new("b").pattern().record_field(Some("b")),
-                        ]),
-                        vec![],
-                        None,
-                    )
-                    .check_ir(
-                        "ifCase(expr(X), recordPattern(varPattern(a, \
+                    h.run(vec![
+                        if_case(
+                            expr("X").check_schema("_"),
+                            record_pattern(vec![
+                                Var::new("a")
+                                    .pattern()
+                                    .with_declared_type("int")
+                                    .record_field(Some("a")),
+                                Var::new("b").pattern().record_field(Some("b")),
+                            ]),
+                            vec![],
+                            None,
+                        )
+                        .check_ir(
+                            "ifCase(expr(X), recordPattern(varPattern(a, \
                          matchedType: Object?, staticType: int), varPattern(b, \
                          matchedType: Object?, staticType: Object?), matchedType: X, \
                          requiredType: ({Object? a, Object? b})), variables(a, b), \
                          true, block(), noop)",
-                    )]);
+                        ),
+                    ]);
                 }
             }
 
@@ -933,8 +1032,14 @@ mod patterns {
                     vec![if_case(
                         expr("({int a})"),
                         record_pattern(vec![
-                            Var::new("a").pattern().record_field(Some("a")).error_id("ORIGINAL"),
-                            Var::new("b").pattern().record_field(Some("a")).error_id("DUPLICATE"),
+                            Var::new("a")
+                                .pattern()
+                                .record_field(Some("a"))
+                                .error_id("ORIGINAL"),
+                            Var::new("b")
+                                .pattern()
+                                .record_field(Some("a"))
+                                .error_id("DUPLICATE"),
                         ])
                         .error_id("PATTERN"),
                         vec![],
@@ -956,13 +1061,16 @@ mod patterns {
         fn refutability() {
             let (_s, mut h) = set_up();
             h.run_with(
-                vec![pattern_variable_declaration(
-                    relational_pattern(">", int_literal(0).check_schema("num")).error_id("PATTERN"),
-                    int_literal(1).check_schema("_"),
-                    false,
-                )
-                .error_id("CONTEXT")
-                .check_ir("match(1, >(0, matchedType: int))")],
+                vec![
+                    pattern_variable_declaration(
+                        relational_pattern(">", int_literal(0).check_schema("num"))
+                            .error_id("PATTERN"),
+                        int_literal(1).check_schema("_"),
+                        false,
+                    )
+                    .error_id("CONTEXT")
+                    .check_ir("match(1, >(0, matchedType: int))"),
+                ],
                 errors(&["refutablePatternInIrrefutableContext(pattern: PATTERN, \
                           context: CONTEXT)"]),
             );
@@ -972,16 +1080,18 @@ mod patterns {
         fn no_operator() {
             let (_s, mut h) = set_up();
             h.add_member("C", ">", None, false, None);
-            h.run(vec![if_case(
-                expr("C").check_schema("_"),
-                relational_pattern(">", int_literal(0).check_schema("_")),
-                vec![],
-                None,
-            )
-            .check_ir(
-                "ifCase(expr(C), >(0, matchedType: C), \
+            h.run(vec![
+                if_case(
+                    expr("C").check_schema("_"),
+                    relational_pattern(">", int_literal(0).check_schema("_")),
+                    vec![],
+                    None,
+                )
+                .check_ir(
+                    "ifCase(expr(C), >(0, matchedType: C), \
                  variables(), true, block(), noop)",
-            )]);
+                ),
+            ]);
         }
 
         mod has_operator {
@@ -990,46 +1100,52 @@ mod patterns {
             #[test]
             fn int_ge() {
                 let (_s, mut h) = set_up();
-                h.run(vec![if_case(
-                    expr("int").check_schema("_"),
-                    relational_pattern(">=", int_literal(0).check_schema("num")),
-                    vec![],
-                    None,
-                )
-                .check_ir(
-                    "ifCase(expr(int), >=(0, matchedType: \
+                h.run(vec![
+                    if_case(
+                        expr("int").check_schema("_"),
+                        relational_pattern(">=", int_literal(0).check_schema("num")),
+                        vec![],
+                        None,
+                    )
+                    .check_ir(
+                        "ifCase(expr(int), >=(0, matchedType: \
                      int), variables(), true, block(), noop)",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
             fn object_eq_nullable() {
                 let (_s, mut h) = set_up();
-                h.run(vec![if_case(
-                    expr("Object").check_schema("_"),
-                    relational_pattern("==", expr("int?").check_schema("Object?")),
-                    vec![],
-                    None,
-                )
-                .check_ir(
-                    "ifCase(expr(Object), ==(expr(int?), \
+                h.run(vec![
+                    if_case(
+                        expr("Object").check_schema("_"),
+                        relational_pattern("==", expr("int?").check_schema("Object?")),
+                        vec![],
+                        None,
+                    )
+                    .check_ir(
+                        "ifCase(expr(Object), ==(expr(int?), \
                      matchedType: Object), variables(), true, block(), noop)",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
             fn object_not_eq_nullable() {
                 let (_s, mut h) = set_up();
-                h.run(vec![if_case(
-                    expr("Object").check_schema("_"),
-                    relational_pattern("!=", expr("int?").check_schema("Object?")),
-                    vec![],
-                    None,
-                )
-                .check_ir(
-                    "ifCase(expr(Object), !=(expr(int?), \
+                h.run(vec![
+                    if_case(
+                        expr("Object").check_schema("_"),
+                        relational_pattern("!=", expr("int?").check_schema("Object?")),
+                        vec![],
+                        None,
+                    )
+                    .check_ir(
+                        "ifCase(expr(Object), !=(expr(int?), \
                      matchedType: Object), variables(), true, block(), noop)",
-                )]);
+                    ),
+                ]);
             }
 
             mod argument_type_not_assignable {
@@ -1039,18 +1155,22 @@ mod patterns {
                 fn basic() {
                     let (_s, mut h) = set_up();
                     h.run_with(
-                        vec![if_case(
-                            expr("int").check_schema("_"),
-                            relational_pattern(">", expr("String")).error_id("PATTERN"),
-                            vec![],
-                            None,
-                        )
-                        .check_ir(
-                            "ifCase(expr(int), >(expr(String), \
+                        vec![
+                            if_case(
+                                expr("int").check_schema("_"),
+                                relational_pattern(">", expr("String")).error_id("PATTERN"),
+                                vec![],
+                                None,
+                            )
+                            .check_ir(
+                                "ifCase(expr(int), >(expr(String), \
                              matchedType: int), variables(), true, block(), noop)",
-                        )],
-                        errors(&["relationalPatternOperandTypeNotAssignable(pattern: PATTERN, \
-                                  operandType: String, parameterType: num)"]),
+                            ),
+                        ],
+                        errors(&[
+                            "relationalPatternOperandTypeNotAssignable(pattern: PATTERN, \
+                                  operandType: String, parameterType: num)",
+                        ]),
                     );
                 }
 
@@ -1064,8 +1184,10 @@ mod patterns {
                             vec![],
                             None,
                         )],
-                        errors(&["relationalPatternOperandTypeNotAssignable(pattern: PATTERN, \
-                                  operandType: int?, parameterType: num)"]),
+                        errors(&[
+                            "relationalPatternOperandTypeNotAssignable(pattern: PATTERN, \
+                                  operandType: int?, parameterType: num)",
+                        ]),
                     );
                 }
 
@@ -1079,8 +1201,10 @@ mod patterns {
                             vec![],
                             None,
                         )],
-                        errors(&["relationalPatternOperandTypeNotAssignable(pattern: PATTERN, \
-                                  operandType: int?, parameterType: num)"]),
+                        errors(&[
+                            "relationalPatternOperandTypeNotAssignable(pattern: PATTERN, \
+                                  operandType: int?, parameterType: num)",
+                        ]),
                     );
                 }
 
@@ -1094,8 +1218,10 @@ mod patterns {
                             vec![],
                             None,
                         )],
-                        errors(&["relationalPatternOperandTypeNotAssignable(pattern: PATTERN, \
-                                  operandType: int?, parameterType: num)"]),
+                        errors(&[
+                            "relationalPatternOperandTypeNotAssignable(pattern: PATTERN, \
+                                  operandType: int?, parameterType: num)",
+                        ]),
                     );
                 }
 
@@ -1109,8 +1235,10 @@ mod patterns {
                             vec![],
                             None,
                         )],
-                        errors(&["relationalPatternOperandTypeNotAssignable(pattern: PATTERN, \
-                                  operandType: int?, parameterType: num)"]),
+                        errors(&[
+                            "relationalPatternOperandTypeNotAssignable(pattern: PATTERN, \
+                                  operandType: int?, parameterType: num)",
+                        ]),
                     );
                 }
 
@@ -1127,8 +1255,10 @@ mod patterns {
                             vec![],
                             None,
                         )],
-                        errors(&["relationalPatternOperandTypeNotAssignable(pattern: PATTERN, \
-                                  operandType: E, parameterType: int)"]),
+                        errors(&[
+                            "relationalPatternOperandTypeNotAssignable(pattern: PATTERN, \
+                                  operandType: E, parameterType: int)",
+                        ]),
                     );
                 }
 
@@ -1145,8 +1275,10 @@ mod patterns {
                             vec![],
                             None,
                         )],
-                        errors(&["relationalPatternOperandTypeNotAssignable(pattern: PATTERN, \
-                                  operandType: int, parameterType: E)"]),
+                        errors(&[
+                            "relationalPatternOperandTypeNotAssignable(pattern: PATTERN, \
+                                  operandType: int, parameterType: E)",
+                        ]),
                     );
                 }
             }
@@ -1182,17 +1314,19 @@ mod patterns {
                 let (_s, mut h) = set_up();
                 h.add_member("A", ">", Some("int Function(Object)"), false, None);
                 h.run_with(
-                    vec![if_case(
-                        expr("A").check_schema("_"),
-                        relational_pattern(">", expr("String").check_schema("Object"))
-                            .error_id("PATTERN"),
-                        vec![],
-                        None,
-                    )
-                    .check_ir(
-                        "ifCase(expr(A), >(expr(String), \
+                    vec![
+                        if_case(
+                            expr("A").check_schema("_"),
+                            relational_pattern(">", expr("String").check_schema("Object"))
+                                .error_id("PATTERN"),
+                            vec![],
+                            None,
+                        )
+                        .check_ir(
+                            "ifCase(expr(A), >(expr(String), \
                          matchedType: A), variables(), true, block(), noop)",
-                    )],
+                        ),
+                    ],
                     errors(&["relationalPatternOperatorReturnTypeNotAssignableToBool(\
                               pattern: PATTERN, returnType: int)"]),
                 );
@@ -1210,45 +1344,51 @@ mod patterns {
             fn when_matched_type_is_a_subtype_of_variable_type() {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
-                h.run(vec![pattern_variable_declaration(
-                    x.pattern().with_declared_type("num"),
-                    expr("int"),
-                    false,
-                )
-                .check_ir(
-                    "match(expr(int), \
+                h.run(vec![
+                    pattern_variable_declaration(
+                        x.pattern().with_declared_type("num"),
+                        expr("int"),
+                        false,
+                    )
+                    .check_ir(
+                        "match(expr(int), \
                      varPattern(x, matchedType: int, staticType: num))",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
             fn when_matched_type_is_dynamic() {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
-                h.run(vec![pattern_variable_declaration(
-                    x.pattern().with_declared_type("num"),
-                    expr("dynamic"),
-                    false,
-                )
-                .check_ir(
-                    "match(expr(dynamic), \
+                h.run(vec![
+                    pattern_variable_declaration(
+                        x.pattern().with_declared_type("num"),
+                        expr("dynamic"),
+                        false,
+                    )
+                    .check_ir(
+                        "match(expr(dynamic), \
                      varPattern(x, matchedType: dynamic, staticType: num))",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
             fn when_matched_type_is_error() {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
-                h.run(vec![pattern_variable_declaration(
-                    x.pattern().with_declared_type("num"),
-                    expr("error"),
-                    false,
-                )
-                .check_ir(
-                    "match(expr(error), \
+                h.run(vec![
+                    pattern_variable_declaration(
+                        x.pattern().with_declared_type("num"),
+                        expr("error"),
+                        false,
+                    )
+                    .check_ir(
+                        "match(expr(error), \
                      varPattern(x, matchedType: error, staticType: num))",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
@@ -1256,14 +1396,18 @@ mod patterns {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
                 h.run_with(
-                    vec![pattern_variable_declaration(
-                        x.pattern().with_declared_type("num").error_id("PATTERN"),
-                        expr("String"),
-                        false,
-                    )
-                    .error_id("CONTEXT")],
-                    errors(&["patternTypeMismatchInIrrefutableContext(pattern: PATTERN, \
-                              context: CONTEXT, matchedType: String, requiredType: num)"]),
+                    vec![
+                        pattern_variable_declaration(
+                            x.pattern().with_declared_type("num").error_id("PATTERN"),
+                            expr("String"),
+                            false,
+                        )
+                        .error_id("CONTEXT"),
+                    ],
+                    errors(
+                        &["patternTypeMismatchInIrrefutableContext(pattern: PATTERN, \
+                              context: CONTEXT, matchedType: String, requiredType: num)"],
+                    ),
                 );
             }
         }
@@ -1275,20 +1419,29 @@ mod patterns {
         #[test]
         fn untyped() {
             let (_s, mut h) = set_up();
-            h.run(vec![if_case(expr("int"), wildcard(), vec![], None).check_ir(
-                "ifCase(expr(int), wildcardPattern(matchedType: int), \
+            h.run(vec![
+                if_case(expr("int"), wildcard(), vec![], None).check_ir(
+                    "ifCase(expr(int), wildcardPattern(matchedType: int), \
                  variables(), true, block(), noop)",
-            )]);
+                ),
+            ]);
         }
 
         #[test]
         fn typed() {
             let (_s, mut h) = set_up();
-            h.run(vec![if_case(expr("num"), wildcard().with_declared_type("int"), vec![], None)
+            h.run(vec![
+                if_case(
+                    expr("num"),
+                    wildcard().with_declared_type("int"),
+                    vec![],
+                    None,
+                )
                 .check_ir(
                     "ifCase(expr(num), wildcardPattern(matchedType: num), \
                      variables(), true, block(), noop)",
-                )]);
+                ),
+            ]);
         }
 
         mod refutability {
@@ -1297,40 +1450,48 @@ mod patterns {
             #[test]
             fn when_matched_type_is_a_subtype_of_variable_type() {
                 let (_s, mut h) = set_up();
-                h.run(vec![pattern_variable_declaration(
-                    wildcard().with_declared_type("num"),
-                    expr("int"),
-                    false,
-                )
-                .check_ir("match(expr(int), wildcardPattern(matchedType: int))")]);
+                h.run(vec![
+                    pattern_variable_declaration(
+                        wildcard().with_declared_type("num"),
+                        expr("int"),
+                        false,
+                    )
+                    .check_ir("match(expr(int), wildcardPattern(matchedType: int))"),
+                ]);
             }
 
             #[test]
             fn when_matched_type_is_dynamic() {
                 let (_s, mut h) = set_up();
-                h.run(vec![pattern_variable_declaration(
-                    wildcard().with_declared_type("num"),
-                    expr("dynamic"),
-                    false,
-                )
-                .check_ir(
-                    "match(expr(dynamic), wildcardPattern(\
+                h.run(vec![
+                    pattern_variable_declaration(
+                        wildcard().with_declared_type("num"),
+                        expr("dynamic"),
+                        false,
+                    )
+                    .check_ir(
+                        "match(expr(dynamic), wildcardPattern(\
                      matchedType: dynamic))",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
             fn when_matched_type_is_not_a_subtype_of_variable_type() {
                 let (_s, mut h) = set_up();
                 h.run_with(
-                    vec![pattern_variable_declaration(
-                        wildcard().with_declared_type("num").error_id("PATTERN"),
-                        expr("String"),
-                        false,
-                    )
-                    .error_id("CONTEXT")],
-                    errors(&["patternTypeMismatchInIrrefutableContext(pattern: PATTERN, \
-                              context: CONTEXT, matchedType: String, requiredType: num)"]),
+                    vec![
+                        pattern_variable_declaration(
+                            wildcard().with_declared_type("num").error_id("PATTERN"),
+                            expr("String"),
+                            false,
+                        )
+                        .error_id("CONTEXT"),
+                    ],
+                    errors(
+                        &["patternTypeMismatchInIrrefutableContext(pattern: PATTERN, \
+                              context: CONTEXT, matchedType: String, requiredType: num)"],
+                    ),
                 );
             }
         }

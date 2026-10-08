@@ -56,7 +56,7 @@ use dartr_flow::shared_type::{SharedTypeSchemaView, SharedTypeView};
 use dartr_flow::type_analysis_result::ExpressionTypeAnalysisResult;
 use dartr_flow::type_analyzer::JoinedPatternVariableInconsistency;
 
-use super::mini_types::{intern, Name, Type, TypeKind};
+use super::mini_types::{Name, Type, TypeKind, intern};
 
 /// A source location in the test file (Dart `String location`).
 pub type Loc = &'static Location<'static>;
@@ -203,22 +203,64 @@ impl From<Node> for Promotable {
 #[allow(missing_docs)]
 pub enum NodeKind {
     // ----------------------------------------------------------- expressions
-    As { target: Node, ty: Type },
-    Await { operand: Node },
-    BooleanLiteral { value: bool },
-    Cascade { target: Node, sections: Vec<Node>, is_null_aware: bool },
+    As {
+        target: Node,
+        ty: Type,
+    },
+    Await {
+        operand: Node,
+    },
+    BooleanLiteral {
+        value: bool,
+    },
+    Cascade {
+        target: Node,
+        sections: Vec<Node>,
+        is_null_aware: bool,
+    },
     CascadePlaceholder,
-    CheckAssigned { variable: Var, expected: bool },
-    CheckPromoted { promotable: Promotable, expected: Option<String> },
-    CheckPromotionChain { promotable: Promotable, expected: Vec<String> },
-    CheckReachable { expected: bool },
-    CheckUnassigned { variable: Var, expected: bool },
-    Conditional { condition: Node, if_true: Node, if_false: Node },
-    DotShorthand { expr: Node },
-    DotShorthandHead { name: String },
-    Equal { lhs: Node, rhs: Node, is_inverted: bool },
-    IfNull { lhs: Node, rhs: Node },
-    IntLiteral { value: i64 },
+    CheckAssigned {
+        variable: Var,
+        expected: bool,
+    },
+    CheckPromoted {
+        promotable: Promotable,
+        expected: Option<String>,
+    },
+    CheckPromotionChain {
+        promotable: Promotable,
+        expected: Vec<String>,
+    },
+    CheckReachable {
+        expected: bool,
+    },
+    CheckUnassigned {
+        variable: Var,
+        expected: bool,
+    },
+    Conditional {
+        condition: Node,
+        if_true: Node,
+        if_false: Node,
+    },
+    DotShorthand {
+        expr: Node,
+    },
+    DotShorthandHead {
+        name: String,
+    },
+    Equal {
+        lhs: Node,
+        rhs: Node,
+        is_inverted: bool,
+    },
+    IfNull {
+        lhs: Node,
+        rhs: Node,
+    },
+    IntLiteral {
+        value: i64,
+    },
     InvokeAnonymousMethod {
         target: Node,
         body: Node,
@@ -227,38 +269,118 @@ pub enum NodeKind {
         is_parameterless: bool,
         parameter: Option<Var>,
     },
-    InvokeMethod { target: Node, method_name: String, arguments: Vec<Node>, is_null_aware: bool },
-    Is { target: Node, ty: Type, is_inverted: bool },
-    ListLiteral { elements: Vec<Node>, element_type: Type },
-    LocalFunction { body: Node, ty: Type },
-    Logical { lhs: Node, rhs: Node, is_and: bool },
-    MapLiteral { elements: Vec<Node>, key_type: Type, value_type: Type },
-    NonNullAssert { operand: Node },
-    Not { operand: Node },
+    InvokeMethod {
+        target: Node,
+        method_name: String,
+        arguments: Vec<Node>,
+        is_null_aware: bool,
+    },
+    Is {
+        target: Node,
+        ty: Type,
+        is_inverted: bool,
+    },
+    ListLiteral {
+        elements: Vec<Node>,
+        element_type: Type,
+    },
+    LocalFunction {
+        body: Node,
+        ty: Type,
+    },
+    Logical {
+        lhs: Node,
+        rhs: Node,
+        is_and: bool,
+    },
+    MapLiteral {
+        elements: Vec<Node>,
+        key_type: Type,
+        value_type: Type,
+    },
+    NonNullAssert {
+        operand: Node,
+    },
+    Not {
+        operand: Node,
+    },
     NullLiteral,
-    ParenthesizedExpression { expr: Node },
-    PatternAssignment { lhs: Node, rhs: Node },
-    PlaceholderExpression { ty: Type },
-    PostIncDec { lhs: Node },
-    PreIncDec { lhs: Node },
-    Property { target: Node, property_name: String, is_null_aware: bool },
-    Second { first: Node, second: Node },
-    SwitchExpression { scrutinee: Node, cases: Vec<Node> },
+    ParenthesizedExpression {
+        expr: Node,
+    },
+    PatternAssignment {
+        lhs: Node,
+        rhs: Node,
+    },
+    PlaceholderExpression {
+        ty: Type,
+    },
+    PostIncDec {
+        lhs: Node,
+    },
+    PreIncDec {
+        lhs: Node,
+    },
+    Property {
+        target: Node,
+        property_name: String,
+        is_null_aware: bool,
+    },
+    Second {
+        first: Node,
+        second: Node,
+    },
+    SwitchExpression {
+        scrutinee: Node,
+        cases: Vec<Node>,
+    },
     This,
-    ThisOrSuperProperty { property_name: String, is_super_access: bool },
-    Throw { operand: Node },
-    VariableReference { variable: Var, callback: Option<PromotedTypeCallback> },
-    WrappedExpression { before: Option<Node>, expr: Node, after: Option<Node> },
-    Write { lhs: Node, rhs: Node },
+    ThisOrSuperProperty {
+        property_name: String,
+        is_super_access: bool,
+    },
+    Throw {
+        operand: Node,
+    },
+    VariableReference {
+        variable: Var,
+        callback: Option<PromotedTypeCallback>,
+    },
+    WrappedExpression {
+        before: Option<Node>,
+        expr: Node,
+        after: Option<Node>,
+    },
+    Write {
+        lhs: Node,
+        rhs: Node,
+    },
 
     // ------------------------------------------------------------ statements
-    Assert { condition: Node, message: Option<Node> },
-    Block { statements: Vec<Node> },
-    Break { target: Option<Label> },
-    Continue { target: Option<Label> },
-    Do { body: Node, condition: Node },
-    ExpressionInTypeSchema { expr: Node, type_schema: SharedTypeSchemaView<Type> },
-    ExpressionStatement { expr: Node },
+    Assert {
+        condition: Node,
+        message: Option<Node>,
+    },
+    Block {
+        statements: Vec<Node>,
+    },
+    Break {
+        target: Option<Label>,
+    },
+    Continue {
+        target: Option<Label>,
+    },
+    Do {
+        body: Node,
+        condition: Node,
+    },
+    ExpressionInTypeSchema {
+        expr: Node,
+        type_schema: SharedTypeSchemaView<Type>,
+    },
+    ExpressionStatement {
+        expr: Node,
+    },
     For {
         initializer: Option<Node>,
         condition: Option<Node>,
@@ -266,8 +388,17 @@ pub enum NodeKind {
         body: Node,
         for_collection: bool,
     },
-    ForEach { variable: Option<Var>, iterable: Node, body: Node, declares_variable: bool },
-    If { condition: Node, if_true: Node, if_false: Option<Node> },
+    ForEach {
+        variable: Option<Var>,
+        iterable: Node,
+        body: Node,
+        declares_variable: bool,
+    },
+    If {
+        condition: Node,
+        if_true: Node,
+        if_false: Option<Node>,
+    },
     IfCase {
         expression: Node,
         pattern: Node,
@@ -276,9 +407,21 @@ pub enum NodeKind {
         if_false: Option<Node>,
         candidate_variables: Vec<(Name, Var)>,
     },
-    LabeledStatement { labels: Vec<Label>, body: Node },
-    PatternForIn { pattern: Node, expression: Node, body: Node, has_await: bool },
-    PatternVariableDeclaration { pattern: Node, initializer: Node, is_final: bool },
+    LabeledStatement {
+        labels: Vec<Label>,
+        body: Node,
+    },
+    PatternForIn {
+        pattern: Node,
+        expression: Node,
+        body: Node,
+        has_await: bool,
+    },
+    PatternVariableDeclaration {
+        pattern: Node,
+        initializer: Node,
+        is_final: bool,
+    },
     Return,
     SwitchStatement {
         scrutinee: Node,
@@ -290,7 +433,11 @@ pub enum NodeKind {
         expect_requires_exhaustiveness_validation: Option<bool>,
         expect_scrutinee_type: Option<String>,
     },
-    TryStatement { body: Node, catches: Vec<CatchClause>, finally_statement: Option<Node> },
+    TryStatement {
+        body: Node,
+        catches: Vec<CatchClause>,
+        finally_statement: Option<Node>,
+    },
     VariableDeclaration {
         variable: Var,
         is_late: bool,
@@ -299,11 +446,19 @@ pub enum NodeKind {
         initializer: Option<Node>,
         expect_inferred_type: Option<String>,
     },
-    While { condition: Node, body: Node },
-    YieldStatement { operand: Node, is_yield_star: bool },
+    While {
+        condition: Node,
+        body: Node,
+    },
+    YieldStatement {
+        operand: Node,
+        is_yield_star: bool,
+    },
 
     // --------------------------------------------------- collection elements
-    ExpressionCollectionElement { expression: Node },
+    ExpressionCollectionElement {
+        expression: Node,
+    },
     IfCaseElement {
         expression: Node,
         pattern: Node,
@@ -312,39 +467,102 @@ pub enum NodeKind {
         if_false: Option<Node>,
         variables: Vec<(Name, Var)>,
     },
-    IfElement { condition: Node, if_true: Node, if_false: Option<Node> },
-    MapEntry { key: Node, value: Node, is_key_null_aware: bool },
-    PatternForInElement { pattern: Node, expression: Node, body: Node, has_await: bool },
+    IfElement {
+        condition: Node,
+        if_true: Node,
+        if_false: Option<Node>,
+    },
+    MapEntry {
+        key: Node,
+        value: Node,
+        is_key_null_aware: bool,
+    },
+    PatternForInElement {
+        pattern: Node,
+        expression: Node,
+        body: Node,
+        has_await: bool,
+    },
 
     // -------------------------------------------------------------- patterns
-    CastPattern { inner: Node, ty: Type },
-    ConstantPattern { constant: Node },
-    ListPattern { element_type: Option<Type>, elements: Vec<Node> },
-    LogicalAndPattern { lhs: Node, rhs: Node },
-    LogicalOrPattern { lhs: Node, rhs: Node },
-    MapPattern { type_arguments: Option<(Type, Type)>, elements: Vec<Node> },
-    NullCheckOrAssertPattern { inner: Node, is_assert: bool },
-    ObjectPattern { required_type: Type, fields: Vec<Node> },
-    ParenthesizedPattern { inner: Node },
-    RecordPattern { fields: Vec<Node> },
-    RelationalPattern { operator: String, operand: Node },
+    CastPattern {
+        inner: Node,
+        ty: Type,
+    },
+    ConstantPattern {
+        constant: Node,
+    },
+    ListPattern {
+        element_type: Option<Type>,
+        elements: Vec<Node>,
+    },
+    LogicalAndPattern {
+        lhs: Node,
+        rhs: Node,
+    },
+    LogicalOrPattern {
+        lhs: Node,
+        rhs: Node,
+    },
+    MapPattern {
+        type_arguments: Option<(Type, Type)>,
+        elements: Vec<Node>,
+    },
+    NullCheckOrAssertPattern {
+        inner: Node,
+        is_assert: bool,
+    },
+    ObjectPattern {
+        required_type: Type,
+        fields: Vec<Node>,
+    },
+    ParenthesizedPattern {
+        inner: Node,
+    },
+    RecordPattern {
+        fields: Vec<Node>,
+    },
+    RelationalPattern {
+        operator: String,
+        operand: Node,
+    },
     VariablePattern {
         declared_type: Option<Type>,
         variable: Var,
         expect_inferred_type: Option<String>,
         is_assigned_variable: Option<bool>,
     },
-    WildcardPattern { declared_type: Option<Type>, expect_inferred_type: Option<String> },
+    WildcardPattern {
+        declared_type: Option<Type>,
+        expect_inferred_type: Option<String>,
+    },
 
     // ----------------------------------------------------------------- other
     /// `Node.placeholder()`.
     Placeholder,
-    ExpressionCase { guarded_pattern: Option<Node>, expression: Node },
-    GuardedPattern { pattern: Node, guard: Option<Node>, variables: Option<Vec<(Name, Var)>> },
-    MapPatternEntry { key: Node, value: Node },
-    RecordPatternField { name: Option<Name>, pattern: Node },
-    RestPattern { sub_pattern: Option<Node> },
-    SwitchHeadCase { guarded_pattern: Node },
+    ExpressionCase {
+        guarded_pattern: Option<Node>,
+        expression: Node,
+    },
+    GuardedPattern {
+        pattern: Node,
+        guard: Option<Node>,
+        variables: Option<Vec<(Name, Var)>>,
+    },
+    MapPatternEntry {
+        key: Node,
+        value: Node,
+    },
+    RecordPatternField {
+        name: Option<Name>,
+        pattern: Node,
+    },
+    RestPattern {
+        sub_pattern: Option<Node>,
+    },
+    SwitchHeadCase {
+        guarded_pattern: Node,
+    },
     SwitchHeadDefault,
     SwitchStatementMember {
         elements: Vec<Node>,
@@ -352,7 +570,10 @@ pub enum NodeKind {
         has_labels: bool,
         candidate_variables: Option<Vec<(Name, Var)>>,
     },
-    BoundLabel { name: String, binding: Option<Node> },
+    BoundLabel {
+        name: String,
+        binding: Option<Node>,
+    },
     UnboundLabel,
 }
 
@@ -376,32 +597,84 @@ impl NodeKind {
     pub fn category(&self) -> Category {
         use NodeKind::*;
         match self {
-            As { .. } | Await { .. } | BooleanLiteral { .. } | Cascade { .. }
-            | CascadePlaceholder | CheckAssigned { .. } | CheckPromoted { .. }
-            | CheckPromotionChain { .. } | CheckReachable { .. } | CheckUnassigned { .. }
-            | Conditional { .. } | DotShorthand { .. } | DotShorthandHead { .. }
-            | Equal { .. } | IfNull { .. } | IntLiteral { .. }
-            | InvokeAnonymousMethod { .. } | InvokeMethod { .. } | Is { .. }
-            | ListLiteral { .. } | LocalFunction { .. } | Logical { .. }
-            | MapLiteral { .. } | NonNullAssert { .. } | Not { .. } | NullLiteral
-            | ParenthesizedExpression { .. } | PatternAssignment { .. }
-            | PlaceholderExpression { .. } | PostIncDec { .. } | PreIncDec { .. }
-            | Property { .. } | Second { .. } | SwitchExpression { .. } | This
-            | ThisOrSuperProperty { .. } | Throw { .. } | VariableReference { .. }
-            | WrappedExpression { .. } | Write { .. } => Category::Expression,
-            Assert { .. } | Block { .. } | Break { .. } | Continue { .. } | Do { .. }
-            | ExpressionInTypeSchema { .. } | ExpressionStatement { .. } | For { .. }
-            | ForEach { .. } | If { .. } | IfCase { .. } | LabeledStatement { .. }
-            | PatternForIn { .. } | PatternVariableDeclaration { .. } | Return
-            | SwitchStatement { .. } | TryStatement { .. } | VariableDeclaration { .. }
-            | While { .. } | YieldStatement { .. } => Category::Statement,
-            ExpressionCollectionElement { .. } | IfCaseElement { .. } | IfElement { .. }
-            | MapEntry { .. } | PatternForInElement { .. } => Category::CollectionElement,
-            CastPattern { .. } | ConstantPattern { .. } | ListPattern { .. }
-            | LogicalAndPattern { .. } | LogicalOrPattern { .. } | MapPattern { .. }
-            | NullCheckOrAssertPattern { .. } | ObjectPattern { .. }
-            | ParenthesizedPattern { .. } | RecordPattern { .. } | RelationalPattern { .. }
-            | VariablePattern { .. } | WildcardPattern { .. } => Category::Pattern,
+            As { .. }
+            | Await { .. }
+            | BooleanLiteral { .. }
+            | Cascade { .. }
+            | CascadePlaceholder
+            | CheckAssigned { .. }
+            | CheckPromoted { .. }
+            | CheckPromotionChain { .. }
+            | CheckReachable { .. }
+            | CheckUnassigned { .. }
+            | Conditional { .. }
+            | DotShorthand { .. }
+            | DotShorthandHead { .. }
+            | Equal { .. }
+            | IfNull { .. }
+            | IntLiteral { .. }
+            | InvokeAnonymousMethod { .. }
+            | InvokeMethod { .. }
+            | Is { .. }
+            | ListLiteral { .. }
+            | LocalFunction { .. }
+            | Logical { .. }
+            | MapLiteral { .. }
+            | NonNullAssert { .. }
+            | Not { .. }
+            | NullLiteral
+            | ParenthesizedExpression { .. }
+            | PatternAssignment { .. }
+            | PlaceholderExpression { .. }
+            | PostIncDec { .. }
+            | PreIncDec { .. }
+            | Property { .. }
+            | Second { .. }
+            | SwitchExpression { .. }
+            | This
+            | ThisOrSuperProperty { .. }
+            | Throw { .. }
+            | VariableReference { .. }
+            | WrappedExpression { .. }
+            | Write { .. } => Category::Expression,
+            Assert { .. }
+            | Block { .. }
+            | Break { .. }
+            | Continue { .. }
+            | Do { .. }
+            | ExpressionInTypeSchema { .. }
+            | ExpressionStatement { .. }
+            | For { .. }
+            | ForEach { .. }
+            | If { .. }
+            | IfCase { .. }
+            | LabeledStatement { .. }
+            | PatternForIn { .. }
+            | PatternVariableDeclaration { .. }
+            | Return
+            | SwitchStatement { .. }
+            | TryStatement { .. }
+            | VariableDeclaration { .. }
+            | While { .. }
+            | YieldStatement { .. } => Category::Statement,
+            ExpressionCollectionElement { .. }
+            | IfCaseElement { .. }
+            | IfElement { .. }
+            | MapEntry { .. }
+            | PatternForInElement { .. } => Category::CollectionElement,
+            CastPattern { .. }
+            | ConstantPattern { .. }
+            | ListPattern { .. }
+            | LogicalAndPattern { .. }
+            | LogicalOrPattern { .. }
+            | MapPattern { .. }
+            | NullCheckOrAssertPattern { .. }
+            | ObjectPattern { .. }
+            | ParenthesizedPattern { .. }
+            | RecordPattern { .. }
+            | RelationalPattern { .. }
+            | VariablePattern { .. }
+            | WildcardPattern { .. } => Category::Pattern,
             _ => Category::Other,
         }
     }
@@ -597,7 +870,8 @@ impl fmt::Debug for Node {
 /// Error IDs that were assigned but never used (Dart
 /// `Node._nodesWithUnusedErrorIds`), and clears the set.
 pub fn take_unused_error_ids() -> Vec<String> {
-    let keys: Vec<String> = UNUSED_ERROR_IDS.with(|ids| std::mem::take(&mut *ids.borrow_mut()))
+    let keys: Vec<String> = UNUSED_ERROR_IDS
+        .with(|ids| std::mem::take(&mut *ids.borrow_mut()))
         .into_iter()
         .collect();
     keys.into_iter()
@@ -1079,7 +1353,10 @@ pub fn break_(target: Option<Label>) -> Node {
 /// `checkAssigned(variable, expectedAssignedState)`.
 #[track_caller]
 pub fn check_assigned(variable: Var, expected: bool) -> Node {
-    Node::alloc(NodeKind::CheckAssigned { variable, expected }, Location::caller())
+    Node::alloc(
+        NodeKind::CheckAssigned { variable, expected },
+        Location::caller(),
+    )
 }
 
 /// `checkNotPromoted(promotable)`.
@@ -1127,7 +1404,10 @@ pub fn check_reachable(expected: bool) -> Node {
 /// `checkUnassigned(variable, expectedUnassignedState)`.
 #[track_caller]
 pub fn check_unassigned(variable: Var, expected: bool) -> Node {
-    Node::alloc(NodeKind::CheckUnassigned { variable, expected }, Location::caller())
+    Node::alloc(
+        NodeKind::CheckUnassigned { variable, expected },
+        Location::caller(),
+    )
 }
 
 /// `continue_([target])`.
@@ -1286,7 +1566,12 @@ pub fn if_else(condition: Node, if_true: Vec<Node>, if_false: Vec<Node>) -> Node
 
 /// `ifCase(expression, pattern, ifTrue, [ifFalse])`.
 #[track_caller]
-pub fn if_case(expression: Node, pattern: Node, if_true: Vec<Node>, if_false: Option<Vec<Node>>) -> Node {
+pub fn if_case(
+    expression: Node,
+    pattern: Node,
+    if_true: Vec<Node>,
+    if_false: Option<Vec<Node>>,
+) -> Node {
     let location = Location::caller();
     let guarded = as_guarded_pattern(pattern);
     let NodeKind::GuardedPattern { pattern, guard, .. } = guarded.kind() else {
@@ -1307,7 +1592,12 @@ pub fn if_case(expression: Node, pattern: Node, if_true: Vec<Node>, if_false: Op
 
 /// `ifCaseElement(expression, pattern, ifTrue, [ifFalse])`.
 #[track_caller]
-pub fn if_case_element(expression: Node, pattern: Node, if_true: Node, if_false: Option<Node>) -> Node {
+pub fn if_case_element(
+    expression: Node,
+    pattern: Node,
+    if_true: Node,
+    if_false: Option<Node>,
+) -> Node {
     let location = Location::caller();
     let guarded = as_guarded_pattern(pattern);
     let NodeKind::GuardedPattern { pattern, guard, .. } = guarded.kind() else {
@@ -1451,7 +1741,11 @@ pub fn map_pattern_entry(key: Node, value: Node) -> Node {
 
 /// `mapPatternWithTypeArguments(keyType:, valueType:, elements:)`.
 #[track_caller]
-pub fn map_pattern_with_type_arguments(key_type: &str, value_type: &str, elements: Vec<Node>) -> Node {
+pub fn map_pattern_with_type_arguments(
+    key_type: &str,
+    value_type: &str,
+    elements: Vec<Node>,
+) -> Node {
     Node::alloc(
         NodeKind::MapPattern {
             type_arguments: Some((Type::parse(key_type), Type::parse(value_type))),
@@ -1494,7 +1788,12 @@ pub fn pattern_for_in(pattern: Node, expression: Node, body: Vec<Node>, has_awai
 
 /// `patternForInElement(pattern, expression, body, {hasAwait})`.
 #[track_caller]
-pub fn pattern_for_in_element(pattern: Node, expression: Node, body: Node, has_await: bool) -> Node {
+pub fn pattern_for_in_element(
+    pattern: Node,
+    expression: Node,
+    body: Node,
+    has_await: bool,
+) -> Node {
     let location = Location::caller();
     Node::alloc(
         NodeKind::PatternForInElement {
@@ -1790,7 +2089,10 @@ impl Node {
     }
 
     /// `checkExpressionTypeAnalysisResult(checker)`.
-    pub fn check_expression_type_analysis_result(self, checker: impl Fn(&ExprResultDetail) + 'static) -> Node {
+    pub fn check_expression_type_analysis_result(
+        self,
+        checker: impl Fn(&ExprResultDetail) + 'static,
+    ) -> Node {
         self.expect_category(Category::Expression, "checkExpressionTypeAnalysisResult");
         self.update(|d| d.check_expression_result = Some(Rc::new(checker)));
         self
@@ -1992,7 +2294,10 @@ impl Node {
     #[track_caller]
     pub fn parenthesized(self) -> Node {
         if self.category() == Category::Pattern {
-            Node::alloc(NodeKind::ParenthesizedPattern { inner: self }, Location::caller())
+            Node::alloc(
+                NodeKind::ParenthesizedPattern { inner: self },
+                Location::caller(),
+            )
         } else {
             Node::alloc(
                 NodeKind::ParenthesizedExpression {
@@ -2056,7 +2361,10 @@ impl Node {
     pub fn as_(self, type_str: &str) -> Node {
         let ty = Type::parse(type_str);
         if self.category() == Category::Pattern {
-            Node::alloc(NodeKind::CastPattern { inner: self, ty }, Location::caller())
+            Node::alloc(
+                NodeKind::CastPattern { inner: self, ty },
+                Location::caller(),
+            )
         } else {
             Node::alloc(
                 NodeKind::As {
@@ -2389,7 +2697,9 @@ impl Node {
         };
         assert!(finally_statement.is_none(), "catch after finally");
         if exception.is_none() && stack_trace.is_some() {
-            panic!("If a stack trace variable is provided, an exception variable must be provided too");
+            panic!(
+                "If a stack trace variable is provided, an exception variable must be provided too"
+            );
         }
         if exception.is_none() && ty.is_none() {
             panic!("If no exception variable is provided, an exception type must be provided");

@@ -30,6 +30,7 @@ use dartr_flow::null_shorting::TypeAnalysisNullShortingInterface;
 use dartr_flow::shared_type::{
     SharedTypeKind, SharedTypeOperations, SharedTypeSchemaView, SharedTypeView,
 };
+use dartr_flow::type_analysis_result::UnnecessaryWildcardKind;
 use dartr_flow::type_analysis_result::{ExpressionTypeAnalysisResult, PatternResult};
 use dartr_flow::type_analyzer::{
     CaseHeadOrDefaultInfo, JoinedPatternVariableInconsistency, JoinedPatternVariableLocation,
@@ -38,7 +39,6 @@ use dartr_flow::type_analyzer::{
     SwitchStatementMemberInfo, TypeAnalyzer, TypeAnalyzerErrors, TypeAnalyzerErrorsBase,
     TypeAnalyzerOptions,
 };
-use dartr_flow::type_analysis_result::UnnecessaryWildcardKind;
 use dartr_flow::type_analyzer_operations::{KeyValueTypes, TypeAnalyzerOperations};
 use dartr_flow::variable_bindings::{VariableBinder, VariableBinderErrors};
 use dartr_type_analyzer::variable_bindings::VariableBinderState;
@@ -47,9 +47,8 @@ use super::mini_flow::MiniFlow;
 use super::mini_ir::{Kind, MiniIrBuilder, MiniIrTmp};
 use super::mini_types::{Name, Type, TypeKind};
 use super::node::{
-    loc_str, take_unused_error_ids, CatchClause, CollectionElementContext, ExprResult,
-    ExprResultDetail, Label, StmtResultDetail,
-    Node, NodeKind, Promotable, PropertyElement, Var,
+    CatchClause, CollectionElementContext, ExprResult, ExprResultDetail, Label, Node, NodeKind,
+    Promotable, PropertyElement, StmtResultDetail, Var, loc_str, take_unused_error_ids,
 };
 use super::operations::MiniAstOperations;
 
@@ -208,7 +207,12 @@ impl TypeAnalyzerErrors for MiniAstErrors {
         );
     }
 
-    fn duplicate_rest_pattern(&mut self, map_or_list_pattern: Node, original: Node, duplicate: Node) {
+    fn duplicate_rest_pattern(
+        &mut self,
+        map_or_list_pattern: Node,
+        original: Node,
+        duplicate: Node,
+    ) {
         self.record_error(
             "duplicateRestPattern",
             vec![
@@ -233,7 +237,11 @@ impl TypeAnalyzerErrors for MiniAstErrors {
         );
     }
 
-    fn matched_type_is_strictly_non_nullable(&mut self, pattern: Node, matched_type: View) -> Option<()> {
+    fn matched_type_is_strictly_non_nullable(
+        &mut self,
+        pattern: Node,
+        matched_type: View,
+    ) -> Option<()> {
         self.record_error(
             "matchedTypeIsStrictlyNonNullable",
             vec![
@@ -301,7 +309,10 @@ impl TypeAnalyzerErrors for MiniAstErrors {
     fn refutable_pattern_in_irrefutable_context(&mut self, pattern: Node, context: Node) {
         self.record_error(
             "refutablePatternInIrrefutableContext",
-            vec![("pattern", Arg::Node(pattern)), ("context", Arg::Node(context))],
+            vec![
+                ("pattern", Arg::Node(pattern)),
+                ("context", Arg::Node(context)),
+            ],
         );
     }
 
@@ -345,7 +356,10 @@ impl TypeAnalyzerErrors for MiniAstErrors {
     fn switch_case_completes_normally(&mut self, node: Node, case_index: usize) {
         self.record_error(
             "switchCaseCompletesNormally",
-            vec![("node", Arg::Node(node)), ("caseIndex", Arg::Int(case_index))],
+            vec![
+                ("node", Arg::Node(node)),
+                ("caseIndex", Arg::Int(case_index)),
+            ],
         );
     }
 
@@ -428,9 +442,15 @@ impl VariableBinder for MiniVariableBinder {
             .iter()
             .map(|c| c.identity())
             .collect();
-        assert_eq!(identities, expected_identities, "at {}", joined_variable.location());
         assert_eq!(
-            components, join.expected_components,
+            identities,
+            expected_identities,
+            "at {}",
+            joined_variable.location()
+        );
+        assert_eq!(
+            components,
+            join.expected_components,
             "at {}",
             joined_variable.location()
         );
@@ -798,7 +818,8 @@ impl PreVisitor<'_> {
         if has_labels {
             binder.switch_statement_shared_case_scope_empty(&member);
         }
-        let candidate = binder.switch_statement_shared_case_scope_finish(&mut MiniVariableBinder, member);
+        let candidate =
+            binder.switch_statement_shared_case_scope_finish(&mut MiniVariableBinder, member);
         member.update_kind(|k| {
             if let NodeKind::SwitchStatementMember {
                 candidate_variables,
@@ -812,7 +833,12 @@ impl PreVisitor<'_> {
     }
 
     /// `Pattern.preVisit` (and `ListOrMapPatternElement.preVisit`).
-    pub fn pre_visit_pattern(&mut self, node: Node, binder: &mut BinderState, is_in_assignment: bool) {
+    pub fn pre_visit_pattern(
+        &mut self,
+        node: Node,
+        binder: &mut BinderState,
+        is_in_assignment: bool,
+    ) {
         use NodeKind::*;
         match node.kind() {
             CastPattern { inner, .. }
@@ -835,9 +861,15 @@ impl PreVisitor<'_> {
                 self.pre_visit_pattern(lhs, binder, is_in_assignment);
                 binder.logical_or_pattern_finish_left();
                 self.pre_visit_pattern(rhs, binder, is_in_assignment);
-                binder.logical_or_pattern_finish(&mut MiniVariableBinder, Some(&mut *self.errors), node);
+                binder.logical_or_pattern_finish(
+                    &mut MiniVariableBinder,
+                    Some(&mut *self.errors),
+                    node,
+                );
             }
-            MapPatternEntry { value, .. } => self.pre_visit_pattern(value, binder, is_in_assignment),
+            MapPatternEntry { value, .. } => {
+                self.pre_visit_pattern(value, binder, is_in_assignment)
+            }
             ObjectPattern { fields, .. } | RecordPattern { fields } => {
                 for field in fields {
                     let RecordPatternField { pattern, .. } = field.kind() else {
@@ -991,7 +1023,8 @@ impl Harness {
 
     /// `addExtensionTypeErasure(type, representation)`.
     pub fn add_extension_type_erasure(&mut self, ty: &str, representation: &str) {
-        self.operations.add_extension_type_erasure(ty, representation);
+        self.operations
+            .add_extension_type_erasure(ty, representation);
     }
 
     /// `addLub(type1, type2, resultType)`.
@@ -1149,14 +1182,10 @@ impl Harness {
             type_analyzer_options: self.compute_type_analyzer_options(),
             current_cascade_target_ir: None,
             current_cascade_target_type: None,
-            body_context: Some(
-                options
-                    .body_context
-                    .unwrap_or(BodyContext {
-                        is_async: false,
-                        yield_context: super::mini_types::UnknownType::new(),
-                    }),
-            ),
+            body_context: Some(options.body_context.unwrap_or(BodyContext {
+                is_async: false,
+                yield_context: super::mini_types::UnknownType::new(),
+            })),
             guards: Vec::new(),
             dot_shorthands: Vec::new(),
             pending_detail: None,
@@ -1270,7 +1299,8 @@ impl MiniAstTypeAnalyzer {
     fn analyze_assert_statement(&mut self, node: Node, condition: Node, message: Option<Node>) {
         self.flow.assert_begin();
         let unknown = self.unknown();
-        let condition_analysis_result = self.analyze_expression(condition, unknown, false, false, false);
+        let condition_analysis_result =
+            self.analyze_expression(condition, unknown, false, false, false);
         self.flow
             .assert_after_condition(condition_analysis_result.flow_analysis_info);
         match message {
@@ -1282,7 +1312,13 @@ impl MiniAstTypeAnalyzer {
         self.flow.assert_end();
     }
 
-    fn analyze_binary_expression(&mut self, node: Node, lhs: Node, operator_name: &str, rhs: Node) -> ExprResult {
+    fn analyze_binary_expression(
+        &mut self,
+        node: Node,
+        lhs: Node,
+        operator_name: &str,
+        rhs: Node,
+    ) -> ExprResult {
         let mut is_equals = false;
         let mut is_not = false;
         let mut is_logical = false;
@@ -1369,14 +1405,17 @@ impl MiniAstTypeAnalyzer {
     ) -> ExprResult {
         self.flow.conditional_condition_begin();
         let unknown = self.unknown();
-        let condition_analysis_result = self.analyze_expression(condition, unknown, false, false, false);
+        let condition_analysis_result =
+            self.analyze_expression(condition, unknown, false, false, false);
         self.flow
             .conditional_then_begin(condition_analysis_result.flow_analysis_info, node);
-        let if_true_analysis_result = self.analyze_expression(if_true, unknown, false, false, false);
+        let if_true_analysis_result =
+            self.analyze_expression(if_true, unknown, false, false, false);
         let if_true_type = if_true_analysis_result.type_;
         self.flow
             .conditional_else_begin(if_true_analysis_result.flow_analysis_info, if_true_type);
-        let if_false_analysis_result = self.analyze_expression(if_false, unknown, false, false, false);
+        let if_false_analysis_result =
+            self.analyze_expression(if_false, unknown, false, false, false);
         let if_false_type = if_false_analysis_result.type_;
         let lub_type = self.operations.lub(if_true_type, if_false_type);
         self.flow.conditional_end(
@@ -1395,12 +1434,17 @@ impl MiniAstTypeAnalyzer {
         self.visit_loop_body(node, body);
         self.flow.do_statement_condition_begin();
         let unknown = self.unknown();
-        let condition_analysis_result = self.analyze_expression(condition, unknown, false, false, false);
+        let condition_analysis_result =
+            self.analyze_expression(condition, unknown, false, false, false);
         self.flow
             .do_statement_end(condition_analysis_result.flow_analysis_info);
     }
 
-    fn analyze_dot_shorthand_expression(&mut self, expression: Node, schema: SchemaView) -> ExprResult {
+    fn analyze_dot_shorthand_expression(
+        &mut self,
+        expression: Node,
+        schema: SchemaView,
+    ) -> ExprResult {
         let ty = self.analyze_dot_shorthand(expression, schema);
         ExpressionTypeAnalysisResult::new(ty)
     }
@@ -1422,7 +1466,9 @@ impl MiniAstTypeAnalyzer {
         let left_type = left_analysis_result.type_;
         self.flow
             .if_null_expression_right_begin(left_analysis_result.flow_analysis_info, left_type);
-        let right_type = self.analyze_expression(rhs, unknown, false, false, false).type_;
+        let right_type = self
+            .analyze_expression(rhs, unknown, false, false, false)
+            .type_;
         self.flow.if_null_expression_end();
         let ops = self.ops();
         ExpressionTypeAnalysisResult::new(ops.lub(ops.promote_to_non_null(left_type), right_type))
@@ -1436,7 +1482,8 @@ impl MiniAstTypeAnalyzer {
 
     fn analyze_logical_not(&mut self, expression: Node) -> ExprResult {
         let unknown = self.unknown();
-        let expression_analysis_result = self.analyze_expression(expression, unknown, false, false, false);
+        let expression_analysis_result =
+            self.analyze_expression(expression, unknown, false, false, false);
         let flow_analysis_info = self
             .flow
             .logical_not_end(expression_analysis_result.flow_analysis_info);
@@ -1456,7 +1503,13 @@ impl MiniAstTypeAnalyzer {
     ) -> ExprResult {
         // Analyze the target, generate its IR, and look up the method's type.
         let method_type = self
-            .handle_property_target_and_member_lookup(None, target, method_name, &loc(node), is_null_aware)
+            .handle_property_target_and_member_lookup(
+                None,
+                target,
+                method_name,
+                &loc(node),
+                is_null_aware,
+            )
             .type_
             .unwrap_type_view();
         let mut return_type = self.operations.dynamic_type().unwrap_type_view();
@@ -1491,7 +1544,8 @@ impl MiniAstTypeAnalyzer {
 
     fn analyze_non_null_assert(&mut self, expression: Node) -> ExprResult {
         let unknown = self.unknown();
-        let expression_analysis_result = self.analyze_expression(expression, unknown, true, false, false);
+        let expression_analysis_result =
+            self.analyze_expression(expression, unknown, true, false, false);
         let ty = expression_analysis_result.type_;
         self.flow
             .non_null_assert_end(expression_analysis_result.flow_analysis_info);
@@ -1529,16 +1583,24 @@ impl MiniAstTypeAnalyzer {
     }
 
     fn analyze_this(&mut self) -> ExprResult {
-        let promoted_type_of_this = self.flow.promoted_type_of_this().map(|t| t.unwrap_type_view());
+        let promoted_type_of_this = self
+            .flow
+            .promoted_type_of_this()
+            .map(|t| t.unwrap_type_view());
         let this_type = promoted_type_of_this.unwrap_or_else(|| self.this_type());
-        self.flow.this_or_super(SharedTypeView::new(this_type), false);
+        self.flow
+            .this_or_super(SharedTypeView::new(this_type), false);
         ExpressionTypeAnalysisResult {
             type_: SharedTypeView::new(this_type),
             flow_analysis_info: Some(()),
         }
     }
 
-    fn analyze_this_or_super_property_get(&mut self, property_name: &str, is_super_access: bool) -> ExprResult {
+    fn analyze_this_or_super_property_get(
+        &mut self,
+        property_name: &str,
+        is_super_access: bool,
+    ) -> ExprResult {
         let member = self.lookup_member(self.this_type(), property_name);
         let member_type = member
             .as_ref()
@@ -1605,11 +1667,12 @@ impl MiniAstTypeAnalyzer {
         }
         match finally_block {
             Some(finally_block) => {
-                self.flow.try_finally_statement_finally_begin(if catch_clauses.is_empty() {
-                    body
-                } else {
-                    node
-                });
+                self.flow
+                    .try_finally_statement_finally_begin(if catch_clauses.is_empty() {
+                        body
+                    } else {
+                        node
+                    });
                 self.dispatch_statement(finally_block);
                 self.flow.try_finally_statement_end();
             }
@@ -1619,7 +1682,8 @@ impl MiniAstTypeAnalyzer {
 
     fn analyze_type_cast(&mut self, expression: Node, ty: Type) -> ExprResult {
         let unknown = self.unknown();
-        let sub_expression_analysis_result = self.analyze_expression(expression, unknown, false, false, false);
+        let sub_expression_analysis_result =
+            self.analyze_expression(expression, unknown, false, false, false);
         let sub_expression_type = sub_expression_analysis_result.type_;
         self.flow.as_expression_end(
             sub_expression_analysis_result.flow_analysis_info,
@@ -1631,7 +1695,8 @@ impl MiniAstTypeAnalyzer {
 
     fn analyze_type_test(&mut self, expression: Node, ty: Type, is_inverted: bool) -> ExprResult {
         let unknown = self.unknown();
-        let sub_expression_analysis_result = self.analyze_expression(expression, unknown, false, false, false);
+        let sub_expression_analysis_result =
+            self.analyze_expression(expression, unknown, false, false, false);
         let sub_expression_type = sub_expression_analysis_result.type_;
         let flow_analysis_info = self.flow.is_expression_end(
             sub_expression_analysis_result.flow_analysis_info,
@@ -1645,7 +1710,11 @@ impl MiniAstTypeAnalyzer {
         }
     }
 
-    fn analyze_variable_get(&mut self, variable: Var, callback: Option<super::node::PromotedTypeCallback>) -> ExprResult {
+    fn analyze_variable_get(
+        &mut self,
+        variable: Var,
+        callback: Option<super::node::PromotedTypeCallback>,
+    ) -> ExprResult {
         let (promoted_type, flow_analysis_info) = self.flow.variable_read(variable);
         if let Some(callback) = callback {
             callback(promoted_type.map(|t| t.unwrap_type_view()));
@@ -1659,14 +1728,19 @@ impl MiniAstTypeAnalyzer {
     fn analyze_while_loop(&mut self, node: Node, condition: Node, body: Node) {
         self.flow.while_statement_condition_begin(node);
         let unknown = self.unknown();
-        let condition_analysis_result = self.analyze_expression(condition, unknown, false, false, false);
+        let condition_analysis_result =
+            self.analyze_expression(condition, unknown, false, false, false);
         self.flow
             .while_statement_body_begin(node, condition_analysis_result.flow_analysis_info);
         self.visit_loop_body(node, body);
         self.flow.while_statement_end();
     }
 
-    fn create_null_aware_guard(&mut self, target: Node, target_analysis_result: ExprResult) -> ExprResult {
+    fn create_null_aware_guard(
+        &mut self,
+        target: Node,
+        target_analysis_result: ExprResult,
+    ) -> ExprResult {
         let tmp = self.ir_builder.allocate_tmp(&loc(target));
         let flow_analysis_info = self.start_null_shorting(
             tmp.clone(),
@@ -1676,7 +1750,9 @@ impl MiniAstTypeAnalyzer {
         );
         self.ir_builder.read_tmp(&tmp, &loc(target));
         ExpressionTypeAnalysisResult {
-            type_: self.operations.promote_to_non_null(target_analysis_result.type_),
+            type_: self
+                .operations
+                .promote_to_non_null(target_analysis_result.type_),
             flow_analysis_info,
         }
     }
@@ -1686,10 +1762,21 @@ impl MiniAstTypeAnalyzer {
         self.flow.finish();
     }
 
-    fn handle_assigned_variable_pattern(&mut self, node: Node, variable: Var, expect_inferred_type: Option<String>) {
-        self.ir_builder.atom(variable.name(), Kind::Variable, &loc(node));
+    fn handle_assigned_variable_pattern(
+        &mut self,
+        node: Node,
+        variable: Var,
+        expect_inferred_type: Option<String>,
+    ) {
         self.ir_builder
-            .apply("assignedVarPattern", &[Kind::Variable], Kind::Pattern, &loc(node), &[]);
+            .atom(variable.name(), Kind::Variable, &loc(node));
+        self.ir_builder.apply(
+            "assignedVarPattern",
+            &[Kind::Variable],
+            Kind::Pattern,
+            &loc(node),
+            &[],
+        );
         assert!(
             expect_inferred_type.is_none(),
             "assigned variable patterns don't get an inferred type"
@@ -1705,7 +1792,8 @@ impl MiniAstTypeAnalyzer {
         static_type: Type,
     ) {
         let location = loc(node);
-        self.ir_builder.atom(variable.name(), Kind::Variable, &location);
+        self.ir_builder
+            .atom(variable.name(), Kind::Variable, &location);
         self.ir_builder
             .atom(&matched_type.type_string(), Kind::Type, &location);
         self.ir_builder
@@ -1736,7 +1824,8 @@ impl MiniAstTypeAnalyzer {
     }
 
     fn handle_no_message(&mut self, node: Node) {
-        self.ir_builder.atom("failure", Kind::Expression, &loc(node));
+        self.ir_builder
+            .atom("failure", Kind::Expression, &loc(node));
     }
 
     /// `lookupInterfaceMember` / `_lookupMember`.
@@ -1785,12 +1874,18 @@ impl MiniAstTypeAnalyzer {
         }
         let member = self.get_member(matched_value_type, operator)?;
         let member_type = member.ty;
-        let Some(function_type) = member_type.as_function_type().filter(|_| !member_type.is_question_type())
+        let Some(function_type) = member_type
+            .as_function_type()
+            .filter(|_| !member_type.is_question_type())
         else {
-            panic!("{matched_value_type}.operator{operator} has type {member_type}; must be a function type");
+            panic!(
+                "{matched_value_type}.operator{operator} has type {member_type}; must be a function type"
+            );
         };
         if function_type.positional_parameters.is_empty() {
-            panic!("{matched_value_type}.operator{operator} has type {member_type}; must accept a parameter");
+            panic!(
+                "{matched_value_type}.operator{operator} has type {member_type}; must accept a parameter"
+            );
         }
         Some(RelationalOperatorResolution {
             kind: RelationalOperatorKind::Other,
@@ -1832,18 +1927,24 @@ impl MiniAstTypeAnalyzer {
                 // an implicit read of the temporary variable holding the
                 // cascade target.
                 property_target = PropertyTarget::Cascade;
-                let tmp = self.current_cascade_target_ir.clone().expect("cascade target");
+                let tmp = self
+                    .current_cascade_target_ir
+                    .clone()
+                    .expect("cascade target");
                 self.ir_builder.read_tmp(&tmp, location);
                 target_type = self.current_cascade_target_type.expect("cascade type");
             }
             Some(target) => {
                 let unknown = self.unknown();
-                let mut target_analysis_result = self.analyze_expression(target, unknown, true, false, false);
+                let mut target_analysis_result =
+                    self.analyze_expression(target, unknown, true, false, false);
                 if is_null_aware {
-                    target_analysis_result = self.create_null_aware_guard(target, target_analysis_result);
+                    target_analysis_result =
+                        self.create_null_aware_guard(target, target_analysis_result);
                 }
                 target_type = target_analysis_result.type_;
-                property_target = PropertyTarget::Expression(target_analysis_result.flow_analysis_info);
+                property_target =
+                    PropertyTarget::Expression(target_analysis_result.flow_analysis_info);
             }
         }
         // Look up the type of the member, applying type promotion if
@@ -1914,20 +2015,28 @@ impl MiniAstTypeAnalyzer {
             Promotable::Var(variable) => {
                 self.ir_builder
                     .atom(variable.name(), Kind::Expression, &variable.location());
-                self.flow.promoted_type(variable).map(|t| t.unwrap_type_view())
+                self.flow
+                    .promoted_type(variable)
+                    .map(|t| t.unwrap_type_view())
             }
             Promotable::Node(node) => match node.kind() {
                 NodeKind::This => {
                     self.ir_builder.atom("this", Kind::Expression, &loc(node));
-                    self.flow.promoted_type_of_this().map(|t| t.unwrap_type_view())
+                    self.flow
+                        .promoted_type_of_this()
+                        .map(|t| t.unwrap_type_view())
                 }
                 NodeKind::Property {
                     target,
                     property_name,
                     is_null_aware,
                 } => {
-                    let (member, flow_analysis_info) =
-                        self.compute_member_and_flow_analysis_info(node, target, &property_name, is_null_aware);
+                    let (member, flow_analysis_info) = self.compute_member_and_flow_analysis_info(
+                        node,
+                        target,
+                        &property_name,
+                        is_null_aware,
+                    );
                     let member_type = member.as_ref().expect("member").ty;
                     self.flow
                         .promoted_property_type(
@@ -1942,7 +2051,8 @@ impl MiniAstTypeAnalyzer {
                     property_name,
                     is_super_access,
                 } => {
-                    let member = self.compute_this_or_super_member(node, &property_name, is_super_access);
+                    let member =
+                        self.compute_this_or_super_member(node, &property_name, is_super_access);
                     let member_type = member.as_ref().expect("member").ty;
                     self.flow
                         .promoted_property_type(
@@ -1987,8 +2097,12 @@ impl MiniAstTypeAnalyzer {
                     property_name,
                     is_null_aware,
                 } => {
-                    let (member, flow_analysis_info) =
-                        self.compute_member_and_flow_analysis_info(node, target, &property_name, is_null_aware);
+                    let (member, flow_analysis_info) = self.compute_member_and_flow_analysis_info(
+                        node,
+                        target,
+                        &property_name,
+                        is_null_aware,
+                    );
                     self.flow
                         .property_promotion_chain_for_testing(
                             PropertyTarget::Expression(flow_analysis_info),
@@ -2003,7 +2117,8 @@ impl MiniAstTypeAnalyzer {
                     property_name,
                     is_super_access,
                 } => {
-                    let member = self.compute_this_or_super_member(node, &property_name, is_super_access);
+                    let member =
+                        self.compute_this_or_super_member(node, &property_name, is_super_access);
                     self.flow
                         .property_promotion_chain_for_testing(
                             if is_super_access {
@@ -2066,8 +2181,11 @@ impl MiniAstTypeAnalyzer {
     fn visit_post_inc_dec(&mut self, lhs: Node, post_inc_dec_expression: Node, written_type: Type) {
         match lhs.kind() {
             NodeKind::VariableReference { variable, .. } => {
-                self.flow
-                    .post_inc_dec(post_inc_dec_expression, variable, SharedTypeView::new(written_type));
+                self.flow.post_inc_dec(
+                    post_inc_dec_expression,
+                    variable,
+                    SharedTypeView::new(written_type),
+                );
             }
             NodeKind::Property { is_null_aware, .. } => {
                 // TODO(paulberry): implement null-aware support
@@ -2120,8 +2238,13 @@ impl MiniAstTypeAnalyzer {
             As { target, ty } => self.analyze_type_cast(target, ty),
             Await { operand } => {
                 let result = self.analyze_await_expression(node, operand, schema);
-                self.ir_builder
-                    .apply("awaitExpr", &[Kind::Expression], Kind::Expression, &location, &[]);
+                self.ir_builder.apply(
+                    "awaitExpr",
+                    &[Kind::Expression],
+                    Kind::Expression,
+                    &location,
+                    &[],
+                );
                 let operand_type = result.operand_type.unwrap_type_view();
                 let result: ExprResult = result.into();
                 self.pending_detail = Some(ExprResultDetail {
@@ -2143,7 +2266,8 @@ impl MiniAstTypeAnalyzer {
                 is_null_aware,
             } => {
                 // Form the IR for evaluating the LHS
-                let target_analysis_result = self.analyze_expression(target, schema, false, false, false);
+                let target_analysis_result =
+                    self.analyze_expression(target, schema, false, false, false);
                 let target_type = target_analysis_result.type_;
                 let previous_cascade_target_ir = self.current_cascade_target_ir.take();
                 let previous_cascade_type = self.current_cascade_target_type;
@@ -2211,9 +2335,14 @@ impl MiniAstTypeAnalyzer {
                 }
             }
             CascadePlaceholder => {
-                let tmp = self.current_cascade_target_ir.clone().expect("cascade target");
+                let tmp = self
+                    .current_cascade_target_ir
+                    .clone()
+                    .expect("cascade target");
                 self.ir_builder.read_tmp(&tmp, &location);
-                ExpressionTypeAnalysisResult::new(self.current_cascade_target_type.expect("cascade type"))
+                ExpressionTypeAnalysisResult::new(
+                    self.current_cascade_target_type.expect("cascade type"),
+                )
             }
             CheckAssigned { variable, expected } => {
                 assert_eq!(self.flow.is_assigned(variable), expected, "at {location}");
@@ -2256,7 +2385,8 @@ impl MiniAstTypeAnalyzer {
                 if_true,
                 if_false,
             } => {
-                let result = self.analyze_conditional_expression(node, condition, if_true, if_false);
+                let result =
+                    self.analyze_conditional_expression(node, condition, if_true, if_false);
                 self.ir_builder.apply(
                     "if",
                     &[Kind::Expression, Kind::Expression, Kind::Expression],
@@ -2323,7 +2453,8 @@ impl MiniAstTypeAnalyzer {
             } => {
                 // Analyze the target, and generate its IR.
                 let unknown = self.unknown();
-                let mut target_result = self.analyze_expression(target, unknown, true, false, false);
+                let mut target_result =
+                    self.analyze_expression(target, unknown, true, false, false);
                 if is_null_aware {
                     target_result = self.create_null_aware_guard(target, target_result);
                 }
@@ -2379,7 +2510,13 @@ impl MiniAstTypeAnalyzer {
                 } else {
                     Some(target)
                 };
-                self.analyze_method_invocation(node, target, &method_name, &arguments, is_null_aware)
+                self.analyze_method_invocation(
+                    node,
+                    target,
+                    &method_name,
+                    &arguments,
+                    is_null_aware,
+                )
             }
             Is {
                 target,
@@ -2457,7 +2594,9 @@ impl MiniAstTypeAnalyzer {
                 self.ir_builder.atom("null", Kind::Expression, &location);
                 result
             }
-            ParenthesizedExpression { expr } => self.analyze_expression(expr, schema, false, false, false),
+            ParenthesizedExpression { expr } => {
+                self.analyze_expression(expr, schema, false, false, false)
+            }
             PatternAssignment { lhs, rhs } => {
                 let result = self.analyze_pattern_assignment(node, lhs, rhs);
                 self.ir_builder.apply(
@@ -2478,7 +2617,8 @@ impl MiniAstTypeAnalyzer {
                 result
             }
             PlaceholderExpression { ty } => {
-                self.ir_builder.atom(&ty.type_string(), Kind::Type, &location);
+                self.ir_builder
+                    .atom(&ty.type_string(), Kind::Type, &location);
                 self.ir_builder
                     .apply("expr", &[Kind::Type], Kind::Expression, &location, &[]);
                 ExpressionTypeAnalysisResult::new(SharedTypeView::new(ty))
@@ -2533,7 +2673,9 @@ impl MiniAstTypeAnalyzer {
             Second { first, second } => {
                 let unknown = self.unknown();
                 self.analyze_expression(first, unknown, false, false, false);
-                let ty = self.analyze_expression(second, schema, false, false, false).type_;
+                let ty = self
+                    .analyze_expression(second, schema, false, false, false)
+                    .type_;
                 self.ir_builder.apply(
                     "second",
                     &[Kind::Expression, Kind::Expression],
@@ -2560,7 +2702,8 @@ impl MiniAstTypeAnalyzer {
                 property_name,
                 is_super_access,
             } => {
-                let result = self.analyze_this_or_super_property_get(&property_name, is_super_access);
+                let result =
+                    self.analyze_this_or_super_property_get(&property_name, is_super_access);
                 let this_or_super = if is_super_access { "super" } else { "this" };
                 self.ir_builder.atom(
                     &format!("{this_or_super}.{property_name}"),
@@ -2584,8 +2727,13 @@ impl MiniAstTypeAnalyzer {
                 let mut before_tmp = None;
                 if let Some(before) = before {
                     self.dispatch_statement(before);
-                    self.ir_builder
-                        .apply("expr", &[Kind::Statement], Kind::Expression, &location, &[]);
+                    self.ir_builder.apply(
+                        "expr",
+                        &[Kind::Statement],
+                        Kind::Expression,
+                        &location,
+                        &[],
+                    );
                     before_tmp = Some(self.ir_builder.allocate_tmp(&location));
                 }
                 let unknown = self.unknown();
@@ -2593,8 +2741,13 @@ impl MiniAstTypeAnalyzer {
                 if let Some(after) = after {
                     let expr_tmp = self.ir_builder.allocate_tmp(&location);
                     self.dispatch_statement(after);
-                    self.ir_builder
-                        .apply("expr", &[Kind::Statement], Kind::Expression, &location, &[]);
+                    self.ir_builder.apply(
+                        "expr",
+                        &[Kind::Statement],
+                        Kind::Expression,
+                        &location,
+                        &[],
+                    );
                     let after_tmp = self.ir_builder.allocate_tmp(&location);
                     self.ir_builder.read_tmp(&expr_tmp, &location);
                     self.ir_builder.let_(&after_tmp, &location);
@@ -2607,7 +2760,8 @@ impl MiniAstTypeAnalyzer {
             }
             Write { lhs, rhs } => {
                 let unknown = self.unknown();
-                let rhs_analysis_result = self.analyze_expression(rhs, unknown, false, false, false);
+                let rhs_analysis_result =
+                    self.analyze_expression(rhs, unknown, false, false, false);
                 let flow_analysis_info = self.visit_write(
                     lhs,
                     node,
@@ -2723,7 +2877,12 @@ impl MiniAstTypeAnalyzer {
                 self.flow.for_end();
                 self.ir_builder.apply(
                     "for",
-                    &[Kind::Statement, Kind::Expression, Kind::Statement, Kind::Expression],
+                    &[
+                        Kind::Statement,
+                        Kind::Expression,
+                        Kind::Statement,
+                        Kind::Expression,
+                    ],
                     Kind::Statement,
                     &location,
                     &[],
@@ -2811,9 +2970,13 @@ impl MiniAstTypeAnalyzer {
                 body,
                 has_await,
             } => {
-                self.analyze_pattern_for_in(node, has_await, pattern, expression, &mut |a: &mut Self| {
-                    a.dispatch_statement(body)
-                });
+                self.analyze_pattern_for_in(
+                    node,
+                    has_await,
+                    pattern,
+                    expression,
+                    &mut |a: &mut Self| a.dispatch_statement(body),
+                );
                 self.ir_builder.apply(
                     "forEach",
                     &[Kind::Expression, Kind::Pattern, Kind::Statement],
@@ -2864,10 +3027,16 @@ impl MiniAstTypeAnalyzer {
                 self.current_continue_target = Some(node);
                 let analysis_result = self.analyze_switch_statement(node, scrutinee, cases.len());
                 if let Some(expected) = expect_has_default {
-                    assert_eq!(analysis_result.has_default, expected, "hasDefault at {location}");
+                    assert_eq!(
+                        analysis_result.has_default, expected,
+                        "hasDefault at {location}"
+                    );
                 }
                 if let Some(expected) = expect_is_exhaustive {
-                    assert_eq!(analysis_result.is_exhaustive, expected, "isExhaustive at {location}");
+                    assert_eq!(
+                        analysis_result.is_exhaustive, expected,
+                        "isExhaustive at {location}"
+                    );
                 }
                 if let Some(expected) = expect_last_case_terminates {
                     assert_eq!(
@@ -2883,7 +3052,10 @@ impl MiniAstTypeAnalyzer {
                 }
                 if let Some(expected) = expect_scrutinee_type {
                     assert_eq!(
-                        analysis_result.scrutinee_type.unwrap_type_view().type_string(),
+                        analysis_result
+                            .scrutinee_type
+                            .unwrap_type_view()
+                            .type_string(),
                         expected,
                         "scrutineeType at {location}"
                     );
@@ -2957,7 +3129,9 @@ impl MiniAstTypeAnalyzer {
                         static_type = match declared_type {
                             Some(declared_type) => declared_type,
                             None => self
-                                .variable_type_from_initializer_type(SharedTypeView::new(initializer_type))
+                                .variable_type_from_initializer_type(SharedTypeView::new(
+                                    initializer_type,
+                                ))
                                 .unwrap_type_view(),
                         };
                         variable.set_type(static_type);
@@ -2972,8 +3146,11 @@ impl MiniAstTypeAnalyzer {
                             declared_type.is_none(),
                             false,
                         );
-                        self.ir_builder
-                            .atom(&initializer_type.type_string(), Kind::Type, &location);
+                        self.ir_builder.atom(
+                            &initializer_type.type_string(),
+                            Kind::Type,
+                            &location,
+                        );
                         self.ir_builder
                             .atom(&static_type.type_string(), Kind::Type, &location);
                         arg_kinds = vec![Kind::Variable, Kind::Expression, Kind::Type, Kind::Type];
@@ -2983,7 +3160,11 @@ impl MiniAstTypeAnalyzer {
                 // Finally, double check the inferred variable type, if
                 // necessary for the test.
                 if let Some(expect_inferred_type) = expect_inferred_type {
-                    assert_eq!(static_type.type_string(), expect_inferred_type, "at {location}");
+                    assert_eq!(
+                        static_type.type_string(),
+                        expect_inferred_type,
+                        "at {location}"
+                    );
                 }
                 let mut ir_name = vec!["declare"];
                 if is_late {
@@ -3018,8 +3199,13 @@ impl MiniAstTypeAnalyzer {
                 self.pending_statement_detail = Some(StmtResultDetail {
                     operand_type: Some(result.operand_type.unwrap_type_view()),
                 });
-                self.ir_builder
-                    .apply("yieldStmt", &[Kind::Expression], Kind::Statement, &location, &[]);
+                self.ir_builder.apply(
+                    "yieldStmt",
+                    &[Kind::Expression],
+                    Kind::Statement,
+                    &location,
+                    &[],
+                );
             }
             other => panic!("{} is not a statement", other.class_name()),
         }
@@ -3079,7 +3265,11 @@ impl MiniAstTypeAnalyzer {
                 self.analyze_if_element(node, condition, if_true, if_false, context);
                 self.ir_builder.apply(
                     "if",
-                    &[Kind::Expression, Kind::CollectionElement, Kind::CollectionElement],
+                    &[
+                        Kind::Expression,
+                        Kind::CollectionElement,
+                        Kind::CollectionElement,
+                    ],
                     Kind::CollectionElement,
                     &location,
                     &[],
@@ -3100,7 +3290,8 @@ impl MiniAstTypeAnalyzer {
                     ),
                     _ => (self.unknown(), self.unknown()),
                 };
-                let key_analysis_result = self.analyze_expression(key, key_schema, false, false, false);
+                let key_analysis_result =
+                    self.analyze_expression(key, key_schema, false, false, false);
                 let key_type = key_analysis_result.type_;
                 self.flow.null_aware_map_entry_value_begin(
                     key_analysis_result.flow_analysis_info,
@@ -3123,9 +3314,13 @@ impl MiniAstTypeAnalyzer {
                 body,
                 has_await,
             } => {
-                self.analyze_pattern_for_in(node, has_await, pattern, expression, &mut |a: &mut Self| {
-                    a.dispatch_collection_element(body, context)
-                });
+                self.analyze_pattern_for_in(
+                    node,
+                    has_await,
+                    pattern,
+                    expression,
+                    &mut |a: &mut Self| a.dispatch_collection_element(body, context),
+                );
                 self.ir_builder.apply(
                     "forEach",
                     &[Kind::Expression, Kind::Pattern, Kind::CollectionElement],
@@ -3139,14 +3334,20 @@ impl MiniAstTypeAnalyzer {
     }
 
     /// `Pattern.visit`.
-    pub fn visit_pattern(&mut self, context: &SharedMatchContext, node: Node) -> PatternResult<Type> {
+    pub fn visit_pattern(
+        &mut self,
+        context: &SharedMatchContext,
+        node: Node,
+    ) -> PatternResult<Type> {
         use NodeKind::*;
         let location = loc(node);
         match node.kind() {
             CastPattern { inner, ty } => {
-                let analysis_result = self.analyze_cast_pattern(context, node, inner, SharedTypeView::new(ty));
+                let analysis_result =
+                    self.analyze_cast_pattern(context, node, inner, SharedTypeView::new(ty));
                 let matched_type = analysis_result.matched_value_type.unwrap_type_view();
-                self.ir_builder.atom(&ty.type_string(), Kind::Type, &location);
+                self.ir_builder
+                    .atom(&ty.type_string(), Kind::Type, &location);
                 self.ir_builder
                     .atom(&matched_type.type_string(), Kind::Type, &location);
                 self.ir_builder.apply(
@@ -3176,8 +3377,12 @@ impl MiniAstTypeAnalyzer {
                 element_type,
                 elements,
             } => {
-                let list_pattern_result =
-                    self.analyze_list_pattern(context, node, element_type.map(SharedTypeView::new), &elements);
+                let list_pattern_result = self.analyze_list_pattern(
+                    context,
+                    node,
+                    element_type.map(SharedTypeView::new),
+                    &elements,
+                );
                 let matched_type = list_pattern_result.matched_value_type.unwrap_type_view();
                 let required_type = list_pattern_result.required_type.unwrap_type_view();
                 self.ir_builder
@@ -3231,7 +3436,8 @@ impl MiniAstTypeAnalyzer {
                     key_type: SharedTypeView::new(k),
                     value_type: SharedTypeView::new(v),
                 });
-                let map_pattern_result = self.analyze_map_pattern(context, node, type_arguments, &elements);
+                let map_pattern_result =
+                    self.analyze_map_pattern(context, node, type_arguments, &elements);
                 let matched_type = map_pattern_result.matched_value_type.unwrap_type_view();
                 let required_type = map_pattern_result.required_type.unwrap_type_view();
                 self.ir_builder
@@ -3250,7 +3456,8 @@ impl MiniAstTypeAnalyzer {
                 map_pattern_result.into()
             }
             NullCheckOrAssertPattern { inner, is_assert } => {
-                let analysis_result = self.analyze_null_check_or_assert_pattern(context, node, inner, is_assert);
+                let analysis_result =
+                    self.analyze_null_check_or_assert_pattern(context, node, inner, is_assert);
                 let matched_type = analysis_result.matched_value_type.unwrap_type_view();
                 self.ir_builder
                     .atom(&matched_type.type_string(), Kind::Type, &location);
@@ -3269,7 +3476,8 @@ impl MiniAstTypeAnalyzer {
             }
             ObjectPattern { fields, .. } => {
                 let fields_info = Self::record_pattern_fields(&fields);
-                let object_pattern_result = self.analyze_object_pattern(context, node, &fields_info);
+                let object_pattern_result =
+                    self.analyze_object_pattern(context, node, &fields_info);
                 let matched_type = object_pattern_result.matched_value_type.unwrap_type_view();
                 let required_type = object_pattern_result.required_type.unwrap_type_view();
                 self.ir_builder
@@ -3290,7 +3498,8 @@ impl MiniAstTypeAnalyzer {
             ParenthesizedPattern { inner } => self.visit_pattern(context, inner),
             RecordPattern { fields } => {
                 let fields_info = Self::record_pattern_fields(&fields);
-                let record_pattern_result = self.analyze_record_pattern(context, node, &fields_info);
+                let record_pattern_result =
+                    self.analyze_record_pattern(context, node, &fields_info);
                 let matched_type = record_pattern_result.matched_value_type.unwrap_type_view();
                 let required_type = record_pattern_result.required_type.unwrap_type_view();
                 self.ir_builder
@@ -3329,7 +3538,8 @@ impl MiniAstTypeAnalyzer {
                 is_assigned_variable,
             } => {
                 if is_assigned_variable.expect("isAssignedVariable (preVisit)") {
-                    let analysis_result = self.analyze_assigned_variable_pattern(context, node, variable);
+                    let analysis_result =
+                        self.analyze_assigned_variable_pattern(context, node, variable);
                     self.handle_assigned_variable_pattern(node, variable, expect_inferred_type);
                     analysis_result.into()
                 } else {
@@ -3343,7 +3553,9 @@ impl MiniAstTypeAnalyzer {
                     let matched_type = declared_variable_pattern_result
                         .matched_value_type
                         .unwrap_type_view();
-                    let static_type = declared_variable_pattern_result.static_type.unwrap_type_view();
+                    let static_type = declared_variable_pattern_result
+                        .static_type
+                        .unwrap_type_view();
                     self.handle_declared_variable_pattern(
                         node,
                         variable,
@@ -3358,8 +3570,11 @@ impl MiniAstTypeAnalyzer {
                 declared_type,
                 expect_inferred_type,
             } => {
-                let analysis_result =
-                    self.analyze_wildcard_pattern(context, node, declared_type.map(SharedTypeView::new));
+                let analysis_result = self.analyze_wildcard_pattern(
+                    context,
+                    node,
+                    declared_type.map(SharedTypeView::new),
+                );
                 let matched_type = analysis_result.matched_value_type.unwrap_type_view();
                 self.ir_builder
                     .atom(&matched_type.type_string(), Kind::Type, &location);
@@ -3371,7 +3586,11 @@ impl MiniAstTypeAnalyzer {
                     &["matchedType"],
                 );
                 if let Some(expect_inferred_type) = expect_inferred_type {
-                    assert_eq!(matched_type.type_string(), expect_inferred_type, "at {location}");
+                    assert_eq!(
+                        matched_type.type_string(),
+                        expect_inferred_type,
+                        "at {location}"
+                    );
                 }
                 analysis_result.into()
             }
@@ -3422,7 +3641,9 @@ impl MiniAstTypeAnalyzer {
                 if is_assigned_variable.expect("isAssignedVariable (preVisit)") {
                     self.analyze_assigned_variable_pattern_schema(variable)
                 } else {
-                    self.analyze_declared_variable_pattern_schema(declared_type.map(SharedTypeView::new))
+                    self.analyze_declared_variable_pattern_schema(
+                        declared_type.map(SharedTypeView::new),
+                    )
                 }
             }
             WildcardPattern { declared_type, .. } => {
@@ -3498,7 +3719,8 @@ impl TypeAnalyzer for MiniAstTypeAnalyzer {
         self.pending_detail = None;
         let result = self.visit_expression(expression, schema);
         let detail = self.pending_detail.take();
-        self.ir_builder.guard_end(guard, &|| format!("{expression:?}"));
+        self.ir_builder
+            .guard_end(guard, &|| format!("{expression:?}"));
         if let Some(checker) = &data.check_expression_result {
             checker(&detail.unwrap_or(ExprResultDetail {
                 result: result.clone(),
@@ -3522,7 +3744,11 @@ impl TypeAnalyzer for MiniAstTypeAnalyzer {
         result
     }
 
-    fn dispatch_pattern(&mut self, context: &SharedMatchContext, pattern: Node) -> PatternResult<Type> {
+    fn dispatch_pattern(
+        &mut self,
+        context: &SharedMatchContext,
+        pattern: Node,
+    ) -> PatternResult<Type> {
         self.visit_pattern(context, pattern)
     }
 
@@ -3535,7 +3761,8 @@ impl TypeAnalyzer for MiniAstTypeAnalyzer {
         self.pending_statement_detail = None;
         self.visit_statement(statement);
         let detail = self.pending_statement_detail.take().unwrap_or_default();
-        self.ir_builder.guard_end(guard, &|| format!("{statement:?}"));
+        self.ir_builder
+            .guard_end(guard, &|| format!("{statement:?}"));
         let data = statement.data();
         if let Some(checker) = &data.check_statement_result {
             checker(&detail);
@@ -3546,7 +3773,11 @@ impl TypeAnalyzer for MiniAstTypeAnalyzer {
         }
     }
 
-    fn downward_infer_object_pattern_required_type(&mut self, matched_type: View, pattern: Node) -> View {
+    fn downward_infer_object_pattern_required_type(
+        &mut self,
+        matched_type: View,
+        pattern: Node,
+    ) -> View {
         let NodeKind::ObjectPattern { required_type, .. } = pattern.kind() else {
             panic!("{pattern:?} is not an object pattern");
         };
@@ -3773,8 +4004,13 @@ impl TypeAnalyzer for MiniAstTypeAnalyzer {
             unreachable!()
         };
         if sub_pattern.is_some() {
-            self.ir_builder
-                .apply("...", &[Kind::Pattern], Kind::Pattern, &loc(rest_element), &[]);
+            self.ir_builder.apply(
+                "...",
+                &[Kind::Pattern],
+                Kind::Pattern,
+                &loc(rest_element),
+                &[],
+            );
         } else {
             self.ir_builder
                 .atom("...", Kind::Pattern, &loc(rest_element));
@@ -3809,7 +4045,12 @@ impl TypeAnalyzer for MiniAstTypeAnalyzer {
         }
     }
 
-    fn handle_merged_statement_case(&mut self, node: Node, case_index: usize, is_terminating: bool) {
+    fn handle_merged_statement_case(
+        &mut self,
+        node: Node,
+        case_index: usize,
+        is_terminating: bool,
+    ) {
         let NodeKind::SwitchStatement { cases, .. } = node.kind() else {
             unreachable!()
         };
@@ -3851,7 +4092,13 @@ impl TypeAnalyzer for MiniAstTypeAnalyzer {
         self.ir_builder.atom("noop", Kind::Statement, &loc(node));
     }
 
-    fn handle_switch_before_alternative(&mut self, _node: Node, _case_index: usize, _sub_index: usize) {}
+    fn handle_switch_before_alternative(
+        &mut self,
+        _node: Node,
+        _case_index: usize,
+        _sub_index: usize,
+    ) {
+    }
 
     fn handle_switch_scrutinee(&mut self, _type_: View) {}
 
@@ -3902,7 +4149,10 @@ impl TypeAnalyzer for MiniAstTypeAnalyzer {
         let NodeKind::RelationalPattern { operator, .. } = node.kind() else {
             panic!("{node:?} is not a relational pattern");
         };
-        self.harness_resolve_relational_pattern_operator(matched_value_type.unwrap_type_view(), &operator)
+        self.harness_resolve_relational_pattern_operator(
+            matched_value_type.unwrap_type_view(),
+            &operator,
+        )
     }
 
     fn set_variable_type(&mut self, variable: Var, type_: View) {
@@ -3932,7 +4182,13 @@ impl TypeAnalyzer for MiniAstTypeAnalyzer {
 fn _unused(_: Label, _: SharedTypeKind) {}
 
 #[allow(dead_code)]
-fn _ops_bound<O: FlowAnalysisOperations + FlowAnalysisTypeOperations + SharedTypeOperations + TypeAnalyzerOperations>() {}
+fn _ops_bound<
+    O: FlowAnalysisOperations
+        + FlowAnalysisTypeOperations
+        + SharedTypeOperations
+        + TypeAnalyzerOperations,
+>() {
+}
 
 #[allow(dead_code)]
 fn _errors_bound<E: VariableBinderErrors + TypeAnalyzerErrors>() {}

@@ -14,7 +14,7 @@ mod mini_ast;
 use mini_ast::harness::{BodyContext, Harness, RunOptions};
 #[allow(unused_imports)]
 use mini_ast::mini_types::{
-    type_registry_scope, PrimaryType, Type, TypeRegistry, TypeRegistryScope,
+    PrimaryType, Type, TypeRegistry, TypeRegistryScope, type_registry_scope,
 };
 #[allow(unused_imports)]
 use mini_ast::node::*;
@@ -47,15 +47,17 @@ mod patterns {
         fn type_schema() {
             let (_s, mut h) = set_up();
             let x = Var::new("x");
-            h.run(vec![pattern_variable_declaration(
-                x.pattern().as_("int"),
-                expr("num").check_schema("_"),
-                false,
-            )
-            .check_ir(
-                "match(expr(num), castPattern(varPattern(x, \
+            h.run(vec![
+                pattern_variable_declaration(
+                    x.pattern().as_("int"),
+                    expr("num").check_schema("_"),
+                    false,
+                )
+                .check_ir(
+                    "match(expr(num), castPattern(varPattern(x, \
                  matchedType: int, staticType: int), int, matchedType: num))",
-            )]);
+                ),
+            ]);
         }
 
         mod refutable_context {
@@ -65,21 +67,21 @@ mod patterns {
             fn when_matched_type_is_a_subtype_of_required_type() {
                 let (_s, mut h) = set_up();
                 h.run_with(
-                    vec![if_case(
-                        expr("int"),
-                        wildcard().as_("num").error_id("PATTERN"),
-                        vec![],
-                        None,
-                    )
-                    .check_ir(
-                        "ifCase(expr(int), castPattern(wildcardPattern(\
+                    vec![
+                        if_case(
+                            expr("int"),
+                            wildcard().as_("num").error_id("PATTERN"),
+                            vec![],
+                            None,
+                        )
+                        .check_ir(
+                            "ifCase(expr(int), castPattern(wildcardPattern(\
                          matchedType: num), num, matchedType: int), \
                          variables(), true, block(), noop)",
-                    )],
-                    errors(&[
-                        "matchedTypeIsSubtypeOfRequired(pattern: PATTERN, \
-                         matchedType: int, requiredType: num)",
-                    ]),
+                        ),
+                    ],
+                    errors(&["matchedTypeIsSubtypeOfRequired(pattern: PATTERN, \
+                         matchedType: int, requiredType: num)"]),
                 );
             }
         }
@@ -92,20 +94,20 @@ mod patterns {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
                 h.run_with(
-                    vec![pattern_variable_declaration(
-                        x.pattern().as_("num").error_id("PATTERN"),
-                        expr("int"),
-                        false,
-                    )
-                    .check_ir(
-                        "match(expr(int), \
+                    vec![
+                        pattern_variable_declaration(
+                            x.pattern().as_("num").error_id("PATTERN"),
+                            expr("int"),
+                            false,
+                        )
+                        .check_ir(
+                            "match(expr(int), \
                          castPattern(varPattern(x, matchedType: num, \
                          staticType: num), num, matchedType: int))",
-                    )],
-                    errors(&[
-                        "matchedTypeIsSubtypeOfRequired(pattern: PATTERN, \
-                         matchedType: int, requiredType: num)",
-                    ]),
+                        ),
+                    ],
+                    errors(&["matchedTypeIsSubtypeOfRequired(pattern: PATTERN, \
+                         matchedType: int, requiredType: num)"]),
                 );
             }
 
@@ -113,32 +115,28 @@ mod patterns {
             fn when_matched_type_is_dynamic() {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
-                h.run(vec![pattern_variable_declaration(
-                    x.pattern().as_("num"),
-                    expr("dynamic"),
-                    false,
-                )
-                .check_ir(
-                    "match(expr(dynamic), \
+                h.run(vec![
+                    pattern_variable_declaration(x.pattern().as_("num"), expr("dynamic"), false)
+                        .check_ir(
+                            "match(expr(dynamic), \
                      castPattern(varPattern(x, matchedType: num, \
                      staticType: num), num, matchedType: dynamic))",
-                )]);
+                        ),
+                ]);
             }
 
             #[test]
             fn when_matched_type_is_not_a_subtype_of_variable_type() {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
-                h.run(vec![pattern_variable_declaration(
-                    x.pattern().as_("num"),
-                    expr("String"),
-                    false,
-                )
-                .check_ir(
-                    "match(expr(String), \
+                h.run(vec![
+                    pattern_variable_declaration(x.pattern().as_("num"), expr("String"), false)
+                        .check_ir(
+                            "match(expr(String), \
                      castPattern(varPattern(x, matchedType: num, \
                      staticType: num), num, matchedType: String))",
-                )]);
+                        ),
+                ]);
             }
         }
 
@@ -188,16 +186,16 @@ mod patterns {
         fn refutability() {
             let (_s, mut h) = set_up();
             h.run_with(
-                vec![pattern_variable_declaration(
-                    int_literal(1).pattern().error_id("PATTERN"),
-                    int_literal(0),
-                    false,
-                )
-                .error_id("CONTEXT")],
-                errors(&[
-                    "refutablePatternInIrrefutableContext(pattern: PATTERN, \
-                     context: CONTEXT)",
-                ]),
+                vec![
+                    pattern_variable_declaration(
+                        int_literal(1).pattern().error_id("PATTERN"),
+                        int_literal(0),
+                        false,
+                    )
+                    .error_id("CONTEXT"),
+                ],
+                errors(&["refutablePatternInIrrefutableContext(pattern: PATTERN, \
+                     context: CONTEXT)"]),
             );
         }
     }
@@ -273,125 +271,135 @@ mod patterns {
             fn explicit_type_arguments() {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
-                h.run(vec![if_case(
-                    expr("dynamic"),
-                    map_pattern_with_type_arguments(
-                        "bool",
-                        "int",
-                        vec![map_pattern_entry(
-                            expr("Object").check_schema("bool"),
-                            x.pattern(),
-                        )],
-                    ),
-                    vec![],
-                    None,
-                )
-                .check_ir(
-                    "ifCase(expr(dynamic), mapPattern(mapPatternEntry(\
+                h.run(vec![
+                    if_case(
+                        expr("dynamic"),
+                        map_pattern_with_type_arguments(
+                            "bool",
+                            "int",
+                            vec![map_pattern_entry(
+                                expr("Object").check_schema("bool"),
+                                x.pattern(),
+                            )],
+                        ),
+                        vec![],
+                        None,
+                    )
+                    .check_ir(
+                        "ifCase(expr(dynamic), mapPattern(mapPatternEntry(\
                      expr(Object), varPattern(x, matchedType: int, staticType: \
                      int)), matchedType: dynamic, requiredType: Map<bool, int>), \
                      variables(x), true, block(), noop)",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
             fn matched_type_is_a_map() {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
-                h.run(vec![if_case(
-                    expr("Map<bool, int>"),
-                    map_pattern(
-                        vec![map_pattern_entry(
-                            expr("Object").check_schema("bool"),
-                            x.pattern(),
-                        )],
+                h.run(vec![
+                    if_case(
+                        expr("Map<bool, int>"),
+                        map_pattern(
+                            vec![map_pattern_entry(
+                                expr("Object").check_schema("bool"),
+                                x.pattern(),
+                            )],
+                            None,
+                            None,
+                        ),
+                        vec![],
                         None,
-                        None,
-                    ),
-                    vec![],
-                    None,
-                )
-                .check_ir(
-                    "ifCase(expr(Map<bool, int>), mapPattern(mapPatternEntry(\
+                    )
+                    .check_ir(
+                        "ifCase(expr(Map<bool, int>), mapPattern(mapPatternEntry(\
                      expr(Object), varPattern(x, matchedType: int, staticType: \
                      int)), matchedType: Map<bool, int>, requiredType: \
                      Map<bool, int>), variables(x), true, block(), noop)",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
             fn matched_type_is_dynamic() {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
-                h.run(vec![if_case(
-                    expr("dynamic"),
-                    map_pattern(
-                        vec![map_pattern_entry(
-                            expr("Object").check_schema("_"),
-                            x.pattern(),
-                        )],
+                h.run(vec![
+                    if_case(
+                        expr("dynamic"),
+                        map_pattern(
+                            vec![map_pattern_entry(
+                                expr("Object").check_schema("_"),
+                                x.pattern(),
+                            )],
+                            None,
+                            None,
+                        ),
+                        vec![],
                         None,
-                        None,
-                    ),
-                    vec![],
-                    None,
-                )
-                .check_ir(
-                    "ifCase(expr(dynamic), mapPattern(mapPatternEntry(\
+                    )
+                    .check_ir(
+                        "ifCase(expr(dynamic), mapPattern(mapPatternEntry(\
                      expr(Object), varPattern(x, matchedType: dynamic, staticType: \
                      dynamic)), matchedType: dynamic, requiredType: \
                      Map<dynamic, dynamic>), variables(x), true, block(), noop)",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
             fn matched_type_is_error() {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
-                h.run(vec![if_case(
-                    expr("error"),
-                    map_pattern(
-                        vec![map_pattern_entry(
-                            expr("Object").check_schema("_"),
-                            x.pattern(),
-                        )],
+                h.run(vec![
+                    if_case(
+                        expr("error"),
+                        map_pattern(
+                            vec![map_pattern_entry(
+                                expr("Object").check_schema("_"),
+                                x.pattern(),
+                            )],
+                            None,
+                            None,
+                        ),
+                        vec![],
                         None,
-                        None,
-                    ),
-                    vec![],
-                    None,
-                )
-                .check_ir(
-                    "ifCase(expr(error), mapPattern(mapPatternEntry(\
+                    )
+                    .check_ir(
+                        "ifCase(expr(error), mapPattern(mapPatternEntry(\
                      expr(Object), varPattern(x, matchedType: error, staticType: \
                      error)), matchedType: error, requiredType: \
                      Map<error, error>), variables(x), true, block(), noop)",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
             fn matched_type_is_other() {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
-                h.run(vec![if_case(
-                    expr("String"),
-                    map_pattern(
-                        vec![map_pattern_entry(
-                            expr("Object").check_schema("_"),
-                            x.pattern(),
-                        )],
+                h.run(vec![
+                    if_case(
+                        expr("String"),
+                        map_pattern(
+                            vec![map_pattern_entry(
+                                expr("Object").check_schema("_"),
+                                x.pattern(),
+                            )],
+                            None,
+                            None,
+                        ),
+                        vec![],
                         None,
-                        None,
-                    ),
-                    vec![],
-                    None,
-                )
-                .check_ir(
-                    "ifCase(expr(String), mapPattern(mapPatternEntry(\
+                    )
+                    .check_ir(
+                        "ifCase(expr(String), mapPattern(mapPatternEntry(\
                      expr(Object), varPattern(x, matchedType: Object?, staticType: \
                      Object?)), matchedType: String, requiredType: \
                      Map<Object?, Object?>), variables(x), true, block(), noop)",
-                )]);
+                    ),
+                ]);
             }
         }
 
@@ -401,71 +409,77 @@ mod patterns {
             #[test]
             fn when_matched_type_is_a_subtype_of_required_type() {
                 let (_s, mut h) = set_up();
-                h.run(vec![pattern_variable_declaration(
-                    map_pattern_with_type_arguments(
-                        "Object",
-                        "num",
-                        vec![map_pattern_entry(
-                            expr("Object").check_schema("Object"),
-                            wildcard(),
-                        )],
-                    ),
-                    expr("Map<bool, int>"),
-                    false,
-                )
-                .check_ir(
-                    "match(expr(Map<bool, int>), mapPattern(mapPatternEntry(\
+                h.run(vec![
+                    pattern_variable_declaration(
+                        map_pattern_with_type_arguments(
+                            "Object",
+                            "num",
+                            vec![map_pattern_entry(
+                                expr("Object").check_schema("Object"),
+                                wildcard(),
+                            )],
+                        ),
+                        expr("Map<bool, int>"),
+                        false,
+                    )
+                    .check_ir(
+                        "match(expr(Map<bool, int>), mapPattern(mapPatternEntry(\
                      expr(Object), wildcardPattern(matchedType: num)), \
                      matchedType: Map<bool, int>, \
                      requiredType: Map<Object, num>))",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
             fn when_matched_type_is_dynamic() {
                 let (_s, mut h) = set_up();
-                h.run(vec![pattern_variable_declaration(
-                    map_pattern_with_type_arguments(
-                        "Object",
-                        "num",
-                        vec![map_pattern_entry(
-                            expr("Object").check_schema("Object"),
-                            wildcard(),
-                        )],
-                    ),
-                    expr("dynamic"),
-                    false,
-                )
-                .check_ir(
-                    "match(expr(dynamic), mapPattern(mapPatternEntry(\
+                h.run(vec![
+                    pattern_variable_declaration(
+                        map_pattern_with_type_arguments(
+                            "Object",
+                            "num",
+                            vec![map_pattern_entry(
+                                expr("Object").check_schema("Object"),
+                                wildcard(),
+                            )],
+                        ),
+                        expr("dynamic"),
+                        false,
+                    )
+                    .check_ir(
+                        "match(expr(dynamic), mapPattern(mapPatternEntry(\
                      expr(Object), wildcardPattern(matchedType: num)), \
                      matchedType: dynamic, requiredType: Map<Object, num>))",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
             fn when_matched_type_is_not_a_subtype_of_required_type() {
                 let (_s, mut h) = set_up();
                 h.run_with(
-                    vec![pattern_variable_declaration(
-                        map_pattern_with_type_arguments(
-                            "bool",
-                            "int",
-                            vec![map_pattern_entry(
-                                expr("Object").check_schema("bool"),
-                                wildcard(),
-                            )],
+                    vec![
+                        pattern_variable_declaration(
+                            map_pattern_with_type_arguments(
+                                "bool",
+                                "int",
+                                vec![map_pattern_entry(
+                                    expr("Object").check_schema("bool"),
+                                    wildcard(),
+                                )],
+                            )
+                            .error_id("PATTERN"),
+                            expr("String"),
+                            false,
                         )
-                        .error_id("PATTERN"),
-                        expr("String"),
-                        false,
-                    )
-                    .error_id("CONTEXT")],
-                    errors(&[
-                        "patternTypeMismatchInIrrefutableContext(pattern: PATTERN, \
+                        .error_id("CONTEXT"),
+                    ],
+                    errors(
+                        &["patternTypeMismatchInIrrefutableContext(pattern: PATTERN, \
                          context: CONTEXT, matchedType: String, \
-                         requiredType: Map<bool, int>)",
-                    ]),
+                         requiredType: Map<bool, int>)"],
+                    ),
                 );
             }
         }
@@ -683,24 +697,24 @@ mod patterns {
                             let (_s, mut h) = set_up();
                             let x = Var::new("x");
                             h.run_with(
-                                vec![pattern_variable_declaration(
-                                    list_pattern(
-                                        vec![rest_pattern(Some(
-                                            x.pattern()
-                                                .with_declared_type("String")
-                                                .error_id("VAR(x)"),
-                                        ))],
-                                        None,
-                                    ),
-                                    expr("List<int>").check_schema("List<_>"),
-                                    false,
-                                )
-                                .error_id("CONTEXT")],
-                                errors(&[
-                                    "patternTypeMismatchInIrrefutableContext(\
+                                vec![
+                                    pattern_variable_declaration(
+                                        list_pattern(
+                                            vec![rest_pattern(Some(
+                                                x.pattern()
+                                                    .with_declared_type("String")
+                                                    .error_id("VAR(x)"),
+                                            ))],
+                                            None,
+                                        ),
+                                        expr("List<int>").check_schema("List<_>"),
+                                        false,
+                                    )
+                                    .error_id("CONTEXT"),
+                                ],
+                                errors(&["patternTypeMismatchInIrrefutableContext(\
                                      pattern: VAR(x), context: CONTEXT, matchedType: \
-                                     List<int>, requiredType: String)",
-                                ]),
+                                     List<int>, requiredType: String)"]),
                             );
                         }
                     }
@@ -743,17 +757,19 @@ mod patterns {
             fn explicit_type() {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
-                h.run(vec![pattern_variable_declaration(
-                    list_pattern(vec![x.pattern().with_declared_type("num")], Some("int")),
-                    expr("dynamic"),
-                    false,
-                )
-                .check_ir(
-                    "match(expr(dynamic), \
+                h.run(vec![
+                    pattern_variable_declaration(
+                        list_pattern(vec![x.pattern().with_declared_type("num")], Some("int")),
+                        expr("dynamic"),
+                        false,
+                    )
+                    .check_ir(
+                        "match(expr(dynamic), \
                      listPattern(varPattern(x, matchedType: int, \
                      staticType: num), \
                      matchedType: dynamic, requiredType: List<int>))",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
@@ -761,23 +777,27 @@ mod patterns {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
                 let y = Var::new("y");
-                h.run(vec![pattern_variable_declaration(
-                    list_pattern(
-                        vec![
-                            x.pattern().with_expect_inferred_type("int"),
-                            rest_pattern(Some(y.pattern().with_expect_inferred_type("List<int>"))),
-                        ],
-                        None,
-                    ),
-                    expr("List<int>"),
-                    false,
-                )
-                .check_ir(
-                    "match(expr(List<int>), listPattern(varPattern(x, \
+                h.run(vec![
+                    pattern_variable_declaration(
+                        list_pattern(
+                            vec![
+                                x.pattern().with_expect_inferred_type("int"),
+                                rest_pattern(Some(
+                                    y.pattern().with_expect_inferred_type("List<int>"),
+                                )),
+                            ],
+                            None,
+                        ),
+                        expr("List<int>"),
+                        false,
+                    )
+                    .check_ir(
+                        "match(expr(List<int>), listPattern(varPattern(x, \
                      matchedType: int, staticType: int), ...(varPattern(y, \
                      matchedType: List<int>, staticType: List<int>)), \
                      matchedType: List<int>, requiredType: List<int>))",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
@@ -785,25 +805,27 @@ mod patterns {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
                 let y = Var::new("y");
-                h.run(vec![pattern_variable_declaration(
-                    list_pattern(
-                        vec![
-                            x.pattern().with_expect_inferred_type("dynamic"),
-                            rest_pattern(Some(
-                                y.pattern().with_expect_inferred_type("List<dynamic>"),
-                            )),
-                        ],
-                        None,
-                    ),
-                    expr("dynamic"),
-                    false,
-                )
-                .check_ir(
-                    "match(expr(dynamic), listPattern(varPattern(x, \
+                h.run(vec![
+                    pattern_variable_declaration(
+                        list_pattern(
+                            vec![
+                                x.pattern().with_expect_inferred_type("dynamic"),
+                                rest_pattern(Some(
+                                    y.pattern().with_expect_inferred_type("List<dynamic>"),
+                                )),
+                            ],
+                            None,
+                        ),
+                        expr("dynamic"),
+                        false,
+                    )
+                    .check_ir(
+                        "match(expr(dynamic), listPattern(varPattern(x, \
                      matchedType: dynamic, staticType: dynamic), ...(varPattern(y, \
                      matchedType: List<dynamic>, staticType: List<dynamic>)), \
                      matchedType: dynamic, requiredType: List<dynamic>))",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
@@ -811,25 +833,27 @@ mod patterns {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
                 let y = Var::new("y");
-                h.run(vec![pattern_variable_declaration(
-                    list_pattern(
-                        vec![
-                            x.pattern().with_expect_inferred_type("error"),
-                            rest_pattern(Some(
-                                y.pattern().with_expect_inferred_type("List<error>"),
-                            )),
-                        ],
-                        None,
-                    ),
-                    expr("error"),
-                    false,
-                )
-                .check_ir(
-                    "match(expr(error), listPattern(varPattern(x, \
+                h.run(vec![
+                    pattern_variable_declaration(
+                        list_pattern(
+                            vec![
+                                x.pattern().with_expect_inferred_type("error"),
+                                rest_pattern(Some(
+                                    y.pattern().with_expect_inferred_type("List<error>"),
+                                )),
+                            ],
+                            None,
+                        ),
+                        expr("error"),
+                        false,
+                    )
+                    .check_ir(
+                        "match(expr(error), listPattern(varPattern(x, \
                      matchedType: error, staticType: error), ...(varPattern(y, \
                      matchedType: List<error>, staticType: List<error>)), \
                      matchedType: error, requiredType: List<error>))",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
@@ -837,27 +861,29 @@ mod patterns {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
                 let y = Var::new("y");
-                h.run(vec![if_case(
-                    expr("Object"),
-                    list_pattern(
-                        vec![
-                            x.pattern().with_expect_inferred_type("Object?"),
-                            rest_pattern(Some(
-                                y.pattern().with_expect_inferred_type("List<Object?>"),
-                            )),
-                        ],
+                h.run(vec![
+                    if_case(
+                        expr("Object"),
+                        list_pattern(
+                            vec![
+                                x.pattern().with_expect_inferred_type("Object?"),
+                                rest_pattern(Some(
+                                    y.pattern().with_expect_inferred_type("List<Object?>"),
+                                )),
+                            ],
+                            None,
+                        ),
+                        vec![],
                         None,
-                    ),
-                    vec![],
-                    None,
-                )
-                .check_ir(
-                    "ifCase(expr(Object), listPattern(varPattern(x, \
+                    )
+                    .check_ir(
+                        "ifCase(expr(Object), listPattern(varPattern(x, \
                      matchedType: Object?, staticType: Object?), ...(varPattern(y, \
                      matchedType: List<Object?>, staticType: List<Object?>)), \
                      matchedType: Object, requiredType: List<Object?>), \
                      variables(x, y), true, block(), noop)",
-                )]);
+                    ),
+                ]);
             }
 
             mod rest_pattern {
@@ -867,30 +893,34 @@ mod patterns {
                 fn with_pattern() {
                     let (_s, mut h) = set_up();
                     let x = Var::new("x");
-                    h.run(vec![pattern_variable_declaration(
-                        list_pattern(vec![rest_pattern(Some(x.pattern()))], None),
-                        expr("List<int>"),
-                        false,
-                    )
-                    .check_ir(
-                        "match(expr(List<int>), listPattern(...(varPattern(x, \
+                    h.run(vec![
+                        pattern_variable_declaration(
+                            list_pattern(vec![rest_pattern(Some(x.pattern()))], None),
+                            expr("List<int>"),
+                            false,
+                        )
+                        .check_ir(
+                            "match(expr(List<int>), listPattern(...(varPattern(x, \
                          matchedType: List<int>, staticType: List<int>)), \
                          matchedType: List<int>, requiredType: List<int>))",
-                    )]);
+                        ),
+                    ]);
                 }
 
                 #[test]
                 fn without_pattern() {
                     let (_s, mut h) = set_up();
-                    h.run(vec![pattern_variable_declaration(
-                        list_pattern(vec![rest_pattern(None)], None),
-                        expr("List<int>"),
-                        false,
-                    )
-                    .check_ir(
-                        "match(expr(List<int>), listPattern(..., \
+                    h.run(vec![
+                        pattern_variable_declaration(
+                            list_pattern(vec![rest_pattern(None)], None),
+                            expr("List<int>"),
+                            false,
+                        )
+                        .check_ir(
+                            "match(expr(List<int>), listPattern(..., \
                          matchedType: List<int>, requiredType: List<int>))",
-                    )]);
+                        ),
+                    ]);
                 }
             }
         }
@@ -901,48 +931,54 @@ mod patterns {
             #[test]
             fn when_matched_type_is_a_subtype_of_pattern_type() {
                 let (_s, mut h) = set_up();
-                h.run(vec![pattern_variable_declaration(
-                    list_pattern(vec![wildcard()], Some("num")),
-                    expr("List<int>"),
-                    false,
-                )
-                .check_ir(
-                    "match(expr(List<int>), listPattern(wildcardPattern\
+                h.run(vec![
+                    pattern_variable_declaration(
+                        list_pattern(vec![wildcard()], Some("num")),
+                        expr("List<int>"),
+                        false,
+                    )
+                    .check_ir(
+                        "match(expr(List<int>), listPattern(wildcardPattern\
                      (matchedType: num), matchedType: List<int>, \
                      requiredType: List<num>))",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
             fn when_matched_type_is_dynamic() {
                 let (_s, mut h) = set_up();
-                h.run(vec![pattern_variable_declaration(
-                    list_pattern(vec![wildcard()], Some("num")),
-                    expr("dynamic"),
-                    false,
-                )
-                .check_ir(
-                    "match(expr(dynamic), listPattern(wildcardPattern(\
+                h.run(vec![
+                    pattern_variable_declaration(
+                        list_pattern(vec![wildcard()], Some("num")),
+                        expr("dynamic"),
+                        false,
+                    )
+                    .check_ir(
+                        "match(expr(dynamic), listPattern(wildcardPattern(\
                      matchedType: num), matchedType: dynamic, \
                      requiredType: List<num>))",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
             fn when_matched_type_is_not_a_subtype_of_variable_type() {
                 let (_s, mut h) = set_up();
                 h.run_with(
-                    vec![pattern_variable_declaration(
-                        list_pattern(vec![wildcard()], Some("num")).error_id("PATTERN"),
-                        expr("String"),
-                        false,
-                    )
-                    .error_id("CONTEXT")],
-                    errors(&[
-                        "patternTypeMismatchInIrrefutableContext(pattern: PATTERN, \
+                    vec![
+                        pattern_variable_declaration(
+                            list_pattern(vec![wildcard()], Some("num")).error_id("PATTERN"),
+                            expr("String"),
+                            false,
+                        )
+                        .error_id("CONTEXT"),
+                    ],
+                    errors(
+                        &["patternTypeMismatchInIrrefutableContext(pattern: PATTERN, \
                          context: CONTEXT, matchedType: String, \
-                         requiredType: List<num>)",
-                    ]),
+                         requiredType: List<num>)"],
+                    ),
                 );
             }
 
@@ -950,18 +986,20 @@ mod patterns {
             fn sub_refutability() {
                 let (_s, mut h) = set_up();
                 h.run_with(
-                    vec![pattern_variable_declaration(
-                        list_pattern(
-                            vec![
-                                wildcard().with_declared_type("int").error_id("INT"),
-                                wildcard().with_declared_type("double").error_id("DOUBLE"),
-                            ],
-                            Some("num"),
-                        ),
-                        expr("List<num>"),
-                        false,
-                    )
-                    .error_id("CONTEXT")],
+                    vec![
+                        pattern_variable_declaration(
+                            list_pattern(
+                                vec![
+                                    wildcard().with_declared_type("int").error_id("INT"),
+                                    wildcard().with_declared_type("double").error_id("DOUBLE"),
+                                ],
+                                Some("num"),
+                            ),
+                            expr("List<num>"),
+                            false,
+                        )
+                        .error_id("CONTEXT"),
+                    ],
                     errors(&[
                         "patternTypeMismatchInIrrefutableContext(pattern: INT, \
                          context: CONTEXT, matchedType: num, requiredType: int)",
@@ -984,30 +1022,30 @@ mod patterns {
                     let x = Var::new("x");
                     let y = Var::new("y");
                     h.run_with(
-                        vec![pattern_variable_declaration(
-                            list_pattern(
-                                vec![
-                                    rest_pattern(Some(x.pattern())).error_id("ORI"),
-                                    rest_pattern(Some(y.pattern())).error_id("DUP"),
-                                ],
-                                None,
+                        vec![
+                            pattern_variable_declaration(
+                                list_pattern(
+                                    vec![
+                                        rest_pattern(Some(x.pattern())).error_id("ORI"),
+                                        rest_pattern(Some(y.pattern())).error_id("DUP"),
+                                    ],
+                                    None,
+                                )
+                                .error_id("LIST_PATTERN"),
+                                expr("List<int>"),
+                                false,
                             )
-                            .error_id("LIST_PATTERN"),
-                            expr("List<int>"),
-                            false,
-                        )
-                        .check_ir(
-                            "match(expr(List<int>), listPattern(...(varPattern(x, \
+                            .check_ir(
+                                "match(expr(List<int>), listPattern(...(varPattern(x, \
                              matchedType: List<int>, staticType: List<int>)), \
                              ...(varPattern(y, matchedType: List<int>, staticType: \
                              List<int>)), matchedType: List<int>, \
                              requiredType: List<int>))",
-                        )],
-                        errors(&[
-                            "duplicateRestPattern(mapOrListPattern: LIST_PATTERN, \
+                            ),
+                        ],
+                        errors(&["duplicateRestPattern(mapOrListPattern: LIST_PATTERN, \
                              original: ORI, \
-                             duplicate: DUP)",
-                        ]),
+                             duplicate: DUP)"]),
                     );
                 }
 
@@ -1015,27 +1053,27 @@ mod patterns {
                 fn without_pattern() {
                     let (_s, mut h) = set_up();
                     h.run_with(
-                        vec![pattern_variable_declaration(
-                            list_pattern(
-                                vec![
-                                    rest_pattern(None).error_id("ORI"),
-                                    rest_pattern(None).error_id("DUP"),
-                                ],
-                                None,
+                        vec![
+                            pattern_variable_declaration(
+                                list_pattern(
+                                    vec![
+                                        rest_pattern(None).error_id("ORI"),
+                                        rest_pattern(None).error_id("DUP"),
+                                    ],
+                                    None,
+                                )
+                                .error_id("LIST_PATTERN"),
+                                expr("List<int>"),
+                                false,
                             )
-                            .error_id("LIST_PATTERN"),
-                            expr("List<int>"),
-                            false,
-                        )
-                        .check_ir(
-                            "match(expr(List<int>), listPattern(..., ..., \
+                            .check_ir(
+                                "match(expr(List<int>), listPattern(..., ..., \
                              matchedType: List<int>, requiredType: List<int>))",
-                        )],
-                        errors(&[
-                            "duplicateRestPattern(mapOrListPattern: LIST_PATTERN, \
+                            ),
+                        ],
+                        errors(&["duplicateRestPattern(mapOrListPattern: LIST_PATTERN, \
                              original: ORI, \
-                             duplicate: DUP)",
-                        ]),
+                             duplicate: DUP)"]),
                     );
                 }
             }
@@ -1044,32 +1082,36 @@ mod patterns {
             fn first() {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
-                h.run(vec![pattern_variable_declaration(
-                    list_pattern(vec![rest_pattern(None), x.pattern()], None),
-                    expr("List<int>"),
-                    false,
-                )
-                .check_ir(
-                    "match(expr(List<int>), listPattern(..., \
+                h.run(vec![
+                    pattern_variable_declaration(
+                        list_pattern(vec![rest_pattern(None), x.pattern()], None),
+                        expr("List<int>"),
+                        false,
+                    )
+                    .check_ir(
+                        "match(expr(List<int>), listPattern(..., \
                      varPattern(x, matchedType: int, staticType: int), \
                      matchedType: List<int>, requiredType: List<int>))",
-                )]);
+                    ),
+                ]);
             }
 
             #[test]
             fn last() {
                 let (_s, mut h) = set_up();
                 let x = Var::new("x");
-                h.run(vec![pattern_variable_declaration(
-                    list_pattern(vec![x.pattern(), rest_pattern(None)], None),
-                    expr("List<int>"),
-                    false,
-                )
-                .check_ir(
-                    "match(expr(List<int>), listPattern(varPattern(x, \
+                h.run(vec![
+                    pattern_variable_declaration(
+                        list_pattern(vec![x.pattern(), rest_pattern(None)], None),
+                        expr("List<int>"),
+                        false,
+                    )
+                    .check_ir(
+                        "match(expr(List<int>), listPattern(varPattern(x, \
                      matchedType: int, staticType: int), ..., \
                      matchedType: List<int>, requiredType: List<int>))",
-                )]);
+                    ),
+                ]);
             }
         }
 
@@ -1096,19 +1138,25 @@ mod patterns {
         fn type_schema() {
             let (_s, mut h) = set_up();
             h.run_with(
-                vec![pattern_variable_declaration(
-                    wildcard()
-                        .with_declared_type("int?")
-                        .error_id("WILDCARD1")
-                        .and(wildcard().with_declared_type("double?").error_id("WILDCARD2")),
-                    null_literal().check_schema("Null"),
-                    false,
-                )
-                .check_ir(
-                    "match(null, logicalAndPattern(wildcardPattern(\
+                vec![
+                    pattern_variable_declaration(
+                        wildcard()
+                            .with_declared_type("int?")
+                            .error_id("WILDCARD1")
+                            .and(
+                                wildcard()
+                                    .with_declared_type("double?")
+                                    .error_id("WILDCARD2"),
+                            ),
+                        null_literal().check_schema("Null"),
+                        false,
+                    )
+                    .check_ir(
+                        "match(null, logicalAndPattern(wildcardPattern(\
                      matchedType: Null), wildcardPattern(matchedType: Null), \
                      matchedType: Null))",
-                )],
+                    ),
+                ],
                 errors(&[
                     "unnecessaryWildcardPattern(pattern: WILDCARD1, \
                      kind: logicalAndPatternOperand)",
@@ -1122,15 +1170,17 @@ mod patterns {
         fn refutability() {
             let (_s, mut h) = set_up();
             h.run_with(
-                vec![pattern_variable_declaration(
-                    wildcard()
-                        .with_declared_type("int")
-                        .error_id("LHS")
-                        .and(wildcard().with_declared_type("double").error_id("RHS")),
-                    expr("num"),
-                    false,
-                )
-                .error_id("CONTEXT")],
+                vec![
+                    pattern_variable_declaration(
+                        wildcard()
+                            .with_declared_type("int")
+                            .error_id("LHS")
+                            .and(wildcard().with_declared_type("double").error_id("RHS")),
+                        expr("num"),
+                        false,
+                    )
+                    .error_id("CONTEXT"),
+                ],
                 errors(&[
                     "patternTypeMismatchInIrrefutableContext(pattern: LHS, \
                      context: CONTEXT, matchedType: num, requiredType: int)",
@@ -1163,19 +1213,19 @@ mod patterns {
         fn type_schema() {
             let (_s, mut h) = set_up();
             h.run_with(
-                vec![pattern_variable_declaration(
-                    wildcard()
-                        .with_declared_type("int?")
-                        .or(wildcard().with_declared_type("double?"))
-                        .error_id("PATTERN"),
-                    null_literal().check_schema("_"),
-                    false,
-                )
-                .error_id("CONTEXT")],
-                errors(&[
-                    "refutablePatternInIrrefutableContext(pattern: PATTERN, \
-                     context: CONTEXT)",
-                ]),
+                vec![
+                    pattern_variable_declaration(
+                        wildcard()
+                            .with_declared_type("int?")
+                            .or(wildcard().with_declared_type("double?"))
+                            .error_id("PATTERN"),
+                        null_literal().check_schema("_"),
+                        false,
+                    )
+                    .error_id("CONTEXT"),
+                ],
+                errors(&["refutablePatternInIrrefutableContext(pattern: PATTERN, \
+                     context: CONTEXT)"]),
             );
         }
 
@@ -1186,19 +1236,19 @@ mod patterns {
             // we're issuing for the logical-or pattern as a whole.
             let (_s, mut h) = set_up();
             h.run_with(
-                vec![pattern_variable_declaration(
-                    wildcard()
-                        .with_declared_type("int")
-                        .or(wildcard().with_declared_type("double"))
-                        .error_id("PATTERN"),
-                    expr("num"),
-                    false,
-                )
-                .error_id("CONTEXT")],
-                errors(&[
-                    "refutablePatternInIrrefutableContext(pattern: PATTERN, \
-                     context: CONTEXT)",
-                ]),
+                vec![
+                    pattern_variable_declaration(
+                        wildcard()
+                            .with_declared_type("int")
+                            .or(wildcard().with_declared_type("double"))
+                            .error_id("PATTERN"),
+                        expr("num"),
+                        false,
+                    )
+                    .error_id("CONTEXT"),
+                ],
+                errors(&["refutablePatternInIrrefutableContext(pattern: PATTERN, \
+                     context: CONTEXT)"]),
             );
         }
 
@@ -1217,21 +1267,23 @@ mod patterns {
                         let x1 = Var::new("x").with_identity("x1");
                         let x2 = Var::new("x").with_identity("x2");
                         Var::join("x", vec![x1, x2]);
-                        h.run(vec![if_case(
-                            expr("Object"),
-                            x1.pattern()
-                                .with_declared_type("int")
-                                .or(x2.pattern().with_declared_type("int")),
-                            vec![],
-                            None,
-                        )
-                        .check_ir(
-                            "ifCase(expr(Object), logicalOrPattern(varPattern(x, \
+                        h.run(vec![
+                            if_case(
+                                expr("Object"),
+                                x1.pattern()
+                                    .with_declared_type("int")
+                                    .or(x2.pattern().with_declared_type("int")),
+                                vec![],
+                                None,
+                            )
+                            .check_ir(
+                                "ifCase(expr(Object), logicalOrPattern(varPattern(x, \
                              matchedType: Object, staticType: int), varPattern(x, \
                              matchedType: Object, staticType: int), \
                              matchedType: Object), variables(int x = [x1, x2]), \
                              true, block(), noop)",
-                        )]);
+                            ),
+                        ]);
                     }
 
                     #[test]
@@ -1240,21 +1292,23 @@ mod patterns {
                         let x1 = Var::new("x").with_identity("x1");
                         let x2 = Var::new("x").with_identity("x2");
                         Var::join("x", vec![x1, x2]);
-                        h.run(vec![if_case(
-                            expr("Object"),
-                            x1.pattern()
-                                .with_declared_type("Object")
-                                .or(x2.pattern().with_declared_type("FutureOr<Object>")),
-                            vec![],
-                            None,
-                        )
-                        .check_ir(
-                            "ifCase(expr(Object), logicalOrPattern(varPattern(x, \
+                        h.run(vec![
+                            if_case(
+                                expr("Object"),
+                                x1.pattern()
+                                    .with_declared_type("Object")
+                                    .or(x2.pattern().with_declared_type("FutureOr<Object>")),
+                                vec![],
+                                None,
+                            )
+                            .check_ir(
+                                "ifCase(expr(Object), logicalOrPattern(varPattern(x, \
                              matchedType: Object, staticType: Object), varPattern(x, \
                              matchedType: Object, staticType: FutureOr<Object>), \
                              matchedType: Object), variables(Object x = [x1, x2]), \
                              true, block(), noop)",
-                        )]);
+                            ),
+                        ]);
                     }
 
                     #[test]
@@ -1263,18 +1317,20 @@ mod patterns {
                         let x1 = Var::new("x").with_identity("x1");
                         let x2 = Var::new("x").with_identity("x2");
                         Var::join("x", vec![x1, x2]);
-                        h.run(vec![if_case(
-                            expr("int"),
-                            x1.pattern().with_declared_type("int").or(x2.pattern()),
-                            vec![],
-                            None,
-                        )
-                        .check_ir(
-                            "ifCase(expr(int), logicalOrPattern(varPattern(x, \
+                        h.run(vec![
+                            if_case(
+                                expr("int"),
+                                x1.pattern().with_declared_type("int").or(x2.pattern()),
+                                vec![],
+                                None,
+                            )
+                            .check_ir(
+                                "ifCase(expr(int), logicalOrPattern(varPattern(x, \
                              matchedType: int, staticType: int), varPattern(x, \
                              matchedType: int, staticType: int), matchedType: int), \
                              variables(int x = [x1, x2]), true, block(), noop)",
-                        )]);
+                            ),
+                        ]);
                     }
 
                     #[test]
@@ -1283,18 +1339,20 @@ mod patterns {
                         let x1 = Var::new("x").with_identity("x1");
                         let x2 = Var::new("x").with_identity("x2");
                         Var::join("x", vec![x1, x2]);
-                        h.run(vec![if_case(
-                            expr("int"),
-                            x1.pattern().or(x2.pattern().with_declared_type("int")),
-                            vec![],
-                            None,
-                        )
-                        .check_ir(
-                            "ifCase(expr(int), logicalOrPattern(varPattern(x, \
+                        h.run(vec![
+                            if_case(
+                                expr("int"),
+                                x1.pattern().or(x2.pattern().with_declared_type("int")),
+                                vec![],
+                                None,
+                            )
+                            .check_ir(
+                                "ifCase(expr(int), logicalOrPattern(varPattern(x, \
                              matchedType: int, staticType: int), varPattern(x, \
                              matchedType: int, staticType: int), matchedType: int), \
                              variables(int x = [x1, x2]), true, block(), noop)",
-                        )]);
+                            ),
+                        ]);
                     }
 
                     #[test]
@@ -1303,18 +1361,15 @@ mod patterns {
                         let x1 = Var::new("x").with_identity("x1");
                         let x2 = Var::new("x").with_identity("x2");
                         Var::join("x", vec![x1, x2]);
-                        h.run(vec![if_case(
-                            expr("int"),
-                            x1.pattern().or(x2.pattern()),
-                            vec![],
-                            None,
-                        )
-                        .check_ir(
-                            "ifCase(expr(int), logicalOrPattern(varPattern(x, \
+                        h.run(vec![
+                            if_case(expr("int"), x1.pattern().or(x2.pattern()), vec![], None)
+                                .check_ir(
+                                    "ifCase(expr(int), logicalOrPattern(varPattern(x, \
                              matchedType: int, staticType: int), varPattern(x, \
                              matchedType: int, staticType: int), matchedType: int), \
                              variables(int x = [x1, x2]), true, block(), noop)",
-                        )]);
+                                ),
+                        ]);
                     }
                 }
 
@@ -1328,25 +1383,27 @@ mod patterns {
                         let x2 = Var::new("x").with_identity("x2").error_id("x2");
                         Var::join("x", vec![x1, x2]);
                         h.run_with(
-                            vec![if_case(
-                                expr("Object"),
-                                x1.pattern()
-                                    .with_declared_type("int")
-                                    .or(x2.pattern().with_declared_type("num")),
-                                vec![],
-                                None,
-                            )
-                            .check_ir(
-                                "ifCase(expr(Object), logicalOrPattern(varPattern(x, \
+                            vec![
+                                if_case(
+                                    expr("Object"),
+                                    x1.pattern()
+                                        .with_declared_type("int")
+                                        .or(x2.pattern().with_declared_type("num")),
+                                    vec![],
+                                    None,
+                                )
+                                .check_ir(
+                                    "ifCase(expr(Object), logicalOrPattern(varPattern(x, \
                                  matchedType: Object, staticType: int), varPattern(x, \
                                  matchedType: Object, staticType: num), matchedType: \
                                  Object), variables(notConsistent:differentFinalityOrType \
                                  error x = [x1, x2]), true, block(), noop)",
-                            )],
-                            errors(&[
-                                "inconsistentJoinedPatternVariable(variable: x = [x1, x2], \
-                                 component: x2)",
-                            ]),
+                                ),
+                            ],
+                            errors(
+                                &["inconsistentJoinedPatternVariable(variable: x = [x1, x2], \
+                                 component: x2)"],
+                            ),
                         );
                     }
 
@@ -1357,23 +1414,25 @@ mod patterns {
                         let x2 = Var::new("x").with_identity("x2").error_id("x2");
                         Var::join("x", vec![x1, x2]);
                         h.run_with(
-                            vec![if_case(
-                                expr("num"),
-                                x1.pattern().with_declared_type("int").or(x2.pattern()),
-                                vec![],
-                                None,
-                            )
-                            .check_ir(
-                                "ifCase(expr(num), logicalOrPattern(varPattern(x, \
+                            vec![
+                                if_case(
+                                    expr("num"),
+                                    x1.pattern().with_declared_type("int").or(x2.pattern()),
+                                    vec![],
+                                    None,
+                                )
+                                .check_ir(
+                                    "ifCase(expr(num), logicalOrPattern(varPattern(x, \
                                  matchedType: num, staticType: int), varPattern(x, \
                                  matchedType: num, staticType: num), matchedType: num), \
                                  variables(notConsistent:differentFinalityOrType error x = \
                                  [x1, x2]), true, block(), noop)",
-                            )],
-                            errors(&[
-                                "inconsistentJoinedPatternVariable(variable: x = [x1, x2], \
-                                 component: x2)",
-                            ]),
+                                ),
+                            ],
+                            errors(
+                                &["inconsistentJoinedPatternVariable(variable: x = [x1, x2], \
+                                 component: x2)"],
+                            ),
                         );
                     }
                 }
@@ -1386,17 +1445,19 @@ mod patterns {
                 let x2 = Var::new("x").with_identity("x2").error_id("x2");
                 Var::join("x", vec![x1, x2]);
                 h.run_with(
-                    vec![if_case(expr("int"), x1.pattern().or(x2.pattern()), vec![], None).check_ir(
-                        "ifCase(expr(int), logicalOrPattern(varPattern(x, \
+                    vec![
+                        if_case(expr("int"), x1.pattern().or(x2.pattern()), vec![], None).check_ir(
+                            "ifCase(expr(int), logicalOrPattern(varPattern(x, \
                          matchedType: int, staticType: int), varPattern(x, \
                          matchedType: int, staticType: int), matchedType: int), \
                          variables(notConsistent:differentFinalityOrType int x = \
                          [x1, x2]), true, block(), noop)",
-                    )],
-                    errors(&[
-                        "inconsistentJoinedPatternVariable(variable: x = [x1, x2], \
-                         component: x2)",
-                    ]),
+                        ),
+                    ],
+                    errors(
+                        &["inconsistentJoinedPatternVariable(variable: x = [x1, x2], \
+                         component: x2)"],
+                    ),
                 );
             }
 
@@ -1409,13 +1470,14 @@ mod patterns {
                     let x1 = Var::new("x").with_identity("x1");
                     let x2 = Var::new("x").with_identity("x2");
                     Var::join("x", vec![x1, x2]);
-                    h.run(vec![if_case(expr("int"), x1.pattern().or(x2.pattern()), vec![], None)
-                        .check_ir(
+                    h.run(vec![
+                        if_case(expr("int"), x1.pattern().or(x2.pattern()), vec![], None).check_ir(
                             "ifCase(expr(int), logicalOrPattern(varPattern(x, \
                              matchedType: int, staticType: int), varPattern(x, \
                              matchedType: int, staticType: int), matchedType: int), \
                              variables(int x = [x1, x2]), true, block(), noop)",
-                        )]);
+                        ),
+                    ]);
                 }
 
                 #[test]
@@ -1424,23 +1486,23 @@ mod patterns {
                     let x1 = Var::new("x").with_identity("x1").error_id("x1");
                     Var::join("x", vec![x1]);
                     h.run_with(
-                        vec![if_case(
-                            expr("int"),
-                            x1.pattern().or(wildcard()).error_id("PATTERN"),
-                            vec![],
-                            None,
-                        )
-                        .check_ir(
-                            "ifCase(expr(int), logicalOrPattern(varPattern(x, \
+                        vec![
+                            if_case(
+                                expr("int"),
+                                x1.pattern().or(wildcard()).error_id("PATTERN"),
+                                vec![],
+                                None,
+                            )
+                            .check_ir(
+                                "ifCase(expr(int), logicalOrPattern(varPattern(x, \
                              matchedType: int, staticType: int), wildcardPattern(\
                              matchedType: int), matchedType: int), variables(\
                              notConsistent:logicalOr int x = [x1]), true, block(), \
                              noop)",
-                        )],
-                        errors(&[
-                            "logicalOrPatternBranchMissingVariable(node: PATTERN, \
-                             hasInLeft: true, name: x, variable: x1)",
-                        ]),
+                            ),
+                        ],
+                        errors(&["logicalOrPatternBranchMissingVariable(node: PATTERN, \
+                             hasInLeft: true, name: x, variable: x1)"]),
                     );
                 }
 
@@ -1450,23 +1512,23 @@ mod patterns {
                     let x1 = Var::new("x").with_identity("x1").error_id("x1");
                     Var::join("x", vec![x1]);
                     h.run_with(
-                        vec![if_case(
-                            expr("int"),
-                            wildcard().or(x1.pattern()).error_id("PATTERN"),
-                            vec![],
-                            None,
-                        )
-                        .check_ir(
-                            "ifCase(expr(int), logicalOrPattern(wildcardPattern(\
+                        vec![
+                            if_case(
+                                expr("int"),
+                                wildcard().or(x1.pattern()).error_id("PATTERN"),
+                                vec![],
+                                None,
+                            )
+                            .check_ir(
+                                "ifCase(expr(int), logicalOrPattern(wildcardPattern(\
                              matchedType: int), varPattern(x, matchedType: int, \
                              staticType: int), matchedType: int), variables(\
                              notConsistent:logicalOr int x = [x1]), true, block(), \
                              noop)",
-                        )],
-                        errors(&[
-                            "logicalOrPatternBranchMissingVariable(node: PATTERN, \
-                             hasInLeft: false, name: x, variable: x1)",
-                        ]),
+                            ),
+                        ],
+                        errors(&["logicalOrPatternBranchMissingVariable(node: PATTERN, \
+                             hasInLeft: false, name: x, variable: x1)"]),
                     );
                 }
             }

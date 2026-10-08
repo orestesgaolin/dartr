@@ -19,6 +19,7 @@
 //! different associated types, and [`SharedTypeAnalyzer`] converts them
 //! (the client provides `Into<Node>` conversions).
 
+use dartr_flow::body_inference_context::SharedBodyInferenceContext;
 use dartr_flow::flow_analysis::{FlowAnalysis, PromotionKey};
 use dartr_flow::flow_analysis_operations::{FlowAnalysisOperations, FlowAnalysisTypeOperations};
 use dartr_flow::null_shorting::{
@@ -36,7 +37,6 @@ use dartr_flow::type_analysis_result::{
     SharedMap, SwitchExpressionResult, SwitchStatementTypeAnalysisResult, UnnecessaryWildcardKind,
     WildcardPatternResult, YieldStatementResult,
 };
-use dartr_flow::body_inference_context::SharedBodyInferenceContext;
 use dartr_flow::type_analyzer::{
     JoinedPatternVariableInconsistency, JoinedPatternVariableLocation, MatchContextOf,
     PropertyMemberOf, RecordPatternFieldOf, RelationalOperatorKind, TypeAnalyzer,
@@ -408,7 +408,9 @@ pub fn analyze_declared_variable_pattern<A: SharedTypeAnalyzer + ?Sized>(
         let kind = kind_of(a, matched_value_type);
         if kind != SharedTypeKind::Dynamic
             && kind != SharedTypeKind::Invalid
-            && !a.operations().is_subtype_of(matched_value_type, static_type)
+            && !a
+                .operations()
+                .is_subtype_of(matched_value_type, static_type)
         {
             pattern_type_mismatch_in_irrefutable_context_error =
                 Some(a.errors().pattern_type_mismatch_in_irrefutable_context(
@@ -689,7 +691,8 @@ pub fn analyze_if_element<A: SharedTypeAnalyzer + ?Sized>(
     // Stack: ()
     a.flow().if_statement_condition_begin();
     let bool_schema = a.operations().type_to_schema(a.operations().bool_type());
-    let condition_analysis_result = a.analyze_expression(condition, bool_schema, false, true, false);
+    let condition_analysis_result =
+        a.analyze_expression(condition, bool_schema, false, true, false);
     a.handle_if_element_condition_end(node);
     // Stack: (Expression condition)
     a.flow()
@@ -709,7 +712,8 @@ pub fn analyze_if_statement<A: SharedTypeAnalyzer + ?Sized>(
     // Stack: ()
     a.flow().if_statement_condition_begin();
     let bool_schema = a.operations().type_to_schema(a.operations().bool_type());
-    let condition_analysis_result = a.analyze_expression(condition, bool_schema, false, true, false);
+    let condition_analysis_result =
+        a.analyze_expression(condition, bool_schema, false, true, false);
     a.handle_if_statement_condition_end(node);
     // Stack: (Expression condition)
     a.flow().if_statement_then_begin(
@@ -917,10 +921,11 @@ pub fn analyze_logical_or_pattern<A: SharedTypeAnalyzer + ?Sized>(
     let mut context = context.clone();
     let mut refutable_pattern_in_irrefutable_context_error = None;
     if let Some(irrefutable_context) = context.irrefutable_context {
-        refutable_pattern_in_irrefutable_context_error = Some(
-            a.errors()
-                .refutable_pattern_in_irrefutable_context(A::pattern_node(node), irrefutable_context),
-        );
+        refutable_pattern_in_irrefutable_context_error =
+            Some(a.errors().refutable_pattern_in_irrefutable_context(
+                A::pattern_node(node),
+                irrefutable_context,
+            ));
         // Avoid cascading errors
         context = context.make_refutable();
     }
@@ -1152,7 +1157,8 @@ pub fn analyze_map_pattern_schema<A: SharedTypeAnalyzer + ?Sized>(
 ) -> SchemaView<Ops<A>> {
     if let Some(type_arguments) = type_arguments {
         let ops = a.operations();
-        return ops.type_to_schema(ops.map_type(type_arguments.key_type, type_arguments.value_type));
+        return ops
+            .type_to_schema(ops.map_type(type_arguments.key_type, type_arguments.value_type));
     }
 
     let mut value_type: Option<SchemaView<Ops<A>>> = None;
@@ -1198,10 +1204,11 @@ pub fn analyze_null_check_or_assert_pattern<A: SharedTypeAnalyzer + ?Sized>(
     if let Some(irrefutable_context) = irrefutable_context
         && !is_assert
     {
-        refutable_pattern_in_irrefutable_context_error = Some(
-            a.errors()
-                .refutable_pattern_in_irrefutable_context(A::pattern_node(node), irrefutable_context),
-        );
+        refutable_pattern_in_irrefutable_context_error =
+            Some(a.errors().refutable_pattern_in_irrefutable_context(
+                A::pattern_node(node),
+                irrefutable_context,
+            ));
         // Avoid cascading errors
         context = context.make_refutable();
     } else if matched_type_is_strictly_non_nullable {
@@ -1300,9 +1307,7 @@ pub fn analyze_object_pattern<A: SharedTypeAnalyzer + ?Sized>(
         // in error recovery circumstances, one may be absent; when this
         // happens, use the empty string as a the property name to prevent a
         // crash.
-        let property_name = field
-            .name
-            .unwrap_or_else(A::empty_name);
+        let property_name = field.name.unwrap_or_else(A::empty_name);
         let promoted_property_type = a
             .flow()
             .push_property_subpattern(property_name, property_member, unpromoted_property_type)
@@ -1421,10 +1426,12 @@ pub fn analyze_pattern_for_in<A: SharedTypeAnalyzer + ?Sized>(
             SharedTypeKind::Dynamic => a.operations().dynamic_type(),
             SharedTypeKind::Invalid => a.operations().error_type(),
             _ => {
-                pattern_for_in_expression_is_not_iterable_error = Some(
-                    a.errors()
-                        .pattern_for_in_expression_is_not_iterable(node, expression, expression_type),
-                );
+                pattern_for_in_expression_is_not_iterable_error =
+                    Some(a.errors().pattern_for_in_expression_is_not_iterable(
+                        node,
+                        expression,
+                        expression_type,
+                    ));
                 a.operations().error_type()
             }
         },
@@ -1682,10 +1689,11 @@ pub fn analyze_relational_pattern<A: SharedTypeAnalyzer + ?Sized>(
     // Stack: ()
     let mut refutable_pattern_in_irrefutable_context_error = None;
     if let Some(irrefutable_context) = context.irrefutable_context {
-        refutable_pattern_in_irrefutable_context_error = Some(
-            a.errors()
-                .refutable_pattern_in_irrefutable_context(A::pattern_node(node), irrefutable_context),
-        );
+        refutable_pattern_in_irrefutable_context_error =
+            Some(a.errors().refutable_pattern_in_irrefutable_context(
+                A::pattern_node(node),
+                irrefutable_context,
+            ));
     }
     let operator = a.resolve_relational_pattern_operator(node, matched_value_type);
     let mut parameter_type = operator.map(|operator| operator.parameter_type);
@@ -1730,7 +1738,9 @@ pub fn analyze_relational_pattern<A: SharedTypeAnalyzer + ?Sized>(
     let mut operator_return_type_not_assignable_to_bool_error = None;
     if let Some(operator) = operator {
         if let Some(parameter_type) = parameter_type
-            && !a.operations().is_assignable_to(operand_type, parameter_type)
+            && !a
+                .operations()
+                .is_assignable_to(operand_type, parameter_type)
         {
             argument_type_not_assignable_error =
                 Some(a.errors().relational_pattern_operand_type_not_assignable(
@@ -2129,9 +2139,10 @@ pub fn analyze_wildcard_pattern<A: SharedTypeAnalyzer + ?Sized>(
     }
 
     let is_always_matching = match declared_type {
-        Some(declared_type) => a
-            .flow()
-            .promote_for_pattern(matched_value_type, declared_type, true, false),
+        Some(declared_type) => {
+            a.flow()
+                .promote_for_pattern(matched_value_type, declared_type, true, false)
+        }
         None => true,
     };
 
@@ -2352,7 +2363,12 @@ fn match_record_type_shape<A: SharedTypeAnalyzer + ?Sized>(
     let matched_type_named: Vec<(NameOf<Ops<A>>, TypeView<Ops<A>>)> = ops
         .sorted_named_types_shared(record_type)
         .into_iter()
-        .map(|named| (named.name_shared, TypeView::<Ops<A>>::new(named.type_shared)))
+        .map(|named| {
+            (
+                named.name_shared,
+                TypeView::<Ops<A>>::new(named.type_shared),
+            )
+        })
         .collect();
 
     let mut result = Vec::new();
@@ -2673,7 +2689,13 @@ macro_rules! type_analyzer_mixin {
             $crate::__private::shared_type::TypeOf<Self::Operations>,
             Self::Error,
         > {
-            $crate::type_analyzer::analyze_map_pattern(self, context, node, type_arguments, elements)
+            $crate::type_analyzer::analyze_map_pattern(
+                self,
+                context,
+                node,
+                type_arguments,
+                elements,
+            )
         }
 
         fn analyze_map_pattern_schema(
@@ -2824,7 +2846,9 @@ macro_rules! type_analyzer_mixin {
             $crate::__private::null_shorting::ExpressionInfoOf<Self>,
             Self::Error,
         > {
-            $crate::type_analyzer::analyze_switch_expression(self, node, scrutinee, num_cases, schema)
+            $crate::type_analyzer::analyze_switch_expression(
+                self, node, scrutinee, num_cases, schema,
+            )
         }
 
         fn analyze_switch_statement(

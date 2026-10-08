@@ -86,7 +86,10 @@ fn element_to_string_inner(arena: &[Element], var: Var) -> String {
         } => {
             let mut parts = Vec::new();
             if *inconsistency != Inconsistency::None {
-                parts.push(format!("notConsistent:{}", inconsistency_name(*inconsistency)));
+                parts.push(format!(
+                    "notConsistent:{}",
+                    inconsistency_name(*inconsistency)
+                ));
             }
             let list: Vec<String> = components
                 .iter()
@@ -179,9 +182,8 @@ impl VariableBinder for Binder {
                 None => flat.push(variable),
             }
         }
-        let inconsistency = inconsistency.max_with_all(
-            components.iter().map(|&c| self.inconsistency_of(c)),
-        );
+        let inconsistency =
+            inconsistency.max_with_all(components.iter().map(|&c| self.inconsistency_of(c)));
         let mut arena = self.arena.borrow_mut();
         arena.push(Element::Join {
             components: flat,
@@ -258,8 +260,11 @@ impl Harness {
                 self.visit(left);
                 self.state.logical_or_pattern_finish_left();
                 self.visit(right);
-                self.state
-                    .logical_or_pattern_finish(&mut self.binder, Some(&mut self.errors), node);
+                self.state.logical_or_pattern_finish(
+                    &mut self.binder,
+                    Some(&mut self.errors),
+                    node,
+                );
             }
             Pattern::Var(name, id) => {
                 let element = {
@@ -349,11 +354,7 @@ mod logical_or {
 
         #[test]
         fn both_have() {
-            Harness::new().run_pattern(
-                or(var("x", 1), var("x", 2)),
-                &[],
-                &["x: [1, 2]"],
-            );
+            Harness::new().run_pattern(or(var("x", 1), var("x", 2)), &[], &["x: [1, 2]"]);
         }
 
         #[test]
