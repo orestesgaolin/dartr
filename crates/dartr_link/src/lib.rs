@@ -14,5 +14,10 @@
 
 pub mod ast_util;
 pub mod dump;
+pub mod element_builder;
+pub mod export;
+pub mod informative_data;
 pub mod input;
+pub mod library_builder;
+pub mod link;
 pub mod reference;
