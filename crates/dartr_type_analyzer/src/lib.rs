@@ -28,6 +28,7 @@
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
 pub mod type_analyzer;
+pub mod variable_bindings;
 
 /// Re-exports used by the mixin macros (not public API).
 #[doc(hidden)]
