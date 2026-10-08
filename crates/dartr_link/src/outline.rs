@@ -74,20 +74,24 @@ pub fn build_outlines(lk: &mut Linker<'_>, tp: &TypeProvider) {
     for index in 0..lk.builders.len() {
         crate::library_builder::LibraryBuilder::build_enum_synthetic_constructors(lk, index);
     }
-    build_mixin_application_constructors(lk, tp);
     for index in 0..lk.builders.len() {
         crate::library_builder::LibraryBuilder::replace_const_fields_if_no_const_constructor(lk, index);
     }
     for index in 0..lk.builders.len() {
         crate::library_builder::LibraryBuilder::resolve_constructor_field_formals(lk, index);
     }
+    {
+        let lk_ref: &Linker<'_> = lk;
+        let ctx = link_ctx(lk_ref, tp, &features);
+        build_enum_children(lk_ref, &ctx);
+        for index in 0..lk_ref.builders.len() {
+            compute_field_promotability(lk_ref, &ctx, index);
+        }
+    }
+    complete_classes(lk, tp);
     let lk_ref: &Linker<'_> = lk;
     let ctx = link_ctx(lk_ref, tp, &features);
-    build_enum_children(lk_ref, &ctx);
-    for index in 0..lk_ref.builders.len() {
-        compute_field_promotability(lk_ref, &ctx, index);
-    }
-    resolve_super_constructors(lk_ref, &ctx);
+    resolve_redirected_constructors(lk_ref, &ctx);
     set_induced_modifiers(lk_ref, &ctx);
     build_extension_types(lk_ref, &ctx);
 }
@@ -187,57 +191,141 @@ fn set_default_supertypes(lk: &Linker<'_>, ctx: &Ctx<'_>) {
     }
 }
 
-/// Dart `ClassElementImpl._buildMixinAppConstructors` for every mixin
-/// application class of the cycle (Dart builds them on first access; they
-/// are built here before the store is frozen). The super constructor is
+/// The classes and enums of the cycle, completed superclass first: the
+/// constructors of a mixin application (Dart
+/// `ClassElementImpl._buildMixinAppConstructors`, built on first access in
+/// Dart, here before the store is frozen), the super constructors (Dart
+/// `SuperConstructorResolver`) and the types of initializing formal
+/// parameters (Dart `InstanceMemberInferrer._inferConstructor`, the part
+/// that does not need top-level inference). The super constructor is
 /// recorded as the base element (Dart: the substituted member).
-fn build_mixin_application_constructors(lk: &mut Linker<'_>, tp: &TypeProvider) {
-    let mut classes: Vec<(usize, EId<ClassElement>)> = Vec::new();
+fn complete_classes(lk: &mut Linker<'_>, tp: &TypeProvider) {
+    let mut classes: Vec<(usize, EId<InterfaceElement>)> = Vec::new();
     for (index, b) in lk.builders.iter().enumerate() {
-        for &c in &lk.core.store.get(b.element).classes {
-            let first = lk.core.store.get(c).first_fragment();
-            if lk
-                .core
-                .store
-                .fragment(first)
-                .flags
-                .has(FragmentFlags::CLASS_FRAGMENT_IS_MIXIN_APPLICATION)
-            {
-                classes.push((index, c));
-            }
+        let l = lk.core.store.get(b.element);
+        for &c in &l.classes {
+            classes.push((index, c.upcast()));
+        }
+        for &e in &l.enums {
+            classes.push((index, e.upcast()));
         }
     }
-    let mut done: IndexSet<EId<ClassElement>> = IndexSet::new();
-    for &(index, c) in &classes {
-        build_mixin_app(lk, tp, &classes, &mut done, index, c);
+    let mut done: IndexSet<EId<InterfaceElement>> = IndexSet::new();
+    for &(index, c) in &classes.clone() {
+        complete_class(lk, tp, &classes, &mut done, index, c);
     }
 }
 
-fn build_mixin_app(
+fn complete_class(
     lk: &mut Linker<'_>,
     tp: &TypeProvider,
-    classes: &[(usize, EId<ClassElement>)],
-    done: &mut IndexSet<EId<ClassElement>>,
+    classes: &[(usize, EId<InterfaceElement>)],
+    done: &mut IndexSet<EId<InterfaceElement>>,
     index: usize,
-    class: EId<ClassElement>,
+    class: EId<InterfaceElement>,
 ) {
     if !done.insert(class) {
         return;
     }
     let features = FeatureSet::default();
+    let superclass = {
+        let ctx = link_ctx(lk, tp, &features);
+        ctx.interface(class).supertype.get().and_then(|t| interface_element_of(&ctx, t))
+    };
+    if let Some(s) = superclass
+        && let Some(&(i, _)) = classes.iter().find(|(_, x)| *x == s)
+    {
+        complete_class(lk, tp, classes, done, i, s);
+    }
+    let is_mixin_application = class.raw().tag() == Tag::Class
+        && lk
+            .core
+            .store
+            .fragment_data(lk.core.store.element_data(class.raw()).unwrap().first_fragment)
+            .unwrap()
+            .flags
+            .has(FragmentFlags::CLASS_FRAGMENT_IS_MIXIN_APPLICATION);
+    if is_mixin_application {
+        build_mixin_app(lk, tp, index, EId::from_raw(class.raw()));
+        return;
+    }
+    let ctx = link_ctx(lk, tp, &features);
+    resolve_super_constructors_of(lk, &ctx, class);
+    infer_constructor_formals(&ctx, class);
+}
+
+/// Dart `InstanceMemberInferrer._inferConstructor` (formal parameters).
+fn infer_constructor_formals(ctx: &Ctx<'_>, class: EId<InterfaceElement>) {
+    let i = ctx.interface(class);
+    for &constructor in &i.constructors {
+        let c = ctx.get(constructor);
+        let super_formals: Vec<EId<FormalParameterElement>> = c
+            .formal_params
+            .iter()
+            .copied()
+            .filter(|p| p.raw().tag() == Tag::SuperFormalParameter && ctx.get(*p).kind.is_positional())
+            .collect();
+        for &p in &c.formal_params {
+            let pe = ctx.get(p);
+            if !first_has(ctx, p.raw(), FragmentFlags::VARIABLE_FRAGMENT_HAS_IMPLICIT_TYPE) {
+                continue;
+            }
+            match p.raw().tag() {
+                Tag::FieldFormalParameter if pe.first_fragment().raw().tag() == Tag::FieldFormalParameter => {
+                    if let Some(field) = pe.field.get()
+                        && let Some(t) = ctx.get(field).type_.get()
+                    {
+                        pe.type_.set(Some(t));
+                    }
+                }
+                Tag::SuperFormalParameter if pe.first_fragment().raw().tag() == Tag::SuperFormalParameter => {
+                    let t = super_constructor_parameter_type(ctx, class, constructor, p, &super_formals);
+                    pe.type_.set(Some(t.unwrap_or(TypeId::DYNAMIC)));
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+/// The type of Dart `SuperFormalParameterElementImpl.superConstructorParameter`
+/// (substituted with the supertype).
+fn super_constructor_parameter_type(
+    ctx: &Ctx<'_>,
+    class: EId<InterfaceElement>,
+    constructor: EId<ConstructorElement>,
+    p: EId<FormalParameterElement>,
+    positional_super_formals: &[EId<FormalParameterElement>],
+) -> Option<TypeId> {
+    let ElemRef::Base(super_constructor) = ctx.get(constructor).super_constructor.get()? else {
+        return None;
+    };
+    let super_params = &ctx.get(EId::<ConstructorElement>::from_raw(super_constructor)).formal_params;
+    let pe = ctx.get(p);
+    let found = if pe.kind.is_named() {
+        super_params
+            .iter()
+            .copied()
+            .find(|&s| ctx.get(s).kind.is_named() && ctx.get(s).name == pe.name)
+    } else {
+        let index = positional_super_formals.iter().position(|&x| x == p)?;
+        super_params
+            .iter()
+            .copied()
+            .filter(|&s| ctx.get(s).kind.is_positional())
+            .nth(index)
+    }?;
+    let t = ctx.get(found).type_.get()?;
+    let supertype = ctx.interface(class).supertype.get()?;
+    let substitution = MapSubstitution::from_interface_type(ctx, supertype);
+    Some(substitution.substitute_type(ctx, t))
+}
+
+fn build_mixin_app(lk: &mut Linker<'_>, tp: &TypeProvider, index: usize, class: EId<ClassElement>) {
+    let features = FeatureSet::default();
     let Some(super_type) = lk.core.store.get(class).supertype.get() else {
         return;
     };
-    // The super class first, when it is a mixin application of this cycle.
-    {
-        let ctx = link_ctx(lk, tp, &features);
-        if let Some(s) = interface_element_of(&ctx, super_type)
-            && let Some(sc) = s.raw().cast::<ClassElement>()
-            && let Some(&(i, _)) = classes.iter().find(|(_, x)| *x == sc)
-        {
-            build_mixin_app(lk, tp, classes, done, i, sc);
-        }
-    }
     struct NewParam {
         name: Option<Name>,
         kind: ParameterKind,
@@ -296,7 +384,10 @@ fn build_mixin_app(
                     kind: f.parameter_kind,
                     ty: substitution.substitute_type(&ctx, pe.type_.get().unwrap_or(TypeId::INVALID)),
                     is_const: f.flags.has(FragmentFlags::VARIABLE_FRAGMENT_IS_CONST),
-                    is_final: f.flags.has(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL),
+                    // Dart `isFinal` of the element: always `true` for
+                    // field formal and super formal parameters.
+                    is_final: matches!(p.raw().tag(), Tag::FieldFormalParameter | Tag::SuperFormalParameter)
+                        || f.flags.has(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL),
                     initializer: f.constant_initializer.map(|e| (first.store(), e)),
                 });
             }
@@ -618,71 +709,49 @@ impl FieldPromotability {
     }
 }
 
-/// Dart `SuperConstructorResolver.perform`.
-fn resolve_super_constructors(lk: &Linker<'_>, ctx: &Ctx<'_>) {
+/// Dart `SuperConstructorResolver._constructor` for the constructors of
+/// [interface].
+fn resolve_super_constructors_of(lk: &Linker<'_>, ctx: &Ctx<'_>, interface: EId<InterfaceElement>) {
     use dartr_ast::*;
-    for b in &lk.builders {
-        let l = ctx.get(b.element);
-        let interfaces: Vec<EId<InterfaceElement>> = l
-            .classes
-            .iter()
-            .map(|c| c.upcast())
-            .chain(l.enums.iter().map(|e| e.upcast()))
-            .collect();
-        for interface in interfaces {
-            if interface.raw().tag() == Tag::Class
-                && first_has(ctx, interface.raw(), FragmentFlags::CLASS_FRAGMENT_IS_MIXIN_APPLICATION)
-            {
-                continue;
-            }
-            let i = ctx.interface(interface);
-            for &constructor in &i.constructors {
-                if first_has(ctx, constructor.raw(), FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_FACTORY) {
-                    continue;
-                }
-                let named_constructor = |name: &str| -> Option<ElemRef> {
-                    let supertype = i.supertype.get()?;
-                    let s = interface_element_of(ctx, supertype)?;
-                    ctx.interface(s)
-                        .constructors
-                        .iter()
-                        .find(|&&c| ctx.get(c).name.map(|n| ctx.name_str(n)) == Some(name))
-                        .map(|c| ElemRef::Base(c.raw()))
-                };
-                let mut invokes_default = true;
-                let mut fragment = Some(ctx.get(constructor).first_fragment().raw());
-                while let Some(f) = fragment {
-                    if let Some(&(lib, unit, node)) = lk.core.fragment_nodes.get(&f) {
-                        let ast = crate::types::unit_ast(lk, lib as u32, unit as u32);
-                        let initializers = if let Some(c) = ast.cast::<ConstructorDeclaration>(node) {
-                            Some(ast.get(c).initializers)
-                        } else if ast.is::<PrimaryConstructorDeclaration>(node) {
-                            None
-                        } else {
-                            None
-                        };
-                        if let Some(list) = initializers {
-                            for &init in ast.list(list) {
-                                if ast.is::<RedirectingConstructorInvocation>(init.raw()) {
-                                    invokes_default = false;
-                                } else if let Some(s) = ast.cast::<SuperConstructorInvocation>(init.raw()) {
-                                    invokes_default = false;
-                                    let name = ast
-                                        .get(s)
-                                        .constructor_name
-                                        .map(|n| ast.tokens.lexeme(ast.get(n).token))
-                                        .unwrap_or("new");
-                                    ctx.get(constructor).super_constructor.set(named_constructor(name));
-                                }
-                            }
+    let i = ctx.interface(interface);
+    for &constructor in &i.constructors {
+        if first_has(ctx, constructor.raw(), FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_FACTORY) {
+            continue;
+        }
+        let named_constructor = |name: &str| -> Option<ElemRef> {
+            let supertype = i.supertype.get()?;
+            let s = interface_element_of(ctx, supertype)?;
+            ctx.interface(s)
+                .constructors
+                .iter()
+                .find(|&&c| ctx.get(c).name.map(|n| ctx.name_str(n)) == Some(name))
+                .map(|c| ElemRef::Base(c.raw()))
+        };
+        let mut invokes_default = true;
+        let mut fragment = Some(ctx.get(constructor).first_fragment().raw());
+        while let Some(f) = fragment {
+            if let Some(&(lib, unit, node)) = lk.core.fragment_nodes.get(&f) {
+                let ast = crate::types::unit_ast(lk, lib as u32, unit as u32);
+                if let Some(c) = ast.cast::<ConstructorDeclaration>(node) {
+                    for &init in ast.list(ast.get(c).initializers) {
+                        if ast.is::<RedirectingConstructorInvocation>(init.raw()) {
+                            invokes_default = false;
+                        } else if let Some(s) = ast.cast::<SuperConstructorInvocation>(init.raw()) {
+                            invokes_default = false;
+                            let name = ast
+                                .get(s)
+                                .constructor_name
+                                .map(|n| ast.tokens.lexeme(ast.get(n).token))
+                                .unwrap_or("new");
+                            ctx.get(constructor).super_constructor.set(named_constructor(name));
                         }
                     }
-                    fragment = ctx.fragment_data(f).unwrap().next_fragment;
-                }
-                if invokes_default {
-                    ctx.get(constructor).super_constructor.set(named_constructor("new"));
                 }
             }
+            fragment = ctx.fragment_data(f).unwrap().next_fragment;
+        }
+        if invokes_default {
+            ctx.get(constructor).super_constructor.set(named_constructor("new"));
         }
     }
 }
@@ -949,5 +1018,92 @@ fn collect_extension_types(ctx: &Ctx<'_>, t: TypeId, out: &mut Vec<EId<Extension
         }
         TypeKind::TypeParameter { promoted_bound: Some(b), .. } => collect_extension_types(ctx, b, out),
         _ => {}
+    }
+}
+
+/// The redirected constructors of `ConstructorInitializerResolver`: Dart
+/// resolves the redirection with the `AstResolver` (unit C10). This port
+/// resolves the constructor name with the library scope: the type name
+/// (also prefixed, also a type alias of a class) and the constructor name,
+/// or the constructor of the class for `this.name(...)`. The result is the
+/// base element (Dart: the substituted member).
+fn resolve_redirected_constructors(lk: &Linker<'_>, ctx: &Ctx<'_>) {
+    use dartr_ast::*;
+    let scopes = crate::scope::LibraryScopes::build(lk);
+    let named = |interface: EId<InterfaceElement>, name: &str| -> Option<ElementId> {
+        ctx.interface(interface)
+            .constructors
+            .iter()
+            .find(|&&c| ctx.get(c).name.map(|n| ctx.name_str(n)) == Some(name))
+            .map(|c| c.raw())
+    };
+    for (lib, b) in lk.builders.iter().enumerate() {
+        for interface in interfaces_of(ctx, b.element) {
+            for &constructor in &ctx.interface(interface).constructors {
+                if !first_has(ctx, constructor.raw(), FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_DECLARATION) {
+                    continue;
+                }
+                let mut fragment = Some(ctx.get(constructor).first_fragment().raw());
+                while let Some(f) = fragment {
+                    fragment = ctx.fragment_data(f).unwrap().next_fragment;
+                    let Some(&(l, unit, node)) = lk.core.fragment_nodes.get(&f) else { continue };
+                    let ast = crate::types::unit_ast(lk, l as u32, unit as u32);
+                    let Some(c) = ast.cast::<ConstructorDeclaration>(node) else { continue };
+                    let c = ast.get(c);
+                    if c.factory_keyword.is_some() {
+                        let Some(rc) = c.redirected_constructor else { continue };
+                        let rc = ast.get(rc);
+                        let t = ast.get(rc.type_);
+                        let unit_fragment = lk.builders[lib].units[unit].fragment;
+                        let type_name = ast.tokens.lexeme(t.name);
+                        // `C.name` is parsed as a prefixed type `C.name`; Dart
+                        // rewrites it when `C` is not a prefix (AstRewriter).
+                        let mut constructor_name: Option<&str> = rc.name.map(|n| ast.tokens.lexeme(ast.get(n).token));
+                        let element = match t.import_prefix {
+                            Some(p) => {
+                                let prefix = ast.tokens.lexeme(ast.get(p).name);
+                                match scopes.lookup(unit_fragment, prefix).getter {
+                                    Some(crate::scope::ScopeElement::Prefix(_, s)) => {
+                                        scopes.prefix_lookup(s, type_name).getter
+                                    }
+                                    other if constructor_name.is_none() => {
+                                        constructor_name = Some(type_name);
+                                        other
+                                    }
+                                    _ => None,
+                                }
+                            }
+                            None => scopes.lookup(unit_fragment, type_name).getter,
+                        };
+                        let element = element.and_then(|e| e.element());
+                        let interface_element = element.and_then(|e| {
+                            if let Some(i) = e.cast::<InterfaceElement>() {
+                                Some(i)
+                            } else if let Some(a) = e.cast::<TypeAliasElement>() {
+                                let aliased = ctx.get(a).aliased_type.get()?;
+                                interface_element_of(ctx, aliased)
+                            } else {
+                                None
+                            }
+                        });
+                        let name = constructor_name.unwrap_or("new");
+                        let target = interface_element.and_then(|i| named(i, name));
+                        ctx.get(constructor).redirected_constructor.set(target.map(ElemRef::Base));
+                    } else {
+                        for &init in ast.list(c.initializers) {
+                            if let Some(r) = ast.cast::<RedirectingConstructorInvocation>(init.raw()) {
+                                let name = ast
+                                    .get(r)
+                                    .constructor_name
+                                    .map(|n| ast.tokens.lexeme(ast.get(n).token))
+                                    .unwrap_or("new");
+                                let target = named(interface, name);
+                                ctx.get(constructor).redirected_constructor.set(target.map(ElemRef::Base));
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
