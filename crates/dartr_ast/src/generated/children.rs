@@ -43,6 +43,14 @@ impl AdjacentStrings {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.strings, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -137,6 +145,29 @@ impl Annotation {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.name, start, end) {
+            return Some(self.name.raw());
+        }
+        if let Some(c) = self.type_arguments {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.constructor_name {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.arguments {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -228,6 +259,14 @@ impl AnonymousBlockBody {
         f(self.block.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.block, start, end) {
+            return Some(self.block.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -282,6 +321,14 @@ impl AnonymousExpressionBody {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.expression.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -353,6 +400,24 @@ impl AnonymousMethodInvocation {
             f(c.raw());
         }
         f(self.body.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.target {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.parameters {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.body, start, end) {
+            return Some(self.body.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -442,6 +507,14 @@ impl ArgumentList {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.arguments, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -505,6 +578,17 @@ impl AsExpression {
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.expression.raw());
         f(self.type_.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        if ast.contains_offset(self.type_, start, end) {
+            return Some(self.type_.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -583,6 +667,19 @@ impl AssertInitializer {
         if let Some(c) = self.message {
             f(c.raw());
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.condition, start, end) {
+            return Some(self.condition.raw());
+        }
+        if let Some(c) = self.message {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -665,6 +762,19 @@ impl AssertStatement {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.condition, start, end) {
+            return Some(self.condition.raw());
+        }
+        if let Some(c) = self.message {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -730,6 +840,11 @@ impl AssignedVariablePattern {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -775,6 +890,17 @@ impl AssignmentExpression {
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.left_hand_side.raw());
         f(self.right_hand_side.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.left_hand_side, start, end) {
+            return Some(self.left_hand_side.raw());
+        }
+        if ast.contains_offset(self.right_hand_side, start, end) {
+            return Some(self.right_hand_side.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -844,6 +970,14 @@ impl AwaitExpression {
         f(self.expression.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -900,6 +1034,17 @@ impl BinaryExpression {
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.left_operand.raw());
         f(self.right_operand.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.left_operand, start, end) {
+            return Some(self.left_operand.raw());
+        }
+        if ast.contains_offset(self.right_operand, start, end) {
+            return Some(self.right_operand.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -976,6 +1121,14 @@ impl Block {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.statements, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -1040,6 +1193,14 @@ impl BlockClassBody {
         for &c in ast.list_raw(self.members) {
             f(c);
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.members, start, end) {
+            return Some(result);
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -1115,6 +1276,17 @@ impl BlockEnumBody {
         for &c in ast.list_raw(self.members) {
             f(c);
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.constants, start, end) {
+            return Some(result);
+        }
+        if let Some(result) = ast.element_containing_range(self.members, start, end) {
+            return Some(result);
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -1207,6 +1379,14 @@ impl BlockFunctionBody {
         f(self.block.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.block, start, end) {
+            return Some(self.block.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -1260,6 +1440,11 @@ impl BooleanLiteral {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -1308,6 +1493,16 @@ impl BreakStatement {
         if let Some(c) = self.label {
             f(c.raw());
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.label {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -1375,6 +1570,17 @@ impl CascadeExpression {
         for &c in ast.list_raw(self.cascade_sections) {
             f(c);
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.target, start, end) {
+            return Some(self.target.raw());
+        }
+        if let Some(result) = ast.element_containing_range(self.cascade_sections, start, end) {
+            return Some(result);
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -1451,6 +1657,14 @@ impl CaseClause {
         f(self.guarded_pattern.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.guarded_pattern, start, end) {
+            return Some(self.guarded_pattern.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -1507,6 +1721,17 @@ impl CastPattern {
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.pattern.raw());
         f(self.type_.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.pattern, start, end) {
+            return Some(self.pattern.raw());
+        }
+        if ast.contains_offset(self.type_, start, end) {
+            return Some(self.type_.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -1632,6 +1857,29 @@ impl CatchClause {
         f(self.body.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.exception_type {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.exception_parameter {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.stack_trace_parameter {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.body, start, end) {
+            return Some(self.body.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -1720,6 +1968,11 @@ impl CatchClauseParameter {
 
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
@@ -1843,6 +2096,45 @@ impl ClassDeclaration {
             f(c.raw());
         }
         f(self.body.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if ast.contains_offset(self.name_part, start, end) {
+            return Some(self.name_part.raw());
+        }
+        if let Some(c) = self.extends_clause {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.with_clause {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.implements_clause {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.native_clause {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.body, start, end) {
+            return Some(self.body.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -2060,6 +2352,35 @@ impl ClassTypeAlias {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.type_parameters {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.superclass, start, end) {
+            return Some(self.superclass.raw());
+        }
+        if ast.contains_offset(self.with_clause, start, end) {
+            return Some(self.with_clause.raw());
+        }
+        if let Some(c) = self.implements_clause {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -2167,6 +2488,14 @@ impl Comment {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.references, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -2235,6 +2564,14 @@ impl CommentReference {
         f(self.expression.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -2276,6 +2613,22 @@ impl CompilationUnit {
             f(c.raw());
         }
         ast.visit_directives_and_declarations(self.directives, self.declarations, f);
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.script_tag {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.directives, start, end) {
+            return Some(result);
+        }
+        if let Some(result) = ast.element_containing_range(self.declarations, start, end) {
+            return Some(result);
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -2376,6 +2729,20 @@ impl ConditionalExpression {
         f(self.else_expression.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.condition, start, end) {
+            return Some(self.condition.raw());
+        }
+        if ast.contains_offset(self.then_expression, start, end) {
+            return Some(self.then_expression.raw());
+        }
+        if ast.contains_offset(self.else_expression, start, end) {
+            return Some(self.else_expression.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -2467,6 +2834,22 @@ impl Configuration {
         f(self.uri.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.name, start, end) {
+            return Some(self.name.raw());
+        }
+        if let Some(c) = self.value {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.uri, start, end) {
+            return Some(self.uri.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -2549,6 +2932,14 @@ impl ConstantPattern {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.expression.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -2682,6 +3073,38 @@ impl ConstructorDeclaration {
             f(c.raw());
         }
         f(self.body.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.type_name {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.parameters, start, end) {
+            return Some(self.parameters.raw());
+        }
+        if let Some(result) = ast.element_containing_range(self.initializers, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.redirected_constructor {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.body, start, end) {
+            return Some(self.body.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -2837,6 +3260,17 @@ impl ConstructorFieldInitializer {
         f(self.expression.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.field_name, start, end) {
+            return Some(self.field_name.raw());
+        }
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -2918,6 +3352,19 @@ impl ConstructorName {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.type_, start, end) {
+            return Some(self.type_.raw());
+        }
+        if let Some(c) = self.name {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -2985,6 +3432,14 @@ impl ConstructorReference {
         f(self.constructor_name.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.constructor_name, start, end) {
+            return Some(self.constructor_name.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -3039,6 +3494,14 @@ impl ConstructorSelector {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.name.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.name, start, end) {
+            return Some(self.name.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -3100,6 +3563,16 @@ impl ContinueStatement {
         if let Some(c) = self.label {
             f(c.raw());
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.label {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -3181,6 +3654,24 @@ impl DeclaredIdentifier {
         if let Some(c) = self.type_ {
             f(c.raw());
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.type_ {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -3283,6 +3774,16 @@ impl DeclaredVariablePattern {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.type_ {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -3344,6 +3845,17 @@ impl DoStatement {
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.body.raw());
         f(self.condition.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.body, start, end) {
+            return Some(self.body.raw());
+        }
+        if ast.contains_offset(self.condition, start, end) {
+            return Some(self.condition.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -3425,6 +3937,22 @@ impl DotShorthandConstructorInvocation {
             f(c.raw());
         }
         f(self.argument_list.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.constructor_name, start, end) {
+            return Some(self.constructor_name.raw());
+        }
+        if let Some(c) = self.type_arguments {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.argument_list, start, end) {
+            return Some(self.argument_list.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -3514,6 +4042,22 @@ impl DotShorthandInvocation {
         f(self.argument_list.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.member_name, start, end) {
+            return Some(self.member_name.raw());
+        }
+        if let Some(c) = self.type_arguments {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.argument_list, start, end) {
+            return Some(self.argument_list.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -3593,6 +4137,14 @@ impl DotShorthandPropertyAccess {
         f(self.property_name.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.property_name, start, end) {
+            return Some(self.property_name.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -3650,6 +4202,11 @@ impl DottedName {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -3691,6 +4248,11 @@ impl DoubleLiteral {
 
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
@@ -3734,6 +4296,11 @@ impl EmptyClassBody {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -3775,6 +4342,11 @@ impl EmptyEnumBody {
 
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
@@ -3818,6 +4390,11 @@ impl EmptyFunctionBody {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -3859,6 +4436,11 @@ impl EmptyStatement {
 
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
@@ -3920,6 +4502,24 @@ impl EnumConstantArguments {
             f(c.raw());
         }
         f(self.argument_list.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.type_arguments {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.constructor_selector {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.argument_list, start, end) {
+            return Some(self.argument_list.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -4024,6 +4624,24 @@ impl EnumConstantDeclaration {
         if let Some(c) = self.arguments {
             f(c.raw());
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.arguments {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -4142,6 +4760,35 @@ impl EnumDeclaration {
             f(c.raw());
         }
         f(self.body.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if ast.contains_offset(self.name_part, start, end) {
+            return Some(self.name_part.raw());
+        }
+        if let Some(c) = self.with_clause {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.implements_clause {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.body, start, end) {
+            return Some(self.body.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -4293,6 +4940,28 @@ impl ExportDirective {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if ast.contains_offset(self.uri, start, end) {
+            return Some(self.uri.raw());
+        }
+        if let Some(result) = ast.element_containing_range(self.configurations, start, end) {
+            return Some(result);
+        }
+        if let Some(result) = ast.element_containing_range(self.combinators, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -4433,6 +5102,14 @@ impl ExpressionFunctionBody {
         f(self.expression.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -4494,6 +5171,14 @@ impl ExpressionStatement {
         f(self.expression.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -4548,6 +5233,14 @@ impl ExtendsClause {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.superclass.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.superclass, start, end) {
+            return Some(self.superclass.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -4639,6 +5332,32 @@ impl ExtensionDeclaration {
             f(c.raw());
         }
         f(self.body.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.type_parameters {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.on_clause {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.body, start, end) {
+            return Some(self.body.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -4751,6 +5470,14 @@ impl ExtensionOnClause {
         f(self.extended_type.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.extended_type, start, end) {
+            return Some(self.extended_type.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -4820,6 +5547,24 @@ impl ExtensionOverride {
             f(c.raw());
         }
         f(self.argument_list.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.import_prefix {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.type_arguments {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.argument_list, start, end) {
+            return Some(self.argument_list.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -4926,6 +5671,30 @@ impl ExtensionTypeDeclaration {
             f(c.raw());
         }
         f(self.body.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if ast.contains_offset(self.name_part, start, end) {
+            return Some(self.name_part.raw());
+        }
+        if let Some(c) = self.implements_clause {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.body, start, end) {
+            return Some(self.body.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -5075,6 +5844,22 @@ impl FieldDeclaration {
         f(self.fields.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if ast.contains_offset(self.fields, start, end) {
+            return Some(self.fields.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -5217,6 +6002,34 @@ impl FieldFormalParameter {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.type_ {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.function_typed_suffix {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.default_clause {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -5330,6 +6143,17 @@ impl ForEachPartsWithDeclaration {
         f(self.iterable.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.loop_variable, start, end) {
+            return Some(self.loop_variable.raw());
+        }
+        if ast.contains_offset(self.iterable, start, end) {
+            return Some(self.iterable.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -5397,6 +6221,17 @@ impl ForEachPartsWithIdentifier {
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.identifier.raw());
         f(self.iterable.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.identifier, start, end) {
+            return Some(self.identifier.raw());
+        }
+        if ast.contains_offset(self.iterable, start, end) {
+            return Some(self.iterable.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -5474,6 +6309,20 @@ impl ForEachPartsWithPattern {
         }
         f(self.pattern.raw());
         f(self.iterable.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if ast.contains_offset(self.pattern, start, end) {
+            return Some(self.pattern.raw());
+        }
+        if ast.contains_offset(self.iterable, start, end) {
+            return Some(self.iterable.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -5571,6 +6420,17 @@ impl ForElement {
         f(self.body.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.for_loop_parts, start, end) {
+            return Some(self.for_loop_parts.raw());
+        }
+        if ast.contains_offset(self.body, start, end) {
+            return Some(self.body.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -5650,6 +6510,22 @@ impl ForPartsWithDeclarations {
         for &c in ast.list_raw(self.updaters) {
             f(c);
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.variables, start, end) {
+            return Some(self.variables.raw());
+        }
+        if let Some(c) = self.condition {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.updaters, start, end) {
+            return Some(result);
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -5759,6 +6635,24 @@ impl ForPartsWithExpression {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.initialization {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.condition {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.updaters, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -5860,6 +6754,22 @@ impl ForPartsWithPattern {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.variables, start, end) {
+            return Some(self.variables.raw());
+        }
+        if let Some(c) = self.condition {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.updaters, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -5956,6 +6866,17 @@ impl ForStatement {
         f(self.body.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.for_loop_parts, start, end) {
+            return Some(self.for_loop_parts.raw());
+        }
+        if ast.contains_offset(self.body, start, end) {
+            return Some(self.body.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -6023,6 +6944,14 @@ impl FormalParameterDefaultClause {
         f(self.value.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.value, start, end) {
+            return Some(self.value.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -6073,6 +7002,14 @@ impl FormalParameterList {
         for &c in ast.list_raw(self.parameters) {
             f(c);
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.parameters, start, end) {
+            return Some(result);
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -6176,6 +7113,27 @@ impl FunctionDeclaration {
         f(self.function_expression.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.return_type {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.function_expression, start, end) {
+            return Some(self.function_expression.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -6273,6 +7231,14 @@ impl FunctionDeclarationStatement {
         f(self.function_declaration.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.function_declaration, start, end) {
+            return Some(self.function_declaration.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -6344,6 +7310,24 @@ impl FunctionExpression {
             f(c.raw());
         }
         f(self.body.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.type_parameters {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.parameters {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.body, start, end) {
+            return Some(self.body.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -6433,6 +7417,22 @@ impl FunctionExpressionInvocation {
         f(self.argument_list.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.function, start, end) {
+            return Some(self.function.raw());
+        }
+        if let Some(c) = self.type_arguments {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.argument_list, start, end) {
+            return Some(self.argument_list.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -6518,6 +7518,19 @@ impl FunctionReference {
         if let Some(c) = self.type_arguments {
             f(c.raw());
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.function, start, end) {
+            return Some(self.function.raw());
+        }
+        if let Some(c) = self.type_arguments {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -6617,6 +7630,32 @@ impl FunctionTypeAlias {
             f(c.raw());
         }
         f(self.parameters.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.return_type {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.type_parameters {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.parameters, start, end) {
+            return Some(self.parameters.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -6743,6 +7782,19 @@ impl FunctionTypedFormalParameterSuffix {
         f(self.formal_parameters.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.type_parameters {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.formal_parameters, start, end) {
+            return Some(self.formal_parameters.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -6830,6 +7882,24 @@ impl GenericFunctionType {
             f(c.raw());
         }
         f(self.parameters.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.return_type {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.type_parameters {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.parameters, start, end) {
+            return Some(self.parameters.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -6938,6 +8008,27 @@ impl GenericTypeAlias {
         f(self.type_.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.type_parameters {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.type_, start, end) {
+            return Some(self.type_.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -7044,6 +8135,19 @@ impl GuardedPattern {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.pattern, start, end) {
+            return Some(self.pattern.raw());
+        }
+        if let Some(c) = self.when_clause {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -7119,6 +8223,14 @@ impl HideCombinator {
         for &c in ast.list_raw(self.hidden_names) {
             f(c);
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.hidden_names, start, end) {
+            return Some(result);
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -7207,6 +8319,27 @@ impl IfElement {
         if let Some(c) = self.else_element {
             f(c.raw());
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        if let Some(c) = self.case_clause {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.then_element, start, end) {
+            return Some(self.then_element.raw());
+        }
+        if let Some(c) = self.else_element {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -7327,6 +8460,27 @@ impl IfStatement {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        if let Some(c) = self.case_clause {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.then_statement, start, end) {
+            return Some(self.then_statement.raw());
+        }
+        if let Some(c) = self.else_statement {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -7427,6 +8581,14 @@ impl ImplementsClause {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.interfaces, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -7496,6 +8658,19 @@ impl ImplicitCallReference {
         if let Some(c) = self.type_arguments {
             f(c.raw());
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        if let Some(c) = self.type_arguments {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -7604,6 +8779,33 @@ impl ImportDirective {
         for &c in ast.list_raw(self.combinators) {
             f(c);
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if ast.contains_offset(self.uri, start, end) {
+            return Some(self.uri.raw());
+        }
+        if let Some(result) = ast.element_containing_range(self.configurations, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.prefix {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.combinators, start, end) {
+            return Some(result);
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -7738,6 +8940,11 @@ impl ImportPrefixReference {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -7803,6 +9010,19 @@ impl IndexExpression {
             f(c.raw());
         }
         f(self.index.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.target {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.index, start, end) {
+            return Some(self.index.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -7886,6 +9106,22 @@ impl InstanceCreationExpression {
         f(self.argument_list.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.constructor_name, start, end) {
+            return Some(self.constructor_name.raw());
+        }
+        if let Some(c) = self.type_arguments {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.argument_list, start, end) {
+            return Some(self.argument_list.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -7962,6 +9198,11 @@ impl IntegerLiteral {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -8011,6 +9252,14 @@ impl InterpolationExpression {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.expression.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -8066,6 +9315,11 @@ impl InterpolationString {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -8114,6 +9368,17 @@ impl IsExpression {
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.expression.raw());
         f(self.type_.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        if ast.contains_offset(self.type_, start, end) {
+            return Some(self.type_.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -8181,6 +9446,11 @@ impl Label {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -8222,6 +9492,11 @@ impl LabelReference {
 
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
@@ -8272,6 +9547,17 @@ impl LabeledStatement {
             f(c);
         }
         f(self.statement.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.labels, start, end) {
+            return Some(result);
+        }
+        if ast.contains_offset(self.statement, start, end) {
+            return Some(self.statement.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -8355,6 +9641,24 @@ impl LibraryDirective {
         if let Some(c) = self.name {
             f(c.raw());
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.name {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -8462,6 +9766,19 @@ impl ListLiteral {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.type_arguments {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.elements, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -8549,6 +9866,19 @@ impl ListPattern {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.type_arguments {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.elements, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -8626,6 +9956,17 @@ impl LogicalAndPattern {
         f(self.right_operand.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.left_operand, start, end) {
+            return Some(self.left_operand.raw());
+        }
+        if ast.contains_offset(self.right_operand, start, end) {
+            return Some(self.right_operand.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -8693,6 +10034,17 @@ impl LogicalOrPattern {
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.left_operand.raw());
         f(self.right_operand.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.left_operand, start, end) {
+            return Some(self.left_operand.raw());
+        }
+        if ast.contains_offset(self.right_operand, start, end) {
+            return Some(self.right_operand.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -8771,6 +10123,17 @@ impl MapLiteralEntry {
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.key.raw());
         f(self.value.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.key, start, end) {
+            return Some(self.key.raw());
+        }
+        if ast.contains_offset(self.value, start, end) {
+            return Some(self.value.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -8852,6 +10215,19 @@ impl MapPattern {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.type_arguments {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.elements, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -8927,6 +10303,17 @@ impl MapPatternEntry {
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.key.raw());
         f(self.value.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.key, start, end) {
+            return Some(self.key.raw());
+        }
+        if ast.contains_offset(self.value, start, end) {
+            return Some(self.value.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -9054,6 +10441,37 @@ impl MethodDeclaration {
             f(c.raw());
         }
         f(self.body.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.return_type {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.type_parameters {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.parameters {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.body, start, end) {
+            return Some(self.body.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -9200,6 +10618,27 @@ impl MethodInvocation {
         f(self.argument_list.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.target {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.method_name, start, end) {
+            return Some(self.method_name.raw());
+        }
+        if let Some(c) = self.type_arguments {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.argument_list, start, end) {
+            return Some(self.argument_list.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -9333,6 +10772,37 @@ impl MixinDeclaration {
         f(self.body.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.type_parameters {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.on_clause {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.implements_clause {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.body, start, end) {
+            return Some(self.body.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -9464,6 +10934,15 @@ impl MixinOnClause {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.superclass_constraints, start, end)
+        {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -9535,6 +11014,16 @@ impl NameWithTypeParameters {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.type_parameters {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -9591,6 +11080,14 @@ impl NamedArgument {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.argument_expression.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.argument_expression, start, end) {
+            return Some(self.argument_expression.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -9671,6 +11168,21 @@ impl NamedType {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.import_prefix {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.type_arguments {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -9747,6 +11259,16 @@ impl NativeClause {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.name {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -9809,6 +11331,16 @@ impl NativeFunctionBody {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.string_literal {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -9864,6 +11396,14 @@ impl NullAssertPattern {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.pattern.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.pattern, start, end) {
+            return Some(self.pattern.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -9922,6 +11462,14 @@ impl NullAwareElement {
         f(self.value.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.value, start, end) {
+            return Some(self.value.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -9978,6 +11526,14 @@ impl NullCheckPattern {
         f(self.pattern.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.pattern, start, end) {
+            return Some(self.pattern.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -10031,6 +11587,11 @@ impl NullLiteral {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -10079,6 +11640,17 @@ impl ObjectPattern {
         for &c in ast.list_raw(self.fields) {
             f(c);
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.type_, start, end) {
+            return Some(self.type_.raw());
+        }
+        if let Some(result) = ast.element_containing_range(self.fields, start, end) {
+            return Some(result);
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -10149,6 +11721,14 @@ impl ParenthesizedExpression {
         f(self.expression.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -10204,6 +11784,14 @@ impl ParenthesizedPattern {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.pattern.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.pattern, start, end) {
+            return Some(self.pattern.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -10272,6 +11860,22 @@ impl PartDirective {
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         ast.visit_comment_and_annotations(self.documentation_comment, self.metadata, f);
         f(self.uri.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if ast.contains_offset(self.uri, start, end) {
+            return Some(self.uri.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -10383,6 +11987,29 @@ impl PartOfDirective {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.uri {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.library_name {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -10484,6 +12111,17 @@ impl PatternAssignment {
         f(self.expression.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.pattern, start, end) {
+            return Some(self.pattern.raw());
+        }
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -10559,6 +12197,19 @@ impl PatternField {
         f(self.pattern.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.name {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.pattern, start, end) {
+            return Some(self.pattern.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -10630,6 +12281,11 @@ impl PatternFieldName {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -10687,6 +12343,25 @@ impl PatternVariableDeclaration {
         ast.visit_comment_and_annotations(self.documentation_comment, self.metadata, f);
         f(self.pattern.raw());
         f(self.expression.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if ast.contains_offset(self.pattern, start, end) {
+            return Some(self.pattern.raw());
+        }
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -10786,6 +12461,14 @@ impl PatternVariableDeclarationStatement {
         f(self.declaration.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.declaration, start, end) {
+            return Some(self.declaration.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -10842,6 +12525,14 @@ impl PostfixExpression {
         f(self.operand.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.operand, start, end) {
+            return Some(self.operand.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -10891,6 +12582,14 @@ impl PrefixExpression {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.operand.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.operand, start, end) {
+            return Some(self.operand.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -10944,6 +12643,17 @@ impl PrefixedIdentifier {
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.prefix.raw());
         f(self.identifier.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.prefix, start, end) {
+            return Some(self.prefix.raw());
+        }
+        if ast.contains_offset(self.identifier, start, end) {
+            return Some(self.identifier.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -11033,6 +12743,25 @@ impl PrimaryConstructorBody {
             f(c);
         }
         f(self.body.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if let Some(result) = ast.element_containing_range(self.initializers, start, end) {
+            return Some(result);
+        }
+        if ast.contains_offset(self.body, start, end) {
+            return Some(self.body.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -11157,6 +12886,24 @@ impl PrimaryConstructorDeclaration {
         f(self.formal_parameters.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.type_parameters {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.constructor_name {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.formal_parameters, start, end) {
+            return Some(self.formal_parameters.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -11235,6 +12982,11 @@ impl PrimaryConstructorName {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -11287,6 +13039,19 @@ impl PropertyAccess {
             f(c.raw());
         }
         f(self.property_name.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.target {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.property_name, start, end) {
+            return Some(self.property_name.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -11366,6 +13131,14 @@ impl RecordLiteral {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.fields, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -11421,6 +13194,14 @@ impl RecordLiteralNamedField {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.field_expression.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.field_expression, start, end) {
+            return Some(self.field_expression.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -11480,6 +13261,14 @@ impl RecordPattern {
         for &c in ast.list_raw(self.fields) {
             f(c);
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.fields, start, end) {
+            return Some(result);
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -11555,6 +13344,19 @@ impl RecordTypeAnnotation {
         if let Some(c) = self.named_fields {
             f(c.raw());
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.positional_fields, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.named_fields {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -11639,6 +13441,17 @@ impl RecordTypeAnnotationNamedField {
         f(self.type_.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if ast.contains_offset(self.type_, start, end) {
+            return Some(self.type_.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -11716,6 +13529,14 @@ impl RecordTypeAnnotationNamedFields {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.fields, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -11782,6 +13603,17 @@ impl RecordTypeAnnotationPositionalField {
             f(c);
         }
         f(self.type_.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if ast.contains_offset(self.type_, start, end) {
+            return Some(self.type_.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -11865,6 +13697,19 @@ impl RedirectingConstructorInvocation {
             f(c.raw());
         }
         f(self.argument_list.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.constructor_name {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.argument_list, start, end) {
+            return Some(self.argument_list.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -12015,6 +13860,34 @@ impl RegularFormalParameter {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.type_ {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.function_typed_suffix {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.default_clause {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -12126,6 +13999,14 @@ impl RelationalPattern {
         f(self.operand.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.operand, start, end) {
+            return Some(self.operand.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -12189,6 +14070,16 @@ impl RestPatternElement {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.pattern {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -12243,6 +14134,11 @@ impl RethrowExpression {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -12291,6 +14187,16 @@ impl ReturnStatement {
         if let Some(c) = self.expression {
             f(c.raw());
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.expression {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -12346,6 +14252,11 @@ impl ScriptTag {
 
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
@@ -12408,6 +14319,19 @@ impl SetOrMapLiteral {
         for &c in ast.list_raw(self.elements) {
             f(c);
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.type_arguments {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.elements, start, end) {
+            return Some(result);
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -12494,6 +14418,14 @@ impl ShowCombinator {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.shown_names, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -12554,6 +14486,11 @@ impl SimpleIdentifier {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -12595,6 +14532,11 @@ impl SimpleStringLiteral {
 
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
@@ -12639,6 +14581,14 @@ impl SpreadElement {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.expression.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -12702,6 +14652,14 @@ impl StringInterpolation {
         for &c in ast.list_raw(self.elements) {
             f(c);
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.elements, start, end) {
+            return Some(result);
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -12776,6 +14734,19 @@ impl SuperConstructorInvocation {
         f(self.argument_list.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.constructor_name {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if ast.contains_offset(self.argument_list, start, end) {
+            return Some(self.argument_list.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -12840,6 +14811,11 @@ impl SuperExpression {
 
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
@@ -12940,6 +14916,34 @@ impl SuperFormalParameter {
         if let Some(c) = self.default_clause {
             f(c.raw());
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.type_ {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.function_typed_suffix {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(c) = self.default_clause {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -13072,6 +15076,20 @@ impl SwitchCase {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.labels, start, end) {
+            return Some(result);
+        }
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        if let Some(result) = ast.element_containing_range(self.statements, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -13174,6 +15192,17 @@ impl SwitchDefault {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.labels, start, end) {
+            return Some(result);
+        }
+        if let Some(result) = ast.element_containing_range(self.statements, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -13256,6 +15285,17 @@ impl SwitchExpression {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        if let Some(result) = ast.element_containing_range(self.cases, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -13323,6 +15363,17 @@ impl SwitchExpressionCase {
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.guarded_pattern.raw());
         f(self.expression.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.guarded_pattern, start, end) {
+            return Some(self.guarded_pattern.raw());
+        }
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -13409,6 +15460,20 @@ impl SwitchPatternCase {
         for &c in ast.list_raw(self.statements) {
             f(c);
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.labels, start, end) {
+            return Some(result);
+        }
+        if ast.contains_offset(self.guarded_pattern, start, end) {
+            return Some(self.guarded_pattern.raw());
+        }
+        if let Some(result) = ast.element_containing_range(self.statements, start, end) {
+            return Some(result);
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -13504,6 +15569,17 @@ impl SwitchStatement {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        if let Some(result) = ast.element_containing_range(self.members, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -13578,6 +15654,11 @@ impl SymbolLiteral {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -13619,6 +15700,11 @@ impl ThisExpression {
 
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {}
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        None
+    }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
@@ -13663,6 +15749,14 @@ impl ThrowExpression {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.expression.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -13748,6 +15842,22 @@ impl TopLevelVariableDeclaration {
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         ast.visit_comment_and_annotations(self.documentation_comment, self.metadata, f);
         f(self.variables.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if ast.contains_offset(self.variables, start, end) {
+            return Some(self.variables.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -13862,6 +15972,22 @@ impl TryStatement {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.body, start, end) {
+            return Some(self.body.raw());
+        }
+        if let Some(result) = ast.element_containing_range(self.catch_clauses, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.finally_block {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -13955,6 +16081,14 @@ impl TypeArgumentList {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.arguments, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -14015,6 +16149,14 @@ impl TypeLiteral {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.type_.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.type_, start, end) {
+            return Some(self.type_.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -14101,6 +16243,24 @@ impl TypeParameter {
         if let Some(c) = self.bound {
             f(c.raw());
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.bound {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -14197,6 +16357,14 @@ impl TypeParameterList {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.type_parameters, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -14282,6 +16450,24 @@ impl VariableDeclaration {
         if let Some(c) = self.initializer {
             f(c.raw());
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.initializer {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -14423,6 +16609,27 @@ impl VariableDeclarationList {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.documentation_comment {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.metadata, start, end) {
+            return Some(result);
+        }
+        if let Some(c) = self.type_ {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        if let Some(result) = ast.element_containing_range(self.variables, start, end) {
+            return Some(result);
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -14528,6 +16735,14 @@ impl VariableDeclarationStatement {
         f(self.variables.raw());
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.variables, start, end) {
+            return Some(self.variables.raw());
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -14582,6 +16797,14 @@ impl WhenClause {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.expression.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -14642,6 +16865,17 @@ impl WhileStatement {
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.condition.raw());
         f(self.body.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.condition, start, end) {
+            return Some(self.condition.raw());
+        }
+        if ast.contains_offset(self.body, start, end) {
+            return Some(self.body.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -14724,6 +16958,16 @@ impl WildcardPattern {
         }
     }
 
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(c) = self.type_ {
+            if ast.contains_offset(c, start, end) {
+                return Some(c.raw());
+            }
+        }
+        None
+    }
+
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
     /// a child slot. Returns false if [old] is not a child.
     pub(crate) fn replace_child(
@@ -14788,6 +17032,14 @@ impl WithClause {
         for &c in ast.list_raw(self.mixin_types) {
             f(c);
         }
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if let Some(result) = ast.element_containing_range(self.mixin_types, start, end) {
+            return Some(result);
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -14855,6 +17107,14 @@ impl YieldStatement {
     /// The child nodes in Dart `visitChildren` order.
     pub(crate) fn for_each_child(&self, ast: &Ast, f: &mut dyn FnMut(NodeId)) {
         f(self.expression.raw());
+    }
+
+    /// Dart `_childContainingRange`: the child that contains the range.
+    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {
+        if ast.contains_offset(self.expression, start, end) {
+            return Some(self.expression.raw());
+        }
+        None
     }
 
     /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in
@@ -17472,6 +19732,559 @@ impl Ast {
             }
             NodeKind::WithClause => self.stores.with_clause[slot].remove_child(lists, old),
             NodeKind::YieldStatement => self.stores.yield_statement[slot].remove_child(lists, old),
+        }
+    }
+
+    /// Dart `AstNodeImpl._childContainingRange`.
+    pub(crate) fn child_containing_range(
+        &self,
+        id: NodeId,
+        start: u32,
+        end: u32,
+    ) -> Option<NodeId> {
+        let slot = self.slot(id);
+        match self.kind(id) {
+            NodeKind::AdjacentStrings => {
+                self.stores.adjacent_strings[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::Annotation => {
+                self.stores.annotation[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::AnonymousBlockBody => {
+                self.stores.anonymous_block_body[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::AnonymousExpressionBody => {
+                self.stores.anonymous_expression_body[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::AnonymousMethodInvocation => self.stores.anonymous_method_invocation[slot]
+                .child_containing_range(self, start, end),
+            NodeKind::ArgumentList => {
+                self.stores.argument_list[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::AsExpression => {
+                self.stores.as_expression[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::AssertInitializer => {
+                self.stores.assert_initializer[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::AssertStatement => {
+                self.stores.assert_statement[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::AssignedVariablePattern => {
+                self.stores.assigned_variable_pattern[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::AssignmentExpression => {
+                self.stores.assignment_expression[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::AwaitExpression => {
+                self.stores.await_expression[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::BinaryExpression => {
+                self.stores.binary_expression[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::Block => self.stores.block[slot].child_containing_range(self, start, end),
+            NodeKind::BlockClassBody => {
+                self.stores.block_class_body[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::BlockEnumBody => {
+                self.stores.block_enum_body[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::BlockFunctionBody => {
+                self.stores.block_function_body[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::BooleanLiteral => {
+                self.stores.boolean_literal[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::BreakStatement => {
+                self.stores.break_statement[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::CascadeExpression => {
+                self.stores.cascade_expression[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::CaseClause => {
+                self.stores.case_clause[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::CastPattern => {
+                self.stores.cast_pattern[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::CatchClause => {
+                self.stores.catch_clause[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::CatchClauseParameter => {
+                self.stores.catch_clause_parameter[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ClassDeclaration => {
+                self.stores.class_declaration[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ClassTypeAlias => {
+                self.stores.class_type_alias[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::Comment => self.stores.comment[slot].child_containing_range(self, start, end),
+            NodeKind::CommentReference => {
+                self.stores.comment_reference[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::CompilationUnit => {
+                self.stores.compilation_unit[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ConditionalExpression => {
+                self.stores.conditional_expression[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::Configuration => {
+                self.stores.configuration[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ConstantPattern => {
+                self.stores.constant_pattern[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ConstructorDeclaration => {
+                self.stores.constructor_declaration[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ConstructorFieldInitializer => self.stores.constructor_field_initializer
+                [slot]
+                .child_containing_range(self, start, end),
+            NodeKind::ConstructorName => {
+                self.stores.constructor_name[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ConstructorReference => {
+                self.stores.constructor_reference[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ConstructorSelector => {
+                self.stores.constructor_selector[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ContinueStatement => {
+                self.stores.continue_statement[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::DeclaredIdentifier => {
+                self.stores.declared_identifier[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::DeclaredVariablePattern => {
+                self.stores.declared_variable_pattern[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::DoStatement => {
+                self.stores.do_statement[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::DotShorthandConstructorInvocation => {
+                self.stores.dot_shorthand_constructor_invocation[slot]
+                    .child_containing_range(self, start, end)
+            }
+            NodeKind::DotShorthandInvocation => {
+                self.stores.dot_shorthand_invocation[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::DotShorthandPropertyAccess => self.stores.dot_shorthand_property_access[slot]
+                .child_containing_range(self, start, end),
+            NodeKind::DottedName => {
+                self.stores.dotted_name[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::DoubleLiteral => {
+                self.stores.double_literal[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::EmptyClassBody => {
+                self.stores.empty_class_body[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::EmptyEnumBody => {
+                self.stores.empty_enum_body[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::EmptyFunctionBody => {
+                self.stores.empty_function_body[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::EmptyStatement => {
+                self.stores.empty_statement[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::EnumConstantArguments => {
+                self.stores.enum_constant_arguments[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::EnumConstantDeclaration => {
+                self.stores.enum_constant_declaration[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::EnumDeclaration => {
+                self.stores.enum_declaration[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ExportDirective => {
+                self.stores.export_directive[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ExpressionFunctionBody => {
+                self.stores.expression_function_body[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ExpressionStatement => {
+                self.stores.expression_statement[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ExtendsClause => {
+                self.stores.extends_clause[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ExtensionDeclaration => {
+                self.stores.extension_declaration[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ExtensionOnClause => {
+                self.stores.extension_on_clause[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ExtensionOverride => {
+                self.stores.extension_override[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ExtensionTypeDeclaration => self.stores.extension_type_declaration[slot]
+                .child_containing_range(self, start, end),
+            NodeKind::FieldDeclaration => {
+                self.stores.field_declaration[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::FieldFormalParameter => {
+                self.stores.field_formal_parameter[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ForEachPartsWithDeclaration => self.stores.for_each_parts_with_declaration
+                [slot]
+                .child_containing_range(self, start, end),
+            NodeKind::ForEachPartsWithIdentifier => self.stores.for_each_parts_with_identifier
+                [slot]
+                .child_containing_range(self, start, end),
+            NodeKind::ForEachPartsWithPattern => self.stores.for_each_parts_with_pattern[slot]
+                .child_containing_range(self, start, end),
+            NodeKind::ForElement => {
+                self.stores.for_element[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ForPartsWithDeclarations => self.stores.for_parts_with_declarations[slot]
+                .child_containing_range(self, start, end),
+            NodeKind::ForPartsWithExpression => {
+                self.stores.for_parts_with_expression[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ForPartsWithPattern => {
+                self.stores.for_parts_with_pattern[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ForStatement => {
+                self.stores.for_statement[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::FormalParameterDefaultClause => self.stores.formal_parameter_default_clause
+                [slot]
+                .child_containing_range(self, start, end),
+            NodeKind::FormalParameterList => {
+                self.stores.formal_parameter_list[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::FunctionDeclaration => {
+                self.stores.function_declaration[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::FunctionDeclarationStatement => self.stores.function_declaration_statement
+                [slot]
+                .child_containing_range(self, start, end),
+            NodeKind::FunctionExpression => {
+                self.stores.function_expression[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::FunctionExpressionInvocation => self.stores.function_expression_invocation
+                [slot]
+                .child_containing_range(self, start, end),
+            NodeKind::FunctionReference => {
+                self.stores.function_reference[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::FunctionTypeAlias => {
+                self.stores.function_type_alias[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::FunctionTypedFormalParameterSuffix => {
+                self.stores.function_typed_formal_parameter_suffix[slot]
+                    .child_containing_range(self, start, end)
+            }
+            NodeKind::GenericFunctionType => {
+                self.stores.generic_function_type[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::GenericTypeAlias => {
+                self.stores.generic_type_alias[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::GuardedPattern => {
+                self.stores.guarded_pattern[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::HideCombinator => {
+                self.stores.hide_combinator[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::IfElement => {
+                self.stores.if_element[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::IfStatement => {
+                self.stores.if_statement[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ImplementsClause => {
+                self.stores.implements_clause[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ImplicitCallReference => {
+                self.stores.implicit_call_reference[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ImportDirective => {
+                self.stores.import_directive[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ImportPrefixReference => {
+                self.stores.import_prefix_reference[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::IndexExpression => {
+                self.stores.index_expression[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::InstanceCreationExpression => self.stores.instance_creation_expression[slot]
+                .child_containing_range(self, start, end),
+            NodeKind::IntegerLiteral => {
+                self.stores.integer_literal[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::InterpolationExpression => {
+                self.stores.interpolation_expression[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::InterpolationString => {
+                self.stores.interpolation_string[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::IsExpression => {
+                self.stores.is_expression[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::Label => self.stores.label[slot].child_containing_range(self, start, end),
+            NodeKind::LabelReference => {
+                self.stores.label_reference[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::LabeledStatement => {
+                self.stores.labeled_statement[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::LibraryDirective => {
+                self.stores.library_directive[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ListLiteral => {
+                self.stores.list_literal[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ListPattern => {
+                self.stores.list_pattern[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::LogicalAndPattern => {
+                self.stores.logical_and_pattern[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::LogicalOrPattern => {
+                self.stores.logical_or_pattern[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::MapLiteralEntry => {
+                self.stores.map_literal_entry[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::MapPattern => {
+                self.stores.map_pattern[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::MapPatternEntry => {
+                self.stores.map_pattern_entry[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::MethodDeclaration => {
+                self.stores.method_declaration[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::MethodInvocation => {
+                self.stores.method_invocation[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::MixinDeclaration => {
+                self.stores.mixin_declaration[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::MixinOnClause => {
+                self.stores.mixin_on_clause[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::NameWithTypeParameters => {
+                self.stores.name_with_type_parameters[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::NamedArgument => {
+                self.stores.named_argument[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::NamedType => {
+                self.stores.named_type[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::NativeClause => {
+                self.stores.native_clause[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::NativeFunctionBody => {
+                self.stores.native_function_body[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::NullAssertPattern => {
+                self.stores.null_assert_pattern[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::NullAwareElement => {
+                self.stores.null_aware_element[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::NullCheckPattern => {
+                self.stores.null_check_pattern[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::NullLiteral => {
+                self.stores.null_literal[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ObjectPattern => {
+                self.stores.object_pattern[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ParenthesizedExpression => {
+                self.stores.parenthesized_expression[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ParenthesizedPattern => {
+                self.stores.parenthesized_pattern[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::PartDirective => {
+                self.stores.part_directive[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::PartOfDirective => {
+                self.stores.part_of_directive[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::PatternAssignment => {
+                self.stores.pattern_assignment[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::PatternField => {
+                self.stores.pattern_field[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::PatternFieldName => {
+                self.stores.pattern_field_name[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::PatternVariableDeclaration => self.stores.pattern_variable_declaration[slot]
+                .child_containing_range(self, start, end),
+            NodeKind::PatternVariableDeclarationStatement => {
+                self.stores.pattern_variable_declaration_statement[slot]
+                    .child_containing_range(self, start, end)
+            }
+            NodeKind::PostfixExpression => {
+                self.stores.postfix_expression[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::PrefixExpression => {
+                self.stores.prefix_expression[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::PrefixedIdentifier => {
+                self.stores.prefixed_identifier[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::PrimaryConstructorBody => {
+                self.stores.primary_constructor_body[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::PrimaryConstructorDeclaration => self.stores.primary_constructor_declaration
+                [slot]
+                .child_containing_range(self, start, end),
+            NodeKind::PrimaryConstructorName => {
+                self.stores.primary_constructor_name[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::PropertyAccess => {
+                self.stores.property_access[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::RecordLiteral => {
+                self.stores.record_literal[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::RecordLiteralNamedField => self.stores.record_literal_named_field[slot]
+                .child_containing_range(self, start, end),
+            NodeKind::RecordPattern => {
+                self.stores.record_pattern[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::RecordTypeAnnotation => {
+                self.stores.record_type_annotation[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::RecordTypeAnnotationNamedField => {
+                self.stores.record_type_annotation_named_field[slot]
+                    .child_containing_range(self, start, end)
+            }
+            NodeKind::RecordTypeAnnotationNamedFields => {
+                self.stores.record_type_annotation_named_fields[slot]
+                    .child_containing_range(self, start, end)
+            }
+            NodeKind::RecordTypeAnnotationPositionalField => {
+                self.stores.record_type_annotation_positional_field[slot]
+                    .child_containing_range(self, start, end)
+            }
+            NodeKind::RedirectingConstructorInvocation => {
+                self.stores.redirecting_constructor_invocation[slot]
+                    .child_containing_range(self, start, end)
+            }
+            NodeKind::RegularFormalParameter => {
+                self.stores.regular_formal_parameter[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::RelationalPattern => {
+                self.stores.relational_pattern[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::RestPatternElement => {
+                self.stores.rest_pattern_element[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::RethrowExpression => {
+                self.stores.rethrow_expression[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ReturnStatement => {
+                self.stores.return_statement[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ScriptTag => {
+                self.stores.script_tag[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::SetOrMapLiteral => {
+                self.stores.set_or_map_literal[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ShowCombinator => {
+                self.stores.show_combinator[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::SimpleIdentifier => {
+                self.stores.simple_identifier[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::SimpleStringLiteral => {
+                self.stores.simple_string_literal[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::SpreadElement => {
+                self.stores.spread_element[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::StringInterpolation => {
+                self.stores.string_interpolation[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::SuperConstructorInvocation => self.stores.super_constructor_invocation[slot]
+                .child_containing_range(self, start, end),
+            NodeKind::SuperExpression => {
+                self.stores.super_expression[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::SuperFormalParameter => {
+                self.stores.super_formal_parameter[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::SwitchCase => {
+                self.stores.switch_case[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::SwitchDefault => {
+                self.stores.switch_default[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::SwitchExpression => {
+                self.stores.switch_expression[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::SwitchExpressionCase => {
+                self.stores.switch_expression_case[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::SwitchPatternCase => {
+                self.stores.switch_pattern_case[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::SwitchStatement => {
+                self.stores.switch_statement[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::SymbolLiteral => {
+                self.stores.symbol_literal[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ThisExpression => {
+                self.stores.this_expression[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::ThrowExpression => {
+                self.stores.throw_expression[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::TopLevelVariableDeclaration => self.stores.top_level_variable_declaration
+                [slot]
+                .child_containing_range(self, start, end),
+            NodeKind::TryStatement => {
+                self.stores.try_statement[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::TypeArgumentList => {
+                self.stores.type_argument_list[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::TypeLiteral => {
+                self.stores.type_literal[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::TypeParameter => {
+                self.stores.type_parameter[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::TypeParameterList => {
+                self.stores.type_parameter_list[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::VariableDeclaration => {
+                self.stores.variable_declaration[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::VariableDeclarationList => {
+                self.stores.variable_declaration_list[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::VariableDeclarationStatement => self.stores.variable_declaration_statement
+                [slot]
+                .child_containing_range(self, start, end),
+            NodeKind::WhenClause => {
+                self.stores.when_clause[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::WhileStatement => {
+                self.stores.while_statement[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::WildcardPattern => {
+                self.stores.wildcard_pattern[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::WithClause => {
+                self.stores.with_clause[slot].child_containing_range(self, start, end)
+            }
+            NodeKind::YieldStatement => {
+                self.stores.yield_statement[slot].child_containing_range(self, start, end)
+            }
         }
     }
 

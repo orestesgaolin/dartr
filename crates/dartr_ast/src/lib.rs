@@ -42,6 +42,8 @@ pub use generated::nodes::*;
 pub use generated::visitor::{AstVisitor, AstVisitorMut, GeneralizingAstVisitor};
 pub use node_impl::ParameterKind;
 pub mod dump;
+pub mod extensions;
 #[cfg(feature = "testing")]
 pub mod testing;
 pub mod to_source;
+pub mod utilities;

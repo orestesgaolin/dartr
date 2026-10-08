@@ -476,6 +476,20 @@ use crate::token::lexically_first;
             elif k == 'node_list':
                 out.append('        for &c in ast.list_raw(self.%s) {\n            f(c);\n        }\n' % name)
         out.append('    }\n\n')
+        # _childContainingRange
+        out.append('    /// Dart `_childContainingRange`: the child that contains the range.\n')
+        out.append('    pub(crate) fn child_containing_range(&self, ast: &Ast, start: u32, end: u32) -> Option<NodeId> {\n')
+        for p in allp:
+            name = field(p['name'])
+            k = p['kind']
+            if k == 'node':
+                if p['nullable']:
+                    out.append('        if let Some(c) = self.%s {\n            if ast.contains_offset(c, start, end) {\n                return Some(c.raw());\n            }\n        }\n' % name)
+                else:
+                    out.append('        if ast.contains_offset(self.%s, start, end) {\n            return Some(self.%s.raw());\n        }\n' % (name, name))
+            elif k == 'node_list':
+                out.append('        if let Some(result) = ast.element_containing_range(self.%s, start, end) {\n            return Some(result);\n        }\n' % name)
+        out.append('        None\n    }\n\n')
         # replace child
         out.append('    /// Dart `replaceChild`: replaces [old] with [new] (of kind [kind]) in\n')
         out.append('    /// a child slot. Returns false if [old] is not a child.\n')
@@ -585,6 +599,12 @@ use crate::token::lexically_first;
     s.append('        match self.kinds[parent.index()] {\n')
     for n in nodes:
         s.append('            NodeKind::%s => self.stores.%s[slot].remove_child(lists, old),\n' % (n['name'], snake(n['name'])))
+    s.append('        }\n    }\n\n')
+    s.append('    /// Dart `AstNodeImpl._childContainingRange`.\n')
+    s.append('    pub(crate) fn child_containing_range(&self, id: NodeId, start: u32, end: u32) -> Option<NodeId> {\n')
+    s.append('        let slot = self.slot(id);\n        match self.kind(id) {\n')
+    for n in nodes:
+        s.append('            NodeKind::%s => self.stores.%s[slot].child_containing_range(self, start, end),\n' % (n['name'], snake(n['name'])))
     s.append('        }\n    }\n\n')
     s.append('    /// Dart `AstNode.isInValueExpressionSlot`: whether [child] (a child of\n')
     s.append('    /// [parent]) is in a slot that allows a value expression.\n')

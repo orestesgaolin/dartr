@@ -605,6 +605,83 @@ impl Ast {
         self.parents[new.raw().index()] = Some(owner.into());
     }
 
+    /// Dart `AstNodeImpl._containsOffset`: whether [id] contains the range
+    /// `start..end`. An insertion point between this node and an adjacent
+    /// identifier of another node is not contained.
+    pub fn contains_offset(&self, id: impl Into<NodeId>, start: u32, end: u32) -> bool {
+        let id = id.into();
+        let begin_token = self.begin_token(id);
+        let offset = self.tokens.offset(begin_token);
+        let end_token = self.end_token(id);
+        let node_end = self.tokens.get(end_token).end();
+        if start == end {
+            if start == offset {
+                if let Some(previous) = self.tokens.previous(begin_token).get() {
+                    let p = self.tokens.get(previous);
+                    if start == p.end() && p.is_identifier() {
+                        return false;
+                    }
+                }
+            }
+            if start == node_end {
+                if let Some(next) = self.tokens.next(end_token).get() {
+                    let n = self.tokens.get(next);
+                    if start == n.offset && n.is_identifier() {
+                        return false;
+                    }
+                }
+            }
+        }
+        offset <= start && node_end >= end
+    }
+
+    /// Dart `NodeListImpl._elementContainingRange` (binary search).
+    pub fn element_containing_range<T: ?Sized>(
+        &self,
+        list: NodeList<T>,
+        start: u32,
+        end: u32,
+    ) -> Option<NodeId> {
+        let elements = self.list_raw(list);
+        let mut left: isize = 0;
+        let mut right: isize = elements.len() as isize - 1;
+        while left <= right {
+            let middle = left + (right - left) / 2;
+            let candidate = elements[middle as usize];
+            if self.contains_offset(candidate, start, end) {
+                return Some(candidate);
+            }
+            if end <= self.offset(candidate) {
+                right = middle - 1;
+            } else if self.end(candidate) <= start {
+                left = middle + 1;
+            } else {
+                return None;
+            }
+        }
+        None
+    }
+
+    /// Dart `CompilationUnit.nodeCovering`: the smallest node under [root]
+    /// whose range includes `offset..offset + length`.
+    pub fn node_covering(
+        &self,
+        root: impl Into<NodeId>,
+        offset: u32,
+        length: u32,
+    ) -> Option<NodeId> {
+        let root = root.into();
+        let end = offset + length;
+        if end > self.end(root) {
+            return None;
+        }
+        let mut previous = root;
+        while let Some(current) = self.child_containing_range(previous, offset, end) {
+            previous = current;
+        }
+        Some(previous)
+    }
+
     /// Begin token of an annotated node: Dart `_AnnotatedNodeMixin.beginToken`
     /// without the fallback.
     pub(crate) fn annotated_begin_token(

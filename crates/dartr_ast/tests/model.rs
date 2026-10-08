@@ -295,3 +295,21 @@ fn side_table_holds_resolution_data() {
     assert_eq!(static_types.get(u.x), Some(&"int"));
     assert_eq!(static_types.get(u.f), None);
 }
+
+#[test]
+fn node_covering_and_node_locator_find_the_deepest_node() {
+    let u = build();
+    let ast = &u.ast;
+    // `void main() {f(x);}`: `f` is 13..14, `x` is 15..16.
+    assert_eq!(ast.node_covering(u.unit, 15, 0), Some(u.x.raw()));
+    assert_eq!(ast.node_covering(u.unit, 14, 0), Some(u.f.raw()));
+    assert_eq!(ast.node_covering(u.unit, 13, 4), Some(u.invocation.raw()));
+    assert_eq!(ast.node_covering(u.unit, 0, 30), None);
+    let locate = |start: u32, end: Option<u32>| {
+        utilities::NodeLocator2::new(start, end).search_within(ast, Some(u.unit.raw()))
+    };
+    assert_eq!(locate(15, None), Some(u.x.raw()));
+    assert_eq!(locate(13, Some(16)), Some(u.invocation.raw()));
+    // The end of a declaration name is the declaration.
+    assert_eq!(locate(9, None), Some(u.main.raw()));
+}
