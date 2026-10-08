@@ -752,7 +752,7 @@ impl Server {
 
     fn file_changed(&mut self, path: &str) {
         self.parsed.remove(path);
-        if self.analyzed.contains(path) {
+        if self.analyzed.contains(path) || self.priority.iter().any(|p| p == path) {
             self.dirty.insert(path.to_string());
         }
     }
@@ -863,6 +863,8 @@ impl Server {
         // a context root (for example an open file that is not under a
         // folder, without workspace folders).
         self.dirty = analyzed.clone();
+        self.dirty
+            .extend(self.priority.iter().filter(|p| p.ends_with(".dart")).cloned());
         self.analyzed = analyzed;
         self.parsed.clear();
     }
@@ -929,7 +931,10 @@ impl Server {
             })
             .collect();
         for (path, diagnostics) in results {
-            self.publish_diagnostics(&path, diagnostics);
+            // Dart `handleFileResult`: diagnostics only for analyzed files.
+            if self.analyzed.contains(&path) {
+                self.publish_diagnostics(&path, diagnostics);
+            }
             if self.priority.contains(&path) {
                 self.publish_open_file_notifications(&path);
             }
@@ -956,15 +961,19 @@ impl Server {
     /// Dart `LspServerContextManagerCallbacks.handleResolvedUnitResult`:
     /// closing labels and the outline of an open file. The Flutter outline
     /// needs resolution and is not sent yet.
+    ///
+    /// The outline is sent for every open Dart file that has an analysis
+    /// context (also excluded files), closing labels only for analyzed files
+    /// (Dart `shouldSendClosingLabelsFor`, `shouldSendOutlineFor`). Dart
+    /// sends nothing for an excluded open file until its analysis driver
+    /// knows the file (an analyzed file imports it, or after the next
+    /// change); dartr sends the outline at once.
     fn publish_open_file_notifications(&mut self, path: &str) {
-        if !self.is_analyzed(path) {
-            return;
-        }
         let Some(file) = self.parsed_unit(path) else {
             return;
         };
         let uri = path_to_uri(path);
-        if self.init.closing_labels {
+        if self.init.closing_labels && self.is_analyzed(path) {
             self.send_notification(
                 "dart/textDocument/publishClosingLabels",
                 json!({"uri": uri, "labels": features::closing_labels(&file)}),

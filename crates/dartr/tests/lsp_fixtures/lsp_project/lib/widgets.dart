@@ -1,4 +1,8 @@
 // Classes that look like Flutter widgets, for closing labels.
+import 'generated/excluded.dart';
+
+export 'generated/excluded.dart';
+
 class Widget {
   const Widget();
 }

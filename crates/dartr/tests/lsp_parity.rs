@@ -200,6 +200,20 @@ fn run_session(mut c: LspClient, root: &Path) -> (Transcript, i32) {
     c.settle(true);
     t.push(("full change shapes.dart".into(), snapshot(&c, &root_uri)));
 
+    // An open file that analysis_options.yaml excludes and no file imports:
+    // analyzed as a priority file, but no notifications.
+    let excluded = uri("lib/generated/excluded.dart");
+    c.notify(
+        "textDocument/didOpen",
+        json!({"textDocument": {"uri": excluded, "languageId": "dart", "version": 1, "text": read("lib/generated/excluded.dart")}}),
+    );
+    c.settle(true);
+    t.push(("open excluded file".into(), snapshot(&c, &root_uri)));
+    t.push((
+        "documentSymbol excluded file".into(),
+        c.request("textDocument/documentSymbol", doc(&excluded)),
+    ));
+
     c.notify("textDocument/didClose", doc(&errors));
     c.settle(true);
     t.push(("close errors.dart".into(), snapshot(&c, &root_uri)));
