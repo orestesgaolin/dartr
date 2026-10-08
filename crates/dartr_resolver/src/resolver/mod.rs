@@ -501,6 +501,11 @@ impl<'a> ResolverVisitor<'a> {
         let children = self.ast.children(node);
         for child in children {
             let kind = self.ast.kind(child);
+            if self.is_member_name_of(node, child) {
+                // A member name (`a.foo`, `a.foo()`, `p.x`) is resolved
+                // against its target, not in the lexical scope.
+                continue;
+            }
             if crate::generated::dispatch::is_expression_kind(kind) {
                 if self.flow_analysis.is_active() {
                     self.resolve_expression(Id::from_raw(child), TypeId::UNKNOWN);
@@ -513,6 +518,23 @@ impl<'a> ResolverVisitor<'a> {
                 self.fallback_visit_expressions_below(child);
             }
         }
+    }
+
+    /// Whether [child] is the member name of [parent] (`methodName` of a
+    /// method invocation, `propertyName` of a property access, `identifier`
+    /// of a prefixed identifier).
+    fn is_member_name_of(&self, parent: NodeId, child: NodeId) -> bool {
+        use dartr_ast::{MethodInvocation, PrefixedIdentifier, PropertyAccess};
+        if let Some(m) = self.ast.cast::<MethodInvocation>(parent) {
+            return self.ast[m].method_name.raw() == child;
+        }
+        if let Some(p) = self.ast.cast::<PropertyAccess>(parent) {
+            return self.ast[p].property_name.raw() == child;
+        }
+        if let Some(p) = self.ast.cast::<PrefixedIdentifier>(parent) {
+            return self.ast[p].identifier.raw() == child;
+        }
+        false
     }
 
     /// The type `dynamic` if [ty] is an invalid type (Dart
