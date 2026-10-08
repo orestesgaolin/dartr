@@ -340,6 +340,11 @@ impl<'a> FlowAnalysisOperations for TypeSystemOperations<'a> {
     /// Dart `Object property` (an executable element or a member).
     type PropertyMember = ElemRef;
 
+    /// Dart `propertyName.startsWith('_')` in flow analysis.
+    fn is_private_name(&self, name: Name) -> bool {
+        self.ctx().name_str(name).starts_with('_')
+    }
+
     fn is_final(&self, variable: EId<PromotableElement>) -> bool {
         let _ = variable;
         todo!("TypeSystemOperations.isFinal (resolver unit C2: PromotableElementImpl.isFinal)")

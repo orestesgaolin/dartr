@@ -573,6 +573,8 @@ mod defer_node {
     }
 }
 
+// Dart `assert` is ported as `debug_assert!`, so these tests need debug assertions.
+#[cfg(debug_assertions)]
 mod final_assertions {
     use super::*;
 
