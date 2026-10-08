@@ -31,6 +31,7 @@ pub mod test_support;
 pub mod top_merge;
 pub mod type_algebra;
 pub mod type_ext;
+pub mod type_schema;
 pub mod type_schema_elimination;
 pub mod type_system;
 pub mod type_visitor;
