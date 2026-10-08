@@ -76,7 +76,11 @@ let name: &str = ctx.name_str(class.name.unwrap());
   store of the generation, frozen cycles of the snapshot.
 - `ctx.global()` drops the local arena. **Lazy shared caches** (inheritance,
   member types, constants; `get_or_init` on frozen data) **always run under
-  `ctx.global()`**, so they cannot see local elements or types.
+  `ctx.global()`**, so they cannot see local elements or types. A cache of a
+  frozen element that is filled while a cycle is linked also drops `current`
+  when the cached value does not mention that cycle
+  (`dartr_typesystem::type_ext::cache_ctx`): other cycles, linked at the same
+  time, read the cache and cannot see the store of that cycle.
 - Body analysis: `let local = generation.new_local_arena();` and
   `Ctx { local: Some(&local), .. }`. Local elements are added through
   `local.store.add(...)` (shared reference, append-only).
