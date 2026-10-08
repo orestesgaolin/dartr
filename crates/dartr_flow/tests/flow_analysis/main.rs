@@ -21,6 +21,8 @@
 //! | [`anonymous_methods`] | 13066-13303 | `Anonymous methods:` |
 //! | [`patterns_part3`] | 8703-9666 | `Patterns:` (third part: `Null-assert:` to `Relational pattern:`) |
 //! | [`patterns_part3b`] | 9667-10407 | `Patterns:` (third part: `Switch expression:`, `Switch statement:`) |
+//! | [`patterns_part4`] | 10408-10998 | `Patterns:` (fourth part) |
+//! | [`sound_flow_analysis_part1`] | 10999-12238 | `Sound flow analysis:` (first part) |
 
 mod common;
 
@@ -33,4 +35,6 @@ mod patterns_part2;
 mod sound_flow_analysis_part2;
 mod patterns_part3;
 mod patterns_part3b;
+mod patterns_part4;
+mod sound_flow_analysis_part1;
 mod state_part1;
