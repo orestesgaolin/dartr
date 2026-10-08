@@ -43,6 +43,11 @@ pub struct AnalyzerScanResult {
     /// error tokens, which the parser reports through
     /// `Listener.handleErrorToken` when the AST is built.
     pub scan_diagnostic_count: usize,
+    /// The version that the feature set of the file is restricted to (Dart
+    /// `Scanner.featureSet`): the last valid `// @dart = x.y` comment. A
+    /// later comment with a too high version resets
+    /// [`Self::override_version`] but not the feature set.
+    pub feature_version: Option<(i64, i64)>,
 }
 
 impl AnalyzerScanResult {
@@ -64,6 +69,7 @@ impl AnalyzerScanResult {
 pub fn scan_for_analyzer(source: &str) -> AnalyzerScanResult {
     let mut diagnostics = RecordingDiagnosticListener::default();
     let mut override_version = None;
+    let mut feature_version = None;
     let mut callback = |info: LanguageVersionInfo| -> Option<ScannerConfiguration> {
         // Dart `Scanner._languageVersionChanged`.
         if info.major < 0 || info.minor < 0 {
@@ -83,6 +89,7 @@ pub fn scan_for_analyzer(source: &str) -> AnalyzerScanResult {
             override_version = None;
             None
         } else {
+            feature_version = Some(version);
             // `_featureSetForOverriding.restrictToVersion(overrideVersion)`.
             Some(ScannerConfiguration {
                 enable_triple_shift: version >= TRIPLE_SHIFT_VERSION,
@@ -114,6 +121,7 @@ pub fn scan_for_analyzer(source: &str) -> AnalyzerScanResult {
         diagnostics: diagnostics.diagnostics,
         override_version,
         scan_diagnostic_count,
+        feature_version,
     }
 }
 

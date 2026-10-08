@@ -1,22 +1,22 @@
 // Dart source: pkg/analyzer/lib/src/fasta/ast_builder.dart (lines 1695-3098)
 
 use dartr_ast::{
-    Annotation, ArgumentList, AwaitExpression, ClassTypeAlias, CollectionElement, Combinator,
-    Configuration, ConstructorInitializer, ConstructorName, DottedName, Expression,
-    ExpressionStatement, FieldFormalParameter, ForEachParts, ForElement, ForParts, ForStatement,
-    FormalParameter, FormalParameterDefaultClause, FormalParameterList, FunctionBody,
-    FunctionDeclaration, FunctionDeclarationStatement, FunctionExpression,
-    FunctionTypedFormalParameterSuffix, GenericFunctionType, HideCombinator, Id, Identifier,
-    IfElement, IfStatement, ImplementsClause, ImportDirective, InterpolationElement,
-    InterpolationExpression, InterpolationString, Label, LabeledStatement, LibraryDirective,
-    NamedType, NodeId, NodeList, ParenthesizedExpression, PartDirective, PartOfDirective,
-    PrimaryConstructorBody, PrimaryConstructorName, RecordLiteral, RecordLiteralField,
-    RecordLiteralNamedField, RecordTypeAnnotation, RecordTypeAnnotationNamedField,
-    RecordTypeAnnotationNamedFields, RecordTypeAnnotationPositionalField, RegularFormalParameter,
-    RethrowExpression, ReturnStatement, ShowCombinator, SimpleIdentifier, SimpleStringLiteral,
-    Statement, StringInterpolation, StringLiteral, SuperFormalParameter, SwitchCase, SwitchDefault,
+    Annotation, ArgumentList, ClassTypeAlias, CollectionElement, Combinator, Configuration,
+    ConstructorInitializer, ConstructorName, DottedName, Expression, ExpressionStatement,
+    FieldFormalParameter, ForEachParts, ForElement, ForParts, ForStatement, FormalParameter,
+    FormalParameterDefaultClause, FormalParameterList, FunctionBody, FunctionDeclaration,
+    FunctionDeclarationStatement, FunctionExpression, FunctionTypedFormalParameterSuffix,
+    GenericFunctionType, HideCombinator, Id, Identifier, IfElement, IfStatement, ImplementsClause,
+    ImportDirective, InterpolationElement, InterpolationExpression, InterpolationString, Label,
+    LabeledStatement, LibraryDirective, NamedType, NodeId, NodeList, ParenthesizedExpression,
+    PartDirective, PartOfDirective, PrimaryConstructorBody, PrimaryConstructorName, RecordLiteral,
+    RecordLiteralField, RecordLiteralNamedField, RecordTypeAnnotation,
+    RecordTypeAnnotationNamedField, RecordTypeAnnotationNamedFields,
+    RecordTypeAnnotationPositionalField, RegularFormalParameter, RethrowExpression,
+    ReturnStatement, ShowCombinator, SimpleIdentifier, SimpleStringLiteral, Statement,
+    StringInterpolation, StringLiteral, SuperFormalParameter, SwitchCase, SwitchDefault,
     SwitchMember, SwitchPatternCase, SymbolLiteral, TypeAnnotation, TypeArgumentList,
-    TypeParameterList, VariableDeclaration, WhenClause, WithClause, YieldStatement,
+    TypeParameterList, VariableDeclaration, WhenClause, WithClause,
 };
 use dartr_diagnostics::cfe::{CfeCode, CfeMessage};
 use dartr_diagnostics::{cfe_codes, diag};
@@ -31,20 +31,12 @@ use dartr_syntax::{Keyword, TokenId, TokenType};
 use rustc_hash::FxHashSet;
 
 use super::{
-    AstBuilder, FunctionTypedFormalParameterData, OptionalFormalParameters, ParenthesizedCondition,
+    AstBuilder, FunctionTypedFormalParameterData, OptionalFormalParameters,
     PrimaryConstructorBuilder, RedirectingFactoryBody,
 };
 use crate::stack::{NullValue, Value};
 
 impl AstBuilder {
-    /// Dart `pop() as _ParenthesizedCondition`.
-    fn pop_parenthesized_condition(&mut self) -> ParenthesizedCondition {
-        match self.pop() {
-            Value::ParenthesizedCondition(c) => c,
-            other => panic!("{other:?} is not a subtype of type '_ParenthesizedCondition'"),
-        }
-    }
-
     /// Reports the unescape errors collected from a `quote.dart` call
     /// (`UnescapeErrorListener` with [location]).
     fn report_unescape_errors(&mut self, errors: Vec<(CfeMessage, u32, u32)>, location: TokenId) {
@@ -563,18 +555,10 @@ impl AstBuilder {
     pub(crate) fn end_invalid_await_expression(
         &mut self,
         await_keyword: TokenId,
-        _end_token: TokenId,
+        end_token: TokenId,
         _error_code: &'static CfeCode,
     ) {
-        // Dart: `endAwaitExpression(awaitKeyword, endToken)`, inlined here
-        // (that event is ported in part1.rs).
-        let expression = self.pop_node::<Expression>();
-        self.report_error_if_super(expression);
-        let node = self.ast.add(AwaitExpression {
-            await_keyword,
-            expression,
-        });
-        self.push(node);
+        self.end_await_expression(await_keyword, end_token);
     }
 
     pub(crate) fn end_invalid_yield_statement(
@@ -584,16 +568,7 @@ impl AstBuilder {
         end_token: TokenId,
         _error_code: &'static CfeCode,
     ) {
-        // Dart: `endYieldStatement(yieldKeyword, starToken, endToken)`,
-        // inlined here (that event is ported in part3.rs).
-        let expression = self.pop_node::<Expression>();
-        let node = self.ast.add(YieldStatement {
-            yield_keyword,
-            star: star_token,
-            expression,
-            semicolon: end_token,
-        });
-        self.push(node);
+        self.end_yield_statement(yield_keyword, star_token, end_token);
     }
 
     pub(crate) fn end_is_operator_type(&mut self, _operator: TokenId) {}

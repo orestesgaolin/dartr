@@ -959,7 +959,7 @@ impl AstBuilder {
     }
 
     /// Dart `pop() as _ParenthesizedCondition`.
-    fn pop_parenthesized_condition(&mut self) -> ParenthesizedCondition {
+    pub(crate) fn pop_parenthesized_condition(&mut self) -> ParenthesizedCondition {
         match self.pop() {
             Value::ParenthesizedCondition(c) => c,
             other => panic!("{other:?} is not a subtype of type '_ParenthesizedCondition'"),

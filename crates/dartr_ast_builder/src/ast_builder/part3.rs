@@ -24,7 +24,7 @@ use dartr_syntax::{Keyword, TokenId, TokenType};
 
 use super::{
     AstBuilder, ClassDeclarationBuilder, ClassLikeDeclarationBuilder, ClassLikeKind,
-    EnumDeclarationBuilder, ParenthesizedCondition, PrimaryConstructorBuilder,
+    EnumDeclarationBuilder, PrimaryConstructorBuilder,
 };
 use crate::stack::{NullValue, Value};
 
@@ -1328,14 +1328,6 @@ impl AstBuilder {
     // ---------------------------------------------------------------------
     // Helpers of this part.
 
-    /// Dart `pop() as _ParenthesizedCondition`.
-    fn pop_parenthesized_condition(&mut self) -> ParenthesizedCondition {
-        match self.pop() {
-            Value::ParenthesizedCondition(c) => c,
-            other => panic!("{other:?} is not a subtype of type '_ParenthesizedCondition'"),
-        }
-    }
-
     /// Dart `pop(NullValues.PrimaryConstructor) as
     /// _PrimaryConstructorBuilder?`.
     fn pop_primary_constructor_builder(&mut self) -> Option<Box<PrimaryConstructorBuilder>> {
@@ -1348,7 +1340,7 @@ impl AstBuilder {
 
     /// Dart `ExpressionImpl.isAssignable`: identifiers, index expressions
     /// and property accesses.
-    fn is_assignable(&self, expression: Id<Expression>) -> bool {
+    pub(crate) fn is_assignable(&self, expression: Id<Expression>) -> bool {
         self.ast.is::<Identifier>(expression)
             || self.ast.is::<IndexExpression>(expression)
             || self.ast.is::<PropertyAccess>(expression)

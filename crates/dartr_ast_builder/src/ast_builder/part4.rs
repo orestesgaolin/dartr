@@ -10,11 +10,11 @@ use dartr_ast::{
     NativeFunctionBody, NodeList, NullAssertPattern, NullAwareElement, NullCheckPattern,
     NullLiteral, ObjectPattern, ParenthesizedPattern, PatternAssignment, PatternField,
     PatternFieldName, PatternVariableDeclaration, PatternVariableDeclarationStatement,
-    PostfixExpression, PrefixExpression, PrefixedIdentifier, PropertyAccess,
-    RecordLiteralNamedField, RecordPattern, RelationalPattern, RestPatternElement, ScriptTag,
-    SetOrMapLiteral, SimpleIdentifier, SpreadElement, Statement, StringLiteral, SuperExpression,
-    ThisExpression, ThrowExpression, TypeAnnotation, TypeArgumentList, TypeParameter,
-    VariableDeclaration, WhenClause, WildcardPattern, WithClause,
+    PostfixExpression, PrefixExpression, PrefixedIdentifier, RecordLiteralNamedField,
+    RecordPattern, RelationalPattern, RestPatternElement, ScriptTag, SetOrMapLiteral,
+    SimpleIdentifier, SpreadElement, Statement, StringLiteral, SuperExpression, ThisExpression,
+    ThrowExpression, TypeAnnotation, TypeArgumentList, TypeParameter, VariableDeclaration,
+    WhenClause, WildcardPattern, WithClause,
 };
 use dartr_diagnostics::{cfe_codes, diag};
 use dartr_parser::declaration_kind::{DeclarationHeaderKind, DeclarationKind};
@@ -88,7 +88,7 @@ impl AstBuilder {
         interfaces_count: i32,
     ) {
         if let Some(implements_keyword) = implements_keyword {
-            self.end_type_list_impl_for_part4(interfaces_count);
+            self.end_type_list(interfaces_count);
             let interfaces = self.pop_named_type_list(diag::expected_named_type_implements);
             let interfaces = self.ast.new_list(interfaces);
             let node = self.ast.add(ImplementsClause {
@@ -99,13 +99,6 @@ impl AstBuilder {
         } else {
             self.push(NullValue::IdentifierList);
         }
-    }
-
-    /// Dart `endTypeList(count)` (part3 defines `end_type_list`; this is the
-    /// same code so that this part compiles on its own).
-    fn end_type_list_impl_for_part4(&mut self, count: i32) {
-        let list = self.pop_typed_list::<TypeAnnotation>(count as usize);
-        self.push_nodes_or(list, NullValue::TypeList);
     }
 
     pub(crate) fn handle_import_prefix(
@@ -488,7 +481,7 @@ impl AstBuilder {
 
     pub(crate) fn handle_mixin_on(&mut self, on_keyword: Option<TokenId>, type_count: i32) {
         if let Some(on_keyword) = on_keyword {
-            self.end_type_list_impl_for_part4(type_count);
+            self.end_type_list(type_count);
             let on_types = self.pop_named_type_list(diag::expected_named_type_on);
             let superclass_constraints = self.ast.new_list(on_types);
             let node = self.ast.add(MixinOnClause {
@@ -1305,13 +1298,5 @@ impl AstBuilder {
             name: wildcard,
         });
         self.push(node);
-    }
-
-    /// Dart `ExpressionImpl.isAssignable`: identifiers, index expressions
-    /// and property accesses.
-    fn is_assignable(&self, expression: Id<Expression>) -> bool {
-        self.ast.is::<Identifier>(expression)
-            || self.ast.is::<IndexExpression>(expression)
-            || self.ast.is::<PropertyAccess>(expression)
     }
 }

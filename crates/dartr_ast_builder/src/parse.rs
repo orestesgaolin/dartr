@@ -68,6 +68,7 @@ pub fn parse_string(content: &str, path: &str) -> ParsedUnit {
         diagnostics: scan_diagnostics,
         override_version,
         scan_diagnostic_count,
+        feature_version,
         ..
     } = scan_for_analyzer(content);
     let ScannerResult {
@@ -88,7 +89,7 @@ pub fn parse_string(content: &str, path: &str) -> ParsedUnit {
         ),
         override_,
     };
-    let feature_set = features_for_file(override_version);
+    let feature_set = features_for_file(feature_version);
 
     // Dart `Parser(diagnosticReporter, featureSet:, languageVersion:,
     // lineInfo:)` of `generated/parser.dart`.
