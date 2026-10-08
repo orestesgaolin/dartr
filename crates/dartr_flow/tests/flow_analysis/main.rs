@@ -14,9 +14,13 @@
 //! | [`api_part1`] | 37-1005 | `API` (first part) |
 //! | [`state_part1`] | 3721-3884 | `State` (first part) |
 //! | [`patterns_part1`] | 7038-7330 | `Patterns:` (first part) |
+//! | [`patterns_part4`] | 10408-10998 | `Patterns:` (fourth part) |
+//! | [`sound_flow_analysis_part1`] | 10999-12238 | `Sound flow analysis:` (first part) |
 
 mod common;
 
 mod api_part1;
 mod patterns_part1;
+mod patterns_part4;
+mod sound_flow_analysis_part1;
 mod state_part1;
