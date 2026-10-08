@@ -14,9 +14,12 @@
 //! | [`api_part1`] | 37-1005 | `API` (first part) |
 //! | [`api_part3`] | 2300-3592 | `API` (third part) |
 //! | [`api_part2`] | 1005-2299 | `API` (second part) |
+//! | [`reachability`] | 3593-3720 | `Reachability` |
 //! | [`state_part1`] | 3721-3884 | `State` (first part) |
 //! | [`why_not_promoted`] | 5451-5825 | `why not promoted` |
 //! | [`field_promotion`] | 5826-7037 | `Field promotion` |
+//! | [`state_part2`] | 3884-4900 | `State` (second part) |
+//! | [`join_part1`] | 4902-5450 | `joinPromotionChains`, `joinTypesOfInterest`, `join`, `inheritTested` |
 //! | [`patterns_part1`] | 7038-7330 | `Patterns:` (first part) |
 //! | [`patterns_part2`] | 7335-8702 | `Patterns:` (second part) |
 //! | [`sound_flow_analysis_part2`] | 12239-12882 | `Sound flow analysis:` (second part) |
@@ -35,6 +38,7 @@ mod api_part3;
 mod demotion;
 mod api_part2;
 mod field_promotion;
+mod join_part1;
 mod patterns_part1;
 mod patterns_part2;
 mod sound_flow_analysis_part2;
@@ -42,5 +46,7 @@ mod patterns_part3;
 mod patterns_part3b;
 mod patterns_part4;
 mod sound_flow_analysis_part1;
+mod reachability;
 mod state_part1;
 mod why_not_promoted;
+mod state_part2;
