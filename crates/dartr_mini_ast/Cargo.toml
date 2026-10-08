@@ -8,4 +8,5 @@ description = "Test support: port of the _fe_analyzer_shared \"mini AST\" and \"
 
 [dependencies]
 dartr_flow.workspace = true
+dartr_type_analyzer.workspace = true
 indexmap.workspace = true

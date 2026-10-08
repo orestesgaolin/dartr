@@ -4,12 +4,9 @@
 //! the mini-AST harness.
 //!
 //! Dart groups are nested modules, Dart tests are functions (snake case, in
-//! Dart order). Tests that check results of flow analysis (promotion,
-//! reachability) are `#[ignore = "needs flow analysis"]` until the real flow
-//! analysis replaces the [`MiniFlow`](mini_ast::mini_flow::MiniFlow)
-//! stand-in.
+//! Dart order). Flow analysis is the real `dartr_flow` implementation.
 
-mod mini_ast;
+use dartr_mini_ast as mini_ast;
 
 #[allow(unused_imports)]
 use mini_ast::harness::{BodyContext, Harness, RunOptions};

@@ -13,6 +13,7 @@
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use dartr_flow::flow_analysis_operations::{
     FlowAnalysisOperations, FlowAnalysisTypeOperations, PropertyNonPromotabilityReason,
@@ -32,10 +33,33 @@ use super::mini_types::{
     DynamicType, FutureOrType, InvalidType, Name, NamedType, NeverType, NullType, PrimaryType,
     RecordType, Type, TypeKind, TypeParameter, TypeParameterType, TypeRegistry, TypeSystem, t,
 };
-use super::node::{Node, PropertyElement, Var};
+use super::node::{Category, Node, PropertyElement, Var};
+use dartr_flow::flow_analysis_impl::model::FlowTypes;
 
 type View = SharedTypeView<Type>;
 type SchemaView = SharedTypeSchemaView<Type>;
+
+/// The [`FlowTypes`] of the mini AST: `FlowAnalysisImpl<MiniAstTypes>` is
+/// Dart `FlowAnalysis<Node, Statement, Expression, Var>`. Statements and
+/// expressions are [`Node`]s.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct MiniAstTypes;
+
+impl FlowTypes for MiniAstTypes {
+    type Ops = MiniAstOperations;
+    type Node = Node;
+    type Statement = Node;
+    type Expression = Node;
+
+    fn statement_to_node(statement: Node) -> Node {
+        statement
+    }
+
+    /// Dart `node is Expression`.
+    fn is_expression(node: Node) -> bool {
+        node.category() == Category::Expression
+    }
+}
 
 /// The type operations of the mini-AST test harness (Dart class
 /// `MiniAstOperations`).
@@ -43,7 +67,21 @@ type SchemaView = SharedTypeSchemaView<Type>;
 /// Queries that the harness can't compute (glb, lub, normalization,
 /// exhaustiveness, downward inference) are answered from tables keyed by
 /// the type strings; tests extend the tables with the `add_...` methods.
-pub struct MiniAstOperations {
+///
+/// A cheap handle (`Rc`): the harness, the type analyzer and flow analysis
+/// (which owns its operations, `FlowTypes::Ops`) share one state.
+#[derive(Clone)]
+pub struct MiniAstOperations(Rc<MiniAstOperationsData>);
+
+impl std::ops::Deref for MiniAstOperations {
+    type Target = MiniAstOperationsData;
+    fn deref(&self) -> &MiniAstOperationsData {
+        &self.0
+    }
+}
+
+/// The state of [`MiniAstOperations`].
+pub struct MiniAstOperationsData {
     /// `objectQuestionType`.
     object_question_type: Type,
     /// `objectType`.
@@ -159,7 +197,7 @@ impl MiniAstOperations {
             ("List<int>", "List<int>"),
         ]);
 
-        MiniAstOperations {
+        MiniAstOperations(Rc::new(MiniAstOperationsData {
             object_question_type: t("Object?"),
             object_type: t("Object"),
             unknown_type: t("_"),
@@ -175,7 +213,7 @@ impl MiniAstOperations {
             normalize_results: RefCell::new(core_normalize_results),
             type_system: RefCell::new(TypeSystem::new()),
             variance: RefCell::new(HashMap::new()),
-        }
+        }))
     }
 
     /// Updates the harness with a new result for
@@ -536,6 +574,10 @@ impl FlowAnalysisOperations for MiniAstOperations {
 
     fn is_property_promotable(&self, property: &PropertyElement) -> bool {
         property.is_promotable
+    }
+
+    fn is_private_name(&self, name: Name) -> bool {
+        name.starts_with('_')
     }
 
     fn variable_type(&self, variable: Var) -> View {

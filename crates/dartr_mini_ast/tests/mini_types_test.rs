@@ -1,55 +1,30 @@
 // Dart source: pkg/_fe_analyzer_shared/test/mini_types_test.dart
 
-//! Port of `mini_types_test.dart`. Dart groups are nested modules; the Dart
-//! `setUp`/`tearDown` are [`set_up`] and the [`RegistryGuard`] it returns.
+use dartr_mini_ast as mini_ast;
 
-use std::collections::HashSet;
+use mini_ast::mini_types::*;
+use std::collections::{HashMap, HashSet};
 
-use dartr_mini_ast::mini_types::*;
-use indexmap::IndexSet;
-
-/// The Dart `setUp` state: the registry is initialized, and `T`, `U`, `V`
-/// are registered as type parameters. The registry is un-initialized when
-/// this is dropped (Dart `tearDown`).
 struct Fixture {
+    _scope: TypeRegistryScope,
     t: TypeParameter,
     u: TypeParameter,
     v: TypeParameter,
-    _guard: RegistryGuard,
 }
 
 fn set_up() -> Fixture {
-    let guard = TypeRegistry::init_for_test();
+    let scope = type_registry_scope();
     Fixture {
         t: TypeRegistry::add_type_parameter("T"),
         u: TypeRegistry::add_type_parameter("U"),
         v: TypeRegistry::add_type_parameter("V"),
-        _guard: guard,
+        _scope: scope,
     }
 }
 
-/// Dart `Type(typeStr)`.
-fn ty(type_str: &str) -> Type {
-    Type::new(type_str)
-}
-
-/// Dart `TypeParameterType(typeParameter)`.
-fn tpt(type_parameter: TypeParameter) -> Type {
-    TypeParameterType::new(type_parameter).into_type()
-}
-
-/// Dart `expect(() => Type(typeStr), throwsParseError)`.
-fn expect_parse_error(type_str: &str) {
-    let result = Type::try_parse(type_str);
-    assert!(
-        result.is_err(),
-        "expected ParseError for `{type_str}`, got {result:?}"
-    );
-}
-
-/// Dart `{typeParameter: type}`.
-fn substitution(type_parameter: TypeParameter, type_: Type) -> Substitution {
-    Substitution::from([(type_parameter, type_)])
+/// Dart `Type('...')`.
+fn ty(s: &str) -> Type {
+    Type::parse(s)
 }
 
 mod to_string {
@@ -65,9 +40,12 @@ mod to_string {
             fn all_required() {
                 let f = set_up();
                 assert_eq!(
-                    FunctionType::new(tpt(f.t), vec![tpt(f.u), tpt(f.v)])
-                        .into_type()
-                        .to_string(),
+                    FunctionType::new(
+                        TypeParameterType::new(f.t),
+                        vec![TypeParameterType::new(f.u), TypeParameterType::new(f.v)],
+                    )
+                    .into_type()
+                    .to_string(),
                     "T Function(U, V)"
                 );
             }
@@ -76,10 +54,13 @@ mod to_string {
             fn all_optional() {
                 let f = set_up();
                 assert_eq!(
-                    FunctionType::new(tpt(f.t), vec![tpt(f.u), tpt(f.v)])
-                        .with_required_positional_parameter_count(0)
-                        .into_type()
-                        .to_string(),
+                    FunctionType::new(
+                        TypeParameterType::new(f.t),
+                        vec![TypeParameterType::new(f.u), TypeParameterType::new(f.v)],
+                    )
+                    .with_required_positional_parameter_count(0)
+                    .into_type()
+                    .to_string(),
                     "T Function([U, V])"
                 );
             }
@@ -88,10 +69,13 @@ mod to_string {
             fn mixed_required_and_optional() {
                 let f = set_up();
                 assert_eq!(
-                    FunctionType::new(tpt(f.t), vec![tpt(f.u), tpt(f.v)])
-                        .with_required_positional_parameter_count(1)
-                        .into_type()
-                        .to_string(),
+                    FunctionType::new(
+                        TypeParameterType::new(f.t),
+                        vec![TypeParameterType::new(f.u), TypeParameterType::new(f.v)],
+                    )
+                    .with_required_positional_parameter_count(1)
+                    .into_type()
+                    .to_string(),
                     "T Function(U, [V])"
                 );
             }
@@ -101,10 +85,10 @@ mod to_string {
         fn named_parameters() {
             let f = set_up();
             assert_eq!(
-                FunctionType::new(tpt(f.t), vec![])
+                FunctionType::new(TypeParameterType::new(f.t), vec![])
                     .with_named_parameters(vec![
-                        NamedFunctionParameter::new(false, "x", tpt(f.u)),
-                        NamedFunctionParameter::new(true, "y", tpt(f.v)),
+                        NamedFunctionParameter::new(false, "x", TypeParameterType::new(f.u)),
+                        NamedFunctionParameter::new(true, "y", TypeParameterType::new(f.v)),
                     ])
                     .into_type()
                     .to_string(),
@@ -116,10 +100,17 @@ mod to_string {
         fn positional_and_named_parameters() {
             let f = set_up();
             assert_eq!(
-                FunctionType::new(tpt(f.t), vec![tpt(f.u)])
-                    .with_named_parameters(vec![NamedFunctionParameter::new(false, "y", tpt(f.v))])
-                    .into_type()
-                    .to_string(),
+                FunctionType::new(
+                    TypeParameterType::new(f.t),
+                    vec![TypeParameterType::new(f.u)]
+                )
+                .with_named_parameters(vec![NamedFunctionParameter::new(
+                    false,
+                    "y",
+                    TypeParameterType::new(f.v)
+                )])
+                .into_type()
+                .to_string(),
                 "T Function(U, {V y})"
             );
         }
@@ -139,7 +130,7 @@ mod to_string {
         #[test]
         fn type_formals_bounded() {
             let f = set_up();
-            f.t.set_explicit_bound(Some(tpt(f.u)));
+            f.t.set_explicit_bound(Some(TypeParameterType::new(f.u)));
             assert_eq!(
                 FunctionType::new(VoidType::instance(), vec![])
                     .with_type_parameters(vec![f.t, f.u])
@@ -153,12 +144,13 @@ mod to_string {
         fn needs_parentheses() {
             let f = set_up();
             assert_eq!(
-                TypeParameterType::new(f.t)
-                    .with_promotion(Some(
-                        FunctionType::new(VoidType::instance(), vec![]).into_type()
-                    ))
-                    .into_type()
-                    .to_string(),
+                TypeParameterType {
+                    type_parameter: f.t,
+                    promotion: Some(FunctionType::new(VoidType::instance(), vec![]).into_type()),
+                    is_question_type: false,
+                }
+                .into_type()
+                .to_string(),
                 "T&(void Function())"
             );
         }
@@ -170,16 +162,18 @@ mod to_string {
         #[test]
         fn simple() {
             let f = set_up();
-            assert_eq!(tpt(f.t).to_string(), "T");
+            assert_eq!(TypeParameterType::new(f.t).to_string(), "T");
         }
 
         #[test]
         fn with_arguments() {
             let f = set_up();
             assert_eq!(
-                PrimaryType::new(TypeRegistry::map(), vec![tpt(f.t), tpt(f.u)])
-                    .into_type()
-                    .to_string(),
+                PrimaryType::new(
+                    TypeRegistry::map(),
+                    vec![TypeParameterType::new(f.t), TypeParameterType::new(f.u)],
+                )
+                .to_string(),
                 "Map<T, U>"
             );
         }
@@ -192,10 +186,13 @@ mod to_string {
         fn basic() {
             let f = set_up();
             assert_eq!(
-                TypeParameterType::new(f.t)
-                    .with_promotion(Some(tpt(f.u)))
-                    .into_type()
-                    .to_string(),
+                TypeParameterType {
+                    type_parameter: f.t,
+                    promotion: Some(TypeParameterType::new(f.u)),
+                    is_question_type: false,
+                }
+                .into_type()
+                .to_string(),
                 "T&U"
             );
         }
@@ -204,14 +201,20 @@ mod to_string {
         fn needs_parentheses_right() {
             let f = set_up();
             assert_eq!(
-                TypeParameterType::new(f.t)
-                    .with_promotion(Some(
-                        TypeParameterType::new(f.u)
-                            .with_promotion(Some(tpt(f.v)))
-                            .into_type()
-                    ))
-                    .into_type()
-                    .to_string(),
+                TypeParameterType {
+                    type_parameter: f.t,
+                    promotion: Some(
+                        TypeParameterType {
+                            type_parameter: f.u,
+                            promotion: Some(TypeParameterType::new(f.v)),
+                            is_question_type: false,
+                        }
+                        .into_type()
+                    ),
+                    is_question_type: false,
+                }
+                .into_type()
+                .to_string(),
                 "T&(U&V)"
             );
         }
@@ -220,11 +223,13 @@ mod to_string {
         fn needs_parentheses_question() {
             let f = set_up();
             assert_eq!(
-                TypeParameterType::new(f.t)
-                    .with_promotion(Some(tpt(f.u)))
-                    .with_is_question_type(true)
-                    .into_type()
-                    .to_string(),
+                TypeParameterType {
+                    type_parameter: f.t,
+                    promotion: Some(TypeParameterType::new(f.u)),
+                    is_question_type: true,
+                }
+                .into_type()
+                .to_string(),
                 "(T&U)?"
             );
         }
@@ -237,10 +242,13 @@ mod to_string {
         fn basic() {
             let f = set_up();
             assert_eq!(
-                TypeParameterType::new(f.t)
-                    .with_is_question_type(true)
-                    .into_type()
-                    .to_string(),
+                TypeParameterType {
+                    type_parameter: f.t,
+                    promotion: None,
+                    is_question_type: true,
+                }
+                .into_type()
+                .to_string(),
                 "T?"
             );
         }
@@ -249,14 +257,20 @@ mod to_string {
         fn needs_parentheses() {
             let f = set_up();
             assert_eq!(
-                TypeParameterType::new(f.t)
-                    .with_promotion(Some(
-                        TypeParameterType::new(f.u)
-                            .with_is_question_type(true)
-                            .into_type()
-                    ))
-                    .into_type()
-                    .to_string(),
+                TypeParameterType {
+                    type_parameter: f.t,
+                    promotion: Some(
+                        TypeParameterType {
+                            type_parameter: f.u,
+                            promotion: None,
+                            is_question_type: true,
+                        }
+                        .into_type()
+                    ),
+                    is_question_type: false,
+                }
+                .into_type()
+                .to_string(),
                 "T&(U?)"
             );
         }
@@ -268,19 +282,14 @@ mod to_string {
         #[test]
         fn no_arguments() {
             let _f = set_up();
-            assert_eq!(
-                RecordType::new(vec![], vec![]).into_type().to_string(),
-                "()"
-            );
+            assert_eq!(RecordType::new(vec![], vec![]).to_string(), "()");
         }
 
         #[test]
         fn single_positional_argument() {
             let f = set_up();
             assert_eq!(
-                RecordType::new(vec![tpt(f.t)], vec![])
-                    .into_type()
-                    .to_string(),
+                RecordType::new(vec![TypeParameterType::new(f.t)], vec![]).to_string(),
                 "(T,)"
             );
         }
@@ -289,9 +298,11 @@ mod to_string {
         fn multiple_positional_arguments() {
             let f = set_up();
             assert_eq!(
-                RecordType::new(vec![tpt(f.t), tpt(f.u)], vec![])
-                    .into_type()
-                    .to_string(),
+                RecordType::new(
+                    vec![TypeParameterType::new(f.t), TypeParameterType::new(f.u)],
+                    vec![]
+                )
+                .to_string(),
                 "(T, U)"
             );
         }
@@ -300,9 +311,11 @@ mod to_string {
         fn single_named_argument() {
             let f = set_up();
             assert_eq!(
-                RecordType::new(vec![], vec![NamedType::new("t", tpt(f.t))])
-                    .into_type()
-                    .to_string(),
+                RecordType::new(
+                    vec![],
+                    vec![NamedType::new("t", TypeParameterType::new(f.t))]
+                )
+                .to_string(),
                 "({T t})"
             );
         }
@@ -313,9 +326,11 @@ mod to_string {
             assert_eq!(
                 RecordType::new(
                     vec![],
-                    vec![NamedType::new("t", tpt(f.t)), NamedType::new("u", tpt(f.u))]
+                    vec![
+                        NamedType::new("t", TypeParameterType::new(f.t)),
+                        NamedType::new("u", TypeParameterType::new(f.u)),
+                    ]
                 )
-                .into_type()
                 .to_string(),
                 "({T t, U u})"
             );
@@ -325,9 +340,11 @@ mod to_string {
         fn both_positional_and_named_arguments() {
             let f = set_up();
             assert_eq!(
-                RecordType::new(vec![tpt(f.t)], vec![NamedType::new("u", tpt(f.u))])
-                    .into_type()
-                    .to_string(),
+                RecordType::new(
+                    vec![TypeParameterType::new(f.t)],
+                    vec![NamedType::new("u", TypeParameterType::new(f.u))]
+                )
+                .to_string(),
                 "(T, {U u})"
             );
         }
@@ -336,12 +353,16 @@ mod to_string {
     #[test]
     fn unknown_type() {
         let _f = set_up();
-        assert_eq!(UnknownType::new(false).into_type().to_string(), "_");
+        assert_eq!(UnknownType::new().to_string(), "_");
     }
 }
 
 mod parse {
     use super::*;
+
+    fn throws_parse_error(s: &str) {
+        assert!(Type::try_parse(s).is_err(), "expected ParseError for {s:?}");
+    }
 
     mod primary_type {
         use super::*;
@@ -376,64 +397,58 @@ mod parse {
         #[test]
         fn invalid_type_arg_separator() {
             let _f = set_up();
-            expect_parse_error("Map<int) String>");
+            throws_parse_error("Map<int) String>");
         }
 
         #[test]
         fn dynamic() {
             let _f = set_up();
-            assert_eq!(ty("dynamic"), DynamicType::instance());
-            assert!(ty("dynamic").is_dynamic_type());
+            assert!(ty("dynamic").identical(DynamicType::instance()));
         }
 
         #[test]
         fn error() {
             let _f = set_up();
-            assert_eq!(ty("error"), InvalidType::instance());
-            assert!(ty("error").is_invalid_type());
+            assert!(ty("error").identical(InvalidType::instance()));
         }
 
         #[test]
         fn future_or() {
             let _f = set_up();
             let type_ = ty("FutureOr<int>");
-            assert!(type_.is_future_or_type());
             assert_eq!(type_.future_or_type_argument().unwrap().to_string(), "int");
         }
 
         #[test]
         fn never() {
             let _f = set_up();
-            assert_eq!(ty("Never"), NeverType::instance());
-            assert!(ty("Never").is_never_type());
+            assert!(ty("Never").identical(NeverType::instance()));
         }
 
         #[test]
         fn null() {
             let _f = set_up();
-            assert_eq!(ty("Null"), NullType::instance());
-            assert!(ty("Null").is_null_type());
+            assert!(ty("Null").identical(NullType::instance()));
         }
 
         #[test]
         fn void() {
             let _f = set_up();
-            assert_eq!(ty("void"), VoidType::instance());
-            assert!(ty("void").is_void_type());
+            assert!(ty("void").identical(VoidType::instance()));
         }
     }
 
     #[test]
     fn invalid_initial_token() {
         let _f = set_up();
-        expect_parse_error("<");
+        throws_parse_error("<");
     }
 
     #[test]
     fn unknown_type() {
         let _f = set_up();
         let type_ = ty("_");
-        assert!(type_.is_unknown_type());
+        assert!(type_.as_unknown_type().is_some());
     }
 
     #[test]
@@ -448,7 +463,7 @@ mod parse {
     fn promoted_type_variable() {
         let f = set_up();
         let type_ = ty("T&int").as_type_parameter_type().unwrap();
-        assert_eq!(type_.type_parameter, f.t);
+        assert!(type_.type_parameter == f.t);
         assert_eq!(type_.promotion.unwrap().to_string(), "int");
     }
 
@@ -462,7 +477,7 @@ mod parse {
     #[test]
     fn invalid_token_terminating_parenthesized_type() {
         let _f = set_up();
-        expect_parse_error("(?<");
+        throws_parse_error("(?<");
     }
 
     mod function_type {
@@ -540,7 +555,7 @@ mod parse {
                 assert_eq!(type_.required_positional_parameter_count, 0);
                 assert_eq!(type_.named_parameters.len(), 1);
                 assert!(!type_.named_parameters[0].is_required);
-                assert_eq!(type_.named_parameters[0].type_.to_string(), "String");
+                assert_eq!(type_.named_parameters[0].ty.to_string(), "String");
                 assert_eq!(type_.named_parameters[0].name, "x");
             }
 
@@ -555,7 +570,7 @@ mod parse {
                 assert_eq!(type_.required_positional_parameter_count, 0);
                 assert_eq!(type_.named_parameters.len(), 1);
                 assert!(type_.named_parameters[0].is_required);
-                assert_eq!(type_.named_parameters[0].type_.to_string(), "String");
+                assert_eq!(type_.named_parameters[0].ty.to_string(), "String");
                 assert_eq!(type_.named_parameters[0].name, "x");
             }
         }
@@ -571,10 +586,10 @@ mod parse {
             assert_eq!(type_.required_positional_parameter_count, 0);
             assert_eq!(type_.named_parameters.len(), 2);
             assert!(!type_.named_parameters[0].is_required);
-            assert_eq!(type_.named_parameters[0].type_.to_string(), "String");
+            assert_eq!(type_.named_parameters[0].ty.to_string(), "String");
             assert_eq!(type_.named_parameters[0].name, "x");
             assert!(!type_.named_parameters[1].is_required);
-            assert_eq!(type_.named_parameters[1].type_.to_string(), "double");
+            assert_eq!(type_.named_parameters[1].ty.to_string(), "double");
             assert_eq!(type_.named_parameters[1].name, "y");
         }
 
@@ -589,10 +604,10 @@ mod parse {
             assert_eq!(type_.required_positional_parameter_count, 0);
             assert_eq!(type_.named_parameters.len(), 2);
             assert!(!type_.named_parameters[0].is_required);
-            assert_eq!(type_.named_parameters[0].type_.to_string(), "String");
+            assert_eq!(type_.named_parameters[0].ty.to_string(), "String");
             assert_eq!(type_.named_parameters[0].name, "x");
             assert!(!type_.named_parameters[1].is_required);
-            assert_eq!(type_.named_parameters[1].type_.to_string(), "double");
+            assert_eq!(type_.named_parameters[1].ty.to_string(), "double");
             assert_eq!(type_.named_parameters[1].name, "y");
         }
 
@@ -622,30 +637,30 @@ mod parse {
                 let type_ = ty("T Function<T>(T, {T t})").as_function_type().unwrap();
                 assert_eq!(type_.type_parameters_shared.len(), 1);
                 let t = type_.type_parameters_shared[0];
-                assert_eq!(
+                assert!(
                     type_
                         .return_type
                         .as_type_parameter_type()
                         .unwrap()
-                        .type_parameter,
-                    t
+                        .type_parameter
+                        == t
                 );
                 assert_eq!(type_.positional_parameters.len(), 1);
-                assert_eq!(
+                assert!(
                     type_.positional_parameters[0]
                         .as_type_parameter_type()
                         .unwrap()
-                        .type_parameter,
-                    t
+                        .type_parameter
+                        == t
                 );
                 assert_eq!(type_.named_parameters.len(), 1);
-                assert_eq!(
+                assert!(
                     type_.named_parameters[0]
-                        .type_
+                        .ty
                         .as_type_parameter_type()
                         .unwrap()
-                        .type_parameter,
-                    t
+                        .type_parameter
+                        == t
                 );
             }
 
@@ -655,7 +670,7 @@ mod parse {
                 let type_ = ty("void Function<T>()").as_function_type().unwrap();
                 assert_eq!(type_.type_parameters_shared.len(), 1);
                 let t = type_.type_parameters_shared[0];
-                assert_eq!(t.explicit_bound(), None);
+                assert!(t.explicit_bound().is_none());
             }
 
             #[test]
@@ -677,39 +692,39 @@ mod parse {
                     .unwrap();
                 let t = type_.type_parameters_shared[0];
                 let u = type_.type_parameters_shared[1];
-                assert_eq!(
+                assert!(
                     t.explicit_bound()
                         .unwrap()
                         .as_type_parameter_type()
                         .unwrap()
-                        .type_parameter,
-                    u
+                        .type_parameter
+                        == u
                 );
             }
 
             #[test]
             fn invalid_token_in_type_formals() {
                 let _f = set_up();
-                expect_parse_error("int Function<{>()");
+                throws_parse_error("int Function<{>()");
             }
 
             #[test]
             fn invalid_token_at_end_of_type_formals() {
                 let _f = set_up();
-                expect_parse_error("int Function<T}()");
+                throws_parse_error("int Function<T}()");
             }
         }
 
         #[test]
         fn invalid_parameter_separator() {
             let _f = set_up();
-            expect_parse_error("int Function(String Function()< double)");
+            throws_parse_error("int Function(String Function()< double)");
         }
 
         #[test]
         fn invalid_token_after_function() {
             let _f = set_up();
-            expect_parse_error("int Function&)");
+            throws_parse_error("int Function&)");
         }
     }
 
@@ -731,7 +746,7 @@ mod parse {
             assert!(type_.positional_types.is_empty());
             assert_eq!(type_.named_types.len(), 1);
             assert_eq!(type_.named_types[0].name, "x");
-            assert_eq!(type_.named_types[0].type_.to_string(), "int");
+            assert_eq!(type_.named_types[0].ty.to_string(), "int");
         }
 
         #[test]
@@ -741,19 +756,19 @@ mod parse {
             assert!(type_.positional_types.is_empty());
             assert_eq!(type_.named_types.len(), 1);
             assert_eq!(type_.named_types[0].name, "x");
-            assert_eq!(type_.named_types[0].type_.to_string(), "int");
+            assert_eq!(type_.named_types[0].ty.to_string(), "int");
         }
 
         #[test]
         fn named_field_followed_by_invalid_token() {
             let _f = set_up();
-            expect_parse_error("({int x))");
+            throws_parse_error("({int x))");
         }
 
         #[test]
         fn named_field_name_is_not_an_identifier() {
             let _f = set_up();
-            expect_parse_error("({int )})");
+            throws_parse_error("({int )})");
         }
 
         #[test]
@@ -763,21 +778,21 @@ mod parse {
             assert!(type_.positional_types.is_empty());
             assert_eq!(type_.named_types.len(), 2);
             assert_eq!(type_.named_types[0].name, "x");
-            assert_eq!(type_.named_types[0].type_.to_string(), "int");
+            assert_eq!(type_.named_types[0].ty.to_string(), "int");
             assert_eq!(type_.named_types[1].name, "y");
-            assert_eq!(type_.named_types[1].type_.to_string(), "String");
+            assert_eq!(type_.named_types[1].ty.to_string(), "String");
         }
 
         #[test]
         fn curly_braces_followed_by_invalid_token() {
             let _f = set_up();
-            expect_parse_error("({int x}&");
+            throws_parse_error("({int x}&");
         }
 
         #[test]
         fn curly_braces_but_no_named_fields() {
             let _f = set_up();
-            expect_parse_error("({})");
+            throws_parse_error("({})");
         }
 
         #[test]
@@ -822,13 +837,13 @@ mod parse {
             assert_eq!(type_.positional_types[0].to_string(), "int");
             assert_eq!(type_.named_types.len(), 1);
             assert_eq!(type_.named_types[0].name, "x");
-            assert_eq!(type_.named_types[0].type_.to_string(), "String");
+            assert_eq!(type_.named_types[0].ty.to_string(), "String");
         }
 
         #[test]
         fn terminated_by_invalid_token() {
             let _f = set_up();
-            expect_parse_error("(int, String(");
+            throws_parse_error("(int, String(");
         }
     }
 
@@ -838,46 +853,37 @@ mod parse {
         #[test]
         fn before_other_tokens() {
             let _f = set_up();
-            expect_parse_error("#int");
+            throws_parse_error("#int");
         }
 
         #[test]
         fn at_end() {
             let _f = set_up();
-            expect_parse_error("int#");
+            throws_parse_error("int#");
         }
     }
 
     #[test]
     fn extra_token_after_type() {
         let _f = set_up();
-        expect_parse_error("int)");
+        throws_parse_error("int)");
     }
 }
 
 mod hash_code_and_equality {
     use super::*;
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-
-    fn hash_of(t: Type) -> u64 {
-        let mut h = DefaultHasher::new();
-        t.hash(&mut h);
-        h.finish()
-    }
 
     fn check_equal(t1: Type, t2: Type) {
-        assert!(t1 == t2, "expected {t1:?} == {t2:?}");
-        assert!(hash_of(t1) == hash_of(t2));
+        assert!(t1 == t2);
+        assert!(t1.hash_code() == t2.hash_code());
     }
 
     fn check_not_equal(t1: Type, t2: Type) {
-        assert!(t1 != t2, "expected {t1:?} != {t2:?}");
-        // Note: don't compare `t1.hashCode` to `t2.hashCode` because it's not
-        // guaranteed whether they will be different or not. And besides, it
-        // really only matters for efficiency, and efficiency is not needed
-        // for the "mini_types" representation because it's only used in unit
-        // tests.
+        assert!(t1 != t2);
+        // Note: don't compare `t1.hash_code()` to `t2.hash_code()` because it's
+        // not guaranteed whether they will be different or not. And besides, it
+        // really only matters for efficiency, and efficiency is not needed for
+        // the "mini_types" representation because it's only used in unit tests.
     }
 
     #[test]
@@ -940,15 +946,19 @@ mod hash_code_and_equality {
             ty("void Function<V>(void Function<W extends V>(V, W))"),
         );
 
-        // For these final test cases, we give one of the type parameters a
-        // name that would be chosen by `FreshTypeParameterGenerator`, to
-        // verify that the logic for avoiding name collisions does the right
-        // thing.
-        let t = FreshTypeParameterGenerator::new().generate().name();
-        check_equal(ty(&format!("{t} Function<{t}>()")), ty("U Function<U>()"));
+        // For these final test cases, we give one of the type parameters a name
+        // that would be chosen by `FreshTypeParameterGenerator`, to verify that
+        // the logic for avoiding name collisions does the right thing.
+        let name = FreshTypeParameterGenerator::new().generate().name();
+        check_equal(
+            ty(&format!("{name} Function<{name}>()")),
+            ty("U Function<U>()"),
+        );
         check_not_equal(
-            ty(&format!("void Function<{t}>(X Function<X>({t}))")),
-            ty(&format!("void Function<{t}>({t} Function<X>({t}))")),
+            ty(&format!("void Function<{name}>(X Function<X>({name}))")),
+            ty(&format!(
+                "void Function<{name}>({name} Function<X>({name}))"
+            )),
         );
     }
 
@@ -1000,19 +1010,19 @@ mod hash_code_and_equality {
         check_equal(ty("T&int"), ty("T&int"));
         check_not_equal(ty("T&int"), ty("T&String"));
         // Type formals from different function types are not equal
-        //
-        // Rust deviation: Dart compares the formals of two separately parsed
-        // `void Function<T>()`. Here the two types are Dart-`==`, so they are
-        // interned to one id and share their type formals. The check uses two
-        // function types that are not `==` instead, and the shared formals are
-        // checked explicitly.
         check_not_equal(
-            tpt(ty("void Function<T>()").type_parameters_shared()[0]),
-            tpt(ty("int Function<T>()").type_parameters_shared()[0]),
-        );
-        check_equal(
-            tpt(ty("void Function<T>()").type_parameters_shared()[0]),
-            tpt(ty("void Function<T>()").type_parameters_shared()[0]),
+            TypeParameterType::new(
+                ty("void Function<T>()")
+                    .as_function_type()
+                    .unwrap()
+                    .type_parameters_shared[0],
+            ),
+            TypeParameterType::new(
+                ty("void Function<T>()")
+                    .as_function_type()
+                    .unwrap()
+                    .type_parameters_shared[0],
+            ),
         );
     }
 
@@ -1028,7 +1038,7 @@ mod fresh_type_parameter_generator {
     use super::*;
 
     #[test]
-    fn generates_type_parameters_with_a_bound_of_object_question() {
+    fn generates_type_parameters_with_a_bound_of_object() {
         let _f = set_up();
         let mut ftpg = FreshTypeParameterGenerator::new();
         assert_eq!(ftpg.generate().bound().to_string(), "Object?");
@@ -1059,22 +1069,6 @@ mod fresh_type_parameter_generator {
     }
 }
 
-/// `type.recursivelyDemote(covariant: covariant)!.type`.
-fn demoted(type_str: &str, covariant: bool) -> String {
-    ty(type_str)
-        .recursively_demote(covariant)
-        .unwrap_or_else(|| panic!("expected `{type_str}` to change"))
-        .to_string()
-}
-
-/// `type.closureWithRespectToUnknown(covariant: covariant)!.type`.
-fn closed(type_str: &str, covariant: bool) -> String {
-    ty(type_str)
-        .closure_with_respect_to_unknown(covariant)
-        .unwrap_or_else(|| panic!("expected `{type_str}` to change"))
-        .to_string()
-}
-
 mod recursively_demote {
     use super::*;
 
@@ -1087,26 +1081,44 @@ mod recursively_demote {
             #[test]
             fn unchanged() {
                 let _f = set_up();
-                assert_eq!(ty("int Function()").recursively_demote(true), None);
-                assert_eq!(ty("int Function()").recursively_demote(false), None);
+                assert!(ty("int Function()").recursively_demote(true).is_none());
+                assert!(ty("int Function()").recursively_demote(false).is_none());
             }
 
             #[test]
             fn covariant() {
                 let _f = set_up();
-                assert_eq!(demoted("T&int Function()", true), "T Function()");
+                assert_eq!(
+                    ty("T&int Function()")
+                        .recursively_demote(true)
+                        .unwrap()
+                        .to_string(),
+                    "T Function()"
+                );
             }
 
             #[test]
             fn contravariant() {
                 let _f = set_up();
-                assert_eq!(demoted("T&int Function()", false), "Never Function()");
+                assert_eq!(
+                    ty("T&int Function()")
+                        .recursively_demote(false)
+                        .unwrap()
+                        .to_string(),
+                    "Never Function()"
+                );
             }
 
             #[test]
             fn generic() {
                 let _f = set_up();
-                assert_eq!(demoted("T&int Function<U>()", true), "T Function<U>()");
+                assert_eq!(
+                    ty("T&int Function<U>()")
+                        .recursively_demote(true)
+                        .unwrap()
+                        .to_string(),
+                    "T Function<U>()"
+                );
             }
         }
 
@@ -1116,13 +1128,15 @@ mod recursively_demote {
             #[test]
             fn unchanged() {
                 let _f = set_up();
-                assert_eq!(
-                    ty("void Function(int, String)").recursively_demote(true),
-                    None
+                assert!(
+                    ty("void Function(int, String)")
+                        .recursively_demote(true)
+                        .is_none()
                 );
-                assert_eq!(
-                    ty("void Function(int, String)").recursively_demote(false),
-                    None
+                assert!(
+                    ty("void Function(int, String)")
+                        .recursively_demote(false)
+                        .is_none()
                 );
             }
 
@@ -1130,7 +1144,10 @@ mod recursively_demote {
             fn covariant() {
                 let _f = set_up();
                 assert_eq!(
-                    demoted("void Function(T&int, String)", true),
+                    ty("void Function(T&int, String)")
+                        .recursively_demote(true)
+                        .unwrap()
+                        .to_string(),
                     "void Function(Never, String)"
                 );
             }
@@ -1139,7 +1156,10 @@ mod recursively_demote {
             fn contravariant() {
                 let _f = set_up();
                 assert_eq!(
-                    demoted("void Function(T&int, String)", false),
+                    ty("void Function(T&int, String)")
+                        .recursively_demote(false)
+                        .unwrap()
+                        .to_string(),
                     "void Function(T, String)"
                 );
             }
@@ -1151,13 +1171,15 @@ mod recursively_demote {
             #[test]
             fn unchanged() {
                 let _f = set_up();
-                assert_eq!(
-                    ty("void Function({int x, String y})").recursively_demote(true),
-                    None
+                assert!(
+                    ty("void Function({int x, String y})")
+                        .recursively_demote(true)
+                        .is_none()
                 );
-                assert_eq!(
-                    ty("void Function({int x, String y})").recursively_demote(false),
-                    None
+                assert!(
+                    ty("void Function({int x, String y})")
+                        .recursively_demote(false)
+                        .is_none()
                 );
             }
 
@@ -1165,7 +1187,10 @@ mod recursively_demote {
             fn covariant() {
                 let _f = set_up();
                 assert_eq!(
-                    demoted("void Function({T&int x, String y})", true),
+                    ty("void Function({T&int x, String y})")
+                        .recursively_demote(true)
+                        .unwrap()
+                        .to_string(),
                     "void Function({Never x, String y})"
                 );
             }
@@ -1174,7 +1199,10 @@ mod recursively_demote {
             fn contravariant() {
                 let _f = set_up();
                 assert_eq!(
-                    demoted("void Function({T&int x, String y})", false),
+                    ty("void Function({T&int x, String y})")
+                        .recursively_demote(false)
+                        .unwrap()
+                        .to_string(),
                     "void Function({T x, String y})"
                 );
             }
@@ -1187,8 +1215,8 @@ mod recursively_demote {
         #[test]
         fn unchanged() {
             let _f = set_up();
-            assert_eq!(ty("int").recursively_demote(true), None);
-            assert_eq!(ty("int").recursively_demote(false), None);
+            assert!(ty("int").recursively_demote(true).is_none());
+            assert!(ty("int").recursively_demote(false).is_none());
         }
 
         mod type_parameters {
@@ -1197,20 +1225,32 @@ mod recursively_demote {
             #[test]
             fn unchanged() {
                 let _f = set_up();
-                assert_eq!(ty("Map<int, String>").recursively_demote(true), None);
-                assert_eq!(ty("Map<int, String>").recursively_demote(false), None);
+                assert!(ty("Map<int, String>").recursively_demote(true).is_none());
+                assert!(ty("Map<int, String>").recursively_demote(false).is_none());
             }
 
             #[test]
             fn covariant() {
                 let _f = set_up();
-                assert_eq!(demoted("Map<T&int, String>", true), "Map<T, String>");
+                assert_eq!(
+                    ty("Map<T&int, String>")
+                        .recursively_demote(true)
+                        .unwrap()
+                        .to_string(),
+                    "Map<T, String>"
+                );
             }
 
             #[test]
             fn contravariant() {
                 let _f = set_up();
-                assert_eq!(demoted("Map<T&int, String>", false), "Map<Never, String>");
+                assert_eq!(
+                    ty("Map<T&int, String>")
+                        .recursively_demote(false)
+                        .unwrap()
+                        .to_string(),
+                    "Map<Never, String>"
+                );
             }
         }
     }
@@ -1221,21 +1261,30 @@ mod recursively_demote {
         #[test]
         fn unchanged() {
             let _f = set_up();
-            assert_eq!(ty("int?").recursively_demote(true), None);
-            assert_eq!(ty("int?").recursively_demote(false), None);
+            assert!(ty("int?").recursively_demote(true).is_none());
+            assert!(ty("int?").recursively_demote(false).is_none());
         }
 
         #[test]
         fn covariant() {
             let _f = set_up();
-            assert_eq!(demoted("(T&int)?", true), "T?");
+            assert_eq!(
+                ty("(T&int)?").recursively_demote(true).unwrap().to_string(),
+                "T?"
+            );
         }
 
         #[test]
         fn contravariant() {
             let _f = set_up();
             // Note: we don't normalize `Never?` to `Null`.
-            assert_eq!(demoted("(T&int)?", false), "Never?");
+            assert_eq!(
+                ty("(T&int)?")
+                    .recursively_demote(false)
+                    .unwrap()
+                    .to_string(),
+                "Never?"
+            );
         }
     }
 
@@ -1245,8 +1294,8 @@ mod recursively_demote {
         #[test]
         fn unchanged() {
             let _f = set_up();
-            assert_eq!(ty("(int, {double a})").recursively_demote(true), None);
-            assert_eq!(ty("(int, {double a})").recursively_demote(false), None);
+            assert!(ty("(int, {double a})").recursively_demote(true).is_none());
+            assert!(ty("(int, {double a})").recursively_demote(false).is_none());
         }
 
         mod changed {
@@ -1258,13 +1307,25 @@ mod recursively_demote {
                 #[test]
                 fn covariant() {
                     let _f = set_up();
-                    assert_eq!(demoted("(T&int, {double a})", true), "(T, {double a})");
+                    assert_eq!(
+                        ty("(T&int, {double a})")
+                            .recursively_demote(true)
+                            .unwrap()
+                            .to_string(),
+                        "(T, {double a})"
+                    );
                 }
 
                 #[test]
                 fn contravariant() {
                     let _f = set_up();
-                    assert_eq!(demoted("(T&int, {double a})", false), "(Never, {double a})");
+                    assert_eq!(
+                        ty("(T&int, {double a})")
+                            .recursively_demote(false)
+                            .unwrap()
+                            .to_string(),
+                        "(Never, {double a})"
+                    );
                 }
             }
 
@@ -1274,13 +1335,25 @@ mod recursively_demote {
                 #[test]
                 fn covariant() {
                     let _f = set_up();
-                    assert_eq!(demoted("(double, {T&int a})", true), "(double, {T a})");
+                    assert_eq!(
+                        ty("(double, {T&int a})")
+                            .recursively_demote(true)
+                            .unwrap()
+                            .to_string(),
+                        "(double, {T a})"
+                    );
                 }
 
                 #[test]
                 fn contravariant() {
                     let _f = set_up();
-                    assert_eq!(demoted("(double, {T&int a})", false), "(double, {Never a})");
+                    assert_eq!(
+                        ty("(double, {T&int a})")
+                            .recursively_demote(false)
+                            .unwrap()
+                            .to_string(),
+                        "(double, {Never a})"
+                    );
                 }
             }
         }
@@ -1289,8 +1362,8 @@ mod recursively_demote {
     #[test]
     fn unknown_type() {
         let _f = set_up();
-        assert_eq!(ty("_").recursively_demote(true), None);
-        assert_eq!(ty("_").recursively_demote(false), None);
+        assert!(ty("_").recursively_demote(true).is_none());
+        assert!(ty("_").recursively_demote(false).is_none());
     }
 }
 
@@ -1300,8 +1373,20 @@ mod closure_with_respect_to_unknown {
     #[test]
     fn unknown_type() {
         let _f = set_up();
-        assert_eq!(closed("_", true), "Object?");
-        assert_eq!(closed("_", false), "Never");
+        assert_eq!(
+            ty("_")
+                .closure_with_respect_to_unknown(true)
+                .unwrap()
+                .to_string(),
+            "Object?"
+        );
+        assert_eq!(
+            ty("_")
+                .closure_with_respect_to_unknown(false)
+                .unwrap()
+                .to_string(),
+            "Never"
+        );
     }
 
     mod function_type {
@@ -1313,32 +1398,52 @@ mod closure_with_respect_to_unknown {
             #[test]
             fn unchanged() {
                 let _f = set_up();
-                assert_eq!(
-                    ty("int Function()").closure_with_respect_to_unknown(true),
-                    None
+                assert!(
+                    ty("int Function()")
+                        .closure_with_respect_to_unknown(true)
+                        .is_none()
                 );
-                assert_eq!(
-                    ty("int Function()").closure_with_respect_to_unknown(false),
-                    None
+                assert!(
+                    ty("int Function()")
+                        .closure_with_respect_to_unknown(false)
+                        .is_none()
                 );
             }
 
             #[test]
             fn covariant() {
                 let _f = set_up();
-                assert_eq!(closed("_ Function()", true), "Object? Function()");
+                assert_eq!(
+                    ty("_ Function()")
+                        .closure_with_respect_to_unknown(true)
+                        .unwrap()
+                        .to_string(),
+                    "Object? Function()"
+                );
             }
 
             #[test]
             fn contravariant() {
                 let _f = set_up();
-                assert_eq!(closed("_ Function()", false), "Never Function()");
+                assert_eq!(
+                    ty("_ Function()")
+                        .closure_with_respect_to_unknown(false)
+                        .unwrap()
+                        .to_string(),
+                    "Never Function()"
+                );
             }
 
             #[test]
             fn generic() {
                 let _f = set_up();
-                assert_eq!(closed("_ Function<T>()", true), "Object? Function<T>()");
+                assert_eq!(
+                    ty("_ Function<T>()")
+                        .closure_with_respect_to_unknown(true)
+                        .unwrap()
+                        .to_string(),
+                    "Object? Function<T>()"
+                );
             }
         }
 
@@ -1348,13 +1453,15 @@ mod closure_with_respect_to_unknown {
             #[test]
             fn unchanged() {
                 let _f = set_up();
-                assert_eq!(
-                    ty("void Function(int, String)").closure_with_respect_to_unknown(true),
-                    None
+                assert!(
+                    ty("void Function(int, String)")
+                        .closure_with_respect_to_unknown(true)
+                        .is_none()
                 );
-                assert_eq!(
-                    ty("void Function(int, String)").closure_with_respect_to_unknown(false),
-                    None
+                assert!(
+                    ty("void Function(int, String)")
+                        .closure_with_respect_to_unknown(false)
+                        .is_none()
                 );
             }
 
@@ -1362,7 +1469,10 @@ mod closure_with_respect_to_unknown {
             fn covariant() {
                 let _f = set_up();
                 assert_eq!(
-                    closed("void Function(_, String)", true),
+                    ty("void Function(_, String)")
+                        .closure_with_respect_to_unknown(true)
+                        .unwrap()
+                        .to_string(),
                     "void Function(Never, String)"
                 );
             }
@@ -1371,7 +1481,10 @@ mod closure_with_respect_to_unknown {
             fn contravariant() {
                 let _f = set_up();
                 assert_eq!(
-                    closed("void Function(_, String)", false),
+                    ty("void Function(_, String)")
+                        .closure_with_respect_to_unknown(false)
+                        .unwrap()
+                        .to_string(),
                     "void Function(Object?, String)"
                 );
             }
@@ -1383,13 +1496,15 @@ mod closure_with_respect_to_unknown {
             #[test]
             fn unchanged() {
                 let _f = set_up();
-                assert_eq!(
-                    ty("void Function({int x, String y})").closure_with_respect_to_unknown(true),
-                    None
+                assert!(
+                    ty("void Function({int x, String y})")
+                        .closure_with_respect_to_unknown(true)
+                        .is_none()
                 );
-                assert_eq!(
-                    ty("void Function({int x, String y})").closure_with_respect_to_unknown(false),
-                    None
+                assert!(
+                    ty("void Function({int x, String y})")
+                        .closure_with_respect_to_unknown(false)
+                        .is_none()
                 );
             }
 
@@ -1397,7 +1512,10 @@ mod closure_with_respect_to_unknown {
             fn covariant() {
                 let _f = set_up();
                 assert_eq!(
-                    closed("void Function({_ x, String y})", true),
+                    ty("void Function({_ x, String y})")
+                        .closure_with_respect_to_unknown(true)
+                        .unwrap()
+                        .to_string(),
                     "void Function({Never x, String y})"
                 );
             }
@@ -1406,7 +1524,10 @@ mod closure_with_respect_to_unknown {
             fn contravariant() {
                 let _f = set_up();
                 assert_eq!(
-                    closed("void Function({_ x, String y})", false),
+                    ty("void Function({_ x, String y})")
+                        .closure_with_respect_to_unknown(false)
+                        .unwrap()
+                        .to_string(),
                     "void Function({Object? x, String y})"
                 );
             }
@@ -1419,8 +1540,8 @@ mod closure_with_respect_to_unknown {
         #[test]
         fn unchanged() {
             let _f = set_up();
-            assert_eq!(ty("int").closure_with_respect_to_unknown(true), None);
-            assert_eq!(ty("int").closure_with_respect_to_unknown(false), None);
+            assert!(ty("int").closure_with_respect_to_unknown(true).is_none());
+            assert!(ty("int").closure_with_respect_to_unknown(false).is_none());
         }
 
         mod type_parameters {
@@ -1429,26 +1550,40 @@ mod closure_with_respect_to_unknown {
             #[test]
             fn unchanged() {
                 let _f = set_up();
-                assert_eq!(
-                    ty("Map<int, String>").closure_with_respect_to_unknown(true),
-                    None
+                assert!(
+                    ty("Map<int, String>")
+                        .closure_with_respect_to_unknown(true)
+                        .is_none()
                 );
-                assert_eq!(
-                    ty("Map<int, String>").closure_with_respect_to_unknown(false),
-                    None
+                assert!(
+                    ty("Map<int, String>")
+                        .closure_with_respect_to_unknown(false)
+                        .is_none()
                 );
             }
 
             #[test]
             fn covariant() {
                 let _f = set_up();
-                assert_eq!(closed("Map<_, String>", true), "Map<Object?, String>");
+                assert_eq!(
+                    ty("Map<_, String>")
+                        .closure_with_respect_to_unknown(true)
+                        .unwrap()
+                        .to_string(),
+                    "Map<Object?, String>"
+                );
             }
 
             #[test]
             fn contravariant() {
                 let _f = set_up();
-                assert_eq!(closed("Map<_, String>", false), "Map<Never, String>");
+                assert_eq!(
+                    ty("Map<_, String>")
+                        .closure_with_respect_to_unknown(false)
+                        .unwrap()
+                        .to_string(),
+                    "Map<Never, String>"
+                );
             }
         }
     }
@@ -1459,14 +1594,20 @@ mod closure_with_respect_to_unknown {
         #[test]
         fn unchanged() {
             let _f = set_up();
-            assert_eq!(ty("int?").closure_with_respect_to_unknown(true), None);
-            assert_eq!(ty("int?").closure_with_respect_to_unknown(false), None);
+            assert!(ty("int?").closure_with_respect_to_unknown(true).is_none());
+            assert!(ty("int?").closure_with_respect_to_unknown(false).is_none());
         }
 
         #[test]
         fn covariant() {
             let _f = set_up();
-            assert_eq!(closed("_?", true), "Object?");
+            assert_eq!(
+                ty("_?")
+                    .closure_with_respect_to_unknown(true)
+                    .unwrap()
+                    .to_string(),
+                "Object?"
+            );
         }
     }
 
@@ -1476,13 +1617,15 @@ mod closure_with_respect_to_unknown {
         #[test]
         fn unchanged() {
             let _f = set_up();
-            assert_eq!(
-                ty("(int, {double a})").closure_with_respect_to_unknown(true),
-                None
+            assert!(
+                ty("(int, {double a})")
+                    .closure_with_respect_to_unknown(true)
+                    .is_none()
             );
-            assert_eq!(
-                ty("(int, {double a})").closure_with_respect_to_unknown(false),
-                None
+            assert!(
+                ty("(int, {double a})")
+                    .closure_with_respect_to_unknown(false)
+                    .is_none()
             );
         }
 
@@ -1495,13 +1638,25 @@ mod closure_with_respect_to_unknown {
                 #[test]
                 fn covariant() {
                     let _f = set_up();
-                    assert_eq!(closed("(_, {double a})", true), "(Object?, {double a})");
+                    assert_eq!(
+                        ty("(_, {double a})")
+                            .closure_with_respect_to_unknown(true)
+                            .unwrap()
+                            .to_string(),
+                        "(Object?, {double a})"
+                    );
                 }
 
                 #[test]
                 fn contravariant() {
                     let _f = set_up();
-                    assert_eq!(closed("(_, {double a})", false), "(Never, {double a})");
+                    assert_eq!(
+                        ty("(_, {double a})")
+                            .closure_with_respect_to_unknown(false)
+                            .unwrap()
+                            .to_string(),
+                        "(Never, {double a})"
+                    );
                 }
             }
 
@@ -1511,13 +1666,25 @@ mod closure_with_respect_to_unknown {
                 #[test]
                 fn covariant() {
                     let _f = set_up();
-                    assert_eq!(closed("(double, {_ a})", true), "(double, {Object? a})");
+                    assert_eq!(
+                        ty("(double, {_ a})")
+                            .closure_with_respect_to_unknown(true)
+                            .unwrap()
+                            .to_string(),
+                        "(double, {Object? a})"
+                    );
                 }
 
                 #[test]
                 fn contravariant() {
                     let _f = set_up();
-                    assert_eq!(closed("(double, {_ a})", false), "(double, {Never a})");
+                    assert_eq!(
+                        ty("(double, {_ a})")
+                            .closure_with_respect_to_unknown(false)
+                            .unwrap()
+                            .to_string(),
+                        "(double, {Never a})"
+                    );
                 }
             }
         }
@@ -1528,14 +1695,13 @@ mod gather_used_identifiers {
     use super::*;
 
     fn query_used_identifiers(t: Type) -> HashSet<String> {
-        let mut identifiers = IndexSet::new();
+        let mut identifiers = HashSet::new();
         t.gather_used_identifiers(&mut identifiers);
-        identifiers.into_iter().collect()
+        identifiers
     }
 
-    /// Dart `unorderedEquals({...})`.
-    fn set(items: &[&str]) -> HashSet<String> {
-        items.iter().map(|s| s.to_string()).collect()
+    fn set(names: &[&str]) -> HashSet<String> {
+        names.iter().map(|s| s.to_string()).collect()
     }
 
     #[test]
@@ -1595,84 +1761,111 @@ mod gather_used_identifiers {
 mod substitute {
     use super::*;
 
+    fn subst(tp: TypeParameter, replacement: &str) -> HashMap<TypeParameter, Type> {
+        HashMap::from([(tp, ty(replacement))])
+    }
+
     #[test]
     fn function_type() {
         let f = set_up();
-        let s = substitution(f.t, ty("String"));
-        assert_eq!(ty("int Function<U>(int, {int i})").substitute(&s), None);
+        let m = subst(f.t, "String");
+        assert_eq!(ty("int Function<U>(int, {int i})").substitute(&m), None);
         assert_eq!(
-            ty("T Function<U>(int, {int i})").substitute(&s),
+            ty("T Function<U>(int, {int i})").substitute(&m),
             Some(ty("String Function<U>(int, {int i})"))
         );
         assert_eq!(
-            ty("int Function<U>(T, {int i})?").substitute(&s),
+            ty("int Function<U>(T, {int i})?").substitute(&m),
             Some(ty("int Function<U>(String, {int i})?"))
         );
         assert_eq!(
-            ty("int Function<U>(int, {T i})").substitute(&s),
+            ty("int Function<U>(int, {T i})").substitute(&m),
             Some(ty("int Function<U>(int, {String i})"))
         );
         assert_eq!(
-            ty("int Function<U>(int, {int i})")
-                .as_function_type()
-                .unwrap()
-                .substitute(&s, true),
+            ty("int Function<U>(int, {int i})").substitute_function_type(&m, true),
             Some(ty("int Function(int, {int i})"))
         );
         assert_eq!(
-            ty("int Function<U>(int, {int i})?")
-                .as_function_type()
-                .unwrap()
-                .substitute(&s, true),
+            ty("int Function<U>(int, {int i})?").substitute_function_type(&m, true),
             Some(ty("int Function(int, {int i})?"))
         );
         assert_eq!(
-            ty("int Function(T, T)").substitute(&s),
+            ty("int Function(T, T)").substitute(&m),
             Some(ty("int Function(String, String)"))
         );
         assert_eq!(
-            ty("int Function({T t1, T t2})").substitute(&s),
+            ty("int Function({T t1, T t2})").substitute(&m),
             Some(ty("int Function({String t1, String t2})"))
         );
 
         // Verify that bounds of type parameters are substituted
         let orig_type = ty("Map<U, V> Function<U extends T, V extends U>(U, V, {U u, V v})");
-        let substituted_type = orig_type.substitute(&s).unwrap();
+        let substituted_type_ = orig_type.substitute(&m).unwrap();
+        let substituted_type = substituted_type_.as_function_type().unwrap();
         assert_eq!(
-            substituted_type,
+            substituted_type_,
             ty("Map<U, V> Function<U extends String, V extends U>(U, V, {U u, V v})")
         );
-        let substituted_type = substituted_type.as_function_type().unwrap();
         // And verify that references to the type parameters now point to the
         // new, updated type parameters.
-        let type_parameter_of = |t: Type| t.as_type_parameter_type().unwrap().type_parameter;
         let return_args = substituted_type.return_type.as_primary_type().unwrap().args;
-        let formals = &substituted_type.type_parameters_shared;
-        assert_eq!(type_parameter_of(return_args[0]), formals[0]);
-        assert_eq!(type_parameter_of(return_args[1]), formals[1]);
-        assert_eq!(
-            type_parameter_of(formals[1].explicit_bound().unwrap()),
-            formals[0]
+        assert!(
+            return_args[0]
+                .as_type_parameter_type()
+                .unwrap()
+                .type_parameter
+                == substituted_type.type_parameters_shared[0]
         );
-        assert_eq!(
-            type_parameter_of(substituted_type.positional_parameters[0]),
-            formals[0]
+        assert!(
+            return_args[1]
+                .as_type_parameter_type()
+                .unwrap()
+                .type_parameter
+                == substituted_type.type_parameters_shared[1]
         );
-        assert_eq!(
-            type_parameter_of(substituted_type.positional_parameters[1]),
-            formals[1]
+        assert!(
+            substituted_type.type_parameters_shared[1]
+                .explicit_bound()
+                .unwrap()
+                .as_type_parameter_type()
+                .unwrap()
+                .type_parameter
+                == substituted_type.type_parameters_shared[0]
         );
-        assert_eq!(
-            type_parameter_of(substituted_type.named_parameters[0].type_),
-            formals[0]
+        assert!(
+            substituted_type.positional_parameters[0]
+                .as_type_parameter_type()
+                .unwrap()
+                .type_parameter
+                == substituted_type.type_parameters_shared[0]
         );
-        assert_eq!(
-            type_parameter_of(substituted_type.named_parameters[1].type_),
-            formals[1]
+        assert!(
+            substituted_type.positional_parameters[1]
+                .as_type_parameter_type()
+                .unwrap()
+                .type_parameter
+                == substituted_type.type_parameters_shared[1]
         );
-        // Finally, verify that the original type didn't change (this is
-        // important because `TypeParameter.explicitBound` is non-final in
-        // order to allow for the creation of F-bounded types).
+        assert!(
+            substituted_type.named_parameters[0]
+                .ty
+                .as_type_parameter_type()
+                .unwrap()
+                .type_parameter
+                == substituted_type.type_parameters_shared[0]
+        );
+        assert!(
+            substituted_type.named_parameters[1]
+                .ty
+                .as_type_parameter_type()
+                .unwrap()
+                .type_parameter
+                == substituted_type.type_parameters_shared[1]
+        );
+        // Finally, verify that the original type didn't change (this is important
+        // because `TypeParameter.explicitBound` is mutable in order to allow
+        // for the creation of F-bounded types).
         assert_eq!(
             orig_type,
             ty("Map<U, V> Function<U extends T, V extends U>(U, V, {U u, V v})")
@@ -1682,28 +1875,28 @@ mod substitute {
     #[test]
     fn primary_type() {
         let f = set_up();
-        let s = substitution(f.t, ty("String"));
-        assert_eq!(ty("Map<int, int>").substitute(&s), None);
+        let m = subst(f.t, "String");
+        assert_eq!(ty("Map<int, int>").substitute(&m), None);
         assert_eq!(
-            ty("Map<T, int>").substitute(&s),
+            ty("Map<T, int>").substitute(&m),
             Some(ty("Map<String, int>"))
         );
         assert_eq!(
-            ty("Map<int, T>").substitute(&s),
+            ty("Map<int, T>").substitute(&m),
             Some(ty("Map<int, String>"))
         );
         assert_eq!(
-            ty("Map<T, T>").substitute(&s),
+            ty("Map<T, T>").substitute(&m),
             Some(ty("Map<String, String>"))
         );
-        assert_eq!(ty("dynamic").substitute(&s), None);
-        assert_eq!(ty("error").substitute(&s), None);
-        assert_eq!(ty("Never").substitute(&s), None);
-        assert_eq!(ty("Null").substitute(&s), None);
-        assert_eq!(ty("void").substitute(&s), None);
-        assert_eq!(ty("FutureOr<int>").substitute(&s), None);
+        assert_eq!(ty("dynamic").substitute(&m), None);
+        assert_eq!(ty("error").substitute(&m), None);
+        assert_eq!(ty("Never").substitute(&m), None);
+        assert_eq!(ty("Null").substitute(&m), None);
+        assert_eq!(ty("void").substitute(&m), None);
+        assert_eq!(ty("FutureOr<int>").substitute(&m), None);
         assert_eq!(
-            ty("FutureOr<T>").substitute(&s),
+            ty("FutureOr<T>").substitute(&m),
             Some(ty("FutureOr<String>"))
         );
     }
@@ -1711,19 +1904,19 @@ mod substitute {
     #[test]
     fn record_type() {
         let f = set_up();
-        let s = substitution(f.t, ty("String"));
-        assert_eq!(ty("(int, {int i})").substitute(&s), None);
+        let m = subst(f.t, "String");
+        assert_eq!(ty("(int, {int i})").substitute(&m), None);
         assert_eq!(
-            ty("(T, {int i})?").substitute(&s),
+            ty("(T, {int i})?").substitute(&m),
             Some(ty("(String, {int i})?"))
         );
         assert_eq!(
-            ty("(int, {T i})").substitute(&s),
+            ty("(int, {T i})").substitute(&m),
             Some(ty("(int, {String i})"))
         );
-        assert_eq!(ty("(T, T)").substitute(&s), Some(ty("(String, String)")));
+        assert_eq!(ty("(T, T)").substitute(&m), Some(ty("(String, String)")));
         assert_eq!(
-            ty("({T t1, T t2})").substitute(&s),
+            ty("({T t1, T t2})").substitute(&m),
             Some(ty("({String t1, String t2})"))
         );
     }
@@ -1731,15 +1924,20 @@ mod substitute {
     #[test]
     fn type_parameter_type() {
         let f = set_up();
-        assert_eq!(ty("T").substitute(&substitution(f.u, ty("String"))), None);
-        let s = substitution(f.t, ty("String"));
-        assert_eq!(ty("T").substitute(&s), Some(ty("String")));
-        assert_eq!(ty("T&Object").substitute(&s), Some(ty("String")));
+        assert_eq!(ty("T").substitute(&subst(f.u, "String")), None);
+        assert_eq!(
+            ty("T").substitute(&subst(f.t, "String")),
+            Some(ty("String"))
+        );
+        assert_eq!(
+            ty("T&Object").substitute(&subst(f.t, "String")),
+            Some(ty("String"))
+        );
     }
 
     #[test]
     fn unknown_type() {
         let f = set_up();
-        assert_eq!(ty("_").substitute(&substitution(f.t, ty("String"))), None);
+        assert_eq!(ty("_").substitute(&subst(f.t, "String")), None);
     }
 }

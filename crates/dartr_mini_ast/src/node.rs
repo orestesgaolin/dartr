@@ -56,7 +56,7 @@ use dartr_flow::shared_type::{SharedTypeSchemaView, SharedTypeView};
 use dartr_flow::type_analysis_result::ExpressionTypeAnalysisResult;
 use dartr_flow::type_analyzer::JoinedPatternVariableInconsistency;
 
-use super::mini_types::{Name, Type, TypeKind, intern};
+use super::mini_types::{Name, Type, intern};
 
 /// A source location in the test file (Dart `String location`).
 pub type Loc = &'static Location<'static>;
@@ -67,7 +67,11 @@ pub fn loc_str(loc: Loc) -> String {
 }
 
 /// The result of analyzing an expression in the mini-AST.
-pub type ExprResult = ExpressionTypeAnalysisResult<Type, ()>;
+pub type ExprResult = ExpressionTypeAnalysisResult<Type, ExprInfo>;
+
+/// The flow analysis `ExpressionInfo` of the mini AST.
+pub type ExprInfo =
+    dartr_flow::flow_analysis_impl::model::ExpressionInfo<super::operations::MiniAstTypes>;
 
 /// The result passed to a `checkExpressionTypeAnalysisResult` checker.
 ///
@@ -108,6 +112,26 @@ pub type ExprResultChecker = Rc<dyn Fn(&ExprResultDetail)>;
 /// A callback receiving the promoted type of a variable read
 /// (`readAndCheckPromotedType`).
 pub type PromotedTypeCallback = Rc<dyn Fn(Option<Type>)>;
+
+/// A callback receiving the flow analysis `ExpressionInfo` of an expression
+/// (`getExpressionInfo`).
+pub type ExpressionInfoCallback = Rc<dyn Fn(Option<ExprInfo>)>;
+
+/// A callback receiving an [`SsaNodeHarness`](crate::flow_analysis_mini_ast::SsaNodeHarness)
+/// (`getSsaNodes`).
+pub type SsaNodesCallback = Rc<dyn Fn(&crate::flow_analysis_mini_ast::SsaNodeHarness)>;
+
+/// A non-promotion reason of the mini AST flow analysis.
+pub type NonPromotionReason = dartr_flow::flow_analysis::NonPromotionReasonOf<
+    dartr_flow::flow_analysis_impl::FlowAnalysisImpl<super::operations::MiniAstTypes>,
+>;
+
+/// The result of `whyNotPromoted`: (type, reason) pairs in Dart map order.
+pub type WhyNotPromotedMap = Vec<(SharedTypeView<Type>, NonPromotionReason)>;
+
+/// A callback receiving the non-promotion reasons (`whyNotPromoted`,
+/// `implicitThis_whyNotPromoted`).
+pub type WhyNotPromotedCallback = Rc<dyn Fn(WhyNotPromotedMap)>;
 
 // ===================================================================== arena
 
@@ -354,6 +378,26 @@ pub enum NodeKind {
     Write {
         lhs: Node,
         rhs: Node,
+    },
+    // flow_analysis_mini_ast.dart
+    /// `_GetExpressionInfo`.
+    GetExpressionInfo {
+        target: Node,
+        callback: ExpressionInfoCallback,
+    },
+    /// `_GetSsaNodes`.
+    GetSsaNodes {
+        callback: SsaNodesCallback,
+    },
+    /// `_WhyNotPromoted`.
+    WhyNotPromoted {
+        target: Node,
+        callback: WhyNotPromotedCallback,
+    },
+    /// `_WhyNotPromoted_ImplicitThis`.
+    WhyNotPromotedImplicitThis {
+        static_type: Type,
+        callback: WhyNotPromotedCallback,
     },
 
     // ------------------------------------------------------------ statements
@@ -636,7 +680,11 @@ impl NodeKind {
             | Throw { .. }
             | VariableReference { .. }
             | WrappedExpression { .. }
-            | Write { .. } => Category::Expression,
+            | Write { .. }
+            | GetExpressionInfo { .. }
+            | GetSsaNodes { .. }
+            | WhyNotPromoted { .. }
+            | WhyNotPromotedImplicitThis { .. } => Category::Expression,
             Assert { .. }
             | Block { .. }
             | Break { .. }
@@ -713,6 +761,10 @@ impl NodeKind {
             PatternAssignment { .. } => "PatternAssignment",
             PlaceholderExpression { .. } => "PlaceholderExpression",
             PostIncDec { .. } => "PostIncDec",
+            GetExpressionInfo { .. } => "_GetExpressionInfo",
+            GetSsaNodes { .. } => "_GetSsaNodes",
+            WhyNotPromoted { .. } => "_WhyNotPromoted",
+            WhyNotPromotedImplicitThis { .. } => "_WhyNotPromoted_ImplicitThis",
             PreIncDec { .. } => "PreIncDec",
             Property { .. } => "Property",
             Second { .. } => "Second",
@@ -778,7 +830,7 @@ impl NodeKind {
 
 impl Node {
     /// Allocates a node (Dart `Node._`).
-    fn alloc(kind: NodeKind, location: Loc) -> Node {
+    pub(crate) fn alloc(kind: NodeKind, location: Loc) -> Node {
         NODES.with(|nodes| {
             let mut nodes = nodes.borrow_mut();
             let id = nodes.len() as u32;

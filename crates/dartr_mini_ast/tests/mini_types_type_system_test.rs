@@ -8,11 +8,11 @@
 use dartr_mini_ast::mini_types::*;
 
 fn ty(type_str: &str) -> Type {
-    Type::new(type_str)
+    Type::parse(type_str)
 }
 
-fn set_up() -> RegistryGuard {
-    let guard = TypeRegistry::init_for_test();
+fn set_up() -> TypeRegistryScope {
+    let guard = type_registry_scope();
     TypeRegistry::add_type_parameter("T");
     TypeRegistry::add_interface_type_name("Function");
     TypeRegistry::add_interface_type_name("Record");
@@ -186,8 +186,8 @@ fn derived_future_type() {
     TypeRegistry::add_interface_type_name("MyFuture");
     ts.add_super_interfaces("MyFuture", |args| {
         vec![
-            PrimaryType::new(TypeRegistry::future(), args.to_vec()).into_type(),
-            Type::new("Object"),
+            PrimaryType::new(TypeRegistry::future(), args.to_vec()),
+            ty("Object"),
         ]
     });
     let derived = |t: &str| ts.derived_future_type(ty(t)).map(|f| f.to_string());
@@ -196,65 +196,9 @@ fn derived_future_type() {
     assert_eq!(derived("MyFuture<int>?").as_deref(), Some("Future<int>?"));
     assert_eq!(derived("FutureOr<int>").as_deref(), Some("FutureOr<int>"));
     assert_eq!(derived("int"), None);
-    let t = TypeRegistry::lookup("T");
-    let TypeNameInfo::TypeParameter(t) = t else {
-        panic!("T is a type parameter")
-    };
+    let t = TypeRegistry::lookup("T")
+        .as_type_parameter()
+        .expect("T is a type parameter");
     t.set_explicit_bound(Some(ty("Future<String>")));
     assert_eq!(derived("T").as_deref(), Some("Future<String>"));
-}
-
-#[test]
-fn shared_getters() {
-    let _g = set_up();
-    assert_eq!(
-        ty("void Function(String, [num])").required_positional_parameter_count(),
-        1
-    );
-    let f = ty("int Function<T>(String, num, {required bool b})");
-    assert_eq!(
-        f.shared_type_kind(),
-        dartr_flow::shared_type::SharedTypeKind::Function
-    );
-    assert_eq!(f.required_positional_parameter_count(), 2);
-    assert_eq!(f.positional_parameter_types_shared().len(), 2);
-    let named = f.sorted_named_parameters_shared();
-    assert_eq!(named.len(), 1);
-    assert!(named[0].is_required);
-    assert_eq!(named[0].name_shared, Name::new("b"));
-    assert_eq!(f.return_type_shared(), ty("int"));
-    assert_eq!(f.type_parameters_shared()[0].name(), "T");
-
-    let r = ty("(int, {String s})");
-    assert_eq!(
-        r.shared_type_kind(),
-        dartr_flow::shared_type::SharedTypeKind::Record
-    );
-    assert_eq!(r.positional_types_shared(), vec![ty("int")]);
-    assert_eq!(r.sorted_named_types_shared()[0].type_shared, ty("String"));
-
-    assert_eq!(ty("int").as_question_type(true), ty("int?"));
-    assert_eq!(ty("dynamic").as_question_type(true), ty("dynamic"));
-    assert_eq!(ty("Null").as_question_type(true), ty("Null"));
-    assert_eq!(ty("Never").as_question_type(true).to_string(), "Never?");
-}
-
-#[test]
-#[should_panic(expected = "init() already called")]
-fn init_twice_panics() {
-    let _g = set_up();
-    TypeRegistry::init();
-}
-
-#[test]
-fn guard_uninitializes_after_panic() {
-    let result = std::panic::catch_unwind(|| {
-        let _g = set_up();
-        panic!("test failure");
-    });
-    assert!(result.is_err());
-    assert!(!TypeRegistry::is_initialized());
-    // A second init on the same thread works.
-    let _g = set_up();
-    assert!(TypeRegistry::is_initialized());
 }

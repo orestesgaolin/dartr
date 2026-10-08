@@ -1,6 +1,6 @@
 // Dart source: pkg/_fe_analyzer_shared/test/type_inference/type_constraint_gatherer_test.dart
 
-mod mini_ast;
+use dartr_mini_ast as mini_ast;
 
 use dartr_flow::shared_type::{SharedTypeSchemaView, Variance};
 use dartr_flow::type_analyzer_operations::{TypeAnalyzerOperations, TypeConstraintGenerator};

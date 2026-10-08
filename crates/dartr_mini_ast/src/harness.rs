@@ -14,11 +14,11 @@
 //! [`MiniAstTypeAnalyzer::visit_collection_element`] and
 //! [`MiniAstTypeAnalyzer::compute_schema`].
 //!
-//! Flow analysis is the stand-in [`MiniFlow`]; the pre-visit therefore
-//! does not build `AssignedVariables` (only flow analysis reads them).
+//! Flow analysis is the real `dartr_flow` implementation
+//! ([`FlowAnalysisImpl`]`<`[`MiniAstTypes`]`>`); the pre-visit builds its
+//! `AssignedVariables`.
 
 use std::collections::{BTreeSet, HashMap};
-use std::rc::Rc;
 
 use dartr_flow::body_inference_context::SharedBodyInferenceContext;
 use dartr_flow::flow_analysis::{FlowAnalysis, FlowAnalysisNullShortingInterface, PropertyTarget};
@@ -43,14 +43,15 @@ use dartr_flow::type_analyzer_operations::{KeyValueTypes, TypeAnalyzerOperations
 use dartr_flow::variable_bindings::{VariableBinder, VariableBinderErrors};
 use dartr_type_analyzer::variable_bindings::VariableBinderState;
 
-use super::mini_flow::MiniFlow;
 use super::mini_ir::{Kind, MiniIrBuilder, MiniIrTmp};
 use super::mini_types::{Name, Type, TypeKind};
 use super::node::{
-    CatchClause, CollectionElementContext, ExprResult, ExprResultDetail, Label, Node, NodeKind,
-    Promotable, PropertyElement, StmtResultDetail, Var, loc_str, take_unused_error_ids,
+    CatchClause, CollectionElementContext, ExprInfo, ExprResult, ExprResultDetail, Label, Node,
+    NodeKind, Promotable, PropertyElement, StmtResultDetail, Var, loc_str, take_unused_error_ids,
 };
-use super::operations::MiniAstOperations;
+use super::operations::{MiniAstOperations, MiniAstTypes};
+use dartr_flow::assigned_variables::{AssignedVariables, AssignedVariablesImpl};
+use dartr_flow::flow_analysis_impl::FlowAnalysisImpl;
 
 type View = SharedTypeView<Type>;
 type SchemaView = SharedTypeSchemaView<Type>;
@@ -416,9 +417,12 @@ impl VariableBinderErrors for MiniAstErrors {
 
 /// `_VariableBinder`: joins pattern variables into the
 /// `PatternVariableJoin` that the test created for them.
-pub struct MiniVariableBinder;
+pub struct MiniVariableBinder<'a> {
+    /// `visitor._assignedVariables` (the join is declared there).
+    pub assigned_variables: &'a mut AssignedVariablesImpl<Node, Var>,
+}
 
-impl VariableBinder for MiniVariableBinder {
+impl VariableBinder for MiniVariableBinder<'_> {
     type Node = Node;
     type Variable = Var;
     type Key = Node;
@@ -459,12 +463,26 @@ impl VariableBinder for MiniVariableBinder {
             join.inconsistency = inconsistency;
             join.is_joined = true;
         });
+        self.assigned_variables.declare(joined_variable, false);
         joined_variable
     }
 }
 
+/// Dart `_LValueDisposition`: the different ways an `LValue` might be used.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum LValueDisposition {
+    /// Read from only (an ordinary expression).
+    Read,
+    /// Written to only (left hand side of `=`).
+    Write,
+    /// Both read from and written to (`op=`, `++`, `--`).
+    ReadWrite,
+}
+
 /// `PreVisitor` together with the `preVisit` methods of the AST classes.
 pub struct PreVisitor<'a> {
+    /// `_assignedVariables`.
+    pub assigned_variables: AssignedVariablesImpl<Node, Var>,
     /// `errors`.
     pub errors: &'a mut MiniAstErrors,
 }
@@ -499,8 +517,11 @@ impl PreVisitor<'_> {
             | PlaceholderExpression { .. }
             | Return
             | This
-            | ThisOrSuperProperty { .. }
-            | VariableReference { .. } => {}
+            | GetSsaNodes { .. }
+            | WhyNotPromotedImplicitThis { .. } => {}
+            Property { .. } | ThisOrSuperProperty { .. } | VariableReference { .. } => {
+                self.pre_visit_lvalue(node, LValueDisposition::Read)
+            }
             Cascade {
                 target, sections, ..
             } => {
@@ -508,6 +529,7 @@ impl PreVisitor<'_> {
                 sections.into_iter().for_each(|s| self.pre_visit(s));
             }
             CheckPromoted { promotable, .. } | CheckPromotionChain { promotable, .. } => {
+                // `Promotable.preVisit` (`Var.preVisit` does nothing).
                 if let Promotable::Node(n) = promotable {
                     self.pre_visit(n);
                 }
@@ -518,17 +540,27 @@ impl PreVisitor<'_> {
                 if_false,
             } => {
                 self.pre_visit(condition);
+                self.assigned_variables.begin_node();
                 self.pre_visit(if_true);
+                self.assigned_variables.end_node(node, false);
                 self.pre_visit(if_false);
             }
             Do { body, condition } => {
+                self.assigned_variables.begin_node();
                 self.pre_visit(body);
                 self.pre_visit(condition);
+                self.assigned_variables.end_node(node, false);
             }
             DotShorthand { expr } => self.pre_visit(expr),
-            Equal { lhs, rhs, .. } | IfNull { lhs, rhs } | Logical { lhs, rhs, .. } => {
+            Equal { lhs, rhs, .. } | IfNull { lhs, rhs } => {
                 self.pre_visit(lhs);
                 self.pre_visit(rhs);
+            }
+            Logical { lhs, rhs, .. } => {
+                self.pre_visit(lhs);
+                self.assigned_variables.begin_node();
+                self.pre_visit(rhs);
+                self.assigned_variables.end_node(node, false);
             }
             ExpressionCollectionElement { expression } => self.pre_visit(expression),
             ExpressionInTypeSchema { expr, .. } | ExpressionStatement { expr } => {
@@ -544,6 +576,7 @@ impl PreVisitor<'_> {
                 if let Some(initializer) = initializer {
                     self.pre_visit(initializer);
                 }
+                self.assigned_variables.begin_node();
                 if let Some(condition) = condition {
                     self.pre_visit(condition);
                 }
@@ -551,21 +584,38 @@ impl PreVisitor<'_> {
                 if let Some(updater) = updater {
                     self.pre_visit(updater);
                 }
+                self.assigned_variables.end_node(node, false);
             }
-            ForEach { iterable, body, .. } => {
+            ForEach {
+                variable,
+                iterable,
+                body,
+                declares_variable,
+            } => {
                 self.pre_visit(iterable);
+                if let Some(variable) = variable {
+                    if declares_variable {
+                        self.assigned_variables.declare(variable, false);
+                    } else {
+                        self.assigned_variables.write(variable);
+                    }
+                }
+                self.assigned_variables.begin_node();
                 self.pre_visit(body);
+                self.assigned_variables.end_node(node, false);
             }
             If {
                 condition,
                 if_true,
                 if_false,
+            }
+            | IfElement {
+                condition,
+                if_true,
+                if_false,
             } => {
                 self.pre_visit(condition);
-                self.pre_visit(if_true);
-                if let Some(if_false) = if_false {
-                    self.pre_visit(if_false);
-                }
+                self.pre_visit_if_base(node, if_true, if_false);
             }
             IfCase {
                 expression,
@@ -580,7 +630,6 @@ impl PreVisitor<'_> {
                 binder.case_pattern_start();
                 self.pre_visit_pattern(pattern, &mut binder, false);
                 let candidate = binder.case_pattern_finish(None);
-                binder.finish();
                 node.update_kind(|k| {
                     if let IfCase {
                         candidate_variables,
@@ -590,13 +639,11 @@ impl PreVisitor<'_> {
                         *candidate_variables = candidate.into_iter().collect();
                     }
                 });
+                binder.finish();
                 if let Some(guard) = guard {
                     self.pre_visit(guard);
                 }
-                self.pre_visit(if_true);
-                if let Some(if_false) = if_false {
-                    self.pre_visit(if_false);
-                }
+                self.pre_visit_if_base(node, if_true, if_false);
             }
             IfCaseElement {
                 expression,
@@ -611,33 +658,27 @@ impl PreVisitor<'_> {
                 binder.case_pattern_start();
                 self.pre_visit_pattern(pattern, &mut binder, false);
                 let found = binder.case_pattern_finish(None);
-                binder.finish();
                 node.update_kind(|k| {
                     if let IfCaseElement { variables, .. } = k {
                         *variables = found.into_iter().collect();
                     }
                 });
+                binder.finish();
                 if let Some(guard) = guard {
                     self.pre_visit(guard);
                 }
-                self.pre_visit(if_true);
-                if let Some(if_false) = if_false {
-                    self.pre_visit(if_false);
-                }
+                self.pre_visit_if_base(node, if_true, if_false);
             }
-            IfElement {
-                condition,
-                if_true,
-                if_false,
+            InvokeAnonymousMethod {
+                target,
+                body,
+                parameter,
+                ..
             } => {
-                self.pre_visit(condition);
-                self.pre_visit(if_true);
-                if let Some(if_false) = if_false {
-                    self.pre_visit(if_false);
-                }
-            }
-            InvokeAnonymousMethod { target, body, .. } => {
                 self.pre_visit(target);
+                if let Some(parameter) = parameter {
+                    self.assigned_variables.declare(parameter, false);
+                }
                 self.pre_visit(body);
             }
             InvokeMethod {
@@ -651,7 +692,11 @@ impl PreVisitor<'_> {
             ListLiteral { elements, .. } | MapLiteral { elements, .. } => {
                 elements.into_iter().for_each(|e| self.pre_visit(e))
             }
-            LocalFunction { body, .. } => self.pre_visit(body),
+            LocalFunction { body, .. } => {
+                self.assigned_variables.begin_node();
+                self.pre_visit(body);
+                self.assigned_variables.end_node(node, true);
+            }
             MapEntry { key, value, .. } => {
                 self.pre_visit(key);
                 self.pre_visit(value);
@@ -686,7 +731,9 @@ impl PreVisitor<'_> {
                 self.pre_visit_pattern(pattern, &mut binder, false);
                 binder.case_pattern_finish(None);
                 binder.finish();
+                self.assigned_variables.begin_node();
                 self.pre_visit(body);
+                self.assigned_variables.end_node(node, false);
             }
             PatternVariableDeclaration {
                 pattern,
@@ -700,8 +747,9 @@ impl PreVisitor<'_> {
                 binder.finish();
                 self.pre_visit(initializer);
             }
-            PostIncDec { lhs } | PreIncDec { lhs } => self.pre_visit(lhs),
-            Property { target, .. } => self.pre_visit(target),
+            PostIncDec { lhs } | PreIncDec { lhs } => {
+                self.pre_visit_lvalue(lhs, LValueDisposition::ReadWrite)
+            }
             Second { first, second } => {
                 self.pre_visit(first);
                 self.pre_visit(second);
@@ -736,31 +784,64 @@ impl PreVisitor<'_> {
                 scrutinee, cases, ..
             } => {
                 self.pre_visit(scrutinee);
+                self.assigned_variables.begin_node();
                 for case_ in cases {
                     self.pre_visit_switch_statement_member(case_);
                 }
+                self.assigned_variables.end_node(node, false);
             }
             TryStatement {
                 body,
                 catches,
                 finally_statement,
             } => {
+                if finally_statement.is_some() {
+                    self.assigned_variables.begin_node();
+                }
+                if !catches.is_empty() {
+                    self.assigned_variables.begin_node();
+                }
                 self.pre_visit(body);
-                for catch_ in catches {
+                self.assigned_variables.end_node(body, false);
+                for catch_ in &catches {
+                    // `CatchClause._preVisit`.
+                    if let Some(exception) = catch_.exception {
+                        self.assigned_variables.declare(exception, false);
+                    }
+                    if let Some(stack_trace) = catch_.stack_trace {
+                        self.assigned_variables.declare(stack_trace, false);
+                    }
                     self.pre_visit(catch_.body);
                 }
                 if let Some(finally_statement) = finally_statement {
+                    if !catches.is_empty() {
+                        self.assigned_variables.end_node(node, false);
+                    }
                     self.pre_visit(finally_statement);
                 }
             }
-            VariableDeclaration { initializer, .. } => {
+            VariableDeclaration {
+                variable,
+                is_late,
+                initializer,
+                ..
+            } => {
+                self.assigned_variables.declare(variable, false);
+                if is_late {
+                    self.assigned_variables.begin_node();
+                }
                 if let Some(initializer) = initializer {
                     self.pre_visit(initializer);
                 }
+                if is_late {
+                    self.assigned_variables.end_node(node, false);
+                }
             }
             While { condition, body } => {
+                self.assigned_variables.begin_node();
                 self.pre_visit(condition);
                 self.pre_visit(body);
+                self.assigned_variables.end_node(node, false);
             }
             WrappedExpression {
                 before,
@@ -776,11 +857,41 @@ impl PreVisitor<'_> {
                 }
             }
             Write { lhs, rhs } => {
-                self.pre_visit(lhs);
+                self.pre_visit_lvalue(lhs, LValueDisposition::Write);
                 self.pre_visit(rhs);
             }
             YieldStatement { operand, .. } => self.pre_visit(operand),
+            GetExpressionInfo { target, .. } | WhyNotPromoted { target, .. } => {
+                self.pre_visit(target)
+            }
             other => panic!("preVisit of {}", other.class_name()),
+        }
+    }
+
+    /// `IfBase.preVisit` / `IfElementBase.preVisit`.
+    fn pre_visit_if_base(&mut self, node: Node, if_true: Node, if_false: Option<Node>) {
+        self.assigned_variables.begin_node();
+        self.pre_visit(if_true);
+        self.assigned_variables.end_node(node, false);
+        if let Some(if_false) = if_false {
+            self.pre_visit(if_false);
+        }
+    }
+
+    /// `LValue.preVisit(visitor, disposition: ...)`.
+    pub fn pre_visit_lvalue(&mut self, node: Node, disposition: LValueDisposition) {
+        match node.kind() {
+            NodeKind::Property { target, .. } => self.pre_visit(target),
+            NodeKind::ThisOrSuperProperty { .. } => {}
+            NodeKind::VariableReference { variable, .. } => {
+                if disposition != LValueDisposition::Write {
+                    self.assigned_variables.read(variable);
+                }
+                if disposition != LValueDisposition::Read {
+                    self.assigned_variables.write(variable);
+                }
+            }
+            other => panic!("{} is not an LValue", other.class_name()),
         }
     }
 
@@ -818,8 +929,12 @@ impl PreVisitor<'_> {
         if has_labels {
             binder.switch_statement_shared_case_scope_empty(&member);
         }
-        let candidate =
-            binder.switch_statement_shared_case_scope_finish(&mut MiniVariableBinder, member);
+        let candidate = binder.switch_statement_shared_case_scope_finish(
+            &mut MiniVariableBinder {
+                assigned_variables: &mut self.assigned_variables,
+            },
+            member,
+        );
         member.update_kind(|k| {
             if let NodeKind::SwitchStatementMember {
                 candidate_variables,
@@ -862,7 +977,9 @@ impl PreVisitor<'_> {
                 binder.logical_or_pattern_finish_left();
                 self.pre_visit_pattern(rhs, binder, is_in_assignment);
                 binder.logical_or_pattern_finish(
-                    &mut MiniVariableBinder,
+                    &mut MiniVariableBinder {
+                        assigned_variables: &mut self.assigned_variables,
+                    },
                     Some(&mut *self.errors),
                     node,
                 );
@@ -899,8 +1016,10 @@ impl PreVisitor<'_> {
                         *slot = Some(is_assigned_variable);
                     }
                 });
-                if !is_assigned_variable {
-                    binder.add(Some(&mut *self.errors), variable.name(), variable);
+                if !is_assigned_variable
+                    && binder.add(Some(&mut *self.errors), variable.name(), variable)
+                {
+                    self.assigned_variables.declare(variable, false);
                 }
                 if is_assigned_variable {
                     assert!(
@@ -939,7 +1058,7 @@ pub struct RunOptions {
 /// `Harness`: the configuration of a test.
 pub struct Harness {
     /// `operations`.
-    pub operations: Rc<MiniAstOperations>,
+    pub operations: MiniAstOperations,
     started: bool,
     inference_update3_enabled: Option<bool>,
     inference_update4_enabled: Option<bool>,
@@ -951,6 +1070,10 @@ pub struct Harness {
     members: HashMap<String, Option<PropertyElement>>,
     respect_implicitly_typed_var_initializers: bool,
     field_promotion_enabled: bool,
+    /// `computeTypeAnalyzerOptions()`, kept up to date by the `disable_...`
+    /// methods (so that a reference can be returned, see
+    /// [`Harness::type_analyzer_options`]).
+    options_cache: TypeAnalyzerOptions,
 }
 
 /// `Harness._coreMemberTypes`.
@@ -986,7 +1109,7 @@ impl Harness {
             })
             .collect();
         Harness {
-            operations: Rc::new(MiniAstOperations::new()),
+            operations: MiniAstOperations::new(),
             started: false,
             inference_update3_enabled: None,
             inference_update4_enabled: None,
@@ -997,7 +1120,21 @@ impl Harness {
             members,
             respect_implicitly_typed_var_initializers: true,
             field_promotion_enabled: true,
+            options_cache: TypeAnalyzerOptions {
+                patterns_enabled: true,
+                inference_update3_enabled: true,
+                respect_implicitly_typed_var_initializers: true,
+                field_promotion_enabled: true,
+                inference_update4_enabled: true,
+                this_promotion_enabled: true,
+                sound_flow_analysis_enabled: true,
+            },
         }
+    }
+
+    /// The current `computeTypeAnalyzerOptions()`, by reference.
+    pub fn type_analyzer_options(&self) -> &TypeAnalyzerOptions {
+        &self.options_cache
     }
 
     /// `patternsEnabled`.
@@ -1101,42 +1238,49 @@ impl Harness {
     pub fn disable_field_promotion(&mut self) {
         assert!(!self.started);
         self.field_promotion_enabled = false;
+        self.options_cache = self.compute_type_analyzer_options();
     }
 
     /// `disableInferenceUpdate3()`.
     pub fn disable_inference_update3(&mut self) {
         assert!(!self.started);
         self.inference_update3_enabled = Some(false);
+        self.options_cache = self.compute_type_analyzer_options();
     }
 
     /// `disableInferenceUpdate4()`.
     pub fn disable_inference_update4(&mut self) {
         assert!(!self.started);
         self.inference_update4_enabled = Some(false);
+        self.options_cache = self.compute_type_analyzer_options();
     }
 
     /// `disablePatterns()`.
     pub fn disable_patterns(&mut self) {
         assert!(!self.started);
         self.patterns_enabled = Some(false);
+        self.options_cache = self.compute_type_analyzer_options();
     }
 
     /// `disableRespectImplicitlyTypedVarInitializers()`.
     pub fn disable_respect_implicitly_typed_var_initializers(&mut self) {
         assert!(!self.started);
         self.respect_implicitly_typed_var_initializers = false;
+        self.options_cache = self.compute_type_analyzer_options();
     }
 
     /// `disableSoundFlowAnalysis()`.
     pub fn disable_sound_flow_analysis(&mut self) {
         assert!(!self.started);
         self.sound_flow_analysis_enabled = Some(false);
+        self.options_cache = self.compute_type_analyzer_options();
     }
 
     /// `disableThisPromotion()`.
     pub fn disable_this_promotion(&mut self) {
         assert!(!self.started);
         self.this_promotion_enabled = Some(false);
+        self.options_cache = self.compute_type_analyzer_options();
     }
 
     /// `run(statements)`.
@@ -1165,16 +1309,24 @@ impl Harness {
         self.started = true;
         let mut errors = MiniAstErrors::default();
         let b = super::node::block(statements);
-        PreVisitor {
-            errors: &mut errors,
-        }
-        .pre_visit(b);
+        let assigned_variables = {
+            let mut visitor = PreVisitor {
+                assigned_variables: AssignedVariablesImpl::new(),
+                errors: &mut errors,
+            };
+            visitor.pre_visit(b);
+            visitor.assigned_variables
+        };
         let mut type_analyzer = MiniAstTypeAnalyzer {
             harness_members: self.members.clone(),
             this_type: self.this_type,
             patterns_enabled: self.patterns_enabled(),
-            operations: Rc::clone(&self.operations),
-            flow: MiniFlow::new(Rc::clone(&self.operations)),
+            operations: self.operations.clone(),
+            flow: FlowAnalysisImpl::new(
+                self.operations.clone(),
+                assigned_variables,
+                self.compute_type_analyzer_options(),
+            ),
             errors,
             current_break_target: None,
             current_continue_target: None,
@@ -1215,8 +1367,8 @@ pub struct MiniAstTypeAnalyzer {
     /// `Harness._thisType`.
     this_type: Option<Type>,
     patterns_enabled: bool,
-    operations: Rc<MiniAstOperations>,
-    flow: MiniFlow<MiniAstOperations, Node>,
+    operations: MiniAstOperations,
+    flow: FlowAnalysisImpl<MiniAstTypes>,
     /// `errors`.
     pub errors: MiniAstErrors,
     current_break_target: Option<Node>,
@@ -1241,7 +1393,7 @@ impl TypeAnalysisNullShortingInterface for MiniAstTypeAnalyzer {
     type Expression = Node;
     type Variable = Var;
     type Operations = MiniAstOperations;
-    type Flow = MiniFlow<MiniAstOperations, Node>;
+    type Flow = FlowAnalysisImpl<MiniAstTypes>;
     type Guard = MiniIrTmp;
 
     fn flow(&mut self) -> &mut Self::Flow {
@@ -1277,8 +1429,8 @@ fn loc(node: Node) -> String {
 }
 
 impl MiniAstTypeAnalyzer {
-    fn ops(&self) -> Rc<MiniAstOperations> {
-        Rc::clone(&self.operations)
+    fn ops(&self) -> MiniAstOperations {
+        self.operations.clone()
     }
 
     fn unknown(&self) -> SchemaView {
@@ -1372,9 +1524,10 @@ impl MiniAstTypeAnalyzer {
                 is_not,
             );
         } else if is_logical {
-            self.flow
-                .logical_binary_op_end(right_analysis_result.flow_analysis_info, is_and);
-            flow_analysis_info = Some(());
+            flow_analysis_info = Some(
+                self.flow
+                    .logical_binary_op_end(right_analysis_result.flow_analysis_info, is_and),
+            );
         }
         ExpressionTypeAnalysisResult {
             type_: self.operations.bool_type(),
@@ -1389,10 +1542,10 @@ impl MiniAstTypeAnalyzer {
     }
 
     fn analyze_bool_literal(&mut self, value: bool) -> ExprResult {
-        self.flow.boolean_literal(value);
+        let flow_analysis_info = self.flow.boolean_literal(value);
         ExpressionTypeAnalysisResult {
             type_: self.operations.bool_type(),
-            flow_analysis_info: Some(()),
+            flow_analysis_info: Some(flow_analysis_info),
         }
     }
 
@@ -1418,14 +1571,14 @@ impl MiniAstTypeAnalyzer {
             self.analyze_expression(if_false, unknown, false, false, false);
         let if_false_type = if_false_analysis_result.type_;
         let lub_type = self.operations.lub(if_true_type, if_false_type);
-        self.flow.conditional_end(
+        let flow_analysis_info = self.flow.conditional_end(
             lub_type,
             if_false_analysis_result.flow_analysis_info,
             if_false_type,
         );
         ExpressionTypeAnalysisResult {
             type_: lub_type,
-            flow_analysis_info: Some(()),
+            flow_analysis_info: Some(flow_analysis_info),
         }
     }
 
@@ -1554,10 +1707,10 @@ impl MiniAstTypeAnalyzer {
 
     fn analyze_null_literal(&mut self) -> ExprResult {
         let null_type = SharedTypeView::new(self.null_type());
-        self.flow.null_literal(null_type);
+        let flow_analysis_info = self.flow.null_literal(null_type);
         ExpressionTypeAnalysisResult {
             type_: null_type,
-            flow_analysis_info: Some(()),
+            flow_analysis_info: Some(flow_analysis_info),
         }
     }
 
@@ -1588,11 +1741,12 @@ impl MiniAstTypeAnalyzer {
             .promoted_type_of_this()
             .map(|t| t.unwrap_type_view());
         let this_type = promoted_type_of_this.unwrap_or_else(|| self.this_type());
-        self.flow
+        let flow_analysis_info = self
+            .flow
             .this_or_super(SharedTypeView::new(this_type), false);
         ExpressionTypeAnalysisResult {
             type_: SharedTypeView::new(this_type),
-            flow_analysis_info: Some(()),
+            flow_analysis_info: Some(flow_analysis_info),
         }
     }
 
@@ -2145,7 +2299,7 @@ impl MiniAstTypeAnalyzer {
         target: Node,
         property_name: &str,
         is_null_aware: bool,
-    ) -> (Option<PropertyElement>, Option<()>) {
+    ) -> (Option<PropertyElement>, Option<ExprInfo>) {
         if is_null_aware {
             panic!(
                 "at {}: it doesn't make sense to compute the promoted type of a null-aware property.",
@@ -2205,8 +2359,8 @@ impl MiniAstTypeAnalyzer {
         lhs: Node,
         assignment_expression: Node,
         written_type: Type,
-        rhs_info: Option<()>,
-    ) -> Option<()> {
+        rhs_info: Option<ExprInfo>,
+    ) -> Option<ExprInfo> {
         match lhs.kind() {
             NodeKind::VariableReference { variable, .. } => self.flow.write(
                 assignment_expression,
@@ -2326,12 +2480,12 @@ impl MiniAstTypeAnalyzer {
                     self.flow.null_aware_access_end();
                 }
                 self.ir_builder.let_(&target_tmp, &location);
-                self.flow.cascade_expression_end();
+                let flow_analysis_info = self.flow.cascade_expression_end();
                 self.current_cascade_target_ir = previous_cascade_target_ir;
                 self.current_cascade_target_type = previous_cascade_type;
                 ExpressionTypeAnalysisResult {
                     type_: target_type,
-                    flow_analysis_info: Some(()),
+                    flow_analysis_info: Some(flow_analysis_info),
                 }
             }
             CascadePlaceholder => {
@@ -2461,7 +2615,7 @@ impl MiniAstTypeAnalyzer {
                 let target_info = target_result.flow_analysis_info;
                 let previous_this_type = self.this_type;
                 if is_parameterless {
-                    self.flow.this_binding_begin(target_info);
+                    self.flow.this_binding_begin(target_info.clone());
                     self.this_type = Some(target_result.type_.unwrap_type_view());
                 }
                 self.flow.anonymous_block_body_begin();
@@ -2774,6 +2928,39 @@ impl MiniAstTypeAnalyzer {
                     flow_analysis_info,
                 }
             }
+            GetExpressionInfo { target, callback } => {
+                let unknown = self.unknown();
+                let analysis_result = self.analyze_expression(target, unknown, false, false, false);
+                callback(analysis_result.flow_analysis_info.clone());
+                analysis_result
+            }
+            GetSsaNodes { callback } => {
+                callback(&crate::flow_analysis_mini_ast::SsaNodeHarness::new(
+                    &self.flow,
+                ));
+                self.ir_builder.atom("null", Kind::Expression, &location);
+                ExpressionTypeAnalysisResult::new(SharedTypeView::new(self.null_type()))
+            }
+            WhyNotPromoted { target, callback } => {
+                let unknown = self.unknown();
+                let analysis_result = self.analyze_expression(target, unknown, false, false, false);
+                let why = self
+                    .flow
+                    .why_not_promoted(analysis_result.flow_analysis_info.clone());
+                callback(why());
+                analysis_result
+            }
+            WhyNotPromotedImplicitThis {
+                static_type,
+                callback,
+            } => {
+                let why = self
+                    .flow
+                    .why_not_promoted_implicit_this(SharedTypeView::new(static_type));
+                callback(why());
+                self.ir_builder.atom("noop", Kind::Expression, &location);
+                ExpressionTypeAnalysisResult::new(SharedTypeView::new(self.null_type()))
+            }
             other => panic!("{} is not an expression", other.class_name()),
         }
     }
@@ -2857,8 +3044,7 @@ impl MiniAstTypeAnalyzer {
                     }
                     None => {
                         self.handle_no_condition(node);
-                        self.flow.boolean_literal(true);
-                        Some(())
+                        Some(self.flow.boolean_literal(true))
                     }
                 };
                 self.flow.for_body_begin(
