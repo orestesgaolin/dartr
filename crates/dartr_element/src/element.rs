@@ -39,7 +39,7 @@ use crate::fragment::{
 };
 use crate::ids::{EId, ElementId, FId, FragmentId, InterfaceElement, PropertyInducingElement};
 use crate::name::Name;
-use crate::slot::{BoolSlot, ElementFlagCell, OnceSlot, VarSlot};
+use crate::slot::{BoolSlot, ElementCache, ElementFlagCell, OnceSlot, VarSlot};
 use crate::types::{ElemRef, ParameterKind, TypeId, TypeList, Variance};
 
 macro_rules! deref_base {
@@ -199,6 +199,11 @@ pub struct InterfaceElementData {
     pub constructors: Vec<EId<ConstructorElement>>,
     /// Dart: InterfaceElementImpl._hasNonFinalField
     pub has_non_final_field: BoolSlot,
+    /// Not a Dart field: the entry of `InheritanceManager3._interfaces` (and
+    /// the members that the inheritance manager synthesizes for this
+    /// element), owned by `dartr_typesystem::inheritance_manager3`
+    /// (design §2.3).
+    pub inheritance: ElementCache,
 }
 deref_base!(InterfaceElementData => instance: InstanceElementData);
 
@@ -216,6 +221,7 @@ impl InterfaceElementData {
             all_supertypes: OnceSlot::new(),
             constructors: Vec::new(),
             has_non_final_field: BoolSlot::new(false),
+            inheritance: ElementCache::new(),
         }
     }
 }

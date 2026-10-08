@@ -12,8 +12,10 @@
 //! [`crate::WorldSnapshot::type_provider`].
 
 use crate::ctx::Ctx;
-use crate::ids::{EId, InterfaceElement};
+use crate::flags::FragmentFlags;
+use crate::ids::{EId, FId, InterfaceElement};
 use crate::slot::OnceSlot;
+use crate::store::StoredFragment;
 use crate::types::{Nullability, TypeId, TypeKind};
 use crate::{ClassElement, LibraryElement};
 
@@ -262,9 +264,15 @@ impl TypeProvider {
             .any(|(uri, names)| *uri == library_uri && names.contains(&name))
     }
 
-    /// Dart `isObjectGetter(id)` (needs member lookup, unit A7).
-    pub fn is_object_getter(&self, _ctx: &Ctx<'_>, _id: &str) -> bool {
-        todo!("TypeProviderBase.isObjectGetter")
+    /// Dart `isObjectGetter(id)`: `objectType.element.getGetter(id)` is
+    /// an instance getter.
+    pub fn is_object_getter(&self, ctx: &Ctx<'_>, id: &str) -> bool {
+        let object = ctx.get(self.object_element());
+        object.getters.iter().any(|&g| {
+            let data = ctx.get(g);
+            data.name.is_some_and(|n| ctx.name_str(n) == id)
+                && !is_static(ctx, data.first_fragment())
+        })
     }
 
     /// Dart `isObjectMember(id)`.
@@ -272,8 +280,21 @@ impl TypeProvider {
         self.is_object_getter(ctx, id) || self.is_object_method(ctx, id)
     }
 
-    /// Dart `isObjectMethod(id)` (needs member lookup, unit A7).
-    pub fn is_object_method(&self, _ctx: &Ctx<'_>, _id: &str) -> bool {
-        todo!("TypeProviderBase.isObjectMethod")
+    /// Dart `isObjectMethod(id)`: `objectType.element.getMethod(id)` is
+    /// an instance method. (`getMethod` compares `lookupName`; `Object` has
+    /// no unary minus, so the name is the lookup name.)
+    pub fn is_object_method(&self, ctx: &Ctx<'_>, id: &str) -> bool {
+        let object = ctx.get(self.object_element());
+        object.methods.iter().any(|&m| {
+            let data = ctx.get(m);
+            data.name.is_some_and(|n| ctx.name_str(n) == id)
+                && !is_static(ctx, data.first_fragment())
+        })
     }
+}
+
+/// `ExecutableElementImpl.isStatic` (`_firstFragment.isStatic`).
+fn is_static<T: StoredFragment>(ctx: &Ctx<'_>, fragment: FId<T>) -> bool {
+    ctx.fragment_data(fragment.raw())
+        .is_some_and(|f| f.flags.has(FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC))
 }

@@ -9,8 +9,11 @@
 
 use std::hash::Hash;
 
+use parking_lot::Mutex;
+
 use crate::TypeParameterElement;
 use crate::ids::EId;
+use crate::lookup::LookupMap;
 use crate::pool::{Pool, SHARDS};
 use crate::types::{
     AliasId, AliasRef, FnParam, ListId, Member, MemberId, MentionsLocal, NamedType, SubstId,
@@ -27,6 +30,11 @@ pub struct TypePools {
     substs: Pool<Box<[SubstPair]>>,
     members: Pool<Member>,
     aliases: Pool<AliasRef>,
+    /// Lazy types of substituted members (Dart caches them in the member
+    /// object: `SubstitutedExecutableElementImpl._type`,
+    /// `SubstitutedVariableElementImpl._type`), keyed by (member index,
+    /// slot). Only for lookups.
+    member_types: Mutex<LookupMap<(u32, u8), TypeId>>,
 }
 
 impl TypePools {
@@ -40,6 +48,7 @@ impl TypePools {
             substs: Pool::new(shards),
             members: Pool::new(shards),
             aliases: Pool::new(shards),
+            member_types: Mutex::new(LookupMap::new()),
         }
     }
 }
@@ -140,6 +149,21 @@ impl<const LOCAL: bool> Pools<LOCAL> {
         self.0.members.get(id.index())
     }
 
+    fn member_type(&self, id: MemberId, slot: u8) -> Option<TypeId> {
+        assert_eq!(id.is_local(), LOCAL, "{id:?} is not in this interner");
+        self.0.member_types.lock().get(&(id.index(), slot)).copied()
+    }
+
+    fn set_member_type(&self, id: MemberId, slot: u8, t: TypeId) -> TypeId {
+        assert_eq!(id.is_local(), LOCAL, "{id:?} is not in this interner");
+        let mut map = self.0.member_types.lock();
+        if let Some(&old) = map.get(&(id.index(), slot)) {
+            return old;
+        }
+        map.insert((id.index(), slot), t);
+        t
+    }
+
     fn intern_alias(&self, alias: AliasRef) -> AliasId {
         self.check(alias.mentions_local());
         AliasId::new(self.0.aliases.intern(alias), LOCAL)
@@ -198,6 +222,18 @@ macro_rules! interner_api {
 
             pub fn member(&self, id: MemberId) -> &Member {
                 self.0.member(id)
+            }
+
+            /// The cached type in [slot] of the member [id] (see
+            /// `Ctx::member_type_cached`).
+            pub fn member_type(&self, id: MemberId, slot: u8) -> Option<TypeId> {
+                self.0.member_type(id, slot)
+            }
+
+            /// Caches [t] in [slot] of the member [id], unless a type is
+            /// already there; returns the cached type.
+            pub fn set_member_type(&self, id: MemberId, slot: u8, t: TypeId) -> TypeId {
+                self.0.set_member_type(id, slot, t)
             }
 
             pub fn intern_alias(&self, alias: AliasRef) -> AliasId {

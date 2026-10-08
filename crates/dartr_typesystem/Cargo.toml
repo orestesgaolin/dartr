@@ -13,3 +13,6 @@ dartr_type_analyzer.workspace = true
 indexmap.workspace = true
 
 [dev-dependencies]
+dartr_ast.workspace = true
+dartr_ast_builder.workspace = true
+dartr_syntax.workspace = true

@@ -17,6 +17,14 @@
 //! [`type_system_operations`] (`TypeSystemOperations`, the analyzer's
 //! implementation of the shared operations traits of `dartr_flow`).
 //!
+//! Inheritance (unit A7): [`inheritance_manager3`] (`InheritanceManager3`,
+//! interfaces cached on the elements), [`member`] (substituted members,
+//! `ElemRef::Member`), [`lookup`] (the `lookUp*` methods of elements and
+//! interface types) and [`interface_dump`] (the `interface` dump of the
+//! oracle). This is a module of `dartr_typesystem`, not its own crate,
+//! because `TypeSystem.isAssignableTo` needs `getCallMethodType`, which is
+//! `InterfaceTypeImpl.lookUpMethod` and so the inheritance manager.
+//!
 //! [`test_support`] is a port of the analyzer test helpers
 //! (`test_library_builder.dart`, `mock_sdk_elements.dart`,
 //! `type_system_base.dart`): it builds the mock SDK and test libraries from
@@ -27,8 +35,12 @@ pub mod element_type;
 pub mod equality;
 pub mod generic_inferrer;
 pub mod greatest_lower_bound;
+pub mod inheritance_manager3;
+pub mod interface_dump;
 pub mod least_greatest_closure;
 pub mod least_upper_bound;
+pub mod lookup;
+pub mod member;
 pub mod normalize;
 pub mod replace_top_bottom_visitor;
 pub mod replacement_visitor;
