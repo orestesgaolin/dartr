@@ -3,5 +3,6 @@
 // Dart source: pkg/analyzer/lib/src/dart/ast/ast.dart
 
 pub mod children;
+pub mod copy;
 pub mod nodes;
 pub mod visitor;

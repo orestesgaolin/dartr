@@ -18,6 +18,8 @@ dartr_element = { path = "crates/dartr_element" }
 dartr_flow = { path = "crates/dartr_flow" }
 dartr_mini_ast = { path = "crates/dartr_mini_ast" }
 dartr_type_analyzer = { path = "crates/dartr_type_analyzer" }
+dartr_link = { path = "crates/dartr_link" }
+dartr_driver = { path = "crates/dartr_driver" }
 dartr_constant = { path = "crates/dartr_constant" }
 dartr_typesystem = { path = "crates/dartr_typesystem" }
 serde = { version = "1.0.229", features = ["derive"] }

@@ -10,6 +10,8 @@
 //!   reflection table ([`NODE_INFOS`]).
 //! - [`node_impl`]: the hand-written parts (`CommentImpl`,
 //!   `CompilationUnitImpl`, `@DoNotGenerate` members).
+//! - [`copy`]: deep copy of a subtree into another [`Ast`]
+//!   ([`copy_subtree`]).
 //! - [`dump`]: the `ast` dump of the oracle; [`to_source`]: `toSource()`;
 //!   [`precedence`]: `Expression.precedence`.
 //! - `testing` (feature `testing`): builds an AST from the oracle `ast`
@@ -28,6 +30,7 @@
 #![allow(clippy::collapsible_if, clippy::too_many_arguments)]
 
 pub mod arena;
+pub mod copy;
 pub mod doc_comment;
 pub mod generated;
 pub mod node_impl;
@@ -38,6 +41,7 @@ pub mod token;
 pub use arena::{
     Ast, Concrete, Entity, Id, NodeId, NodeList, NodeMap, NodeType, SubtypeOf, TokenList,
 };
+pub use copy::{AstCopier, copy_subtree};
 pub use generated::children::{FieldValue, build_node};
 pub use generated::nodes::*;
 pub use generated::visitor::{AstVisitor, AstVisitorMut, GeneralizingAstVisitor};
