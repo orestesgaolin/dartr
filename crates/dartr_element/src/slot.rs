@@ -2,6 +2,7 @@
 //! of an [`crate::ElementStore`]) and [`OnceSlot<T>`] (data that linking
 //! computes after the structure is built).
 
+use std::any::Any;
 use std::fmt;
 use std::sync::OnceLock;
 
@@ -280,3 +281,48 @@ flag_cell!(
     std::sync::atomic::AtomicU64,
     u64
 );
+
+/// A lazy cache of a type that this crate cannot name, attached to an
+/// element by a higher crate (for example the inheritance data of
+/// `dartr_typesystem::inheritance_manager3`, the per-element entry of
+/// `InheritanceManager3._interfaces`, design §2.3). It is not a Dart field.
+///
+/// Each field of this type has one owner module that decides the stored
+/// type; [`ElementCache::get_or_init`] panics when a reader asks for another
+/// type.
+#[derive(Default)]
+pub struct ElementCache(OnceLock<Box<dyn Any + Send + Sync>>);
+
+impl ElementCache {
+    pub const fn new() -> Self {
+        ElementCache(OnceLock::new())
+    }
+
+    /// The cached value, created by [f] on the first call. If two threads
+    /// race, both run [f] and one result is dropped; [f] must not depend on
+    /// the race.
+    pub fn get_or_init<T: Any + Send + Sync>(&self, f: impl FnOnce() -> T) -> &T {
+        self.0
+            .get_or_init(|| Box::new(f()))
+            .downcast_ref::<T>()
+            .expect("ElementCache read with another type")
+    }
+
+    /// The cached value, when it was created.
+    pub fn try_get<T: Any + Send + Sync>(&self) -> Option<&T> {
+        self.0.get().map(|b| {
+            b.downcast_ref::<T>()
+                .expect("ElementCache read with another type")
+        })
+    }
+}
+
+impl fmt::Debug for ElementCache {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0.get().is_some() {
+            write!(f, "ElementCache(set)")
+        } else {
+            write!(f, "ElementCache(empty)")
+        }
+    }
+}

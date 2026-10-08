@@ -14,10 +14,8 @@
 //!   constants), `demoteType` (type_demotion.dart), `isWellBounded`
 //!   (well_bounded.dart), `setupGenericTypeInference`,
 //!   `inferFunctionTypeInstantiation`, `matchSupertypeConstraints` (unit A6).
-//! - `getCallMethodType` uses a direct member search (the declared `call`
-//!   method of the class, else of the first supertype in `allSupertypes`
-//!   order that declares one) until the inheritance manager (unit A7) is
-//!   ported.
+//! - `getCallMethodType` uses `InterfaceTypeImpl.lookUpMethod`
+//!   ([`crate::lookup::type_look_up_method`], unit A7).
 
 use dartr_element::{
     ClassElement, Ctx, EId, EnumElement, ExtensionElement, ExtensionTypeElement, FragmentFlags,
@@ -291,35 +289,20 @@ impl<'a> TypeSystem<'a> {
             .collect()
     }
 
-    /// `getCallMethodType(t)` (interim lookup, see the module
-    /// documentation).
+    /// `getCallMethodType(t)`: the type of the `call` method of an
+    /// interface type (`t.lookUpMethod('call', t.element.library)?.type`).
     pub fn get_call_method_type(&self, t: TypeId) -> Option<TypeId> {
         let ctx = self.ctx;
         let element = ctx.interface_element(t)?;
-        let find = |e: EId<InterfaceElement>| -> Option<EId<MethodElement>> {
-            ctx.interface(e)
-                .methods
-                .iter()
-                .copied()
-                .find(|&m| ctx.element_name(m.raw()) == Some("call"))
-        };
-        let (owner_type, method) = if let Some(m) = find(element) {
-            (t, m)
-        } else {
-            let mut found = None;
-            for s in ctx.all_supertypes(t) {
-                if let Some(m) = find(ctx.interface_element(s).unwrap()) {
-                    found = Some((s, m));
-                    break;
-                }
-            }
-            found?
-        };
-        let method_type = crate::element_type::executable_type(&ctx, method.upcast());
-        Some(
-            MapSubstitution::from_interface_type(&ctx, owner_type)
-                .substitute_type(&ctx, method_type),
-        )
+        let library = ctx.element_data(element.raw())?.library?;
+        let method = crate::lookup::type_look_up_method(
+            &ctx,
+            t,
+            "call",
+            library,
+            crate::lookup::LookUpOptions::default(),
+        )?;
+        Some(crate::member::type_(&ctx, method))
     }
 
     /// `getFreeParameters(rootType, candidates:)`.

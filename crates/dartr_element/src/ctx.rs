@@ -576,6 +576,34 @@ impl<'a> Ctx<'a> {
         }
     }
 
+    /// A lazy type of the substituted member [id] (Dart caches it in the
+    /// member object, `SubstitutedExecutableElementImpl._type`): the type in
+    /// [slot], computed by [compute] on the first call. If two threads race,
+    /// the first stored type wins. The type lives in the same interner as
+    /// the member (a member without local ids has a global type).
+    pub fn member_type_cached(
+        &self,
+        id: MemberId,
+        slot: u8,
+        compute: impl FnOnce() -> TypeId,
+    ) -> TypeId {
+        if id.is_local() {
+            let overlay = self.overlay();
+            if let Some(t) = overlay.member_type(id, slot) {
+                return t;
+            }
+            overlay.set_member_type(id, slot, compute())
+        } else {
+            let interner = &self.world.generation.interner;
+            if let Some(t) = interner.member_type(id, slot) {
+                return t;
+            }
+            let t = compute();
+            debug_assert!(!t.is_local(), "a global member has a local type");
+            interner.set_member_type(id, slot, t)
+        }
+    }
+
     pub fn intern_alias(&self, alias: AliasRef) -> AliasId {
         if alias.mentions_local() {
             self.overlay().intern_alias(alias)
