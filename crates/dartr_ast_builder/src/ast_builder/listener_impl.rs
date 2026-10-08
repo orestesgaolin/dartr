@@ -26,39 +26,112 @@ use super::AstBuilder;
 
 impl Listener for AstBuilder {
     #[inline]
-    fn handle_async_modifier(
+    fn handle_object_pattern_fields(
         &mut self,
         tokens: &mut Tokens,
-        async_token: Option<TokenId>,
-        star_token: Option<TokenId>,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
     ) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_async_modifier(self, async_token, star_token);
+        AstBuilder::handle_object_pattern_fields(self, count, begin_token, end_token);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
     #[inline]
-    fn handle_class_extends(
+    fn handle_invalid_top_level_block(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_invalid_top_level_block(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_implements(
         &mut self,
         tokens: &mut Tokens,
-        extends_keyword: Option<TokenId>,
+        implements_keyword: Option<TokenId>,
+        interfaces_count: i32,
+    ) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_implements(self, implements_keyword, interfaces_count);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_recover_declaration_header(
+        &mut self,
+        tokens: &mut Tokens,
+        kind: DeclarationHeaderKind,
+    ) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_recover_declaration_header(self, kind);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_no_class_body(&mut self, tokens: &mut Tokens, semicolon_token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_no_class_body(self, semicolon_token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_no_extension_type_body(&mut self, tokens: &mut Tokens, semicolon_token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_no_extension_type_body(self, semicolon_token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_mixin_on(
+        &mut self,
+        tokens: &mut Tokens,
+        on_keyword: Option<TokenId>,
         type_count: i32,
     ) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_class_extends(self, extends_keyword, type_count);
+        AstBuilder::handle_mixin_on(self, on_keyword, type_count);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
     #[inline]
-    fn handle_class_header(
+    fn handle_mixin_header(&mut self, tokens: &mut Tokens, mixin_keyword: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_mixin_header(self, mixin_keyword);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_recover_mixin_header(&mut self, tokens: &mut Tokens) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_recover_mixin_header(self);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_no_mixin_body(&mut self, tokens: &mut Tokens, semicolon_token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_no_mixin_body(self, semicolon_token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_no_extension_body(&mut self, tokens: &mut Tokens, semicolon_token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_no_extension_body(self, semicolon_token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_no_primary_constructor(
         &mut self,
         tokens: &mut Tokens,
-        begin: TokenId,
-        class_keyword: TokenId,
-        native_token: Option<TokenId>,
+        kind: DeclarationKind,
+        token: TokenId,
+        const_keyword: Option<TokenId>,
     ) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_class_header(self, begin, class_keyword, native_token);
+        AstBuilder::handle_no_primary_constructor(self, kind, token, const_keyword);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
@@ -70,46 +143,9 @@ impl Listener for AstBuilder {
     }
 
     #[inline]
-    fn end_while_statement_body(&mut self, tokens: &mut Tokens, end_token: TokenId) {
+    fn handle_no_enum_body(&mut self, tokens: &mut Tokens, semicolon_token: TokenId) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::end_while_statement_body(self, end_token);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn handle_enum_elements(
-        &mut self,
-        tokens: &mut Tokens,
-        elements_end_token: TokenId,
-        elements_count: i32,
-    ) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_enum_elements(self, elements_end_token, elements_count);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn handle_enum_header(
-        &mut self,
-        tokens: &mut Tokens,
-        augment_token: Option<TokenId>,
-        enum_keyword: TokenId,
-        left_brace: TokenId,
-    ) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_enum_header(self, augment_token, enum_keyword, left_brace);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn handle_enum_element(
-        &mut self,
-        tokens: &mut Tokens,
-        begin_token: TokenId,
-        augment_token: Option<TokenId>,
-    ) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_enum_element(self, begin_token, augment_token);
+        AstBuilder::handle_no_enum_body(self, semicolon_token);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
@@ -126,18 +162,6 @@ impl Listener for AstBuilder {
     }
 
     #[inline]
-    fn handle_expression_statement(
-        &mut self,
-        tokens: &mut Tokens,
-        begin_token: TokenId,
-        end_token: TokenId,
-    ) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_expression_statement(self, begin_token, end_token);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
     fn handle_no_formal_parameters(
         &mut self,
         tokens: &mut Tokens,
@@ -150,93 +174,6 @@ impl Listener for AstBuilder {
     }
 
     #[inline]
-    fn handle_for_initializer_empty_statement(&mut self, tokens: &mut Tokens, token: TokenId) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_for_initializer_empty_statement(self, token);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn handle_for_initializer_expression_statement(
-        &mut self,
-        tokens: &mut Tokens,
-        token: TokenId,
-        for_in: bool,
-    ) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_for_initializer_expression_statement(self, token, for_in);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn handle_for_initializer_local_variable_declaration(
-        &mut self,
-        tokens: &mut Tokens,
-        token: TokenId,
-        for_in: bool,
-    ) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_for_initializer_local_variable_declaration(self, token, for_in);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn handle_for_initializer_pattern_variable_assignment(
-        &mut self,
-        tokens: &mut Tokens,
-        keyword: TokenId,
-        equals: TokenId,
-    ) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_for_initializer_pattern_variable_assignment(self, keyword, equals);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn handle_for_loop_parts(
-        &mut self,
-        tokens: &mut Tokens,
-        for_keyword: TokenId,
-        left_paren: TokenId,
-        left_separator: TokenId,
-        right_separator: TokenId,
-        update_expression_count: i32,
-    ) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_for_loop_parts(
-            self,
-            for_keyword,
-            left_paren,
-            left_separator,
-            right_separator,
-            update_expression_count,
-        );
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn handle_for_in_loop_parts(
-        &mut self,
-        tokens: &mut Tokens,
-        await_token: Option<TokenId>,
-        for_token: TokenId,
-        left_parenthesis: TokenId,
-        pattern_keyword: Option<TokenId>,
-        in_keyword: TokenId,
-    ) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_for_in_loop_parts(
-            self,
-            await_token,
-            for_token,
-            left_parenthesis,
-            pattern_keyword,
-            in_keyword,
-        );
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
     fn handle_no_function_body(&mut self, tokens: &mut Tokens, token: TokenId) {
         std::mem::swap(tokens, &mut self.ast.tokens);
         AstBuilder::handle_no_function_body(self, token);
@@ -244,77 +181,60 @@ impl Listener for AstBuilder {
     }
 
     #[inline]
-    fn end_typedef(
+    fn handle_mixin_with_clause(&mut self, tokens: &mut Tokens, with_keyword: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_mixin_with_clause(self, with_keyword);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_named_mixin_application_with_clause(
         &mut self,
         tokens: &mut Tokens,
-        augment_token: Option<TokenId>,
-        typedef_keyword: TokenId,
-        equals: Option<TokenId>,
-        end_token: TokenId,
+        with_keyword: TokenId,
     ) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::end_typedef(self, augment_token, typedef_keyword, equals, end_token);
+        AstBuilder::handle_named_mixin_application_with_clause(self, with_keyword);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
     #[inline]
-    fn handle_class_with_clause(&mut self, tokens: &mut Tokens, with_keyword: TokenId) {
+    fn handle_identifier_list(&mut self, tokens: &mut Tokens, count: i32) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_class_with_clause(self, with_keyword);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn handle_class_no_with_clause(&mut self, tokens: &mut Tokens) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_class_no_with_clause(self);
+        AstBuilder::handle_identifier_list(self, count);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
     #[inline]
-    fn handle_enum_with_clause(&mut self, tokens: &mut Tokens, with_keyword: TokenId) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_enum_with_clause(self, with_keyword);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn handle_enum_no_with_clause(&mut self, tokens: &mut Tokens) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_enum_no_with_clause(self);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn end_type_list(&mut self, tokens: &mut Tokens, count: i32) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::end_type_list(self, count);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn end_then_statement(
+    fn handle_import_prefix(
         &mut self,
         tokens: &mut Tokens,
-        begin_token: TokenId,
-        end_token: TokenId,
+        deferred_keyword: Option<TokenId>,
+        as_keyword: Option<TokenId>,
     ) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::end_then_statement(self, begin_token, end_token);
+        AstBuilder::handle_import_prefix(self, deferred_keyword, as_keyword);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
     #[inline]
-    fn handle_dotted_name(&mut self, tokens: &mut Tokens, count: i32, first_identifier: TokenId) {
+    fn handle_recover_import(&mut self, tokens: &mut Tokens, semicolon: Option<TokenId>) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_dotted_name(self, count, first_identifier);
+        AstBuilder::handle_recover_import(self, semicolon);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
     #[inline]
-    fn end_variable_initializer(&mut self, tokens: &mut Tokens, assignment_operator: TokenId) {
+    fn handle_no_field_initializer(&mut self, tokens: &mut Tokens, token: TokenId) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::end_variable_initializer(self, assignment_operator);
+        AstBuilder::handle_no_field_initializer(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_no_variable_initializer(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_no_variable_initializer(self, token);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
@@ -326,14 +246,93 @@ impl Listener for AstBuilder {
     }
 
     #[inline]
-    fn handle_adjacent_string_literals(
+    fn handle_no_initializers(&mut self, tokens: &mut Tokens) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_no_initializers(self);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_invalid_expression(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_invalid_expression(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_invalid_function_body(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_invalid_function_body(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_label(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_label(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_literal_map_entry(
         &mut self,
         tokens: &mut Tokens,
-        start_token: TokenId,
-        literal_count: i32,
+        colon: TokenId,
+        end_token: TokenId,
+        null_aware_key_token: Option<TokenId>,
+        null_aware_value_token: Option<TokenId>,
     ) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_adjacent_string_literals(self, start_token, literal_count);
+        AstBuilder::handle_literal_map_entry(
+            self,
+            colon,
+            end_token,
+            null_aware_key_token,
+            null_aware_value_token,
+        );
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_map_pattern_entry(
+        &mut self,
+        tokens: &mut Tokens,
+        colon: TokenId,
+        end_token: TokenId,
+    ) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_map_pattern_entry(self, colon, end_token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_interpolation_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        left_bracket: TokenId,
+        right_bracket: Option<TokenId>,
+    ) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_interpolation_expression(self, left_bracket, right_bracket);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_invalid_member(&mut self, tokens: &mut Tokens, end_token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_invalid_member(self, end_token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_native_function_body(
+        &mut self,
+        tokens: &mut Tokens,
+        native_token: TokenId,
+        semicolon: TokenId,
+    ) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_native_function_body(self, native_token, semicolon);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
@@ -362,110 +361,28 @@ impl Listener for AstBuilder {
     }
 
     #[inline]
-    fn handle_empty_function_body(&mut self, tokens: &mut Tokens, semicolon: TokenId) {
+    fn handle_send(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_empty_function_body(self, semicolon);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn handle_expression_function_body(
-        &mut self,
-        tokens: &mut Tokens,
-        arrow_token: TokenId,
-        end_token: Option<TokenId>,
-    ) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_expression_function_body(self, arrow_token, end_token);
+        AstBuilder::handle_send(self, begin_token, end_token);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
     #[inline]
-    fn end_switch_statement(
+    fn handle_throw_expression(
         &mut self,
         tokens: &mut Tokens,
-        switch_keyword: TokenId,
+        throw_token: TokenId,
         end_token: TokenId,
     ) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::end_switch_statement(self, switch_keyword, end_token);
+        AstBuilder::handle_throw_expression(self, throw_token, end_token);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
     #[inline]
-    fn end_switch_expression(
-        &mut self,
-        tokens: &mut Tokens,
-        switch_keyword: TokenId,
-        end_token: TokenId,
-    ) {
+    fn handle_invalid_top_level_declaration(&mut self, tokens: &mut Tokens, end_token: TokenId) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::end_switch_expression(self, switch_keyword, end_token);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn end_switch_expression_block(
-        &mut self,
-        tokens: &mut Tokens,
-        case_count: i32,
-        begin_token: TokenId,
-        end_token: TokenId,
-    ) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::end_switch_expression_block(self, case_count, begin_token, end_token);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn end_top_level_declaration(&mut self, tokens: &mut Tokens, end_token: TokenId) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::end_top_level_declaration(self, end_token);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn end_top_level_fields(
-        &mut self,
-        tokens: &mut Tokens,
-        augment_token: Option<TokenId>,
-        abstract_token: Option<TokenId>,
-        external_token: Option<TokenId>,
-        static_token: Option<TokenId>,
-        covariant_token: Option<TokenId>,
-        late_token: Option<TokenId>,
-        var_final_or_const: Option<TokenId>,
-        count: i32,
-        begin_token: TokenId,
-        end_token: TokenId,
-    ) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::end_top_level_fields(
-            self,
-            augment_token,
-            abstract_token,
-            external_token,
-            static_token,
-            covariant_token,
-            late_token,
-            var_final_or_const,
-            count,
-            begin_token,
-            end_token,
-        );
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn end_top_level_method(
-        &mut self,
-        tokens: &mut Tokens,
-        begin_token: TokenId,
-        get_or_set: Option<TokenId>,
-        end_token: TokenId,
-    ) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::end_top_level_method(self, begin_token, get_or_set, end_token);
+        AstBuilder::handle_invalid_top_level_declaration(self, end_token);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
@@ -477,61 +394,47 @@ impl Listener for AstBuilder {
     }
 
     #[inline]
-    fn handle_catch_block(
+    fn handle_type(
         &mut self,
         tokens: &mut Tokens,
-        on_keyword: Option<TokenId>,
-        catch_keyword: Option<TokenId>,
-        comma: Option<TokenId>,
+        begin_token: TokenId,
+        question_mark: Option<TokenId>,
     ) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_catch_block(self, on_keyword, catch_keyword, comma);
+        AstBuilder::handle_type(self, begin_token, question_mark);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
     #[inline]
-    fn handle_finally_block(&mut self, tokens: &mut Tokens, finally_keyword: TokenId) {
+    fn handle_non_null_assert_expression(&mut self, tokens: &mut Tokens, bang: TokenId) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_finally_block(self, finally_keyword);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn end_try_statement(
-        &mut self,
-        tokens: &mut Tokens,
-        catch_count: i32,
-        try_keyword: TokenId,
-        finally_keyword: Option<TokenId>,
-        end_token: TokenId,
-    ) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::end_try_statement(self, catch_count, try_keyword, finally_keyword, end_token);
+        AstBuilder::handle_non_null_assert_expression(self, bang);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
     #[inline]
-    fn handle_assigned_variable_pattern(&mut self, tokens: &mut Tokens, variable: TokenId) {
+    fn handle_null_assert_pattern(&mut self, tokens: &mut Tokens, bang: TokenId) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_assigned_variable_pattern(self, variable);
+        AstBuilder::handle_null_assert_pattern(self, bang);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
     #[inline]
-    fn handle_declared_variable_pattern(
+    fn handle_null_check_pattern(&mut self, tokens: &mut Tokens, question: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_null_check_pattern(self, question);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_wildcard_pattern(
         &mut self,
         tokens: &mut Tokens,
         keyword: Option<TokenId>,
-        variable: TokenId,
-        in_assignment_pattern: bool,
+        wildcard: TokenId,
     ) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_declared_variable_pattern(
-            self,
-            keyword,
-            variable,
-            in_assignment_pattern,
-        );
+        AstBuilder::handle_wildcard_pattern(self, keyword, wildcard);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
@@ -543,15 +446,9 @@ impl Listener for AstBuilder {
     }
 
     #[inline]
-    fn end_type_arguments(
-        &mut self,
-        tokens: &mut Tokens,
-        count: i32,
-        begin_token: TokenId,
-        end_token: TokenId,
-    ) {
+    fn handle_invalid_type_arguments(&mut self, tokens: &mut Tokens, token: TokenId) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::end_type_arguments(self, count, begin_token, end_token);
+        AstBuilder::handle_invalid_type_arguments(self, token);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
@@ -563,28 +460,9 @@ impl Listener for AstBuilder {
     }
 
     #[inline]
-    fn end_type_variable(
-        &mut self,
-        tokens: &mut Tokens,
-        token: TokenId,
-        index: i32,
-        extends_or_super: Option<TokenId>,
-        variance: Option<TokenId>,
-    ) {
+    fn handle_type_variables_defined(&mut self, tokens: &mut Tokens, token: TokenId, count: i32) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::end_type_variable(self, token, index, extends_or_super, variance);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn end_type_variables(
-        &mut self,
-        tokens: &mut Tokens,
-        begin_token: TokenId,
-        end_token: TokenId,
-    ) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::end_type_variables(self, begin_token, end_token);
+        AstBuilder::handle_type_variables_defined(self, token, count);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
@@ -600,56 +478,6 @@ impl Listener for AstBuilder {
     }
 
     #[inline]
-    fn end_variables_declaration(
-        &mut self,
-        tokens: &mut Tokens,
-        count: i32,
-        end_token: Option<TokenId>,
-    ) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::end_variables_declaration(self, count, end_token);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn end_while_statement(
-        &mut self,
-        tokens: &mut Tokens,
-        while_keyword: TokenId,
-        end_token: TokenId,
-    ) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::end_while_statement(self, while_keyword, end_token);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn handle_as_operator(&mut self, tokens: &mut Tokens, operator: TokenId) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_as_operator(self, operator);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn handle_cast_pattern(&mut self, tokens: &mut Tokens, operator: TokenId) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_cast_pattern(self, operator);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn handle_assignment_expression(
-        &mut self,
-        tokens: &mut Tokens,
-        token: TokenId,
-        end_token: TokenId,
-    ) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_assignment_expression(self, token, end_token);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
     fn handle_implicit_formal_parameters(&mut self, tokens: &mut Tokens, token: TokenId) {
         std::mem::swap(tokens, &mut self.ast.tokens);
         AstBuilder::handle_implicit_formal_parameters(self, token);
@@ -657,75 +485,197 @@ impl Listener for AstBuilder {
     }
 
     #[inline]
-    fn handle_dot_access(
+    fn handle_spread_expression(&mut self, tokens: &mut Tokens, spread_token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_spread_expression(self, spread_token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_null_aware_element(&mut self, tokens: &mut Tokens, null_aware_token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_null_aware_element(self, null_aware_token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_rest_pattern(&mut self, tokens: &mut Tokens, dots: TokenId, has_sub_pattern: bool) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_rest_pattern(self, dots, has_sub_pattern);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_identifier(
         &mut self,
         tokens: &mut Tokens,
         token: TokenId,
-        end_token: TokenId,
-        is_null_aware: bool,
+        context: IdentifierContext,
     ) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_dot_access(self, token, end_token, is_null_aware);
+        AstBuilder::handle_identifier(self, token, context);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
     #[inline]
-    fn handle_cascade_access(
+    fn handle_indexed_expression(
         &mut self,
         tokens: &mut Tokens,
-        token: TokenId,
-        end_token: TokenId,
-        is_null_aware: bool,
+        question: Option<TokenId>,
+        open_square_bracket: TokenId,
+        close_square_bracket: TokenId,
     ) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_cascade_access(self, token, end_token, is_null_aware);
+        AstBuilder::handle_indexed_expression(
+            self,
+            question,
+            open_square_bracket,
+            close_square_bracket,
+        );
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
     #[inline]
-    fn handle_const_factory(&mut self, tokens: &mut Tokens, const_keyword: TokenId) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_const_factory(self, const_keyword);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn handle_else_control_flow(&mut self, tokens: &mut Tokens, else_token: TokenId) {
-        std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_else_control_flow(self, else_token);
-        std::mem::swap(tokens, &mut self.ast.tokens);
-    }
-
-    #[inline]
-    fn handle_break_statement(
+    fn handle_is_operator(
         &mut self,
         tokens: &mut Tokens,
-        has_target: bool,
-        break_keyword: TokenId,
-        end_token: TokenId,
+        is_operator: TokenId,
+        not: Option<TokenId>,
     ) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_break_statement(self, has_target, break_keyword, end_token);
+        AstBuilder::handle_is_operator(self, is_operator, not);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
     #[inline]
-    fn handle_continue_statement(
+    fn handle_literal_bool(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_literal_bool(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_literal_double(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_literal_double(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_literal_double_with_separators(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_literal_double_with_separators(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_literal_int(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_literal_int(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_literal_int_with_separators(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_literal_int_with_separators(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_literal_list(
         &mut self,
         tokens: &mut Tokens,
-        has_target: bool,
-        continue_keyword: TokenId,
-        end_token: TokenId,
+        count: i32,
+        left_bracket: TokenId,
+        const_keyword: Option<TokenId>,
+        right_bracket: TokenId,
     ) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_continue_statement(self, has_target, continue_keyword, end_token);
+        AstBuilder::handle_literal_list(self, count, left_bracket, const_keyword, right_bracket);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
     #[inline]
-    fn handle_empty_statement(&mut self, tokens: &mut Tokens, token: TokenId) {
+    fn handle_list_pattern(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        left_bracket: TokenId,
+        right_bracket: TokenId,
+    ) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_empty_statement(self, token);
+        AstBuilder::handle_list_pattern(self, count, left_bracket, right_bracket);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_literal_set_or_map(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        left_brace: TokenId,
+        const_keyword: Option<TokenId>,
+        right_brace: TokenId,
+        has_set_entry: bool,
+    ) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_literal_set_or_map(
+            self,
+            count,
+            left_brace,
+            const_keyword,
+            right_brace,
+            has_set_entry,
+        );
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_map_pattern(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        left_brace: TokenId,
+        right_brace: TokenId,
+    ) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_map_pattern(self, count, left_brace, right_brace);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_literal_null(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_literal_null(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_native_clause(&mut self, tokens: &mut Tokens, native_token: TokenId, has_name: bool) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_native_clause(self, native_token, has_name);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_named_argument(&mut self, tokens: &mut Tokens, colon: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_named_argument(self, colon);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_pattern_field(&mut self, tokens: &mut Tokens, colon: Option<TokenId>) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_pattern_field(self, colon);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_named_record_field(&mut self, tokens: &mut Tokens, colon: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_named_record_field(self, colon);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
@@ -733,6 +683,40 @@ impl Listener for AstBuilder {
     fn handle_no_arguments(&mut self, tokens: &mut Tokens, token: TokenId) {
         std::mem::swap(tokens, &mut self.ast.tokens);
         AstBuilder::handle_no_arguments(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_no_constructor_reference_continuation_after_type_arguments(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+    ) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_no_constructor_reference_continuation_after_type_arguments(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_no_identifier(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        identifier_context: IdentifierContext,
+    ) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_no_identifier(self, token, identifier_context);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_no_type_name_in_constructor_reference(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+    ) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_no_type_name_in_constructor_reference(self, token);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
@@ -751,36 +735,187 @@ impl Listener for AstBuilder {
     }
 
     #[inline]
-    fn end_switch_expression_case(
+    fn handle_operator(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_operator(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_switch_case_no_when_clause(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_switch_case_no_when_clause(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_switch_expression_case_pattern(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_switch_expression_case_pattern(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_symbol_void(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_symbol_void(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_operator_name(
         &mut self,
         tokens: &mut Tokens,
-        begin_token: TokenId,
+        operator_keyword: TokenId,
+        token: TokenId,
+    ) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_operator_name(self, operator_keyword, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_invalid_operator_name(
+        &mut self,
+        tokens: &mut Tokens,
+        operator_keyword: TokenId,
+        token: TokenId,
+    ) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_invalid_operator_name(self, operator_keyword, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_parenthesized_condition(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        case_: Option<TokenId>,
         when: Option<TokenId>,
-        arrow: TokenId,
-        end_token: TokenId,
     ) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::end_switch_expression_case(self, begin_token, when, arrow, end_token);
+        AstBuilder::handle_parenthesized_condition(self, token, case_, when);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
     #[inline]
-    fn handle_formal_parameter_without_value(&mut self, tokens: &mut Tokens, token: TokenId) {
+    fn handle_record_pattern(&mut self, tokens: &mut Tokens, token: TokenId, count: i32) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_formal_parameter_without_value(self, token);
+        AstBuilder::handle_record_pattern(self, token, count);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
     #[inline]
-    fn end_yield_statement(
+    fn handle_parenthesized_pattern(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_parenthesized_pattern(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_object_pattern(
         &mut self,
         tokens: &mut Tokens,
-        yield_token: TokenId,
-        star_token: Option<TokenId>,
-        end_token: TokenId,
+        first_identifier: TokenId,
+        dot: Option<TokenId>,
+        second_identifier: Option<TokenId>,
     ) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::end_yield_statement(self, yield_token, star_token, end_token);
+        AstBuilder::handle_object_pattern(self, first_identifier, dot, second_identifier);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_qualified(&mut self, tokens: &mut Tokens, period: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_qualified(self, period);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_string_part(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_string_part(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_super_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        context: IdentifierContext,
+    ) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_super_expression(self, token, context);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_this_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        context: IdentifierContext,
+    ) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_this_expression(self, token, context);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_unary_postfix_assignment_expression(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_unary_postfix_assignment_expression(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_unary_prefix_expression(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_unary_prefix_expression(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_relational_pattern(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_relational_pattern(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_unary_prefix_assignment_expression(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_unary_prefix_assignment_expression(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_valued_formal_parameter(
+        &mut self,
+        tokens: &mut Tokens,
+        equals: TokenId,
+        token: TokenId,
+        kind: FormalParameterKind,
+    ) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_valued_formal_parameter(self, equals, token, kind);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_void_keyword(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_void_keyword(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_void_keyword_with_type_arguments(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_void_keyword_with_type_arguments(self, token);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
@@ -819,16 +954,47 @@ impl Listener for AstBuilder {
     }
 
     #[inline]
-    fn handle_dot_shorthand_context(&mut self, tokens: &mut Tokens, token: TokenId) {
+    fn handle_script(&mut self, tokens: &mut Tokens, token: TokenId) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_dot_shorthand_context(self, token);
+        AstBuilder::handle_script(self, token);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 
     #[inline]
-    fn handle_dot_shorthand_head(&mut self, tokens: &mut Tokens, token: TokenId) {
+    fn handle_type_argument_application(
+        &mut self,
+        tokens: &mut Tokens,
+        open_angle_bracket: TokenId,
+    ) {
         std::mem::swap(tokens, &mut self.ast.tokens);
-        AstBuilder::handle_dot_shorthand_head(self, token);
+        AstBuilder::handle_type_argument_application(self, open_angle_bracket);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_new_as_identifier(&mut self, tokens: &mut Tokens, token: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_new_as_identifier(self, token);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_pattern_variable_declaration_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        keyword: TokenId,
+        equals: TokenId,
+        semicolon: TokenId,
+    ) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_pattern_variable_declaration_statement(self, keyword, equals, semicolon);
+        std::mem::swap(tokens, &mut self.ast.tokens);
+    }
+
+    #[inline]
+    fn handle_pattern_assignment(&mut self, tokens: &mut Tokens, equals: TokenId) {
+        std::mem::swap(tokens, &mut self.ast.tokens);
+        AstBuilder::handle_pattern_assignment(self, equals);
         std::mem::swap(tokens, &mut self.ast.tokens);
     }
 }
