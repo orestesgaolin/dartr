@@ -1313,12 +1313,24 @@ pub fn default_value_code(
         let store = initializer.fragment.store();
         return Some(sources.const_expr_source(store, initializer.expression));
     }
-    // TODO(B5): a super formal parameter without own default value uses
-    // `superConstructorParameter?.defaultValueCode` when
-    // `_superConstructorParameterDefaultValue` is not null: the constant value
-    // of the super constructor parameter, when its type is a subtype of the
-    // type of this parameter. That needs constant evaluation and the type
-    // system; until then the result is null.
+    // Dart: `superConstructorParameter?.defaultValueCode` when
+    // `_superConstructorParameterDefaultValue` is not null, that is when the
+    // constant value of the super parameter's default is a subtype of the
+    // type of this parameter. Interim until constant evaluation (C7): the
+    // value is assumed to be a subtype unless the default is `null` and the
+    // type of this parameter is non-nullable.
+    if is_super {
+        let p = EId::<FormalParameterElement>::from_raw(e);
+        let super_parameter = crate::outline::super_constructor_parameter(ctx, p)?;
+        let code = default_value_code(ctx, sources, super_parameter.raw())?;
+        if code == "null" {
+            let t = ctx.get(p).type_.get().unwrap_or(TypeId::INVALID);
+            if dartr_typesystem::TypeSystem::new(*ctx).is_non_nullable(t) {
+                return None;
+            }
+        }
+        return Some(code);
+    }
     None
 }
 

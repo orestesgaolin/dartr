@@ -93,6 +93,7 @@ pub fn build_outlines(lk: &mut Linker<'_>, tp: &TypeProvider) {
     let ctx = link_ctx(lk_ref, tp, &features);
     resolve_redirected_constructors(lk_ref, &ctx);
     set_induced_modifiers(lk_ref, &ctx);
+    infer_covariance(lk_ref, &ctx);
     build_extension_types(lk_ref, &ctx);
 }
 
@@ -1105,5 +1106,204 @@ fn resolve_redirected_constructors(lk: &Linker<'_>, ctx: &Ctx<'_>) {
                 }
             }
         }
+    }
+}
+
+/// The covariance part of Dart `InstanceMemberInferrer` (unit B5): a
+/// parameter of a method, or the value parameter of a setter, that
+/// overrides a covariant parameter is covariant (`_inferParameterCovariance`,
+/// `_isCovariantSetter`). Classes are processed supertypes first.
+///
+/// Interim: Dart takes the overridden members from the inheritance manager
+/// (`getOverridden`, unit A7); here they are the first members with the
+/// name found in each direct supertype and, when not declared there, in its
+/// supertypes (private names only within the same library).
+fn infer_covariance(lk: &Linker<'_>, ctx: &Ctx<'_>) {
+    let mut to_infer: IndexSet<EId<InterfaceElement>> = IndexSet::new();
+    for b in &lk.builders {
+        for e in interfaces_of(ctx, b.element) {
+            to_infer.insert(e);
+        }
+    }
+    let order: Vec<EId<InterfaceElement>> = to_infer.iter().copied().collect();
+    for e in order {
+        infer_class_covariance(ctx, &mut to_infer, e);
+    }
+}
+
+fn direct_supertype_elements(ctx: &Ctx<'_>, e: EId<InterfaceElement>) -> Vec<EId<InterfaceElement>> {
+    let i = ctx.interface(e);
+    let mut types: Vec<TypeId> = Vec::new();
+    types.extend(i.supertype.get());
+    types.extend(ctx.list(i.mixins.get().unwrap_or(TypeList::EMPTY)));
+    types.extend(ctx.list(i.interfaces.get().unwrap_or(TypeList::EMPTY)));
+    if e.raw().tag() == Tag::Mixin {
+        types.extend(ctx.list(
+            ctx.get(EId::<MixinElement>::from_raw(e.raw()))
+                .superclass_constraints
+                .get()
+                .unwrap_or(TypeList::EMPTY),
+        ));
+    }
+    types.into_iter().filter_map(|t| interface_element_of(ctx, t)).collect()
+}
+
+fn infer_class_covariance(ctx: &Ctx<'_>, to_infer: &mut IndexSet<EId<InterfaceElement>>, e: EId<InterfaceElement>) {
+    if !to_infer.shift_remove(&e) {
+        return;
+    }
+    let supers = direct_supertype_elements(ctx, e);
+    for &s in &supers {
+        infer_class_covariance(ctx, to_infer, s);
+    }
+    let library = ctx.element_data(e.raw()).unwrap().library;
+    let i = ctx.interface(e);
+    let is_static = |x: ElementId| first_has(ctx, x, FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC);
+    let covariant = |p: EId<FormalParameterElement>| {
+        ctx.get(p).flags.has(ElementFlags::FORMAL_PARAMETER_ELEMENT_IS_COVARIANT)
+    };
+    // Setters (explicit and of fields).
+    for &setter in &i.setters {
+        if is_static(setter.raw()) {
+            continue;
+        }
+        let Some(name) = ctx.get(setter).name else { continue };
+        let overridden = overridden_members(ctx, &supers, library, ctx.name_str(name), MemberKind::Setter);
+        let any_covariant = overridden.iter().any(|&o| {
+            ctx.executable(EId::from_raw(o))
+                .formal_params
+                .first()
+                .is_some_and(|&p| covariant(p))
+        });
+        if any_covariant && let Some(&value) = ctx.get(setter).formal_params.first() {
+            ctx.get(value).flags.set(ElementFlags::FORMAL_PARAMETER_ELEMENT_IS_COVARIANT, true);
+        }
+    }
+    // Methods.
+    for &method in &i.methods {
+        if is_static(method.raw()) || !first_has(ctx, method.raw(), FragmentFlags::METHOD_FRAGMENT_IS_ORIGIN_DECLARATION) {
+            continue;
+        }
+        let Some(name) = ctx.get(method).name else { continue };
+        let overridden = overridden_members(ctx, &supers, library, ctx.name_str(name), MemberKind::Method);
+        if overridden.is_empty() || overridden.iter().any(|o| o.tag() != Tag::Method) {
+            continue;
+        }
+        let params = ctx.get(method).formal_params.clone();
+        for (index, &p) in params.iter().enumerate() {
+            if covariant(p) {
+                continue;
+            }
+            let pe = ctx.get(p);
+            let inherits = overridden.iter().any(|&o| {
+                let other = &ctx.executable(EId::from_raw(o)).formal_params;
+                let corresponding = if pe.kind.is_named() {
+                    other.iter().rev().copied().find(|&x| ctx.get(x).kind.is_named() && ctx.get(x).name == pe.name)
+                } else {
+                    other.get(index).copied().filter(|&x| !ctx.get(x).kind.is_named())
+                };
+                corresponding.is_some_and(covariant)
+            });
+            if inherits {
+                pe.flags.set(ElementFlags::FORMAL_PARAMETER_ELEMENT_IS_COVARIANT, true);
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum MemberKind {
+    Method,
+    Setter,
+}
+
+/// The members named [name] that a class with the direct supertypes
+/// [supers] overrides (see [`infer_covariance`]).
+fn overridden_members(
+    ctx: &Ctx<'_>,
+    supers: &[EId<InterfaceElement>],
+    library: Option<EId<LibraryElement>>,
+    name: &str,
+    kind: MemberKind,
+) -> Vec<ElementId> {
+    let private = name.starts_with('_');
+    let mut result = Vec::new();
+    for &s in supers {
+        let mut visited = IndexSet::new();
+        if let Some(m) = find_member(ctx, s, library, name, kind, private, &mut visited)
+            && !result.contains(&m)
+        {
+            result.push(m);
+        }
+    }
+    result
+}
+
+fn find_member(
+    ctx: &Ctx<'_>,
+    e: EId<InterfaceElement>,
+    library: Option<EId<LibraryElement>>,
+    name: &str,
+    kind: MemberKind,
+    private: bool,
+    visited: &mut IndexSet<EId<InterfaceElement>>,
+) -> Option<ElementId> {
+    if !visited.insert(e) {
+        return None;
+    }
+    let same_library = ctx.element_data(e.raw()).unwrap().library == library;
+    if !private || same_library {
+        let i = ctx.interface(e);
+        let named = |x: ElementId| ctx.element_data(x).and_then(|d| d.name).map(|n| ctx.name_str(n)) == Some(name);
+        let candidates: Vec<ElementId> = match kind {
+            MemberKind::Method => i
+                .methods
+                .iter()
+                .map(|m| m.raw())
+                .chain(i.getters.iter().map(|g| g.raw()))
+                .collect(),
+            MemberKind::Setter => i.setters.iter().map(|s| s.raw()).collect(),
+        };
+        for c in candidates {
+            if named(c) && !first_has(ctx, c, FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC) {
+                return Some(c);
+            }
+        }
+    }
+    for s in direct_supertype_elements(ctx, e) {
+        if let Some(m) = find_member(ctx, s, library, name, kind, private, visited) {
+            return Some(m);
+        }
+    }
+    None
+}
+
+/// Dart `SuperFormalParameterElementImpl.superConstructorParameter` (the
+/// base element).
+pub fn super_constructor_parameter(ctx: &Ctx<'_>, p: EId<FormalParameterElement>) -> Option<EId<FormalParameterElement>> {
+    let constructor = ctx.element_data(p.raw())?.enclosing?.cast::<ConstructorElement>()?;
+    let ElemRef::Base(super_constructor) = ctx.get(constructor).super_constructor.get()? else {
+        return None;
+    };
+    let super_params = &ctx.get(EId::<ConstructorElement>::from_raw(super_constructor)).formal_params;
+    let pe = ctx.get(p);
+    if pe.kind.is_named() {
+        super_params
+            .iter()
+            .copied()
+            .find(|&s| ctx.get(s).kind.is_named() && ctx.get(s).name == pe.name)
+    } else {
+        let index = ctx
+            .get(constructor)
+            .formal_params
+            .iter()
+            .copied()
+            .filter(|x| x.raw().tag() == Tag::SuperFormalParameter && ctx.get(*x).kind.is_positional())
+            .position(|x| x == p)?;
+        super_params
+            .iter()
+            .copied()
+            .filter(|&s| ctx.get(s).kind.is_positional())
+            .nth(index)
     }
 }
