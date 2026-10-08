@@ -14,22 +14,37 @@ use std::sync::Arc;
 use dartr_driver::driver::Driver;
 use dartr_driver::file_state::{FileConfig, FileId, FileSystemState, SourceFactory};
 use dartr_driver::uri::Uri;
-use dartr_element::{
-    ConstExprId, Ctx, FeatureSet, Generation, NoopSink, StoreId,
-};
+use dartr_element::{ConstExprId, Ctx, FeatureSet, Generation, NoopSink, StoreId};
 use dartr_link::dump::{DumpSources, error_json, library_json};
 use dartr_parser::experimental_flags::ExperimentalFlag;
-use dartr_project::{AnalysisContextCollection, CollectionOptions, DartSdk, Packages, Workspace, paths};
+use dartr_project::{
+    AnalysisContextCollection, CollectionOptions, DartSdk, Packages, Workspace, paths,
+};
 use indexmap::IndexMap;
 
 /// The result of looking up one input.
-enum Input {
+pub(crate) enum Input {
     Error(&'static str),
     Library { driver: usize, file: FileId },
 }
 
-/// One line per input path, in input order.
-pub fn dump_elements_all(inputs: &[String], interface: bool) -> Vec<String> {
+/// The drivers of the analysis contexts of the inputs, with the libraries
+/// of the inputs linked.
+pub(crate) struct LinkedInputs {
+    pub collection: Rc<AnalysisContextCollection>,
+    pub drivers: Vec<Driver>,
+    /// The context index of each driver; `None` for the driver of the
+    /// `dart:` inputs.
+    pub driver_context: Vec<Option<usize>>,
+    /// One entry per input, in input order.
+    pub inputs: Vec<Input>,
+}
+
+/// Groups [inputs] by analysis context (like the oracle), creates one
+/// driver per context (and one for the `dart:` URIs), reads the files and
+/// links the libraries of the inputs. A part file gives
+/// `Input::Error("NotLibraryButPartResult")`.
+pub(crate) fn link_inputs(inputs: &[String]) -> LinkedInputs {
     let generation = Arc::new(Generation::new(0));
     let sdk_path = dartr_project::sdk::find_sdk_path();
 
@@ -47,6 +62,7 @@ pub fn dump_elements_all(inputs: &[String], interface: bool) -> Vec<String> {
     ));
 
     let mut drivers: Vec<Driver> = Vec::new();
+    let mut driver_context: Vec<Option<usize>> = Vec::new();
     let mut context_driver: IndexMap<usize, usize> = IndexMap::new();
     let mut sdk_driver: Option<usize> = None;
     let mut resolved: Vec<Input> = Vec::new();
@@ -55,6 +71,7 @@ pub fn dump_elements_all(inputs: &[String], interface: bool) -> Vec<String> {
         if p.starts_with("dart:") {
             let d = *sdk_driver.get_or_insert_with(|| {
                 drivers.push(sdk_only_driver(sdk_path.as_deref(), generation.clone()));
+                driver_context.push(None);
                 drivers.len() - 1
             });
             let driver = &mut drivers[d];
@@ -72,12 +89,21 @@ pub fn dump_elements_all(inputs: &[String], interface: bool) -> Vec<String> {
             resolved.push(Input::Error("ArgumentError"));
             continue;
         }
-        let Some(context_index) = collection.contexts.iter().position(|c| c.root.is_analyzed(p)) else {
+        let Some(context_index) = collection
+            .contexts
+            .iter()
+            .position(|c| c.root.is_analyzed(p))
+        else {
             resolved.push(Input::Error("StateError"));
             continue;
         };
         let d = *context_driver.entry(context_index).or_insert_with(|| {
-            drivers.push(context_driver_for(&collection, context_index, generation.clone()));
+            drivers.push(context_driver_for(
+                &collection,
+                context_index,
+                generation.clone(),
+            ));
+            driver_context.push(Some(context_index));
             drivers.len() - 1
         });
         let file = drivers[d].fs.get_file_for_path(p);
@@ -114,6 +140,19 @@ pub fn dump_elements_all(inputs: &[String], interface: bool) -> Vec<String> {
             rayon::current_num_threads()
         );
     }
+    LinkedInputs {
+        collection,
+        drivers,
+        driver_context,
+        inputs: resolved,
+    }
+}
+
+/// One line per input path, in input order.
+pub fn dump_elements_all(inputs: &[String], interface: bool) -> Vec<String> {
+    let linked = link_inputs(inputs);
+    let drivers = &linked.drivers;
+    let resolved = &linked.inputs;
 
     let features = FeatureSet::default();
     let sink = NoopSink;
@@ -138,7 +177,9 @@ pub fn dump_elements_all(inputs: &[String], interface: bool) -> Vec<String> {
                     req: &sink,
                 };
                 if interface {
-                    return dartr_typesystem::interface_dump::interface_library_json(&ctx, p, library);
+                    return dartr_typesystem::interface_dump::interface_library_json(
+                        &ctx, p, library,
+                    );
                 }
                 let sources = Sources { driver };
                 library_json(&ctx, &sources, p, library)
