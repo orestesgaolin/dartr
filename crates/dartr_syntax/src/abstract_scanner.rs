@@ -9,6 +9,7 @@
 use crate::characters::*;
 use crate::error_token::*;
 use crate::keyword_state::{self, KeywordState};
+use crate::string_scanner::stop_table;
 use crate::token::{Token, TokenId, Tokens, flags};
 use crate::token_constants::*;
 use crate::token_type::{Keyword, TokenType};
@@ -57,6 +58,18 @@ pub(crate) struct Pos {
 }
 
 pub(crate) const STX_SIGNAL: i32 = STX;
+
+// Characters that end a run of characters that a string or comment loop only
+// skips (see `advance_until`).
+static STOP_STRING_DQ: [bool; 256] = stop_table(b"\"\\$\n\r");
+static STOP_STRING_SQ: [bool; 256] = stop_table(b"'\\$\n\r");
+static STOP_MULTI_LINE_STRING_DQ: [bool; 256] = stop_table(b"\"\\$\n");
+static STOP_MULTI_LINE_STRING_SQ: [bool; 256] = stop_table(b"'\\$\n");
+static STOP_RAW_STRING_DQ: [bool; 256] = stop_table(b"\"\n\r");
+static STOP_RAW_STRING_SQ: [bool; 256] = stop_table(b"'\n\r");
+static STOP_RAW_MULTI_LINE_DQ: [bool; 256] = stop_table(b"\"\n");
+static STOP_RAW_MULTI_LINE_SQ: [bool; 256] = stop_table(b"'\n");
+static STOP_MULTI_LINE_COMMENT: [bool; 256] = stop_table(b"*/\n");
 
 pub struct AbstractScanner<'a, 'c> {
     // ---- StringScanner state (see string_scanner.rs) ----
@@ -114,6 +127,8 @@ impl<'a, 'c> AbstractScanner<'a, 'c> {
         s.language_version_changed = language_version_changed;
         // LineStarts: the first line starts at character offset 0.
         s.line_starts.reserve(1 + source.len() / 22);
+        // About one token (or comment) per 10 bytes in typical code.
+        s.arena.tokens.reserve(16 + source.len() / 8);
         s.line_starts.push(0);
         s.set_configuration(configuration);
         s
@@ -1709,7 +1724,8 @@ impl<'a, 'c> AbstractScanner<'a, 'c> {
                 if next > 127 {
                     ascii_only_comment = false;
                 }
-                next = self.advance();
+                // `next = advance()` until a character that the loop handles.
+                next = self.advance_until(&STOP_MULTI_LINE_COMMENT);
             }
         }
         next
@@ -1776,7 +1792,15 @@ impl<'a, 'c> AbstractScanner<'a, 'c> {
         // We allow a leading capital character.
         if A <= next && next <= LC_z {
             state = state.next(table, next);
-            next = self.advance();
+            // The loop below on bytes: `next = advance()` while the state is
+            // not null and `next` is in `a`..`z` (all ASCII).
+            let src = self.src;
+            let mut p = self.pos + 1;
+            while !state.is_null() && p < src.len() && src[p].is_ascii_lowercase() {
+                state = state.next(table, src[p] as i32);
+                p += 1;
+            }
+            next = self.stop_at(p, (p - self.pos) as i64);
         }
         while !state.is_null() && LC_a <= next && next <= LC_z {
             state = state.next(table, next);
@@ -1889,7 +1913,12 @@ impl<'a, 'c> AbstractScanner<'a, 'c> {
             if next > 127 {
                 ascii_only = false;
             }
-            next = self.advance();
+            // `next = advance()` until a character that the loop handles.
+            next = self.advance_until(if quote_char == DQ {
+                &STOP_STRING_DQ
+            } else {
+                &STOP_STRING_SQ
+            });
         }
         // Advance past the quote character.
         next = self.advance();
@@ -1983,7 +2012,12 @@ impl<'a, 'c> AbstractScanner<'a, 'c> {
             } else if next > 127 {
                 ascii_only = false;
             }
-            next = self.advance();
+            // `next = advance()` until a character that the loop handles.
+            next = self.advance_until(if quote_char == DQ {
+                &STOP_RAW_STRING_DQ
+            } else {
+                &STOP_RAW_STRING_SQ
+            });
         }
         self.unterminated_string(
             quote_char,
@@ -2007,7 +2041,12 @@ impl<'a, 'c> AbstractScanner<'a, 'c> {
                 } else if next > 127 {
                     ascii_only_string = false;
                 }
-                next = self.advance();
+                // `next = advance()` until a character that the loop handles.
+                next = self.advance_until(if quote_char == DQ {
+                    &STOP_RAW_MULTI_LINE_DQ
+                } else {
+                    &STOP_RAW_MULTI_LINE_SQ
+                });
                 if next == EOF {
                     break 'outer;
                 }
@@ -2075,7 +2114,12 @@ impl<'a, 'c> AbstractScanner<'a, 'c> {
             } else if next > 127 {
                 ascii_only_string = false;
             }
-            next = self.advance();
+            // `next = advance()` until a character that the loop handles.
+            next = self.advance_until(if quote_char == DQ {
+                &STOP_MULTI_LINE_STRING_DQ
+            } else {
+                &STOP_MULTI_LINE_STRING_SQ
+            });
         }
         self.unterminated_string(
             quote_char,

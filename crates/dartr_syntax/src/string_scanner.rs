@@ -29,6 +29,18 @@ static IDENTIFIER_CHAR_ALLOW_DOLLAR: [bool; 256] = {
     t
 };
 
+/// Builds a table of stop characters for [`AbstractScanner::advance_until`].
+pub(crate) const fn stop_table(chars: &[u8]) -> [bool; 256] {
+    let mut t = [false; 256];
+    let mut i = 0;
+    while i < chars.len() {
+        assert!(chars[i] < 0x80);
+        t[chars[i] as usize] = true;
+        i += 1;
+    }
+    t
+}
+
 /// Decodes the UTF-8 sequence at `p` (`src` is valid UTF-8). Returns the
 /// code point and its byte length.
 #[inline(always)]
@@ -183,12 +195,63 @@ impl<'a, 'c> AbstractScanner<'a, 'c> {
     /// Dart `skipSpaces()`.
     #[inline(always)]
     pub(crate) fn skip_spaces(&mut self) -> i32 {
-        let mut next = self.advance();
+        let next = self.advance();
         // Sequences of spaces are common, so advance through them fast.
-        while next == SPACE {
-            next = self.advance();
+        if next != SPACE {
+            return next;
         }
-        next
+        let start = self.pos;
+        let src = self.src;
+        let mut p = start + 1;
+        while p < src.len() && src[p] == b' ' {
+            p += 1;
+        }
+        self.stop_at(p, (p - start) as i64)
+    }
+
+    /// Moves from the current character to the character at byte offset
+    /// `p`, `units` UTF-16 code units later, and returns it (like `units`
+    /// calls of [`Self::advance`]). The current character must not be a high
+    /// surrogate.
+    #[inline(always)]
+    pub(crate) fn stop_at(&mut self, p: usize, units: i64) -> i32 {
+        if p < self.src.len() && self.src[p] >= 0x80 {
+            self.scan_offset += units - 1;
+            self.pos = p;
+            self.cur_len = 0;
+            self.in_low = false;
+            return self.advance();
+        }
+        self.jump_to(p, units)
+    }
+
+    /// Advances like repeated calls of [`Self::advance`] until the returned
+    /// character is in [stop] (ASCII only) or is [`EOF`], and returns it.
+    #[inline(always)]
+    pub(crate) fn advance_until(&mut self, stop: &[bool; 256]) -> i32 {
+        if self.pending_low != 0 {
+            // The current character is a high surrogate: consume the low one
+            // (never a stop character).
+            self.advance();
+        }
+        let src = self.src;
+        let start = self.pos + self.cur_len;
+        let mut p = start;
+        let mut ascii_only = true;
+        while p < src.len() {
+            let b = src[p];
+            if stop[b as usize] {
+                break;
+            }
+            ascii_only &= b < 0x80;
+            p += 1;
+        }
+        let units = if ascii_only {
+            (p - start) as i64
+        } else {
+            utf16_len(&src[start..p])
+        };
+        self.jump_to(p, units + 1)
     }
 
     /// Dart `passIdentifierCharAllowDollar()`.
@@ -204,16 +267,7 @@ impl<'a, 'c> AbstractScanner<'a, 'c> {
         while p < src.len() && IDENTIFIER_CHAR_ALLOW_DOLLAR[src[p] as usize] {
             p += 1;
         }
-        let units = (p - start) as i64;
-        if p < src.len() && src[p] >= 0x80 {
-            // Not an identifier character: stop before it and decode it.
-            self.scan_offset += units - 1;
-            self.pos = p;
-            self.cur_len = 0;
-            self.in_low = false;
-            return self.advance();
-        }
-        self.jump_to(p, units)
+        self.stop_at(p, (p - start) as i64)
     }
 
     /// Dart `scanUntilLineEnd()`. Returns true if the skipped characters are
