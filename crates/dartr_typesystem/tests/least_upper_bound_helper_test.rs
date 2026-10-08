@@ -540,7 +540,12 @@ mod superinterface_set_test {
         assert_unordered_equals(
             &t,
             &super_interfaces(&t, inst_d),
-            &[t.parse_type("Object?"), t.parse_type("Object"), inst_a, inst_c],
+            &[
+                t.parse_type("Object?"),
+                t.parse_type("Object"),
+                inst_a,
+                inst_c,
+            ],
         );
 
         // E
@@ -581,7 +586,12 @@ mod superinterface_set_test {
         assert_unordered_equals(
             &t,
             &super_interfaces(&t, inst_d),
-            &[t.parse_type("Object?"), t.parse_type("Object"), inst_a, inst_c],
+            &[
+                t.parse_type("Object?"),
+                t.parse_type("Object"),
+                inst_a,
+                inst_c,
+            ],
         );
 
         // E
@@ -650,7 +660,12 @@ mod superinterface_set_test {
         assert_unordered_equals(
             &t,
             &super_interfaces(&t, inst_c),
-            &[t.parse_type("Object?"), t.parse_type("Object"), inst_a, inst_b],
+            &[
+                t.parse_type("Object?"),
+                t.parse_type("Object"),
+                inst_a,
+                inst_b,
+            ],
         );
     }
 
@@ -690,7 +705,12 @@ mod superinterface_set_test {
         assert_unordered_equals(
             &t,
             &super_interfaces(&t, inst_c),
-            &[t.parse_type("Object?"), t.parse_type("Object"), inst_a, inst_b],
+            &[
+                t.parse_type("Object?"),
+                t.parse_type("Object"),
+                inst_a,
+                inst_b,
+            ],
         );
     }
 }

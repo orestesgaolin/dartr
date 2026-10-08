@@ -405,8 +405,11 @@ impl<'a> InterfaceLeastUpperBoundHelper<'a> {
         for &mixin in mixins {
             // class _X&S&M extends S implements M {}
             // So, we choose the maximum length from S and M.
-            let mixin_length =
-                Self::compute_longest_inheritance_path_to_object_visited(ctx, mixin, visited_elements);
+            let mixin_length = Self::compute_longest_inheritance_path_to_object_visited(
+                ctx,
+                mixin,
+                visited_elements,
+            );
             super_length = super_length.max(mixin_length);
             // For this synthetic class representing the mixin application.
             super_length += 1;
@@ -944,15 +947,11 @@ impl<'a> LeastUpperBoundHelper<'a> {
         let ctx = self.ctx();
         let first_argument = |t: TypeId| ctx.type_arguments(t)[0];
 
-        let T1_futureOr = ctx
-            .is_dart_async_future_or(T1)
-            .then(|| first_argument(T1));
+        let T1_futureOr = ctx.is_dart_async_future_or(T1).then(|| first_argument(T1));
 
         let T1_future = ctx.is_dart_async_future(T1).then(|| first_argument(T1));
 
-        let T2_futureOr = ctx
-            .is_dart_async_future_or(T2)
-            .then(|| first_argument(T2));
+        let T2_futureOr = ctx.is_dart_async_future_or(T2).then(|| first_argument(T2));
 
         let T2_future = ctx.is_dart_async_future(T2).then(|| first_argument(T2));
 
