@@ -303,6 +303,7 @@ dependencies = [
  "dartr_link",
  "dartr_parser",
  "dartr_project",
+ "dartr_resolver",
  "dartr_syntax",
  "imbl",
  "indexmap",
@@ -372,6 +373,24 @@ dependencies = [
  "pretty_assertions",
  "saphyr-parser",
  "serde_json",
+]
+
+[[package]]
+name = "dartr_resolver"
+version = "0.1.0"
+dependencies = [
+ "dartr_ast",
+ "dartr_ast_builder",
+ "dartr_diagnostics",
+ "dartr_element",
+ "dartr_flow",
+ "dartr_parser",
+ "dartr_syntax",
+ "dartr_type_analyzer",
+ "dartr_typesystem",
+ "indexmap",
+ "pretty_assertions",
+ "rayon",
 ]
 
 [[package]]

@@ -41,6 +41,14 @@ impl Name {
     }
 }
 
+/// The empty name (Dart `''`; the shared type analyzer uses it for error
+/// recovery).
+impl Default for Name {
+    fn default() -> Name {
+        Name::EMPTY
+    }
+}
+
 impl fmt::Debug for Name {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match WELL_KNOWN.get(self.index() as usize) {
