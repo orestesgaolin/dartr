@@ -25,6 +25,7 @@ pub mod dump;
 pub mod element_builder;
 pub mod export;
 pub mod informative_data;
+pub mod instance_member_inferrer;
 pub mod input;
 pub mod library_builder;
 pub mod link;

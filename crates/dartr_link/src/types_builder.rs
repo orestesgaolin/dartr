@@ -7,10 +7,6 @@
 //! The last part of type resolution: the types of the declarations
 //! (`TypesBuilder._declaration`), mixin inference, and breaking interface
 //! cycles; and [`resolve_types`], the order of `Linker._resolveTypes`.
-//!
-//! Mixin inference without explicit type arguments of a generic mixin needs
-//! the generic inferrer (unit A6, not ported yet): such a mixin keeps its
-//! default type arguments.
 
 use dartr_ast::NamedType as NamedTypeNode;
 use dartr_ast::*;
@@ -574,65 +570,151 @@ fn set_synthetic_variable_type(ctx: &Ctx<'_>, element: ElementId) {
     }
 }
 
-/// Dart `_MixinsInference.perform`. The type arguments of a generic mixin
-/// without explicit type arguments are inferred by matching its superclass
-/// constraints with the supertypes structurally; Dart uses the generic
-/// inferrer (`matchSupertypeConstraints`, unit A6), which gives the same
-/// result when each type parameter appears directly in a constraint.
-/// Otherwise the mixin keeps its default type arguments.
+/// Dart `_MixinsInference.perform`.
+///
+/// Dart infers the mixins of a declaration on demand when another
+/// declaration reads them (`mixinInferenceCallback`), and pretends that
+/// they are empty when it reads them during their own inference (a loop).
+/// The class hierarchy in `dartr_typesystem` reads the `mixins` slot
+/// directly, so this port infers, before it computes a hierarchy, every
+/// declaration that the hierarchy reaches ([`MixinsInference::ensure`]);
+/// a declaration in inference has no mixins yet, as in the Dart loop case.
 fn mixins_inference(
     tr: &mut TypeResolution,
     lk: &Linker<'_>,
     ctx: &Ctx<'_>,
     declarations: &IndexMap<ElementId, Vec<NodeKey>>,
 ) {
-    use dartr_typesystem::class_hierarchy::InterfacesMerger;
-    for (&element, withs) in declarations {
-        let i = ctx.interface(EId::from_raw(element));
-        let mut merger = InterfacesMerger::new(TypeSystem::new(*ctx));
-        merger.add_with_supertypes(i.supertype.get());
-        let mut mixins = Vec::new();
-        for &(lib, unit, with) in withs {
-            let ast = unit_ast(lk, lib, unit);
-            let Some(w) = ast.cast::<WithClause>(with) else { continue };
-            for &m in ast.list(ast.get(w).mixin_types) {
-                let Some(t) = built(tr, lk, ctx, (lib, unit, m.raw())) else { continue };
-                if !is_interface_type_interface(ctx, t) {
-                    continue;
-                }
-                let t = if ast.get(m).type_arguments.is_none() {
-                    let node_element = match tr.node_elements.get(&(lib, unit, m.raw())) {
-                        Some(Some(crate::scope::ScopeElement::Element(e))) => Some(*e),
-                        _ => None,
-                    };
-                    infer_mixin(ctx, &merger, node_element, t).unwrap_or(t)
-                } else {
-                    t
-                };
-                mixins.push(t);
-                merger.add_with_supertypes(Some(t));
-            }
-        }
-        i.mixins.set(Some(ctx.intern_list(&mixins)));
+    let mut inference = MixinsInference {
+        tr,
+        lk,
+        ctx,
+        declarations,
+        state: IndexMap::new(),
+    };
+    for &element in declarations.keys() {
+        inference.infer_declaration(element);
     }
 }
 
-/// Dart `_MixinInference._inferSingle` for a mixin without type arguments.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum MixinsState {
+    InProgress,
+    Done,
+}
+
+struct MixinsInference<'t, 'l, 'c, 'a> {
+    tr: &'t mut TypeResolution,
+    lk: &'l Linker<'l>,
+    ctx: &'c Ctx<'a>,
+    declarations: &'t IndexMap<ElementId, Vec<NodeKey>>,
+    state: IndexMap<ElementId, MixinsState>,
+}
+
+impl MixinsInference<'_, '_, '_, '_> {
+    /// Infers the declarations that the class hierarchy of [t] reads (the
+    /// Dart `_callbackWhenRecursion` of every `mixins` read).
+    fn ensure(&mut self, t: TypeId, visited: &mut IndexSet<ElementId>) {
+        let Some(e) = self.ctx.interface_element(t) else { return };
+        self.ensure_element(e, visited);
+    }
+
+    fn ensure_element(&mut self, e: EId<InterfaceElement>, visited: &mut IndexSet<ElementId>) {
+        if !visited.insert(e.raw()) {
+            return;
+        }
+        if self.declarations.contains_key(&e.raw()) && !self.state.contains_key(&e.raw()) {
+            self.infer_declaration(e.raw());
+        }
+        let ctx = self.ctx;
+        let i = ctx.interface(e);
+        let mut types: Vec<TypeId> = Vec::new();
+        types.extend(i.supertype.get());
+        types.extend(ctx.list(i.mixins.get().unwrap_or(TypeList::EMPTY)));
+        types.extend(ctx.list(i.interfaces.get().unwrap_or(TypeList::EMPTY)));
+        if let Some(m) = e.raw().cast::<MixinElement>() {
+            types.extend(ctx.list(ctx.get(m).superclass_constraints.get().unwrap_or(TypeList::EMPTY)));
+        }
+        for t in types {
+            self.ensure(t, visited);
+        }
+    }
+
+    /// Dart `_inferDeclaration` with `_MixinInference.perform` for each
+    /// fragment.
+    fn infer_declaration(&mut self, element: ElementId) {
+        if self.state.contains_key(&element) {
+            return;
+        }
+        self.state.insert(element, MixinsState::InProgress);
+        use dartr_typesystem::class_hierarchy::InterfacesMerger;
+        let ctx = self.ctx;
+        let lk = self.lk;
+        let i = ctx.interface(EId::from_raw(element));
+        let mut visited = IndexSet::new();
+        visited.insert(element);
+        if let Some(s) = i.supertype.get() {
+            self.ensure(s, &mut visited);
+        }
+        let mut merger = InterfacesMerger::new(TypeSystem::new(*ctx));
+        merger.add_with_supertypes(i.supertype.get());
+        let mut mixins = Vec::new();
+        let withs = self.declarations[&element].clone();
+        for (lib, unit, with) in withs {
+            let ast = unit_ast(lk, lib, unit);
+            let Some(w) = ast.cast::<WithClause>(with) else { continue };
+            let builder = &lk.builders[lib as usize];
+            let flags = dartr_typesystem::generic_inferrer::InferenceFlags {
+                generic_metadata_is_enabled: builder.is_enabled(ExperimentalFlag::GenericMetadata),
+                inference_using_bounds_is_enabled: builder.is_enabled(ExperimentalFlag::InferenceUsingBounds),
+                strict_inference: false,
+            };
+            for &m in ast.list(ast.get(w).mixin_types) {
+                let Some(t) = built(self.tr, lk, ctx, (lib, unit, m.raw())) else { continue };
+                // _interfaceType
+                if !is_interface_type_interface(ctx, t) {
+                    continue;
+                }
+                self.ensure(t, &mut visited);
+                let t = if ast.get(m).type_arguments.is_none() {
+                    let node_element = match self.tr.node_elements.get(&(lib, unit, m.raw())) {
+                        Some(Some(crate::scope::ScopeElement::Element(e))) => Some(*e),
+                        _ => None,
+                    };
+                    infer_mixin(ctx, &merger, node_element, t, flags).unwrap_or(t)
+                } else {
+                    t
+                };
+                if is_interface_type_interface(ctx, t) {
+                    mixins.push(t);
+                    merger.add_with_supertypes(Some(t));
+                }
+            }
+        }
+        i.mixins.set(Some(ctx.intern_list(&mixins)));
+        self.state.insert(element, MixinsState::Done);
+    }
+}
+
+/// Dart `_MixinInference._inferSingle` for a mixin without type arguments:
+/// `None` keeps [mixin_type].
 fn infer_mixin(
     ctx: &Ctx<'_>,
     merger: &dartr_typesystem::class_hierarchy::InterfacesMerger<'_>,
     element: Option<ElementId>,
     mixin_type: TypeId,
+    flags: dartr_typesystem::generic_inferrer::InferenceFlags,
 ) -> Option<TypeId> {
     let element = element?;
     let nullability = ctx.nullability_suffix(mixin_type);
-    let (type_parameters, constraints): (Vec<EId<TypeParameterElement>>, Vec<TypeId>) =
+    let type_system = TypeSystem::new(*ctx);
+    let (type_parameters, supertype_constraints): (Vec<EId<TypeParameterElement>>, Vec<TypeId>) =
         if let Some(i) = element.cast::<InterfaceElement>() {
             let tps = ctx.instance(i.upcast()).type_params.clone();
             if tps.is_empty() {
                 return None;
             }
-            let constraints = TypeSystem::new(*ctx).gather_mixin_supertype_constraints_for_inference(i);
+            let constraints = type_system.gather_mixin_supertype_constraints_for_inference(i);
             (tps, constraints)
         } else {
             let a = element.cast::<TypeAliasElement>()?;
@@ -644,6 +726,7 @@ fn infer_mixin(
             let TypeKind::Interface { element: e, .. } = *ctx.ty(raw) else {
                 return None;
             };
+            // InterfaceTypeImpl.superclassConstraints
             let substitution = dartr_typesystem::MapSubstitution::from_interface_type(ctx, raw);
             let constraints: Vec<TypeId> = ctx
                 .element_superclass_constraints(e)
@@ -652,59 +735,34 @@ fn infer_mixin(
                 .collect();
             (tps, constraints)
         };
-    let candidates = merger.type_list();
-    let mut solution: IndexMap<EId<TypeParameterElement>, TypeId> = IndexMap::new();
-    for &constraint in &constraints {
-        let TypeKind::Interface { element: ce, .. } = *ctx.ty(constraint) else {
-            return None;
-        };
-        let matching = candidates
+
+    // _findInterfaceTypesForConstraints
+    let interface_types = merger.type_list();
+    let mut matching_interface_types = Vec::new();
+    for &constraint in &supertype_constraints {
+        let constraint_element = ctx.interface_element(constraint);
+        // No matching interface type found, so inference fails.
+        let found = interface_types
             .iter()
             .copied()
-            .find(|&t| ctx.interface_element(t) == Some(ce))?;
-        if !unify(ctx, &type_parameters, constraint, matching, &mut solution) {
-            return None;
-        }
+            .find(|&t| ctx.interface_element(t) == constraint_element)?;
+        matching_interface_types.push(found);
     }
-    let args: Vec<TypeId> = type_parameters
-        .iter()
-        .map(|p| solution.get(p).copied())
-        .collect::<Option<Vec<_>>>()?;
-    if let Some(i) = element.cast::<InterfaceElement>() {
-        Some(ctx.interface_type(i, &args, nullability))
-    } else {
-        Some(ctx.instantiate_type_alias(EId::from_raw(element), &args, nullability))
-    }
-}
 
-/// Structural matching of a constraint with a supertype: binds the type
-/// parameters of [params].
-fn unify(
-    ctx: &Ctx<'_>,
-    params: &[EId<TypeParameterElement>],
-    pattern: TypeId,
-    t: TypeId,
-    solution: &mut IndexMap<EId<TypeParameterElement>, TypeId>,
-) -> bool {
-    match (*ctx.ty(pattern), *ctx.ty(t)) {
-        (TypeKind::TypeParameter { param, nullability: Nullability::None, .. }, _) if params.contains(&param) => {
-            match solution.get(&param) {
-                Some(&existing) => existing == t,
-                None => {
-                    solution.insert(param, t);
-                    true
-                }
-            }
-        }
-        (
-            TypeKind::Interface { element: e1, args: a1, .. },
-            TypeKind::Interface { element: e2, args: a2, .. },
-        ) if e1 == e2 => {
-            let a1 = ctx.list(a1).to_vec();
-            let a2 = ctx.list(a2).to_vec();
-            a1.len() == a2.len() && a1.iter().zip(a2.iter()).all(|(&x, &y)| unify(ctx, params, x, y, solution))
-        }
-        _ => pattern == t,
+    // Casts aren't relevant for mixin inference.
+    let operations = dartr_typesystem::type_system_operations::TypeSystemOperations::new(type_system, false);
+    let inferred_type_arguments = type_system.match_supertype_constraints(
+        &type_parameters,
+        &supertype_constraints,
+        &matching_interface_types,
+        operations,
+        flags,
+    )?;
+
+    if let Some(i) = element.cast::<InterfaceElement>() {
+        Some(ctx.interface_type(i, &inferred_type_arguments, nullability))
+    } else {
+        Some(ctx.instantiate_type_alias(EId::from_raw(element), &inferred_type_arguments, nullability))
     }
 }
 

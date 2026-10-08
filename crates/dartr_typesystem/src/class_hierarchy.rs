@@ -44,7 +44,7 @@ pub fn implemented_interfaces<'a>(ctx: &Ctx<'a>, element: EId<InterfaceElement>)
     if IN_PROGRESS.with(|s| s.borrow().contains(&element)) {
         return &[];
     }
-    let global = ctx.global();
+    let global = crate::type_ext::cache_ctx(ctx, |store| element.raw().store() == store);
     IN_PROGRESS.with(|s| s.borrow_mut().push(element));
     let (interfaces, _) = compute_hierarchy(&global, element);
     IN_PROGRESS.with(|s| s.borrow_mut().pop());

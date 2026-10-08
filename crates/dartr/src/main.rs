@@ -22,6 +22,12 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Analyzes Dart code like `dart analyze` (same options, output formats
+    /// and exit codes). Diagnostics: parse diagnostics only for now.
+    Analyze {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// Writes internal data structures as JSON Lines (same format as
     /// tools/oracle), one object per file.
     Dump {
@@ -33,8 +39,24 @@ enum Command {
 }
 
 fn main() -> anyhow::Result<()> {
+    // `analyze` has the command line of `dart analyze` (package:args rules
+    // and messages), so it is parsed by dartr_cli and not by clap.
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    if argv.first().map(String::as_str) == Some("analyze") {
+        let stdout = std::io::stdout();
+        let stderr = std::io::stderr();
+        let code = dartr_cli::run(
+            &argv[1..],
+            &dartr_cli::ParseOnlyProvider,
+            dartr_cli::Terminal::detect(),
+            &mut stdout.lock(),
+            &mut stderr.lock(),
+        );
+        std::process::exit(code);
+    }
     let cli = Cli::parse();
     match cli.command {
         Command::Dump { mode, files } => dump::run(mode, files),
+        Command::Analyze { .. } => unreachable!("handled before clap"),
     }
 }

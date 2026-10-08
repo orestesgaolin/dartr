@@ -120,6 +120,6 @@ Data model rules:
 | 6 | resolution, type inference, flow analysis | `resolved` types parity |
 | 7 | error verifiers, constants, hints, warnings, ignore comments | `resolved` diagnostics parity |
 | 8 | lints | all lint rules, `dart analyze` parity with lints enabled |
-| 9 | `dartr analyze` CLI | output and exit code parity |
+| 9 | `dartr analyze` CLI | output and exit code parity  (CLI, formats, exit codes, ignore comments, `errors:` done in `dartr_cli` with the parse-only `DiagnosticsProvider`; parity: `crates/dartr/tests/analyze_parity.rs`, `tools/analyze_parity.py`) |
 | 10 | LSP server, then legacy subset (`dart analyze`/`dart fix`), then full legacy (IntelliJ) | Dart-Code works through the shim; `flutter analyze` works; LSP request parity |
 | 11 | performance | benchmark report vs baseline |
