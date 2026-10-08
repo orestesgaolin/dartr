@@ -8,7 +8,9 @@ use dartr_diagnostics::diag;
 use dartr_flow::shared_type::SharedTypeView;
 use dartr_flow::type_analyzer::TypeAnalyzer;
 
-use crate::pattern_resolver::{check_pattern_never_matches_value_type, set_required_type, type_argument_types};
+use crate::pattern_resolver::{
+    check_pattern_never_matches_value_type, set_required_type, type_argument_types,
+};
 use crate::resolver::{PatternResultOf, ResolverVisitor, SharedMatchContext};
 
 /// Dart `ListPatternResolver.resolve(node:, context:)`.

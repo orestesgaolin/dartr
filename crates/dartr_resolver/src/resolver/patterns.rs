@@ -24,12 +24,19 @@ use crate::resolver::{PatternResultOf, ResolverVisitor, SchemaOf, SharedMatchCon
 
 impl<'a> ResolverVisitor<'a> {
     /// Dart `AssignedVariablePatternImpl.resolvePattern`.
-    pub(crate) fn resolve_pattern_assigned_variable_pattern(&mut self, node: Id<AssignedVariablePattern>, context: &SharedMatchContext) -> PatternResultOf {
+    pub(crate) fn resolve_pattern_assigned_variable_pattern(
+        &mut self,
+        node: Id<AssignedVariablePattern>,
+        context: &SharedMatchContext,
+    ) -> PatternResultOf {
         pattern_resolver::resolve_assigned_variable_pattern(self, node, context)
     }
 
     /// Dart `AssignedVariablePatternImpl.computePatternSchema`.
-    pub(crate) fn compute_pattern_schema_assigned_variable_pattern(&mut self, node: Id<AssignedVariablePattern>) -> SchemaOf {
+    pub(crate) fn compute_pattern_schema_assigned_variable_pattern(
+        &mut self,
+        node: Id<AssignedVariablePattern>,
+    ) -> SchemaOf {
         let element = self
             .base_element(node)
             .and_then(|e| e.cast::<PromotableElement>());
@@ -43,7 +50,11 @@ impl<'a> ResolverVisitor<'a> {
     }
 
     /// Dart `CastPatternImpl.resolvePattern`.
-    pub(crate) fn resolve_pattern_cast_pattern(&mut self, node: Id<CastPattern>, context: &SharedMatchContext) -> PatternResultOf {
+    pub(crate) fn resolve_pattern_cast_pattern(
+        &mut self,
+        node: Id<CastPattern>,
+        context: &SharedMatchContext,
+    ) -> PatternResultOf {
         let type_ = self.ast[node].type_;
         self.visit_node(type_.raw());
         let required_type = annotation_type(self, type_.raw());
@@ -67,13 +78,20 @@ impl<'a> ResolverVisitor<'a> {
     }
 
     /// Dart `CastPatternImpl.computePatternSchema`.
-    pub(crate) fn compute_pattern_schema_cast_pattern(&mut self, node: Id<CastPattern>) -> SchemaOf {
+    pub(crate) fn compute_pattern_schema_cast_pattern(
+        &mut self,
+        node: Id<CastPattern>,
+    ) -> SchemaOf {
         let _ = node;
         self.analyze_cast_pattern_schema()
     }
 
     /// Dart `ConstantPatternImpl.resolvePattern`.
-    pub(crate) fn resolve_pattern_constant_pattern(&mut self, node: Id<ConstantPattern>, context: &SharedMatchContext) -> PatternResultOf {
+    pub(crate) fn resolve_pattern_constant_pattern(
+        &mut self,
+        node: Id<ConstantPattern>,
+        context: &SharedMatchContext,
+    ) -> PatternResultOf {
         let expression = self.ast[node].expression;
         let analysis_result = self.analyze_constant_pattern(context, node.raw(), expression);
         // Dart `expression = popRewrite()!`: the rewrite already replaced the
@@ -83,13 +101,20 @@ impl<'a> ResolverVisitor<'a> {
     }
 
     /// Dart `ConstantPatternImpl.computePatternSchema`.
-    pub(crate) fn compute_pattern_schema_constant_pattern(&mut self, node: Id<ConstantPattern>) -> SchemaOf {
+    pub(crate) fn compute_pattern_schema_constant_pattern(
+        &mut self,
+        node: Id<ConstantPattern>,
+    ) -> SchemaOf {
         let _ = node;
         self.analyze_constant_pattern_schema()
     }
 
     /// Dart `DeclaredVariablePatternImpl.resolvePattern`.
-    pub(crate) fn resolve_pattern_declared_variable_pattern(&mut self, node: Id<DeclaredVariablePattern>, context: &SharedMatchContext) -> PatternResultOf {
+    pub(crate) fn resolve_pattern_declared_variable_pattern(
+        &mut self,
+        node: Id<DeclaredVariablePattern>,
+        context: &SharedMatchContext,
+    ) -> PatternResultOf {
         let declared_type = self.ast[node]
             .type_
             .map(|t| SharedTypeView::new(annotation_type(self, t.raw())));
@@ -140,7 +165,10 @@ impl<'a> ResolverVisitor<'a> {
     }
 
     /// Dart `DeclaredVariablePatternImpl.computePatternSchema`.
-    pub(crate) fn compute_pattern_schema_declared_variable_pattern(&mut self, node: Id<DeclaredVariablePattern>) -> SchemaOf {
+    pub(crate) fn compute_pattern_schema_declared_variable_pattern(
+        &mut self,
+        node: Id<DeclaredVariablePattern>,
+    ) -> SchemaOf {
         let declared_type = self.ast[node]
             .type_
             .map(|t| SharedTypeView::new(annotation_type(self, t.raw())));
@@ -148,36 +176,58 @@ impl<'a> ResolverVisitor<'a> {
     }
 
     /// Dart `ListPatternImpl.resolvePattern`.
-    pub(crate) fn resolve_pattern_list_pattern(&mut self, node: Id<ListPattern>, context: &SharedMatchContext) -> PatternResultOf {
+    pub(crate) fn resolve_pattern_list_pattern(
+        &mut self,
+        node: Id<ListPattern>,
+        context: &SharedMatchContext,
+    ) -> PatternResultOf {
         list_pattern_resolver::resolve(self, node, context)
     }
 
     /// Dart `ListPatternImpl.computePatternSchema`.
-    pub(crate) fn compute_pattern_schema_list_pattern(&mut self, node: Id<ListPattern>) -> SchemaOf {
+    pub(crate) fn compute_pattern_schema_list_pattern(
+        &mut self,
+        node: Id<ListPattern>,
+    ) -> SchemaOf {
         let element_type = self.ast[node]
             .type_arguments
-            .and_then(|t| pattern_resolver::type_argument_types(self, t).first().copied())
+            .and_then(|t| {
+                pattern_resolver::type_argument_types(self, t)
+                    .first()
+                    .copied()
+            })
             .map(SharedTypeView::new);
         let elements = self.ast.list_raw(self.ast[node].elements).to_vec();
         self.analyze_list_pattern_schema(element_type, &elements)
     }
 
     /// Dart `LogicalAndPatternImpl.resolvePattern`.
-    pub(crate) fn resolve_pattern_logical_and_pattern(&mut self, node: Id<LogicalAndPattern>, context: &SharedMatchContext) -> PatternResultOf {
+    pub(crate) fn resolve_pattern_logical_and_pattern(
+        &mut self,
+        node: Id<LogicalAndPattern>,
+        context: &SharedMatchContext,
+    ) -> PatternResultOf {
         let left = self.ast[node].left_operand;
         let right = self.ast[node].right_operand;
         self.analyze_logical_and_pattern(context, node.upcast(), left.raw(), right.raw())
     }
 
     /// Dart `LogicalAndPatternImpl.computePatternSchema`.
-    pub(crate) fn compute_pattern_schema_logical_and_pattern(&mut self, node: Id<LogicalAndPattern>) -> SchemaOf {
+    pub(crate) fn compute_pattern_schema_logical_and_pattern(
+        &mut self,
+        node: Id<LogicalAndPattern>,
+    ) -> SchemaOf {
         let left = self.ast[node].left_operand;
         let right = self.ast[node].right_operand;
         self.analyze_logical_and_pattern_schema(left.raw(), right.raw())
     }
 
     /// Dart `LogicalOrPatternImpl.resolvePattern`.
-    pub(crate) fn resolve_pattern_logical_or_pattern(&mut self, node: Id<LogicalOrPattern>, context: &SharedMatchContext) -> PatternResultOf {
+    pub(crate) fn resolve_pattern_logical_or_pattern(
+        &mut self,
+        node: Id<LogicalOrPattern>,
+        context: &SharedMatchContext,
+    ) -> PatternResultOf {
         let left = self.ast[node].left_operand;
         let right = self.ast[node].right_operand;
         let analysis_result =
@@ -187,14 +237,21 @@ impl<'a> ResolverVisitor<'a> {
     }
 
     /// Dart `LogicalOrPatternImpl.computePatternSchema`.
-    pub(crate) fn compute_pattern_schema_logical_or_pattern(&mut self, node: Id<LogicalOrPattern>) -> SchemaOf {
+    pub(crate) fn compute_pattern_schema_logical_or_pattern(
+        &mut self,
+        node: Id<LogicalOrPattern>,
+    ) -> SchemaOf {
         let left = self.ast[node].left_operand;
         let right = self.ast[node].right_operand;
         self.analyze_logical_or_pattern_schema(left.raw(), right.raw())
     }
 
     /// Dart `MapPatternImpl.resolvePattern`.
-    pub(crate) fn resolve_pattern_map_pattern(&mut self, node: Id<MapPattern>, context: &SharedMatchContext) -> PatternResultOf {
+    pub(crate) fn resolve_pattern_map_pattern(
+        &mut self,
+        node: Id<MapPattern>,
+        context: &SharedMatchContext,
+    ) -> PatternResultOf {
         pattern_resolver::resolve_map_pattern(self, node, context)
     }
 
@@ -206,33 +263,51 @@ impl<'a> ResolverVisitor<'a> {
     }
 
     /// Dart `NullAssertPatternImpl.resolvePattern`.
-    pub(crate) fn resolve_pattern_null_assert_pattern(&mut self, node: Id<NullAssertPattern>, context: &SharedMatchContext) -> PatternResultOf {
+    pub(crate) fn resolve_pattern_null_assert_pattern(
+        &mut self,
+        node: Id<NullAssertPattern>,
+        context: &SharedMatchContext,
+    ) -> PatternResultOf {
         let pattern = self.ast[node].pattern;
         self.analyze_null_check_or_assert_pattern(context, node.upcast(), pattern, true)
             .into()
     }
 
     /// Dart `NullAssertPatternImpl.computePatternSchema`.
-    pub(crate) fn compute_pattern_schema_null_assert_pattern(&mut self, node: Id<NullAssertPattern>) -> SchemaOf {
+    pub(crate) fn compute_pattern_schema_null_assert_pattern(
+        &mut self,
+        node: Id<NullAssertPattern>,
+    ) -> SchemaOf {
         let pattern = self.ast[node].pattern;
         self.analyze_null_check_or_assert_pattern_schema(pattern, true)
     }
 
     /// Dart `NullCheckPatternImpl.resolvePattern`.
-    pub(crate) fn resolve_pattern_null_check_pattern(&mut self, node: Id<NullCheckPattern>, context: &SharedMatchContext) -> PatternResultOf {
+    pub(crate) fn resolve_pattern_null_check_pattern(
+        &mut self,
+        node: Id<NullCheckPattern>,
+        context: &SharedMatchContext,
+    ) -> PatternResultOf {
         let pattern = self.ast[node].pattern;
         self.analyze_null_check_or_assert_pattern(context, node.upcast(), pattern, false)
             .into()
     }
 
     /// Dart `NullCheckPatternImpl.computePatternSchema`.
-    pub(crate) fn compute_pattern_schema_null_check_pattern(&mut self, node: Id<NullCheckPattern>) -> SchemaOf {
+    pub(crate) fn compute_pattern_schema_null_check_pattern(
+        &mut self,
+        node: Id<NullCheckPattern>,
+    ) -> SchemaOf {
         let pattern = self.ast[node].pattern;
         self.analyze_null_check_or_assert_pattern_schema(pattern, false)
     }
 
     /// Dart `ObjectPatternImpl.resolvePattern`.
-    pub(crate) fn resolve_pattern_object_pattern(&mut self, node: Id<ObjectPattern>, context: &SharedMatchContext) -> PatternResultOf {
+    pub(crate) fn resolve_pattern_object_pattern(
+        &mut self,
+        node: Id<ObjectPattern>,
+        context: &SharedMatchContext,
+    ) -> PatternResultOf {
         let fields = build_shared_pattern_fields(self, self.ast[node].fields, true);
         let result = self.analyze_object_pattern(context, node.upcast(), &fields);
 
@@ -247,25 +322,39 @@ impl<'a> ResolverVisitor<'a> {
     }
 
     /// Dart `ObjectPatternImpl.computePatternSchema`.
-    pub(crate) fn compute_pattern_schema_object_pattern(&mut self, node: Id<ObjectPattern>) -> SchemaOf {
+    pub(crate) fn compute_pattern_schema_object_pattern(
+        &mut self,
+        node: Id<ObjectPattern>,
+    ) -> SchemaOf {
         let type_ = annotation_type(self, self.ast[node].type_.raw());
         self.analyze_object_pattern_schema(SharedTypeView::new(type_))
     }
 
     /// Dart `ParenthesizedPatternImpl.resolvePattern`.
-    pub(crate) fn resolve_pattern_parenthesized_pattern(&mut self, node: Id<ParenthesizedPattern>, context: &SharedMatchContext) -> PatternResultOf {
+    pub(crate) fn resolve_pattern_parenthesized_pattern(
+        &mut self,
+        node: Id<ParenthesizedPattern>,
+        context: &SharedMatchContext,
+    ) -> PatternResultOf {
         let pattern = self.ast[node].pattern;
         self.dispatch_pattern(context, pattern.raw())
     }
 
     /// Dart `ParenthesizedPatternImpl.computePatternSchema`.
-    pub(crate) fn compute_pattern_schema_parenthesized_pattern(&mut self, node: Id<ParenthesizedPattern>) -> SchemaOf {
+    pub(crate) fn compute_pattern_schema_parenthesized_pattern(
+        &mut self,
+        node: Id<ParenthesizedPattern>,
+    ) -> SchemaOf {
         let pattern = self.ast[node].pattern;
         self.dispatch_pattern_schema(pattern.raw())
     }
 
     /// Dart `RecordPatternImpl.resolvePattern`.
-    pub(crate) fn resolve_pattern_record_pattern(&mut self, node: Id<RecordPattern>, context: &SharedMatchContext) -> PatternResultOf {
+    pub(crate) fn resolve_pattern_record_pattern(
+        &mut self,
+        node: Id<RecordPattern>,
+        context: &SharedMatchContext,
+    ) -> PatternResultOf {
         let fields = build_shared_pattern_fields(self, self.ast[node].fields, false);
         let result = self.analyze_record_pattern(context, node.upcast(), &fields);
 
@@ -284,13 +373,20 @@ impl<'a> ResolverVisitor<'a> {
     }
 
     /// Dart `RecordPatternImpl.computePatternSchema`.
-    pub(crate) fn compute_pattern_schema_record_pattern(&mut self, node: Id<RecordPattern>) -> SchemaOf {
+    pub(crate) fn compute_pattern_schema_record_pattern(
+        &mut self,
+        node: Id<RecordPattern>,
+    ) -> SchemaOf {
         let fields = build_shared_pattern_fields(self, self.ast[node].fields, false);
         self.analyze_record_pattern_schema(&fields)
     }
 
     /// Dart `RelationalPatternImpl.resolvePattern`.
-    pub(crate) fn resolve_pattern_relational_pattern(&mut self, node: Id<RelationalPattern>, context: &SharedMatchContext) -> PatternResultOf {
+    pub(crate) fn resolve_pattern_relational_pattern(
+        &mut self,
+        node: Id<RelationalPattern>,
+        context: &SharedMatchContext,
+    ) -> PatternResultOf {
         let operand = self.ast[node].operand;
         let analysis_result = self.analyze_relational_pattern(context, node.upcast(), operand);
         self.pop_rewrite();
@@ -298,16 +394,21 @@ impl<'a> ResolverVisitor<'a> {
     }
 
     /// Dart `RelationalPatternImpl.computePatternSchema`.
-    pub(crate) fn compute_pattern_schema_relational_pattern(&mut self, node: Id<RelationalPattern>) -> SchemaOf {
+    pub(crate) fn compute_pattern_schema_relational_pattern(
+        &mut self,
+        node: Id<RelationalPattern>,
+    ) -> SchemaOf {
         let _ = node;
         self.analyze_relational_pattern_schema()
     }
 
     /// Dart `WildcardPatternImpl.resolvePattern`.
-    pub(crate) fn resolve_pattern_wildcard_pattern(&mut self, node: Id<WildcardPattern>, context: &SharedMatchContext) -> PatternResultOf {
-        let declared_type = self.ast[node]
-            .type_
-            .map(|t| annotation_type(self, t.raw()));
+    pub(crate) fn resolve_pattern_wildcard_pattern(
+        &mut self,
+        node: Id<WildcardPattern>,
+        context: &SharedMatchContext,
+    ) -> PatternResultOf {
+        let declared_type = self.ast[node].type_.map(|t| annotation_type(self, t.raw()));
         let analysis_result = self.analyze_wildcard_pattern(
             context,
             node.upcast(),
@@ -327,7 +428,10 @@ impl<'a> ResolverVisitor<'a> {
     }
 
     /// Dart `WildcardPatternImpl.computePatternSchema`.
-    pub(crate) fn compute_pattern_schema_wildcard_pattern(&mut self, node: Id<WildcardPattern>) -> SchemaOf {
+    pub(crate) fn compute_pattern_schema_wildcard_pattern(
+        &mut self,
+        node: Id<WildcardPattern>,
+    ) -> SchemaOf {
         let declared_type = self.ast[node]
             .type_
             .map(|t| SharedTypeView::new(annotation_type(self, t.raw())));

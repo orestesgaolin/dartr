@@ -49,8 +49,8 @@ use dartr_ast::{
     MapPattern, NodeId, NodeList, NullAssertPattern, NullCheckPattern, NullLiteral, ObjectPattern,
     ParenthesizedExpression, ParenthesizedPattern, PatternAssignment, PatternField,
     PatternVariableDeclaration, PrefixedIdentifier, PropertyAccess, RelationalPattern,
-    SimpleIdentifier, Statement, SwitchCase, SwitchDefault, SwitchExpression,
-    SwitchExpressionCase, SwitchPatternCase, SwitchStatement, TypeArgumentList,
+    SimpleIdentifier, Statement, SwitchCase, SwitchDefault, SwitchExpression, SwitchExpressionCase,
+    SwitchPatternCase, SwitchStatement, TypeArgumentList,
 };
 use dartr_diagnostics::{DiagnosticMessage, diag};
 use dartr_element::diagnostics::type_arg;
@@ -63,9 +63,8 @@ use dartr_flow::shared_type::SharedTypeView;
 use dartr_flow::type_analysis_result::PatternResult;
 use dartr_flow::type_analyzer::{
     CaseHeadOrDefaultInfo, JoinedPatternVariableInconsistency, JoinedPatternVariableLocation,
-    RecordPatternField, RecordPatternFieldOf, RelationalOperatorKind,
-    RelationalOperatorResolution, SwitchExpressionMemberInfo, SwitchStatementMemberInfo,
-    TypeAnalyzer,
+    RecordPatternField, RecordPatternFieldOf, RelationalOperatorKind, RelationalOperatorResolution,
+    SwitchExpressionMemberInfo, SwitchStatementMemberInfo, TypeAnalyzer,
 };
 use dartr_flow::type_analyzer_operations::KeyValueTypes;
 use dartr_typesystem::{TypeExt, member};
@@ -187,14 +186,24 @@ pub fn visit_pattern_variable_declaration(
 /// Dart `node.patternTypeSchema = schema` of a `PatternAssignment` or a
 /// `PatternVariableDeclaration`.
 fn set_pattern_type_schema(rv: &mut ResolverVisitor<'_>, node: NodeId, schema: TypeId) {
-    let mut info = rv.tables.pattern_info.get(node).copied().unwrap_or_default();
+    let mut info = rv
+        .tables
+        .pattern_info
+        .get(node)
+        .copied()
+        .unwrap_or_default();
     info.pattern_type_schema = Some(schema);
     rv.tables.pattern_info.insert(node, info);
 }
 
 /// Dart `pattern.requiredType = type` of a `ListPattern` or a `MapPattern`.
 pub(crate) fn set_required_type(rv: &mut ResolverVisitor<'_>, node: NodeId, ty: TypeId) {
-    let mut info = rv.tables.pattern_info.get(node).copied().unwrap_or_default();
+    let mut info = rv
+        .tables
+        .pattern_info
+        .get(node)
+        .copied()
+        .unwrap_or_default();
     info.required_type = Some(ty);
     rv.tables.pattern_info.insert(node, info);
 }
@@ -224,7 +233,10 @@ impl SwitchStatementCaseGroup {
 }
 
 /// The labels and the statements of the switch member [member].
-fn switch_member_parts(ast: &Ast, member: NodeId) -> Option<(NodeList<Label>, NodeList<Statement>)> {
+fn switch_member_parts(
+    ast: &Ast,
+    member: NodeId,
+) -> Option<(NodeList<Label>, NodeList<Statement>)> {
     if let Some(m) = ast.cast::<SwitchCase>(member) {
         Some((ast[m].labels, ast[m].statements))
     } else if let Some(m) = ast.cast::<SwitchDefault>(member) {
@@ -287,7 +299,10 @@ pub fn guarded_pattern_variables(
 /// record them: the bind variable of each `DeclaredVariablePattern` (in
 /// source order), or the logical-or join variable that it is a component
 /// of. The first variable with a name wins (Dart `VariableBinder.add`).
-fn compute_pattern_variables(rv: &ResolverVisitor<'_>, pattern: Id<DartPattern>) -> PatternVariables {
+fn compute_pattern_variables(
+    rv: &ResolverVisitor<'_>,
+    pattern: Id<DartPattern>,
+) -> PatternVariables {
     let ast = &*rv.ast;
     let mut declared = Vec::new();
     collect_declared_variable_patterns(ast, pattern.raw(), &mut declared);
@@ -524,7 +539,9 @@ fn infer_type_arguments(
     declared_type: TypeId,
     context_type: TypeId,
 ) -> Vec<TypeId> {
-    use dartr_typesystem::generic_inferrer::{GenericInferrer, InferenceErrorEntity, InferenceFlags};
+    use dartr_typesystem::generic_inferrer::{
+        GenericInferrer, InferenceErrorEntity, InferenceFlags,
+    };
     let flags = InferenceFlags {
         generic_metadata_is_enabled: rv.generic_metadata_is_enabled(),
         inference_using_bounds_is_enabled: rv.inference_using_bounds_is_enabled(),
@@ -558,7 +575,11 @@ fn infer_type_arguments(
 }
 
 /// Dart `finishExpressionCase`.
-pub fn finish_expression_case(rv: &mut ResolverVisitor<'_>, node: Id<Expression>, case_index: usize) {
+pub fn finish_expression_case(
+    rv: &mut ResolverVisitor<'_>,
+    node: Id<Expression>,
+    case_index: usize,
+) {
     let _ = (node, case_index);
     // Dart `case_.expression = popRewrite()!`: the rewrite already replaced
     // the expression in the AST.
@@ -685,7 +706,8 @@ pub fn get_switch_statement_member_info(
     rv: &mut ResolverVisitor<'_>,
     node: Id<Statement>,
     case_index: usize,
-) -> SwitchStatementMemberInfo<NodeId, Id<Statement>, Id<Expression>, EId<PromotableElement>, Name> {
+) -> SwitchStatementMemberInfo<NodeId, Id<Statement>, Id<Expression>, EId<PromotableElement>, Name>
+{
     let group = member_group(rv.ast, node.raw(), case_index).expect("switch statement case group");
     let heads = group
         .members
@@ -717,7 +739,12 @@ pub fn get_switch_statement_member_info(
 }
 
 /// Dart `handleCaseHead` (after the guard is popped).
-pub fn handle_case_head(rv: &mut ResolverVisitor<'_>, node: NodeId, case_index: usize, sub_index: usize) {
+pub fn handle_case_head(
+    rv: &mut ResolverVisitor<'_>,
+    node: NodeId,
+    case_index: usize,
+    sub_index: usize,
+) {
     let _ = sub_index;
     if rv.ast.is::<SwitchStatement>(node) {
         if let Some(group) = member_group(rv.ast, node, case_index)
@@ -738,7 +765,12 @@ pub fn handle_case_head(rv: &mut ResolverVisitor<'_>, node: NodeId, case_index: 
 }
 
 /// Dart `handleDefault`.
-pub fn handle_default(rv: &mut ResolverVisitor<'_>, node: NodeId, case_index: usize, sub_index: usize) {
+pub fn handle_default(
+    rv: &mut ResolverVisitor<'_>,
+    node: NodeId,
+    case_index: usize,
+    sub_index: usize,
+) {
     let _ = sub_index;
     if let Some(group) = member_group(rv.ast, node, case_index)
         && let Some(mut exhaustiveness) = rv.legacy_switch_exhaustiveness.take()
@@ -1197,7 +1229,10 @@ pub(crate) fn shared_error_diagnostic(
                     ast.length(original),
                     "The first assigned variable pattern.",
                 )])
-                .at_offset(ast.offset(duplicate) as usize, ast.length(duplicate) as usize)
+                .at_offset(
+                    ast.offset(duplicate) as usize,
+                    ast.length(duplicate) as usize,
+                )
         }
         SharedError::DuplicateRecordPatternField {
             name,
@@ -1232,7 +1267,10 @@ pub(crate) fn shared_error_diagnostic(
                 ast.length(original),
                 "The first rest element.",
             )])
-            .at_offset(ast.offset(duplicate) as usize, ast.length(duplicate) as usize),
+            .at_offset(
+                ast.offset(duplicate) as usize,
+                ast.length(duplicate) as usize,
+            ),
         SharedError::InconsistentJoinedPatternVariable {
             variable,
             component,
@@ -1322,7 +1360,11 @@ impl SwitchExhaustiveness {
     }
 
     /// Dart `visitSwitchMember`.
-    pub fn visit_switch_member(&mut self, rv: &ResolverVisitor<'_>, group: &SwitchStatementCaseGroup) {
+    pub fn visit_switch_member(
+        &mut self,
+        rv: &ResolverVisitor<'_>,
+        group: &SwitchStatementCaseGroup,
+    ) {
         let ast = &*rv.ast;
         for &node in &group.members {
             if self.enum_constants.is_some() {
@@ -1346,7 +1388,11 @@ impl SwitchExhaustiveness {
     }
 
     /// Dart `_handleCaseConstant`.
-    fn handle_case_constant(&mut self, rv: &ResolverVisitor<'_>, case_constant: Option<Id<Expression>>) {
+    fn handle_case_constant(
+        &mut self,
+        rv: &ResolverVisitor<'_>,
+        case_constant: Option<Id<Expression>>,
+    ) {
         let Some(case_constant) = case_constant else {
             return;
         };

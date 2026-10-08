@@ -106,15 +106,19 @@ impl Analyzed {
         self.with_ctx(|ctx, _| type_display_string_with(ctx, ty, DisplayOptions::default()))
     }
 
-    /// The node of [kind] that starts where [needle] starts in the source
-    /// (the first occurrence of [needle]).
+    /// The node of [kind] at the first occurrence of [needle] in the source:
+    /// the node that starts there, or else the innermost node that contains
+    /// it (a `DeclaredVariablePattern` starts at its keyword or type; the
+    /// tests name it by its variable name).
     fn find(&self, kind: NodeKind, needle: &str) -> NodeId {
-        let offset = self
-            .source
-            .find(needle)
-            .unwrap_or_else(|| panic!("`{needle}` is not in the source")) as u32;
+        let offset =
+            self.source
+                .find(needle)
+                .unwrap_or_else(|| panic!("`{needle}` is not in the source")) as u32;
         let unit = self.unit();
-        find_node(&unit.ast, unit.unit.raw(), kind, offset)
+        let root = unit.unit.raw();
+        find_node(&unit.ast, root, kind, offset)
+            .or_else(|| find_containing(&unit.ast, root, kind, offset))
             .unwrap_or_else(|| panic!("no {kind:?} at `{needle}`"))
     }
 
@@ -166,11 +170,7 @@ impl Analyzed {
                 .declared_fragment
                 .get(node)
                 .unwrap_or_else(|| panic!("`{needle}` is not bound"));
-            let element = *ctx
-                .fragment_data(fragment)
-                .expect("fragment")
-                .element
-                .get();
+            let element = *ctx.fragment_data(fragment).expect("fragment").element.get();
             let local = element
                 .cast::<LocalVariableElement>()
                 .expect("local variable");
@@ -207,6 +207,20 @@ impl Analyzed {
     }
 }
 
+/// The innermost node of [kind] below [node] that contains [offset].
+fn find_containing(ast: &Ast, node: NodeId, kind: NodeKind, offset: u32) -> Option<NodeId> {
+    for child in ast.children(node) {
+        if ast.offset(child) <= offset
+            && offset < ast.end(child)
+            && let Some(found) = find_containing(ast, child, kind, offset)
+        {
+            return Some(found);
+        }
+    }
+    (ast.kind(node) == kind && ast.offset(node) <= offset && offset < ast.end(node)).then_some(node)
+}
+
+/// The node of [kind] below [node] that starts at [offset].
 fn find_node(ast: &Ast, node: NodeId, kind: NodeKind, offset: u32) -> Option<NodeId> {
     if ast.kind(node) == kind && ast.offset(node) == offset {
         return Some(node);
@@ -239,13 +253,26 @@ String f() => switch (1) {
     ) else {
         return;
     };
-    assert_eq!(a.static_type(NodeKind::SwitchExpression, "switch (1)"), "String");
-    assert_eq!(a.matched_value_type(NodeKind::ConstantPattern, "0 =>"), "int");
-    assert_eq!(a.matched_value_type(NodeKind::RelationalPattern, "> 0"), "int");
-    assert_eq!(a.matched_value_type(NodeKind::WildcardPattern, "_ =>"), "int");
+    assert_eq!(
+        a.static_type(NodeKind::SwitchExpression, "switch (1)"),
+        "String"
+    );
+    assert_eq!(
+        a.matched_value_type(NodeKind::ConstantPattern, "0 =>"),
+        "int"
+    );
+    assert_eq!(
+        a.matched_value_type(NodeKind::RelationalPattern, "> 0"),
+        "int"
+    );
+    assert_eq!(
+        a.matched_value_type(NodeKind::WildcardPattern, "_ =>"),
+        "int"
+    );
     // The operator `>` of `num` (Dart `RelationalPatternImpl.element`).
     assert_eq!(
-        a.element_name(NodeKind::RelationalPattern, "> 0").as_deref(),
+        a.element_name(NodeKind::RelationalPattern, "> 0")
+            .as_deref(),
         Some("bool >(num other)")
     );
 }
@@ -267,8 +294,14 @@ Object f() => switch ('s') {
     };
     // The type of a switch expression is the least upper bound of the case
     // bodies: LUB(int, double, int) = num.
-    assert_eq!(a.static_type(NodeKind::SwitchExpression, "switch ('s')"), "num");
-    assert_eq!(a.matched_value_type(NodeKind::ConstantPattern, "'a' =>"), "String");
+    assert_eq!(
+        a.static_type(NodeKind::SwitchExpression, "switch ('s')"),
+        "num"
+    );
+    assert_eq!(
+        a.matched_value_type(NodeKind::ConstantPattern, "'a' =>"),
+        "String"
+    );
 }
 
 #[test]
@@ -291,7 +324,10 @@ void f() {
     };
     // The type of an untyped variable pattern is the matched value type.
     assert_eq!(a.variable_type("first when"), "int");
-    assert_eq!(a.matched_value_type(NodeKind::DeclaredVariablePattern, "first when"), "int");
+    assert_eq!(
+        a.matched_value_type(NodeKind::DeclaredVariablePattern, "first when"),
+        "int"
+    );
     assert_eq!(a.variable_type("second:"), "int");
 }
 
@@ -314,9 +350,19 @@ void f() {
     ) else {
         return;
     };
-    assert_eq!(a.matched_value_type(NodeKind::ConstantPattern, "'a':"), "String");
-    assert_eq!(a.matched_value_type(NodeKind::ConstantPattern, "'b':"), "String");
-    assert!(a.diagnostic_names().is_empty(), "{:?}", a.diagnostic_names());
+    assert_eq!(
+        a.matched_value_type(NodeKind::ConstantPattern, "'a':"),
+        "String"
+    );
+    assert_eq!(
+        a.matched_value_type(NodeKind::ConstantPattern, "'b':"),
+        "String"
+    );
+    assert!(
+        a.diagnostic_names().is_empty(),
+        "{:?}",
+        a.diagnostic_names()
+    );
 }
 
 #[test]
@@ -335,7 +381,10 @@ void f() {
     };
     assert_eq!(a.variable_type("y)"), "int");
     assert_eq!(a.variable_type("z?"), "String");
-    assert_eq!(a.matched_value_type(NodeKind::NullCheckPattern, "z?"), "String");
+    assert_eq!(
+        a.matched_value_type(NodeKind::NullCheckPattern, "z?"),
+        "String"
+    );
     // `?` on a value of a non-nullable type.
     assert_eq!(a.diagnostic_names(), vec!["unnecessary_null_check_pattern"]);
 }
@@ -356,7 +405,10 @@ void f() {
     };
     assert_eq!(a.variable_type("p)"), "int");
     assert_eq!(a.variable_type("q)"), "String");
-    assert_eq!(a.matched_value_type(NodeKind::ParenthesizedPattern, "(p)"), "int");
+    assert_eq!(
+        a.matched_value_type(NodeKind::ParenthesizedPattern, "(p)"),
+        "int"
+    );
 }
 
 // ------------------------------------------------------------ realistic code
@@ -381,12 +433,18 @@ void f(Object o) {
     ) else {
         return;
     };
-    assert_eq!(a.matched_value_type(NodeKind::RecordPattern, "(int a"), "Object");
+    assert_eq!(
+        a.matched_value_type(NodeKind::RecordPattern, "(int a"),
+        "Object"
+    );
     assert_eq!(a.variable_type("a, String"), "int");
     assert_eq!(a.variable_type("b)"), "String");
     // The fields of a record pattern match `Object?` when the scrutinee is
     // not a record type.
-    assert_eq!(a.matched_value_type(NodeKind::DeclaredVariablePattern, "a, String"), "Object?");
+    assert_eq!(
+        a.matched_value_type(NodeKind::DeclaredVariablePattern, "a, String"),
+        "Object?"
+    );
     assert_eq!(a.variable_type("x when"), "int");
     assert_eq!(a.variable_type("c, d"), "Object?");
     assert_eq!(a.variable_type("e)"), "Object?");
@@ -406,9 +464,15 @@ void f(List<int> list, Map<String, double> map) {
     ) else {
         return;
     };
-    assert_eq!(a.required_type(NodeKind::ListPattern, "[var first"), "List<int>");
+    assert_eq!(
+        a.required_type(NodeKind::ListPattern, "[var first"),
+        "List<int>"
+    );
     assert_eq!(a.variable_type("first,"), "int");
-    assert_eq!(a.required_type(NodeKind::MapPattern, "{'k'"), "Map<String, double>");
+    assert_eq!(
+        a.required_type(NodeKind::MapPattern, "{'k'"),
+        "Map<String, double>"
+    );
     assert_eq!(a.variable_type("v}"), "double");
 }
 
@@ -440,7 +504,8 @@ void f(Object o, Box<String> box) {
     assert_eq!(a.variable_type("px"), "int");
     assert_eq!(a.variable_type("y))"), "int");
     assert_eq!(
-        a.element_name(NodeKind::PatternField, "x: var px").as_deref(),
+        a.element_name(NodeKind::PatternField, "x: var px")
+            .as_deref(),
         Some("int get x")
     );
     // `Box` without type arguments: inferred from the matched value type.
@@ -465,7 +530,11 @@ void f((int, int) r) {
     };
     assert_eq!(a.variable_type("v) ||"), "int");
     assert_eq!(a.variable_type("v, 0)"), "int");
-    assert!(a.diagnostic_names().is_empty(), "{:?}", a.diagnostic_names());
+    assert!(
+        a.diagnostic_names().is_empty(),
+        "{:?}",
+        a.diagnostic_names()
+    );
 }
 
 #[test]
@@ -483,6 +552,115 @@ void f() {
     ) else {
         return;
     };
-    assert_eq!(a.static_type(NodeKind::PatternAssignment, "(a, b) ="), "(int, String)");
-    assert_eq!(a.matched_value_type(NodeKind::AssignedVariablePattern, "a, b)"), "int");
+    assert_eq!(
+        a.static_type(NodeKind::PatternAssignment, "(a, b) ="),
+        "(int, String)"
+    );
+    assert_eq!(
+        a.matched_value_type(NodeKind::AssignedVariablePattern, "a, b)"),
+        "int"
+    );
+}
+
+#[test]
+#[ignore = "needs the element binding pass (element_binding_visitor.rs)"]
+fn every_pattern_kind_resolves_without_a_panic() {
+    let Some(a) = analyze(
+        "every_pattern_kind_resolves_without_a_panic",
+        r#"
+void f() {
+  switch (1) {
+    case 0 || 1:
+      break;
+    case == 2 || != 3:
+      break;
+    case (> 4) && < 10:
+      break;
+    case var v || var v:
+      break;
+    case final w!:
+      break;
+    case int(isEven: true):
+      break;
+    case (var r1, var r2):
+      break;
+    case [var l1, ...var rest]:
+      break;
+    case {'k': var m1, ...}:
+      break;
+    case _:
+  }
+  final s = switch ('s') {
+    'a' || 'b' => 0,
+    var t when t.isEmpty => 1,
+    _ => 2,
+  };
+  if (null case var n?) {}
+}
+"#,
+    ) else {
+        return;
+    };
+    assert_eq!(
+        a.matched_value_type(NodeKind::LogicalOrPattern, "0 || 1"),
+        "int"
+    );
+    assert_eq!(
+        a.matched_value_type(NodeKind::RelationalPattern, "== 2"),
+        "int"
+    );
+    assert_eq!(
+        a.matched_value_type(NodeKind::LogicalAndPattern, "(> 4)"),
+        "int"
+    );
+    assert_eq!(
+        a.matched_value_type(NodeKind::NullAssertPattern, "w!"),
+        "int"
+    );
+    assert_eq!(a.variable_type("w!"), "int");
+    assert_eq!(
+        a.matched_value_type(NodeKind::RecordPattern, "(var r1"),
+        "int"
+    );
+    assert_eq!(
+        a.matched_value_type(NodeKind::ListPattern, "[var l1"),
+        "int"
+    );
+    assert_eq!(a.matched_value_type(NodeKind::MapPattern, "{'k'"), "int");
+    assert_eq!(
+        a.static_type(NodeKind::SwitchExpression, "switch ('s')"),
+        "int"
+    );
+    assert_eq!(a.variable_type("t when"), "String");
+}
+
+#[test]
+#[ignore = "needs the element binding pass and the prefixed identifier resolver"]
+fn legacy_switch_statement_on_enum() {
+    let Some(a) = analyze(
+        "legacy_switch_statement_on_enum",
+        r#"
+// @dart=2.19
+enum E { a, b }
+
+int f() {
+  switch (E.a) {
+    case E.a:
+      return 0;
+    case E.b:
+      return 1;
+  }
+}
+"#,
+    ) else {
+        return;
+    };
+    // Before patterns, a switch statement on an enum type that covers all
+    // the constants is exhaustive (`SwitchExhaustiveness`), so the body
+    // cannot complete normally: no `body_might_complete_normally`.
+    assert!(
+        a.diagnostic_names().is_empty(),
+        "{:?}",
+        a.diagnostic_names()
+    );
 }
