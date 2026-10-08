@@ -1,0 +1,17 @@
+include: cycle.yaml
+analyzer:
+  errors:
+    base_code: warning
+    other_code: ignore
+  language:
+    strict-casts: true
+  exclude:
+    - lib/excluded/**
+    - lib/also/**
+formatter:
+  page_width: 0
+  trailing_commas: automate
+linter:
+  rules:
+    avoid_print: true
+    prefer_const_constructors: false

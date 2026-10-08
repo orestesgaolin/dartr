@@ -1,0 +1,8 @@
+{
+  "configVersion": 2,
+  "packages": [
+    {"name": "nested", "rootUri": "../", "packageUri": "lib/", "languageVersion": "3.4"},
+    {"name": "lints", "rootUri": "../../shared/lints", "packageUri": "lib/", "languageVersion": "3.0"},
+    {"name": "sky_engine", "rootUri": "../../shared/sky_engine", "packageUri": "lib/"}
+  ]
+}

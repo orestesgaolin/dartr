@@ -63,6 +63,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
+  linter:
+    dependency: "direct main"
+    description:
+      path: "../../third_party/dart-sdk/pkg/linter"
+      relative: true
+    source: path
+    version: "0.0.0"
   meta:
     dependency: transitive
     description:

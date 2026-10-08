@@ -1,0 +1,6 @@
+linter:
+  rules:
+    - avoid_empty_else
+    - avoid_relative_lib_imports
+    - unrelated_type_equality_checks
+    - not_a_registered_rule

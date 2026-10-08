@@ -5,8 +5,11 @@ environment:
 dependencies:
   analyzer: any
   _fe_analyzer_shared: any
+  linter: any
 dependency_overrides:
   analyzer:
     path: ../../third_party/dart-sdk/pkg/analyzer
   _fe_analyzer_shared:
     path: ../../third_party/dart-sdk/pkg/_fe_analyzer_shared
+  linter:
+    path: ../../third_party/dart-sdk/pkg/linter

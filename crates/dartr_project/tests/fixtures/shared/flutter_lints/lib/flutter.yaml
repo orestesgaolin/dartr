@@ -1,0 +1,7 @@
+include: package:lints/recommended.yaml
+
+linter:
+  rules:
+    avoid_print: true
+    use_key_in_widget_constructors: true
+    prefer_final_fields: false
