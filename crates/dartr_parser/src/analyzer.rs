@@ -16,6 +16,48 @@
 //! true` and `astBuilder.parser = fastaParser`, and creates the `AstBuilder`
 //! with `isFullAst = true`; these are options of the listener (the AST
 //! builder), not of the parser.
+//!
+//! # Notes for the AST builder (`pkg/analyzer/lib/src/fasta/ast_builder.dart`)
+//!
+//! Where the builder reaches back into the parser or changes its input:
+//!
+//! - Token rewriting from inside events, with `parser.rewriter`: Rust
+//!   listeners get `&mut Tokens` in every event and use
+//!   `TokenStreamRewriter::new(tokens)`. The undoable rewriter is only
+//!   active while events are dropped (look-ahead), so the builder always
+//!   sees the plain rewriter. Uses in Dart: `endNamedMixinApplication`
+//!   (`replaceNextTokensWithSyntheticToken`), `endRecordLiteral` and
+//!   `endRecordType` (`insertSyntheticIdentifier`), `endVariablesDeclaration`
+//!   (`insertSyntheticIdentifier`, `insertToken`, `insertSyntheticToken` for
+//!   `await for` recovery), `handleForInLoopParts`
+//!   (`insertSyntheticIdentifier`), `_ensureSetterFormalParameter`
+//!   (`insertSyntheticIdentifier`), `_syntheticArgumentList` and
+//!   `_syntheticFormalParameterList` (`insertParens`). These changes can
+//!   change the tokens the parser reads next.
+//! - `parser.findDartDoc(token)` in `_findComment`: the free function
+//!   `parser_impl::find_dart_doc(tokens, token)`.
+//! - Doc comments (`DocCommentBuilder`): comment references are scanned
+//!   with a separate `scanString` (a separate token arena) and rewritten
+//!   with `parser.rewriter.replaceTokenFollowing` /
+//!   `insertSyntheticIdentifier` and `parser.syntheticPreviousToken`
+//!   (`TokenStreamRewriter::new(&mut other_tokens)`,
+//!   `parser_impl::synthetic_previous_token`). `@docImport` creates a new
+//!   `DocImportStringScanner`, a new `AstBuilder` and a new `Parser`
+//!   (`Parser::new` over the new arena) and calls `parseUnit`.
+//! - Builder options that the parser does not see: `isFullAst` (true),
+//!   `allowNativeClause` (true for `parseString`), `parseFunctionBodies`,
+//!   the feature flags of the builder (from the same feature set).
+//! - `handleErrorToken`: the builder translates scanner error tokens with
+//!   `translateErrorToken` (in Rust `dartr_syntax::analyzer_scanner`).
+//!   The parser reports them at the end of `parse_unit`, after all other
+//!   events.
+//! - `addProblem` turns `NonPartOfDirectiveInPart` into
+//!   `DirectiveAfterDeclaration` when no directive was seen yet: builder
+//!   state, not parser state.
+//! - Listener defaults: `handle_experiment_not_enabled`,
+//!   `handle_error_token`, `handle_unescape_error` and
+//!   `handle_invalid_statement` forward to `handle_recoverable_error` like
+//!   Dart; the builder overrides some of them.
 
 use dartr_syntax::analyzer_scanner::{AnalyzerScanResult, scan_for_analyzer};
 use dartr_syntax::{Diagnostic, ScannerResult, TokenId, Tokens};

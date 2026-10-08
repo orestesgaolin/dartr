@@ -388,7 +388,7 @@ impl<L: Listener> Parser<L> {
         }
     }
 
-    /// ```
+    /// ```text
     /// initializers:
     ///   ':' initializerListEntry (',' initializerListEntry)*
     /// ;
@@ -449,7 +449,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// initializerListEntry:
     ///   'super' ('.' identifier)? arguments |
     ///   fieldInitializer |
@@ -569,7 +569,7 @@ impl<L: Listener> Parser<L> {
     }
 
     /// Parse the `super` initializer:
-    /// ```
+    /// ```text
     ///   'super' ('.' identifier)? arguments ;
     /// ```
     /// Dart (line 4876): `Token parseSuperInitializerExpression(Token start)`
@@ -880,7 +880,7 @@ impl<L: Listener> Parser<L> {
         self.ensure_block(token, /* missingBlockKind = */ None)
     }
 
-    /// ```
+    /// ```text
     /// classBody:
     ///   '{' classMember* '}'
     /// ;
@@ -994,7 +994,7 @@ impl<L: Listener> Parser<L> {
         false
     }
 
-    /// ```
+    /// ```text
     /// classMember:
     ///   fieldDeclaration |
     ///   constructorDeclaration |

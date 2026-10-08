@@ -50,7 +50,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// qualifiedRestOpt:
     ///   qualifiedRest?
     /// ;
@@ -69,7 +69,7 @@ impl<L: Listener> Parser<L> {
         }
     }
 
-    /// ```
+    /// ```text
     /// qualifiedRest:
     ///   '.' identifier
     /// ;
@@ -95,7 +95,7 @@ impl<L: Listener> Parser<L> {
 
     /// Parse the portion of a enum declaration after 'enum'.
     ///
-    /// ```
+    /// ```text
     /// enumType:
     ///     :    'augment'? 'enum' classNamePart mixins? interfaces? '{'
     ///          enumEntry (',' enumEntry)* ','?
@@ -595,7 +595,7 @@ impl<L: Listener> Parser<L> {
     /// Parse the portion of a class declaration (not a mixin application) that
     /// follows the end of the type parameters.
     ///
-    /// ```
+    /// ```text
     /// classDeclaration
     ///     :    'augment'? (classModifiers | mixinClassModifiers)
     ///          'class' classNamePart superclass? interfaces? classBody
@@ -922,7 +922,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// implementsClause:
     ///   'implements' typeName (',' typeName)*
     /// ;
@@ -957,7 +957,7 @@ impl<L: Listener> Parser<L> {
 
     /// Parse a mixin declaration.
     ///
-    /// ```
+    /// ```text
     /// mixinDeclaration:
     ///   metadata? 'augment'? 'base'? 'mixin' [SimpleIdentifier]
     ///        [TypeParameterList]? [OnClause]? [ImplementsClause]?
@@ -1139,7 +1139,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// onClause:
     ///   'on' typeName (',' typeName)*
     /// ;
@@ -1219,7 +1219,7 @@ impl<L: Listener> Parser<L> {
     ///
     /// This parses
     ///
-    /// ```
+    /// ```text
     ///    <identifier>? <typeParameters>?
     ///       (('.' <identifier>)? <implementsClause>) | ('on' <type> '?'?)
     ///   `{'
@@ -1531,7 +1531,9 @@ impl<L: Listener> Parser<L> {
     /// This parses
     ///
     ///    'const'? <identifier> <typeParameters>?
+    /// ```text
     ///        ('.' <identifier>)? <formals> '{' <memberDeclaration>* '}'
+    /// ```
     ///
     /// Dart (line 3915): `Token parseExtensionTypeDeclaration( Token beginToken, Token token, Token? augmentToken, Token extensionKeyword, Token typeKeyword, )`
     pub fn parse_extension_type_declaration(

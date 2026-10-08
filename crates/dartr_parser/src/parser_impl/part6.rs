@@ -54,7 +54,7 @@ fn is_equality_operator(ty: TokenType) -> bool {
 impl<L: Listener> Parser<L> {
     /// Dart (line 10490): `Token parseBlock(Token token, BlockKind blockKind)`
     ///
-    /// ```
+    /// ```text
     /// block:
     ///   '{' statement* '}'
     /// ;
@@ -204,7 +204,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 10619): `Token parseAwaitExpression(Token token, bool allowCascades)`
     ///
-    /// ```
+    /// ```text
     /// awaitExpression:
     ///   'await' unaryExpression
     /// ;
@@ -233,7 +233,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 10648): `Token parseThrowExpression(Token token, bool allowCascades)`
     ///
-    /// ```
+    /// ```text
     /// throwExpression:
     ///   'throw' expression
     /// ;
@@ -274,7 +274,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 10678): `Token parseRethrowStatement(Token token)`
     ///
-    /// ```
+    /// ```text
     /// rethrowStatement:
     ///   'rethrow' ';'
     /// ;
@@ -290,7 +290,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 10705): `Token parseTryStatement(Token token)`
     ///
-    /// ```
+    /// ```text
     /// tryStatement:
     ///   'try' block (onPart+ finallyPart? | finallyPart)
     /// ;
@@ -458,7 +458,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 10856): `Token parseSwitchStatement(Token token)`
     ///
-    /// ```
+    /// ```text
     /// switchStatement:
     ///   'switch' parenthesizedExpression switchBlock
     /// ;
@@ -480,7 +480,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 10876): `Token parseSwitchBlock(Token token)`
     ///
-    /// ```
+    /// ```text
     /// switchBlock:
     ///   '{' switchCase* defaultCase? '}'
     /// ;
@@ -648,7 +648,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 11028): `Token parseBreakStatement(Token token)`
     ///
-    /// ```
+    /// ```text
     /// breakStatement:
     ///   'break' identifier? ';'
     /// ;
@@ -672,7 +672,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 11048): `Token parseAssert(Token token, Assert kind)`
     ///
-    /// ```
+    /// ```text
     /// assertion:
     ///   'assert' '(' expression (',' expression)? ','? ')'
     /// ;
@@ -737,7 +737,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 11113): `Token parseAssertStatement(Token token)`
     ///
-    /// ```
+    /// ```text
     /// assertStatement:
     ///   assertion ';'
     /// ;
@@ -751,7 +751,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 11124): `Token parseContinueStatement(Token token)`
     ///
-    /// ```
+    /// ```text
     /// continueStatement:
     ///   'continue' identifier? ';'
     /// ;
@@ -783,7 +783,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 11152): `Token parseEmptyStatement(Token token)`
     ///
-    /// ```
+    /// ```text
     /// emptyStatement:
     ///   ';'
     /// ;
@@ -1096,12 +1096,16 @@ impl<L: Listener> Parser<L> {
     /// logicalOrPattern      ::= logicalOrPattern ( '|' logicalAndPattern )?
     /// logicalAndPattern     ::= logicalAndPattern ( '&' relationalPattern )?
     /// relationalPattern     ::= ( equalityOperator | relationalOperator)
+    /// ```text
     ///                               relationalExpression
     ///                         | unaryPattern
+    /// ```
     /// unaryPattern          ::= castPattern
+    /// ```text
     ///                         | nullCheckPattern
     ///                         | nullAssertPattern
     ///                         | primaryPattern
+    /// ```
     /// castPattern ::= primaryPattern 'as' type
     /// nullAssertPattern ::= primaryPattern '!'
     /// nullCheckPattern ::= primaryPattern '?'
@@ -1198,12 +1202,14 @@ impl<L: Listener> Parser<L> {
     /// Dart (line 11658): `Token parsePrimaryPattern(Token token, PatternContext patternContext)`
     ///
     /// primaryPattern        ::= constantPattern
+    /// ```text
     ///                         | variablePattern
     ///                         | parenthesizedPattern
     ///                         | listPattern
     ///                         | mapPattern
     ///                         | recordPattern
     ///                         | objectPattern
+    /// ```
     /// listPattern ::= typeArguments? '[' patterns? ']'
     /// mapPattern        ::= typeArguments? '{' mapPatternEntries? '}'
     /// mapPatternEntries ::= mapPatternEntry ( ',' mapPatternEntry )* ','?
@@ -1214,6 +1220,7 @@ impl<L: Listener> Parser<L> {
     /// patternFields         ::= patternField ( ',' patternField )* ','?
     /// patternField          ::= ( identifier? ':' )? pattern
     /// constantPattern ::= booleanLiteral
+    /// ```text
     ///                   | nullLiteral
     ///                   | numericLiteral
     ///                   | stringLiteral
@@ -1223,6 +1230,7 @@ impl<L: Listener> Parser<L> {
     ///                   | 'const' typeArguments? '[' elements? ']'
     ///                   | 'const' typeArguments? '{' elements? '}'
     ///                   | 'const' '(' expression ')'
+    /// ```
     /// objectPattern ::= typeName typeArguments? '(' patternFields? ')'
     pub fn parse_primary_pattern(
         &mut self,
@@ -1900,7 +1908,9 @@ impl<L: Listener> Parser<L> {
     /// by `=`.  This occurs in the following grammar productions:
     ///
     /// patternVariableDeclaration ::= ( 'final' | 'var' ) outerPattern '='
+    /// ```text
     ///                                expression
+    /// ```
     /// patternAssignment ::= outerPattern '=' expression
     pub fn looks_like_outer_pattern_equals(&mut self, token: TokenId) -> bool {
         let after_outer_pattern = self.skip_outer_pattern(token);
@@ -1916,10 +1926,12 @@ impl<L: Listener> Parser<L> {
     /// next construct after [token] is not an outer pattern, returns `null`.
     ///
     /// outerPattern ::= parenthesizedPattern
+    /// ```text
     ///                | listPattern
     ///                | mapPattern
     ///                | recordPattern
     ///                | objectPattern
+    /// ```
     pub fn skip_outer_pattern(&mut self, token: TokenId) -> Option<TokenId> {
         let mut token = token;
         let mut next = self.next(token);
@@ -1979,7 +1991,9 @@ impl<L: Listener> Parser<L> {
     /// Dart (line 12353): `Token parsePatternVariableDeclarationStatement( Token keyword, Token start, Token varOrFinal, )`
     ///
     /// patternVariableDeclaration ::= ( 'final' | 'var' ) outerPattern '='
+    /// ```text
     ///                                expression
+    /// ```
     pub fn parse_pattern_variable_declaration_statement(
         &mut self,
         keyword: TokenId,
@@ -2026,8 +2040,10 @@ impl<L: Listener> Parser<L> {
     /// Dart (line 12393): `Token parseSwitchExpression(Token token)`
     ///
     /// switchExpression    ::= 'switch' '(' expression ')' '{'
+    /// ```text
     ///                         switchExpressionCase ( ',' switchExpressionCase )*
     ///                             ','? '}'
+    /// ```
     /// switchExpressionCase    ::= guardedPattern '=>' expression
     pub fn parse_switch_expression(&mut self, token: TokenId) -> TokenId {
         let switch_keyword = self.next(token);

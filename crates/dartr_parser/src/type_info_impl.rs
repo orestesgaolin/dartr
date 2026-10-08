@@ -1333,7 +1333,9 @@ impl ComplexTypeInfo {
     /// Given
     ///
     ///   `(` unchecked content assumed to be RecordType `)`
+    /// ```text
     ///      `Function` non-identifier
+    /// ```
     ///
     /// compute the type and return the receiver or one of the [TypeInfo]
     /// constants.
@@ -1383,7 +1385,9 @@ impl ComplexTypeInfo {
     /// Given
     ///
     ///   `(` unchecked content assumed to be RecordType `)` `?`
+    /// ```text
     ///      `Function` non-identifier
+    /// ```
     ///
     /// compute the type and return the receiver or one of the [TypeInfo]
     /// constants.

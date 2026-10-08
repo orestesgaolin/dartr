@@ -184,7 +184,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 6814): `Token parseYieldStatement(Token token)`
     ///
-    /// ```
+    /// ```text
     /// yieldStatement:
     ///   'yield' expression? ';'
     /// ;
@@ -217,7 +217,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 6842): `Token parseReturnStatement(Token token)`
     ///
-    /// ```
+    /// ```text
     /// returnStatement:
     ///   'return' expression? ';'
     /// ;
@@ -246,7 +246,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 6865): `Token parseLabel(Token token)`
     ///
-    /// ```
+    /// ```text
     /// label:
     ///   identifier ':'
     /// ;
@@ -262,7 +262,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 6878): `Token parseLabeledStatement(Token token)`
     ///
-    /// ```
+    /// ```text
     /// statement:
     ///   label* nonLabelledStatement
     /// ;
@@ -289,7 +289,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 6904): `Token parseExpressionStatement(Token token)`
     ///
-    /// ```
+    /// ```text
     /// expressionStatement:
     ///   expression? ';'
     /// ;

@@ -9,8 +9,35 @@
 //! counterpart is `tools/oracle/bin/parse_bench.dart` (compile it with
 //! `dart compile exe` and run it on the same directories).
 
+use std::alloc::{GlobalAlloc, Layout, System};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
+
+/// Counts heap allocations, to check that parsing does not allocate per
+/// event.
+struct CountingAllocator;
+
+static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
+
+unsafe impl GlobalAlloc for CountingAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
+        unsafe { System.alloc(layout) }
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        unsafe { System.dealloc(ptr, layout) }
+    }
+
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
+        unsafe { System.realloc(ptr, layout, new_size) }
+    }
+}
+
+#[global_allocator]
+static GLOBAL: CountingAllocator = CountingAllocator;
 
 use dartr_parser::{Listener, parse_for_analyzer};
 
@@ -59,11 +86,19 @@ fn run() {
         .collect();
     let bytes: usize = sources.iter().map(|s| s.len()).sum();
 
-    // Warm up.
+    // Warm up, and count the allocations of scan + parse and of the scan
+    // alone.
     let mut tokens = 0usize;
+    let before = ALLOCATIONS.load(Ordering::Relaxed);
     for s in &sources {
         tokens += parse_for_analyzer(s, NoopListener).tokens.len();
     }
+    let parse_allocations = ALLOCATIONS.load(Ordering::Relaxed) - before;
+    let before = ALLOCATIONS.load(Ordering::Relaxed);
+    for s in &sources {
+        std::hint::black_box(dartr_syntax::scan_for_analyzer(s));
+    }
+    let scan_allocations = ALLOCATIONS.load(Ordering::Relaxed) - before;
 
     let mut best = f64::MAX;
     let mut total = 0.0;
@@ -81,6 +116,13 @@ fn run() {
     let mean = total / iterations as f64;
     println!("files:      {}", sources.len());
     println!("source:     {:.2} MB, {} tokens (arena entries incl. comments)", mb, tokens);
+    println!(
+        "allocs:     {} scan + parse, {} scan only ({} in the parser for {} tokens)",
+        parse_allocations,
+        scan_allocations,
+        parse_allocations.saturating_sub(scan_allocations),
+        tokens
+    );
     println!("iterations: {iterations}");
     println!(
         "mean:       {:.1} ms/iteration, {:.1} MB/s",

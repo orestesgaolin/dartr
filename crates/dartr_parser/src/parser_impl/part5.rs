@@ -48,7 +48,7 @@ impl<L: Listener> Parser<L> {
     /// This method parses the portion of a list literal starting with the left
     /// square bracket.
     ///
-    /// ```
+    /// ```text
     /// listLiteral:
     ///   'const'? typeArguments? '[' (elementList ','?)? ']'
     /// ;
@@ -383,9 +383,13 @@ impl<L: Listener> Parser<L> {
     /// Where
     ///   genericListLiteral ::= typeArguments '[' (expressionList ','?)? ']'
     ///   genericMapLiteral ::=
+    /// ```text
     ///       typeArguments '{' (mapLiteralEntry (',' mapLiteralEntry)* ','?)? '}'
+    /// ```
     ///   genericFunctionLiteral ::=
+    /// ```text
     ///       typeParameters formalParameterList functionBody
+    /// ```
     /// Provide token for [constKeyword] if preceded by 'const', null if not.
     pub fn parse_literal_list_set_map_or_function(
         &mut self,
@@ -428,7 +432,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 8787): `Token parseMapLiteralEntry(Token token)`
     ///
-    /// ```
+    /// ```text
     /// mapLiteralEntry:
     ///   expression ':' expression |
     ///   'if' '(' expression ')' mapLiteralEntry ( 'else' mapLiteralEntry )? |
@@ -538,7 +542,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 8880): `Token parseNewExpression(Token token)`
     ///
-    /// ```
+    /// ```text
     /// newExpression:
     ///   'new' type ('.' identifier)? arguments
     /// ;
@@ -667,7 +671,7 @@ impl<L: Listener> Parser<L> {
     /// This method parses a list or map literal that is known to start with the
     /// keyword 'const'.
     ///
-    /// ```
+    /// ```text
     /// listLiteral:
     ///   'const'? typeArguments? '[' (expressionList ','?)? ']'
     /// ;
@@ -799,7 +803,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 9145): `Token parseLiteralInt(Token token)`
     ///
-    /// ```
+    /// ```text
     /// intLiteral:
     ///   integer
     /// ;
@@ -821,7 +825,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 9170): `Token parseLiteralDouble(Token token)`
     ///
-    /// ```
+    /// ```text
     /// doubleLiteral:
     ///   double
     /// ;
@@ -843,7 +847,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 9189): `Token parseLiteralString(Token token)`
     ///
-    /// ```
+    /// ```text
     /// stringLiteral:
     ///   (multilineString | singleLineString)+
     /// ;
@@ -870,7 +874,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 9212): `Token parseLiteralSymbol(Token token)`
     ///
-    /// ```
+    /// ```text
     /// symbolLiteral:
     ///   '#' (operator | (identifier ('.' identifier)*))
     /// ;
@@ -960,7 +964,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 9297): `Token parseLiteralBool(Token token)`
     ///
-    /// ```
+    /// ```text
     /// booleanLiteral:
     ///   'true' |
     ///   'false'
@@ -975,7 +979,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 9309): `Token parseLiteralNull(Token token)`
     ///
-    /// ```
+    /// ```text
     /// nullLiteral:
     ///   'null'
     /// ;
@@ -1154,7 +1158,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 9479): `Token parseArguments(Token token)`
     ///
-    /// ```
+    /// ```text
     /// arguments:
     ///   '(' (argumentList ','?)? ')'
     /// ;
@@ -1307,7 +1311,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 9610): `Token parseIsOperatorRest(Token token)`
     ///
-    /// ```
+    /// ```text
     /// typeTest::
     ///   'is' '!'? type
     /// ;
@@ -1381,7 +1385,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 9673): `Token parseAsOperatorRest(Token token)`
     ///
-    /// ```
+    /// ```text
     /// typeCast:
     ///   'as' type
     /// ;
@@ -1856,7 +1860,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 10096): `Token parseIfStatement(Token token)`
     ///
-    /// ```
+    /// ```text
     /// ifStatement:
     ///   'if' '(' expression ')' statement ('else' statement)?
     /// ;
@@ -1885,7 +1889,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 10137): `Token parseForStatement(Token token, Token? awaitToken)`
     ///
-    /// ```
+    /// ```text
     /// forStatement:
     ///   'await'? 'for' '(' forLoopParts ')' statement
     /// ;
@@ -2064,7 +2068,7 @@ impl<L: Listener> Parser<L> {
     /// This method parses the portion of the forLoopParts that starts with the
     /// first semicolon (the one that terminates the forInitializerStatement).
     ///
-    /// ```
+    /// ```text
     ///  forLoopParts:
     ///      localVariableDeclaration ';' expression? ';' expressionList?
     ///    | expression? ';' expression? ';' expressionList?
@@ -2143,7 +2147,7 @@ impl<L: Listener> Parser<L> {
     /// keyword 'in'. For the sake of recovery, we accept a colon in place of the
     /// keyword.
     ///
-    /// ```
+    /// ```text
     ///  forLoopParts:
     ///      localVariableDeclaration ';' expression? ';' expressionList?
     ///    | expression? ';' expression? ';' expressionList?
@@ -2240,7 +2244,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 10441): `Token parseWhileStatement(Token token)`
     ///
-    /// ```
+    /// ```text
     /// whileStatement:
     ///   'while' '(' expression ')' statement
     /// ;
@@ -2264,7 +2268,7 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 10461): `Token parseDoWhileStatement(Token token)`
     ///
-    /// ```
+    /// ```text
     /// doStatement:
     ///   'do' statement 'while' '(' expression ')' ';'
     /// ;

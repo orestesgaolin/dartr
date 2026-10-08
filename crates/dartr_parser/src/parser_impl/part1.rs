@@ -167,7 +167,7 @@ impl<L: Listener> Parser<L> {
         self.next(token)
     }
 
-    /// ```
+    /// ```text
     /// topLevelDefinition:
     ///   classDefinition |
     ///   enumType |
@@ -572,7 +572,7 @@ impl<L: Listener> Parser<L> {
         false
     }
 
-    /// ```
+    /// ```text
     /// libraryAugmentationDirective:
     ///   'augment' 'library' uri ';'
     /// ;
@@ -598,7 +598,7 @@ impl<L: Listener> Parser<L> {
         semicolon
     }
 
-    /// ```
+    /// ```text
     /// libraryDirective:
     ///   'library' qualified? ';'
     /// ;
@@ -627,7 +627,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// importPrefix:
     ///   'deferred'? 'as' identifier
     /// ;
@@ -656,7 +656,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// importDirective:
     ///   'import' uri ('if' '(' test ')' uri)* importPrefix? combinator* ';'
     /// ;
@@ -823,7 +823,7 @@ impl<L: Listener> Parser<L> {
         semicolon.unwrap()
     }
 
-    /// ```
+    /// ```text
     /// conditionalUris:
     ///   conditionalUri*
     /// ;
@@ -843,7 +843,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// conditionalUri:
     ///   'if' '(' dottedName ('==' literalString)? ')' uri
     /// ;
@@ -889,7 +889,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// dottedName:
     ///   identifier ('.' identifier)*
     /// ;
@@ -909,7 +909,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// exportDirective:
     ///   'export' uri conditional-uris* combinator* ';'
     /// ;
@@ -929,7 +929,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// combinators:
     ///   (hideCombinator | showCombinator)*
     /// ;
@@ -957,7 +957,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// hideCombinator:
     ///   'hide' identifierList
     /// ;
@@ -973,7 +973,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// showCombinator:
     ///   'show' identifierList
     /// ;
@@ -989,7 +989,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// identifierList:
     ///   identifier (',' identifier)*
     /// ;
@@ -1008,7 +1008,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// typeList:
     ///   type (',' type)*
     /// ;
@@ -1064,7 +1064,7 @@ impl<L: Listener> Parser<L> {
         }
     }
 
-    /// ```
+    /// ```text
     /// partDirective:
     ///   'part' uri ';'
     /// ;
@@ -1080,7 +1080,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// partOfDirective:
     ///   'part' 'of' (qualified | uri) ';'
     /// ;
@@ -1109,7 +1109,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// metadata:
     ///   annotation*
     /// ;
@@ -1129,7 +1129,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// <metadata> ::= (‘@’ <metadatum>)*
     /// <metadatum> ::= <identifier>
     ///   | <qualifiedName>
@@ -1193,7 +1193,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// scriptTag:
     ///   '#!' (˜NEWLINE)* NEWLINE
     /// ;
@@ -1207,7 +1207,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// typeAlias:
     ///   metadata 'typedef' typeAliasBody |
     ///   metadata 'typedef' identifier typeParameters? '=' functionType ';'
@@ -1551,14 +1551,18 @@ impl<L: Listener> Parser<L> {
     /// Parse a record type similarly as a formal parameter list of a function.
     ///
     /// recordType          ::= '(' recordTypeFields ',' recordTypeNamedFields ')'
+    /// ```text
     ///                       | '(' recordTypeFields ','? ')'
     ///                       | '(' recordTypeNamedFields? ')'
+    /// ```
     ///
     /// recordTypeFields      ::= recordTypeField ( ',' recordTypeField )*
     /// recordTypeField       ::= metadata type identifier?
     ///
     /// recordTypeNamedFields ::= '{' recordTypeNamedField
+    /// ```text
     ///                           ( ',' recordTypeNamedField )* ','? '}'
+    /// ```
     /// recordTypeNamedField  ::= metadata type identifier
     ///
     /// Dart (line 1727): `Token parseRecordType( Token start, Token token, bool isQuestionMarkPartOfType, )`
@@ -1886,7 +1890,7 @@ impl<L: Listener> Parser<L> {
         }
     }
 
-    /// ```
+    /// ```text
     /// normalFormalParameter:
     ///   functionFormalParameter |
     ///   fieldFormalParameter |
@@ -2291,7 +2295,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// defaultFormalParameter:
     ///   normalFormalParameter ('=' expression)?
     /// ;
@@ -2346,7 +2350,7 @@ impl<L: Listener> Parser<L> {
         token
     }
 
-    /// ```
+    /// ```text
     /// defaultNamedParameter:
     ///   normalFormalParameter ('=' expression)? |
     ///   normalFormalParameter (':' expression)?
