@@ -365,14 +365,14 @@ fn collect_allowed_string_lines(
                 .get(ctx.ast.cast::<SimpleStringLiteral>(node).unwrap());
             let start = line_index_at(ctx, ctx.ast.offset(node));
             let end = line_index_at(ctx, ctx.ast.end(node));
-            if start != end {
+            let lexeme = token_text(ctx, literal.literal);
+            let quoted = lexeme.strip_prefix('r').unwrap_or(lexeme);
+            if quoted.starts_with("'''") || quoted.starts_with("\"\"\"") {
                 allowed.extend(start..=end);
-            } else {
-                let lexeme = token_text(ctx, literal.literal);
-                if string_piece_looks_like_uri_or_path(&literal.value, lexeme.starts_with('r')) {
-                    allowed.insert(start);
-                }
+            } else if string_piece_looks_like_uri_or_path(&literal.value, lexeme.starts_with('r')) {
+                allowed.insert(start);
             }
+            return;
         }
         NodeKind::StringInterpolation => {
             let interpolation = ctx
@@ -380,10 +380,12 @@ fn collect_allowed_string_lines(
                 .get(ctx.ast.cast::<StringInterpolation>(node).unwrap());
             let start = line_index_at(ctx, ctx.ast.offset(node));
             let end = line_index_at(ctx, ctx.ast.end(node));
-            if start != end {
+            let first_lexeme = token_text(ctx, ctx.ast.begin_token(node));
+            let quoted = first_lexeme.strip_prefix('r').unwrap_or(first_lexeme);
+            if quoted.starts_with("'''") || quoted.starts_with("\"\"\"") {
                 allowed.extend(start..=end);
             } else {
-                let is_raw = token_text(ctx, ctx.ast.begin_token(node)).starts_with('r');
+                let is_raw = first_lexeme.starts_with('r');
                 let has_path = ctx.ast.list(interpolation.elements).iter().any(|element| {
                     ctx.ast
                         .cast::<InterpolationString>(element.raw())
@@ -395,6 +397,10 @@ fn collect_allowed_string_lines(
                     allowed.insert(start);
                 }
             }
+            // The upstream visitor overrides visitStringInterpolation without
+            // visiting its children. String literals inside interpolation
+            // expressions therefore do not exempt the outer source line.
+            return;
         }
         _ => {}
     }
@@ -421,10 +427,10 @@ fn collect_allowed_comment_lines(
         while let Some(comment_id) = comment.get() {
             let content = token_text(ctx, comment_id);
             let base_line = line_index_at(ctx, ctx.ast.tokens.offset(comment_id));
-            if let Some(body) = content.strip_prefix("//") {
-                if body.trim_start().starts_with("ignore:") {
-                    allowed.insert(base_line);
-                }
+            if let Some(body) = content.strip_prefix("//")
+                && body.trim_start().starts_with("ignore:")
+            {
+                allowed.insert(base_line);
             }
             let body = if let Some(body) = content.strip_prefix("///") {
                 body
@@ -519,16 +525,17 @@ fn missing_code_block_language_in_doc_comment(
 ) {
     let comment = ctx.ast.get(ctx.ast.cast::<Comment>(node).unwrap());
     for block in &comment.code_blocks {
-        if block.info_string.is_none() && block.ty == CodeBlockType::Fenced {
-            if let Some(line) = block.lines.first() {
-                ctx.report_offset(
-                    out,
-                    &diag::MISSING_CODE_BLOCK_LANGUAGE_IN_DOC_COMMENT,
-                    line.offset as usize,
-                    line.length as usize,
-                    &[],
-                );
-            }
+        if block.info_string.is_none()
+            && block.ty == CodeBlockType::Fenced
+            && let Some(line) = block.lines.first()
+        {
+            ctx.report_offset(
+                out,
+                &diag::MISSING_CODE_BLOCK_LANGUAGE_IN_DOC_COMMENT,
+                line.offset as usize,
+                line.length as usize,
+                &[],
+            );
         }
     }
 }
@@ -664,10 +671,10 @@ fn non_constant_identifier_names(ctx: &LinterContext<'_>, node: NodeId, out: &mu
             let n = ctx
                 .ast
                 .get(ctx.ast.cast::<ConstructorDeclaration>(node).unwrap());
-            if n.augment_keyword.is_none() {
-                if let Some(name) = n.name {
-                    check_non_constant_name(ctx, name, true, out);
-                }
+            if n.augment_keyword.is_none()
+                && let Some(name) = n.name
+            {
+                check_non_constant_name(ctx, name, true, out);
             }
         }
         NodeKind::DeclaredVariablePattern => {
@@ -702,10 +709,10 @@ fn non_constant_identifier_names(ctx: &LinterContext<'_>, node: NodeId, out: &mu
                 .ast
                 .get(ctx.ast.cast::<FormalParameterList>(node).unwrap());
             for &parameter in ctx.ast.list(n.parameters) {
-                if let Some(p) = ctx.ast.cast::<RegularFormalParameter>(parameter.raw()) {
-                    if let Some(name) = ctx.ast.get(p).name {
-                        check_non_constant_name(ctx, name, true, out);
-                    }
+                if let Some(p) = ctx.ast.cast::<RegularFormalParameter>(parameter.raw())
+                    && let Some(name) = ctx.ast.get(p).name
+                {
+                    check_non_constant_name(ctx, name, true, out);
                 }
             }
         }
@@ -923,12 +930,11 @@ fn prefer_expression_function_bodies(
         .ast
         .get(ctx.ast.cast::<BlockFunctionBody>(node).unwrap());
     let statements = ctx.ast.list(ctx.ast.get(body.block).statements);
-    if statements.len() == 1 {
-        if let Some(ret) = ctx.ast.cast::<ReturnStatement>(statements[0].raw()) {
-            if ctx.ast.get(ret).expression.is_some() {
-                ctx.report_node(out, &diag::PREFER_EXPRESSION_FUNCTION_BODIES, node, &[]);
-            }
-        }
+    if statements.len() == 1
+        && let Some(ret) = ctx.ast.cast::<ReturnStatement>(statements[0].raw())
+        && ctx.ast.get(ret).expression.is_some()
+    {
+        ctx.report_node(out, &diag::PREFER_EXPRESSION_FUNCTION_BODIES, node, &[]);
     }
 }
 

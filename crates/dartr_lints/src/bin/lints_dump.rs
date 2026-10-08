@@ -18,6 +18,22 @@ fn normalized(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 fn main() {
+    if std::env::args().any(|arg| arg == "--metadata") {
+        let rules: Vec<_> = dartr_lints::ALL_RULES.iter().map(|rule| {
+            json!({
+                "name": rule.name,
+                "description": rule.description,
+                "state": format!("{:?}", rule.state.kind).to_ascii_lowercase(),
+                "since": rule.state.since.map(|(a,b,c)| format!("{a}.{b}.{c}")),
+                "replacedBy": rule.state.replaced_by,
+                "canUseParsedResult": rule.can_use_parsed_result(),
+                "incompatibleRules": rule.incompatible_rules,
+                "diagnosticCodes": rule.diagnostic_codes().map(|code| code.unique_name).collect::<Vec<_>>(),
+            })
+        }).collect();
+        println!("{}", json!(rules));
+        return;
+    }
     if std::env::args().any(|arg| arg == "--list") {
         let registry = Registry::builtin();
         let rules: Vec<_> = implemented_rules().into_iter().map(|name| {
@@ -67,15 +83,15 @@ fn main() {
             if unit.ast.is::<PartOfDirective>(directive) {
                 is_part[i] = true;
             }
-            if let Some(part) = unit.ast.cast::<PartDirective>(directive) {
-                if let Some(uri) = unit.ast.cast::<SimpleStringLiteral>(unit.ast[part].uri) {
-                    let path = Path::new(paths[i])
-                        .parent()
-                        .unwrap_or(Path::new(""))
-                        .join(unit.ast[uri].value.as_ref());
-                    if let Some(&index) = path_indices.get(&normalized(&path)) {
-                        parts[i].push(index);
-                    }
+            if let Some(part) = unit.ast.cast::<PartDirective>(directive)
+                && let Some(uri) = unit.ast.cast::<SimpleStringLiteral>(unit.ast[part].uri)
+            {
+                let path = Path::new(paths[i])
+                    .parent()
+                    .unwrap_or(Path::new(""))
+                    .join(unit.ast[uri].value.as_ref());
+                if let Some(&index) = path_indices.get(&normalized(&path)) {
+                    parts[i].push(index);
                 }
             }
         }

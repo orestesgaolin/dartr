@@ -111,7 +111,7 @@ impl<'a> LinterContext<'a> {
             NodeKind::BooleanLiteral
             | NodeKind::SimpleIdentifier
             | NodeKind::SimpleStringLiteral
-            | NodeKind::EmptyFunctionBody => self
+            | NodeKind::EmptyStatement => self
                 .ast
                 .tokens
                 .get(self.ast.begin_token(node))
@@ -208,8 +208,10 @@ pub fn lint_library(units: &[RuleContextUnit<'_>], enabled: &[&str]) -> Vec<Vec<
     let mut registry = RuleVisitorRegistry::default();
     let enabled: IndexSet<_> = enabled.iter().map(|s| s.to_ascii_lowercase()).collect();
     let defining_context = context(0);
-    for rule in &enabled {
-        rules::register(rule, &mut registry, &defining_context);
+    for rule in ALL_RULES {
+        if enabled.contains(rule.name) {
+            rules::register(rule.name, &mut registry, &defining_context);
+        }
     }
     let visitor = AnalysisRuleVisitor::new(&registry);
     let mut out = Vec::with_capacity(units.len());

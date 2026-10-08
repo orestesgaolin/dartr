@@ -34,11 +34,17 @@ pub type AbstractAnalysisRule = AnalysisRule;
 pub type MultiAnalysisRule = AnalysisRule;
 impl AnalysisRule {
     pub fn can_use_parsed_result(&self) -> bool {
+        self.can_use_parsed_result
+    }
+    pub fn is_implemented(&self) -> bool {
         crate::rules::implemented_rules().contains(&self.name)
     }
     pub fn diagnostic_codes(&self) -> impl Iterator<Item = &'static DiagnosticCode> + '_ {
-        all_codes().iter().copied().filter(|code| {
-            code.origin == Origin::Linter && self.diagnostic_names.contains(&code.camel_case_name)
+        self.diagnostic_names.iter().filter_map(|name| {
+            all_codes()
+                .iter()
+                .copied()
+                .find(|code| code.origin == Origin::Linter && code.camel_case_name == *name)
         })
     }
 }
@@ -127,10 +133,11 @@ impl Registry {
         }
     }
     pub fn rules(&self) -> impl Iterator<Item = &'static AnalysisRule> + '_ {
-        self.lint_rules
-            .values()
-            .chain(self.warning_rules.values())
-            .copied()
+        let mut rules = IndexMap::new();
+        for rule in self.lint_rules.values().chain(self.warning_rules.values()) {
+            rules.insert(rule.name, *rule);
+        }
+        rules.into_values()
     }
     pub fn enabled<'a>(
         &'a self,

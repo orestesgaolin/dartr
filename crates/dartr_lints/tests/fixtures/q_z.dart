@@ -45,6 +45,10 @@ void throwCases() {
 /// <Tasty> is unintended HTML; <code>code</code> is valid HTML.
 void documentationCase() {}
 
+/// `<name>: <description>
+/// Balanced `<code>` and an <Unintended> tag.
+void documentationCodeSpanCases() {}
+
 void stringAndCollectionCases(String value) {
   print('${value}');
   print('${value}Suffix');
@@ -58,7 +62,13 @@ void stringAndCollectionCases(String value) {
   final unnecessaryEscape = 'double: \"';
   final necessaryEscape = 'single: \'';
   final preferRaw = 'dollar: \$ and slash: \\';
-  print((unnecessaryRaw, necessaryRaw, unnecessaryEscape, necessaryEscape, preferRaw));
+  print((
+    unnecessaryRaw,
+    necessaryRaw,
+    unnecessaryEscape,
+    necessaryEscape,
+    preferRaw,
+  ));
 
   final Object? nullable = value.isEmpty ? null : value;
   print(nullable ?? null);
@@ -67,11 +77,13 @@ void stringAndCollectionCases(String value) {
 
 enum EnumBad {
   a;
+
   const EnumBad();
 }
 
 enum EnumGood {
   a;
+
   EnumGood();
 }
 
@@ -91,6 +103,17 @@ void localFinalCases() {
   final withoutType = 2;
   var allowed = 3;
   print((withType, withoutType, allowed));
+}
+
+void patternAndForFinalCases() {
+  final (int left, int right) = (1, 2);
+  for (final int value in <int>[1]) {
+    print(value);
+  }
+  var collectionValues = <int>[
+    for (final int value in <int>[1]) value,
+  ];
+  print((left, right, collectionValues));
 }
 
 Object constructionCases() {

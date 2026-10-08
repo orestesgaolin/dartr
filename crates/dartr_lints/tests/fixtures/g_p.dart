@@ -47,6 +47,9 @@ text starts after the newline
 and continues here''';
 final ordinaryLongLine = 'This ordinary source line is intentionally made longer than eighty characters for the line-length rule.';
 final escapedNewlineLongLine = 'This escaped newline does not make the source line exempt from the eighty character limit.\n';
+final nestedUriInInterpolation = 'A nested URI in an interpolation expression does not exempt this long source line: ${true ? 'https://example.com' : ''}';
+final splitInterpolation = "${true ? 'first part'
+        'This non-multiline interpolation spans source lines, and this nested line still exceeds eighty characters.' : ''}";
 final allowedLongUri = 'https://example.com/a/very/long/path/that/is/intentionally/longer/than/eighty/source/characters';
 
 typedef int OldStyle<T>(T value);

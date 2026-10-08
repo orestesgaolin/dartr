@@ -68,7 +68,12 @@ pub static ALL_RULES: &[AnalysisRule] = &[
             "alwaysSpecifyTypesSplitToTypes",
         ],
         can_use_parsed_result: false,
-        incompatible_rules: &[],
+        incompatible_rules: &[
+            "avoid_types_on_closure_parameters",
+            "omit_local_variable_types",
+            "omit_obvious_local_variable_types",
+            "omit_obvious_property_types",
+        ],
     },
     AnalysisRule {
         name: "always_use_package_imports",
@@ -80,7 +85,7 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         },
         diagnostic_names: &["alwaysUsePackageImports"],
         can_use_parsed_result: false,
-        incompatible_rules: &[],
+        incompatible_rules: &["prefer_relative_imports"],
     },
     AnalysisRule {
         name: "analyzer_element_model_tracking",
@@ -306,7 +311,7 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         },
         diagnostic_names: &["avoidFinalParameters"],
         can_use_parsed_result: false,
-        incompatible_rules: &[],
+        incompatible_rules: &["prefer_final_parameters"],
     },
     AnalysisRule {
         name: "avoid_function_literals_in_foreach_calls",
@@ -612,7 +617,7 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         },
         diagnostic_names: &["avoidTypesOnClosureParameters"],
         can_use_parsed_result: false,
-        incompatible_rules: &[],
+        incompatible_rules: &["always_specify_types"],
     },
     AnalysisRule {
         name: "avoid_unnecessary_containers",
@@ -855,6 +860,18 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         incompatible_rules: &[],
     },
     AnalysisRule {
+        name: "depend_on_referenced_packages",
+        description: "Depend on referenced packages.",
+        state: RuleState {
+            kind: RuleStateType::Stable,
+            since: None,
+            replaced_by: None,
+        },
+        diagnostic_names: &["dependOnReferencedPackages"],
+        can_use_parsed_result: false,
+        incompatible_rules: &[],
+    },
+    AnalysisRule {
         name: "deprecated_consistency",
         description: "Missing deprecated annotation.",
         state: RuleState {
@@ -927,18 +944,6 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         incompatible_rules: &[],
     },
     AnalysisRule {
-        name: "do_not_use_environment",
-        description: "Do not use environment declared variables.",
-        state: RuleState {
-            kind: RuleStateType::Stable,
-            since: None,
-            replaced_by: None,
-        },
-        diagnostic_names: &["doNotUseEnvironment"],
-        can_use_parsed_result: false,
-        incompatible_rules: &[],
-    },
-    AnalysisRule {
         name: "document_ignores",
         description: "Document ignore comments.",
         state: RuleState {
@@ -947,6 +952,18 @@ pub static ALL_RULES: &[AnalysisRule] = &[
             replaced_by: None,
         },
         diagnostic_names: &["documentIgnores"],
+        can_use_parsed_result: false,
+        incompatible_rules: &[],
+    },
+    AnalysisRule {
+        name: "do_not_use_environment",
+        description: "Do not use environment declared variables.",
+        state: RuleState {
+            kind: RuleStateType::Stable,
+            since: None,
+            replaced_by: None,
+        },
+        diagnostic_names: &["doNotUseEnvironment"],
         can_use_parsed_result: false,
         incompatible_rules: &[],
     },
@@ -964,7 +981,7 @@ pub static ALL_RULES: &[AnalysisRule] = &[
     },
     AnalysisRule {
         name: "empty_constructor_bodies",
-        description: "",
+        description: "Use `;` instead of `{}` for empty constructor bodies.",
         state: RuleState {
             kind: RuleStateType::Stable,
             since: None,
@@ -976,7 +993,7 @@ pub static ALL_RULES: &[AnalysisRule] = &[
     },
     AnalysisRule {
         name: "empty_container_bodies",
-        description: "",
+        description: "Use `;` instead of `{}` for empty container bodies.",
         state: RuleState {
             kind: RuleStateType::Stable,
             since: Some((3, 13, 0)),
@@ -1143,27 +1160,6 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         incompatible_rules: &[],
     },
     AnalysisRule {
-        name: "invalid_runtime_check_with_js_interop_types",
-        description: "Avoid runtime type tests with JS interop types where the result may not be platform-consistent.",
-        state: RuleState {
-            kind: RuleStateType::Stable,
-            since: None,
-            replaced_by: None,
-        },
-        diagnostic_names: &[
-            "invalidRuntimeCheckWithJsInteropTypesCatchClauseJsInteropType",
-            "invalidRuntimeCheckWithJsInteropTypesDartAsJs",
-            "invalidRuntimeCheckWithJsInteropTypesDartIsJs",
-            "invalidRuntimeCheckWithJsInteropTypesJsAsDart",
-            "invalidRuntimeCheckWithJsInteropTypesJsAsIncompatibleJs",
-            "invalidRuntimeCheckWithJsInteropTypesJsIsDart",
-            "invalidRuntimeCheckWithJsInteropTypesJsIsInconsistentJs",
-            "invalidRuntimeCheckWithJsInteropTypesJsIsUnrelatedJs",
-        ],
-        can_use_parsed_result: false,
-        incompatible_rules: &[],
-    },
-    AnalysisRule {
         name: "invariant_booleans",
         description: "Conditions should not unconditionally evaluate to `true` or to `false`.",
         state: RuleState {
@@ -1184,6 +1180,27 @@ pub static ALL_RULES: &[AnalysisRule] = &[
             replaced_by: None,
         },
         diagnostic_names: &[],
+        can_use_parsed_result: false,
+        incompatible_rules: &[],
+    },
+    AnalysisRule {
+        name: "invalid_runtime_check_with_js_interop_types",
+        description: "Avoid runtime type tests with JS interop types where the result may not be platform-consistent.",
+        state: RuleState {
+            kind: RuleStateType::Stable,
+            since: None,
+            replaced_by: None,
+        },
+        diagnostic_names: &[
+            "invalidRuntimeCheckWithJsInteropTypesCatchClauseJsInteropType",
+            "invalidRuntimeCheckWithJsInteropTypesDartAsJs",
+            "invalidRuntimeCheckWithJsInteropTypesDartIsJs",
+            "invalidRuntimeCheckWithJsInteropTypesJsAsDart",
+            "invalidRuntimeCheckWithJsInteropTypesJsAsIncompatibleJs",
+            "invalidRuntimeCheckWithJsInteropTypesJsIsDart",
+            "invalidRuntimeCheckWithJsInteropTypesJsIsInconsistentJs",
+            "invalidRuntimeCheckWithJsInteropTypesJsIsUnrelatedJs",
+        ],
         can_use_parsed_result: false,
         incompatible_rules: &[],
     },
@@ -1545,7 +1562,10 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         },
         diagnostic_names: &["omitLocalVariableTypes"],
         can_use_parsed_result: false,
-        incompatible_rules: &[],
+        incompatible_rules: &[
+            "always_specify_types",
+            "specify_nonobvious_local_variable_types",
+        ],
     },
     AnalysisRule {
         name: "omit_obvious_local_variable_types",
@@ -1557,7 +1577,7 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         },
         diagnostic_names: &["omitObviousLocalVariableTypes"],
         can_use_parsed_result: false,
-        incompatible_rules: &[],
+        incompatible_rules: &["always_specify_types"],
     },
     AnalysisRule {
         name: "omit_obvious_property_types",
@@ -1569,7 +1589,7 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         },
         diagnostic_names: &["omitObviousPropertyTypes"],
         can_use_parsed_result: false,
-        incompatible_rules: &[],
+        incompatible_rules: &["always_specify_types", "type_annotate_public_apis"],
     },
     AnalysisRule {
         name: "one_member_abstracts",
@@ -1612,10 +1632,22 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         description: "Provide doc comments for all public APIs.",
         state: RuleState {
             kind: RuleStateType::Removed,
-            since: None,
+            since: Some((3, 7, 0)),
             replaced_by: None,
         },
         diagnostic_names: &[],
+        can_use_parsed_result: false,
+        incompatible_rules: &[],
+    },
+    AnalysisRule {
+        name: "package_names",
+        description: "Use `lowercase_with_underscores` for package names.",
+        state: RuleState {
+            kind: RuleStateType::Stable,
+            since: None,
+            replaced_by: None,
+        },
+        diagnostic_names: &["packageNames"],
         can_use_parsed_result: false,
         incompatible_rules: &[],
     },
@@ -1753,7 +1785,7 @@ pub static ALL_RULES: &[AnalysisRule] = &[
     },
     AnalysisRule {
         name: "prefer_const_literals_to_create_immutables",
-        description: "",
+        description: "Prefer const literals as parameters of constructors on @immutable classes.",
         state: RuleState {
             kind: RuleStateType::Stable,
             since: None,
@@ -1801,7 +1833,7 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         },
         diagnostic_names: &["preferDoubleQuotes"],
         can_use_parsed_result: false,
-        incompatible_rules: &[],
+        incompatible_rules: &["prefer_single_quotes"],
     },
     AnalysisRule {
         name: "prefer_equal_for_default_values",
@@ -1852,7 +1884,7 @@ pub static ALL_RULES: &[AnalysisRule] = &[
             "preferFinalInForEachVariable",
         ],
         can_use_parsed_result: false,
-        incompatible_rules: &[],
+        incompatible_rules: &["unnecessary_final"],
     },
     AnalysisRule {
         name: "prefer_final_locals",
@@ -1864,7 +1896,7 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         },
         diagnostic_names: &["preferFinalLocals"],
         can_use_parsed_result: false,
-        incompatible_rules: &[],
+        incompatible_rules: &["unnecessary_final"],
     },
     AnalysisRule {
         name: "prefer_final_parameters",
@@ -1876,7 +1908,7 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         },
         diagnostic_names: &["preferFinalParameters"],
         can_use_parsed_result: false,
-        incompatible_rules: &[],
+        incompatible_rules: &["unnecessary_final", "avoid_final_parameters"],
     },
     AnalysisRule {
         name: "prefer_for_elements_to_map_fromiterable",
@@ -2097,7 +2129,7 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         },
         diagnostic_names: &["preferRelativeImports"],
         can_use_parsed_result: false,
-        incompatible_rules: &[],
+        incompatible_rules: &["always_use_package_imports"],
     },
     AnalysisRule {
         name: "prefer_single_quotes",
@@ -2109,7 +2141,7 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         },
         diagnostic_names: &["preferSingleQuotes"],
         can_use_parsed_result: false,
-        incompatible_rules: &[],
+        incompatible_rules: &["prefer_double_quotes"],
     },
     AnalysisRule {
         name: "prefer_spread_collections",
@@ -2159,54 +2191,6 @@ pub static ALL_RULES: &[AnalysisRule] = &[
             replaced_by: None,
         },
         diagnostic_names: &["provideDeprecationMessage"],
-        can_use_parsed_result: false,
-        incompatible_rules: &[],
-    },
-    AnalysisRule {
-        name: "depend_on_referenced_packages",
-        description: "Depend on referenced packages.",
-        state: RuleState {
-            kind: RuleStateType::Stable,
-            since: None,
-            replaced_by: None,
-        },
-        diagnostic_names: &["dependOnReferencedPackages"],
-        can_use_parsed_result: false,
-        incompatible_rules: &[],
-    },
-    AnalysisRule {
-        name: "package_names",
-        description: "Use `lowercase_with_underscores` for package names.",
-        state: RuleState {
-            kind: RuleStateType::Stable,
-            since: None,
-            replaced_by: None,
-        },
-        diagnostic_names: &["packageNames"],
-        can_use_parsed_result: false,
-        incompatible_rules: &[],
-    },
-    AnalysisRule {
-        name: "secure_pubspec_urls",
-        description: "Use secure urls in `pubspec.yaml`.",
-        state: RuleState {
-            kind: RuleStateType::Stable,
-            since: None,
-            replaced_by: None,
-        },
-        diagnostic_names: &["securePubspecUrls"],
-        can_use_parsed_result: false,
-        incompatible_rules: &[],
-    },
-    AnalysisRule {
-        name: "sort_pub_dependencies",
-        description: "Sort pub dependencies alphabetically.",
-        state: RuleState {
-            kind: RuleStateType::Stable,
-            since: None,
-            replaced_by: None,
-        },
-        diagnostic_names: &["sortPubDependencies"],
         can_use_parsed_result: false,
         incompatible_rules: &[],
     },
@@ -2267,6 +2251,18 @@ pub static ALL_RULES: &[AnalysisRule] = &[
             replaced_by: None,
         },
         diagnostic_names: &["simpleDirectivePaths"],
+        can_use_parsed_result: false,
+        incompatible_rules: &[],
+    },
+    AnalysisRule {
+        name: "secure_pubspec_urls",
+        description: "Use secure urls in `pubspec.yaml`.",
+        state: RuleState {
+            kind: RuleStateType::Stable,
+            since: None,
+            replaced_by: None,
+        },
+        diagnostic_names: &["securePubspecUrls"],
         can_use_parsed_result: false,
         incompatible_rules: &[],
     },
@@ -2343,6 +2339,18 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         incompatible_rules: &[],
     },
     AnalysisRule {
+        name: "sort_pub_dependencies",
+        description: "Sort pub dependencies alphabetically.",
+        state: RuleState {
+            kind: RuleStateType::Stable,
+            since: None,
+            replaced_by: None,
+        },
+        diagnostic_names: &["sortPubDependencies"],
+        can_use_parsed_result: false,
+        incompatible_rules: &[],
+    },
+    AnalysisRule {
         name: "sort_unnamed_constructors_first",
         description: "Sort unnamed constructor declarations first.",
         state: RuleState {
@@ -2351,6 +2359,18 @@ pub static ALL_RULES: &[AnalysisRule] = &[
             replaced_by: None,
         },
         diagnostic_names: &["sortUnnamedConstructorsFirst"],
+        can_use_parsed_result: false,
+        incompatible_rules: &[],
+    },
+    AnalysisRule {
+        name: "super_goes_last",
+        description: "Place the `super` call last in a constructor initialization list.",
+        state: RuleState {
+            kind: RuleStateType::Removed,
+            since: Some((3, 0, 0)),
+            replaced_by: None,
+        },
+        diagnostic_names: &[],
         can_use_parsed_result: false,
         incompatible_rules: &[],
     },
@@ -2364,7 +2384,7 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         },
         diagnostic_names: &["specifyNonobviousLocalVariableTypes"],
         can_use_parsed_result: false,
-        incompatible_rules: &[],
+        incompatible_rules: &["omit_local_variable_types"],
     },
     AnalysisRule {
         name: "specify_nonobvious_property_types",
@@ -2391,18 +2411,6 @@ pub static ALL_RULES: &[AnalysisRule] = &[
             "strictTopLevelInferenceReplaceKeyword",
             "strictTopLevelInferenceSplitToTypes",
         ],
-        can_use_parsed_result: false,
-        incompatible_rules: &[],
-    },
-    AnalysisRule {
-        name: "super_goes_last",
-        description: "Place the `super` call last in a constructor initialization list.",
-        state: RuleState {
-            kind: RuleStateType::Removed,
-            since: Some((3, 0, 0)),
-            replaced_by: None,
-        },
-        diagnostic_names: &[],
         can_use_parsed_result: false,
         incompatible_rules: &[],
     },
@@ -2464,7 +2472,7 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         },
         diagnostic_names: &["typeAnnotatePublicApis"],
         can_use_parsed_result: false,
-        incompatible_rules: &[],
+        incompatible_rules: &["omit_obvious_property_types"],
     },
     AnalysisRule {
         name: "type_init_formals",
@@ -2608,7 +2616,11 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         },
         diagnostic_names: &["unnecessaryFinalWithType", "unnecessaryFinalWithoutType"],
         can_use_parsed_result: false,
-        incompatible_rules: &[],
+        incompatible_rules: &[
+            "prefer_final_locals",
+            "prefer_final_parameters",
+            "prefer_final_in_for_each",
+        ],
     },
     AnalysisRule {
         name: "unnecessary_getters_setters",
@@ -2631,10 +2643,10 @@ pub static ALL_RULES: &[AnalysisRule] = &[
             replaced_by: None,
         },
         diagnostic_names: &[
-            "unnecessaryIgnoreFile",
             "unnecessaryIgnore",
-            "unnecessaryIgnoreNameFile",
+            "unnecessaryIgnoreFile",
             "unnecessaryIgnoreName",
+            "unnecessaryIgnoreNameFile",
         ],
         can_use_parsed_result: false,
         incompatible_rules: &[],
@@ -2935,7 +2947,7 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         description: "Avoid unsafe HTML APIs.",
         state: RuleState {
             kind: RuleStateType::Removed,
-            since: None,
+            since: Some((3, 7, 0)),
             replaced_by: None,
         },
         diagnostic_names: &[],
@@ -2982,18 +2994,6 @@ pub static ALL_RULES: &[AnalysisRule] = &[
         incompatible_rules: &[],
     },
     AnalysisRule {
-        name: "use_declaring_parameters",
-        description: "Use a declaring parameter.",
-        state: RuleState {
-            kind: RuleStateType::Stable,
-            since: Some((3, 13, 0)),
-            replaced_by: None,
-        },
-        diagnostic_names: &["useDeclaringParameters"],
-        can_use_parsed_result: false,
-        incompatible_rules: &[],
-    },
-    AnalysisRule {
         name: "use_decorated_box",
         description: "Use `DecoratedBox`.",
         state: RuleState {
@@ -3002,6 +3002,18 @@ pub static ALL_RULES: &[AnalysisRule] = &[
             replaced_by: None,
         },
         diagnostic_names: &["useDecoratedBox"],
+        can_use_parsed_result: false,
+        incompatible_rules: &[],
+    },
+    AnalysisRule {
+        name: "use_declaring_parameters",
+        description: "Use a declaring parameter.",
+        state: RuleState {
+            kind: RuleStateType::Stable,
+            since: Some((3, 13, 0)),
+            replaced_by: None,
+        },
+        diagnostic_names: &["useDeclaringParameters"],
         can_use_parsed_result: false,
         incompatible_rules: &[],
     },

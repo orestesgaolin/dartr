@@ -19,12 +19,12 @@ Upstream `canUseParsedResult` is preserved separately from this classification: 
 
 | Rule | Class | Reason | Port status |
 |---|---|---|---|
-| always_declare_return_types | AST-only | Declaration tokens and return-type syntax; test-directory exception comes from context.path | implemented |
+| always_declare_return_types | AST-only | Declaration tokens and return-type syntax; the rule context provides package test-directory membership | implemented |
 | always_put_control_body_on_new_line | AST-only | Control statement bodies, tokens, and parsed line information only | implemented |
 | always_put_required_named_parameters_first | needs resolution | Reads the declared parameter element to distinguish required named parameters | deferred |
 | always_require_non_null_named_parameters | removed | Upstream RemovedAnalysisRule since Dart 3.3 | removed upstream |
 | always_specify_types | needs resolution | Reads declared elements and static types to infer omitted annotations | deferred |
-| always_use_package_imports | AST-only | Checks relative import URI syntax for a source path under lib | implemented |
+| always_use_package_imports | AST-only | Checks relative import URI syntax when the rule context places the defining unit under its package lib directory | implemented |
 | analyzer_element_model_tracking | needs resolution | Internal analyzer rule reads declared elements and annotations | deferred |
 | analyzer_public_api | needs resolution | Internal analyzer rule traverses public elements and exported libraries | deferred |
 | annotate_overrides | needs resolution | Requires inherited-member and overridden-element lookup | deferred |

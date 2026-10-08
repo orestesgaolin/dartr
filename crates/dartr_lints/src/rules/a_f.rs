@@ -521,43 +521,14 @@ fn avoid_js_rounded_ints(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diag
 
 fn integer_literal_is_rounded(text: &str) -> bool {
     let text = text.replace('_', "");
-    let (radix, digits) =
-        if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
-            (16, hex)
-        } else {
-            (10, text.as_str())
-        };
-    let mut words = vec![0u32];
-    for byte in digits.bytes() {
-        let Some(digit) = (byte as char).to_digit(radix) else {
-            return false;
-        };
-        let mut carry = digit as u64;
-        for word in &mut words {
-            let value = *word as u64 * radix as u64 + carry;
-            *word = value as u32;
-            carry = value >> 32;
-        }
-        if carry != 0 {
-            words.push(carry as u32);
-        }
-    }
-    while words.last() == Some(&0) && words.len() > 1 {
-        words.pop();
-    }
-    if words.len() == 1 && words[0] == 0 {
-        return false;
-    }
-    let bit_length = (words.len() - 1) * 32 + 32 - words.last().unwrap().leading_zeros() as usize;
-    if bit_length <= 53 {
-        return false;
-    }
-    let zero_words = words.iter().take_while(|word| **word == 0).count();
-    let trailing = zero_words * 32
-        + words
-            .get(zero_words)
-            .map_or(0, |word| word.trailing_zeros() as usize);
-    trailing < bit_length - 53
+    let value = if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
+        // Dart VM integer parsing accepts a 64-bit hexadecimal bit pattern and
+        // interprets its high bit as the sign bit.
+        u64::from_str_radix(hex, 16).ok().map(|value| value as i64)
+    } else {
+        text.parse::<i64>().ok()
+    };
+    value.is_some_and(|value| (value as f64) as i64 != value)
 }
 
 fn avoid_multiple_declarations_per_line(

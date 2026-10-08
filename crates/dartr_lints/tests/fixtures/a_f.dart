@@ -34,6 +34,8 @@ class bad_type<T> {
     final stable = 'contains "both" and \'quotes\'';
     final rounded = 9007199254740993;
     final exact = 9007199254740992;
+    final vmMaxIntDecimal = 9223372036854775807;
+    final vmMaxIntHex = 0x7FFFFFFFFFFFFFFF;
     var first = 1, second = 2;
     for (var left = 0, right = 1; left < right; left++) {}
     StringBuffer()..write('one section');
@@ -50,7 +52,16 @@ class bad_type<T> {
       print(stable);
     } catch (_) {}
     // ignore: unused_local_variable
-    final ignored = [rounded, exact, first, second, BAD_CONSTANT, goodConstant];
+    final ignored = [
+      rounded,
+      exact,
+      vmMaxIntDecimal,
+      vmMaxIntHex,
+      first,
+      second,
+      BAD_CONSTANT,
+      goodConstant,
+    ];
     // This ignore is documented.
     // ignore: unused_local_variable
     final documented = ignored;

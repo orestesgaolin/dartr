@@ -202,6 +202,11 @@ pub fn register(
                 "unnecessary_final",
                 unnecessary_final,
             );
+            registry.add(
+                NodeKind::PatternVariableDeclaration,
+                "unnecessary_final",
+                unnecessary_final,
+            );
         }
         "unnecessary_late" => {
             registry.add(
@@ -421,10 +426,10 @@ fn trailing_comma_exception(ctx: &LinterContext<'_>, node: NodeId) -> bool {
     ) {
         return false;
     }
-    if let Some(function) = ctx.ast.cast::<FunctionExpression>(node) {
-        if ctx.ast.kind(ctx.ast[function].body) == NodeKind::BlockFunctionBody {
-            return true;
-        }
+    if let Some(function) = ctx.ast.cast::<FunctionExpression>(node)
+        && ctx.ast.kind(ctx.ast[function].body) == NodeKind::BlockFunctionBody
+    {
+        return true;
     }
     if StringLiteral::test(ctx.ast.kind(node)) {
         return true;
@@ -507,16 +512,17 @@ fn uri_is_simple(uri: &str, source_path: &str) -> bool {
     }
     let path = path.split(['?', '#']).next().unwrap_or(path);
     let absolute = path.starts_with('/');
-    if !has_scheme && !absolute {
-        if let Some((_, within_lib)) = source_path.rsplit_once("/lib/") {
-            let directory_depth = within_lib.split('/').count().saturating_sub(1);
-            let leading_parents = path
-                .split('/')
-                .take_while(|segment| *segment == "..")
-                .count();
-            if leading_parents > directory_depth {
-                return false;
-            }
+    if !has_scheme
+        && !absolute
+        && let Some((_, within_lib)) = source_path.rsplit_once("/lib/")
+    {
+        let directory_depth = within_lib.split('/').count().saturating_sub(1);
+        let leading_parents = path
+            .split('/')
+            .take_while(|segment| *segment == "..")
+            .count();
+        if leading_parents > directory_depth {
+            return false;
         }
     }
     let mut depth = 0usize;
@@ -535,10 +541,10 @@ fn uri_is_simple(uri: &str, source_path: &str) -> bool {
 
 fn slash_for_doc_comments(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let comment = &ctx.ast[Id::<Comment>::from_raw(node)];
-    if let Some(&token) = ctx.ast.token_list(comment.tokens).first() {
-        if ctx.ast.tokens.lexeme(token).starts_with("/**") {
-            ctx.report_node(out, &diag::SLASH_FOR_DOC_COMMENTS, node, &[]);
-        }
+    if let Some(&token) = ctx.ast.token_list(comment.tokens).first()
+        && ctx.ast.tokens.lexeme(token).starts_with("/**")
+    {
+        ctx.report_node(out, &diag::SLASH_FOR_DOC_COMMENTS, node, &[]);
     }
 }
 
@@ -676,17 +682,15 @@ fn throw_in_finally(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnos
         if FunctionBody::test(ctx.ast.kind(parent)) {
             return;
         }
-        if let Some(try_node) = ctx.ast.cast::<TryStatement>(parent) {
-            if let Some(finally_block) = ctx.ast[try_node].finally_block {
-                if ctx
-                    .ast
-                    .this_or_ancestor_matching(node, |_, n| n == finally_block.raw())
-                    .is_some()
-                {
-                    ctx.report_node(out, &diag::THROW_IN_FINALLY, node, &["throw"]);
-                    return;
-                }
-            }
+        if let Some(try_node) = ctx.ast.cast::<TryStatement>(parent)
+            && let Some(finally_block) = ctx.ast[try_node].finally_block
+            && ctx
+                .ast
+                .this_or_ancestor_matching(node, |_, n| n == finally_block.raw())
+                .is_some()
+        {
+            ctx.report_node(out, &diag::THROW_IN_FINALLY, node, &["throw"]);
+            return;
         }
         current = parent;
     }
@@ -846,11 +850,11 @@ fn unintended_tags(text: &str) -> Vec<(usize, usize)> {
             }
             continue;
         }
-        if bytes[i] == b'[' {
-            if let Some(end) = text[i + 1..].find(']') {
-                i += end + 2;
-                continue;
-            }
+        if bytes[i] == b'['
+            && let Some(end) = text[i + 1..].find(']')
+        {
+            i += end + 2;
+            continue;
         }
         if bytes[i] != b'<' {
             i += 1;
@@ -879,7 +883,7 @@ fn unintended_tags(text: &str) -> Vec<(usize, usize)> {
         };
         let end = i + 1 + rel_end + 1;
         let inside = &text[i + 1..end - 1];
-        if inside.bytes().any(|b| b.is_ascii_whitespace()) == false && inside.contains(':') {
+        if !inside.bytes().any(|b| b.is_ascii_whitespace()) && inside.contains(':') {
             i = end;
             continue;
         }
@@ -1094,10 +1098,10 @@ fn unnecessary_const(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagno
         }
         _ => None,
     };
-    if let Some(token) = token {
-        if in_constant_context(ctx, node) {
-            ctx.report_token(out, &diag::UNNECESSARY_CONST, token, &[]);
-        }
+    if let Some(token) = token
+        && in_constant_context(ctx, node)
+    {
+        ctx.report_token(out, &diag::UNNECESSARY_CONST, token, &[]);
     }
 }
 
@@ -1113,10 +1117,9 @@ fn unnecessary_const_in_enum_constructor(
                 .ast
                 .parent(node)
                 .is_some_and(|p| ctx.ast.kind(p) == NodeKind::BlockEnumBody)
+                && let Some(t) = n.const_keyword
             {
-                if let Some(t) = n.const_keyword {
-                    ctx.report_token(out, &diag::UNNECESSARY_CONST_IN_ENUM_CONSTRUCTOR, t, &[]);
-                }
+                ctx.report_token(out, &diag::UNNECESSARY_CONST_IN_ENUM_CONSTRUCTOR, t, &[]);
             }
         }
         NodeKind::PrimaryConstructorDeclaration => {
@@ -1125,10 +1128,9 @@ fn unnecessary_const_in_enum_constructor(
                 .ast
                 .parent(node)
                 .is_some_and(|p| ctx.ast.kind(p) == NodeKind::EnumDeclaration)
+                && let Some(t) = n.const_keyword
             {
-                if let Some(t) = n.const_keyword {
-                    ctx.report_token(out, &diag::UNNECESSARY_CONST_IN_ENUM_CONSTRUCTOR, t, &[]);
-                }
+                ctx.report_token(out, &diag::UNNECESSARY_CONST_IN_ENUM_CONSTRUCTOR, t, &[]);
             }
         }
         _ => {}
@@ -1214,6 +1216,10 @@ fn unnecessary_final(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagno
                 report_final(ctx, out, t, n.type_.is_some());
             }
         }
+        NodeKind::PatternVariableDeclaration => {
+            let n = &ctx.ast[Id::<PatternVariableDeclaration>::from_raw(node)];
+            report_final(ctx, out, n.keyword, false);
+        }
         _ => {}
     }
 }
@@ -1275,10 +1281,10 @@ fn unnecessary_library_name(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec
 }
 
 fn unnecessary_new(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
-    if let Some(t) = ctx.ast[Id::<InstanceCreationExpression>::from_raw(node)].keyword {
-        if ctx.ast.tokens.lexeme(t) == "new" {
-            ctx.report_token(out, &diag::UNNECESSARY_NEW, t, &[]);
-        }
+    if let Some(t) = ctx.ast[Id::<InstanceCreationExpression>::from_raw(node)].keyword
+        && ctx.ast.tokens.lexeme(t) == "new"
+    {
+        ctx.report_token(out, &diag::UNNECESSARY_NEW, t, &[]);
     }
 }
 
@@ -1603,12 +1609,11 @@ fn var_with_no_type_annotation(ctx: &LinterContext<'_>, node: NodeId, out: &mut 
             }
             _ => continue,
         };
-        if pair.1.is_none() {
-            if let Some(t) = pair.0 {
-                if ctx.ast.tokens.lexeme(t) == "var" {
-                    ctx.report_token(out, &diag::VAR_WITH_NO_TYPE_ANNOTATION, t, &[]);
-                }
-            }
+        if pair.1.is_none()
+            && let Some(t) = pair.0
+            && ctx.ast.tokens.lexeme(t) == "var"
+        {
+            ctx.report_token(out, &diag::VAR_WITH_NO_TYPE_ANNOTATION, t, &[]);
         }
     }
 }
