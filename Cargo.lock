@@ -190,9 +190,12 @@ version = "0.1.0"
 dependencies = [
  "dartr_ast",
  "dartr_diagnostics",
+ "dartr_difftest",
  "dartr_parser",
  "dartr_syntax",
  "rustc-hash",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

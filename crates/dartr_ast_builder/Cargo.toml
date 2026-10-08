@@ -10,3 +10,8 @@ dartr_ast.workspace = true
 dartr_parser.workspace = true
 dartr_diagnostics.workspace = true
 rustc-hash.workspace = true
+
+[dev-dependencies]
+dartr_difftest = { path = "../dartr_difftest" }
+serde_json = { workspace = true, features = ["unbounded_depth"] }
+serde.workspace = true
