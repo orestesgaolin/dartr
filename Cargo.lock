@@ -322,6 +322,7 @@ dependencies = [
  "dartr_ast",
  "dartr_ast_builder",
  "dartr_element",
+ "dartr_parser",
  "dartr_syntax",
  "indexmap",
  "serde_json",
