@@ -402,6 +402,7 @@ dependencies = [
  "dartr_ast",
  "dartr_ast_builder",
  "dartr_diagnostics",
+ "dartr_parser",
  "dartr_project",
  "dartr_syntax",
  "pretty_assertions",

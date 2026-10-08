@@ -8,7 +8,34 @@
 //! - `getChildren` lists in directory order, follows links, and skips broken
 //!   links and other entities.
 
+use std::collections::HashMap;
 use std::fs;
+use std::sync::{OnceLock, RwLock};
+
+/// Overlays of the language server (`OverlayResourceProvider`): the content
+/// of open documents, for the files that [read_string], [read_string_strict]
+/// and [file_exists] read.
+fn overlays() -> &'static RwLock<HashMap<String, String>> {
+    static OVERLAYS: OnceLock<RwLock<HashMap<String, String>>> = OnceLock::new();
+    OVERLAYS.get_or_init(Default::default)
+}
+
+/// Sets (or, with `None`, removes) the overlay of [path].
+pub fn set_overlay(path: &str, content: Option<String>) {
+    let mut map = overlays().write().unwrap();
+    match content {
+        Some(content) => map.insert(path.to_string(), content),
+        None => map.remove(path),
+    };
+}
+
+fn overlay(path: &str) -> Option<String> {
+    let map = overlays().read().unwrap();
+    if map.is_empty() {
+        return None;
+    }
+    map.get(path).cloned()
+}
 
 /// The kind of a resource.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -26,6 +53,9 @@ pub struct Child {
 
 /// Returns `true` if [path] is an existing file.
 pub fn file_exists(path: &str) -> bool {
+    if overlay(path).is_some() {
+        return true;
+    }
     fs::metadata(path).map(|m| m.is_file()).unwrap_or(false)
 }
 
@@ -45,11 +75,23 @@ pub fn resource_kind(path: &str) -> ResourceKind {
 
 /// Reads the file at [path] as a string.
 pub fn read_string(path: &str) -> Option<String> {
+    if let Some(content) = overlay(path) {
+        return Some(content);
+    }
     let bytes = fs::read(path).ok()?;
     Some(match String::from_utf8(bytes) {
         Ok(text) => text,
         Err(error) => String::from_utf8_lossy(error.as_bytes()).into_owned(),
     })
+}
+
+/// Reads the file at [path] like `File.readAsStringSync`: `None` if the file
+/// cannot be read or is not valid UTF-8.
+pub fn read_string_strict(path: &str) -> Option<String> {
+    if let Some(content) = overlay(path) {
+        return Some(content);
+    }
+    String::from_utf8(fs::read(path).ok()?).ok()
 }
 
 /// Lists the children of the folder at [path], or `None` if it cannot be

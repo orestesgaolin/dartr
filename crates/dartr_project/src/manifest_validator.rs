@@ -20,7 +20,7 @@ pub fn validate_manifest(context: &AnalysisContext, path: &str) -> Vec<Diagnosti
     }
     // `File.readAsStringSync()` throws for malformed UTF-8. The analysis
     // server catches that exception and clears diagnostics for the file.
-    let Ok(content) = std::fs::read_to_string(path) else {
+    let Some(content) = crate::fs::read_string_strict(path) else {
         return Vec::new();
     };
     validate_content(&content)

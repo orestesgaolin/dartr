@@ -32,7 +32,15 @@ fn is_syntactic(code: &str) -> bool {
         .any(|c| c.diagnostic_type == DiagnosticType::SyntacticError)
 }
 
-/// The document state, normalized: syntactic diagnostics only, empty lists
+/// Whether [uri] is a non-Dart file with diagnostics of the context manager.
+fn is_non_dart(uri: &str) -> bool {
+    ["analysis_options.yaml", "pubspec.yaml", "AndroidManifest.xml"]
+        .iter()
+        .any(|n| uri.ends_with(&format!("/{n}")))
+}
+
+/// The document state, normalized: syntactic diagnostics (and all
+/// diagnostics of non-Dart files) only, empty lists
 /// removed, only documents of the fixture project.
 fn snapshot(c: &LspClient, root_uri: &str) -> Value {
     let in_root = |uri: &String| uri.starts_with(root_uri);
@@ -40,7 +48,7 @@ fn snapshot(c: &LspClient, root_uri: &str) -> Value {
     for (uri, list) in &c.state.diagnostics {
         let list: Vec<Value> = list
             .iter()
-            .filter(|d| d["code"].as_str().is_some_and(is_syntactic))
+            .filter(|d| is_non_dart(uri) || d["code"].as_str().is_some_and(is_syntactic))
             .cloned()
             .collect();
         if in_root(uri) && !list.is_empty() {
@@ -382,4 +390,131 @@ fn lsp_session_through_dart_shim() {
         .unwrap();
     assert_eq!(out.status.code(), Some(64));
     assert!(String::from_utf8_lossy(&out.stderr).contains("Could not find an option named"));
+}
+
+const FIXTURES: &str = "../dartr_project/tests/fixtures/diagnostics";
+
+/// A package with a package language version of 2.19 (records are an error
+/// there) and broken `analysis_options.yaml`, `pubspec.yaml` and
+/// `AndroidManifest.xml` (from the `dartr_project` fixtures).
+fn write_non_dart_project() -> std::path::PathBuf {
+    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("lsp_non_dart");
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("lib")).unwrap();
+    std::fs::create_dir_all(root.join(".dart_tool")).unwrap();
+    std::fs::create_dir_all(root.join("android")).unwrap();
+    let root = root.canonicalize().unwrap();
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join(FIXTURES);
+    let copy = |from: &str, to: &str| {
+        std::fs::copy(fixtures.join(from), root.join(to)).unwrap();
+    };
+    std::fs::write(
+        root.join("analysis_options.yaml"),
+        "analyzer:\n  mystery: true\n  errors:\n    no_such_diagnostic: warning\n  language:\n    strict-casts: maybe\n  optional-checks:\n    chrome-os-manifest-checks: true\nlinter:\n  rules:\n    - no_such_lint\n    - avoid_print\n    - avoid_print\n",
+    )
+    .unwrap();
+    copy("pubspec_fields/pubspec.yaml", "pubspec.yaml");
+    copy("manifest_required/AndroidManifest.xml", "android/AndroidManifest.xml");
+    std::fs::write(
+        root.join(".dart_tool/package_config.json"),
+        "{\"configVersion\":2,\"packages\":[{\"name\":\"p\",\"rootUri\":\"../\",\"packageUri\":\"lib/\",\"languageVersion\":\"2.19\"}]}",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("lib/old.dart"),
+        "var r = (1, 2);\nsealed class S {}\nvar t = 1 >>> 2;\nvoid main() { print(1) }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("lib/new.dart"),
+        "// @dart = 3.0\nvar r = (1, 2);\nsealed class S {}\nvoid main() { print(1) }\n",
+    )
+    .unwrap();
+    root
+}
+
+fn run_non_dart_session(mut c: LspClient, root: &Path) -> (Transcript, i32) {
+    let root_uri = format!("{}/", file_uri(root));
+    let uri = |rel: &str| format!("{root_uri}{rel}");
+    let read = |rel: &str| std::fs::read_to_string(root.join(rel)).unwrap();
+    let mut t: Transcript = Vec::new();
+    let init = c.request("initialize", dart_code_initialize_params(root));
+    assert!(init["result"]["capabilities"].is_object(), "{init}");
+    c.notify("initialized", json!({}));
+    c.settle(true);
+    t.push(("initial analysis".into(), snapshot(&c, &root_uri)));
+
+    for (rel, language) in [
+        ("analysis_options.yaml", "yaml"),
+        ("pubspec.yaml", "yaml"),
+        ("android/AndroidManifest.xml", "xml"),
+        ("lib/old.dart", "dart"),
+        ("lib/new.dart", "dart"),
+    ] {
+        c.notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {"uri": uri(rel), "languageId": language, "version": 1, "text": read(rel)}}),
+        );
+    }
+    c.settle(true);
+    t.push(("open all files".into(), snapshot(&c, &root_uri)));
+
+    // Change the options in the editor: the overlay is analyzed.
+    c.notify(
+        "textDocument/didChange",
+        json!({"textDocument": {"uri": uri("analysis_options.yaml"), "version": 2}, "contentChanges": [
+            {"text": "analyzer:\n  errors:\n    no_such_diagnostic: ignore\n  language:\n    strict-raw-types: sometimes\n"}
+        ]}),
+    );
+    c.settle(true);
+    t.push(("change analysis_options.yaml".into(), snapshot(&c, &root_uri)));
+
+    // Change the pubspec and the manifest.
+    c.notify(
+        "textDocument/didChange",
+        json!({"textDocument": {"uri": uri("pubspec.yaml"), "version": 2}, "contentChanges": [
+            {"text": "name: p\nauthor: someone\n"}
+        ]}),
+    );
+    c.settle(false);
+    t.push(("change pubspec.yaml".into(), snapshot(&c, &root_uri)));
+    c.notify(
+        "textDocument/didChange",
+        json!({"textDocument": {"uri": uri("android/AndroidManifest.xml"), "version": 2}, "contentChanges": [
+            {"text": "<manifest><uses-feature android:name=\"android.hardware.camera\" /></manifest>"}
+        ]}),
+    );
+    c.settle(false);
+    t.push(("change AndroidManifest.xml".into(), snapshot(&c, &root_uri)));
+
+    for rel in ["analysis_options.yaml", "pubspec.yaml", "android/AndroidManifest.xml"] {
+        c.notify("textDocument/didClose", doc(&uri(rel)));
+    }
+    c.settle(false);
+    t.push(("close non-Dart files".into(), snapshot(&c, &root_uri)));
+    if let Some(dir) = std::env::var_os("DARTR_LSP_TRANSCRIPTS") {
+        let path = Path::new(&dir).join(format!("lsp_log_{}.json", c.id()));
+        std::fs::write(&path, serde_json::to_string_pretty(&c.log).unwrap()).unwrap();
+    }
+    let (response, code) = c.shutdown_and_exit();
+    t.push(("shutdown".into(), response));
+    (t, code)
+}
+
+#[test]
+fn lsp_non_dart_files_and_package_language_version() {
+    if !dart_available() {
+        eprintln!("skipped: `dart` is not on PATH");
+        return;
+    }
+    let root = write_non_dart_project();
+    let mut dart_args = vec!["language-server", "--protocol=lsp"];
+    dart_args.extend(session_args());
+    let (dart, dart_code) = run_non_dart_session(LspClient::spawn("dart", &dart_args, &[]), &root);
+    let (dartr, dartr_code) =
+        run_non_dart_session(LspClient::spawn(dartr_bin(), &dart_args, &[]), &root);
+    assert_eq!(dart_code, 0);
+    assert_eq!(dartr_code, 0);
+    let failures = report("non-Dart files, language version", &dart, &dartr);
+    assert_eq!(failures, 0, "LSP session differs from dart language-server");
 }
