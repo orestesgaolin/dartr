@@ -2125,6 +2125,7 @@ impl MiniAstTypeAnalyzer {
                     result: result.clone(),
                     operand_type: Some(operand_type),
                     converted_to_double: None,
+                    pattern_schema: None,
                 });
                 result
             }
@@ -2305,6 +2306,7 @@ impl MiniAstTypeAnalyzer {
                     result: result.clone(),
                     operand_type: None,
                     converted_to_double: Some(converted_to_double),
+                    pattern_schema: None,
                 });
                 result
             }
@@ -2462,7 +2464,15 @@ impl MiniAstTypeAnalyzer {
                     &location,
                     &[],
                 );
-                result.into()
+                let pattern_schema = result.pattern_schema.unwrap_type_schema_view();
+                let result: ExprResult = result.into();
+                self.pending_detail = Some(ExprResultDetail {
+                    result: result.clone(),
+                    operand_type: None,
+                    converted_to_double: None,
+                    pattern_schema: Some(pattern_schema),
+                });
+                result
             }
             PlaceholderExpression { ty } => {
                 self.ir_builder.atom(&ty.type_string(), Kind::Type, &location);
@@ -3488,6 +3498,7 @@ impl TypeAnalyzer for MiniAstTypeAnalyzer {
                 result: result.clone(),
                 operand_type: None,
                 converted_to_double: None,
+                pattern_schema: None,
             }));
         }
         if let Some(expected_type) = &data.expected_type {

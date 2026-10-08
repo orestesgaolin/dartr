@@ -82,6 +82,9 @@ pub struct ExprResultDetail {
     pub operand_type: Option<Type>,
     /// `IntTypeAnalysisResult.convertedToDouble`, for an integer literal.
     pub converted_to_double: Option<bool>,
+    /// `PatternAssignmentAnalysisResult.patternSchema`, for a pattern
+    /// assignment.
+    pub pattern_schema: Option<Type>,
 }
 
 /// A checker of an expression analysis result
@@ -1448,7 +1451,7 @@ pub fn map_pattern_with_type_arguments(key_type: &str, value_type: &str, element
 #[track_caller]
 pub fn object_pattern(required_type: &str, fields: Vec<Node>) -> Node {
     let parsed_type = Type::parse(required_type);
-    if parsed_type.kind() != TypeKind::Primary || parsed_type.is_question_type() {
+    if parsed_type.as_primary_type().is_none() || parsed_type.is_question_type() {
         panic!("Expected a primary type, got {parsed_type}");
     }
     Node::alloc(
