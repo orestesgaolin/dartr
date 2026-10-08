@@ -239,7 +239,6 @@ fn find_node(ast: &Ast, node: NodeId, kind: NodeKind, offset: u32) -> Option<Nod
 // ------------------------------------------------------------ literal scrutinees
 
 #[test]
-#[ignore = "needs the element binding pass (element_binding_visitor.rs)"]
 fn switch_expression_constant_relational_wildcard() {
     let Some(a) = analyze(
         "switch_expression_constant_relational_wildcard",
@@ -278,7 +277,6 @@ String f() => switch (1) {
 }
 
 #[test]
-#[ignore = "needs the element binding pass (element_binding_visitor.rs)"]
 fn switch_expression_least_upper_bound_of_cases() {
     let Some(a) = analyze(
         "switch_expression_least_upper_bound_of_cases",
@@ -305,7 +303,6 @@ Object f() => switch ('s') {
 }
 
 #[test]
-#[ignore = "needs the element binding pass (element_binding_visitor.rs)"]
 fn switch_statement_declared_variable_patterns() {
     let Some(a) = analyze(
         "switch_statement_declared_variable_patterns",
@@ -332,7 +329,6 @@ void f() {
 }
 
 #[test]
-#[ignore = "needs the element binding pass (element_binding_visitor.rs)"]
 fn switch_statement_shared_body_and_default() {
     let Some(a) = analyze(
         "switch_statement_shared_body_and_default",
@@ -366,7 +362,6 @@ void f() {
 }
 
 #[test]
-#[ignore = "needs the element binding pass (element_binding_visitor.rs)"]
 fn if_case_statement_with_null_check_pattern() {
     let Some(a) = analyze(
         "if_case_statement_with_null_check_pattern",
@@ -390,7 +385,6 @@ void f() {
 }
 
 #[test]
-#[ignore = "needs the element binding pass (element_binding_visitor.rs)"]
 fn pattern_variable_declaration_parenthesized() {
     let Some(a) = analyze(
         "pattern_variable_declaration_parenthesized",
@@ -414,7 +408,6 @@ void f() {
 // ------------------------------------------------------------ realistic code
 
 #[test]
-#[ignore = "needs the element binding pass and the resolution visitor (scopes, type annotations), and the record literal resolver"]
 fn switch_statement_record_and_typed_patterns() {
     let Some(a) = analyze(
         "switch_statement_record_and_typed_patterns",
@@ -451,7 +444,6 @@ void f(Object o) {
 }
 
 #[test]
-#[ignore = "needs the element binding pass and the resolution visitor (scopes, type annotations), and the collection literal resolvers"]
 fn if_case_list_and_map_patterns() {
     let Some(a) = analyze(
         "if_case_list_and_map_patterns",
@@ -477,7 +469,6 @@ void f(List<int> list, Map<String, double> map) {
 }
 
 #[test]
-#[ignore = "needs the element binding pass and the resolution visitor (scopes, type annotations)"]
 fn object_pattern_fields_and_inferred_type_arguments() {
     let Some(a) = analyze(
         "object_pattern_fields_and_inferred_type_arguments",
@@ -513,7 +504,6 @@ void f(Object o, Box<String> box) {
 }
 
 #[test]
-#[ignore = "needs the element binding pass and the resolution visitor (scopes, join variables)"]
 fn logical_or_pattern_join_variable() {
     let Some(a) = analyze(
         "logical_or_pattern_join_variable",
@@ -538,7 +528,7 @@ void f((int, int) r) {
 }
 
 #[test]
-#[ignore = "needs the element binding pass and the resolution visitor (assigned variable patterns), and the record literal resolver"]
+#[ignore = "needs the record literal resolver (unit C7)"]
 fn pattern_assignment_static_type() {
     let Some(a) = analyze(
         "pattern_assignment_static_type",
@@ -563,7 +553,6 @@ void f() {
 }
 
 #[test]
-#[ignore = "needs the element binding pass (element_binding_visitor.rs)"]
 fn every_pattern_kind_resolves_without_a_panic() {
     let Some(a) = analyze(
         "every_pattern_kind_resolves_without_a_panic",
@@ -635,7 +624,6 @@ void f() {
 }
 
 #[test]
-#[ignore = "needs the element binding pass and the prefixed identifier resolver"]
 fn legacy_switch_statement_on_enum() {
     let Some(a) = analyze(
         "legacy_switch_statement_on_enum",
