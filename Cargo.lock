@@ -311,6 +311,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "dartr_type_analyzer"
+version = "0.1.0"
+dependencies = [
+ "dartr_flow",
+ "indexmap",
+]
+
+[[package]]
 name = "dartr_typesystem"
 version = "0.1.0"
 dependencies = [
