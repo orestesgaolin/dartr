@@ -724,13 +724,12 @@ impl Server {
             .and_then(|d| d.get("text"))
             .and_then(Value::as_str)
             .ok_or_else(|| invalid_params("textDocument/didOpen"))?;
-        self.overlays.insert(
-            path.clone(),
-            Document {
-                content: text.to_string(),
-            },
-        );
-        dartr_project::fs::set_overlay(&path, Some(text.to_string()));
+        // Dart analyzes a document with a leading byte order mark like the
+        // text without it (checked with `dart language-server`: no
+        // `illegal_character`, columns without the mark).
+        let text = dartr_syntax::strip_bom(text).to_string();
+        dartr_project::fs::set_overlay(&path, Some(text.clone()));
+        self.overlays.insert(path.clone(), Document { content: text });
         self.file_changed(&path);
         if !self.priority.contains(&path) {
             self.priority.push(path.clone());
@@ -759,7 +758,8 @@ impl Server {
             .get("contentChanges")
             .and_then(Value::as_array)
             .ok_or_else(|| invalid_params("textDocument/didChange"))?;
-        doc.content = apply_changes(&doc.content, changes)?;
+        let content = apply_changes(&doc.content, changes)?;
+        doc.content = dartr_syntax::strip_bom(&content).to_string();
         dartr_project::fs::set_overlay(&path, Some(doc.content.clone()));
         self.file_changed(&path);
         // Checked with `dart language-server`: a change of an open

@@ -430,6 +430,12 @@ fn write_non_dart_project() -> std::path::PathBuf {
         "// @dart = 3.0\nvar r = (1, 2);\nsealed class S {}\nvoid main() { print(1) }\n",
     )
     .unwrap();
+    // A byte order mark in the text of an open document is ignored.
+    std::fs::write(
+        root.join("lib/bom.dart"),
+        "\u{feff}void main() { var x = }\n",
+    )
+    .unwrap();
     root
 }
 
@@ -450,6 +456,7 @@ fn run_non_dart_session(mut c: LspClient, root: &Path) -> (Transcript, i32) {
         ("android/AndroidManifest.xml", "xml"),
         ("lib/old.dart", "dart"),
         ("lib/new.dart", "dart"),
+        ("lib/bom.dart", "dart"),
     ] {
         c.notify(
             "textDocument/didOpen",
