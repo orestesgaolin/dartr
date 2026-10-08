@@ -12,11 +12,13 @@
 //! |---|---|---|
 //! | [`common`] | 19-35, 13305-13489 | `setUp`, helpers |
 //! | [`api_part1`] | 37-1005 | `API` (first part) |
+//! | [`api_part3`] | 2300-3592 | `API` (third part) |
 //! | [`state_part1`] | 3721-3884 | `State` (first part) |
 //! | [`patterns_part1`] | 7038-7330 | `Patterns:` (first part) |
 
 mod common;
 
 mod api_part1;
+mod api_part3;
 mod patterns_part1;
 mod state_part1;
