@@ -13,7 +13,7 @@ use dartr_difftest::{Options, run};
     about = "Compare `dartr dump <mode>` with the Dart analyzer oracle"
 )]
 struct Cli {
-    /// Dump mode: tokens, ast or resolved.
+    /// Dump mode: tokens, ast, resolved or elements.
     mode: String,
     /// Dart files or directories (searched recursively).
     #[arg(required = true)]
@@ -35,6 +35,10 @@ struct Cli {
     /// (default: the oracle compiled to target/oracle/oracle).
     #[arg(long)]
     oracle: Option<String>,
+    /// Replace the `"type"` of every JSON object with `"inf": true` by
+    /// `"<inferred>"` on both sides before the comparison.
+    #[arg(long)]
+    mask_inferred: bool,
     /// Number of differing files to report.
     #[arg(long, default_value_t = 20)]
     max_report: usize,
@@ -64,6 +68,7 @@ fn main() -> anyhow::Result<ExitCode> {
             .oracle
             .map(|s| s.split_whitespace().map(str::to_string).collect())
             .unwrap_or_default(),
+        mask_inferred: cli.mask_inferred,
     };
     let report = run(&options)?;
     print!("{}", report.difference_report(cli.max_report));

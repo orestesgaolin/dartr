@@ -6,6 +6,10 @@
 //! JSON object per file with a `path` key. The comparison is generic over
 //! the mode: the raw lines are compared first, and for a difference the
 //! first differing JSON path is reported.
+//!
+//! With [`Options::mask_inferred`], the `"type"` of every JSON object that
+//! has `"inf": true` is replaced by `"<inferred>"` on both sides before the
+//! comparison (the `elements` mode before top-level inference exists).
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -20,7 +24,7 @@ use serde_json::Value;
 /// Options of a difftest run.
 #[derive(Clone, Debug)]
 pub struct Options {
-    /// `tokens`, `events`, `ast` or `resolved`.
+    /// `tokens`, `events`, `ast`, `resolved` or `elements`.
     pub mode: String,
     /// Files or directories (searched recursively for `.dart` files).
     pub inputs: Vec<PathBuf>,
@@ -36,6 +40,10 @@ pub struct Options {
     /// The oracle command (program and leading arguments); the mode is
     /// appended. Empty: use [`ensure_oracle`].
     pub oracle: Vec<String>,
+    /// Replace the `"type"` of each JSON object with `"inf": true` by
+    /// `"<inferred>"` on both sides before the comparison (see
+    /// [`mask_inferred`]).
+    pub mask_inferred: bool,
 }
 
 /// The first difference of one file.
@@ -119,7 +127,9 @@ pub fn repo_root() -> PathBuf {
         .expect("repository root")
 }
 
-/// Collects the `.dart` files of [inputs] (sorted, absolute paths).
+/// Collects the `.dart` files of [inputs] (sorted, absolute paths). An
+/// input that starts with `dart:` (a library URI, mode `elements`) is passed
+/// through unchanged.
 pub fn collect_dart_files(inputs: &[PathBuf]) -> Result<Vec<String>> {
     fn walk(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
         for entry in std::fs::read_dir(dir).with_context(|| format!("reading {}", dir.display()))? {
@@ -135,7 +145,12 @@ pub fn collect_dart_files(inputs: &[PathBuf]) -> Result<Vec<String>> {
         Ok(())
     }
     let mut files = Vec::new();
+    let mut uris = Vec::new();
     for input in inputs {
+        if let Some(uri) = input.to_str().filter(|s| s.starts_with("dart:")) {
+            uris.push(uri.to_string());
+            continue;
+        }
         let input = std::path::absolute(input)?;
         if input.is_dir() {
             walk(&input, &mut files)?;
@@ -147,15 +162,20 @@ pub fn collect_dart_files(inputs: &[PathBuf]) -> Result<Vec<String>> {
     }
     files.sort();
     files.dedup();
-    Ok(files
+    let mut out: Vec<String> = files
         .into_iter()
         .map(|p| p.to_string_lossy().into_owned())
-        .collect())
+        .collect();
+    uris.sort();
+    uris.dedup();
+    out.extend(uris);
+    Ok(out)
 }
 
 /// Returns the oracle command: the AOT-compiled oracle in
 /// `target/oracle/oracle`, compiled first when it is missing or older than
-/// its sources.
+/// one of its sources (a file in `tools/oracle/bin/`, or
+/// `tools/oracle/pubspec.lock`).
 pub fn ensure_oracle() -> Result<Vec<String>> {
     let root = repo_root();
     let oracle_dir = root.join("tools/oracle");
@@ -325,8 +345,57 @@ fn first_difference(a: &Value, b: &Value, path: &str) -> Option<(String, String,
     }
 }
 
-/// Compares the output lines of one file.
-fn compare(file: &str, oracle: Option<&String>, dartr: Option<&String>) -> Option<Difference> {
+/// Replaces, in every JSON object of [value] that has `"inf": true`, the
+/// value of its `"type"` key by the string `"<inferred>"`. Nested objects
+/// (members, parameters) are masked too.
+pub fn mask_inferred(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            if map.get("inf") == Some(&Value::Bool(true))
+                && let Some(ty) = map.get_mut("type")
+            {
+                *ty = Value::String("<inferred>".to_string());
+            }
+            for v in map.values_mut() {
+                mask_inferred(v);
+            }
+        }
+        Value::Array(items) => items.iter_mut().for_each(mask_inferred),
+        _ => {}
+    }
+}
+
+/// [line] with [mask_inferred] applied, serialized again (keys keep their
+/// order). A line that is not valid JSON is returned unchanged.
+fn masked_line(line: &str) -> String {
+    match serde_json::from_str::<Value>(line) {
+        Ok(mut v) => {
+            mask_inferred(&mut v);
+            v.to_string()
+        }
+        Err(_) => line.to_string(),
+    }
+}
+
+/// Compares the output lines of one file. With [mask], both lines are
+/// masked first (see [`mask_inferred`]); the text comparison then sees the
+/// re-serialized lines, so escaping differences are not reported.
+fn compare(
+    file: &str,
+    oracle: Option<&String>,
+    dartr: Option<&String>,
+    mask: bool,
+) -> Option<Difference> {
+    let masked;
+    let (oracle, dartr) = if mask {
+        masked = (
+            oracle.map(|l| masked_line(l)),
+            dartr.map(|l| masked_line(l)),
+        );
+        (masked.0.as_ref(), masked.1.as_ref())
+    } else {
+        (oracle, dartr)
+    };
     let diff = |json_path: &str, o: String, d: String| {
         Some(Difference {
             file: file.to_string(),
@@ -426,7 +495,7 @@ pub fn run(options: &Options) -> Result<Report> {
                         let mut identical = 0;
                         for file in batch {
                             let (lo, ld) = (o.lines.get(file), d.lines.get(file));
-                            match compare(file, lo, ld) {
+                            match compare(file, lo, ld, options.mask_inferred) {
                                 None => identical += 1,
                                 Some(mut diff) => {
                                     if lo.is_none() && !o.stderr.is_empty() {
@@ -514,7 +583,84 @@ mod tests {
     use super::*;
 
     fn diff(o: &str, d: &str) -> Option<Difference> {
-        compare("f.dart", Some(&o.to_string()), Some(&d.to_string()))
+        compare("f.dart", Some(&o.to_string()), Some(&d.to_string()), false)
+    }
+
+    fn masked_diff(o: &str, d: &str) -> Option<Difference> {
+        compare("f.dart", Some(&o.to_string()), Some(&d.to_string()), true)
+    }
+
+    #[test]
+    fn mask_inferred_hides_inferred_types_only() {
+        // Only an inferred type differs: equal with the mask, different
+        // without it.
+        let o = r#"{"path":"f","elements":[{"k":"topVar","n":"v","type":"int","inf":true}]}"#;
+        let d = r#"{"path":"f","elements":[{"k":"topVar","n":"v","type":"dynamic","inf":true}]}"#;
+        assert!(masked_diff(o, d).is_none());
+        let unmasked = diff(o, d).unwrap();
+        assert_eq!(unmasked.json_path, "elements[0].type");
+
+        // A declared type (`"inf": false`) is still compared, and the JSON
+        // path of the difference is reported.
+        let o = r#"{"path":"f","elements":[{"k":"topVar","n":"v","type":"int","inf":false}]}"#;
+        let d = r#"{"path":"f","elements":[{"k":"topVar","n":"v","type":"num","inf":false}]}"#;
+        let m = masked_diff(o, d).unwrap();
+        assert_eq!(
+            (m.json_path.as_str(), m.oracle.as_str(), m.dartr.as_str()),
+            ("elements[0].type", "\"int\"", "\"num\"")
+        );
+
+        // A different `inf` value is a difference, not masked away.
+        let d = r#"{"path":"f","elements":[{"k":"topVar","n":"v","type":"num","inf":true}]}"#;
+        let m = masked_diff(o, d).unwrap();
+        assert_eq!(m.json_path, "elements[0].type");
+        assert_eq!(m.dartr, "\"<inferred>\"");
+    }
+
+    #[test]
+    fn mask_inferred_masks_nested_objects() {
+        // A method with an inferred parameter type inside a class: both the
+        // method type and the parameter type are masked; the declared
+        // parameter type next to it is still compared.
+        let line = |method: &str, p0: &str, p1: &str| {
+            format!(
+                r#"{{"path":"f","elements":[{{"k":"class","n":"A","members":[{{"k":"method","n":"m","type":"{method}","inf":true,"params":[{{"n":"x","type":"{p0}","inf":true}},{{"n":"y","type":"{p1}","inf":false}}]}}]}}]}}"#
+            )
+        };
+        let o = line("int Function(int, String)", "int", "String");
+        let d = line("dynamic Function(dynamic, String)", "dynamic", "String");
+        assert!(masked_diff(&o, &d).is_none());
+
+        let d = line("dynamic Function(dynamic, Object)", "dynamic", "Object");
+        let m = masked_diff(&o, &d).unwrap();
+        assert_eq!(m.json_path, "elements[0].members[0].params[1].type");
+
+        let mut v: Value = serde_json::from_str(&o).unwrap();
+        mask_inferred(&mut v);
+        assert_eq!(
+            v.to_string(),
+            line("<inferred>", "<inferred>", "String"),
+            "key order is kept"
+        );
+    }
+
+    #[test]
+    fn dart_uris_pass_through_collect() {
+        let files =
+            collect_dart_files(&[PathBuf::from("dart:core"), PathBuf::from("dart:_internal")])
+                .unwrap();
+        assert_eq!(files, ["dart:_internal", "dart:core"]);
+    }
+
+    #[test]
+    fn mask_keeps_key_order_differences() {
+        let d = masked_diff(
+            r#"{"k":"field","type":"int","inf":true}"#,
+            r#"{"type":"int","k":"field","inf":true}"#,
+        )
+        .unwrap();
+        assert_eq!(d.json_path, "");
+        assert!(d.oracle.starts_with("keys"), "{}", d.oracle);
     }
 
     #[test]

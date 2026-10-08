@@ -25,6 +25,9 @@ pub enum DumpMode {
     Ast,
     /// Resolved diagnostics and expression types (not implemented yet).
     Resolved,
+    /// Element model of each library (docs/design/semantics.md §5.1).
+    /// Skeleton: every path gives `{"path":..,"error":"not implemented"}`.
+    Elements,
 }
 
 /// Runs `dump` for [files], or for the paths on stdin (one per line) when
@@ -47,7 +50,8 @@ pub fn run(mode: DumpMode, files: Vec<PathBuf>) -> anyhow::Result<()> {
     let paths: Vec<String> = paths
         .iter()
         .map(|p| {
-            if p.is_absolute() {
+            // A `dart:` library URI (mode `elements`) is kept as it is.
+            if p.is_absolute() || p.to_str().is_some_and(|s| s.starts_with("dart:")) {
                 p.to_string_lossy().into_owned()
             } else {
                 cwd.join(p).to_string_lossy().into_owned()
@@ -58,6 +62,7 @@ pub fn run(mode: DumpMode, files: Vec<PathBuf>) -> anyhow::Result<()> {
     let dump: fn(&str) -> String = match mode {
         DumpMode::Tokens => dump_tokens,
         DumpMode::Events => dump_events,
+        DumpMode::Elements => dump_elements,
         DumpMode::Ast | DumpMode::Resolved => {
             anyhow::bail!("dump mode {mode:?} is not implemented yet")
         }
@@ -105,6 +110,12 @@ fn error_json(path: &str, error: &str) -> String {
     write_string(&mut out, error);
     out.push('}');
     out
+}
+
+/// One line of `dump elements`. Not implemented yet: the element model is
+/// built in `dartr_element` (phase 5).
+pub fn dump_elements(path: &str) -> String {
+    error_json(path, "not implemented")
 }
 
 /// One line of `dump tokens`.

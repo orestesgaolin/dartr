@@ -1,0 +1,18 @@
+[package]
+name = "dartr_element"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+dartr_ast.workspace = true
+dartr_diagnostics.workspace = true
+boxcar.workspace = true
+hashbrown.workspace = true
+imbl.workspace = true
+indexmap.workspace = true
+parking_lot.workspace = true
+rustc-hash.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

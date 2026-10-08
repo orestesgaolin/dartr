@@ -1,0 +1,4530 @@
+{
+ "source": "pkg/analyzer/lib/src/dart/element/element.dart",
+ "classes": [
+  {
+   "name": "BindPatternVariableElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "PatternVariableElementImpl",
+   "mixins": [],
+   "interfaces": [
+    "BindPatternVariableElement"
+   ],
+   "line": 72,
+   "flagEnums": [],
+   "fields": []
+  },
+  {
+   "name": "BindPatternVariableFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "PatternVariableFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "BindPatternVariableFragment"
+   ],
+   "line": 106,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "node",
+     "type": "DeclaredVariablePatternImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 108
+    },
+    {
+     "name": "isDuplicate",
+     "type": "bool",
+     "final": false,
+     "late": false,
+     "init": "false",
+     "line": 112
+    }
+   ]
+  },
+  {
+   "name": "ClassElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "InterfaceElementImpl",
+   "mixins": [],
+   "interfaces": [
+    "ClassElement"
+   ],
+   "line": 137,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _ClassElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "reference",
+     "type": "MemberContainerReference",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 140
+    },
+    {
+     "name": "_firstFragment",
+     "type": "ClassFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 143
+    }
+   ]
+  },
+  {
+   "name": "ClassFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "InterfaceFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "ClassFragment"
+   ],
+   "line": 628,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _ClassElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "element",
+     "type": "ClassElementImpl",
+     "final": true,
+     "late": true,
+     "init": null,
+     "line": 630
+    }
+   ]
+  },
+  {
+   "name": "ConstantInitializerImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "Object",
+   "mixins": [],
+   "interfaces": [],
+   "line": 768,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "fragment",
+     "type": "VariableFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 769
+    },
+    {
+     "name": "expression",
+     "type": "ExpressionImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 770
+    }
+   ]
+  },
+  {
+   "name": "ConstructorElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "ExecutableElementImpl",
+   "mixins": [
+    "InternalConstructorElement"
+   ],
+   "interfaces": [
+    "ConstantEvaluationTarget"
+   ],
+   "line": 777,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _ConstructorElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "reference",
+     "type": "MemberReference",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 782
+    },
+    {
+     "name": "name",
+     "type": "String?",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 786
+    },
+    {
+     "name": "_firstFragment",
+     "type": "ConstructorFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 789
+    },
+    {
+     "name": "_redirectedConstructor",
+     "type": "InternalConstructorElement?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 792
+    },
+    {
+     "name": "_superConstructor",
+     "type": "InternalConstructorElement?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 800
+    },
+    {
+     "name": "isCycleFree",
+     "type": "bool",
+     "final": false,
+     "late": false,
+     "init": "true",
+     "line": 806
+    },
+    {
+     "name": "isConstantEvaluated",
+     "type": "bool",
+     "final": false,
+     "late": false,
+     "init": "false",
+     "line": 810
+    }
+   ]
+  },
+  {
+   "name": "ConstructorFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "ExecutableFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "ConstructorFragment"
+   ],
+   "line": 1107,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _ConstructorElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "element",
+     "type": "ConstructorElementImpl",
+     "final": true,
+     "late": true,
+     "init": null,
+     "line": 1109
+    },
+    {
+     "name": "_constantInitializers",
+     "type": "List<ConstructorInitializer>",
+     "final": false,
+     "late": false,
+     "init": "const []",
+     "line": 1113
+    },
+    {
+     "name": "newKeywordOffset",
+     "type": "int?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 1116
+    },
+    {
+     "name": "factoryKeywordOffset",
+     "type": "int?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 1119
+    },
+    {
+     "name": "typeName",
+     "type": "String?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 1122
+    },
+    {
+     "name": "typeNameOffset",
+     "type": "int?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 1125
+    },
+    {
+     "name": "periodOffset",
+     "type": "int?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 1128
+    },
+    {
+     "name": "name",
+     "type": "String",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 1131
+    },
+    {
+     "name": "nameOffset",
+     "type": "int?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 1134
+    },
+    {
+     "name": "nameEnd",
+     "type": "int?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 1137
+    },
+    {
+     "name": "thisKeywordOffset",
+     "type": "int?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 1140
+    },
+    {
+     "name": "previousFragment",
+     "type": "ConstructorFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 1143
+    },
+    {
+     "name": "nextFragment",
+     "type": "ConstructorFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 1146
+    }
+   ]
+  },
+  {
+   "name": "DirectiveUriImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "Object",
+   "mixins": [],
+   "interfaces": [
+    "DirectiveUri"
+   ],
+   "line": 1416,
+   "flagEnums": [],
+   "fields": []
+  },
+  {
+   "name": "DirectiveUriWithLibraryImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "DirectiveUriWithSourceImpl",
+   "mixins": [],
+   "interfaces": [
+    "DirectiveUriWithLibrary"
+   ],
+   "line": 1418,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "library",
+     "type": "LibraryElementImpl",
+     "final": false,
+     "late": true,
+     "init": null,
+     "line": 1421
+    }
+   ]
+  },
+  {
+   "name": "DirectiveUriWithRelativeUriImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "DirectiveUriWithRelativeUriStringImpl",
+   "mixins": [],
+   "interfaces": [
+    "DirectiveUriWithRelativeUri"
+   ],
+   "line": 1437,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "relativeUri",
+     "type": "Uri",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 1441
+    }
+   ]
+  },
+  {
+   "name": "DirectiveUriWithRelativeUriStringImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "DirectiveUriImpl",
+   "mixins": [],
+   "interfaces": [
+    "DirectiveUriWithRelativeUriString"
+   ],
+   "line": 1449,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "relativeUriString",
+     "type": "String",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 1452
+    }
+   ]
+  },
+  {
+   "name": "DirectiveUriWithSourceImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "DirectiveUriWithRelativeUriImpl",
+   "mixins": [],
+   "interfaces": [
+    "DirectiveUriWithSource"
+   ],
+   "line": 1457,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "source",
+     "type": "Source",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 1460
+    }
+   ]
+  },
+  {
+   "name": "DirectiveUriWithUnitImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "DirectiveUriWithRelativeUriImpl",
+   "mixins": [],
+   "interfaces": [
+    "DirectiveUriWithUnit"
+   ],
+   "line": 1469,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "libraryFragment",
+     "type": "LibraryFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 1472
+    }
+   ]
+  },
+  {
+   "name": "DynamicElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "ElementImpl",
+   "mixins": [],
+   "interfaces": [],
+   "line": 1485,
+   "flagEnums": [],
+   "fields": []
+  },
+  {
+   "name": "DynamicFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "FragmentImpl",
+   "mixins": [],
+   "interfaces": [],
+   "line": 1539,
+   "flagEnums": [],
+   "fields": []
+  },
+  {
+   "name": "ElementAnnotationImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "Object",
+   "mixins": [],
+   "interfaces": [
+    "ElementAnnotation",
+    "ConstantEvaluationTarget"
+   ],
+   "line": 1578,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "libraryFragment",
+     "type": "LibraryFragmentImpl",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 1736
+    },
+    {
+     "name": "annotationAst",
+     "type": "AnnotationImpl",
+     "final": false,
+     "late": true,
+     "init": null,
+     "line": 1740
+    },
+    {
+     "name": "evaluationResult",
+     "type": "Constant?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 1745
+    },
+    {
+     "name": "additionalErrors",
+     "type": "List<Diagnostic>?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 1754
+    }
+   ]
+  },
+  {
+   "name": "ElementDirectiveImpl",
+   "kind": "class",
+   "abstract": true,
+   "sealed": true,
+   "super": "Object",
+   "mixins": [],
+   "interfaces": [
+    "ElementDirective"
+   ],
+   "line": 2031,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "libraryFragment",
+     "type": "LibraryFragmentImpl",
+     "final": false,
+     "late": true,
+     "init": null,
+     "line": 2033
+    },
+    {
+     "name": "uri",
+     "type": "DirectiveUri",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 2036
+    },
+    {
+     "name": "metadata",
+     "type": "MetadataImpl",
+     "final": false,
+     "late": false,
+     "init": "MetadataImpl(const [])",
+     "line": 2039
+    }
+   ]
+  },
+  {
+   "name": "ElementImpl",
+   "kind": "class",
+   "abstract": true,
+   "sealed": false,
+   "super": "Object",
+   "mixins": [],
+   "interfaces": [
+    "Element"
+   ],
+   "line": 2060,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _ElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "id",
+     "type": "int",
+     "final": true,
+     "late": false,
+     "init": "FragmentImpl._NEXT_ID++",
+     "line": 2072
+    },
+    {
+     "name": "previousFragmentOfDifferentKind",
+     "type": "FragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 2078
+    },
+    {
+     "name": "_flags",
+     "type": "EnumSet<_ElementStorageFlag>",
+     "final": false,
+     "late": false,
+     "init": "EnumSet.empty()",
+     "line": 2081
+    }
+   ]
+  },
+  {
+   "name": "EnumElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "InterfaceElementImpl",
+   "mixins": [],
+   "interfaces": [
+    "EnumElement"
+   ],
+   "line": 2365,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "reference",
+     "type": "MemberContainerReference",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 2368
+    },
+    {
+     "name": "_firstFragment",
+     "type": "EnumFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 2371
+    }
+   ]
+  },
+  {
+   "name": "EnumFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "InterfaceFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "EnumFragment"
+   ],
+   "line": 2476,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "element",
+     "type": "EnumElementImpl",
+     "final": true,
+     "late": true,
+     "init": null,
+     "line": 2478
+    }
+   ]
+  },
+  {
+   "name": "ExecutableElementImpl",
+   "kind": "class",
+   "abstract": true,
+   "sealed": false,
+   "super": "FunctionTypedElementImpl",
+   "mixins": [
+    "InternalExecutableElement",
+    "DeferredResolutionReadingMixin"
+   ],
+   "interfaces": [],
+   "line": 2506,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _ExecutableElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "_returnType",
+     "type": "TypeImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 2508
+    },
+    {
+     "name": "_type",
+     "type": "FunctionTypeImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 2510
+    }
+   ]
+  },
+  {
+   "name": "ExecutableFragmentImpl",
+   "kind": "class",
+   "abstract": true,
+   "sealed": false,
+   "super": "FunctionTypedFragmentImpl",
+   "mixins": [
+    "DeferredResolutionReadingMixin"
+   ],
+   "interfaces": [
+    "ExecutableFragment"
+   ],
+   "line": 2776,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _ExecutableElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "_typeParameters",
+     "type": "List<TypeParameterFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "const []",
+     "line": 2779
+    },
+    {
+     "name": "_formalParameters",
+     "type": "List<FormalParameterFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "const []",
+     "line": 2783
+    }
+   ]
+  },
+  {
+   "name": "ExtensionElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "InstanceElementImpl",
+   "mixins": [],
+   "interfaces": [
+    "ExtensionElement"
+   ],
+   "line": 2979,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "reference",
+     "type": "MemberContainerReference",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 2983
+    },
+    {
+     "name": "_firstFragment",
+     "type": "ExtensionFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 2986
+    },
+    {
+     "name": "_extendedType",
+     "type": "TypeImpl",
+     "final": false,
+     "late": false,
+     "init": "InvalidTypeImpl.instance",
+     "line": 2988
+    }
+   ]
+  },
+  {
+   "name": "ExtensionFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "InstanceFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "ExtensionFragment"
+   ],
+   "line": 3149,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "element",
+     "type": "ExtensionElementImpl",
+     "final": true,
+     "late": true,
+     "init": null,
+     "line": 3152
+    }
+   ]
+  },
+  {
+   "name": "ExtensionTypeElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "InterfaceElementImpl",
+   "mixins": [],
+   "interfaces": [
+    "ExtensionTypeElement"
+   ],
+   "line": 3203,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "reference",
+     "type": "MemberContainerReference",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 3207
+    },
+    {
+     "name": "_firstFragment",
+     "type": "ExtensionTypeFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 3210
+    },
+    {
+     "name": "hasRepresentationSelfReference",
+     "type": "bool",
+     "final": false,
+     "late": false,
+     "init": "false",
+     "line": 3215
+    },
+    {
+     "name": "hasImplementsSelfReference",
+     "type": "bool",
+     "final": false,
+     "late": false,
+     "init": "false",
+     "line": 3220
+    },
+    {
+     "name": "_typeErasure",
+     "type": "TypeImpl",
+     "final": false,
+     "late": true,
+     "init": null,
+     "line": 3222
+    }
+   ]
+  },
+  {
+   "name": "ExtensionTypeFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "InterfaceFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "ExtensionTypeFragment"
+   ],
+   "line": 3331,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "element",
+     "type": "ExtensionTypeElementImpl",
+     "final": true,
+     "late": true,
+     "init": null,
+     "line": 3334
+    }
+   ]
+  },
+  {
+   "name": "FieldElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "PropertyInducingElementImpl",
+   "mixins": [
+    "InternalFieldElement"
+   ],
+   "interfaces": [],
+   "line": 3355,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _FieldElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "reference",
+     "type": "MemberReference",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 3359
+    },
+    {
+     "name": "_firstFragment",
+     "type": "FieldFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 3362
+    }
+   ]
+  },
+  {
+   "name": "FieldFormalParameterElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "FormalParameterElementImpl",
+   "mixins": [
+    "InternalFieldFormalParameterElement"
+   ],
+   "interfaces": [],
+   "line": 3632,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _FieldFormalParameterElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "_field",
+     "type": "FieldElementImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 3634
+    }
+   ]
+  },
+  {
+   "name": "FieldFormalParameterFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "FormalParameterFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "FieldFormalParameterFragment"
+   ],
+   "line": 3687,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _FieldFormalParameterElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "privateName",
+     "type": "String?",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 3690
+    }
+   ]
+  },
+  {
+   "name": "FieldFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "PropertyInducingFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "FieldFragment"
+   ],
+   "line": 3736,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _FieldElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "inheritsCovariant",
+     "type": "bool",
+     "final": false,
+     "late": false,
+     "init": "false",
+     "line": 3740
+    },
+    {
+     "name": "element",
+     "type": "FieldElementImpl",
+     "final": true,
+     "late": true,
+     "init": null,
+     "line": 3743
+    }
+   ]
+  },
+  {
+   "name": "FormalParameterElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "PromotableElementImpl",
+   "mixins": [
+    "InternalFormalParameterElement"
+   ],
+   "interfaces": [],
+   "line": 3892,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _FormalParameterElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "_firstFragment",
+     "type": "FormalParameterFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 3895
+    },
+    {
+     "name": "_type",
+     "type": "TypeImpl",
+     "final": false,
+     "late": false,
+     "init": "InvalidTypeImpl.instance",
+     "line": 3897
+    },
+    {
+     "name": "_baseFormalParameter",
+     "type": "FormalParameterElementImpl?",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 3899
+    }
+   ]
+  },
+  {
+   "name": "FormalParameterFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "VariableFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "FormalParameterFragment"
+   ],
+   "line": 4105,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _FormalParameterElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "name",
+     "type": "String?",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 4108
+    },
+    {
+     "name": "nameOffset",
+     "type": "int?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 4111
+    },
+    {
+     "name": "parameterKind",
+     "type": "ParameterKind",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 4117
+    },
+    {
+     "name": "_element",
+     "type": "FormalParameterElementImpl",
+     "final": true,
+     "late": true,
+     "init": null,
+     "line": 4120
+    },
+    {
+     "name": "nextFragment",
+     "type": "FormalParameterFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 4123
+    },
+    {
+     "name": "previousFragment",
+     "type": "FormalParameterFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 4126
+    }
+   ]
+  },
+  {
+   "name": "FragmentImpl",
+   "kind": "class",
+   "abstract": true,
+   "sealed": false,
+   "super": "Object",
+   "mixins": [],
+   "interfaces": [
+    "Fragment"
+   ],
+   "line": 4388,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _FragmentFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "id",
+     "type": "int",
+     "final": true,
+     "late": false,
+     "init": "_NEXT_ID++",
+     "line": 4392
+    },
+    {
+     "name": "enclosingFragment",
+     "type": "FragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 4399
+    },
+    {
+     "name": "firstTokenOffset",
+     "type": "int?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 4403
+    },
+    {
+     "name": "_flags",
+     "type": "EnumSet<_FragmentStorageFlag>",
+     "final": false,
+     "late": false,
+     "init": "EnumSet.empty()",
+     "line": 4406
+    },
+    {
+     "name": "documentationComment",
+     "type": "String?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 4409
+    },
+    {
+     "name": "metadata",
+     "type": "MetadataImpl",
+     "final": false,
+     "late": false,
+     "init": "MetadataImpl.empty",
+     "line": 4412
+    },
+    {
+     "name": "_codeOffset",
+     "type": "int?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 4416
+    },
+    {
+     "name": "_codeLength",
+     "type": "int?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 4419
+    }
+   ]
+  },
+  {
+   "name": "FunctionFragmentImpl",
+   "kind": "class",
+   "abstract": true,
+   "sealed": true,
+   "super": "ExecutableFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "FunctionTypedFragmentImpl"
+   ],
+   "line": 4662,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "name",
+     "type": "String?",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 4665
+    },
+    {
+     "name": "nameOffset",
+     "type": "int?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 4668
+    }
+   ]
+  },
+  {
+   "name": "FunctionTypedElementImpl",
+   "kind": "class",
+   "abstract": true,
+   "sealed": false,
+   "super": "ElementImpl",
+   "mixins": [],
+   "interfaces": [
+    "FunctionTypedElement"
+   ],
+   "line": 4682,
+   "flagEnums": [],
+   "fields": []
+  },
+  {
+   "name": "FunctionTypedFragmentImpl",
+   "kind": "class",
+   "abstract": true,
+   "sealed": false,
+   "super": "FragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "FunctionTypedFragment"
+   ],
+   "line": 4698,
+   "flagEnums": [],
+   "fields": []
+  },
+  {
+   "name": "GenericFunctionTypeElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "FunctionTypedElementImpl",
+   "mixins": [],
+   "interfaces": [
+    "GenericFunctionTypeElement"
+   ],
+   "line": 4733,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "_firstFragment",
+     "type": "GenericFunctionTypeFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 4736
+    },
+    {
+     "name": "returnType",
+     "type": "TypeImpl",
+     "final": false,
+     "late": true,
+     "init": null,
+     "line": 4739
+    },
+    {
+     "name": "_type",
+     "type": "FunctionTypeImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 4742
+    }
+   ]
+  },
+  {
+   "name": "GenericFunctionTypeFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "FragmentImpl",
+   "mixins": [
+    "DeferredResolutionReadingMixin"
+   ],
+   "interfaces": [
+    "FunctionTypedFragmentImpl",
+    "GenericFunctionTypeFragment"
+   ],
+   "line": 4831,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "_typeParameters",
+     "type": "List<TypeParameterFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "const []",
+     "line": 4834
+    },
+    {
+     "name": "_formalParameters",
+     "type": "List<FormalParameterFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "const []",
+     "line": 4837
+    },
+    {
+     "name": "isNullable",
+     "type": "bool",
+     "final": false,
+     "late": false,
+     "init": "false",
+     "line": 4840
+    },
+    {
+     "name": "element",
+     "type": "GenericFunctionTypeElementImpl",
+     "final": true,
+     "late": true,
+     "init": null,
+     "line": 4843
+    }
+   ]
+  },
+  {
+   "name": "GetterElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "PropertyAccessorElementImpl",
+   "mixins": [
+    "InternalGetterElement"
+   ],
+   "interfaces": [],
+   "line": 4899,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "reference",
+     "type": "DeclarationReference",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 4903
+    },
+    {
+     "name": "_firstFragment",
+     "type": "GetterFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 4906
+    }
+   ]
+  },
+  {
+   "name": "GetterFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "PropertyAccessorFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "GetterFragment"
+   ],
+   "line": 5044,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "element",
+     "type": "GetterElementImpl",
+     "final": false,
+     "late": true,
+     "init": null,
+     "line": 5047
+    },
+    {
+     "name": "previousFragment",
+     "type": "GetterFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 5050
+    },
+    {
+     "name": "nextFragment",
+     "type": "GetterFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 5053
+    }
+   ]
+  },
+  {
+   "name": "HideElementCombinatorImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "Object",
+   "mixins": [],
+   "interfaces": [
+    "HideElementCombinator"
+   ],
+   "line": 5065,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "hiddenNames",
+     "type": "List<String>",
+     "final": false,
+     "late": false,
+     "init": "const []",
+     "line": 5067
+    },
+    {
+     "name": "offset",
+     "type": "int",
+     "final": false,
+     "late": false,
+     "init": "0",
+     "line": 5070
+    },
+    {
+     "name": "end",
+     "type": "int",
+     "final": false,
+     "late": false,
+     "init": "-1",
+     "line": 5073
+    }
+   ]
+  },
+  {
+   "name": "InstanceElementImpl",
+   "kind": "class",
+   "abstract": true,
+   "sealed": true,
+   "super": "ElementImpl",
+   "mixins": [
+    "DeferredMembersReadingMixin",
+    "DeferredResolutionReadingMixin"
+   ],
+   "interfaces": [
+    "InstanceElement",
+    "TypeParameterizedElement"
+   ],
+   "line": 5092,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _InstanceElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "_fields",
+     "type": "List<FieldElementImpl>",
+     "final": false,
+     "late": false,
+     "init": "[]",
+     "line": 5095
+    },
+    {
+     "name": "_getters",
+     "type": "List<GetterElementImpl>",
+     "final": false,
+     "late": false,
+     "init": "[]",
+     "line": 5097
+    },
+    {
+     "name": "_setters",
+     "type": "List<SetterElementImpl>",
+     "final": false,
+     "late": false,
+     "init": "[]",
+     "line": 5099
+    },
+    {
+     "name": "_methods",
+     "type": "List<MethodElementImpl>",
+     "final": false,
+     "late": false,
+     "init": "[]",
+     "line": 5101
+    },
+    {
+     "name": "requirementState",
+     "type": "InstanceElementRequirementState",
+     "final": false,
+     "late": false,
+     "init": "InstanceElementRequirementState()",
+     "line": 5104
+    }
+   ]
+  },
+  {
+   "name": "InstanceFragmentImpl",
+   "kind": "class",
+   "abstract": true,
+   "sealed": false,
+   "super": "FragmentImpl",
+   "mixins": [
+    "DeferredMembersReadingMixin",
+    "DeferredResolutionReadingMixin"
+   ],
+   "interfaces": [
+    "InstanceFragment"
+   ],
+   "line": 5522,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "name",
+     "type": "String?",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 5526
+    },
+    {
+     "name": "nameOffset",
+     "type": "int?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 5529
+    },
+    {
+     "name": "previousFragment",
+     "type": "InstanceFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 5532
+    },
+    {
+     "name": "nextFragment",
+     "type": "InstanceFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 5535
+    },
+    {
+     "name": "_typeParameters",
+     "type": "List<TypeParameterFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "const []",
+     "line": 5537
+    },
+    {
+     "name": "_fields",
+     "type": "List<FieldFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "_Sentinel.fieldFragment",
+     "line": 5538
+    },
+    {
+     "name": "_getters",
+     "type": "List<GetterFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "_Sentinel.getterFragment",
+     "line": 5539
+    },
+    {
+     "name": "_setters",
+     "type": "List<SetterFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "_Sentinel.setterFragment",
+     "line": 5540
+    },
+    {
+     "name": "_methods",
+     "type": "List<MethodFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "_Sentinel.methodFragment",
+     "line": 5541
+    }
+   ]
+  },
+  {
+   "name": "InterfaceElementImpl",
+   "kind": "class",
+   "abstract": true,
+   "sealed": true,
+   "super": "InstanceElementImpl",
+   "mixins": [],
+   "interfaces": [
+    "InterfaceElement"
+   ],
+   "line": 5688,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _InterfaceElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "_nonNullableInstance",
+     "type": "InterfaceTypeImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 5692
+    },
+    {
+     "name": "_nullableInstance",
+     "type": "InterfaceTypeImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 5696
+    },
+    {
+     "name": "_supertype",
+     "type": "InterfaceTypeImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 5698
+    },
+    {
+     "name": "_mixins",
+     "type": "List<InterfaceTypeImpl>",
+     "final": false,
+     "late": false,
+     "init": "const []",
+     "line": 5699
+    },
+    {
+     "name": "_interfaces",
+     "type": "List<InterfaceTypeImpl>",
+     "final": false,
+     "late": false,
+     "init": "const []",
+     "line": 5700
+    },
+    {
+     "name": "_thisType",
+     "type": "InterfaceTypeImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 5702
+    },
+    {
+     "name": "interfaceCycle",
+     "type": "List<InterfaceElementImpl>?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 5707
+    },
+    {
+     "name": "_allSupertypes",
+     "type": "List<InterfaceTypeImpl>?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 5710
+    },
+    {
+     "name": "_constructors",
+     "type": "List<ConstructorElementImpl>",
+     "final": false,
+     "late": false,
+     "init": "_Sentinel.constructorElement",
+     "line": 5712
+    },
+    {
+     "name": "mixinInferenceCallback",
+     "type": "List<InterfaceTypeImpl>? Function(InterfaceElementImpl)?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 5717
+    },
+    {
+     "name": "_hasNonFinalField",
+     "type": "bool",
+     "final": false,
+     "late": false,
+     "init": "false",
+     "line": 5720
+    }
+   ]
+  },
+  {
+   "name": "InterfaceFragmentImpl",
+   "kind": "class",
+   "abstract": true,
+   "sealed": false,
+   "super": "InstanceFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "InterfaceFragment"
+   ],
+   "line": 6168,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "_constructors",
+     "type": "List<ConstructorFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "_Sentinel.constructorFragment",
+     "line": 6170
+    }
+   ]
+  },
+  {
+   "name": "JoinPatternVariableElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "PatternVariableElementImpl",
+   "mixins": [],
+   "interfaces": [
+    "JoinPatternVariableElement"
+   ],
+   "line": 6467,
+   "flagEnums": [],
+   "fields": []
+  },
+  {
+   "name": "JoinPatternVariableFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "PatternVariableFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "JoinPatternVariableFragment"
+   ],
+   "line": 6529,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "variables",
+     "type": "List<PatternVariableFragmentImpl>",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 6532
+    },
+    {
+     "name": "inconsistency",
+     "type": "JoinedPatternVariableInconsistency",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 6534
+    },
+    {
+     "name": "references",
+     "type": "List<SimpleIdentifier>",
+     "final": true,
+     "late": false,
+     "init": "[]",
+     "line": 6537
+    }
+   ]
+  },
+  {
+   "name": "LabelElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "ElementImpl",
+   "mixins": [],
+   "interfaces": [
+    "LabelElement"
+   ],
+   "line": 6583,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "_firstFragment",
+     "type": "LabelFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 6585
+    }
+   ]
+  },
+  {
+   "name": "LabelFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "FragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "LabelFragment"
+   ],
+   "line": 6630,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "element",
+     "type": "LabelElementImpl",
+     "final": true,
+     "late": true,
+     "init": "LabelElementImpl(this)",
+     "line": 6632
+    },
+    {
+     "name": "name",
+     "type": "String?",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 6635
+    },
+    {
+     "name": "_onSwitchMember",
+     "type": "bool",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 6640
+    }
+   ]
+  },
+  {
+   "name": "LibraryElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "ElementImpl",
+   "mixins": [
+    "DeferredResolutionReadingMixin"
+   ],
+   "interfaces": [
+    "LibraryElement"
+   ],
+   "line": 6688,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _LibraryElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "_context",
+     "type": "AnalysisContext",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 6691
+    },
+    {
+     "name": "reference",
+     "type": "LibraryReference?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 6695
+    },
+    {
+     "name": "_metadata",
+     "type": "MetadataImpl",
+     "final": false,
+     "late": false,
+     "init": "MetadataImpl(const [])",
+     "line": 6697
+    },
+    {
+     "name": "_documentationComment",
+     "type": "String?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 6699
+    },
+    {
+     "name": "_session",
+     "type": "AnalysisSessionImpl",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 6701
+    },
+    {
+     "name": "_firstFragment",
+     "type": "LibraryFragmentImpl",
+     "final": false,
+     "late": true,
+     "init": null,
+     "line": 6705
+    },
+    {
+     "name": "_languageVersion",
+     "type": "LibraryLanguageVersion?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 6708
+    },
+    {
+     "name": "hasTypeProviderSystemSet",
+     "type": "bool",
+     "final": false,
+     "late": false,
+     "init": "false",
+     "line": 6711
+    },
+    {
+     "name": "typeProvider",
+     "type": "TypeProviderImpl",
+     "final": false,
+     "late": true,
+     "init": null,
+     "line": 6715
+    },
+    {
+     "name": "typeSystem",
+     "type": "TypeSystemImpl",
+     "final": false,
+     "late": true,
+     "init": null,
+     "line": 6719
+    },
+    {
+     "name": "exportEntries",
+     "type": "List<ExportEntry>",
+     "final": false,
+     "late": true,
+     "init": null,
+     "line": 6722
+    },
+    {
+     "name": "nameUnion",
+     "type": "ElementNameUnion",
+     "final": false,
+     "late": false,
+     "init": "ElementNameUnion.empty()",
+     "line": 6726
+    },
+    {
+     "name": "_featureSet",
+     "type": "FeatureSet",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 6728
+    },
+    {
+     "name": "_entryPoint",
+     "type": "TopLevelFunctionElementImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 6732
+    },
+    {
+     "name": "loadLibraryProvider",
+     "type": "LoadLibraryFunctionProvider",
+     "final": true,
+     "late": true,
+     "init": null,
+     "line": 6737
+    },
+    {
+     "name": "_name",
+     "type": "String",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 6739
+    },
+    {
+     "name": "_nameOffset",
+     "type": "int",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 6740
+    },
+    {
+     "name": "_nameLength",
+     "type": "int",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 6741
+    },
+    {
+     "name": "_classes",
+     "type": "List<ClassElementImpl>",
+     "final": false,
+     "late": false,
+     "init": "[]",
+     "line": 6743
+    },
+    {
+     "name": "_enums",
+     "type": "List<EnumElementImpl>",
+     "final": false,
+     "late": false,
+     "init": "[]",
+     "line": 6744
+    },
+    {
+     "name": "_extensions",
+     "type": "List<ExtensionElementImpl>",
+     "final": false,
+     "late": false,
+     "init": "[]",
+     "line": 6745
+    },
+    {
+     "name": "_extensionTypes",
+     "type": "List<ExtensionTypeElementImpl>",
+     "final": false,
+     "late": false,
+     "init": "[]",
+     "line": 6746
+    },
+    {
+     "name": "_getters",
+     "type": "List<GetterElementImpl>",
+     "final": false,
+     "late": false,
+     "init": "[]",
+     "line": 6747
+    },
+    {
+     "name": "_setters",
+     "type": "List<SetterElementImpl>",
+     "final": false,
+     "late": false,
+     "init": "[]",
+     "line": 6748
+    },
+    {
+     "name": "_mixins",
+     "type": "List<MixinElementImpl>",
+     "final": false,
+     "late": false,
+     "init": "[]",
+     "line": 6749
+    },
+    {
+     "name": "_topLevelFunctions",
+     "type": "List<TopLevelFunctionElementImpl>",
+     "final": false,
+     "late": false,
+     "init": "[]",
+     "line": 6750
+    },
+    {
+     "name": "_topLevelVariables",
+     "type": "List<TopLevelVariableElementImpl>",
+     "final": false,
+     "late": false,
+     "init": "[]",
+     "line": 6751
+    },
+    {
+     "name": "_typeAliases",
+     "type": "List<TypeAliasElementImpl>",
+     "final": false,
+     "late": false,
+     "init": "[]",
+     "line": 6752
+    },
+    {
+     "name": "_exportNamespace",
+     "type": "Namespace?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 6756
+    },
+    {
+     "name": "_publicNamespace",
+     "type": "Namespace?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 6760
+    },
+    {
+     "name": "_fieldNameNonPromotabilityInfo",
+     "type": "Map<String, FieldNameNonPromotabilityInfo>?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 6766
+    },
+    {
+     "name": "_libraryDeclarations",
+     "type": "LibraryDeclarations?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 6769
+    },
+    {
+     "name": "manifest",
+     "type": "LibraryManifestHandle?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 6773
+    },
+    {
+     "name": "requirementState",
+     "type": "LibraryElementRequirementState",
+     "final": false,
+     "late": false,
+     "init": "LibraryElementRequirementState()",
+     "line": 6776
+    },
+    {
+     "name": "internal",
+     "type": "LibraryElementImplInternal",
+     "final": true,
+     "late": true,
+     "init": "LibraryElementImplInternal(this)",
+     "line": 6780
+    }
+   ]
+  },
+  {
+   "name": "LibraryExportImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "ElementDirectiveImpl",
+   "mixins": [],
+   "interfaces": [
+    "LibraryExport"
+   ],
+   "line": 7623,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "combinators",
+     "type": "List<NamespaceCombinator>",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 7625
+    },
+    {
+     "name": "exportKeywordOffset",
+     "type": "int",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 7628
+    }
+   ]
+  },
+  {
+   "name": "LibraryFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "FragmentImpl",
+   "mixins": [
+    "DeferredResolutionReadingMixin"
+   ],
+   "interfaces": [
+    "LibraryFragment"
+   ],
+   "line": 7652,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _LibraryElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "source",
+     "type": "Source",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 7656
+    },
+    {
+     "name": "lineInfo",
+     "type": "LineInfo",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 7659
+    },
+    {
+     "name": "library",
+     "type": "LibraryElementImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 7661
+    },
+    {
+     "name": "_libraryExports",
+     "type": "List<LibraryExportImpl>",
+     "final": false,
+     "late": false,
+     "init": "_Sentinel.libraryExport",
+     "line": 7664
+    },
+    {
+     "name": "_libraryImports",
+     "type": "List<LibraryImportImpl>",
+     "final": false,
+     "late": false,
+     "init": "_Sentinel.libraryImport",
+     "line": 7667
+    },
+    {
+     "name": "_libraryImportPrefixes",
+     "type": "List<PrefixElementImpl>?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 7670
+    },
+    {
+     "name": "_libraryImportPrefixesById",
+     "type": "Map<String, PrefixElementImpl>",
+     "final": true,
+     "late": false,
+     "init": "{}",
+     "line": 7673
+    },
+    {
+     "name": "_parts",
+     "type": "List<PartIncludeImpl>",
+     "final": false,
+     "late": false,
+     "init": "const <PartIncludeImpl>[]",
+     "line": 7676
+    },
+    {
+     "name": "_getters",
+     "type": "List<GetterFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "_Sentinel.getterFragment",
+     "line": 7679
+    },
+    {
+     "name": "_setters",
+     "type": "List<SetterFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "_Sentinel.setterFragment",
+     "line": 7682
+    },
+    {
+     "name": "_classes",
+     "type": "List<ClassFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "_Sentinel.classFragment",
+     "line": 7684
+    },
+    {
+     "name": "_enums",
+     "type": "List<EnumFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "_Sentinel.enumFragment",
+     "line": 7687
+    },
+    {
+     "name": "_extensions",
+     "type": "List<ExtensionFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "_Sentinel.extensionFragment",
+     "line": 7691
+    },
+    {
+     "name": "_extensionTypes",
+     "type": "List<ExtensionTypeFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "_Sentinel.extensionTypeFragment",
+     "line": 7693
+    },
+    {
+     "name": "_functions",
+     "type": "List<TopLevelFunctionFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "_Sentinel.topLevelFunctionFragment",
+     "line": 7698
+    },
+    {
+     "name": "_mixins",
+     "type": "List<MixinFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "_Sentinel.mixinFragment",
+     "line": 7701
+    },
+    {
+     "name": "_typeAliases",
+     "type": "List<TypeAliasFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "_Sentinel.typeAliasFragment",
+     "line": 7705
+    },
+    {
+     "name": "_variables",
+     "type": "List<TopLevelVariableFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "_Sentinel.topLevelVariableFragment",
+     "line": 7708
+    },
+    {
+     "name": "_scope",
+     "type": "LibraryFragmentScope?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 7712
+    }
+   ]
+  },
+  {
+   "name": "LibraryImportImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "ElementDirectiveImpl",
+   "mixins": [],
+   "interfaces": [
+    "LibraryImport"
+   ],
+   "line": 8193,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "isSynthetic",
+     "type": "bool",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 8195
+    },
+    {
+     "name": "combinators",
+     "type": "List<NamespaceCombinator>",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 8198
+    },
+    {
+     "name": "importKeywordOffset",
+     "type": "int",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 8201
+    },
+    {
+     "name": "prefix",
+     "type": "PrefixFragmentImpl?",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 8204
+    },
+    {
+     "name": "_namespace",
+     "type": "Namespace?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 8206
+    }
+   ]
+  },
+  {
+   "name": "LocalFunctionElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "ExecutableElementImpl",
+   "mixins": [],
+   "interfaces": [
+    "LocalFunctionElement"
+   ],
+   "line": 8268,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "_firstFragment",
+     "type": "LocalFunctionFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 8271
+    }
+   ]
+  },
+  {
+   "name": "LocalFunctionFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "FunctionFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "LocalFunctionFragment"
+   ],
+   "line": 8323,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "element",
+     "type": "LocalFunctionElementImpl",
+     "final": true,
+     "late": true,
+     "init": "LocalFunctionElementImpl(this)",
+     "line": 8327
+    },
+    {
+     "name": "previousFragment",
+     "type": "LocalFunctionFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 8330
+    },
+    {
+     "name": "nextFragment",
+     "type": "LocalFunctionFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 8333
+    }
+   ]
+  },
+  {
+   "name": "LocalVariableElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "PromotableElementImpl",
+   "mixins": [],
+   "interfaces": [
+    "LocalVariableElement"
+   ],
+   "line": 8341,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "_firstFragment",
+     "type": "LocalVariableFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 8344
+    },
+    {
+     "name": "type",
+     "type": "TypeImpl",
+     "final": false,
+     "late": false,
+     "init": "InvalidTypeImpl.instance",
+     "line": 8347
+    }
+   ]
+  },
+  {
+   "name": "LocalVariableFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "NonParameterVariableFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "LocalVariableFragment"
+   ],
+   "line": 8393,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "_element2",
+     "type": "LocalVariableElementImpl",
+     "final": false,
+     "late": true,
+     "init": "switch (this) {BindPatternVariableFragmentImpl() => BindPatternVariableElementImpl(this), JoinPatternVariableFragmentImpl() => JoinPatternVariableElementImpl(this), PatternVariableFragmentImpl() => PatternVariableElementImpl(this), _ => LocalVariableElementImpl(this)}",
+     "line": 8395
+    },
+    {
+     "name": "name",
+     "type": "String?",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 8403
+    },
+    {
+     "name": "nameOffset",
+     "type": "int?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 8406
+    }
+   ]
+  },
+  {
+   "name": "MetadataImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "Object",
+   "mixins": [],
+   "interfaces": [
+    "Metadata"
+   ],
+   "line": 8431,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "_metadataFlags2",
+     "type": "int",
+     "final": false,
+     "late": false,
+     "init": "0",
+     "line": 8439
+    },
+    {
+     "name": "annotations",
+     "type": "List<ElementAnnotationImpl>",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 8442
+    }
+   ]
+  },
+  {
+   "name": "MethodElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "ExecutableElementImpl",
+   "mixins": [
+    "InternalMethodElement"
+   ],
+   "interfaces": [],
+   "line": 8834,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _MethodElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "reference",
+     "type": "MemberReference",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 8838
+    },
+    {
+     "name": "name",
+     "type": "String?",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 8842
+    },
+    {
+     "name": "_firstFragment",
+     "type": "MethodFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 8845
+    },
+    {
+     "name": "isOperatorEqualWithParameterTypeFromObject",
+     "type": "bool",
+     "final": false,
+     "late": false,
+     "init": "false",
+     "line": 8851
+    },
+    {
+     "name": "typeInferenceError",
+     "type": "TopLevelInferenceError?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 8856
+    }
+   ]
+  },
+  {
+   "name": "MethodFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "ExecutableFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "MethodFragment"
+   ],
+   "line": 9026,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _MethodElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "element",
+     "type": "MethodElementImpl",
+     "final": true,
+     "late": true,
+     "init": null,
+     "line": 9029
+    },
+    {
+     "name": "name",
+     "type": "String?",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 9032
+    },
+    {
+     "name": "nameOffset",
+     "type": "int?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 9035
+    },
+    {
+     "name": "previousFragment",
+     "type": "MethodFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 9038
+    },
+    {
+     "name": "nextFragment",
+     "type": "MethodFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 9041
+    }
+   ]
+  },
+  {
+   "name": "MixinElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "InterfaceElementImpl",
+   "mixins": [],
+   "interfaces": [
+    "MixinElement"
+   ],
+   "line": 9122,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _MixinElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "reference",
+     "type": "MemberContainerReference",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 9125
+    },
+    {
+     "name": "_firstFragment",
+     "type": "MixinFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 9128
+    },
+    {
+     "name": "_superclassConstraints",
+     "type": "List<InterfaceTypeImpl>",
+     "final": false,
+     "late": false,
+     "init": "const []",
+     "line": 9130
+    }
+   ]
+  },
+  {
+   "name": "MixinFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "InterfaceFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "MixinFragment"
+   ],
+   "line": 9264,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _MixinElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "element",
+     "type": "MixinElementImpl",
+     "final": true,
+     "late": true,
+     "init": null,
+     "line": 9266
+    },
+    {
+     "name": "superInvokedNames",
+     "type": "List<String>",
+     "final": false,
+     "late": true,
+     "init": null,
+     "line": 9271
+    }
+   ]
+  },
+  {
+   "name": "MultiplyDefinedElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "ElementImpl",
+   "mixins": [],
+   "interfaces": [
+    "MultiplyDefinedElement"
+   ],
+   "line": 9310,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "libraryFragment",
+     "type": "LibraryFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 9312
+    },
+    {
+     "name": "name",
+     "type": "String",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 9315
+    },
+    {
+     "name": "conflictingElements",
+     "type": "List<Element>",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 9318
+    },
+    {
+     "name": "_firstFragment",
+     "type": "MultiplyDefinedFragmentImpl",
+     "final": true,
+     "late": true,
+     "init": "MultiplyDefinedFragmentImpl(this)",
+     "line": 9321
+    }
+   ]
+  },
+  {
+   "name": "MultiplyDefinedFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "FragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "MultiplyDefinedFragment"
+   ],
+   "line": 9433,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "element",
+     "type": "MultiplyDefinedElementImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 9436
+    }
+   ]
+  },
+  {
+   "name": "NeverElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "ElementImpl",
+   "mixins": [],
+   "interfaces": [],
+   "line": 9472,
+   "flagEnums": [],
+   "fields": []
+  },
+  {
+   "name": "NeverFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "FragmentImpl",
+   "mixins": [],
+   "interfaces": [],
+   "line": 9533,
+   "flagEnums": [],
+   "fields": []
+  },
+  {
+   "name": "NonParameterVariableFragmentImpl",
+   "kind": "class",
+   "abstract": true,
+   "sealed": false,
+   "super": "VariableFragmentImpl",
+   "mixins": [],
+   "interfaces": [],
+   "line": 9585,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _NonParameterVariableElementFlags.values)"
+   ],
+   "fields": []
+  },
+  {
+   "name": "PartIncludeImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "ElementDirectiveImpl",
+   "mixins": [],
+   "interfaces": [
+    "PartInclude"
+   ],
+   "line": 9625,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "partKeywordOffset",
+     "type": "int",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 9627
+    }
+   ]
+  },
+  {
+   "name": "PatternVariableElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "LocalVariableElementImpl",
+   "mixins": [],
+   "interfaces": [
+    "PatternVariableElement"
+   ],
+   "line": 9645,
+   "flagEnums": [],
+   "fields": []
+  },
+  {
+   "name": "PatternVariableFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "LocalVariableFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "PatternVariableFragment"
+   ],
+   "line": 9699,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "join",
+     "type": "JoinPatternVariableFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 9702
+    },
+    {
+     "name": "isVisitingWhenClause",
+     "type": "bool",
+     "final": false,
+     "late": false,
+     "init": "false",
+     "line": 9706
+    }
+   ]
+  },
+  {
+   "name": "PrefixElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "ElementImpl",
+   "mixins": [],
+   "interfaces": [
+    "PrefixElement"
+   ],
+   "line": 9731,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "localId",
+     "type": "String",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 9737
+    },
+    {
+     "name": "_firstFragment",
+     "type": "PrefixFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 9740
+    },
+    {
+     "name": "lastFragment",
+     "type": "PrefixFragmentImpl",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 9742
+    },
+    {
+     "name": "_scope",
+     "type": "PrefixScope?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 9745
+    }
+   ]
+  },
+  {
+   "name": "PrefixFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "FragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "PrefixFragment"
+   ],
+   "line": 9818,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "name",
+     "type": "String?",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 9820
+    },
+    {
+     "name": "nameOffset",
+     "type": "int?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 9823
+    },
+    {
+     "name": "offset",
+     "type": "int",
+     "final": false,
+     "late": false,
+     "init": "0",
+     "line": 9826
+    },
+    {
+     "name": "isDeferred",
+     "type": "bool",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 9829
+    },
+    {
+     "name": "element",
+     "type": "PrefixElementImpl",
+     "final": true,
+     "late": true,
+     "init": null,
+     "line": 9832
+    },
+    {
+     "name": "previousFragment",
+     "type": "PrefixFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 9835
+    },
+    {
+     "name": "nextFragment",
+     "type": "PrefixFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 9838
+    }
+   ]
+  },
+  {
+   "name": "PromotableElementImpl",
+   "kind": "class",
+   "abstract": true,
+   "sealed": false,
+   "super": "VariableElementImpl",
+   "mixins": [],
+   "interfaces": [],
+   "line": 9858,
+   "flagEnums": [],
+   "fields": []
+  },
+  {
+   "name": "PropertyAccessorElementImpl",
+   "kind": "class",
+   "abstract": true,
+   "sealed": false,
+   "super": "ExecutableElementImpl",
+   "mixins": [
+    "InternalPropertyAccessorElement"
+   ],
+   "interfaces": [],
+   "line": 9862,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _PropertyAccessorElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "_variable3",
+     "type": "PropertyInducingElementImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 9864
+    }
+   ]
+  },
+  {
+   "name": "PropertyAccessorFragmentImpl",
+   "kind": "class",
+   "abstract": true,
+   "sealed": true,
+   "super": "ExecutableFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "PropertyAccessorFragment"
+   ],
+   "line": 9952,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _PropertyAccessorElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "name",
+     "type": "String?",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 9955
+    },
+    {
+     "name": "nameOffset",
+     "type": "int?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 9958
+    },
+    {
+     "name": "_inducingVariable",
+     "type": "PropertyInducingFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 9960
+    }
+   ]
+  },
+  {
+   "name": "PropertyInducingElementImpl",
+   "kind": "class",
+   "abstract": true,
+   "sealed": false,
+   "super": "VariableElementImpl",
+   "mixins": [
+    "InternalPropertyInducingElement",
+    "DeferredResolutionReadingMixin"
+   ],
+   "interfaces": [],
+   "line": 10056,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _PropertyInducingElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "getter",
+     "type": "GetterElementImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 10060
+    },
+    {
+     "name": "setter",
+     "type": "SetterElementImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 10064
+    },
+    {
+     "name": "_type",
+     "type": "TypeImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 10066
+    },
+    {
+     "name": "typeInference",
+     "type": "PropertyInducingElementTypeInference?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 10071
+    },
+    {
+     "name": "typeInferenceError",
+     "type": "TopLevelInferenceError?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 10076
+    },
+    {
+     "name": "internal",
+     "type": "PropertyInducingElementImplInternal",
+     "final": true,
+     "late": true,
+     "init": "PropertyInducingElementImplInternal(this)",
+     "line": 10079
+    }
+   ]
+  },
+  {
+   "name": "PropertyInducingFragmentImpl",
+   "kind": "class",
+   "abstract": true,
+   "sealed": false,
+   "super": "NonParameterVariableFragmentImpl",
+   "mixins": [
+    "DeferredResolutionReadingMixin"
+   ],
+   "interfaces": [
+    "PropertyInducingFragment"
+   ],
+   "line": 10240,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _PropertyInducingElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "name",
+     "type": "String?",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 10245
+    },
+    {
+     "name": "nameOffset",
+     "type": "int?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 10248
+    },
+    {
+     "name": "_inducedGetter",
+     "type": "GetterFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 10250
+    },
+    {
+     "name": "_inducedSetter",
+     "type": "SetterFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 10252
+    },
+    {
+     "name": "previousFragment",
+     "type": "PropertyInducingFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 10255
+    },
+    {
+     "name": "nextFragment",
+     "type": "PropertyInducingFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 10258
+    }
+   ]
+  },
+  {
+   "name": "SetterElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "PropertyAccessorElementImpl",
+   "mixins": [
+    "InternalSetterElement"
+   ],
+   "interfaces": [],
+   "line": 10352,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "reference",
+     "type": "DeclarationReference",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 10356
+    },
+    {
+     "name": "_firstFragment",
+     "type": "SetterFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 10359
+    }
+   ]
+  },
+  {
+   "name": "SetterFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "PropertyAccessorFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "SetterFragment"
+   ],
+   "line": 10515,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "element",
+     "type": "SetterElementImpl",
+     "final": false,
+     "late": true,
+     "init": null,
+     "line": 10518
+    },
+    {
+     "name": "previousFragment",
+     "type": "SetterFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 10521
+    },
+    {
+     "name": "nextFragment",
+     "type": "SetterFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 10524
+    }
+   ]
+  },
+  {
+   "name": "ShowElementCombinatorImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "Object",
+   "mixins": [],
+   "interfaces": [
+    "ShowElementCombinator"
+   ],
+   "line": 10548,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "shownNames",
+     "type": "List<String>",
+     "final": false,
+     "late": false,
+     "init": "const []",
+     "line": 10550
+    },
+    {
+     "name": "offset",
+     "type": "int",
+     "final": false,
+     "late": false,
+     "init": "0",
+     "line": 10553
+    },
+    {
+     "name": "end",
+     "type": "int",
+     "final": false,
+     "late": false,
+     "init": "-1",
+     "line": 10556
+    }
+   ]
+  },
+  {
+   "name": "SuperFormalParameterElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "FormalParameterElementImpl",
+   "mixins": [
+    "InternalSuperFormalParameterElement"
+   ],
+   "interfaces": [],
+   "line": 10573,
+   "flagEnums": [],
+   "fields": []
+  },
+  {
+   "name": "SuperFormalParameterFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "FormalParameterFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "SuperFormalParameterFragment"
+   ],
+   "line": 10692,
+   "flagEnums": [],
+   "fields": []
+  },
+  {
+   "name": "TopLevelFunctionElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "ExecutableElementImpl",
+   "mixins": [],
+   "interfaces": [
+    "TopLevelFunctionElement"
+   ],
+   "line": 10711,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _TopLevelFunctionElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "reference",
+     "type": "TopLevelReference",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 10715
+    },
+    {
+     "name": "_firstFragment",
+     "type": "TopLevelFunctionFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 10718
+    }
+   ]
+  },
+  {
+   "name": "TopLevelFunctionFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "FunctionFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "TopLevelFunctionFragment"
+   ],
+   "line": 10865,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _TopLevelFunctionElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "element",
+     "type": "TopLevelFunctionElementImpl",
+     "final": false,
+     "late": true,
+     "init": null,
+     "line": 10869
+    },
+    {
+     "name": "previousFragment",
+     "type": "TopLevelFunctionFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 10872
+    },
+    {
+     "name": "nextFragment",
+     "type": "TopLevelFunctionFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 10875
+    }
+   ]
+  },
+  {
+   "name": "TopLevelVariableElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "PropertyInducingElementImpl",
+   "mixins": [],
+   "interfaces": [
+    "TopLevelVariableElement"
+   ],
+   "line": 10936,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "reference",
+     "type": "TopLevelReference",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 10940
+    },
+    {
+     "name": "_firstFragment",
+     "type": "TopLevelVariableFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 10943
+    }
+   ]
+  },
+  {
+   "name": "TopLevelVariableFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "PropertyInducingFragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "TopLevelVariableFragment"
+   ],
+   "line": 11041,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "element",
+     "type": "TopLevelVariableElementImpl",
+     "final": false,
+     "late": true,
+     "init": null,
+     "line": 11044
+    }
+   ]
+  },
+  {
+   "name": "TypeAliasElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "ElementImpl",
+   "mixins": [
+    "DeferredResolutionReadingMixin"
+   ],
+   "interfaces": [
+    "TypeAliasElement"
+   ],
+   "line": 11085,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _TypeAliasElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "reference",
+     "type": "TopLevelReference",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 11090
+    },
+    {
+     "name": "_firstFragment",
+     "type": "TypeAliasFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 11093
+    },
+    {
+     "name": "_aliasedType",
+     "type": "TypeImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 11095
+    }
+   ]
+  },
+  {
+   "name": "TypeAliasFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "FragmentImpl",
+   "mixins": [
+    "DeferredResolutionReadingMixin"
+   ],
+   "interfaces": [
+    "TypeAliasFragment"
+   ],
+   "line": 11320,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "name",
+     "type": "String?",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 11324
+    },
+    {
+     "name": "nameOffset",
+     "type": "int?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 11327
+    },
+    {
+     "name": "_typeParameters",
+     "type": "List<TypeParameterFragmentImpl>",
+     "final": false,
+     "late": false,
+     "init": "const []",
+     "line": 11329
+    },
+    {
+     "name": "previousFragment",
+     "type": "Null",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 11332
+    },
+    {
+     "name": "nextFragment",
+     "type": "Null",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 11335
+    },
+    {
+     "name": "hasSelfReference",
+     "type": "bool",
+     "final": false,
+     "late": false,
+     "init": "false",
+     "line": 11339
+    },
+    {
+     "name": "element",
+     "type": "TypeAliasElementImpl",
+     "final": false,
+     "late": true,
+     "init": null,
+     "line": 11342
+    }
+   ]
+  },
+  {
+   "name": "TypeParameterElementImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "ElementImpl",
+   "mixins": [],
+   "interfaces": [
+    "TypeParameterElement",
+    "SharedTypeParameter"
+   ],
+   "line": 11382,
+   "flagEnums": [],
+   "fields": [
+    {
+     "name": "_firstFragment",
+     "type": "TypeParameterFragmentImpl",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 11385
+    },
+    {
+     "name": "_variance",
+     "type": "Variance?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 11389
+    },
+    {
+     "name": "bound",
+     "type": "TypeImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 11392
+    },
+    {
+     "name": "defaultType",
+     "type": "TypeImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 11397
+    }
+   ]
+  },
+  {
+   "name": "TypeParameterFragmentImpl",
+   "kind": "class",
+   "abstract": false,
+   "sealed": false,
+   "super": "FragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "TypeParameterFragment"
+   ],
+   "line": 11535,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _TypeParameterElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "name",
+     "type": "String?",
+     "final": true,
+     "late": false,
+     "init": null,
+     "line": 11538
+    },
+    {
+     "name": "nameOffset",
+     "type": "int?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 11541
+    },
+    {
+     "name": "previousFragment",
+     "type": "TypeParameterFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 11544
+    },
+    {
+     "name": "nextFragment",
+     "type": "TypeParameterFragmentImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 11547
+    },
+    {
+     "name": "element",
+     "type": "TypeParameterElementImpl",
+     "final": true,
+     "late": true,
+     "init": null,
+     "line": 11550
+    }
+   ]
+  },
+  {
+   "name": "VariableElementImpl",
+   "kind": "class",
+   "abstract": true,
+   "sealed": false,
+   "super": "ElementImpl",
+   "mixins": [
+    "InternalVariableElement"
+   ],
+   "interfaces": [
+    "ConstantEvaluationTarget"
+   ],
+   "line": 11626,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _VariableElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "_constantInitializer",
+     "type": "ConstantInitializerImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 11629
+    },
+    {
+     "name": "evaluationResult",
+     "type": "Constant?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 11636
+    }
+   ]
+  },
+  {
+   "name": "VariableFragmentImpl",
+   "kind": "class",
+   "abstract": true,
+   "sealed": false,
+   "super": "FragmentImpl",
+   "mixins": [],
+   "interfaces": [
+    "VariableFragment"
+   ],
+   "line": 11797,
+   "flagEnums": [
+    "@GenerateElementFlags(flags: _VariableElementFlags.values)"
+   ],
+   "fields": [
+    {
+     "name": "constantInitializer",
+     "type": "ExpressionImpl?",
+     "final": false,
+     "late": false,
+     "init": null,
+     "line": 11806
+    }
+   ]
+  }
+ ],
+ "enums": {
+  "_ClassElementFlags": [
+   {
+    "name": "hasExtendsClause",
+    "fragment": true,
+    "element": "none"
+   },
+   {
+    "name": "isAbstract",
+    "fragment": true,
+    "element": "stored"
+   },
+   {
+    "name": "isBase",
+    "fragment": true,
+    "element": "stored"
+   },
+   {
+    "name": "isFinal",
+    "fragment": true,
+    "element": "stored"
+   },
+   {
+    "name": "isInterface",
+    "fragment": true,
+    "element": "stored"
+   },
+   {
+    "name": "isMixinApplication",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isMixinClass",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isSealed",
+    "fragment": true,
+    "element": "firstFragment"
+   }
+  ],
+  "_ConstructorElementFlags": [
+   {
+    "name": "isConst",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isFactory",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isOriginDeclaration",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isOriginExtensionTypeRecovery",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isOriginImplicitDefault",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isOriginMixinApplication",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isPrimary",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isRedirecting",
+    "fragment": true,
+    "element": "computed"
+   }
+  ],
+  "_ElementFlags": [
+   {
+    "name": "hasSinceSdkVersionComputed",
+    "fragment": false,
+    "element": "stored"
+   },
+   {
+    "name": "hasSinceSdkVersionValue",
+    "fragment": false,
+    "element": "stored"
+   }
+  ],
+  "_ElementStorageFlag": [
+   {
+    "name": "classElement_isAbstract",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "classElement_isBase",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "classElement_isFinal",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "classElement_isInterface",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "element_hasSinceSdkVersionComputed",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "element_hasSinceSdkVersionValue",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "executableElement_hasEnclosingTypeParameterReference",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "executableElement_isExtensionTypeMember",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "fieldElement_hasEnclosingTypeParameterReference",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "formalParameterElement_isCovariant",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "instanceElement_isSimplyBounded",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "libraryElement_isSynthetic",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "propertyInducingElement_isTypeInferredFromInitializer",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "typeAliasElement_isSimplyBounded",
+    "fragment": null,
+    "element": null
+   }
+  ],
+  "_ExecutableElementFlags": [
+   {
+    "name": "hasEnclosingTypeParameterReference",
+    "fragment": false,
+    "element": "stored"
+   },
+   {
+    "name": "hasImplicitReturnType",
+    "fragment": true,
+    "element": "none"
+   },
+   {
+    "name": "invokesSuperSelf",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isAbstract",
+    "fragment": true,
+    "element": "none"
+   },
+   {
+    "name": "isAsynchronous",
+    "fragment": true,
+    "element": "none"
+   },
+   {
+    "name": "isExtensionTypeMember",
+    "fragment": false,
+    "element": "stored"
+   },
+   {
+    "name": "isExternal",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isGenerator",
+    "fragment": true,
+    "element": "none"
+   },
+   {
+    "name": "isStatic",
+    "fragment": true,
+    "element": "firstFragment"
+   }
+  ],
+  "_FieldElementFlags": [
+   {
+    "name": "hasEnclosingTypeParameterReference",
+    "fragment": false,
+    "element": "stored"
+   },
+   {
+    "name": "isEnumConstant",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isExplicitlyCovariant",
+    "fragment": true,
+    "element": "none"
+   },
+   {
+    "name": "isOriginDeclaringFormalParameter",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isOriginEnumValues",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isOriginExtensionTypeRecoveryRepresentation",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isPromotable",
+    "fragment": true,
+    "element": "firstFragment"
+   }
+  ],
+  "_FieldFormalParameterElementFlags": [
+   {
+    "name": "isDeclaring",
+    "fragment": true,
+    "element": "computed"
+   }
+  ],
+  "_FormalParameterElementFlags": [
+   {
+    "name": "hasDefaultValue",
+    "fragment": false,
+    "element": "computed"
+   },
+   {
+    "name": "isCovariant",
+    "fragment": false,
+    "element": "stored"
+   },
+   {
+    "name": "isExplicitlyCovariant",
+    "fragment": true,
+    "element": "none"
+   },
+   {
+    "name": "isOriginDeclaration",
+    "fragment": true,
+    "element": "none"
+   },
+   {
+    "name": "isOriginMixinApplicationClassConstructor",
+    "fragment": true,
+    "element": "none"
+   },
+   {
+    "name": "isOriginOtherFragmentOfEnclosing",
+    "fragment": true,
+    "element": "none"
+   }
+  ],
+  "_FragmentFlags": [
+   {
+    "name": "isAugmentation",
+    "fragment": true,
+    "element": "none"
+   },
+   {
+    "name": "isComplete",
+    "fragment": true,
+    "element": "none"
+   }
+  ],
+  "_FragmentStorageFlag": [
+   {
+    "name": "classFragment_hasExtendsClause",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "classFragment_isAbstract",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "classFragment_isBase",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "classFragment_isFinal",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "classFragment_isInterface",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "classFragment_isMixinApplication",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "classFragment_isMixinClass",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "classFragment_isSealed",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "constructorFragment_isConst",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "constructorFragment_isFactory",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "constructorFragment_isOriginDeclaration",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "constructorFragment_isOriginExtensionTypeRecovery",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "constructorFragment_isOriginImplicitDefault",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "constructorFragment_isOriginMixinApplication",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "constructorFragment_isPrimary",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "constructorFragment_isRedirecting",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "executableFragment_hasImplicitReturnType",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "executableFragment_invokesSuperSelf",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "executableFragment_isAbstract",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "executableFragment_isAsynchronous",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "executableFragment_isExternal",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "executableFragment_isGenerator",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "executableFragment_isStatic",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "fieldFormalParameterFragment_isDeclaring",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "fieldFragment_isEnumConstant",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "fieldFragment_isExplicitlyCovariant",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "fieldFragment_isOriginDeclaringFormalParameter",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "fieldFragment_isOriginEnumValues",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "fieldFragment_isOriginExtensionTypeRecoveryRepresentation",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "fieldFragment_isPromotable",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "formalParameterFragment_isExplicitlyCovariant",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "formalParameterFragment_isOriginDeclaration",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "formalParameterFragment_isOriginMixinApplicationClassConstructor",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "formalParameterFragment_isOriginOtherFragmentOfEnclosing",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "fragment_isAugmentation",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "fragment_isComplete",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "libraryFragment_isOriginNotExistingFile",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "methodFragment_isOriginDeclaration",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "methodFragment_isOriginInterface",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "mixinFragment_isBase",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "nonParameterVariableFragment_hasInitializer",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "propertyAccessorFragment_isOriginDeclaration",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "propertyAccessorFragment_isOriginInterface",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "propertyAccessorFragment_isOriginVariable",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "propertyInducingFragment_isOriginDeclaration",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "propertyInducingFragment_isOriginGetterSetter",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "topLevelFunctionFragment_isOriginDeclaration",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "topLevelFunctionFragment_isOriginLoadLibrary",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "typeParameterFragment_isOriginOtherFragmentOfEnclosing",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "variableFragment_hasImplicitType",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "variableFragment_isAbstract",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "variableFragment_isConst",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "variableFragment_isExternal",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "variableFragment_isFinal",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "variableFragment_isLate",
+    "fragment": null,
+    "element": null
+   },
+   {
+    "name": "variableFragment_isStatic",
+    "fragment": null,
+    "element": null
+   }
+  ],
+  "_InstanceElementFlags": [
+   {
+    "name": "isSimplyBounded",
+    "fragment": false,
+    "element": "stored"
+   }
+  ],
+  "_InterfaceElementFlags": [
+   {
+    "name": "hasNonFinalField",
+    "fragment": false,
+    "element": "computed"
+   }
+  ],
+  "_LibraryElementFlags": [
+   {
+    "name": "isOriginNotExistingFile",
+    "fragment": true,
+    "element": "none"
+   },
+   {
+    "name": "isSynthetic",
+    "fragment": false,
+    "element": "stored"
+   }
+  ],
+  "_MethodElementFlags": [
+   {
+    "name": "isOriginDeclaration",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isOriginInterface",
+    "fragment": true,
+    "element": "firstFragment"
+   }
+  ],
+  "_MixinElementFlags": [
+   {
+    "name": "isBase",
+    "fragment": true,
+    "element": "firstFragment"
+   }
+  ],
+  "_NonParameterVariableElementFlags": [
+   {
+    "name": "hasInitializer",
+    "fragment": true,
+    "element": "none"
+   }
+  ],
+  "_PropertyAccessorElementFlags": [
+   {
+    "name": "isOriginDeclaration",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isOriginInterface",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isOriginVariable",
+    "fragment": true,
+    "element": "firstFragment"
+   }
+  ],
+  "_PropertyInducingElementFlags": [
+   {
+    "name": "hasInitializer",
+    "fragment": false,
+    "element": "computed"
+   },
+   {
+    "name": "isOriginDeclaration",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isOriginGetterSetter",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isTypeInferredFromInitializer",
+    "fragment": false,
+    "element": "stored"
+   }
+  ],
+  "_TopLevelFunctionElementFlags": [
+   {
+    "name": "isOriginDeclaration",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isOriginLoadLibrary",
+    "fragment": true,
+    "element": "firstFragment"
+   }
+  ],
+  "_TypeAliasElementFlags": [
+   {
+    "name": "isSimplyBounded",
+    "fragment": false,
+    "element": "stored"
+   }
+  ],
+  "_TypeParameterElementFlags": [
+   {
+    "name": "isOriginOtherFragmentOfEnclosing",
+    "fragment": true,
+    "element": "none"
+   }
+  ],
+  "_VariableElementFlags": [
+   {
+    "name": "hasImplicitType",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isAbstract",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isConst",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isExternal",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isFinal",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isLate",
+    "fragment": true,
+    "element": "firstFragment"
+   },
+   {
+    "name": "isStatic",
+    "fragment": true,
+    "element": "firstFragment"
+   }
+  ]
+ }
+}
