@@ -26,7 +26,6 @@ pub enum DumpMode {
     /// Resolved diagnostics and expression types (not implemented yet).
     Resolved,
     /// Element model of each library (docs/design/semantics.md §5.1).
-    /// Skeleton: every path gives `{"path":..,"error":"not implemented"}`.
     Elements,
 }
 
@@ -62,7 +61,22 @@ pub fn run(mode: DumpMode, files: Vec<PathBuf>) -> anyhow::Result<()> {
     let dump: fn(&str) -> String = match mode {
         DumpMode::Tokens => dump_tokens,
         DumpMode::Events => dump_events,
-        DumpMode::Elements => dump_elements,
+        DumpMode::Elements => {
+            // All inputs at once: they share the analysis contexts and the
+            // linked library cycles.
+            let pool = rayon::ThreadPoolBuilder::new()
+                .stack_size(256 << 20)
+                .build()?;
+            let lines = pool.install(|| crate::elements::dump_elements_all(&paths));
+            let stdout = io::stdout();
+            let mut out = io::BufWriter::new(stdout.lock());
+            for line in lines {
+                out.write_all(line.as_bytes())?;
+                out.write_all(b"\n")?;
+            }
+            out.flush()?;
+            return Ok(());
+        }
         DumpMode::Ast => dump_ast,
         DumpMode::Resolved => {
             anyhow::bail!("dump mode {mode:?} is not implemented yet")
@@ -111,12 +125,6 @@ fn error_json(path: &str, error: &str) -> String {
     write_string(&mut out, error);
     out.push('}');
     out
-}
-
-/// One line of `dump elements`. Not implemented yet: the element model is
-/// built in `dartr_element` (phase 5).
-pub fn dump_elements(path: &str) -> String {
-    error_json(path, "not implemented")
 }
 
 /// One line of `dump tokens`.

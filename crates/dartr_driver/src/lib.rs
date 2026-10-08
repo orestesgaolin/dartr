@@ -8,3 +8,4 @@ pub mod unlinked_data;
 pub mod uri;
 pub mod file_state;
 pub mod library_graph;
+pub mod driver;

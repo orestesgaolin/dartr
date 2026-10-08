@@ -1,0 +1,201 @@
+// Dart source: tools/oracle/bin/elements.dart (dumpElements)
+
+//! `dartr dump elements`: links the libraries of the input paths (and
+//! `dart:` URIs) with `dartr_driver` and writes one line per input with
+//! `dartr_link::dump::library_json`.
+//!
+//! Like the oracle, the input paths are grouped by analysis context
+//! (`AnalysisContextCollection(includedPaths: paths)`), and `dart:` URIs
+//! are linked in a context that has only the SDK.
+
+use std::rc::Rc;
+use std::sync::Arc;
+
+use dartr_driver::driver::Driver;
+use dartr_driver::file_state::{FileConfig, FileId, FileSystemState, SourceFactory};
+use dartr_driver::uri::Uri;
+use dartr_element::{
+    ConstExprId, Ctx, FeatureSet, Generation, NoopSink, StoreId, TypeProvider,
+};
+use dartr_link::dump::{DumpSources, error_json, library_json};
+use dartr_parser::experimental_flags::ExperimentalFlag;
+use dartr_project::{AnalysisContextCollection, CollectionOptions, DartSdk, Packages, Workspace, paths};
+use indexmap::IndexMap;
+
+/// The result of looking up one input.
+enum Input {
+    Error(&'static str),
+    Library { driver: usize, file: FileId },
+}
+
+/// One line per input path, in input order.
+pub fn dump_elements_all(inputs: &[String]) -> Vec<String> {
+    let generation = Arc::new(Generation::new(0));
+    let sdk_path = dartr_project::sdk::find_sdk_path();
+
+    let paths: Vec<String> = inputs
+        .iter()
+        .filter(|p| !p.starts_with("dart:") && **p == paths::normalize(p))
+        .cloned()
+        .collect();
+    let collection = Rc::new(AnalysisContextCollection::new(
+        &paths,
+        &CollectionOptions {
+            sdk_path: sdk_path.clone(),
+            ..Default::default()
+        },
+    ));
+
+    let mut drivers: Vec<Driver> = Vec::new();
+    let mut context_driver: IndexMap<usize, usize> = IndexMap::new();
+    let mut sdk_driver: Option<usize> = None;
+    let mut resolved: Vec<Input> = Vec::new();
+
+    for p in inputs {
+        if p.starts_with("dart:") {
+            let d = *sdk_driver.get_or_insert_with(|| {
+                drivers.push(sdk_only_driver(sdk_path.as_deref(), generation.clone()));
+                drivers.len() - 1
+            });
+            let driver = &mut drivers[d];
+            let Some(uri) = Uri::try_parse(p) else {
+                resolved.push(Input::Error("CannotResolveUriResult"));
+                continue;
+            };
+            match driver.fs.get_file_for_uri(&uri) {
+                None => resolved.push(Input::Error("CannotResolveUriResult")),
+                Some(file) => resolved.push(Input::Library { driver: d, file }),
+            }
+            continue;
+        }
+        if *p != paths::normalize(p) {
+            resolved.push(Input::Error("ArgumentError"));
+            continue;
+        }
+        let Some(context_index) = collection.contexts.iter().position(|c| c.root.is_analyzed(p)) else {
+            resolved.push(Input::Error("StateError"));
+            continue;
+        };
+        let d = *context_driver.entry(context_index).or_insert_with(|| {
+            drivers.push(context_driver_for(&collection, context_index, generation.clone()));
+            drivers.len() - 1
+        });
+        let file = drivers[d].fs.get_file_for_path(p);
+        resolved.push(Input::Library { driver: d, file });
+    }
+
+    // Discover, check kinds, link.
+    let mut libraries: Vec<Vec<FileId>> = vec![Vec::new(); drivers.len()];
+    for driver in &mut drivers {
+        driver.fs.discover();
+    }
+    for input in &mut resolved {
+        if let Input::Library { driver, file } = *input {
+            if drivers[driver].fs.file(file).kind().is_part() {
+                *input = Input::Error("NotLibraryButPartResult");
+            } else {
+                libraries[driver].push(file);
+            }
+        }
+    }
+    for (d, driver) in drivers.iter_mut().enumerate() {
+        driver.link_libraries(&libraries[d]);
+    }
+
+    let tp = TypeProvider::default();
+    let features = FeatureSet::default();
+    let sink = NoopSink;
+    inputs
+        .iter()
+        .zip(resolved.iter())
+        .map(|(p, input)| match input {
+            Input::Error(e) => error_json(p, e),
+            Input::Library { driver, file } => {
+                let driver = &drivers[*driver];
+                let uri = &driver.fs.file(*file).uri_str;
+                let Some(library) = driver.state.world.libraries.get(uri).copied() else {
+                    return error_json(p, "NotLinked");
+                };
+                let ctx = Ctx {
+                    world: &driver.state.world,
+                    current: None,
+                    local: None,
+                    tp: &tp,
+                    features: &features,
+                    req: &sink,
+                };
+                let sources = Sources { driver };
+                library_json(&ctx, &sources, p, library)
+            }
+        })
+        .collect()
+}
+
+/// `DumpSources` over the linked cycles of a driver.
+struct Sources<'a> {
+    driver: &'a Driver,
+}
+
+impl DumpSources for Sources<'_> {
+    fn const_expr_source(&self, store: StoreId, expr: ConstExprId) -> String {
+        for cycle in self.driver.cycles.values() {
+            if cycle.store.id == store {
+                return dartr_ast::to_source::to_source(&cycle.const_exprs.ast, expr.0);
+            }
+        }
+        String::new()
+    }
+}
+
+fn experiment_flags(names: &[&str]) -> Vec<ExperimentalFlag> {
+    ExperimentalFlag::VALUES
+        .iter()
+        .copied()
+        .filter(|f| names.contains(&f.name()))
+        .collect()
+}
+
+/// A driver for one analysis context of the collection.
+fn context_driver_for(
+    collection: &Rc<AnalysisContextCollection>,
+    context_index: usize,
+    generation: Arc<Generation>,
+) -> Driver {
+    let context = &collection.contexts[context_index];
+    let source_factory = SourceFactory {
+        workspace: context.root.workspace.clone(),
+        sdk: context.sdk.as_deref().cloned(),
+    };
+    let collection = collection.clone();
+    let config_for = Box::new(move |path: &str, uri: &str| {
+        let context = &collection.contexts[context_index];
+        let version = context.language_version(path, uri);
+        let options = collection.options_for(context, path);
+        let flags = options.enable_experiment_flags.clone().unwrap_or_default();
+        let enabled = dartr_project::experiments::enabled_experiments(&flags);
+        FileConfig {
+            package_language_version: (version.major, version.minor),
+            experiments: experiment_flags(&enabled),
+        }
+    });
+    Driver::new(FileSystemState::new(source_factory, config_for), generation)
+}
+
+/// The driver of the `dart:` inputs: a context with only the SDK.
+fn sdk_only_driver(sdk_path: Option<&str>, generation: Arc<Generation>) -> Driver {
+    let sdk = sdk_path.map(DartSdk::new);
+    let version = sdk
+        .as_ref()
+        .and_then(|s| s.language_version())
+        .map(|v| (v.major, v.minor))
+        .unwrap_or((3, 13));
+    let source_factory = SourceFactory {
+        workspace: Workspace::basic(Packages::empty(), "/"),
+        sdk,
+    };
+    let config_for = Box::new(move |_: &str, _: &str| FileConfig {
+        package_language_version: version,
+        experiments: Vec::new(),
+    });
+    Driver::new(FileSystemState::new(source_factory, config_for), generation)
+}

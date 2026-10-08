@@ -12,6 +12,11 @@ dartr_parser.workspace = true
 dartr_ast.workspace = true
 dartr_ast_builder.workspace = true
 rayon.workspace = true
+dartr_driver.workspace = true
+dartr_element.workspace = true
+dartr_link.workspace = true
+dartr_project.workspace = true
+indexmap.workspace = true
 
 [dev-dependencies]
 dartr_difftest = { path = "../dartr_difftest" }
