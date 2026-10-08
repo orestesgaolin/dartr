@@ -19,6 +19,8 @@
 //! | [`sound_flow_analysis_part2`] | 12239-12882 | `Sound flow analysis:` (second part) |
 //! | [`demotion`] | 12884-13064 | `Demotion and type of interest promotion:` |
 //! | [`anonymous_methods`] | 13066-13303 | `Anonymous methods:` |
+//! | [`patterns_part3`] | 8703-9666 | `Patterns:` (third part: `Null-assert:` to `Relational pattern:`) |
+//! | [`patterns_part3b`] | 9667-10407 | `Patterns:` (third part: `Switch expression:`, `Switch statement:`) |
 
 mod common;
 
@@ -29,4 +31,6 @@ mod demotion;
 mod patterns_part1;
 mod patterns_part2;
 mod sound_flow_analysis_part2;
+mod patterns_part3;
+mod patterns_part3b;
 mod state_part1;
