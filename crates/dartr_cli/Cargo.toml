@@ -1,0 +1,19 @@
+[package]
+name = "dartr_cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "`dartr analyze`: port of `dart analyze` (pkg/dartdev) and the server-side diagnostic processing it relies on."
+
+[dependencies]
+dartr_syntax.workspace = true
+dartr_ast.workspace = true
+dartr_parser.workspace = true
+dartr_ast_builder.workspace = true
+dartr_diagnostics.workspace = true
+dartr_project.workspace = true
+rayon.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+pretty_assertions.workspace = true

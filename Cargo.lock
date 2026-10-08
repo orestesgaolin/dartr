@@ -227,6 +227,7 @@ dependencies = [
  "clap",
  "dartr_ast",
  "dartr_ast_builder",
+ "dartr_cli",
  "dartr_difftest",
  "dartr_driver",
  "dartr_element",
@@ -262,6 +263,21 @@ dependencies = [
  "rayon",
  "rustc-hash",
  "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "dartr_cli"
+version = "0.1.0"
+dependencies = [
+ "dartr_ast",
+ "dartr_ast_builder",
+ "dartr_diagnostics",
+ "dartr_parser",
+ "dartr_project",
+ "dartr_syntax",
+ "pretty_assertions",
+ "rayon",
  "serde_json",
 ]
 
