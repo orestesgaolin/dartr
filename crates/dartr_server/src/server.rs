@@ -364,25 +364,25 @@ impl Server {
     fn handle_initialized_request(&mut self, method: &str, params: Value) -> ErrorOr<Value> {
         match method {
             "textDocument/documentSymbol" => {
-                let path = self.path_of_doc(&params)?;
-                if !path.ends_with(".dart") {
+                if !is_dart_document(&params) {
                     return Ok(json!([]));
                 }
+                let path = self.path_of_doc(&params)?;
                 let file = self.require_parsed(&path, true)?;
                 Ok(features::document_symbols(&self.client, &path, &file))
             }
             "textDocument/foldingRange" => {
                 let path = self.path_of_doc(&params)?;
-                match self.parsed_if_analyzed(&path) {
+                match self.parsed_unit(&path) {
                     Some(file) => Ok(features::folding_ranges(&self.client, &file)),
                     None => Ok(json!([])),
                 }
             }
             "textDocument/selectionRange" => {
-                let path = self.path_of_doc(&params)?;
-                if !path.ends_with(".dart") {
+                if !is_dart_document(&params) {
                     return Ok(Value::Null);
                 }
+                let path = self.path_of_doc(&params)?;
                 let file = self.require_parsed(&path, false)?;
                 let positions = params
                     .get("positions")
@@ -771,9 +771,11 @@ impl Server {
     }
 
     /// The parsed unit of [path] (Dart `getParsedUnit`): `None` if the file
-    /// is not a Dart file of the analysis roots.
-    fn parsed_if_analyzed(&mut self, path: &str) -> Option<Rc<ParsedFile>> {
-        if !path.ends_with(".dart") || !self.is_analyzed(path) {
+    /// is not a Dart file or there is no analysis context. Like Dart, a
+    /// file outside of the analysis roots is parsed too (Dart uses the
+    /// first analysis driver), and a missing file has empty content.
+    fn parsed_unit(&mut self, path: &str) -> Option<Rc<ParsedFile>> {
+        if !path.ends_with(".dart") || self.roots.is_empty() {
             return None;
         }
         if let Some(p) = self.parsed.get(path) {
@@ -788,7 +790,7 @@ impl Server {
 
     /// Dart `requireUnresolvedUnit` / `requireResolvedUnit`.
     fn require_parsed(&mut self, path: &str, resolved: bool) -> ErrorOr<Rc<ParsedFile>> {
-        match self.parsed_if_analyzed(path) {
+        match self.parsed_unit(path) {
             Some(file) => {
                 if resolved && self.content(path).is_none() {
                     return Err(ResponseError::with_data(
@@ -951,7 +953,10 @@ impl Server {
     /// closing labels and the outline of an open file. The Flutter outline
     /// needs resolution and is not sent yet.
     fn publish_open_file_notifications(&mut self, path: &str) {
-        let Some(file) = self.parsed_if_analyzed(path) else {
+        if !self.is_analyzed(path) {
+            return;
+        }
+        let Some(file) = self.parsed_unit(path) else {
             return;
         };
         let uri = path_to_uri(path);
@@ -1013,6 +1018,16 @@ impl Server {
             Some(false) => self.progress = None,
         }
     }
+}
+
+/// Dart `isDartDocument`: the path of the document URI ends with `.dart`.
+fn is_dart_document(params: &Value) -> bool {
+    params
+        .get("textDocument")
+        .and_then(|d| d.get("uri"))
+        .and_then(Value::as_str)
+        .map(|u| u.split(['?', '#']).next().unwrap_or(u).ends_with(".dart"))
+        .unwrap_or(false)
 }
 
 fn invalid_params(method: &str) -> ResponseError {

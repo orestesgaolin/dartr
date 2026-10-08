@@ -21,4 +21,6 @@ dartr_project.workspace = true
 indexmap.workspace = true
 
 [dev-dependencies]
+serde_json.workspace = true
+dartr_diagnostics.workspace = true
 dartr_difftest = { path = "../dartr_difftest" }

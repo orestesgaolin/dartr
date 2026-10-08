@@ -227,6 +227,7 @@ dependencies = [
  "clap",
  "dartr_ast",
  "dartr_ast_builder",
+ "dartr_diagnostics",
  "dartr_difftest",
  "dartr_driver",
  "dartr_element",
@@ -238,6 +239,7 @@ dependencies = [
  "dartr_typesystem",
  "indexmap",
  "rayon",
+ "serde_json",
 ]
 
 [[package]]
