@@ -283,3 +283,67 @@ fn analyze_parity_usage_errors() {
     ];
     check_all(&cases);
 }
+
+fn copy_dir(from: &Path, to: &Path) {
+    fs::create_dir_all(to).unwrap();
+    for entry in fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_dir(&entry.path(), &target);
+        } else {
+            fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
+/// The non-Dart diagnostics (`analysis_options.yaml`, `pubspec.yaml`,
+/// `AndroidManifest.xml`), with the priority-file output of dartdev, for
+/// the fixture projects of `dartr_project`.
+#[test]
+fn analyze_parity_non_dart_files() {
+    if !dart_available() {
+        eprintln!("skipped: dart 3.13.3 is not on PATH");
+        return;
+    }
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../dartr_project/tests/fixtures/diagnostics");
+    let base = scratch().join("non_dart");
+    if base.exists() {
+        fs::remove_dir_all(&base).unwrap();
+    }
+    let mut names: Vec<String> = fs::read_dir(&fixtures)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    for name in &names {
+        copy_dir(&fixtures.join(name), &base.join(name));
+    }
+    // Each `dart analyze` start takes seconds: run the projects in parallel.
+    let count = names.len() * 3;
+    let failures: Vec<String> = std::thread::scope(|scope| {
+        let handles: Vec<_> = names
+            .iter()
+            .map(|name| {
+                let root = base.join(name);
+                scope.spawn(move || {
+                    [vec![], vec!["--format=json"], vec!["--format=machine"]]
+                        .iter()
+                        .filter_map(|args| compare(&root, args))
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .flat_map(|h| h.join().unwrap())
+            .collect()
+    });
+    assert!(
+        failures.is_empty(),
+        "{} of {count} cases differ:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
