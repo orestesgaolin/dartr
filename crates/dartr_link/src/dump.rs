@@ -1318,11 +1318,16 @@ pub fn default_value_code(
     // constant value of the super parameter's default is a subtype of the
     // type of this parameter. Interim until constant evaluation (C7): the
     // value is assumed to be a subtype unless the default is `null` and the
-    // type of this parameter is non-nullable.
+    // type of this parameter is non-nullable, or the super parameter has an
+    // invalid type.
     if is_super {
         let p = EId::<FormalParameterElement>::from_raw(e);
         let super_parameter = crate::outline::super_constructor_parameter(ctx, p)?;
         let code = default_value_code(ctx, sources, super_parameter.raw())?;
+        // A default of an unresolved type does not evaluate.
+        if ctx.get(super_parameter).type_.get().is_none_or(|t| t == TypeId::INVALID) {
+            return None;
+        }
         if code == "null" {
             let t = ctx.get(p).type_.get().unwrap_or(TypeId::INVALID);
             if dartr_typesystem::TypeSystem::new(*ctx).is_non_nullable(t) {
