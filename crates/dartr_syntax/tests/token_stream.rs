@@ -177,3 +177,70 @@ fn token_stream_properties() {
         assert_eq!(scan.has_errors, errors > 0, "{}", path.display());
     }
 }
+
+/// The parser port splits `>>` into `>` `>` and inserts synthetic tokens;
+/// check that the arena supports that without moving other tokens.
+#[test]
+fn insert_tokens_into_the_stream() {
+    let result = scan_for_analyzer("List<List<int>> x;");
+    let mut tokens = result.scan.tokens.clone();
+    let gt_gt = tokens
+        .iter_from(result.first)
+        .find(|&t| tokens.ty(t) == TokenType::GT_GT)
+        .unwrap();
+    let (offset, byte) = (tokens.offset(gt_gt), tokens.byte_range(gt_gt).start as u32);
+    let before = tokens.previous(gt_gt);
+    let after = tokens.next(gt_gt);
+    let first_gt = tokens.push(dartr_syntax::Token::fixed(
+        TokenType::GT,
+        offset,
+        byte,
+        false,
+    ));
+    let second_gt = tokens.push(dartr_syntax::Token::fixed(
+        TokenType::GT,
+        offset + 1,
+        byte + 1,
+        false,
+    ));
+    let semicolon = tokens.push(dartr_syntax::Token::fixed(
+        TokenType::SEMICOLON,
+        offset + 2,
+        byte + 2,
+        true,
+    ));
+    tokens.set_next(before, first_gt);
+    tokens.set_next(first_gt, second_gt);
+    tokens.set_next(second_gt, semicolon);
+    tokens.set_next(semicolon, after);
+
+    let stream: Vec<(String, u32, bool)> = tokens
+        .iter_from(result.first)
+        .map(|t| {
+            (
+                tokens.lexeme(t).to_string(),
+                tokens.offset(t),
+                tokens.get(t).is_synthetic(),
+            )
+        })
+        .collect();
+    let expected: Vec<(String, u32, bool)> = [
+        ("List", 0, false),
+        ("<", 4, false),
+        ("List", 5, false),
+        ("<", 9, false),
+        ("int", 10, false),
+        (">", 13, false),
+        (">", 14, false),
+        (";", 15, true),
+        ("x", 16, false),
+        (";", 17, false),
+        ("", 18, true),
+    ]
+    .iter()
+    .map(|(l, o, s)| (l.to_string(), *o, *s))
+    .collect();
+    assert_eq!(stream, expected);
+    assert_eq!(tokens.get(semicolon).before_synthetic, second_gt);
+    assert_eq!(tokens.previous(after), semicolon);
+}

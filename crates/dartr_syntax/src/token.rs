@@ -95,6 +95,32 @@ pub struct Token {
 }
 
 impl Token {
+    /// A token whose lexeme is the lexeme of its type (an operator, a
+    /// keyword, or with [synthetic] a synthetic token of length 0, Dart
+    /// `SyntheticToken`), not linked into a stream. For use by the parser,
+    /// with [`Tokens::push`] and [`Tokens::set_next`]. [byte_offset] is the
+    /// position in the source text.
+    pub fn fixed(ty: TokenType, offset: u32, byte_offset: u32, synthetic: bool) -> Token {
+        let len = if synthetic {
+            0
+        } else {
+            ty.lexeme().len() as u32
+        };
+        Token {
+            ty,
+            flags: flags::FIXED_LEXEME | if synthetic { flags::SYNTHETIC } else { 0 },
+            offset,
+            length: len,
+            lex_start: byte_offset,
+            lex_end: byte_offset + len,
+            next: TokenId::NONE,
+            previous: TokenId::NONE,
+            preceding_comments: TokenId::NONE,
+            end_group: TokenId::NONE,
+            before_synthetic: TokenId::NONE,
+        }
+    }
+
     #[inline(always)]
     pub fn kind(&self) -> i32 {
         self.ty.kind()

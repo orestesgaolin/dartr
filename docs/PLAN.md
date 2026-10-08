@@ -31,7 +31,7 @@ writes JSON Lines. `dartr dump <mode>` writes the same format.
 
 | mode       | content                                                            |
 |------------|--------------------------------------------------------------------|
-| `tokens`   | token stream (kind, offset, length, lexeme, synthetic, comments), scanner diagnostics |
+| `tokens`   | scanner only (no parser): token stream (kind, offset, length, lexeme, synthetic, comments), scanner diagnostics |
 | `ast`      | unresolved AST as ordered child entities (`childEntities`), parse diagnostics |
 | `resolved` | diagnostics of the resolved unit, static type of each expression  |
 
@@ -41,8 +41,11 @@ The test corpus:
 - `third_party/dart-sdk/sdk/lib`, `pkg/analyzer/lib`,
 - Flutter packages (`$FLUTTER_ROOT/packages/*`) and the pub cache.
 
-`cargo xtask difftest <mode> [paths]` (or `tools/difftest.sh`) runs both
-and reports the files with differences and a parity percentage.
+`difftest <mode> <path-or-dir>...` (crate `dartr_difftest`; build with
+`cargo build --release`, then `target/release/difftest tokens <dirs>`) runs
+both in parallel batches and reports the first difference of each differing
+file and a parity percentage (`--jobs`, `--write-failures <dir>`). The oracle
+is compiled to `target/oracle/oracle` on first use.
 
 ## Architecture
 
