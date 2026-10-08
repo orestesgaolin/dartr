@@ -19,13 +19,16 @@
 //! - [`doc_comment_builder`]: comment references, code blocks, doc
 //!   directives and `@docImport`s of documentation comments.
 //! - [`error_converter`]: CFE messages to analyzer diagnostics.
-//! - [`parse`]: `parseString`.
+//! - [`mod@parse`]: `parseString`.
 
 #![allow(
     clippy::collapsible_if,
     clippy::collapsible_else_if,
     clippy::too_many_arguments,
-    clippy::needless_return
+    clippy::needless_return,
+    clippy::needless_late_init,
+    clippy::manual_map,
+    clippy::question_mark
 )]
 
 pub mod ast_builder;

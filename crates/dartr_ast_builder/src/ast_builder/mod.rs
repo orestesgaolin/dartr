@@ -201,12 +201,6 @@ impl AstBuilder {
         self.feature_set.is_experiment_enabled(flag)
     }
 
-    /// The token arena (valid during an event).
-    #[inline]
-    pub(crate) fn tokens(&self) -> &Tokens {
-        &self.ast.tokens
-    }
-
     /// Dart `parser.rewriter`.
     #[inline]
     pub(crate) fn rewriter(&mut self) -> TokenStreamRewriter<'_> {
@@ -654,7 +648,8 @@ impl AstBuilder {
         elements
     }
 
-    /// Dart `reportErrorIfNullableType`.
+    /// Dart `reportErrorIfNullableType` (no caller in the AST builder).
+    #[allow(dead_code)]
     pub(crate) fn report_error_if_nullable_type(&mut self, question_mark: Option<TokenId>) {
         if let Some(question_mark) = question_mark {
             self.report_feature_not_enabled(ExperimentalFlag::NonNullable, question_mark, None);

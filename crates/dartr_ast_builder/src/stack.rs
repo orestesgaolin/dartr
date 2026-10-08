@@ -218,15 +218,6 @@ impl AstBuilder {
         }
     }
 
-    /// Dart `push(node ?? nullValue)`.
-    #[inline]
-    pub(crate) fn push_node_or<T: ?Sized>(&mut self, node: Option<Id<T>>, null_value: NullValue) {
-        match node {
-            Some(n) => self.stack.push(Value::Node(n.raw())),
-            None => self.stack.push(Value::Null(null_value)),
-        }
-    }
-
     /// Dart `push(list ?? nullValue)` for a node list.
     #[inline]
     pub(crate) fn push_nodes_or<T: ?Sized>(
@@ -250,19 +241,6 @@ impl AstBuilder {
     #[inline]
     pub(crate) fn peek(&self) -> Option<&Value> {
         self.stack.last()
-    }
-
-    /// Dart `peek()`, mutable.
-    #[inline]
-    pub(crate) fn peek_mut(&mut self) -> Option<&mut Value> {
-        self.stack.last_mut()
-    }
-
-    /// Dart `discard(n)`.
-    pub(crate) fn discard(&mut self, n: usize) {
-        for _ in 0..n {
-            self.pop();
-        }
     }
 
     /// The node in [value] as a `T` (Dart `value as T?`): `None` for a
