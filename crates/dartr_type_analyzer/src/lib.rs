@@ -26,3 +26,13 @@
 //! }
 //! ```
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
+
+pub mod type_analyzer;
+
+/// Re-exports used by the mixin macros (not public API).
+#[doc(hidden)]
+pub mod __private {
+    pub use dartr_flow::{
+        null_shorting, shared_type, type_analysis_result, type_analyzer, type_analyzer_operations,
+    };
+}
