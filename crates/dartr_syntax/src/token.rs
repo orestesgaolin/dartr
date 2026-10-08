@@ -309,6 +309,36 @@ impl Tokens {
         self.push(token)
     }
 
+    /// Copies token [id] of [src] (the arena of another file) into this
+    /// arena and returns the new id. The copy keeps the type, the flags, the
+    /// offset and the length. Its lexeme does not use the source text of
+    /// this arena: a fixed lexeme stays the lexeme of the type, an error
+    /// token gets a copy of its error data, and every other token gets an
+    /// owned lexeme. The byte position of the copy is 0. The links (`next`,
+    /// `previous`, `preceding_comments`, `end_group`, `before_synthetic`)
+    /// are none; the caller links the copy (for example with
+    /// [`Tokens::set_next`]).
+    pub fn push_copy(&mut self, src: &Tokens, id: TokenId) -> TokenId {
+        let mut token = src.get(id).clone();
+        token.next = TokenId::NONE;
+        token.previous = TokenId::NONE;
+        token.preceding_comments = TokenId::NONE;
+        token.end_group = TokenId::NONE;
+        token.before_synthetic = TokenId::NONE;
+        token.lex_end = 0;
+        if token.flags & flags::FIXED_LEXEME != 0 {
+            token.lex_start = 0;
+            self.push(token)
+        } else if token.flags & (flags::OWNED_LEXEME | flags::ERROR) == flags::ERROR {
+            token.lex_start = self.errors.len() as u32;
+            self.errors
+                .push(src.errors[src.get(id).lex_start as usize].clone());
+            self.push(token)
+        } else {
+            self.push_with_lexeme(token, src.lexeme(id))
+        }
+    }
+
     /// The byte offset in the source text where token [id] starts; for
     /// tokens made by the parser, the position they were inserted at.
     pub fn byte_offset(&self, id: TokenId) -> u32 {
