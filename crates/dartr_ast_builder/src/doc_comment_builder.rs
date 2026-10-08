@@ -76,8 +76,13 @@ fn index_of(s: &[u16], pattern: &[u16], start: usize) -> i64 {
 
 /// Dart `String.startsWith(pattern, index)` on code units.
 fn starts_with(s: &[u16], pattern: &str, index: usize) -> bool {
-    let p = utf16(pattern);
-    index + p.len() <= s.len() && s[index..index + p.len()] == p[..]
+    // The patterns are ASCII.
+    let p = pattern.as_bytes();
+    index + p.len() <= s.len()
+        && s[index..index + p.len()]
+            .iter()
+            .zip(p)
+            .all(|(&a, &b)| a == b as u16)
 }
 
 fn string_of(s: &[u16]) -> String {
