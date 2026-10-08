@@ -88,6 +88,19 @@ fn error(error: &YamlException) -> Value {
 fn rust_dump(text: &str, recover: bool) -> Value {
     if recover {
         let result = load_yaml_node_with_options(text, true);
+        if let Some(runtime_error) = result
+            .errors
+            .iter()
+            .find_map(|error| error.runtime_error.as_ref())
+        {
+            return json!({
+                "node": null,
+                "errors": result.errors.iter()
+                    .filter(|error| error.runtime_error.is_none())
+                    .map(error).collect::<Vec<_>>(),
+                "runtimeError": runtime_error,
+            });
+        }
         json!({
             "node": result.node.as_ref().map(node),
             "errors": result.errors.iter().map(error).collect::<Vec<_>>(),
@@ -95,7 +108,12 @@ fn rust_dump(text: &str, recover: bool) -> Value {
     } else {
         match load_yaml_node(text) {
             Ok(parsed) => json!({"node": node(&parsed), "errors": []}),
-            Err(exception) => json!({"node": null, "errors": [error(&exception)]}),
+            Err(exception) => match &exception.runtime_error {
+                Some(runtime_error) => {
+                    json!({"node": null, "errors": [], "runtimeError": runtime_error})
+                }
+                None => json!({"node": null, "errors": [error(&exception)]}),
+            },
         }
     }
 }
@@ -103,10 +121,35 @@ fn rust_dump(text: &str, recover: bool) -> Value {
 fn oracle_dumps(cases: &[(&str, bool)]) -> Vec<Value> {
     let dart = std::env::var_os("DARTR_DART")
         .or_else(|| std::env::var_os("DART"))
-        .unwrap_or_else(|| "/Users/dominik/fvm/default/bin/cache/dart-sdk/bin/dart".into());
+        .unwrap_or_else(|| "dart".into());
     let packages = std::env::var_os("DARTR_ORACLE_PACKAGES").unwrap_or_else(|| {
-        "/Users/dominik/Projects/dartr/tools/oracle/.dart_tool/package_config.json".into()
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tools/oracle/.dart_tool/package_config.json")
+            .into_os_string()
     });
+    let package_config = std::fs::read_to_string(&packages).unwrap_or_else(|error| {
+        panic!(
+            "read oracle package_config {}: {error}; run dart pub get in tools/oracle or set DARTR_ORACLE_PACKAGES",
+            PathBuf::from(&packages).display()
+        )
+    });
+    assert!(
+        package_config.contains("yaml-3.1.4"),
+        "YAML oracle must resolve package:yaml 3.1.4"
+    );
+    let version = Command::new(&dart)
+        .arg("--version")
+        .output()
+        .expect("run Dart YAML oracle --version");
+    let version_text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&version.stdout),
+        String::from_utf8_lossy(&version.stderr)
+    );
+    assert!(
+        version.status.success() && version_text.contains("3.13.3"),
+        "YAML oracle requires Dart 3.13.3, got: {version_text}"
+    );
     let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tools/yaml_oracle.dart");
     let mut child = Command::new(dart)
         .arg(format!("--packages={}", PathBuf::from(packages).display()))
@@ -132,7 +175,12 @@ fn oracle_dumps(cases: &[(&str, bool)]) -> Vec<Value> {
     });
     let lines: Vec<Value> = BufReader::new(child.stdout.take().unwrap())
         .lines()
-        .map(|line| serde_json::from_str(&line.unwrap()).unwrap())
+        .map(|line| {
+            let line = line.unwrap();
+            serde_json::from_str(&line).unwrap_or_else(|error| {
+                panic!("YAML oracle returned non-JSON output {line:?}: {error}")
+            })
+        })
         .collect();
     let status = child.wait().unwrap();
     writer.join().unwrap();
@@ -153,6 +201,61 @@ fn assert_parity(cases: &[(&str, bool)]) {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}
+
+fn package_yaml_test_inputs() -> Vec<String> {
+    let dart = std::env::var_os("DARTR_DART")
+        .or_else(|| std::env::var_os("DART"))
+        .unwrap_or_else(|| "dart".into());
+    let packages = std::env::var_os("DARTR_ORACLE_PACKAGES").unwrap_or_else(|| {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tools/oracle/.dart_tool/package_config.json")
+            .into_os_string()
+    });
+    let config: Value = serde_json::from_str(
+        &std::fs::read_to_string(&packages).expect("read oracle package_config"),
+    )
+    .unwrap();
+    let root_uri = config["packages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|package| package["name"] == "yaml")
+        .and_then(|package| package["rootUri"].as_str())
+        .expect("package:yaml rootUri");
+    let package_root = PathBuf::from(
+        root_uri
+            .strip_prefix("file://")
+            .expect("package:yaml must use a file rootUri"),
+    );
+    let test_files = [
+        package_root.join("test/yaml_test.dart"),
+        package_root.join("test/span_test.dart"),
+    ];
+    let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tools/yaml_oracle.dart");
+    let mut child = Command::new(dart)
+        .arg(format!("--packages={}", PathBuf::from(packages).display()))
+        .arg(script)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("start YAML test extractor");
+    serde_json::to_writer(
+        child.stdin.as_mut().unwrap(),
+        &json!({"testFiles": test_files}),
+    )
+    .unwrap();
+    child.stdin.as_mut().unwrap().write_all(b"\n").unwrap();
+    drop(child.stdin.take());
+    let output = child.wait_with_output().unwrap();
+    assert!(output.status.success(), "YAML test extractor failed");
+    let response: Value = serde_json::from_slice(&output.stdout).unwrap();
+    response["testInputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|input| input.as_str().unwrap().to_owned())
+        .collect()
 }
 
 #[test]
@@ -185,6 +288,65 @@ fn package_yaml_3_1_4_parity() {
             "%TAG !e! tag:one\n%TAG !e! tag:two\n--- !e!x value\n",
             false,
         ),
+        ("!!int ' 42 '", false),
+        ("!!float ' 1.5 '", false),
+        ("!!int '42 '", false),
+        ("!!float '1.25 '", false),
+        ("0x7fffffffffffffff", false),
+        ("0x8000000000000000", false),
+        ("0xffffffffffffffff", false),
+        ("9223372036854775808", false),
+        ("0o7777777777777777777777", false),
+        ("!!int '7'", false),
+        ("!!int '0o+10'", false),
+        ("!!int ' 0o10 '", false),
+        ("!!int '0x+10'", false),
+        ("!!int '0x-10'", false),
+        ("!!int '0o-10'", false),
+        ("!!int '0o 10'", false),
+        ("{.nan: first, .nan: second}", false),
+        ("{1: int, 1.0: float}", false),
+        ("{9007199254740992: a, 9007199254740992.0: b}", false),
+        ("{9007199254740993: a, 9007199254740992.0: b}", false),
+        ("{9223372036854775807: a, 9223372036854775808: b}", false),
+        ("%YAML 1.0\n---\nx\n", false),
+        ("%YAML 1.2\n%YAML 1.2\n---\nx\n", false),
+        ("{one: 1 two: 2}", false),
+        ("[one, {a: b c: d}]", false),
+        ("*\n", false),
+        ("&\n", false),
+        ("%\n---\nx\n", false),
+        ("%YAML\n---\nx\n", false),
+        ("%YAML 1\n---\nx\n", false),
+        ("%YAML 1.x\n---\nx\n", false),
+        ("%YAML 1.2 junk\n---\nx\n", false),
+        ("%TAG\n---\nx\n", false),
+        ("%TAG !foo!\n---\nx\n", false),
+        ("%TAG !foo! tag:foo junk\n---\nx\n", false),
+        ("!foo!bar value\n", false),
+        ("!foo value\n", false),
+        ("!foo%2Fbar value\n", false),
+        ("!<foo%2Fbar> value\n", false),
+        ("!<foo%F0%9F%98%80> value\n", false),
+        ("!<foo%> value\n", false),
+        ("!<foo%ZZ> value\n", false),
+        ("!<foo%C3%28> value\n", false),
+        ("!<foo%80> value\n", false),
+        ("!<foo%E0%80%80> value\n", false),
+        ("!<foo%ED%A0%80> value\n", false),
+        ("!<foo%F4%90%80%80> value\n", false),
+        ("%YAML 999999999999999999999999999999.2\n---\nx\n", false),
+        ("%UNKNOWN value\rone: two\r", false),
+        ("one: two\rone: three\r", false),
+        ("name: \"\\x1\"\n", false),
+        ("name: \"\\u12\"\n", false),
+        ("name: \"\\uZ000\"\n", false),
+        ("name: \"\\uD800\"\n", false),
+        ("name: \"\\U00110000\"\n", false),
+        ("name: |0\n  value\n", false),
+        ("@value\n", false),
+        ("]\n", false),
+        ("{a: b]\n", false),
         ("dependencies:\n  one: any\n  two\n  three:\n  four\n", true),
         (
             "linter:\n  rules:\n    - annotate_overrides\n    alway\n",
@@ -192,6 +354,86 @@ fn package_yaml_3_1_4_parity() {
         ),
         ("a: [", true),
     ];
+    eprintln!("fixed YAML parity: {} inputs", cases.len());
+    assert_parity(&cases);
+}
+
+#[test]
+fn package_yaml_runtime_error_parity() {
+    assert_parity(&[
+        ("!!int ''", false),
+        ("!!int ''", true),
+        ("!!float ''", false),
+        ("!!float ''", true),
+        ("!!float '1'", false),
+        ("!!float '1'", true),
+    ]);
+}
+
+#[test]
+fn package_yaml_source_test_literal_parity() {
+    let inputs = package_yaml_test_inputs();
+    assert!(
+        inputs.len() >= 150,
+        "only {} YAML test inputs",
+        inputs.len()
+    );
+    let cases: Vec<(&str, bool)> = inputs
+        .iter()
+        .flat_map(|input| [(input.as_str(), false), (input.as_str(), true)])
+        .collect();
+    eprintln!(
+        "package:yaml source parity: {} inputs, {} strict/recover comparisons",
+        inputs.len(),
+        cases.len()
+    );
+    assert_parity(&cases);
+}
+
+#[test]
+fn malformed_mutation_parity() {
+    let bases = [
+        "name: package\ndependencies:\n  one: any\n  two: ^2.0.0\n",
+        "analyzer:\n  exclude:\n    - generated/**\nlinter:\n  rules: [one, two]\n",
+        "top: {nested: [one, two, {three: four}]}\n",
+    ];
+    let mut inputs = Vec::new();
+    for base in bases {
+        for (index, _) in base.match_indices('\n').skip(1) {
+            inputs.push(base[..index].to_owned());
+        }
+        inputs.push(base.replacen("  ", "\t", 1));
+        inputs.push(base.replacen("  ", " ", 1));
+    }
+    inputs.extend(
+        [
+            "[one, two",
+            "{one: two",
+            "a: \"unterminated",
+            "a: 'unterminated",
+            "a: \"bad \\q\"",
+            "a: *unknown",
+            "a: &",
+            "a: !<bad tag",
+            "%YAML 1.x\n---\na",
+            "%TAG !x! tag:one\n%TAG !x! tag:two\n---\n!x!a b",
+            "a: 1\na: 2\n",
+            "\u{feff}a:\r\n\tb: c\r\n",
+        ]
+        .into_iter()
+        .map(str::to_owned),
+    );
+    inputs.push(format!("{}: value\n", "a".repeat(1025)));
+    inputs.push(format!("{}: value\n", "😀".repeat(513)));
+    let cases: Vec<(&str, bool)> = inputs
+        .iter()
+        .flat_map(|input| [(input.as_str(), false), (input.as_str(), true)])
+        .collect();
+    eprintln!(
+        "malformed mutation parity: {} inputs, {} strict/recover comparisons",
+        inputs.len(),
+        cases.len()
+    );
     assert_parity(&cases);
 }
 
@@ -241,7 +483,14 @@ fn fvm_and_pub_cache_corpus_parity() {
         .iter()
         .map(|path| std::fs::read_to_string(path).unwrap())
         .collect();
-    let cases: Vec<(&str, bool)> = owned.iter().map(|text| (text.as_str(), false)).collect();
+    let cases: Vec<(&str, bool)> = owned
+        .iter()
+        .flat_map(|text| [(text.as_str(), false), (text.as_str(), true)])
+        .collect();
     assert_parity(&cases);
-    eprintln!("YAML corpus parity: {}/{} files", cases.len(), cases.len());
+    eprintln!(
+        "YAML corpus parity: {0}/{0} files in strict and recover modes ({1}/{1} comparisons)",
+        paths.len(),
+        cases.len()
+    );
 }

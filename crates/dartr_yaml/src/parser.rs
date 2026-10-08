@@ -6,12 +6,12 @@
 
 use std::collections::HashMap;
 
-use crate::YamlException;
 use crate::event::{Event, EventType, TagDirective, VersionDirective};
 use crate::scanner::Scanner;
 use crate::source::{FileSpan, SourceLocation};
 use crate::style::{CollectionStyle, ScalarStyle};
 use crate::token::{Token, TokenType};
+use crate::{YamlException, YamlWarning};
 
 #[allow(dead_code)] // These states exist in the Dart parser's state model.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -64,6 +64,10 @@ impl Parser {
 
     pub fn take_errors(&mut self) -> Vec<YamlException> {
         self.scanner.take_errors()
+    }
+
+    pub fn take_warnings(&mut self) -> Vec<YamlWarning> {
+        self.scanner.take_warnings()
     }
 
     pub fn parse(&mut self) -> Result<Event, YamlException> {
@@ -562,6 +566,12 @@ impl Parser {
                         token.span,
                     ));
                 }
+                if token.minor > 2 {
+                    self.scanner.warnings.push(YamlWarning {
+                        message: "Warning: this parser only supports YAML 1.1 and 1.2.".into(),
+                        span: Some(token.span),
+                    });
+                }
                 version_directive = Some(VersionDirective {
                     major: token.major,
                     minor: token.minor,
@@ -652,6 +662,7 @@ fn collection_start(
 
 fn error(message: &str, span: FileSpan) -> YamlException {
     YamlException {
+        runtime_error: None,
         message: message.to_owned(),
         span,
     }

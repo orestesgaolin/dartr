@@ -7,6 +7,7 @@
 use std::collections::VecDeque;
 
 use crate::YamlException;
+use crate::YamlWarning;
 use crate::source::{FileSpan, SourceFile, SourceLocation};
 use crate::style::ScalarStyle;
 use crate::token::{Token, TokenType};
@@ -116,6 +117,7 @@ pub struct Scanner {
     simple_key_allowed: bool,
     simple_keys: Vec<Option<SimpleKey>>,
     pub errors: Vec<YamlException>,
+    pub warnings: Vec<YamlWarning>,
 }
 
 impl Scanner {
@@ -133,11 +135,16 @@ impl Scanner {
             simple_key_allowed: true,
             simple_keys: vec![None],
             errors: Vec::new(),
+            warnings: Vec::new(),
         }
     }
 
     pub fn take_errors(&mut self) -> Vec<YamlException> {
         std::mem::take(&mut self.errors)
+    }
+
+    pub fn take_warnings(&mut self) -> Vec<YamlWarning> {
+        std::mem::take(&mut self.warnings)
     }
 
     pub fn peek(&mut self) -> Result<Token, YamlException> {
@@ -187,8 +194,16 @@ impl Scanner {
     }
     fn error(&self, message: &str, span: FileSpan) -> YamlException {
         YamlException {
+            runtime_error: None,
             message: message.into(),
             span,
+        }
+    }
+    fn runtime_error(&self, message: String) -> YamlException {
+        YamlException {
+            runtime_error: Some(message.clone()),
+            message,
+            span: self.empty_span(),
         }
     }
     fn indent(&self) -> isize {
@@ -679,14 +694,21 @@ impl Scanner {
         self.cursor.read_char();
         let name = self.scan_directive_name()?;
         let token = if name == "YAML" {
-            Some(self.scan_version_directive_value(start)?)
+            self.scan_version_directive_value(start)?
         } else if name == "TAG" {
-            Some(self.scan_tag_directive_value(start)?)
+            self.scan_tag_directive_value(start)?
         } else {
+            self.warnings.push(YamlWarning {
+                message: "Warning: unknown directive.".into(),
+                span: Some(self.state_span(start)),
+            });
             while !self.is_break_or_end() {
                 self.cursor.read_code_point();
             }
-            None
+            // package:yaml returns immediately here. In particular, it leaves
+            // the line break for scan_to_next_token(), which restores simple
+            // key eligibility at the beginning of the following line.
+            return Ok(None);
         };
         self.skip_blanks();
         self.skip_comment();
@@ -697,7 +719,7 @@ impl Scanner {
             ));
         }
         self.skip_line();
-        Ok(token)
+        Ok(Some(token))
     }
 
     fn scan_directive_name(&mut self) -> Result<String, YamlException> {
@@ -735,10 +757,9 @@ impl Scanner {
             return Err(self.error("Expected version number.", self.empty_span()));
         }
         number.parse().map_err(|_| {
-            self.error(
-                "Invalid version number.",
-                self.span(start, self.cursor.state.pos),
-            )
+            self.runtime_error(format!(
+                "FormatException: Positive input exceeds the limit of integer\n{number}"
+            ))
         })
     }
     fn scan_tag_directive_value(&mut self, start: State) -> Result<Token, YamlException> {
@@ -867,15 +888,9 @@ impl Scanner {
     }
     fn scan_tag_uri(
         &mut self,
-        head: Option<&str>,
+        _head: Option<&str>,
         flow_separators: bool,
     ) -> Result<String, YamlException> {
-        let mut raw = String::new();
-        if let Some(head) = head
-            && head.encode_utf16().count() > 1
-        {
-            raw.push_str(&head[1..]);
-        }
         let start = self.cursor.state.pos;
         loop {
             let ch = self.cursor.peek(0);
@@ -885,13 +900,8 @@ impl Scanner {
                 break;
             }
         }
-        raw.push_str(&self.cursor.slice(start, self.cursor.state.pos));
-        decode_percent(&raw).map_err(|_| {
-            self.error(
-                "Invalid percent-encoding in tag URI.",
-                self.span(start, self.cursor.state.pos),
-            )
-        })
+        let raw = self.cursor.slice(start, self.cursor.state.pos);
+        decode_percent(&raw).map_err(|message| self.runtime_error(message))
     }
 
     fn expect_char(&mut self, expected: u16) -> Result<(), YamlException> {
@@ -1102,10 +1112,9 @@ impl Scanner {
                         for _ in 0..length {
                             if !self.is_hex() {
                                 if self.cursor.done() {
-                                    return Err(self.error(
-                                        "expected more input.",
-                                        self.empty_span(),
-                                    ));
+                                    return Err(
+                                        self.error("expected more input.", self.empty_span())
+                                    );
                                 }
                                 self.cursor.read_char();
                                 return Err(self.error(
@@ -1319,14 +1328,14 @@ impl Scanner {
     }
 }
 
-fn decode_percent(raw: &str) -> Result<String, ()> {
+fn decode_percent(raw: &str) -> Result<String, String> {
     let bytes = raw.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == b'%' {
             if i + 2 >= bytes.len() {
-                return Err(());
+                return Err("Invalid argument(s): Truncated URI".into());
             }
             let h = |b: u8| match b {
                 b'0'..=b'9' => Some(b - b'0'),
@@ -1334,21 +1343,64 @@ fn decode_percent(raw: &str) -> Result<String, ()> {
                 b'A'..=b'F' => Some(10 + b - b'A'),
                 _ => None,
             };
-            let a = h(bytes[i + 1]).ok_or(())?;
-            let b = h(bytes[i + 2]).ok_or(())?;
-            let decoded = (a << 4) | b;
-            // Uri.decodeFull() preserves URI reserved characters. This is
-            // significant for tag prefixes; Uri.decodeComponent() would not.
-            if b":/?#[]@!$&'()*+,;=".contains(&decoded) {
-                out.extend_from_slice(&bytes[i..i + 3]);
-            } else {
-                out.push(decoded);
-            }
+            let a = h(bytes[i + 1])
+                .ok_or_else(|| "Invalid argument(s): Invalid URL encoding".to_string())?;
+            let b = h(bytes[i + 2])
+                .ok_or_else(|| "Invalid argument(s): Invalid URL encoding".to_string())?;
+            out.push((a << 4) | b);
             i += 3;
         } else {
             out.push(bytes[i]);
             i += 1;
         }
     }
-    String::from_utf8(out).map_err(|_| ())
+    validate_utf8(&out)?;
+    Ok(String::from_utf8(out).expect("validated UTF-8"))
+}
+
+fn validate_utf8(bytes: &[u8]) -> Result<(), String> {
+    let error = |message: &str, offset: usize| {
+        Err(format!("FormatException: {message} (at offset {offset})"))
+    };
+    let mut i = 0;
+    while i < bytes.len() {
+        let first = bytes[i];
+        if first <= 0x7f {
+            i += 1;
+            continue;
+        }
+        if (0x80..=0xbf).contains(&first) {
+            return error("Unexpected extension byte", i);
+        }
+        if !(0xc2..=0xf4).contains(&first) {
+            return error("Invalid UTF-8 byte", i);
+        }
+        let width = if first <= 0xdf {
+            2
+        } else if first <= 0xef {
+            3
+        } else {
+            4
+        };
+        if i + width > bytes.len() {
+            return error("Unfinished UTF-8 octet sequence", bytes.len());
+        }
+        for extension in 1..width {
+            if !(0x80..=0xbf).contains(&bytes[i + extension]) {
+                return error("Missing extension byte", i + extension);
+            }
+        }
+        let second = bytes[i + 1];
+        if (first == 0xe0 && second < 0xa0) || (first == 0xf0 && second < 0x90) {
+            return error("Overlong encoding", i + 1);
+        }
+        if first == 0xed && second >= 0xa0 {
+            return error("Encoded surrogate", i + 1);
+        }
+        if first == 0xf4 && second > 0x8f {
+            return error("Out of unicode range", i + 1);
+        }
+        i += width;
+    }
+    Ok(())
 }

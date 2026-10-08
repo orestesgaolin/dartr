@@ -99,7 +99,7 @@ impl YamlNode {
                     // Dart compares integers to doubles without first rounding the integer.
                     b.is_finite()
                         && *b >= i64::MIN as f64
-                        && *b < 9223372036854775808.0
+                        && *b <= 9223372036854775808.0
                         && b.fract() == 0.0
                         && *a == *b as i64
                 }

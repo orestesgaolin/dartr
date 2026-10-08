@@ -42,6 +42,9 @@ impl Loader {
     pub fn take_errors(&mut self) -> Vec<YamlException> {
         self.parser.take_errors()
     }
+    pub fn take_warnings(&mut self) -> Vec<crate::YamlWarning> {
+        self.parser.take_warnings()
+    }
     pub fn load(&mut self) -> Result<Option<YamlDocument>, YamlException> {
         if self.done {
             return Ok(None);
@@ -78,12 +81,14 @@ impl Loader {
             EventType::Alias => {
                 let Some(alias) = self.aliases.get(&event.value) else {
                     return Err(YamlException {
+                        runtime_error: None,
                         message: "Undefined alias.".into(),
                         span: event.span,
                     });
                 };
                 if self.active_anchors.contains(&event.value) {
                     return Err(YamlException {
+                        runtime_error: None,
                         message: "Self-referential collections are not supported.".into(),
                         span: event.span,
                     });
@@ -94,6 +99,27 @@ impl Loader {
                 let value = match event.tag.as_deref() {
                     Some("!" | "tag:yaml.org,2002:str") => Scalar::String(event.value.clone()),
                     Some(tag) => {
+                        // Dart codeUnitAt throws before reporting a YAML error for
+                        // empty numeric tags, and one-code-unit float tags.
+                        if matches!(tag, "tag:yaml.org,2002:int" | "tag:yaml.org,2002:float") {
+                            let length = event.value.encode_utf16().count();
+                            let range = if length == 0 {
+                                Some(
+                                    "RangeError (length): Invalid value: Valid value range is empty: 0",
+                                )
+                            } else if length == 1 && tag == "tag:yaml.org,2002:float" {
+                                Some("RangeError (length): Invalid value: Only valid value is 0: 1")
+                            } else {
+                                None
+                            };
+                            if let Some(range) = range {
+                                return Err(YamlException {
+                                    runtime_error: Some(range.into()),
+                                    message: range.into(),
+                                    span: event.span.start.point_span(),
+                                });
+                            }
+                        }
                         let parsed = match tag {
                             "tag:yaml.org,2002:null" => parse_null(&event.value),
                             "tag:yaml.org,2002:bool" => parse_bool(&event.value),
@@ -101,12 +127,14 @@ impl Loader {
                             "tag:yaml.org,2002:float" => parse_number(&event.value, false, true),
                             _ => {
                                 return Err(YamlException {
+                                    runtime_error: None,
                                     message: format!("Undefined tag: {tag}."),
                                     span: event.span,
                                 });
                             }
                         };
                         parsed.ok_or_else(|| YamlException {
+                            runtime_error: None,
                             message: format!(
                                 "Invalid {} scalar.",
                                 tag.trim_start_matches("tag:yaml.org,2002:")
@@ -137,6 +165,7 @@ impl Loader {
             .is_some_and(|tag| tag != "!" && tag != expected_tag)
         {
             return Err(YamlException {
+                runtime_error: None,
                 message: format!(
                     "Invalid tag for {}.",
                     if is_map { "mapping" } else { "sequence" }
@@ -183,6 +212,7 @@ impl Loader {
                         let value = self.load_node(event)?;
                         if entries.iter().any(|(key, _)| key.value_equals(&child)) {
                             return Err(YamlException {
+                                runtime_error: None,
                                 message: "Duplicate mapping key.".into(),
                                 span: child.span,
                             });
@@ -210,6 +240,7 @@ pub struct LoadResult {
     pub node: Option<YamlNode>,
     /// Recovered errors in encounter order, followed by the fatal exception, if any.
     pub errors: Vec<YamlException>,
+    pub warnings: Vec<crate::YamlWarning>,
 }
 pub fn load_yaml_node(text: &str) -> Result<YamlNode, YamlException> {
     Ok(load_yaml_document(text)?.contents)
@@ -231,6 +262,7 @@ fn load_single_document(loader: &mut Loader) -> Result<YamlDocument, YamlExcepti
     };
     if let Some(next) = loader.load()? {
         return Err(YamlException {
+            runtime_error: None,
             message: "Only expected one document.".into(),
             span: next.span,
         });
@@ -244,6 +276,7 @@ pub fn load_yaml_node_with_options(text: &str, recover: bool) -> LoadResult {
             return LoadResult {
                 node: None,
                 errors: vec![error],
+                warnings: Vec::new(),
             };
         }
     };
@@ -256,7 +289,12 @@ pub fn load_yaml_node_with_options(text: &str, recover: bool) -> LoadResult {
             None
         }
     };
-    LoadResult { node, errors }
+    let warnings = loader.take_warnings();
+    LoadResult {
+        node,
+        errors,
+        warnings,
+    }
 }
 pub fn load_yaml_documents(text: &str) -> Result<Vec<YamlDocument>, YamlException> {
     let mut loader = Loader::new(text, false)?;

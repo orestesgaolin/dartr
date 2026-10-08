@@ -1,16 +1,8 @@
-//! Differential integration coverage for YAML syntax errors.
-//!
-//! The oracle is `package:yaml` 3.1.3 from `tools/oracle`. The cases cover
-//! parser punctuation, indentation, aliases, directives, quoted scalars, and
-//! EOF handling through the public `load_yaml_node` API.
-//!
-//! `%Y@` and `%FOO` are intentionally outside this error corpus: package:yaml
-//! accepts them as unknown directives and reports warnings through a callback,
-//! while `loadYamlNode` and dartr both return a value. Errors that Saphyr does
-//! not emit, including some duplicate tag directive cases, need separate
-//! parser compatibility work. The `simple key expected`
-//! Saphyr variant remains outside the exact-span set because its error drops
-//! the pending key location that package:yaml reports.
+//! Differential integration coverage for package:yaml syntax errors.
+//! The oracle uses the pinned package:yaml 3.1.4 from tools/oracle.
+//! These cases validate messages and UTF-16 source ranges through the
+//! analyzer's byte-span adapter. Broader node/recovery and corpus parity
+//! lives in dartr_yaml/tests/differential.rs.
 
 use dartr_project::yaml::load_yaml_node;
 use serde_json::{Value, json};
@@ -24,6 +16,10 @@ struct Case {
 }
 
 const CASES: &[Case] = &[
+    Case {
+        name: "hex_escape_non_bmp",
+        input: "name: \"\\x😀\"\n",
+    },
     Case {
         name: "yaml_major_incompatible",
         input: "%YAML 2.0\n---\nanalyzer: {}\n",
@@ -237,10 +233,6 @@ fn oracle() -> Vec<Value> {
     })
 }
 
-fn utf16_offset(text: &str, byte_offset: usize) -> usize {
-    text[..byte_offset.min(text.len())].encode_utf16().count()
-}
-
 fn actual(case: &Case) -> Value {
     match load_yaml_node(case.input) {
         Ok(_) => Value::Null,
@@ -254,12 +246,11 @@ fn actual(case: &Case) -> Value {
                     "column": null,
                 });
             };
-            let offset = utf16_offset(case.input, span.start);
-            let end = utf16_offset(case.input, span.end);
+            let (offset, length) = error.utf16_range(case.input).unwrap();
             json!({
                 "message": error.message,
                 "offset": offset,
-                "length": end - offset,
+                "length": length,
                 "line": span.line,
                 "column": span.column,
             })

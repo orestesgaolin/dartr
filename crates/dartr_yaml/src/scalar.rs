@@ -46,12 +46,19 @@ pub(crate) fn parse_number(contents: &str, allow_int: bool, allow_float: bool) -
     let second = *bytes.get(1)?;
     if allow_int && first == b'0' {
         if second == b'x' {
-            return i64::from_str_radix(&contents[2..], 16)
+            let digits = &dart_trim(contents)[2..];
+            // Dart's unsigned hexadecimal form uses the full 64-bit word.
+            if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+                return None;
+            }
+            return u64::from_str_radix(digits, 16)
                 .ok()
-                .map(Scalar::Int);
+                .map(|value| Scalar::Int(value as i64));
         }
         if second == b'o' {
-            return i64::from_str_radix(&contents[2..], 8).ok().map(Scalar::Int);
+            return i64::from_str_radix(dart_trim(&contents[2..]), 8)
+                .ok()
+                .map(Scalar::Int);
         }
     }
     if first.is_ascii_digit() || ((first == b'+' || first == b'-') && second.is_ascii_digit()) {
@@ -90,6 +97,7 @@ pub(crate) fn parse_number(contents: &str, allow_int: bool, allow_float: bool) -
 
 /// `int.tryParse(contents, radix: 10)`: optional sign, decimal digits.
 fn dart_int_try_parse(contents: &str) -> Option<i64> {
+    let contents = dart_trim(contents);
     let digits = contents.strip_prefix(['+', '-']).unwrap_or(contents);
     if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
         return None;
@@ -99,6 +107,7 @@ fn dart_int_try_parse(contents: &str) -> Option<i64> {
 
 /// `double.tryParse`: a decimal floating point literal, or `NaN`/`Infinity`.
 fn dart_double_try_parse(contents: &str) -> Option<f64> {
+    let contents = dart_trim(contents);
     let body = contents.strip_prefix(['+', '-']).unwrap_or(contents);
     match body {
         "NaN" => return Some(f64::NAN),
@@ -118,4 +127,9 @@ fn dart_double_try_parse(contents: &str) -> Option<f64> {
         return None;
     }
     contents.parse::<f64>().ok()
+}
+
+/// Dart String.trim includes BOM, and excludes the obsolete Mongolian vowel separator.
+fn dart_trim(text: &str) -> &str {
+    text.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
 }

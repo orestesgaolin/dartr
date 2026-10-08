@@ -10,7 +10,7 @@ pub struct Span {
     pub end: usize,
     /// Zero-based line of [start].
     pub line: usize,
-    /// Zero-based column (in characters) of [start].
+    /// Zero-based column in UTF-16 code units of [start].
     pub column: usize,
 }
 
@@ -80,6 +80,21 @@ pub enum NodeKind {
 pub struct YamlError {
     pub message: String,
     pub span: Option<Span>,
+    /// Exact Dart range, including spans which end between surrogate code units.
+    pub source_span: Option<dartr_yaml::FileSpan>,
+}
+impl YamlError {
+    pub fn utf16_range(&self, text: &str) -> Option<(usize, usize)> {
+        if let Some(span) = self.source_span {
+            return Some((span.start.offset, span.length()));
+        }
+        self.span.map(|span| {
+            (
+                text[..span.start].encode_utf16().count(),
+                text[span.start..span.end].encode_utf16().count(),
+            )
+        })
+    }
 }
 
 impl YamlNode {
@@ -219,7 +234,11 @@ pub fn load_yaml_node(text: &str) -> Result<YamlNode, YamlError> {
         .map(|node| convert(&source, node))
         .map_err(|error| YamlError {
             message: error.message,
-            span: Some(span(&source, error.span)),
+            span: error
+                .runtime_error
+                .is_none()
+                .then(|| span(&source, error.span)),
+            source_span: error.runtime_error.is_none().then_some(error.span),
         })
 }
 
