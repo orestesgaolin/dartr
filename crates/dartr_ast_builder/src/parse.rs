@@ -10,6 +10,7 @@ use dartr_diagnostics::Diagnostic;
 use dartr_parser::Parser;
 use dartr_parser::analyzer::features_for_file;
 use dartr_parser::experimental_features::ExperimentalFeatures;
+use dartr_parser::experimental_flags::ExperimentalFlag;
 use dartr_syntax::analyzer_scanner::{
     AnalyzerScanResult, CURRENT_LANGUAGE_VERSION, scan_for_analyzer,
 };
@@ -63,6 +64,30 @@ pub struct ParsedUnit {
 /// false)` with the feature set of the latest language version. [content]
 /// must not start with a byte order mark.
 pub fn parse_string(content: &str, path: &str) -> ParsedUnit {
+    parse_impl(content, path, None)
+}
+
+/// Dart `FileState.parseCode`: parses [content] like the analysis driver,
+/// with the language version of the package of the file
+/// ([package_version], Dart `packageLanguageVersion`) and the experiments
+/// that are enabled for the file ([experiments], Dart `featureSet`). The
+/// features of the file are the features of `package_version` (or of the
+/// `// @dart = x.y` comment) plus the experiments (Dart
+/// `featureSet.restrictToVersion(version)`).
+pub fn parse_file(
+    content: &str,
+    path: &str,
+    package_version: (u32, u32),
+    experiments: &[ExperimentalFlag],
+) -> ParsedUnit {
+    parse_impl(content, path, Some((package_version, experiments)))
+}
+
+fn parse_impl(
+    content: &str,
+    path: &str,
+    package: Option<((u32, u32), &[ExperimentalFlag])>,
+) -> ParsedUnit {
     let AnalyzerScanResult {
         scan,
         diagnostics: scan_diagnostics,
@@ -82,14 +107,31 @@ pub fn parse_string(content: &str, path: &str) -> ParsedUnit {
     line_starts.pop();
     let line_info = LineInfo::new(line_starts);
     let override_ = override_version.map(|(major, minor)| (major as u32, minor as u32));
-    let language_version = LibraryLanguageVersion {
-        package: (
-            CURRENT_LANGUAGE_VERSION.0 as u32,
-            CURRENT_LANGUAGE_VERSION.1 as u32,
+    let (language_version, feature_set) = match package {
+        None => (
+            LibraryLanguageVersion {
+                package: (
+                    CURRENT_LANGUAGE_VERSION.0 as u32,
+                    CURRENT_LANGUAGE_VERSION.1 as u32,
+                ),
+                override_,
+            },
+            features_for_file(feature_version),
         ),
-        override_,
+        Some((package_version, experiments)) => {
+            let (major, minor) = match feature_version {
+                Some((major, minor)) => (major as u32, minor as u32),
+                None => package_version,
+            };
+            (
+                LibraryLanguageVersion {
+                    package: package_version,
+                    override_,
+                },
+                ExperimentalFeatures::for_language_version(major, minor, experiments),
+            )
+        }
     };
-    let feature_set = features_for_file(feature_version);
 
     // Dart `Parser(diagnosticReporter, featureSet:, languageVersion:,
     // lineInfo:)` of `generated/parser.dart`.

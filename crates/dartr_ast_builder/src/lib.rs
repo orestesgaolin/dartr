@@ -38,4 +38,4 @@ pub mod parse;
 pub mod stack;
 
 pub use ast_builder::AstBuilder;
-pub use parse::{LibraryLanguageVersion, ParsedUnit, parse_string};
+pub use parse::{LibraryLanguageVersion, ParsedUnit, parse_file, parse_string};

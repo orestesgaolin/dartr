@@ -12,5 +12,6 @@
 //! - [`reference`]: `summary2/reference.dart` (symbolic references).
 //! - [`dump`]: the `elements` dump (`tools/oracle/bin/elements.dart`).
 
+pub mod ast_util;
 pub mod dump;
 pub mod reference;
