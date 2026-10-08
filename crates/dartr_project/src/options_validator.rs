@@ -16,6 +16,7 @@ use crate::yaml::{NodeKind, Scalar, Span, YamlNode};
 use crate::{AnalysisContext, experiments, paths};
 use dartr_diagnostics::{Diagnostic, DiagnosticMessage, LocatableDiagnostic, all_codes, diag};
 use lint_rule_metadata::{RuleStateKind, incompatible_rules, rule_state};
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
 const ANALYZER_OPTIONS: &[&str] = &[
@@ -571,10 +572,11 @@ impl Validator<'_> {
         let Some(state) = rule_state(canonical) else {
             return;
         };
-        if !state
-            .since
-            .is_none_or(|since| self.sdk_min.is_some_and(|minimum| minimum.includes(since)))
-        {
+        if !state.since.is_none_or(|since| {
+            self.sdk_min
+                .as_ref()
+                .is_some_and(|minimum| minimum.includes(since))
+        }) {
             return;
         }
         let located = match (state.kind, state.replacement) {
@@ -1301,16 +1303,76 @@ fn utf16_span(text: &str, span: Span) -> (usize, usize) {
     )
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct MinimumVersion {
-    version: (u16, u16, u16),
-    is_prerelease: bool,
+    version: (u64, u64, u64),
+    pre_release: Vec<VersionIdentifier>,
+    build: Vec<VersionIdentifier>,
 }
 
 impl MinimumVersion {
-    fn includes(self, since: (u16, u16, u16)) -> bool {
-        self.version > since || (self.version == since && !self.is_prerelease)
+    fn includes(&self, since: (u16, u16, u16)) -> bool {
+        let since = MinimumVersion {
+            version: (since.0.into(), since.1.into(), since.2.into()),
+            pre_release: Vec::new(),
+            build: Vec::new(),
+        };
+        self.compare_to(&since).is_ge()
     }
+
+    /// `Version.compareTo` from `package:pub_semver`.
+    fn compare_to(&self, other: &MinimumVersion) -> Ordering {
+        let ordering = self.version.cmp(&other.version);
+        if ordering != Ordering::Equal {
+            return ordering;
+        }
+        if self.pre_release.is_empty() && !other.pre_release.is_empty() {
+            return Ordering::Greater;
+        }
+        if other.pre_release.is_empty() && !self.pre_release.is_empty() {
+            return Ordering::Less;
+        }
+        let ordering = compare_version_identifiers(&self.pre_release, &other.pre_release);
+        if ordering != Ordering::Equal {
+            return ordering;
+        }
+        compare_version_identifiers(&self.build, &other.build)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum VersionIdentifier {
+    Number(u64),
+    Text(String),
+}
+
+fn compare_version_identifiers(
+    first: &[VersionIdentifier],
+    second: &[VersionIdentifier],
+) -> Ordering {
+    for index in 0..first.len().max(second.len()) {
+        let ordering = match (first.get(index), second.get(index)) {
+            (None, None) => Ordering::Equal,
+            (None, Some(_)) => Ordering::Less,
+            (Some(_), None) => Ordering::Greater,
+            (Some(VersionIdentifier::Number(first)), Some(VersionIdentifier::Number(second))) => {
+                first.cmp(second)
+            }
+            (Some(VersionIdentifier::Number(_)), Some(VersionIdentifier::Text(_))) => {
+                Ordering::Less
+            }
+            (Some(VersionIdentifier::Text(_)), Some(VersionIdentifier::Number(_))) => {
+                Ordering::Greater
+            }
+            (Some(VersionIdentifier::Text(first)), Some(VersionIdentifier::Text(second))) => {
+                first.cmp(second)
+            }
+        };
+        if ordering != Ordering::Equal {
+            return ordering;
+        }
+    }
+    Ordering::Equal
 }
 
 fn sdk_minimum(context: &AnalysisContext, path: &str) -> Option<MinimumVersion> {
@@ -1362,7 +1424,7 @@ fn parse_minimum_version(constraint: &str) -> Option<MinimumVersion> {
         index += 1;
     }
     if terms.iter().any(|(operator, _)| *operator == "^") {
-        return (terms.len() == 1).then_some(terms[0].1);
+        return (terms.len() == 1).then(|| terms[0].1.clone());
     }
 
     let mut minimum: Option<(MinimumVersion, bool)> = None;
@@ -1374,7 +1436,7 @@ fn parse_minimum_version(constraint: &str) -> Option<MinimumVersion> {
             "<=" => update_maximum(&mut maximum, version, true),
             "<" => update_maximum(&mut maximum, version, false),
             "=" => {
-                update_minimum(&mut minimum, version, true);
+                update_minimum(&mut minimum, version.clone(), true);
                 update_maximum(&mut maximum, version, true);
             }
             _ => unreachable!(),
@@ -1382,7 +1444,7 @@ fn parse_minimum_version(constraint: &str) -> Option<MinimumVersion> {
     }
     let (minimum, include_minimum) = minimum?;
     if let Some((maximum, include_maximum)) = maximum {
-        let ordering = version_key(minimum).cmp(&version_key(maximum));
+        let ordering = minimum.compare_to(&maximum);
         if ordering.is_gt() || (ordering.is_eq() && (!include_minimum || !include_maximum)) {
             return None;
         }
@@ -1395,39 +1457,39 @@ fn parse_version(version: &str) -> Option<MinimumVersion> {
         .find(|c: char| !c.is_ascii_digit() && c != '.')
         .unwrap_or(version.len());
     let suffix = &version[numeric_end..];
-    let valid_identifiers = |text: &str, reject_numeric_leading_zero: bool| {
+    let valid_identifiers = |text: &str| {
         !text.is_empty()
             && text.split('.').all(|identifier| {
                 !identifier.is_empty()
                     && identifier
                         .chars()
                         .all(|c| c.is_ascii_alphanumeric() || c == '-')
-                    && !(reject_numeric_leading_zero
-                        && identifier.len() > 1
-                        && identifier.starts_with('0')
-                        && identifier.chars().all(|c| c.is_ascii_digit()))
             })
     };
-    let suffix_is_valid = if let Some(rest) = suffix.strip_prefix('-') {
+    let (pre_release, build) = if let Some(rest) = suffix.strip_prefix('-') {
         if let Some((pre, build)) = rest.split_once('+') {
-            valid_identifiers(pre, true) && valid_identifiers(build, false) && !build.contains('+')
+            if !valid_identifiers(pre) || !valid_identifiers(build) || build.contains('+') {
+                return None;
+            }
+            (pre, build)
         } else {
-            valid_identifiers(rest, true)
+            if !valid_identifiers(rest) {
+                return None;
+            }
+            (rest, "")
         }
     } else if let Some(build) = suffix.strip_prefix('+') {
-        valid_identifiers(build, false) && !build.contains('+')
+        if !valid_identifiers(build) || build.contains('+') {
+            return None;
+        }
+        ("", build)
+    } else if suffix.is_empty() {
+        ("", "")
     } else {
-        suffix.is_empty()
-    };
-    if !suffix_is_valid {
         return None;
-    }
+    };
     let parts: Vec<_> = version[..numeric_end].split('.').collect();
-    if parts.len() != 3
-        || parts
-            .iter()
-            .any(|part| part.is_empty() || (part.len() > 1 && part.starts_with('0')))
-    {
+    if parts.len() != 3 || parts.iter().any(|part| part.is_empty()) {
         return None;
     }
     Some(MinimumVersion {
@@ -1436,12 +1498,23 @@ fn parse_version(version: &str) -> Option<MinimumVersion> {
             parts[1].parse().ok()?,
             parts[2].parse().ok()?,
         ),
-        is_prerelease: suffix.starts_with('-'),
+        pre_release: parse_version_identifiers(pre_release),
+        build: parse_version_identifiers(build),
     })
 }
 
-fn version_key(version: MinimumVersion) -> ((u16, u16, u16), bool) {
-    (version.version, !version.is_prerelease)
+fn parse_version_identifiers(text: &str) -> Vec<VersionIdentifier> {
+    if text.is_empty() {
+        return Vec::new();
+    }
+    text.split('.')
+        .map(|identifier| {
+            identifier.parse().map_or_else(
+                |_| VersionIdentifier::Text(identifier.to_string()),
+                VersionIdentifier::Number,
+            )
+        })
+        .collect()
 }
 
 fn update_minimum(
@@ -1449,9 +1522,9 @@ fn update_minimum(
     candidate: MinimumVersion,
     inclusive: bool,
 ) {
-    if current.is_none_or(|(version, current_inclusive)| {
-        version_key(candidate) > version_key(version)
-            || (version_key(candidate) == version_key(version) && !inclusive && current_inclusive)
+    if current.as_ref().is_none_or(|(version, current_inclusive)| {
+        candidate.compare_to(version).is_gt()
+            || (candidate.compare_to(version).is_eq() && !inclusive && *current_inclusive)
     }) {
         *current = Some((candidate, inclusive));
     }
@@ -1462,9 +1535,9 @@ fn update_maximum(
     candidate: MinimumVersion,
     inclusive: bool,
 ) {
-    if current.is_none_or(|(version, current_inclusive)| {
-        version_key(candidate) < version_key(version)
-            || (version_key(candidate) == version_key(version) && !inclusive && current_inclusive)
+    if current.as_ref().is_none_or(|(version, current_inclusive)| {
+        candidate.compare_to(version).is_lt()
+            || (candidate.compare_to(version).is_eq() && !inclusive && *current_inclusive)
     }) {
         *current = Some((candidate, inclusive));
     }
