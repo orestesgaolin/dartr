@@ -69,6 +69,6 @@ pub use analyzer_scanner::{AnalyzerScanResult, scan_for_analyzer};
 pub use diagnostic::{Diagnostic, DiagnosticSeverity, severity_lower_name};
 pub use error_token::{ErrorKind, ErrorToken, ScannerMessageCode};
 pub use line_info::{CharacterLocation, LineInfo};
-pub use scanner::{ScannerResult, scan_string, strip_bom};
+pub use scanner::{ScannerResult, scan_string, scan_with_token_start_delta, strip_bom};
 pub use token::{Token, TokenId, Tokens};
 pub use token_type::{Keyword, KeywordStyle, TokenType};

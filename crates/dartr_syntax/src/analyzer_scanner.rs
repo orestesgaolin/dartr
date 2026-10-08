@@ -173,12 +173,14 @@ pub fn translate_error_token(tokens: &Tokens, token: TokenId, report: &mut dyn F
         ScannerMessageCode::Encoding => at(char_offset, diag::encoding()),
         // Fasta reports the error location as the entire string or comment;
         // analyzer expects the end.
-        ScannerMessageCode::UnterminatedString => {
-            at(end_offset.wrapping_sub(1), diag::unterminated_string_literal())
-        }
-        ScannerMessageCode::UnterminatedComment => {
-            at(end_offset.wrapping_sub(1), diag::unterminated_multi_line_comment())
-        }
+        ScannerMessageCode::UnterminatedString => at(
+            end_offset.wrapping_sub(1),
+            diag::unterminated_string_literal(),
+        ),
+        ScannerMessageCode::UnterminatedComment => at(
+            end_offset.wrapping_sub(1),
+            diag::unterminated_multi_line_comment(),
+        ),
         ScannerMessageCode::MissingExponent => {
             make_error(end_offset.wrapping_sub(1), diag::missing_digit())
         }

@@ -16,11 +16,11 @@
 //! - A doc import (`@docImport`) is scanned and parsed into its own
 //!   [`Ast`] ([`DocImport::ast`]). Dart scans it with
 //!   `DocImportStringScanner`, which maps the token offsets (`tokenStart`)
-//!   into the unit; here the offsets of all non-error tokens are shifted
-//!   after scanning. Error tokens keep the offsets in the synthetic
-//!   `import ...` text: this is the Dart result where the error offset comes
-//!   from `stringOffset` (not mapped), and differs where it comes from
-//!   `tokenStart`.
+//!   into the unit; here the scanner adds the same offset to `tokenStart`
+//!   (`dartr_syntax::scan_with_token_start_delta`), so tokens and error
+//!   tokens made from `tokenStart` are in the unit, and error offsets that
+//!   come from `stringOffset` stay offsets in the synthetic `import ...`
+//!   text, like in Dart.
 
 use dartr_ast::doc_comment::{
     BlockDocDirective, CodeBlockType, DocDirective, DocDirectiveArgument,
@@ -38,7 +38,7 @@ use dartr_parser::parser_impl::synthetic_previous_token;
 use dartr_parser::token_stream_rewriter::TokenStreamRewriter;
 use dartr_parser::util::{is_letter, is_letter_or_digit, is_whitespace, optional};
 use dartr_syntax::token::flags;
-use dartr_syntax::{Token, TokenId, TokenType, Tokens, scan_string};
+use dartr_syntax::{Token, TokenId, TokenType, Tokens, scan_string, scan_with_token_start_delta};
 
 use crate::ast_builder::AstBuilder;
 use crate::error_converter::FastaErrorReporter;
@@ -503,18 +503,11 @@ impl<'a> DocCommentBuilder<'a> {
         let offset_in_unit = self.seq_offset() + (index as i64 - IMPORT_LENGTH);
 
         let configuration = self.feature_set.build_scanner_configuration();
-        let result = scan_string(&synthetic_import, Some(configuration), false, None);
-        let mut tokens = result.tokens;
-        // Dart `DocImportStringScanner.tokenStart`: token offsets in the
-        // unit. The token before the first token (offset -1) is not made
-        // with `tokenStart`.
-        for i in 0..tokens.len() {
-            let t = tokens.get_mut(TokenId(i as u32));
-            if t.is_error() || t.offset == u32::MAX {
-                continue;
-            }
-            t.offset = (t.offset as i64 + offset_in_unit) as u32;
-        }
+        // Dart `DocImportStringScanner(...).tokenize()`: the offsets of the
+        // tokens made with `tokenStart` are offsets in the unit.
+        let result =
+            scan_with_token_start_delta(&synthetic_import, Some(configuration), offset_in_unit);
+        let tokens = result.tokens;
 
         let doc_import_listener = AstBuilder::new(
             self.uri.to_string(),
