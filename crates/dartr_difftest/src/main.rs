@@ -13,7 +13,8 @@ use dartr_difftest::{Options, run};
     about = "Compare `dartr dump <mode>` with the Dart analyzer oracle"
 )]
 struct Cli {
-    /// Dump mode: tokens, ast, resolved or elements.
+    /// Dump mode: tokens, events, ast, elements, interface, resolved or
+    /// resolved-el.
     mode: String,
     /// Dart files or directories (searched recursively).
     #[arg(required = true)]
@@ -39,6 +40,14 @@ struct Cli {
     /// `"<inferred>"` on both sides before the comparison.
     #[arg(long)]
     mask_inferred: bool,
+    /// Compare only the entries of these node kinds (comma separated, for
+    /// example `SimpleIdentifier,NamedType`) in the `types` / `nodes` lists
+    /// of modes `resolved` and `resolved-el`.
+    #[arg(long, value_delimiter = ',')]
+    kinds: Vec<String>,
+    /// Remove the diagnostics before the comparison.
+    #[arg(long)]
+    no_diagnostics: bool,
     /// Number of differing files to report.
     #[arg(long, default_value_t = 20)]
     max_report: usize,
@@ -69,9 +78,12 @@ fn main() -> anyhow::Result<ExitCode> {
             .map(|s| s.split_whitespace().map(str::to_string).collect())
             .unwrap_or_default(),
         mask_inferred: cli.mask_inferred,
+        kinds: cli.kinds,
+        no_diagnostics: cli.no_diagnostics,
     };
     let report = run(&options)?;
     print!("{}", report.difference_report(cli.max_report));
+    print!("{}", report.kind_report());
     print!("{}", report.summary());
     Ok(if report.different() == 0 {
         ExitCode::SUCCESS

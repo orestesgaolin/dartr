@@ -10,8 +10,18 @@
 //! With [`Options::mask_inferred`], the `"type"` of every JSON object that
 //! has `"inf": true` is replaced by `"<inferred>"` on both sides before the
 //! comparison (the `elements` mode before top-level inference exists).
+//!
+//! Modes `resolved` and `resolved-el` (lines with `"units"`, see
+//! `tools/oracle/bin/resolved_el.dart`):
+//! - [`Options::kinds`] keeps only the entries of the given node kinds
+//!   (`"k"`) in the `"types"` and `"nodes"` lists before the comparison;
+//! - [`Options::no_diagnostics`] removes the `"diagnostics"` lists;
+//! - the report has a parity per node kind ([`Report::kinds`]): for each
+//!   kind, the number of oracle entries and the number of them that dartr
+//!   has with the same value (same offsets, kind, type or element), summed
+//!   over all files.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -22,7 +32,7 @@ use anyhow::{Context, Result, bail};
 use serde_json::Value;
 
 /// Options of a difftest run.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Options {
     /// `tokens`, `events`, `ast`, `resolved` or `elements`.
     pub mode: String,
@@ -44,6 +54,158 @@ pub struct Options {
     /// `"<inferred>"` on both sides before the comparison (see
     /// [`mask_inferred`]).
     pub mask_inferred: bool,
+    /// When not empty: compare only the entries of these node kinds in the
+    /// `"types"` and `"nodes"` lists (see [`filter_value`]).
+    pub kinds: Vec<String>,
+    /// Remove the `"diagnostics"` lists before the comparison.
+    pub no_diagnostics: bool,
+}
+
+impl Options {
+    /// Whether the lines are changed before the comparison.
+    fn normalizes(&self) -> bool {
+        self.mask_inferred || !self.kinds.is_empty() || self.no_diagnostics
+    }
+
+    /// [line] after [mask_inferred] and [filter_value], serialized again
+    /// (keys keep their order). A line that is not valid JSON is returned
+    /// unchanged.
+    fn normalize_line(&self, line: &str) -> String {
+        match parse_deep(line) {
+            Ok(mut v) => {
+                self.normalize_value(&mut v);
+                v.to_string()
+            }
+            Err(_) => line.to_string(),
+        }
+    }
+
+    fn normalize_value(&self, v: &mut Value) {
+        if self.mask_inferred {
+            mask_inferred(v);
+        }
+        if !self.kinds.is_empty() || self.no_diagnostics {
+            filter_value(v, &self.kinds, self.no_diagnostics);
+        }
+    }
+}
+
+/// Removes, in every JSON object of [value], the entries of the `"types"`
+/// and `"nodes"` lists whose `"k"` is not in [kinds] (when [kinds] is not
+/// empty), and the `"diagnostics"` key (when [no_diagnostics]).
+pub fn filter_value(value: &mut Value, kinds: &[String], no_diagnostics: bool) {
+    match value {
+        Value::Object(map) => {
+            if no_diagnostics {
+                map.shift_remove("diagnostics");
+            }
+            for (key, v) in map.iter_mut() {
+                if !kinds.is_empty()
+                    && (key == "types" || key == "nodes")
+                    && let Value::Array(items) = v
+                {
+                    items.retain(|item| {
+                        item.get("k")
+                            .and_then(Value::as_str)
+                            .is_some_and(|k| kinds.iter().any(|x| x == k))
+                    });
+                    continue;
+                }
+                filter_value(v, kinds, no_diagnostics);
+            }
+        }
+        Value::Array(items) => items
+            .iter_mut()
+            .for_each(|v| filter_value(v, kinds, no_diagnostics)),
+        _ => {}
+    }
+}
+
+/// The parity of one node kind (modes `resolved`, `resolved-el`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct KindStats {
+    /// Entries of this kind in the oracle output.
+    pub oracle: usize,
+    /// Oracle entries that dartr has with the same value.
+    pub matched: usize,
+    /// Entries of this kind in the dartr output.
+    pub dartr: usize,
+}
+
+impl KindStats {
+    pub fn parity(&self) -> f64 {
+        if self.oracle == 0 {
+            100.0
+        } else {
+            self.matched as f64 * 100.0 / self.oracle as f64
+        }
+    }
+
+    fn add(&mut self, other: &KindStats) {
+        self.oracle += other.oracle;
+        self.matched += other.matched;
+        self.dartr += other.dartr;
+    }
+}
+
+/// The number of `"panic"` keys of a line: on the line itself (a panic
+/// outside the units) and in its units.
+pub fn count_panics(line: &Value) -> usize {
+    let units = line
+        .get("units")
+        .and_then(Value::as_array)
+        .map_or(0, |units| {
+            units.iter().filter(|u| u.get("panic").is_some()).count()
+        });
+    usize::from(line.get("panic").is_some()) + units
+}
+
+/// Adds the per-kind counts of one file to [stats]. The units of the two
+/// lines are paired by `"path"`; in each pair, an oracle entry of the
+/// `"types"` or `"nodes"` list is matched when the dartr list of the same
+/// unit has an equal entry that is not matched yet.
+pub fn count_kinds(oracle: &Value, dartr: Option<&Value>, stats: &mut BTreeMap<String, KindStats>) {
+    fn units(v: &Value) -> Vec<&Value> {
+        v.get("units")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().collect())
+            .unwrap_or_default()
+    }
+    fn entries(unit: &Value) -> impl Iterator<Item = &Value> {
+        ["types", "nodes"]
+            .into_iter()
+            .filter_map(|k| unit.get(k).and_then(Value::as_array))
+            .flatten()
+    }
+    fn kind(entry: &Value) -> String {
+        entry
+            .get("k")
+            .and_then(Value::as_str)
+            .unwrap_or("<no kind>")
+            .to_string()
+    }
+    let dartr_units = dartr.map(units).unwrap_or_default();
+    for unit in units(oracle) {
+        let path = unit.get("path");
+        let other = dartr_units.iter().find(|u| u.get("path") == path);
+        let mut available: HashMap<String, usize> = HashMap::new();
+        if let Some(other) = other {
+            for e in entries(other) {
+                stats.entry(kind(e)).or_default().dartr += 1;
+                *available.entry(e.to_string()).or_default() += 1;
+            }
+        }
+        for e in entries(unit) {
+            let s = stats.entry(kind(e)).or_default();
+            s.oracle += 1;
+            if let Some(n) = available.get_mut(&e.to_string())
+                && *n > 0
+            {
+                *n -= 1;
+                s.matched += 1;
+            }
+        }
+    }
 }
 
 /// The first difference of one file.
@@ -65,6 +227,11 @@ pub struct Report {
     pub oracle_time: Duration,
     pub dartr_time: Duration,
     pub elapsed: Duration,
+    /// Per node kind parity (modes `resolved`, `resolved-el`), by kind name.
+    pub kinds: BTreeMap<String, KindStats>,
+    /// Lines and units with a `"panic"` key in the dartr output (modes
+    /// `resolved`, `resolved-el`).
+    pub panics: usize,
 }
 
 impl Report {
@@ -94,6 +261,45 @@ impl Report {
             self.oracle_time.as_secs_f64(),
             self.dartr_time.as_secs_f64(),
         )
+    }
+
+    /// The per-kind parity table, sorted by the number of oracle entries
+    /// (empty when there are no per-kind counts).
+    pub fn kind_report(&self) -> String {
+        if self.kinds.is_empty() {
+            return String::new();
+        }
+        let mut rows: Vec<(&String, &KindStats)> = self.kinds.iter().collect();
+        rows.sort_by(|a, b| b.1.oracle.cmp(&a.1.oracle).then(a.0.cmp(b.0)));
+        let mut total = KindStats::default();
+        let mut s = format!(
+            "{:<40} {:>9} {:>9} {:>8} {:>9}\n",
+            "kind", "oracle", "matched", "parity", "dartr"
+        );
+        for (kind, k) in rows {
+            total.add(k);
+            s.push_str(&format!(
+                "{:<40} {:>9} {:>9} {:>7.2}% {:>9}\n",
+                kind,
+                k.oracle,
+                k.matched,
+                k.parity(),
+                k.dartr
+            ));
+        }
+        s.push_str(&format!(
+            "{:<40} {:>9} {:>9} {:>7.2}% {:>9}\n",
+            "TOTAL",
+            total.oracle,
+            total.matched,
+            total.parity(),
+            total.dartr
+        ));
+        s.push_str(&format!(
+            "dartr panics (lines and units): {}\n",
+            self.panics
+        ));
+        s
     }
 
     /// The first-difference report of the first [max] differing files.
@@ -392,34 +598,23 @@ pub fn mask_inferred(value: &mut Value) {
     }
 }
 
-/// [line] with [mask_inferred] applied, serialized again (keys keep their
-/// order). A line that is not valid JSON is returned unchanged.
-fn masked_line(line: &str) -> String {
-    match serde_json::from_str::<Value>(line) {
-        Ok(mut v) => {
-            mask_inferred(&mut v);
-            v.to_string()
-        }
-        Err(_) => line.to_string(),
-    }
-}
-
-/// Compares the output lines of one file. With [mask], both lines are
-/// masked first (see [`mask_inferred`]); the text comparison then sees the
-/// re-serialized lines, so escaping differences are not reported.
+/// Compares the output lines of one file. When [options] change the lines
+/// ([`Options::normalize_line`]), both lines are changed first; the text
+/// comparison then sees the re-serialized lines, so escaping differences
+/// are not reported.
 fn compare(
     file: &str,
     oracle: Option<&String>,
     dartr: Option<&String>,
-    mask: bool,
+    options: &Options,
 ) -> Option<Difference> {
-    let masked;
-    let (oracle, dartr) = if mask {
-        masked = (
-            oracle.map(|l| masked_line(l)),
-            dartr.map(|l| masked_line(l)),
+    let normalized;
+    let (oracle, dartr) = if options.normalizes() {
+        normalized = (
+            oracle.map(|l| options.normalize_line(l)),
+            dartr.map(|l| options.normalize_line(l)),
         );
-        (masked.0.as_ref(), masked.1.as_ref())
+        (normalized.0.as_ref(), normalized.1.as_ref())
     } else {
         (oracle, dartr)
     };
@@ -490,7 +685,10 @@ pub fn run(options: &Options) -> Result<Report> {
         oracle_time: Duration,
         dartr_time: Duration,
         failures: Vec<(String, Option<String>, Option<String>)>,
+        kinds: BTreeMap<String, KindStats>,
+        panics: usize,
     }
+    let per_kind = options.mode.starts_with("resolved");
     let next = Mutex::new(0usize);
     let results: Mutex<Vec<Result<BatchResult>>> = Mutex::new(Vec::new());
     std::thread::scope(|scope| {
@@ -517,9 +715,26 @@ pub fn run(options: &Options) -> Result<Report> {
                         let mut differences = Vec::new();
                         let mut failures = Vec::new();
                         let mut identical = 0;
+                        let mut kinds = BTreeMap::new();
+                        let mut panics = 0;
                         for file in batch {
                             let (lo, ld) = (o.lines.get(file), d.lines.get(file));
-                            match compare(file, lo, ld, options.mask_inferred) {
+                            if per_kind && let Some(lo) = lo {
+                                let parse = |l: &String| {
+                                    parse_deep(l).ok().map(|mut v| {
+                                        options.normalize_value(&mut v);
+                                        v
+                                    })
+                                };
+                                let vd = ld.and_then(parse);
+                                if let Some(vd) = &vd {
+                                    panics += count_panics(vd);
+                                }
+                                if let Some(vo) = parse(lo) {
+                                    count_kinds(&vo, vd.as_ref(), &mut kinds);
+                                }
+                            }
+                            match compare(file, lo, ld, options) {
                                 None => identical += 1,
                                 Some(mut diff) => {
                                     if lo.is_none() && !o.stderr.is_empty() {
@@ -545,6 +760,8 @@ pub fn run(options: &Options) -> Result<Report> {
                             oracle_time: o.time,
                             dartr_time: d.time,
                             failures,
+                            kinds,
+                            panics,
                         })
                     })();
                     results.lock().unwrap().push(result);
@@ -572,6 +789,10 @@ pub fn run(options: &Options) -> Result<Report> {
         report.oracle_time += r.oracle_time;
         report.dartr_time += r.dartr_time;
         report.differences.extend(r.differences);
+        report.panics += r.panics;
+        for (kind, k) in &r.kinds {
+            report.kinds.entry(kind.clone()).or_default().add(k);
+        }
         if let Some(dir) = &options.write_failures {
             for (file, o, d) in r.failures {
                 let name = sanitize(&file);
@@ -590,7 +811,7 @@ pub fn run(options: &Options) -> Result<Report> {
     if let Some(dir) = &options.write_failures {
         std::fs::write(
             dir.join("summary.txt"),
-            report.summary() + &report.difference_report(usize::MAX),
+            report.summary() + &report.kind_report() + &report.difference_report(usize::MAX),
         )?;
     }
     report.elapsed = start.elapsed();
@@ -607,11 +828,25 @@ mod tests {
     use super::*;
 
     fn diff(o: &str, d: &str) -> Option<Difference> {
-        compare("f.dart", Some(&o.to_string()), Some(&d.to_string()), false)
+        compare(
+            "f.dart",
+            Some(&o.to_string()),
+            Some(&d.to_string()),
+            &Options::default(),
+        )
     }
 
     fn masked_diff(o: &str, d: &str) -> Option<Difference> {
-        compare("f.dart", Some(&o.to_string()), Some(&d.to_string()), true)
+        let options = Options {
+            mask_inferred: true,
+            ..Default::default()
+        };
+        compare(
+            "f.dart",
+            Some(&o.to_string()),
+            Some(&d.to_string()),
+            &options,
+        )
     }
 
     #[test]
@@ -723,5 +958,66 @@ mod tests {
         assert!(d.json_path.starts_with("<text"), "{}", d.json_path);
 
         assert!(diff(r#"{"a":1}"#, r#"{"a":1}"#).is_none());
+    }
+
+    #[test]
+    fn kinds_and_no_diagnostics_filter_the_lists() {
+        let options = Options {
+            kinds: vec!["IntegerLiteral".to_string()],
+            no_diagnostics: true,
+            ..Default::default()
+        };
+        let o = r#"{"path":"f","units":[{"path":"f","diagnostics":[{"code":"x"}],"types":[{"o":0,"k":"IntegerLiteral","type":"int"},{"o":2,"k":"SimpleIdentifier","type":"int"}]}]}"#;
+        let d = r#"{"path":"f","units":[{"path":"f","diagnostics":[],"types":[{"o":0,"k":"IntegerLiteral","type":"int"},{"o":2,"k":"SimpleIdentifier","type":"dynamic"}]}]}"#;
+        assert!(compare("f", Some(&o.to_string()), Some(&d.to_string()), &options).is_none());
+        assert_eq!(
+            options.normalize_line(o),
+            r#"{"path":"f","units":[{"path":"f","types":[{"o":0,"k":"IntegerLiteral","type":"int"}]}]}"#
+        );
+        // Without the filter, the identifier type is the first difference.
+        let options = Options {
+            no_diagnostics: true,
+            ..Default::default()
+        };
+        let diff = compare("f", Some(&o.to_string()), Some(&d.to_string()), &options).unwrap();
+        assert_eq!(diff.json_path, "units[0].types[1].type");
+    }
+
+    #[test]
+    fn count_kinds_matches_entries_per_unit() {
+        let o: Value = serde_json::from_str(
+            r#"{"path":"a","units":[
+                {"path":"a","nodes":[{"o":0,"k":"SimpleIdentifier","el":"x"},{"o":4,"k":"SimpleIdentifier","el":"y"},{"o":8,"k":"NamedType","el":"T"}]},
+                {"path":"b","nodes":[{"o":0,"k":"SimpleIdentifier","el":"z"}]}]}"#,
+        )
+        .unwrap();
+        // Unit b is missing (for example a panic), y has another element.
+        let d: Value = serde_json::from_str(
+            r#"{"path":"a","units":[{"path":"a","nodes":[{"o":0,"k":"SimpleIdentifier","el":"x"},{"o":4,"k":"SimpleIdentifier","el":null},{"o":8,"k":"NamedType","el":"T"}]}]}"#,
+        )
+        .unwrap();
+        let mut stats = BTreeMap::new();
+        count_kinds(&o, Some(&d), &mut stats);
+        assert_eq!(
+            stats["SimpleIdentifier"],
+            KindStats {
+                oracle: 3,
+                matched: 1,
+                dartr: 2
+            }
+        );
+        assert_eq!(
+            stats["NamedType"],
+            KindStats {
+                oracle: 1,
+                matched: 1,
+                dartr: 1
+            }
+        );
+        // No dartr line: nothing is matched.
+        let mut stats = BTreeMap::new();
+        count_kinds(&o, None, &mut stats);
+        assert_eq!(stats["SimpleIdentifier"].matched, 0);
+        assert_eq!(stats["SimpleIdentifier"].oracle, 3);
     }
 }
