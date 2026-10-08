@@ -45,6 +45,32 @@ fn elements_parity_on_fixtures() {
     assert_parity(dirs, files.len());
 }
 
+/// Override inference (unit B5), mixin inference and default types
+/// (`fixtures/override_inference`), without masking the inferred types:
+/// fields, getters, setters, methods and parameters with types from the
+/// overridden members, combined signatures and conflicts
+/// (`typeInferenceError`), inherited covariance, generic methods, mixins,
+/// initializing formal parameters, private names across libraries.
+#[test]
+fn elements_parity_on_override_inference_fixtures() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/override_inference");
+    let files = collect_dart_files(std::slice::from_ref(&dir)).unwrap();
+    assert!(files.len() >= 6, "fixtures not found in {}", dir.display());
+    let report = run(&Options {
+        mask_inferred: false,
+        ..options(vec![dir])
+    })
+    .unwrap();
+    assert_eq!(report.files, files.len());
+    assert_eq!(
+        report.different(),
+        0,
+        "{}{}",
+        report.difference_report(20),
+        report.summary()
+    );
+}
+
 /// The `dart:` libraries of the SDK of the `dart` on PATH, linked from
 /// source (the `dart:core` cycle and every other SDK cycle).
 #[test]
