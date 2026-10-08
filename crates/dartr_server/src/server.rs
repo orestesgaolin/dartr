@@ -240,12 +240,18 @@ impl Server {
         }
     }
 
-    /// Adds [message] to the queue. Cancellations are applied at once
-    /// (Dart `MessageScheduler.add`).
+    /// Adds [message] to the queue. Cancellations are applied at once to
+    /// the queued requests (Dart `MessageScheduler.add`); a cancellation of
+    /// a request that is not in the queue (answered already) does nothing.
     fn enqueue(&mut self, queue: &mut VecDeque<Value>, message: Value) {
         if message.get("method").and_then(Value::as_str) == Some("$/cancelRequest") {
             if let Some(id) = message.get("params").and_then(|p| p.get("id")) {
-                self.cancelled.insert(id.to_string());
+                let queued = queue
+                    .iter()
+                    .any(|m| m.get("method").is_some() && m.get("id") == Some(id));
+                if queued {
+                    self.cancelled.insert(id.to_string());
+                }
             }
             return;
         }
@@ -1052,4 +1058,150 @@ fn excluded_folders(config: &Value) -> Vec<String> {
         .and_then(Value::as_array)
         .map(|l| l.iter().filter_map(Value::as_str).map(str::to_string).collect())
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use std::sync::{Arc, Mutex};
+
+    /// An output that keeps the bytes.
+    #[derive(Clone, Default)]
+    struct Buffer(Arc<Mutex<Vec<u8>>>);
+
+    impl Write for Buffer {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Buffer {
+        /// The messages written so far.
+        fn messages(&self) -> Vec<Value> {
+            let bytes = self.0.lock().unwrap().clone();
+            let mut input = std::io::Cursor::new(bytes);
+            let mut out = Vec::new();
+            while let Ok(Some(m)) = read_message(&mut input) {
+                out.push(m);
+            }
+            out
+        }
+    }
+
+    fn server(capabilities: Value) -> (Server, Buffer) {
+        let buffer = Buffer::default();
+        let channel = Channel::new(Box::new(buffer.clone()), None);
+        let options = ServerOptions::parse(&[], true).unwrap();
+        let mut s = Server::new(options, channel);
+        let root = normalize(&format!(
+            "{}/../dartr/tests/lsp_fixtures/lsp_project",
+            env!("CARGO_MANIFEST_DIR")
+        ));
+        s.handle_message(json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+            "capabilities": capabilities, "rootUri": path_to_uri(&root),
+        }}));
+        s.handle_message(json!({"jsonrpc": "2.0", "method": "initialized", "params": {}}));
+        (s, buffer)
+    }
+
+    fn response(messages: &[Value], id: i64) -> Value {
+        messages
+            .iter()
+            .find(|m| m.get("method").is_none() && m["id"] == json!(id))
+            .cloned()
+            .unwrap_or_else(|| panic!("no response {id}"))
+    }
+
+    #[test]
+    fn cancel_queued_request() {
+        let (mut s, out) = server(json!({}));
+        let uri = path_to_uri(&format!("{}/src/lib.rs.dart", env!("CARGO_MANIFEST_DIR")));
+        let mut queue = VecDeque::new();
+        let request = |id: i64| {
+            json!({"jsonrpc": "2.0", "id": id, "method": "textDocument/foldingRange",
+                "params": {"textDocument": {"uri": uri}}})
+        };
+        s.enqueue(&mut queue, request(2));
+        s.enqueue(&mut queue, request(3));
+        s.enqueue(
+            &mut queue,
+            json!({"jsonrpc": "2.0", "method": "$/cancelRequest", "params": {"id": 2}}),
+        );
+        // A cancellation of an unknown request does nothing.
+        s.enqueue(
+            &mut queue,
+            json!({"jsonrpc": "2.0", "method": "$/cancelRequest", "params": {"id": 99}}),
+        );
+        while let Some(m) = queue.pop_front() {
+            s.handle_message(m);
+        }
+        let messages = out.messages();
+        assert_eq!(
+            response(&messages, 2)["error"],
+            json!({"code": -32800, "message": "Request was cancelled"})
+        );
+        assert_eq!(response(&messages, 3)["result"], json!([]));
+        assert!(s.cancelled.is_empty());
+    }
+
+    #[test]
+    fn analyzer_status_without_work_done_progress() {
+        let (mut s, out) = server(json!({}));
+        s.run_analysis();
+        let statuses: Vec<Value> = out
+            .messages()
+            .into_iter()
+            .filter(|m| m["method"] == json!("$/analyzerStatus"))
+            .map(|m| m["params"].clone())
+            .collect();
+        assert_eq!(
+            statuses,
+            [json!({"isAnalyzing": true}), json!({"isAnalyzing": false})]
+        );
+    }
+
+    #[test]
+    fn progress_waits_for_token_creation() {
+        let (mut s, out) = server(json!({"window": {"workDoneProgress": true}}));
+        s.run_analysis();
+        let messages = out.messages();
+        let create = messages
+            .iter()
+            .find(|m| m["method"] == json!("window/workDoneProgress/create"))
+            .expect("create request");
+        assert!(!messages.iter().any(|m| m["method"] == json!("$/progress")));
+        // The client creates the token: begin and end follow.
+        s.handle_message(json!({"jsonrpc": "2.0", "id": create["id"], "result": null}));
+        let kinds: Vec<Value> = out
+            .messages()
+            .into_iter()
+            .filter(|m| m["method"] == json!("$/progress"))
+            .map(|m| m["params"]["value"]["kind"].clone())
+            .collect();
+        assert_eq!(kinds, [json!("begin"), json!("end")]);
+    }
+
+    #[test]
+    fn requests_before_initialized() {
+        let buffer = Buffer::default();
+        let channel = Channel::new(Box::new(buffer.clone()), None);
+        let mut s = Server::new(ServerOptions::parse(&[], true).unwrap(), channel);
+        s.handle_message(json!({"jsonrpc": "2.0", "id": 1, "method": "textDocument/hover", "params": {}}));
+        s.handle_message(json!({"jsonrpc": "2.0", "id": 2, "method": "initialize", "params": {"capabilities": {}}}));
+        s.handle_message(json!({"jsonrpc": "2.0", "id": 3, "method": "initialize", "params": {"capabilities": {}}}));
+        s.handle_message(json!({"jsonrpc": "2.0", "id": 4, "method": "textDocument/hover", "params": {}}));
+        let m = buffer.messages();
+        assert_eq!(response(&m, 1)["error"]["code"], json!(-32002));
+        assert!(response(&m, 2)["result"]["capabilities"].is_object());
+        assert_eq!(
+            response(&m, 3)["error"],
+            json!({"code": -32002, "message": "Server already initialized"})
+        );
+        assert_eq!(response(&m, 4)["error"]["code"], json!(-32002));
+    }
 }
