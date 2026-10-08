@@ -442,3 +442,48 @@ pub fn mixin_super_invoked_names(ast: &Ast, node: Id<MixinDeclaration>) -> Vec<S
     ast.accept(node, &mut collector);
     names.into_iter().collect()
 }
+
+/// Dart `ClassNamePart.typeName`.
+pub fn class_name_part_name(ast: &Ast, node: Id<ClassNamePart>) -> TokenId {
+    if let Some(n) = ast.cast::<NameWithTypeParameters>(node.raw()) {
+        ast.get(n).type_name
+    } else {
+        let p = ast.cast::<PrimaryConstructorDeclaration>(node.raw()).expect("ClassNamePart");
+        ast.get(p).type_name
+    }
+}
+
+/// Dart `ClassNamePart.typeParameters`.
+pub fn class_name_part_type_parameters(ast: &Ast, node: Id<ClassNamePart>) -> Option<Id<TypeParameterList>> {
+    if let Some(n) = ast.cast::<NameWithTypeParameters>(node.raw()) {
+        ast.get(n).type_parameters
+    } else {
+        let p = ast.cast::<PrimaryConstructorDeclaration>(node.raw()).expect("ClassNamePart");
+        ast.get(p).type_parameters
+    }
+}
+
+/// The members of a class body (`BlockClassBody.members`, none for an
+/// `EmptyClassBody`).
+pub fn class_body_members(ast: &Ast, body: Id<ClassBody>) -> Vec<Id<ClassMember>> {
+    match ast.cast::<BlockClassBody>(body.raw()) {
+        Some(b) => ast.list(ast.get(b).members).to_vec(),
+        None => Vec::new(),
+    }
+}
+
+/// The members of an enum body.
+pub fn enum_body_members(ast: &Ast, body: Id<EnumBody>) -> Vec<Id<ClassMember>> {
+    match ast.cast::<BlockEnumBody>(body.raw()) {
+        Some(b) => ast.list(ast.get(b).members).to_vec(),
+        None => Vec::new(),
+    }
+}
+
+/// The constants of an enum body.
+pub fn enum_body_constants(ast: &Ast, body: Id<EnumBody>) -> Vec<Id<EnumConstantDeclaration>> {
+    match ast.cast::<BlockEnumBody>(body.raw()) {
+        Some(b) => ast.list(ast.get(b).constants).to_vec(),
+        None => Vec::new(),
+    }
+}

@@ -14,4 +14,5 @@
 
 pub mod ast_util;
 pub mod dump;
+pub mod input;
 pub mod reference;

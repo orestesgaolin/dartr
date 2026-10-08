@@ -175,7 +175,7 @@ impl Uri {
                     let base_path = &self.path;
                     let package_name_end = self.package_name_end();
                     if package_name_end > 0 {
-                        let package_name = &base_path[..package_name_end];
+                        let package_name = &base_path[..package_name_end as usize];
                         if reference.has_absolute_path() {
                             target_path =
                                 format!("{package_name}{}", remove_dot_segments(&reference.path));
