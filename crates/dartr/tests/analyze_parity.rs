@@ -63,12 +63,16 @@ fn compare(cwd: &Path, args: &[&str]) -> Option<String> {
     dart_args.extend(args);
     let dart = run("dart", &dart_args, cwd);
     let dartr = run(env!("CARGO_BIN_EXE_dartr"), &dart_args, cwd);
-    let normalize = |s: &str| s.replace("dart analyze", "dartr analyze").replace("\"dart help\"", "\"dartr help\"");
+    let normalize = |s: &str| {
+        s.replace("dart analyze", "dartr analyze")
+            .replace("\"dart help\"", "\"dartr help\"")
+    };
     let expected_stdout = normalize(&dart.stdout);
     let expected_stderr = normalize(&dart.stderr);
     let label = format!("analyze {} (in {})", args.join(" "), cwd.display());
     eprintln!("{label}: exit dart={} dartr={}", dart.code, dartr.code);
-    if dart.code == dartr.code && expected_stdout == dartr.stdout && expected_stderr == dartr.stderr {
+    if dart.code == dartr.code && expected_stdout == dartr.stdout && expected_stderr == dartr.stderr
+    {
         return None;
     }
     Some(format!(
@@ -93,7 +97,8 @@ int k() { return 3 }
 
 const PIPE_DART: &str = "var a = [1, 2;\n\r\nvar b = 'x\\\\y';\nint c() => 1\n";
 
-const OLD_DART: &str = "var r = (1, 2);\nsealed class S {}\nvar t = 1 >>> 2;\nvoid main() { print(1) }\n";
+const OLD_DART: &str =
+    "var r = (1, 2);\nsealed class S {}\nvar t = 1 >>> 2;\nvoid main() { print(1) }\n";
 
 fn package_config(language_version: &str) -> String {
     format!(
@@ -168,7 +173,10 @@ fn analyze_parity_language_version() {
     write_project(
         &root,
         &[
-            ("pubspec.yaml", "name: p\nenvironment:\n  sdk: '>=2.19.0 <4.0.0'\n"),
+            (
+                "pubspec.yaml",
+                "name: p\nenvironment:\n  sdk: '>=2.19.0 <4.0.0'\n",
+            ),
             (".dart_tool/package_config.json", &pc),
             ("lib/old.dart", OLD_DART),
             ("lib/new.dart", &format!("// @dart = 3.0\n{OLD_DART}")),
@@ -258,7 +266,10 @@ fn analyze_parity_usage_errors() {
         (r, vec!["-x"]),
         (r, vec!["--format=xml"]),
         (r, vec!["--format"]),
-        (r, vec!["--enable-experiment=foo,bar", "--enable-experiment=no-baz"]),
+        (
+            r,
+            vec!["--enable-experiment=foo,bar", "--enable-experiment=no-baz"],
+        ),
         (r, vec!["--enable-experiment=macros"]),
         (r, vec!["--packages=nofile"]),
         (r, vec!["--sdk-path=/nonexistent"]),

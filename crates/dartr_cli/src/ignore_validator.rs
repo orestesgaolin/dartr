@@ -59,8 +59,7 @@ pub fn validate_ignores(
                 IgnoredElement::Name { name, .. } => {
                     if unignorable_names.contains(name) {
                         unignorable.push(element);
-                    } else if names_for_file.contains(name) || !names_on_line.insert(name.clone())
-                    {
+                    } else if names_for_file.contains(name) || !names_on_line.insert(name.clone()) {
                         duplicated.push(element);
                     }
                 }
@@ -146,7 +145,8 @@ pub fn filter_ignored_diagnostics(
     diagnostics
         .into_iter()
         .filter(|d| {
-            unignorable_names.contains(d.code.lower_case_name()) || !ignore_info.ignored(d, line_info)
+            unignorable_names.contains(d.code.lower_case_name())
+                || !ignore_info.ignored(d, line_info)
         })
         .collect()
 }

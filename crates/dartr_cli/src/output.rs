@@ -32,7 +32,12 @@ impl Ansi {
         self.code("\x1b[0m")
     }
     pub fn error(&self, msg: &str) -> String {
-        format!("{}{}{msg}{}", self.code("\x1b[31m"), self.code("\x1b[1m"), self.none())
+        format!(
+            "{}{}{msg}{}",
+            self.code("\x1b[31m"),
+            self.code("\x1b[1m"),
+            self.none()
+        )
     }
     pub fn emphasized(&self, msg: &str) -> String {
         format!("{}{msg}{}", self.code("\x1b[1m"), self.none())
@@ -295,6 +300,9 @@ mod tests {
 
     #[test]
     fn escapes_machine_mode() {
-        assert_eq!(escape_for_machine_mode("a|b\\c\nd\re"), "a\\|b\\\\c\\nd\\re");
+        assert_eq!(
+            escape_for_machine_mode("a|b\\c\nd\re"),
+            "a\\|b\\\\c\\nd\\re"
+        );
     }
 }

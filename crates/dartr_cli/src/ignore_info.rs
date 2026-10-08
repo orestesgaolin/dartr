@@ -20,7 +20,11 @@ pub enum IgnoredElement {
         offset: u32,
     },
     /// Dart `IgnoredDiagnosticType` (`type=lint`). [type_] is lower case.
-    Type { type_: String, offset: u32, length: u32 },
+    Type {
+        type_: String,
+        offset: u32,
+        length: u32,
+    },
     /// Dart `IgnoredDiagnosticComment`.
     Comment { text: String, offset: u32 },
 }
@@ -187,7 +191,8 @@ fn ignore_comments(tokens: &Tokens, first: TokenId) -> Vec<TokenId> {
     for token in tokens.iter_from(first) {
         for comment in tokens.comments(token) {
             let lexeme = tokens.lexeme(comment);
-            if IgnoreInfo::is_ignore_comment(lexeme) || IgnoreInfo::is_ignore_for_file_comment(lexeme)
+            if IgnoreInfo::is_ignore_comment(lexeme)
+                || IgnoreInfo::is_ignore_for_file_comment(lexeme)
             {
                 result.push(comment);
             }
@@ -222,7 +227,10 @@ pub fn ignored_elements(lexeme: &str, token_offset: u32) -> Vec<IgnoredElement> 
     let len = units.len();
     let text = |from: usize, to: usize| String::from_utf16_lossy(&units[from..to]);
     let mut result = Vec::new();
-    let mut offset = units.iter().position(|&c| c == b':' as u16).map_or(0, |i| i + 1);
+    let mut offset = units
+        .iter()
+        .position(|&c| c == b':' as u16)
+        .map_or(0, |i| i + 1);
 
     let skip_whitespace = |offset: &mut usize| {
         while *offset < len && is_whitespace(units[*offset]) {
@@ -396,7 +404,11 @@ mod tests {
         assert_eq!(names("// ignore: http://google.com"), Vec::<String>::new());
         assert_eq!(names("// ignore: a, http://x"), ["a", "#http://x"]);
         assert!(IgnoreInfo::is_ignore_comment("/// ignore: a"));
-        assert!(!IgnoreInfo::is_ignore_for_file_comment("/// ignore_for_file: a"));
-        assert!(IgnoreInfo::is_ignore_for_file_comment("//ignore_for_file: a"));
+        assert!(!IgnoreInfo::is_ignore_for_file_comment(
+            "/// ignore_for_file: a"
+        ));
+        assert!(IgnoreInfo::is_ignore_for_file_comment(
+            "//ignore_for_file: a"
+        ));
     }
 }

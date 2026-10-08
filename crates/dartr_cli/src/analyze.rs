@@ -298,7 +298,9 @@ fn run_parsed(
         );
         for error in server::analysis_errors(&collection, file, &mut line_infos) {
             // dartdev drops TODO infos.
-            if error.type_ == "TODO" && error.severity == dartr_diagnostics::DiagnosticSeverity::Info {
+            if error.type_ == "TODO"
+                && error.severity == dartr_diagnostics::DiagnosticSeverity::Info
+            {
                 continue;
             }
             if is_priority_file && error.severity == dartr_diagnostics::DiagnosticSeverity::Error {

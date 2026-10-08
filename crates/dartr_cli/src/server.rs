@@ -167,7 +167,12 @@ fn new_analysis_error(
     AnalysisError {
         severity,
         type_: code.diagnostic_type.name(),
-        location: location(&file.path, diagnostic.offset, diagnostic.length, &file.line_info),
+        location: location(
+            &file.path,
+            diagnostic.offset,
+            diagnostic.length,
+            &file.line_info,
+        ),
         message: diagnostic.message.clone(),
         correction: diagnostic.correction.clone(),
         code: code.lower_case_name().to_string(),

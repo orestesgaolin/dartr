@@ -203,9 +203,7 @@ pub fn parse(argv: &[String]) -> Result<AnalyzeArgs, UsageError> {
                             )));
                         }
                         Some((n, Some(Kind::Flag(false)))) => {
-                            return Err(UsageError(format!(
-                                "Cannot negate option \"--no-{n}\"."
-                            )));
+                            return Err(UsageError(format!("Cannot negate option \"--no-{n}\".")));
                         }
                         _ => {
                             return Err(UsageError(format!(
@@ -245,7 +243,14 @@ mod tests {
 
     #[test]
     fn parses_options() {
-        let a = p(&["lib", "--no-fatal-warnings", "--format", "json", "--enable-experiment=a,b"]).unwrap();
+        let a = p(&[
+            "lib",
+            "--no-fatal-warnings",
+            "--format",
+            "json",
+            "--enable-experiment=a,b",
+        ])
+        .unwrap();
         assert_eq!(a.rest, ["lib"]);
         assert!(!a.fatal_warnings);
         assert_eq!(a.format, Format::Json);
