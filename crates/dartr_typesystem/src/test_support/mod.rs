@@ -1072,6 +1072,14 @@ impl TypeSystemTest {
         TypeSystem::new(self.ctx())
     }
 
+    /// `typeSystemOperations`: `TypeSystemOperations(typeSystem,
+    /// strictCasts: false)`.
+    pub fn type_system_operations(
+        &self,
+    ) -> crate::type_system_operations::TypeSystemOperations<'_> {
+        crate::type_system_operations::TypeSystemOperations::new(self.type_system(), false)
+    }
+
     /// `typeProvider`.
     pub fn type_provider(&self) -> &TypeProvider {
         &self.tp
