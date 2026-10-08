@@ -126,7 +126,7 @@ reads, not semantic resolution of declarations or expressions.
 | library_names | AST-only | Checks the syntactic dotted library name. | implemented |
 | library_prefixes | AST-only | Checks the syntactic import prefix and defining library wildcard feature. | implemented |
 | library_private_types_in_public_api | needs resolution | Traverses public elements and resolved API types. | deferred |
-| lines_longer_than_80_chars | AST-only | Scans source lines, comments, and syntactic string URI/path exemptions. | implemented |
+| lines_longer_than_80_chars | AST-only | Scans source lines and comments; string URI/path exemptions use decoded AST values and multiline source ranges. | implemented |
 | list_remove_unrelated_type | removed | Upstream is RemovedAnalysisRule. | n/a |
 | literal_only_boolean_expressions | needs resolution | Computes string constants and resolves type-parameter annotations. | deferred |
 | matching_super_parameters | needs resolution | Matches parameters against resolved super constructors. | deferred |

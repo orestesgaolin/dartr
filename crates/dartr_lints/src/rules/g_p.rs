@@ -303,54 +303,9 @@ fn leading_newlines_in_multiline_strings(
     }
 }
 
-fn string_piece_looks_like_uri_or_path(value: &str, is_raw: bool) -> bool {
-    if value.contains('/') || (is_raw && value.contains('\\')) {
-        return true;
-    }
-    let bytes = value.as_bytes();
-    let mut index = 0;
-    while index < bytes.len() {
-        if bytes[index] != b'\\' {
-            index += 1;
-            continue;
-        }
-        let Some(&escaped) = bytes.get(index + 1) else {
-            return false;
-        };
-        match escaped {
-            b'\\' | b'/' => return true,
-            b'x' if index + 3 < bytes.len() => {
-                if u8::from_str_radix(&value[index + 2..index + 4], 16)
-                    .is_ok_and(|c| matches!(c, b'/' | b'\\'))
-                {
-                    return true;
-                }
-                index += 4;
-            }
-            b'u' if bytes.get(index + 2) == Some(&b'{') => {
-                let Some(relative_end) = value[index + 3..].find('}') else {
-                    return false;
-                };
-                let end = index + 3 + relative_end;
-                if u32::from_str_radix(&value[index + 3..end], 16)
-                    .is_ok_and(|c| matches!(c, 0x2f | 0x5c))
-                {
-                    return true;
-                }
-                index = end + 1;
-            }
-            b'u' if index + 5 < bytes.len() => {
-                if u32::from_str_radix(&value[index + 2..index + 6], 16)
-                    .is_ok_and(|c| matches!(c, 0x2f | 0x5c))
-                {
-                    return true;
-                }
-                index += 6;
-            }
-            _ => index += 2,
-        }
-    }
-    false
+// Dart _looksLikeUriOrPath checks decoded AST values, not token escapes.
+fn looks_like_uri_or_path(value: &str) -> bool {
+    value.contains('/') || value.contains('\\')
 }
 
 fn collect_allowed_string_lines(
@@ -369,7 +324,7 @@ fn collect_allowed_string_lines(
             let quoted = lexeme.strip_prefix('r').unwrap_or(lexeme);
             if quoted.starts_with("'''") || quoted.starts_with("\"\"\"") {
                 allowed.extend(start..=end);
-            } else if string_piece_looks_like_uri_or_path(&literal.value, lexeme.starts_with('r')) {
+            } else if looks_like_uri_or_path(&literal.value) {
                 allowed.insert(start);
             }
             return;
@@ -385,13 +340,10 @@ fn collect_allowed_string_lines(
             if quoted.starts_with("'''") || quoted.starts_with("\"\"\"") {
                 allowed.extend(start..=end);
             } else {
-                let is_raw = first_lexeme.starts_with('r');
                 let has_path = ctx.ast.list(interpolation.elements).iter().any(|element| {
                     ctx.ast
                         .cast::<InterpolationString>(element.raw())
-                        .is_some_and(|piece| {
-                            string_piece_looks_like_uri_or_path(&ctx.ast.get(piece).value, is_raw)
-                        })
+                        .is_some_and(|piece| looks_like_uri_or_path(&ctx.ast.get(piece).value))
                 });
                 if has_path {
                     allowed.insert(start);
@@ -407,10 +359,6 @@ fn collect_allowed_string_lines(
     for child in ctx.ast.children(node) {
         collect_allowed_string_lines(ctx, child, allowed);
     }
-}
-
-fn looks_like_comment_uri_or_path(value: &str) -> bool {
-    value.contains('/') || value.contains('\\')
 }
 
 /*
@@ -442,7 +390,7 @@ fn collect_allowed_comment_lines(
                 ""
             };
             for (index, line) in body.lines().enumerate() {
-                if looks_like_comment_uri_or_path(line) {
+                if looks_like_uri_or_path(line) {
                     allowed.insert(base_line + index);
                 }
             }
