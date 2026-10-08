@@ -316,6 +316,16 @@ pub trait SharedTypeOperations {
     /// `String`). For the analyzer this is the interned `Name`.
     type Name: Copy + Eq + Hash + Debug;
 
+    /// Compares two names as Dart `String.compareTo` does (lexicographic
+    /// order of the UTF-16 code units).
+    ///
+    /// Dart compares the `String` names directly; here a name is an id, so
+    /// the client compares the strings behind the ids. The shared constraint
+    /// generator uses it to walk the sorted named parameters of two function
+    /// types in tandem; it must agree with the order of
+    /// [`sorted_named_parameters_shared`](Self::sorted_named_parameters_shared).
+    fn compare_names(&self, name1: Self::Name, name2: Self::Name) -> std::cmp::Ordering;
+
     /// Which `Shared*` interface `ty` implements.
     fn shared_type_kind(&self, ty: Self::Type) -> SharedTypeKind;
 
