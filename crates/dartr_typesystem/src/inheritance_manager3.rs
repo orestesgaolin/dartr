@@ -417,7 +417,7 @@ impl<'a> InheritanceManager3<'a> {
             return map;
         }
         let mut inherited_map = NameMap::new();
-        let mut computer = Computer::new(self.ctx.global(), element);
+        let mut computer = Computer::new(owner_ctx(&self.ctx, element), element);
         computer.find_most_specific_from_named_candidates(
             &mut inherited_map,
             if element.raw().is::<ExtensionTypeElement>() {
@@ -563,7 +563,7 @@ fn get_interface_impl(ctx: &Ctx<'_>, element: EId<InterfaceElement>) -> Arc<Inte
     }
     let result = {
         let _pop = Pop;
-        let mut computer = Computer::new(ctx.global(), element);
+        let mut computer = Computer::new(owner_ctx(ctx, element), element);
         if element.raw().is::<ExtensionTypeElement>() {
             computer.get_interface_extension_type()
         } else if element.raw().is::<MixinElement>() {
@@ -573,6 +573,16 @@ fn get_interface_impl(ctx: &Ctx<'_>, element: EId<InterfaceElement>) -> Arc<Inte
         }
     };
     cache.interface.get_or_init(|| Arc::new(result)).clone()
+}
+
+/// The context to compute the interface of [element] in: `ctx.global()`,
+/// without the cycle being linked when [element] is not in it. The
+/// interface is cached on [element] and seen by every context that sees
+/// [element], so the members that it synthesizes must not go to (and its
+/// types must not mention) a cycle that is being linked and that [element]
+/// does not belong to.
+fn owner_ctx<'a>(ctx: &Ctx<'a>, element: EId<InterfaceElement>) -> Ctx<'a> {
+    crate::type_ext::cache_ctx(ctx, |store| element.raw().store() == store)
 }
 
 // ------------------------------------------------------------------ computer

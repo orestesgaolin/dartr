@@ -798,7 +798,7 @@ pub fn fragments(ctx: &Ctx<'_>, e: ElementId) -> Vec<FragmentId> {
     result
 }
 
-fn first_fragment_has(ctx: &Ctx<'_>, e: ElementId, flag: FragmentFlags) -> bool {
+pub fn first_fragment_has(ctx: &Ctx<'_>, e: ElementId, flag: FragmentFlags) -> bool {
     fragment_data(ctx, first_fragment(ctx, e)).flags.has(flag)
 }
 

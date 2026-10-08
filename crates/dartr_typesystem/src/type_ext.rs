@@ -22,7 +22,7 @@ use dartr_element::{
     MixinElement, Name, NamedType, Nullability, ParameterKind, TypeAliasElement, TypeId, TypeKind,
     TypeList, TypeParameterElement, TypeParameterFragment, Variance,
 };
-use dartr_element::{FragmentData, TypeAliasFragment};
+use dartr_element::{ElemRef, FragmentData, MemberId, StoreId, TypeAliasFragment};
 
 use crate::class_hierarchy;
 use crate::type_algebra::MapSubstitution;
@@ -38,6 +38,80 @@ pub fn fresh_store<'a>(ctx: &Ctx<'a>) -> &'a ElementStore {
     } else {
         &ctx.world.generation.synthetic
     }
+}
+
+/// Whether [t] mentions an element of the store [store] (an interface,
+/// type alias or type parameter element, also in bounds of the type
+/// parameters of function types and in the parameter elements).
+pub fn type_mentions_store(ctx: &Ctx<'_>, t: TypeId, store: StoreId) -> bool {
+    fn alias_mentions(ctx: &Ctx<'_>, alias: Option<AliasId>, store: StoreId) -> bool {
+        alias.is_some_and(|a| {
+            let a = ctx.alias(a);
+            a.element.store() == store || ctx.list(a.args).iter().any(|&t| type_mentions_store(ctx, t, store))
+        })
+    }
+    match *ctx.ty(t) {
+        TypeKind::Interface { element, args, alias, .. } => {
+            element.store() == store
+                || ctx.list(args).iter().any(|&t| type_mentions_store(ctx, t, store))
+                || alias_mentions(ctx, alias, store)
+        }
+        TypeKind::Function(f) => {
+            ctx.list(f.type_params).iter().any(|&p| {
+                p.store() == store
+                    || ctx
+                        .get(p)
+                        .bound
+                        .get()
+                        .is_some_and(|b| type_mentions_store(ctx, b, store))
+            }) || ctx.list(f.params).iter().any(|p| {
+                type_mentions_store(ctx, p.ty, store)
+                    || p.element.is_some_and(|e| match e {
+                        ElemRef::Base(b) => b.store() == store,
+                        ElemRef::Member(m) => member_mentions_store(ctx, m, store),
+                    })
+            }) || type_mentions_store(ctx, f.ret, store)
+                || alias_mentions(ctx, f.alias, store)
+        }
+        TypeKind::Record { positional, named, alias, .. } => {
+            ctx.list(positional).iter().any(|&t| type_mentions_store(ctx, t, store))
+                || ctx.list(named).iter().any(|n| type_mentions_store(ctx, n.ty, store))
+                || alias_mentions(ctx, alias, store)
+        }
+        TypeKind::TypeParameter { param, promoted_bound, alias, .. } => {
+            param.store() == store
+                || promoted_bound.is_some_and(|b| type_mentions_store(ctx, b, store))
+                || alias_mentions(ctx, alias, store)
+        }
+        TypeKind::Dynamic | TypeKind::Void | TypeKind::Invalid | TypeKind::Unknown | TypeKind::Never(_) => false,
+    }
+}
+
+/// Whether the member [m] (its base element or its substitution) mentions
+/// an element of the store [store].
+pub fn member_mentions_store(ctx: &Ctx<'_>, m: MemberId, store: StoreId) -> bool {
+    let member = ctx.member(m);
+    member.base.store() == store
+        || ctx
+            .subst(member.subst)
+            .iter()
+            .any(|&(p, t)| p.store() == store || type_mentions_store(ctx, t, store))
+}
+
+/// The context for a lazy shared cache (design §2.3): `ctx.global()`, and
+/// without the cycle being linked when [mentions_current] is `false`. A
+/// cache on a frozen element (or a member of frozen elements) is seen by
+/// every context that sees that element, so what it creates (fresh type
+/// parameters, synthesized members) must not go to a cycle that is being
+/// linked: other cycles that are linked at the same time cannot see it.
+pub fn cache_ctx<'a>(ctx: &Ctx<'a>, mentions_current: impl FnOnce(StoreId) -> bool) -> Ctx<'a> {
+    let mut global = ctx.global();
+    if let Some(current) = global.current
+        && !mentions_current(current.id)
+    {
+        global.current = None;
+    }
+    global
 }
 
 /// Whether the parameter kind is required positional (`isRequiredPositional`).

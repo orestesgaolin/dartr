@@ -188,6 +188,8 @@ pub fn link_cycle(
         LibraryBuilder::collect_mixin_super_invoked_names(&mut linker, index);
     }
     set_library_and_enclosing(&mut linker.core.store);
+    // Dart: the `InheritanceManager3` of the linker is dropped with it.
+    clear_interface_caches(&mut linker.core.store, false);
     // _detachNodes
     crate::detach_nodes::detach_nodes(&mut linker.core);
 
@@ -364,3 +366,32 @@ coerce_via!(
     VariableElementData,
     PropertyInducingElementData
 );
+
+/// Removes the caches that the inheritance manager (`Interface`s) and, with
+/// [hierarchies], the class hierarchy (`allSupertypes`) keep on the
+/// interface elements of [store].
+pub fn clear_interface_caches(store: &mut ElementStore, hierarchies: bool) {
+    fn clear(i: &mut InterfaceElementData, hierarchies: bool) {
+        i.inheritance = dartr_element::slot::ElementCache::new();
+        if hierarchies {
+            i.all_supertypes = OnceSlot::new();
+        }
+    }
+    let e = &mut store.elements;
+    let indexes: Vec<u32> = e.classes.iter().map(|(i, _)| i).collect();
+    for i in indexes {
+        clear(e.classes.get_mut(i), hierarchies);
+    }
+    let indexes: Vec<u32> = e.enums.iter().map(|(i, _)| i).collect();
+    for i in indexes {
+        clear(e.enums.get_mut(i), hierarchies);
+    }
+    let indexes: Vec<u32> = e.mixins.iter().map(|(i, _)| i).collect();
+    for i in indexes {
+        clear(e.mixins.get_mut(i), hierarchies);
+    }
+    let indexes: Vec<u32> = e.extension_types.iter().map(|(i, _)| i).collect();
+    for i in indexes {
+        clear(e.extension_types.get_mut(i), hierarchies);
+    }
+}

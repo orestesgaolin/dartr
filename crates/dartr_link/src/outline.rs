@@ -91,10 +91,11 @@ pub fn build_outlines(lk: &mut Linker<'_>, tp: &TypeProvider) {
     complete_classes(lk, tp);
     let lk_ref: &Linker<'_> = lk;
     let ctx = link_ctx(lk_ref, tp, &features);
-    resolve_redirected_constructors(lk_ref, &ctx);
-    set_induced_modifiers(lk_ref, &ctx);
-    infer_covariance(lk_ref, &ctx);
+    // _performTopLevelInference (override inference; initializers: C10)
+    crate::instance_member_inferrer::perform(lk_ref, &ctx);
     build_extension_types(lk_ref, &ctx);
+    // _resolveConstructors
+    resolve_redirected_constructors(lk_ref, &ctx);
 }
 
 /// Dart `TypesBuilder._copyDeclaringFormalParametersExplicitTypes`.
@@ -252,52 +253,23 @@ fn complete_class(
     }
     let ctx = link_ctx(lk, tp, &features);
     resolve_super_constructors_of(lk, &ctx, class);
-    infer_constructor_formals(&ctx, class);
-}
-
-/// Dart `InstanceMemberInferrer._inferConstructor` (formal parameters).
-fn infer_constructor_formals(ctx: &Ctx<'_>, class: EId<InterfaceElement>) {
-    let i = ctx.interface(class);
-    for &constructor in &i.constructors {
-        let c = ctx.get(constructor);
-        let super_formals: Vec<EId<FormalParameterElement>> = c
-            .formal_params
-            .iter()
-            .copied()
-            .filter(|p| p.raw().tag() == Tag::SuperFormalParameter && ctx.get(*p).kind.is_positional())
-            .collect();
-        for &p in &c.formal_params {
-            let pe = ctx.get(p);
-            if !first_has(ctx, p.raw(), FragmentFlags::VARIABLE_FRAGMENT_HAS_IMPLICIT_TYPE) {
-                continue;
-            }
-            match p.raw().tag() {
-                Tag::FieldFormalParameter if pe.first_fragment().raw().tag() == Tag::FieldFormalParameter => {
-                    if let Some(field) = pe.field.get()
-                        && let Some(t) = ctx.get(field).type_.get()
-                    {
-                        pe.type_.set(Some(t));
-                    }
-                }
-                Tag::SuperFormalParameter if pe.first_fragment().raw().tag() == Tag::SuperFormalParameter => {
-                    let t = super_constructor_parameter_type(ctx, class, constructor, p, &super_formals);
-                    pe.type_.set(Some(t.unwrap_or(TypeId::DYNAMIC)));
-                }
-                _ => {}
-            }
-        }
-    }
 }
 
 /// The type of Dart `SuperFormalParameterElementImpl.superConstructorParameter`
 /// (substituted with the supertype).
-fn super_constructor_parameter_type(
+pub fn super_constructor_parameter_type(
     ctx: &Ctx<'_>,
     class: EId<InterfaceElement>,
     constructor: EId<ConstructorElement>,
     p: EId<FormalParameterElement>,
-    positional_super_formals: &[EId<FormalParameterElement>],
 ) -> Option<TypeId> {
+    let positional_super_formals: Vec<EId<FormalParameterElement>> = ctx
+        .get(constructor)
+        .formal_params
+        .iter()
+        .copied()
+        .filter(|p| p.raw().tag() == Tag::SuperFormalParameter && ctx.get(*p).kind.is_positional())
+        .collect();
     let ElemRef::Base(super_constructor) = ctx.get(constructor).super_constructor.get()? else {
         return None;
     };
@@ -756,42 +728,8 @@ fn resolve_super_constructors_of(lk: &Linker<'_>, ctx: &Ctx<'_>, interface: EId<
     }
 }
 
-/// Dart `InstanceMemberInferrer._setInducedModifier` for every class of the
-/// cycle, supertypes first.
-fn set_induced_modifiers(lk: &Linker<'_>, ctx: &Ctx<'_>) {
-    let mut to_infer: IndexSet<EId<InterfaceElement>> = IndexSet::new();
-    for b in &lk.builders {
-        let l = ctx.get(b.element);
-        for &c in &l.classes {
-            to_infer.insert(c.upcast());
-        }
-        for &m in &l.mixins {
-            to_infer.insert(m.upcast());
-        }
-    }
-    let order: Vec<EId<InterfaceElement>> = to_infer.iter().copied().collect();
-    fn infer(ctx: &Ctx<'_>, to_infer: &mut IndexSet<EId<InterfaceElement>>, e: EId<InterfaceElement>) {
-        if !to_infer.shift_remove(&e) {
-            return;
-        }
-        set_induced_modifier(ctx, e);
-        let i = ctx.interface(e);
-        let mut types: Vec<TypeId> = Vec::new();
-        types.extend(i.supertype.get());
-        types.extend(ctx.list(i.mixins.get().unwrap_or(TypeList::EMPTY)));
-        types.extend(ctx.list(i.interfaces.get().unwrap_or(TypeList::EMPTY)));
-        for t in types {
-            if let Some(s) = interface_element_of(ctx, t) {
-                infer(ctx, to_infer, s);
-            }
-        }
-    }
-    for e in order {
-        infer(ctx, &mut to_infer, e);
-    }
-}
-
-fn set_induced_modifier(ctx: &Ctx<'_>, class: EId<InterfaceElement>) {
+/// Dart `InstanceMemberInferrer._setInducedModifier`.
+pub fn set_induced_modifier(ctx: &Ctx<'_>, class: EId<InterfaceElement>) {
     if class.raw().tag() != Tag::Class {
         return;
     }
@@ -1106,175 +1044,6 @@ fn resolve_redirected_constructors(lk: &Linker<'_>, ctx: &Ctx<'_>) {
             }
         }
     }
-}
-
-/// The covariance part of Dart `InstanceMemberInferrer` (unit B5): a
-/// parameter of a method, or the value parameter of a setter, that
-/// overrides a covariant parameter is covariant (`_inferParameterCovariance`,
-/// `_isCovariantSetter`). Classes are processed supertypes first.
-///
-/// Interim: Dart takes the overridden members from the inheritance manager
-/// (`getOverridden`, unit A7); here they are the first members with the
-/// name found in each direct supertype and, when not declared there, in its
-/// supertypes (private names only within the same library).
-fn infer_covariance(lk: &Linker<'_>, ctx: &Ctx<'_>) {
-    let mut to_infer: IndexSet<EId<InterfaceElement>> = IndexSet::new();
-    for b in &lk.builders {
-        for e in interfaces_of(ctx, b.element) {
-            to_infer.insert(e);
-        }
-    }
-    let order: Vec<EId<InterfaceElement>> = to_infer.iter().copied().collect();
-    for e in order {
-        infer_class_covariance(ctx, &mut to_infer, e);
-    }
-}
-
-fn direct_supertype_elements(ctx: &Ctx<'_>, e: EId<InterfaceElement>) -> Vec<EId<InterfaceElement>> {
-    let i = ctx.interface(e);
-    let mut types: Vec<TypeId> = Vec::new();
-    types.extend(i.supertype.get());
-    types.extend(ctx.list(i.mixins.get().unwrap_or(TypeList::EMPTY)));
-    types.extend(ctx.list(i.interfaces.get().unwrap_or(TypeList::EMPTY)));
-    if e.raw().tag() == Tag::Mixin {
-        types.extend(ctx.list(
-            ctx.get(EId::<MixinElement>::from_raw(e.raw()))
-                .superclass_constraints
-                .get()
-                .unwrap_or(TypeList::EMPTY),
-        ));
-    }
-    types.into_iter().filter_map(|t| interface_element_of(ctx, t)).collect()
-}
-
-fn infer_class_covariance(ctx: &Ctx<'_>, to_infer: &mut IndexSet<EId<InterfaceElement>>, e: EId<InterfaceElement>) {
-    if !to_infer.shift_remove(&e) {
-        return;
-    }
-    let supers = direct_supertype_elements(ctx, e);
-    for &s in &supers {
-        infer_class_covariance(ctx, to_infer, s);
-    }
-    let library = ctx.element_data(e.raw()).unwrap().library;
-    let i = ctx.interface(e);
-    let is_static = |x: ElementId| first_has(ctx, x, FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC);
-    let covariant = |p: EId<FormalParameterElement>| {
-        ctx.get(p).flags.has(ElementFlags::FORMAL_PARAMETER_ELEMENT_IS_COVARIANT)
-    };
-    // Setters (explicit and of fields).
-    for &setter in &i.setters {
-        if is_static(setter.raw()) {
-            continue;
-        }
-        let Some(name) = ctx.get(setter).name else { continue };
-        let overridden = overridden_members(ctx, &supers, library, ctx.name_str(name), MemberKind::Setter);
-        let any_covariant = overridden.iter().any(|&o| {
-            ctx.executable(EId::from_raw(o))
-                .formal_params
-                .first()
-                .is_some_and(|&p| covariant(p))
-        });
-        if any_covariant && let Some(&value) = ctx.get(setter).formal_params.first() {
-            ctx.get(value).flags.set(ElementFlags::FORMAL_PARAMETER_ELEMENT_IS_COVARIANT, true);
-        }
-    }
-    // Methods.
-    for &method in &i.methods {
-        if is_static(method.raw()) || !first_has(ctx, method.raw(), FragmentFlags::METHOD_FRAGMENT_IS_ORIGIN_DECLARATION) {
-            continue;
-        }
-        let Some(name) = ctx.get(method).name else { continue };
-        let overridden = overridden_members(ctx, &supers, library, ctx.name_str(name), MemberKind::Method);
-        if overridden.is_empty() || overridden.iter().any(|o| o.tag() != Tag::Method) {
-            continue;
-        }
-        let params = ctx.get(method).formal_params.clone();
-        for (index, &p) in params.iter().enumerate() {
-            if covariant(p) {
-                continue;
-            }
-            let pe = ctx.get(p);
-            let inherits = overridden.iter().any(|&o| {
-                let other = &ctx.executable(EId::from_raw(o)).formal_params;
-                let corresponding = if pe.kind.is_named() {
-                    other.iter().rev().copied().find(|&x| ctx.get(x).kind.is_named() && ctx.get(x).name == pe.name)
-                } else {
-                    other.get(index).copied().filter(|&x| !ctx.get(x).kind.is_named())
-                };
-                corresponding.is_some_and(covariant)
-            });
-            if inherits {
-                pe.flags.set(ElementFlags::FORMAL_PARAMETER_ELEMENT_IS_COVARIANT, true);
-            }
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum MemberKind {
-    Method,
-    Setter,
-}
-
-/// The members named [name] that a class with the direct supertypes
-/// [supers] overrides (see [`infer_covariance`]).
-fn overridden_members(
-    ctx: &Ctx<'_>,
-    supers: &[EId<InterfaceElement>],
-    library: Option<EId<LibraryElement>>,
-    name: &str,
-    kind: MemberKind,
-) -> Vec<ElementId> {
-    let private = name.starts_with('_');
-    let mut result = Vec::new();
-    for &s in supers {
-        let mut visited = IndexSet::new();
-        if let Some(m) = find_member(ctx, s, library, name, kind, private, &mut visited)
-            && !result.contains(&m)
-        {
-            result.push(m);
-        }
-    }
-    result
-}
-
-fn find_member(
-    ctx: &Ctx<'_>,
-    e: EId<InterfaceElement>,
-    library: Option<EId<LibraryElement>>,
-    name: &str,
-    kind: MemberKind,
-    private: bool,
-    visited: &mut IndexSet<EId<InterfaceElement>>,
-) -> Option<ElementId> {
-    if !visited.insert(e) {
-        return None;
-    }
-    let same_library = ctx.element_data(e.raw()).unwrap().library == library;
-    if !private || same_library {
-        let i = ctx.interface(e);
-        let named = |x: ElementId| ctx.element_data(x).and_then(|d| d.name).map(|n| ctx.name_str(n)) == Some(name);
-        let candidates: Vec<ElementId> = match kind {
-            MemberKind::Method => i
-                .methods
-                .iter()
-                .map(|m| m.raw())
-                .chain(i.getters.iter().map(|g| g.raw()))
-                .collect(),
-            MemberKind::Setter => i.setters.iter().map(|s| s.raw()).collect(),
-        };
-        for c in candidates {
-            if named(c) && !first_has(ctx, c, FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC) {
-                return Some(c);
-            }
-        }
-    }
-    for s in direct_supertype_elements(ctx, e) {
-        if let Some(m) = find_member(ctx, s, library, name, kind, private, visited) {
-            return Some(m);
-        }
-    }
-    None
 }
 
 /// Dart `SuperFormalParameterElementImpl.superConstructorParameter` (the

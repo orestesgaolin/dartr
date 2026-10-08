@@ -341,7 +341,11 @@ pub fn type_(ctx: &Ctx<'_>, e: ElemRef) -> TypeId {
     match e {
         ElemRef::Base(base) => base_type(ctx, base),
         ElemRef::Member(m) => {
-            let compute_ctx = if m.is_local() { *ctx } else { ctx.global() };
+            let compute_ctx = if m.is_local() {
+                *ctx
+            } else {
+                crate::type_ext::cache_ctx(ctx, |store| crate::type_ext::member_mentions_store(ctx, m, store))
+            };
             ctx.member_type_cached(m, SLOT_TYPE, || {
                 let base = ctx.member(m).base;
                 let t = base_type(&compute_ctx, base);
