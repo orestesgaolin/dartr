@@ -13,10 +13,14 @@
 //! | [`common`] | 19-35, 13305-13489 | `setUp`, helpers |
 //! | [`api_part1`] | 37-1005 | `API` (first part) |
 //! | [`state_part1`] | 3721-3884 | `State` (first part) |
+//! | [`why_not_promoted`] | 5451-5825 | `why not promoted` |
+//! | [`field_promotion`] | 5826-7037 | `Field promotion` |
 //! | [`patterns_part1`] | 7038-7330 | `Patterns:` (first part) |
 
 mod common;
 
 mod api_part1;
+mod field_promotion;
 mod patterns_part1;
 mod state_part1;
+mod why_not_promoted;
