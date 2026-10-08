@@ -722,7 +722,9 @@ impl<'a> ResolverVisitor<'a> {
 
     pub fn visit_switch_expression_case(&mut self, _node: Id<SwitchExpressionCase>) {}
 
-    pub fn visit_pattern_variable_declaration(&mut self, _node: Id<PatternVariableDeclaration>) {}
+    pub fn visit_pattern_variable_declaration(&mut self, node: Id<PatternVariableDeclaration>) {
+        crate::pattern_resolver::visit_pattern_variable_declaration(self, node);
+    }
 
     pub fn visit_pattern_field(&mut self, _node: Id<PatternField>) {}
 

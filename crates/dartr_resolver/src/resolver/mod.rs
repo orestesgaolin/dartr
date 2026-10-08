@@ -143,6 +143,9 @@ pub struct ResolverVisitor<'a> {
     pub(crate) guards: Vec<()>,
     /// Dart `TypeAnalyzer._dotShorthands`.
     pub(crate) dot_shorthands: Vec<(NodeId, SchemaOf)>,
+    /// Dart `legacySwitchExhaustiveness`: the enum constants that the cases
+    /// of the current switch cover (language versions without patterns).
+    pub(crate) legacy_switch_exhaustiveness: Option<crate::pattern_resolver::SwitchExhaustiveness>,
 }
 
 impl<'a> ResolverVisitor<'a> {
@@ -179,6 +182,7 @@ impl<'a> ResolverVisitor<'a> {
             rewrite_stack: Vec::new(),
             guards: Vec::new(),
             dot_shorthands: Vec::new(),
+            legacy_switch_exhaustiveness: None,
         }
     }
 

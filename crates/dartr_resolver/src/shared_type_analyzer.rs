@@ -369,13 +369,12 @@ pub fn to_diagnostic(rv: &ResolverVisitor<'_>, error: SharedError) -> Option<Loc
             at(diag::unnecessary_wildcard_pattern(), pattern.raw())
         }
         // Diagnostic factories (`DiagnosticFactory().duplicate...`) with
-        // context messages: ported with the pattern resolvers.
+        // context messages, and `inconsistentJoinedPatternVariable`.
         SharedError::DuplicateAssignmentPatternVariable { .. }
         | SharedError::DuplicateRecordPatternField { .. }
         | SharedError::DuplicateRestPattern { .. }
         | SharedError::InconsistentJoinedPatternVariable { .. } => {
-            let _ = rv;
-            return None;
+            return crate::pattern_resolver::shared_error_diagnostic(rv, &error);
         }
     })
 }

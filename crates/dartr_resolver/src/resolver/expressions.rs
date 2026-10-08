@@ -349,10 +349,7 @@ impl<'a> ResolverVisitor<'a> {
     }
 
     pub fn visit_pattern_assignment(&mut self, node: Id<PatternAssignment>, context_type: TypeId) {
-        let _ = context_type;
-        // STUB (patterns): fallback.
-        let _ = pattern_resolver::handle_switch_before_alternative;
-        self.fallback_expression(node.upcast());
+        pattern_resolver::visit_pattern_assignment(self, node, context_type);
     }
 
     pub fn visit_postfix_expression(&mut self, node: Id<PostfixExpression>, context_type: TypeId) {
@@ -380,9 +377,7 @@ impl<'a> ResolverVisitor<'a> {
     }
 
     pub fn visit_switch_expression(&mut self, node: Id<SwitchExpression>, context_type: TypeId) {
-        let _ = context_type;
-        // STUB (patterns): fallback.
-        self.fallback_expression(node.upcast());
+        pattern_resolver::visit_switch_expression(self, node, context_type);
     }
 
     // ------------------------------------------------------------ helpers

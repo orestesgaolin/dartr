@@ -11,7 +11,7 @@ use dartr_flow::type_analyzer::TypeAnalyzer;
 
 use crate::body_inference_context::BodyInferenceContext;
 use crate::resolver::ResolverVisitor;
-use crate::{for_resolver, yield_statement_resolver};
+use crate::{for_resolver, pattern_resolver, yield_statement_resolver};
 
 impl<'a> ResolverVisitor<'a> {
     pub fn visit_assert_statement(&mut self, node: Id<AssertStatement>) {
@@ -110,7 +110,7 @@ impl<'a> ResolverVisitor<'a> {
     pub fn visit_if_statement(&mut self, node: Id<IfStatement>) {
         self.check_unreachable_node(node);
         if self.ast[node].case_clause.is_some() {
-            // STUB (patterns): `analyzeIfCaseStatement`.
+            pattern_resolver::visit_if_case_statement(self, node);
             return;
         }
         let condition = self.ast[node].expression;
@@ -128,7 +128,8 @@ impl<'a> ResolverVisitor<'a> {
 
     pub fn visit_pattern_variable_declaration_statement(&mut self, node: Id<PatternVariableDeclarationStatement>) {
         self.check_unreachable_node(node);
-        // STUB (patterns): not resolved.
+        let declaration = self.ast[node].declaration;
+        self.visit_node(declaration.raw());
     }
 
     pub fn visit_return_statement(&mut self, node: Id<ReturnStatement>) {
@@ -155,7 +156,7 @@ impl<'a> ResolverVisitor<'a> {
 
     pub fn visit_switch_statement(&mut self, node: Id<SwitchStatement>) {
         self.check_unreachable_node(node);
-        // STUB (patterns): not resolved.
+        pattern_resolver::visit_switch_statement(self, node);
     }
 
     pub fn visit_try_statement(&mut self, node: Id<TryStatement>) {
