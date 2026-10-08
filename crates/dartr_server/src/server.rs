@@ -761,7 +761,7 @@ impl Server {
     fn content(&self, path: &str) -> Option<String> {
         match self.overlays.get(path) {
             Some(d) => Some(d.content.clone()),
-            None => std::fs::read_to_string(path).ok(),
+            None => read_file(path),
         }
     }
 
@@ -913,7 +913,7 @@ impl Server {
             .into_par_iter()
             .map(|(path, overlay)| {
                 let content = overlay
-                    .or_else(|| std::fs::read_to_string(&path).ok())
+                    .or_else(|| read_file(&path))
                     .unwrap_or_default();
                 let unit = parse_string(&content, &path);
                 let diagnostics = unit
@@ -921,9 +921,7 @@ impl Server {
                     .iter()
                     .map(|d| {
                         mapping::to_diagnostic(&unit.line_info, &path, d, &options, &|f| {
-                            std::fs::read_to_string(f)
-                                .ok()
-                                .map(|c| LineInfo::from_content(&c))
+                            read_file(f).map(|c| LineInfo::from_content(&c))
                         })
                     })
                     .collect();
@@ -1024,6 +1022,14 @@ impl Server {
             Some(false) => self.progress = None,
         }
     }
+}
+
+/// Reads a file like the analyzer's file system: UTF-8 (malformed bytes
+/// replaced) without a leading byte order mark.
+fn read_file(path: &str) -> Option<String> {
+    let bytes = std::fs::read(path).ok()?;
+    let text = String::from_utf8_lossy(&bytes);
+    Some(dartr_syntax::strip_bom(&text).to_string())
 }
 
 /// Dart `isDartDocument`: the path of the document URI ends with `.dart`.
