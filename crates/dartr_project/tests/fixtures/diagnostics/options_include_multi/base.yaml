@@ -1,0 +1,2 @@
+linter:
+  rules: [prefer_single_quotes, prefer_double_quotes]

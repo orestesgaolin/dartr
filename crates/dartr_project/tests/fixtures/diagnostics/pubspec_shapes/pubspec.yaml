@@ -1,0 +1,6 @@
+name: 42
+dependencies: [foo]
+dev_dependencies: 42
+flutter: [assets]
+platforms: [android]
+workspace: 42

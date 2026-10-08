@@ -1,0 +1,15 @@
+name: Bad-Name
+author: old
+authors: [old]
+transformers: [old]
+web: true
+dependencies:
+  shared: any
+dev_dependencies:
+  shared: any
+platforms:
+  android: true
+  unknown: null
+screenshots:
+  - path: absent.png
+workspace: [missing, ../outside, 42]

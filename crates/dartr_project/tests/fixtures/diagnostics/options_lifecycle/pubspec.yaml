@@ -1,0 +1,3 @@
+name: lifecycle_fixture
+environment:
+  sdk: ^3.13.0

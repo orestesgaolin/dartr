@@ -238,15 +238,16 @@ impl<'a> Loader<'a> {
             Some(Err(error)) => {
                 let marker = error.marker();
                 let offset = self.byte(marker.index());
-                Err(YamlError {
-                    message: error.info().to_string(),
-                    span: Some(Span {
+                Err(crate::yaml_errors::normalize_error(
+                    self.text,
+                    error.info(),
+                    Span {
                         start: offset,
                         end: offset,
                         line: marker.line().saturating_sub(1),
                         column: marker.col(),
-                    }),
-                })
+                    },
+                ))
             }
             None => Err(YamlError {
                 message: "Unexpected end of input.".into(),

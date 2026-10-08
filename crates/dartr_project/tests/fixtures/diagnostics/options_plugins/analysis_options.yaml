@@ -1,0 +1,4 @@
+analyzer:
+  plugins: [one, two]
+plugins:
+  versioned: 42

@@ -1,0 +1,6 @@
+# ignore_for_file: deprecated_field
+name: Bad-Name
+author: old
+# ignore: unknown_platform
+platforms:
+  weird: true

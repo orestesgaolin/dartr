@@ -1,0 +1,10 @@
+name: fixture_paths
+dependencies:
+  absent:
+    path: nonexistent
+  file:
+    path: target.txt
+  no_pubspec:
+    path: empty
+  wrong_type:
+    path: 42
