@@ -185,6 +185,7 @@ fn interner_deduplicates_structurally_equal_types() {
     let alias = interner.intern_alias(AliasRef {
         element: alias_el,
         args: TypeList::EMPTY,
+        nullability: Nullability::None,
     });
     let aliased = interner.intern(TypeKind::Interface {
         element: list,

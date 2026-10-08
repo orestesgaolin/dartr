@@ -17,6 +17,7 @@ dartr_project = { path = "crates/dartr_project" }
 dartr_element = { path = "crates/dartr_element" }
 dartr_flow = { path = "crates/dartr_flow" }
 dartr_constant = { path = "crates/dartr_constant" }
+dartr_typesystem = { path = "crates/dartr_typesystem" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 anyhow = "1.0.104"

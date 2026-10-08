@@ -287,6 +287,11 @@ pub type SubstPair = (EId<TypeParameterElement>, TypeId);
 pub struct AliasRef {
     pub element: EId<TypeAliasElement>,
     pub args: TypeList,
+    /// The suffix written after the alias name (`A` or `A?`). It can differ
+    /// from the nullability of the type: `typedef A = int?;` makes `A` an
+    /// `int?` with an alias without suffix.
+    /// (Dart `InstantiatedTypeAliasElementImpl.nullabilitySuffix`.)
+    pub nullability: Nullability,
 }
 
 /// A named record field (`RecordTypeNamedFieldImpl`).
