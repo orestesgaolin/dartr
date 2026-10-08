@@ -13,7 +13,13 @@ dartr is a port of the Dart analyzer (`pkg/analyzer`, `pkg/_fe_analyzer_shared`,
    - editors: `dartr language-server` (LSP, with the Dart LSP extensions that
      Dart-Code and other clients use) and the legacy analysis server protocol
      (`--protocol=analyzer`, used by IntelliJ);
-   - VS Code: Dart-Code setting `dart.analyzerPath` points to `dartr`.
+   - VS Code: Dart-Code runs `dart.analyzerPath` with the Dart VM (`dart <path> --lsp ...`),
+     so it cannot start a native binary. dartr ships `tools/shim/dartr_shim.dart`: it starts
+     `dartr language-server` with the same arguments and forwards stdin/stdout/stderr and the
+     exit code. `dart.analyzerPath` points to the shim (or its AOT/JIT snapshot).
+   - `flutter analyze` uses LSP (`$/progress`, `publishDiagnostics`); IntelliJ uses the legacy
+     protocol through `<sdk>/bin/dart language-server --protocol=analyzer` (no custom binary
+     setting: needs an SDK wrapper). Details: `docs/research/editor-integration.md`.
 3. Faster than the Dart analyzer. Benchmarks before (baseline, `bench/`) and after.
 
 ## Reference version
@@ -82,5 +88,5 @@ Data model rules:
 | 7 | error verifiers, constants, hints, warnings, ignore comments | `resolved` diagnostics parity |
 | 8 | lints | all lint rules, `dart analyze` parity with lints enabled |
 | 9 | `dartr analyze` CLI | output and exit code parity |
-| 10 | LSP + legacy server | Dart-Code works with `dart.analyzerPath`; LSP request parity |
+| 10 | LSP server, then legacy subset (`dart analyze`/`dart fix`), then full legacy (IntelliJ) | Dart-Code works through the shim; `flutter analyze` works; LSP request parity |
 | 11 | performance | benchmark report vs baseline |
