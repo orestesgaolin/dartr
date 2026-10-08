@@ -8,7 +8,7 @@
 //   dart run bin/oracle.dart <mode> [file ...]   (no files: read paths from stdin)
 //
 // Modes:
-//   tokens   token stream and scanner diagnostics
+//   tokens   token stream and scanner diagnostics (scanner only, no parser)
 //   ast      unresolved AST (parser output) and parse diagnostics
 //   resolved diagnostics of a resolved unit, and static types of expressions
 import 'dart:convert';
@@ -23,7 +23,18 @@ import 'package:analyzer/dart/ast/syntactic_entity.dart';
 import 'package:analyzer/dart/ast/token.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/diagnostic/diagnostic.dart';
+import 'package:analyzer/error/listener.dart';
 import 'package:analyzer/file_system/physical_file_system.dart';
+// ignore: implementation_imports
+import 'package:analyzer/src/dart/scanner/scanner.dart';
+// ignore: implementation_imports
+import 'package:analyzer/src/dart/scanner/translate_error_token.dart';
+// ignore: implementation_imports
+import 'package:analyzer/src/error/listener.dart';
+// ignore: implementation_imports
+import 'package:analyzer/src/string_source.dart';
+// ignore: implementation_imports
+import 'package:_fe_analyzer_shared/src/scanner/error_token.dart';
 
 Future<void> main(List<String> args) async {
   if (args.isEmpty) {
@@ -44,17 +55,31 @@ Future<void> main(List<String> args) async {
   switch (mode) {
     case 'tokens':
       for (var p in paths) {
-        stdout.writeln(jsonEncode(dumpTokens(p)));
+        stdout.writeln(jsonEncode(guarded(p, dumpTokens)));
       }
     case 'ast':
       for (var p in paths) {
-        stdout.writeln(jsonEncode(dumpAst(p)));
+        stdout.writeln(jsonEncode(guarded(p, dumpAst)));
       }
     case 'resolved':
       await dumpResolved(paths);
     default:
       stderr.writeln('unknown mode: $mode');
       exit(64);
+  }
+}
+
+/// Runs [dump] for [path]; on an exception (for example a file that is not
+/// valid UTF-8) returns `{"path": ..., "error": <exception type>}` so that one
+/// file does not stop the batch.
+Map<String, Object?> guarded(
+  String path,
+  Map<String, Object?> Function(String) dump,
+) {
+  try {
+    return dump(path);
+  } catch (e) {
+    return {'path': path, 'error': e.runtimeType.toString()};
   }
 }
 
@@ -68,10 +93,32 @@ ParseStringResult parse(String path) {
   );
 }
 
+/// Scanner output only (no parser), as `parseString` sees it before parsing.
+///
+/// `parseString` scans with the analyzer `Scanner`, and the parser then skips
+/// the error tokens at the start of the stream (`Parser.parseUnit`) and
+/// reports them with `translateErrorToken`. This function does the same
+/// without the parser, so that the parser cannot change the token stream
+/// (for example by splitting `>>` or inserting synthetic tokens) and parse
+/// diagnostics are not included.
 Map<String, Object?> dumpTokens(String path) {
-  var result = parse(path);
+  var content = File(path).readAsStringSync();
+  var featureSet = FeatureSet.latestLanguageVersion();
+  var listener = RecordingDiagnosticListener();
+  var reporter = DiagnosticReporter(listener, StringSource(content, path));
+  var scanner = Scanner(inputText: content, reportError: reporter.report)
+    ..configureFeatures(featureSetForOverriding: featureSet, featureSet: featureSet);
+  Token first = scanner.tokenize();
+  var errorTokens = <ErrorToken>[];
+  while (first is ErrorToken) {
+    errorTokens.add(first);
+    first = first.next!;
+  }
+  for (var e in errorTokens) {
+    translateErrorToken(e, reporter.report);
+  }
   var tokens = <Object?>[];
-  Token? t = result.unit.beginToken;
+  Token? t = first;
   while (t != null) {
     tokens.add(tokenJson(t, withComments: true));
     if (t.type == TokenType.EOF) break;
@@ -80,7 +127,7 @@ Map<String, Object?> dumpTokens(String path) {
   return {
     'path': path,
     'tokens': tokens,
-    'diagnostics': result.errors.map(diagnosticJson).toList(),
+    'diagnostics': listener.diagnostics.map(diagnosticJson).toList(),
   };
 }
 
