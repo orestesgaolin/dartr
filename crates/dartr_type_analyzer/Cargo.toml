@@ -1,0 +1,12 @@
+[package]
+name = "dartr_type_analyzer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The shared type analyzer and exhaustiveness checker (_fe_analyzer_shared type_inference, exhaustiveness)"
+
+[dependencies]
+dartr_flow.workspace = true
+indexmap.workspace = true
+
+[dev-dependencies]

@@ -283,6 +283,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "dartr_type_analyzer"
+version = "0.1.0"
+dependencies = [
+ "dartr_flow",
+ "indexmap",
+]
+
+[[package]]
 name = "diff"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
