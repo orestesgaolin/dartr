@@ -97,6 +97,9 @@ fn c1_passes_do_not_panic_on_corpus() {
     let mut declared = 0usize;
     let mut annotated = 0usize;
     let mut reported = 0usize;
+    let mut unbound: Vec<String> = Vec::new();
+    let mut mismatched: Vec<String> = Vec::new();
+    let mut dump: Vec<String> = Vec::new();
     for &file in &libraries {
         let uri = driver.fs.file(file).uri_str.clone();
         let Some(&library) = world.libraries.get(&uri) else {
@@ -175,6 +178,86 @@ fn c1_passes_do_not_panic_on_corpus() {
                 .filter(|&i| tables.annotation_type.get(dartr_ast::NodeId::from_index(i)).is_some())
                 .count();
             reported += diagnostics.len();
+            if std::env::var_os("DARTR_C1_DUMP").is_some() {
+                let text = std::fs::read_to_string(path.as_ref()).unwrap_or_default();
+                let line_starts: Vec<usize> = std::iter::once(0)
+                    .chain(text.match_indices('\n').map(|(i, _)| i + 1))
+                    .collect();
+                for d in &diagnostics {
+                    // Offsets are UTF-16; the corpus is ASCII almost
+                    // everywhere, which is enough for this comparison.
+                    let line = line_starts.iter().rposition(|&s| s <= d.offset).unwrap_or(0);
+                    let column = d.offset - line_starts[line] + 1;
+                    dump.push(format!(
+                        "{}|{}|{}|{}",
+                        d.code.name.to_uppercase(),
+                        path,
+                        line + 1,
+                        column
+                    ));
+                }
+            }
+            // Every declaration node gets a fragment (the walker matched
+            // the linked fragments with the nodes).
+            use dartr_ast::NodeKind as K;
+            for i in 0..ast.node_count() {
+                let n = dartr_ast::NodeId::from_index(i);
+                let kind = ast.kind(n);
+                let is_declaration = matches!(
+                    kind,
+                    K::ClassDeclaration
+                        | K::ClassTypeAlias
+                        | K::MixinDeclaration
+                        | K::EnumDeclaration
+                        | K::ExtensionDeclaration
+                        | K::ExtensionTypeDeclaration
+                        | K::FunctionTypeAlias
+                        | K::GenericTypeAlias
+                        | K::ConstructorDeclaration
+                        | K::MethodDeclaration
+                        | K::FunctionDeclaration
+                        | K::VariableDeclaration
+                        | K::EnumConstantDeclaration
+                        | K::TypeParameter
+                        | K::RegularFormalParameter
+                        | K::FieldFormalParameter
+                        | K::SuperFormalParameter
+                        | K::GenericFunctionType
+                        | K::FunctionExpression
+                        | K::DeclaredIdentifier
+                        | K::DeclaredVariablePattern
+                        | K::Label
+                );
+                // The name of the fragment is at the name of the node.
+                let name_token = match kind {
+                    K::MethodDeclaration => Some(ast[dartr_ast::Id::<dartr_ast::MethodDeclaration>::from_raw(n)].name),
+                    K::FunctionDeclaration => Some(ast[dartr_ast::Id::<dartr_ast::FunctionDeclaration>::from_raw(n)].name),
+                    K::VariableDeclaration => Some(ast[dartr_ast::Id::<dartr_ast::VariableDeclaration>::from_raw(n)].name),
+                    K::TypeParameter => Some(ast[dartr_ast::Id::<dartr_ast::TypeParameter>::from_raw(n)].name),
+                    K::EnumConstantDeclaration => Some(ast[dartr_ast::Id::<dartr_ast::EnumConstantDeclaration>::from_raw(n)].name),
+                    K::RegularFormalParameter => ast[dartr_ast::Id::<dartr_ast::RegularFormalParameter>::from_raw(n)].name,
+                    _ => None,
+                };
+                if let (Some(token), Some(&f)) = (name_token, tables.declared_fragment.get(n)) {
+                    let fragment_offset = ctx.fragment_data(f).and_then(|d| d.name_offset);
+                    let lexeme = ast.tokens.lexeme(token);
+                    if !lexeme.is_empty()
+                        && !ast.tokens.get(token).is_synthetic()
+                        && fragment_offset != Some(ast.tokens.offset(token))
+                    {
+                        mismatched.push(format!(
+                            "{path}@{}: {kind:?} {lexeme} fragment name offset {fragment_offset:?}",
+                            ast.tokens.offset(token)
+                        ));
+                    }
+                }
+                if is_declaration
+                    && tables.declared_fragment.get(n).is_none()
+                    && ast.root(n) == parsed.unit.raw()
+                {
+                    unbound.push(format!("{path}@{}: {kind:?}", ast.offset(n)));
+                }
+            }
             if let Err(e) = result {
                 let message = e
                     .downcast_ref::<String>()
@@ -194,6 +277,18 @@ fn c1_passes_do_not_panic_on_corpus() {
         libraries.len(),
         failures.len()
     );
+    if let Some(out) = std::env::var_os("DARTR_C1_DUMP") {
+        dump.sort();
+        std::fs::write(out, dump.join("\n") + "\n").expect("write dump");
+    }
+    eprintln!("mismatched name offsets: {}", mismatched.len());
+    for m in mismatched.iter().take(30) {
+        eprintln!("  {m}");
+    }
+    eprintln!("unbound declarations: {}", unbound.len());
+    for u in unbound.iter().take(30) {
+        eprintln!("  {u}");
+    }
     for f in failures.iter().take(50) {
         eprintln!("  {f}");
     }
