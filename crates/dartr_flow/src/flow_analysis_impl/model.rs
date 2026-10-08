@@ -156,7 +156,7 @@ impl<F: FlowTypes> PtrEq for PromotionModel<F> {
 /// `FlowModelHelper`, `@visibleForTesting`).
 pub trait FlowModelHelper<F: FlowTypes> {
     /// [`FlowLinkReader`] object for efficiently looking up
-    /// [`PromotionModel`] objects in [`FlowModel::promotion_info`]
+    /// [`PromotionModel`] objects in [`FlowModelData::promotion_info`]
     /// structures, or for computing the difference between two such
     /// structures. (Dart field of the mixin; interior mutability because the
     /// reader caches its current state.)
@@ -2313,7 +2313,7 @@ pub enum ExpressionInfoKind<F: FlowTypes> {
 /// The fields of Dart `_Reference`.
 pub struct ReferenceData<F: FlowTypes> {
     /// The integer key representing the thing referred to by this expression
-    /// in [`FlowModel::promotion_info`].
+    /// in [`FlowModelData::promotion_info`].
     pub promotion_key: PromotionKey,
 
     /// Whether the thing referred to by this expression is `this` (or the
