@@ -39,6 +39,8 @@ pub type FlowModel = model::FlowModel<MiniAstTypes>;
 pub type PromotionModel = model::PromotionModel<MiniAstTypes>;
 /// `ExpressionInfo` of the mini AST.
 pub type ExpressionInfo = model::ExpressionInfo<MiniAstTypes>;
+/// `List<SharedTypeView>` of a `PromotionModel` of the mini AST.
+pub type TypeList = model::TypeList<MiniAstTypes>;
 /// `PromotionInfo?` of the mini AST.
 pub type PromotionInfo = model::PromotionInfoRef<MiniAstTypes>;
 
@@ -86,6 +88,8 @@ pub struct VariableModelMatcher {
     pub assigned: Option<bool>,
     pub unassigned: Option<bool>,
     pub write_captured: Option<bool>,
+    /// Dart `same(model)` in place of `_matchVariableModel(...)`.
+    pub same: Option<PromotionModel>,
 }
 
 /// Dart `_matchVariableModel(...)`: start with no requirements, then add
@@ -134,8 +138,19 @@ impl VariableModelMatcher {
         self
     }
 
+    /// Dart `same(model)` (identity) in place of a `_matchVariableModel`.
+    pub fn same(mut self, model: &PromotionModel) -> Self {
+        self.same = Some(model.clone());
+        self
+    }
+
     /// Whether `model` matches.
     pub fn matches(&self, model: &PromotionModel) -> bool {
+        if let Some(same) = &self.same
+            && !same.ptr_eq(model)
+        {
+            return false;
+        }
         let strings = |l: &[SharedTypeView<Type>]| -> Vec<String> {
             l.iter()
                 .map(|t| t.unwrap_type_view().type_string())
@@ -181,14 +196,45 @@ impl VariableModelMatcher {
         assert!(
             self.matches(model),
             "VariableModel(chain: {:?}, ofInterest: {:?}, assigned: {:?}, unassigned: {:?}, \
-             writeCaptured: {:?}) does not match {model:?}",
+             writeCaptured: {:?}, same: {:?}) does not match {model:?}",
             self.chain,
             self.of_interest,
             self.assigned,
             self.unassigned,
-            self.write_captured
+            self.write_captured,
+            self.same
         );
     }
+}
+
+/// Dart `same(model)` as a value of an `expect(map, {key: ...})`.
+pub fn same_model(model: &PromotionModel) -> VariableModelMatcher {
+    match_variable_model().same(model)
+}
+
+/// The type strings of a list of types (Dart `.map((t) =>
+/// t.unwrapTypeView<Type>().type).toList()`).
+pub fn type_strings(types: &[SharedTypeView<Type>]) -> Vec<String> {
+    types
+        .iter()
+        .map(|t| t.unwrap_type_view().type_string())
+        .collect()
+}
+
+/// Dart `expect(types, _matchPromotionChain([...]))` (in order).
+#[track_caller]
+pub fn expect_promotion_chain(types: &[SharedTypeView<Type>], expected: &[&str]) {
+    assert_eq!(type_strings(types), expected, "promotion chain");
+}
+
+/// Dart `expect(types, _matchOfInterestSet([...]))` (any order).
+#[track_caller]
+pub fn expect_of_interest_set(types: &[SharedTypeView<Type>], expected: &[&str]) {
+    let mut actual = type_strings(types);
+    let mut expected: Vec<String> = expected.iter().map(|s| s.to_string()).collect();
+    actual.sort();
+    expected.sort();
+    assert_eq!(actual, expected, "interest set");
 }
 
 /// Dart `expect(map, {key: matcher, ...})` for a map from promotion keys to
