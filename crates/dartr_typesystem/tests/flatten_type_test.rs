@@ -20,7 +20,6 @@ mod flatten_type_test {
     }
 
     #[test]
-    #[ignore = "needs normalize (class hierarchy merges conflicting interfaces with normalizeInterfaceType) (unit A4)"]
     fn interface_type_conflicting_future_interfaces() {
         // Repeated generic elements in the hierarchy should not trip the
         // recursion guard, and traversal order still determines the future type.
@@ -39,7 +38,6 @@ mod flatten_type_test {
     }
 
     #[test]
-    #[ignore = "needs normalize (class hierarchy merges conflicting interfaces with normalizeInterfaceType) (unit A4)"]
     fn interface_type_conflicting_future_interfaces_disjoint() {
         // Neither 'String' nor 'int' is more specific than the other, meaning
         // they are completely disjoint. Conflict resolution handles this
