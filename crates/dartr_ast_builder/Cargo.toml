@@ -13,3 +13,6 @@ rustc-hash.workspace = true
 
 [dev-dependencies]
 rayon.workspace = true
+dartr_difftest = { path = "../dartr_difftest" }
+serde_json = { workspace = true, features = ["unbounded_depth"] }
+serde.workspace = true
