@@ -67,6 +67,21 @@ impl AnalyzerScanResult {
 /// [source] must not start with a byte order mark (see
 /// [`crate::scanner::strip_bom`]).
 pub fn scan_for_analyzer(source: &str) -> AnalyzerScanResult {
+    scan_for_analyzer_with_configuration(source, ScannerConfiguration::default(), |version| {
+        ScannerConfiguration {
+            enable_triple_shift: version >= TRIPLE_SHIFT_VERSION,
+            enable_augmentations: false,
+        }
+    })
+}
+
+/// Scans with the package's features and restricts them for each valid language
+/// version override, as Dart `Scanner._languageVersionChanged` does.
+pub fn scan_for_analyzer_with_configuration(
+    source: &str,
+    configuration: ScannerConfiguration,
+    mut configuration_for_version: impl FnMut((i64, i64)) -> ScannerConfiguration,
+) -> AnalyzerScanResult {
     let mut diagnostics = RecordingDiagnosticListener::default();
     let mut override_version = None;
     let mut feature_version = None;
@@ -91,18 +106,10 @@ pub fn scan_for_analyzer(source: &str) -> AnalyzerScanResult {
         } else {
             feature_version = Some(version);
             // `_featureSetForOverriding.restrictToVersion(overrideVersion)`.
-            Some(ScannerConfiguration {
-                enable_triple_shift: version >= TRIPLE_SHIFT_VERSION,
-                enable_augmentations: false,
-            })
+            Some(configuration_for_version(version))
         }
     };
-    let scan = scan_string(
-        source,
-        Some(ScannerConfiguration::default()),
-        true,
-        Some(&mut callback),
-    );
+    let scan = scan_string(source, Some(configuration), true, Some(&mut callback));
 
     let scan_diagnostic_count = diagnostics.diagnostics.len();
     let tokens = &scan.tokens;

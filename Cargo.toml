@@ -8,6 +8,7 @@ version = "0.1.0"
 license = "BSD-3-Clause"
 
 [workspace.dependencies]
+dartr_lints = { path = "crates/dartr_lints" }
 dartr_syntax = { path = "crates/dartr_syntax" }
 dartr_ast = { path = "crates/dartr_ast" }
 dartr_parser = { path = "crates/dartr_parser" }

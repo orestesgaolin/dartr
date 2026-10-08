@@ -1,0 +1,87 @@
+rule	class	reason	status
+recursive_getters	needs resolution	Compares identifier elements with the enclosing getter element.	deferred
+remove_deprecations_in_breaking_version	non-AST context	Reads package workspace and pubspec version information.	deferred
+require_trailing_commas	AST-only	Uses tokens, line information, language version, and syntax shapes only.	implemented
+simple_directive_paths	AST-only	Uses directive string syntax plus the current source path for relative minimality.	implemented
+simplify_variable_pattern	needs resolution	Reads field elements and their types.	deferred
+sized_box_for_whitespace	needs resolution	Identifies Flutter Container from the resolved static type and library URI.	deferred
+sized_box_shrink_expand	needs resolution	Identifies Flutter SizedBox from the resolved static type and library URI.	deferred
+slash_for_doc_comments	AST-only	Checks attached documentation-comment token spelling.	implemented
+sort_child_properties_last	needs resolution	Uses resolved Flutter widget types and named parameter elements.	deferred
+sort_constructors_first	AST-only	Examines class member order and constructor syntax.	implemented
+sort_unnamed_constructors_first	needs resolution	Uses declared constructor elements to identify the canonical unnamed name.	deferred
+specify_nonobvious_local_variable_types	needs resolution	Uses inferred static types and obvious-type analysis.	deferred
+specify_nonobvious_property_types	needs resolution	Uses declared elements and inferred initializer types.	deferred
+strict_top_level_inference	needs resolution	Reads declared fragments and inferred element types.	deferred
+super_goes_last	removed	Upstream is RemovedAnalysisRule since Dart 3.	removed upstream
+switch_on_type	needs resolution	Uses matched-value types and the type system.	deferred
+test_types_in_equals	AST-only	Matches operator syntax, its single parameter, and an as-expression.	implemented
+throw_in_finally	AST-only	Uses ancestor and finally-block syntax only.	implemented
+tighten_type_of_initializing_formals	needs resolution	Compares field and formal-parameter resolved types.	deferred
+type_annotate_public_apis	needs resolution	Uses element visibility and inferred/static types.	deferred
+type_init_formals	needs resolution	Reads corresponding field and super-constructor elements.	deferred
+type_literal_in_constant_pattern	needs resolution	Uses matched-value/static types and subtype checks.	deferred
+unawaited_futures	needs resolution	Uses expression static types and enclosing executable elements.	deferred
+unintended_html_in_doc_comment	AST-only	Scans documentation-comment tokens and parsed code-block ranges.	implemented
+unnecessary_async	needs resolution	Uses return static types and element declarations.	deferred
+unnecessary_await_in_return	needs resolution	Uses return types and the type system.	deferred
+unnecessary_brace_in_string_interps	AST-only	Checks interpolation expression shape and adjacent token text.	implemented
+unnecessary_breaks	AST-only	Checks an unlabeled final break when the defining library enables patterns.	implemented
+unnecessary_const	AST-only	Checks explicit const tokens and syntactic constant context.	implemented
+unnecessary_const_in_enum_constructor	AST-only	Checks explicit const tokens on enum constructors.	implemented
+unnecessary_constructor_name	needs resolution	Uses enclosing constructor elements to suppress duplicate-constructor cases.	deferred
+unnecessary_final	AST-only	Checks final tokens on local declarations and parameters.	implemented
+unnecessary_getters_setters	needs resolution	Uses declared getter/setter elements and resolved metadata.	deferred
+unnecessary_ignore	non-AST context	Runs after all diagnostics through IgnoreValidator rather than an AST visitor.	deferred
+unnecessary_lambdas	needs resolution	Compares function and invoked elements and static types.	deferred
+unnecessary_late	AST-only	Checks static/top-level variable syntax and initializers.	implemented
+unnecessary_library_directive	AST-only	Checks directive siblings, annotations, and documentation comments.	implemented
+unnecessary_library_name	AST-only	Checks for a library name when the defining library enables unnamed libraries.	implemented
+unnecessary_new	AST-only	Checks the instance-creation keyword token.	implemented
+unnecessary_null_aware_assignments	needs resolution	Uses write/read elements to prove target identity.	deferred
+unnecessary_null_aware_operator_on_extension_on_nullable	needs resolution	Uses resolved extension elements and nullable types.	deferred
+unnecessary_null_checks	needs resolution	Uses static types, elements, and the type system.	deferred
+unnecessary_null_in_if_null_operators	AST-only	Checks a ?? operand for a null literal.	implemented
+unnecessary_nullable_for_final_variable_declarations	needs resolution	Uses declared-variable elements, inferred types, and the type system.	deferred
+unnecessary_overrides	needs resolution	Compares declared methods with inherited elements.	deferred
+unnecessary_parenthesis	needs resolution	Uses corresponding parameters, record types, extension elements, and the type system.	deferred
+unnecessary_primary_constructor_body	AST-only	The upstream type-system field is unused; the decision is empty-body syntax only.	implemented
+unnecessary_raw_strings	AST-only	Checks raw literal token text for backslash or dollar usage.	implemented
+unnecessary_statements	needs resolution	Uses getter elements to avoid side-effect false positives.	deferred
+unnecessary_string_escapes	AST-only	Scans string literal and interpolation token contents.	implemented
+unnecessary_string_interpolations	needs resolution	Requires the interpolated expression static String type and nullability.	deferred
+unnecessary_this	needs resolution	Resolves referenced members and lexical scope shadowing.	deferred
+unnecessary_to_list_in_spreads	needs resolution	Uses target static type and method element identity.	deferred
+unnecessary_type_name_in_constructor	AST-only	Reports the explicit type-name child of a constructor declaration.	implemented
+unnecessary_unawaited	needs resolution	Uses the resolved unawaited function element.	deferred
+unnecessary_underscores	needs resolution	Tracks declared and referenced elements through function bodies.	deferred
+unreachable_from_main	needs resolution	Builds a reachability graph from declared and referenced elements.	deferred
+unrelated_type_equality_checks	needs resolution	Uses operand static types, operator elements, and the type system.	deferred
+unsafe_html	removed	Upstream is RemovedAnalysisRule.	removed upstream
+unsafe_variance	needs resolution	Uses interface/member elements and variance of resolved types.	deferred
+use_build_context_synchronously	needs resolution	Uses BuildContext static types, elements, and async-state tracking.	deferred
+use_colored_box	needs resolution	Identifies Flutter Container from its resolved static type.	deferred
+use_declaring_parameters	needs resolution	Uses constructor/field elements and assigned-field relationships.	deferred
+use_decorated_box	needs resolution	Identifies Flutter Container from its resolved static type and URI.	deferred
+use_enums	needs resolution	Uses class and member elements to validate enum conversion.	deferred
+use_full_hex_values_for_flutter_colors	needs resolution	Uses the resolved Flutter Color constructor element.	deferred
+use_function_type_syntax_for_parameters	AST-only	Checks the function-typed suffix on formal parameters.	implemented
+use_if_null_to_convert_nulls_to_bools	needs resolution	Uses operand static types and nullability subtype checks.	deferred
+use_is_even_rather_than_modulo	needs resolution	Requires resolved int static types.	deferred
+use_key_in_widget_constructors	needs resolution	Uses Flutter widget ancestry and constructor parameter elements.	deferred
+use_late_for_private_fields_and_variables	needs resolution	Uses declared fields, references, flow, and inferred types.	deferred
+use_named_constants	needs resolution	Compares constant values and resolved constructor/type elements.	deferred
+use_null_aware_elements	needs resolution	Compares canonical elements for null-check target identity.	deferred
+use_primary_constructors	needs resolution	Uses redirecting-constructor elements.	deferred
+use_raw_strings	AST-only	Scans simple literal escapes and quote syntax.	implemented
+use_rethrow_when_possible	needs resolution	Compares the thrown expression element with the catch parameter element.	deferred
+use_setters_to_change_properties	needs resolution	Uses method and field elements plus inherited-member information.	deferred
+use_string_buffers	needs resolution	Uses assignment/read elements to track the same String variable.	deferred
+use_string_in_part_of_directives	AST-only	Checks the library-name versus URI alternatives on part-of syntax.	implemented
+use_super_parameters	needs resolution	Uses super-constructor parameter and field elements plus subtype checks.	deferred
+use_test_throws_matchers	needs resolution	Uses resolved test package function elements.	deferred
+use_to_and_as_if_applicable	needs resolution	Uses resolved return type and inherited-method information.	deferred
+use_truncating_division	needs resolution	Requires operand static int types and core-library identity.	deferred
+valid_regexps	needs resolution	Uses the resolved dart:core RegExp constructor identity.	deferred
+var_with_no_type_annotation	AST-only	Checks var tokens and absent type annotations on formal parameters.	implemented
+void_checks	needs resolution	Uses expression static void types, elements, and the type system.	deferred

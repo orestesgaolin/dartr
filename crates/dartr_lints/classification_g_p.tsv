@@ -1,0 +1,95 @@
+rule	class	reason	status
+hash_and_equals	needs resolution	Inspects declared class elements and overridden equality/hash members.	deferred
+implementation_imports	needs resolution	Uses resolved imported library elements and source URIs.	deferred
+implicit_call_tearoffs	needs resolution	Visits ImplicitCallReference nodes synthesized by resolution.	deferred
+implicit_reopen	needs resolution	Compares resolved declaration and library elements.	deferred
+initialize_in_field_declaration	needs resolution	Uses constructor and enclosing field elements.	deferred
+invalid_case_patterns	needs resolution	Uses resolved pattern variable elements across case branches.	deferred
+invalid_runtime_check_with_js_interop_types	needs resolution	Requires static types, extension-type elements, and the type system.	deferred
+invariant_booleans	removed	Upstream is RemovedAnalysisRule.	n/a
+iterable_contains_unrelated_type	removed	Upstream is RemovedAnalysisRule.	n/a
+join_return_with_assignment	needs resolution	Compares canonical elements of assignment and return targets.	deferred
+leading_newlines_in_multiline_strings	AST-only	Uses parsed string syntax, source offsets, and line information without resolution.	implemented
+library_annotations	needs resolution	Uses annotation and enclosing library elements.	deferred
+library_names	AST-only	Checks the syntactic dotted library name.	implemented
+library_prefixes	AST-only	Checks the syntactic import prefix and defining library wildcard feature.	implemented
+library_private_types_in_public_api	needs resolution	Traverses public elements and resolved API types.	deferred
+lines_longer_than_80_chars	AST-only	Scans source lines and comments; string URI/path exemptions use decoded AST values and multiline source ranges.	implemented
+list_remove_unrelated_type	removed	Upstream is RemovedAnalysisRule.	n/a
+literal_only_boolean_expressions	needs resolution	Computes string constants and resolves type-parameter annotations.	deferred
+matching_super_parameters	needs resolution	Matches parameters against resolved super constructors.	deferred
+migrate_design_widgets	AST-only	Checks import URI string literals.	implemented
+missing_code_block_language_in_doc_comment	AST-only	Uses parsed Markdown code-block data on Comment nodes.	implemented
+missing_whitespace_between_adjacent_strings	needs resolution	Its RegExp exemption identifies the resolved constructor element.	deferred
+no_adjacent_strings_in_list	AST-only	Checks collection elements and list-pattern constants syntactically.	implemented
+no_default_cases	needs resolution	Uses the switch expression static type for enum exemptions.	deferred
+no_duplicate_case_values	needs resolution	Computes and compares constant values.	deferred
+no_dynamic_casts	needs resolution	Requires static types, read elements, and the type system.	deferred
+no_leading_underscores_for_library_prefixes	AST-only	Checks the syntactic import prefix and defining library wildcard feature.	implemented
+no_leading_underscores_for_local_identifiers	needs resolution	Uses declared parameter elements to exempt field-declaring parameters.	deferred
+no_literal_bool_comparisons	needs resolution	Uses static types and the type system.	deferred
+no_logic_in_create_state	needs resolution	Identifies resolved Flutter State/createState elements.	deferred
+no_raw_types	needs resolution	Requires resolved generic type elements and type arguments.	deferred
+no_runtimeType_toString	needs resolution	Identifies resolved Object.runtimeType members.	deferred
+no_self_assignments	AST-only	Compares identifier syntax on simple assignments.	implemented
+no_wildcard_variable_uses	needs resolution	Uses resolved wildcard variable elements and library feature state.	deferred
+non_constant_identifier_names	AST-only	Checks declaration tokens and syntactic context, including augmentation exclusions.	implemented
+noop_primitive_operations	needs resolution	Uses operand static types and resolved operator elements.	deferred
+null_check_on_nullable_type_parameter	needs resolution	Uses static type-parameter types and the type system.	deferred
+null_closures	needs resolution	Requires contextual/static function types.	deferred
+omit_local_variable_types	needs resolution	Compares declared annotations with inferred static types.	deferred
+omit_obvious_local_variable_types	needs resolution	Uses inferred initializer types and type-provider data.	deferred
+omit_obvious_property_types	needs resolution	Uses inferred property/initializer types.	deferred
+one_member_abstracts	needs resolution	Counts resolved public interface members.	deferred
+only_throw_errors	needs resolution	Checks the thrown expression static type.	deferred
+overridden_fields	needs resolution	Finds inherited fields through resolved elements.	deferred
+package_api_docs	removed	Upstream is RemovedAnalysisRule.	n/a
+package_prefixed_library_names	AST-only	Active upstream rule whose visitor intentionally returns without reporting until project information is restored.	implemented no-op
+parameter_assignments	needs resolution	Uses declared parameter elements and write references.	deferred
+prefer_adjacent_string_concatenation	AST-only	Checks binary operator and string-literal node kinds.	implemented
+prefer_asserts_in_initializer_lists	needs resolution	Uses constructor elements and enclosing constructor state.	deferred
+prefer_asserts_with_message	AST-only	Checks assert message syntax.	implemented
+prefer_bool_in_asserts	removed	Upstream is RemovedAnalysisRule.	n/a
+prefer_collection_literals	needs resolution	Identifies core collection constructors through elements and types.	deferred
+prefer_conditional_assignment	needs resolution	Compares canonical resolved elements of null-check and assignment targets.	deferred
+prefer_const_constructors	needs resolution	Uses resolved constructors and constant-context analysis.	deferred
+prefer_const_constructors_in_immutables	needs resolution	Uses class/constructor elements and immutability metadata.	deferred
+prefer_const_declarations	needs resolution	Calls constant evaluation/error analysis for each initializer.	deferred
+prefer_const_literals_to_create_immutables	needs resolution	Uses static types and immutable-class metadata.	deferred
+prefer_constructors_over_static_methods	needs resolution	Requires return/interface types and enclosing elements.	deferred
+prefer_contains	needs resolution	Uses target static types to validate index/search rewrites.	deferred
+prefer_double_quotes	AST-only	Checks string delimiters, contents, nesting, and interpolation syntax.	implemented
+prefer_equal_for_default_values	removed	Upstream is RemovedAnalysisRule.	n/a
+prefer_expression_function_bodies	AST-only	Checks a block body for one value-returning statement.	implemented
+prefer_final_fields	needs resolution	Uses field elements and write-reference analysis.	deferred
+prefer_final_in_for_each	needs resolution	Uses declared-variable elements and mutation analysis.	deferred
+prefer_final_locals	needs resolution	Uses local elements and potentially-mutated-in-scope analysis.	deferred
+prefer_final_parameters	needs resolution	Uses parameter elements and mutation analysis.	deferred
+prefer_for_elements_to_map_fromIterable	needs resolution	Identifies resolved core Map.fromIterable calls.	deferred
+prefer_foreach	needs resolution	Uses resolved iterable methods and closure parameter elements.	deferred
+prefer_function_declarations_over_variables	needs resolution	Uses declared elements and mutation analysis for local variables.	deferred
+prefer_generic_function_type_aliases	AST-only	Builds a replacement from parsed typedef syntax.	implemented
+prefer_if_elements_to_conditional_expressions	AST-only	Checks conditional-expression collection parents.	implemented
+prefer_if_null_operators	AST-only	Compares null-test and result expression syntax.	implemented
+prefer_initializing_formals	needs resolution	Uses field writes, field elements, and the type system.	deferred
+prefer_inlined_adds	AST-only	Checks list-literal cascade sections and arguments.	implemented
+prefer_int_literals	needs resolution	Uses contextual parameter, collection, variable, and return types.	deferred
+prefer_interpolation_to_compose_strings	needs resolution	Uses operand static types to preserve overloaded + semantics.	deferred
+prefer_is_empty	needs resolution	Uses target static types and resolved members.	deferred
+prefer_is_not_empty	needs resolution	Uses resolved isEmpty member elements.	deferred
+prefer_is_not_operator	AST-only	Checks parenthesized is expressions under syntactic negation.	implemented
+prefer_iterable_whereType	needs resolution	Uses target and type-argument static types.	deferred
+prefer_mixin	needs resolution	Uses resolved class elements and inheritance constraints.	deferred
+prefer_null_aware_method_calls	AST-only	Matches null checks and explicit function invocations syntactically.	implemented
+prefer_null_aware_operators	AST-only	Matches null checks and property/invocation target chains syntactically.	implemented
+prefer_relative_imports	needs resolution	Requires resolved import sources, package roots, and library URIs.	deferred
+prefer_single_quotes	AST-only	Checks string delimiters, contents, nesting, and interpolation syntax.	implemented
+prefer_spread_collections	AST-only	Checks list-literal cascades and syntactic constant context.	implemented
+prefer_typing_uninitialized_variables	AST-only	Checks uninitialized variable syntax and excludes augmentation declarations.	implemented
+prefer_void_to_null	needs resolution	Uses resolved type annotations, element use sites, and ancestry.	deferred
+provide_deprecation_message	needs resolution	Uses resolved ElementAnnotation.isDeprecated to distinguish the core annotation.	deferred
+public_member_api_docs	needs resolution	Uses resolved public elements, overrides, and documentation inheritance.	deferred
+depend_on_referenced_packages	non-AST context	Requires pub package/pubspec dependencies and defining-unit directory context.	deferred
+package_names	non-AST context	Runs on the parsed pubspec rather than a Dart AST.	deferred
+secure_pubspec_urls	non-AST context	Runs on pubspec URL and dependency nodes.	deferred
+sort_pub_dependencies	non-AST context	Runs on ordered pubspec dependency nodes and source spans.	deferred

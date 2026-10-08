@@ -368,6 +368,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "dartr_lints"
+version = "0.1.0"
+dependencies = [
+ "dartr_ast",
+ "dartr_ast_builder",
+ "dartr_diagnostics",
+ "dartr_parser",
+ "dartr_syntax",
+ "indexmap",
+ "serde_json",
+]
+
+[[package]]
 name = "dartr_mini_ast"
 version = "0.1.0"
 dependencies = [
