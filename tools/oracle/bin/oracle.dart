@@ -11,6 +11,7 @@
 //   tokens   token stream and scanner diagnostics (scanner only, no parser)
 //   ast      unresolved AST (parser output) and parse diagnostics
 //   resolved diagnostics of a resolved unit, and static types of expressions
+//   elements the element model of a library (elements.dart)
 import 'dart:convert';
 import 'dart:io';
 
@@ -36,9 +37,11 @@ import 'package:analyzer/src/string_source.dart';
 // ignore: implementation_imports
 import 'package:_fe_analyzer_shared/src/scanner/error_token.dart';
 
+import 'elements.dart';
+
 Future<void> main(List<String> args) async {
   if (args.isEmpty) {
-    stderr.writeln('usage: oracle <tokens|ast|resolved> [file ...]');
+    stderr.writeln('usage: oracle <tokens|ast|resolved|elements> [file ...]');
     exit(64);
   }
   var mode = args.first;
@@ -50,7 +53,10 @@ Future<void> main(List<String> args) async {
             .where((l) => l.isNotEmpty)
             .toList();
   var paths = files is List<String> ? files : await (files as Future<List<String>>);
-  paths = paths.map((p) => File(p).absolute.path).toList();
+  // `dart:` URIs (mode `elements`) are kept as they are.
+  paths = paths
+      .map((p) => p.startsWith('dart:') ? p : File(p).absolute.path)
+      .toList();
 
   switch (mode) {
     case 'tokens':
@@ -63,6 +69,8 @@ Future<void> main(List<String> args) async {
       }
     case 'resolved':
       await dumpResolved(paths);
+    case 'elements':
+      await dumpElements(paths);
     default:
       stderr.writeln('unknown mode: $mode');
       exit(64);
