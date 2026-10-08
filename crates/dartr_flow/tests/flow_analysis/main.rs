@@ -14,9 +14,13 @@
 //! | [`api_part1`] | 37-1005 | `API` (first part) |
 //! | [`state_part1`] | 3721-3884 | `State` (first part) |
 //! | [`patterns_part1`] | 7038-7330 | `Patterns:` (first part) |
+//! | [`patterns_part3`] | 8703-9666 | `Patterns:` (third part: `Null-assert:` to `Relational pattern:`) |
+//! | [`patterns_part3b`] | 9667-10407 | `Patterns:` (third part: `Switch expression:`, `Switch statement:`) |
 
 mod common;
 
 mod api_part1;
 mod patterns_part1;
+mod patterns_part3;
+mod patterns_part3b;
 mod state_part1;
