@@ -1,0 +1,3 @@
+name: lsp_project2
+environment:
+  sdk: ^3.13.0

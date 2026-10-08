@@ -1,0 +1,385 @@
+//! Differential test of the language server: one scripted LSP session
+//! (Dart-Code's `initialize`, open/edit/close of fixture files with syntax
+//! errors, requests of the implemented methods, workspace folder changes,
+//! shutdown) runs against `dart language-server` (3.13.3, needs `dart` on
+//! `PATH`), `dartr language-server`, and `dart tools/shim/dartr_shim.dart
+//! --lsp`. The normalized transcripts must be equal.
+//!
+//! Normalization: request ids, `jsonrpc` and versions are dropped; the
+//! notifications are compared as the last value per document after each
+//! step (the order of notifications and `$/progress` is not compared);
+//! diagnostics are restricted to syntactic diagnostics (`SYNTACTIC_ERROR`
+//! codes) until dartr has resolution.
+//!
+//! `cargo test -p dartr --test lsp_parity -- --nocapture` prints the
+//! per-step report.
+
+mod lsp_support;
+
+use std::collections::BTreeMap;
+use std::path::Path;
+
+use dartr_diagnostics::{DiagnosticType, codes_by_name};
+use lsp_support::*;
+use serde_json::{Value, json};
+
+/// A normalized transcript: step name and value.
+type Transcript = Vec<(String, Value)>;
+
+fn is_syntactic(code: &str) -> bool {
+    codes_by_name(code)
+        .iter()
+        .any(|c| c.diagnostic_type == DiagnosticType::SyntacticError)
+}
+
+/// The document state, normalized: syntactic diagnostics only, empty lists
+/// removed, only documents of the fixture project.
+fn snapshot(c: &LspClient, root_uri: &str) -> Value {
+    let in_root = |uri: &String| uri.starts_with(root_uri);
+    let mut diagnostics = BTreeMap::new();
+    for (uri, list) in &c.state.diagnostics {
+        let list: Vec<Value> = list
+            .iter()
+            .filter(|d| d["code"].as_str().is_some_and(is_syntactic))
+            .cloned()
+            .collect();
+        if in_root(uri) && !list.is_empty() {
+            diagnostics.insert(uri.trim_start_matches(root_uri).to_string(), list);
+        }
+    }
+    let strip = |m: &BTreeMap<String, Value>| -> BTreeMap<String, Value> {
+        m.iter()
+            .filter(|(u, _)| in_root(u))
+            .map(|(u, v)| (u.trim_start_matches(root_uri).to_string(), v.clone()))
+            .collect()
+    };
+    json!({
+        "diagnostics": diagnostics,
+        "closingLabels": strip(&c.state.closing_labels),
+        "outlines": strip(&c.state.outlines),
+        "flutterOutlines": strip(&c.state.flutter_outlines),
+    })
+}
+
+fn doc(uri: &str) -> Value {
+    json!({"textDocument": {"uri": uri}})
+}
+
+fn position(line: u32, character: u32) -> Value {
+    json!({"line": line, "character": character})
+}
+
+/// Runs the session on [c] and returns the transcript and the exit code.
+fn run_session(mut c: LspClient, root: &Path) -> (Transcript, i32) {
+    let root_uri = format!("{}/", file_uri(root));
+    let uri = |rel: &str| format!("{root_uri}{rel}");
+    let errors = uri("lib/errors.dart");
+    let shapes = uri("lib/shapes.dart");
+    let widgets = uri("lib/widgets.dart");
+    let read = |rel: &str| std::fs::read_to_string(root.join(rel)).unwrap();
+    let mut t: Transcript = Vec::new();
+
+    let init = c.request("initialize", dart_code_initialize_params(root));
+    assert!(init["result"]["capabilities"].is_object(), "{init}");
+    c.notify("initialized", json!({}));
+    c.settle(true);
+    t.push(("initial analysis".into(), snapshot(&c, &root_uri)));
+
+    for (u, rel) in [(&errors, "lib/errors.dart"), (&shapes, "lib/shapes.dart"), (&widgets, "lib/widgets.dart")] {
+        c.notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {"uri": u, "languageId": "dart", "version": 1, "text": read(rel)}}),
+        );
+    }
+    c.settle(true);
+    t.push(("open 3 files".into(), snapshot(&c, &root_uri)));
+
+    for u in [&errors, &shapes, &widgets] {
+        let name = u.trim_start_matches(&root_uri);
+        t.push((
+            format!("documentSymbol {name}"),
+            c.request("textDocument/documentSymbol", doc(u)),
+        ));
+        t.push((
+            format!("foldingRange {name}"),
+            c.request("textDocument/foldingRange", doc(u)),
+        ));
+    }
+    let positions: Vec<Value> = [
+        (0, 0),
+        (12, 20),
+        (24, 10),
+        (35, 22),
+        (43, 25),
+        (60, 8),
+        (75, 12),
+        (90, 6),
+        (104, 15),
+    ]
+    .iter()
+    .map(|&(l, ch)| position(l, ch))
+    .collect();
+    t.push((
+        "selectionRange shapes.dart".into(),
+        c.request(
+            "textDocument/selectionRange",
+            json!({"textDocument": {"uri": shapes}, "positions": positions}),
+        ),
+    ));
+    t.push((
+        "selectionRange errors.dart".into(),
+        c.request(
+            "textDocument/selectionRange",
+            json!({"textDocument": {"uri": errors}, "positions": [position(2, 10), position(9, 9), position(13, 0)]}),
+        ),
+    ));
+    t.push((
+        "selectionRange widgets.dart".into(),
+        c.request(
+            "textDocument/selectionRange",
+            json!({"textDocument": {"uri": widgets}, "positions": [position(26, 15), position(28, 18), position(37, 10)]}),
+        ),
+    ));
+    t.push((
+        "selectionRange invalid line".into(),
+        c.request(
+            "textDocument/selectionRange",
+            json!({"textDocument": {"uri": shapes}, "positions": [position(9999, 0)]}),
+        ),
+    ));
+    t.push((
+        "documentSymbol of a file outside the roots".into(),
+        c.request("textDocument/documentSymbol", doc("file:///tmp/dartr_not_analyzed.dart")),
+    ));
+    t.push((
+        "foldingRange of a file outside the roots".into(),
+        c.request("textDocument/foldingRange", doc("file:///tmp/dartr_not_analyzed.dart")),
+    ));
+    t.push((
+        "documentSymbol of a non-file URI".into(),
+        c.request("textDocument/documentSymbol", doc("untitled:Untitled-1")),
+    ));
+
+    // Fix the missing parenthesis of `print('missing paren';`.
+    c.notify(
+        "textDocument/didChange",
+        json!({"textDocument": {"uri": errors, "version": 2}, "contentChanges": [
+            {"range": {"start": position(2, 25), "end": position(2, 25)}, "text": ")"}
+        ]}),
+    );
+    c.settle(true);
+    t.push(("incremental change errors.dart".into(), snapshot(&c, &root_uri)));
+
+    // Two changes in one notification: break the class body of `Shape` and
+    // add an unterminated string at the end.
+    let shapes_text = read("lib/shapes.dart");
+    let shapes_lines = shapes_text.lines().count() as u32;
+    c.notify(
+        "textDocument/didChange",
+        json!({"textDocument": {"uri": shapes, "version": 2}, "contentChanges": [
+            {"range": {"start": position(21, 0), "end": position(22, 0)}, "text": "  /// The ärea 😀.\n  double get area => ;\n"},
+            {"range": {"start": position(shapes_lines + 1, 0), "end": position(shapes_lines + 1, 0)}, "text": "var s = 'unterminated\n"}
+        ]}),
+    );
+    c.settle(true);
+    t.push(("two changes in shapes.dart".into(), snapshot(&c, &root_uri)));
+    t.push((
+        "documentSymbol shapes.dart after change".into(),
+        c.request("textDocument/documentSymbol", doc(&shapes)),
+    ));
+    t.push((
+        "foldingRange shapes.dart after change".into(),
+        c.request("textDocument/foldingRange", doc(&shapes)),
+    ));
+
+    // Full content change.
+    c.notify(
+        "textDocument/didChange",
+        json!({"textDocument": {"uri": shapes, "version": 3}, "contentChanges": [{"text": shapes_text}]}),
+    );
+    c.settle(true);
+    t.push(("full change shapes.dart".into(), snapshot(&c, &root_uri)));
+
+    // An open file that analysis_options.yaml excludes and no file imports:
+    // analyzed as a priority file, but no notifications.
+    let excluded = uri("lib/generated/excluded.dart");
+    c.notify(
+        "textDocument/didOpen",
+        json!({"textDocument": {"uri": excluded, "languageId": "dart", "version": 1, "text": read("lib/generated/excluded.dart")}}),
+    );
+    c.settle(true);
+    t.push(("open excluded file".into(), snapshot(&c, &root_uri)));
+    t.push((
+        "documentSymbol excluded file".into(),
+        c.request("textDocument/documentSymbol", doc(&excluded)),
+    ));
+
+    c.notify("textDocument/didClose", doc(&errors));
+    c.settle(true);
+    t.push(("close errors.dart".into(), snapshot(&c, &root_uri)));
+
+    // A second workspace folder.
+    let root2 = root.parent().unwrap().join("lsp_project2");
+    let folder2 = json!({"uri": file_uri(&root2), "name": "lsp_project2"});
+    let root2_uri = format!("{}/", file_uri(&root2));
+    c.notify(
+        "workspace/didChangeWorkspaceFolders",
+        json!({"event": {"added": [folder2], "removed": []}}),
+    );
+    c.settle(true);
+    t.push(("add workspace folder".into(), snapshot(&c, &root2_uri)));
+    c.notify(
+        "workspace/didChangeWorkspaceFolders",
+        json!({"event": {"added": [], "removed": [folder2]}}),
+    );
+    // Both servers analyze again after a change of the roots.
+    c.settle(true);
+    t.push(("remove workspace folder".into(), snapshot(&c, &root2_uri)));
+    t.push(("first workspace folder after remove".into(), snapshot(&c, &root_uri)));
+
+    c.notify("workspace/didChangeConfiguration", json!({"settings": null}));
+    c.settle(false);
+    t.push((
+        "didChangeConfiguration: server requests".into(),
+        json!(c.server_requests.last().map(|r| r.0.clone())),
+    ));
+
+    t.push((
+        "unknown request".into(),
+        c.request("dart/noSuchMethod", json!({})),
+    ));
+    t.push((
+        "user-visible messages".into(),
+        Value::Array(c.messages.clone()),
+    ));
+
+    if let Some(dir) = std::env::var_os("DARTR_LSP_TRANSCRIPTS") {
+        let path = Path::new(&dir).join(format!("lsp_log_{}.json", c.id()));
+        let log: Vec<Value> = c.log.clone();
+        std::fs::write(&path, serde_json::to_string_pretty(&log).unwrap()).unwrap();
+    }
+    let (response, code) = c.shutdown_and_exit();
+    t.push(("shutdown".into(), response));
+    t.push(("exit code".into(), json!(code)));
+    (t, code)
+}
+
+/// The first difference of [a] and [b] (a JSON pointer and both values).
+fn first_difference(a: &Value, b: &Value, path: &str) -> Option<String> {
+    match (a, b) {
+        (Value::Object(x), Value::Object(y)) => {
+            let keys: std::collections::BTreeSet<&String> = x.keys().chain(y.keys()).collect();
+            for k in keys {
+                let (va, vb) = (x.get(k).unwrap_or(&Value::Null), y.get(k).unwrap_or(&Value::Null));
+                if let Some(d) = first_difference(va, vb, &format!("{path}/{k}")) {
+                    return Some(d);
+                }
+            }
+            None
+        }
+        (Value::Array(x), Value::Array(y)) => {
+            for i in 0..x.len().max(y.len()) {
+                let (va, vb) = (x.get(i).unwrap_or(&Value::Null), y.get(i).unwrap_or(&Value::Null));
+                if let Some(d) = first_difference(va, vb, &format!("{path}/{i}")) {
+                    return Some(d);
+                }
+            }
+            None
+        }
+        _ if a == b => None,
+        _ => Some(format!("{path}: dart={a} dartr={b}")),
+    }
+}
+
+/// Compares the transcripts and prints the report. Returns the number of
+/// differing steps.
+fn report(label: &str, expected: &Transcript, actual: &Transcript) -> usize {
+    println!("== {label}");
+    let mut failures = 0;
+    for ((name, e), (name2, a)) in expected.iter().zip(actual) {
+        assert_eq!(name, name2);
+        match first_difference(e, a, "") {
+            None => println!("  PARITY  {name}"),
+            Some(d) => {
+                failures += 1;
+                println!("  DIFF    {name}\n          {d}");
+            }
+        }
+    }
+    println!("  {} of {} steps at parity", expected.len() - failures, expected.len());
+    failures
+}
+
+fn dartr_bin() -> &'static str {
+    env!("CARGO_BIN_EXE_dartr")
+}
+
+fn session_args() -> Vec<&'static str> {
+    vec!["--client-id=VS-Code", "--client-version=3.144.0"]
+}
+
+#[test]
+fn lsp_session_parity_with_dart_language_server() {
+    if !dart_available() {
+        eprintln!("skipped: `dart` is not on PATH");
+        return;
+    }
+    let root = fixtures().join("lsp_project");
+    let mut dart_args = vec!["language-server", "--protocol=lsp"];
+    dart_args.extend(session_args());
+    let (dart, dart_code) = run_session(LspClient::spawn("dart", &dart_args, &[]), &root);
+    let mut dartr_args = vec!["language-server", "--protocol=lsp"];
+    dartr_args.extend(session_args());
+    let (dartr, dartr_code) = run_session(LspClient::spawn(dartr_bin(), &dartr_args, &[]), &root);
+    assert_eq!(dart_code, 0);
+    assert_eq!(dartr_code, 0);
+    let failures = report("dart language-server vs dartr language-server", &dart, &dartr);
+    if std::env::var_os("DARTR_LSP_TRANSCRIPTS").is_some() {
+        let dir = std::path::PathBuf::from(std::env::var_os("DARTR_LSP_TRANSCRIPTS").unwrap());
+        for (name, t) in [("dart", &dart), ("dartr", &dartr)] {
+            let path = dir.join(format!("lsp_transcript_{name}.json"));
+            std::fs::write(&path, serde_json::to_string_pretty(&json!(t)).unwrap()).unwrap();
+            println!("transcript: {}", path.display());
+        }
+    }
+    assert_eq!(failures, 0, "LSP session differs from dart language-server");
+}
+
+#[test]
+fn lsp_session_through_dart_shim() {
+    if !dart_available() {
+        eprintln!("skipped: `dart` is not on PATH");
+        return;
+    }
+    let root = fixtures().join("lsp_project");
+    let shim = repo_root().join("tools/shim/dartr_shim.dart");
+    let shim = shim.to_str().unwrap();
+    // Dart-Code: `dart <analyzerPath> --lsp --client-id=... --client-version=...`.
+    let mut shim_args = vec![shim, "--lsp"];
+    shim_args.extend(session_args());
+    let (via_shim, shim_code) = run_session(
+        LspClient::spawn("dart", &shim_args, &[("DARTR_BIN", dartr_bin())]),
+        &root,
+    );
+    let mut direct_args = vec!["language-server", "--lsp"];
+    direct_args.extend(session_args());
+    let (direct, direct_code) =
+        run_session(LspClient::spawn(dartr_bin(), &direct_args, &[]), &root);
+    assert_eq!(shim_code, direct_code);
+    let failures = report("dartr language-server vs dart dartr_shim.dart --lsp", &direct, &via_shim);
+    assert_eq!(failures, 0);
+
+    // Exit codes are forwarded: `exit` without `shutdown` is 1.
+    let mut c = LspClient::spawn("dart", &shim_args, &[("DARTR_BIN", dartr_bin())]);
+    c.request("initialize", dart_code_initialize_params(&root));
+    c.notify("exit", Value::Null);
+    assert_eq!(c.close(), 1);
+    // A usage error is 64, with the message on stderr.
+    let out = std::process::Command::new("dart")
+        .args([shim, "--no-such-option"])
+        .env("DARTR_BIN", dartr_bin())
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(64));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("Could not find an option named"));
+}
