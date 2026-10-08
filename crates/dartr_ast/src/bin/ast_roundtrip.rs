@@ -14,8 +14,8 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
+use dartr_ast::testing;
 use rayon::prelude::*;
-use serde_json::Value;
 use serde_json::value::RawValue;
 
 #[derive(serde::Deserialize)]
@@ -34,29 +34,11 @@ struct SourceLine {
 enum Outcome {
     Skipped,
     LoadError(String),
-    Result { dump_ok: bool, dump_diff: String, source: Option<(bool, String)> },
-}
-
-fn read_source(path: &str) -> Option<String> {
-    let bytes = std::fs::read(path).ok()?;
-    let text = String::from_utf8(bytes).ok()?;
-    Some(dartr_syntax::strip_bom(&text).to_string())
-}
-
-fn first_diff(a: &str, b: &str) -> String {
-    let i = a.bytes().zip(b.bytes()).take_while(|(x, y)| x == y).count();
-    let ctx = |s: &str| {
-        let mut lo = i.saturating_sub(150);
-        while !s.is_char_boundary(lo) {
-            lo -= 1;
-        }
-        let mut hi = (i + 150).min(s.len());
-        while !s.is_char_boundary(hi) {
-            hi += 1;
-        }
-        s[lo..hi].to_string()
-    };
-    format!("at byte {i}\n  oracle: {}\n  dartr:  {}", ctx(a), ctx(b))
+    Result {
+        dump_ok: bool,
+        dump_diff: String,
+        source: Option<(bool, String)>,
+    },
 }
 
 fn run_one(line: &str, sources: &HashMap<String, String>) -> (String, Outcome) {
@@ -70,25 +52,22 @@ fn run_one(line: &str, sources: &HashMap<String, String>) -> (String, Outcome) {
     let Some(raw) = parsed.ast else {
         return (path, Outcome::Skipped);
     };
-    let Some(source) = read_source(&path) else {
+    let Some(source) = testing::read_source(&path) else {
         return (path, Outcome::Skipped);
     };
-    let mut de = serde_json::Deserializer::from_str(raw.get());
-    de.disable_recursion_limit();
-    let value: Value = serde::Deserialize::deserialize(&mut de).unwrap();
-    let loaded = match dartr_ast::testing::load(&value, &source) {
-        Ok(l) => l,
-        Err(e) => return (path, Outcome::LoadError(e)),
-    };
-    let dump = dartr_ast::dump::node_json(&loaded.ast, loaded.unit);
-    let dump_ok = dump == raw.get();
-    let dump_diff = if dump_ok { String::new() } else { first_diff(raw.get(), &dump) };
-    let source = sources.get(&path).map(|expected| {
-        let actual = dartr_ast::to_source::to_source(&loaded.ast, loaded.unit);
-        let ok = &actual == expected;
-        (ok, if ok { String::new() } else { first_diff(expected, &actual) })
-    });
-    (path, Outcome::Result { dump_ok, dump_diff, source })
+    let expected = sources.get(&path).map(String::as_str);
+    match testing::check(raw.get(), &source, expected) {
+        Err(e) => (path, Outcome::LoadError(e)),
+        Ok(c) => (
+            path,
+            Outcome::Result {
+                dump_ok: c.dump_diff.is_none(),
+                dump_diff: c.dump_diff.unwrap_or_default(),
+                source: expected
+                    .map(|_| (c.source_diff.is_none(), c.source_diff.unwrap_or_default())),
+            },
+        ),
+    }
 }
 
 fn main() {
@@ -109,14 +88,18 @@ fn main() {
         eprintln!("usage: ast_roundtrip <ast.jsonl> [<tosource.jsonl>] [--failures <dir>]");
         std::process::exit(64);
     }
-    let lines: Vec<String> = BufReader::new(std::fs::File::open(&positional[0]).expect("ast.jsonl"))
-        .lines()
-        .map_while(Result::ok)
-        .filter(|l| !l.is_empty())
-        .collect();
+    let lines: Vec<String> =
+        BufReader::new(std::fs::File::open(&positional[0]).expect("ast.jsonl"))
+            .lines()
+            .map_while(Result::ok)
+            .filter(|l| !l.is_empty())
+            .collect();
     let mut sources = HashMap::new();
     if let Some(p) = positional.get(1) {
-        for l in BufReader::new(std::fs::File::open(p).expect("tosource.jsonl")).lines().map_while(Result::ok) {
+        for l in BufReader::new(std::fs::File::open(p).expect("tosource.jsonl"))
+            .lines()
+            .map_while(Result::ok)
+        {
             if let Ok(s) = serde_json::from_str::<SourceLine>(&l) {
                 if let Some(src) = s.source {
                     sources.insert(s.path, src);
@@ -124,11 +107,15 @@ fn main() {
             }
         }
     }
-    let pool = rayon::ThreadPoolBuilder::new().stack_size(256 << 20).build().unwrap();
+    let pool = rayon::ThreadPoolBuilder::new()
+        .stack_size(256 << 20)
+        .build()
+        .unwrap();
     let results: Vec<(String, Outcome)> =
         pool.install(|| lines.par_iter().map(|l| run_one(l, &sources)).collect());
 
-    let (mut files, mut skipped, mut load_errors, mut dump_ok, mut src_total, mut src_ok) = (0, 0, 0, 0, 0, 0);
+    let (mut files, mut skipped, mut load_errors, mut dump_ok, mut src_total, mut src_ok) =
+        (0, 0, 0, 0, 0, 0);
     let mut report = String::new();
     let mut shown = 0;
     for (path, outcome) in &results {
@@ -142,7 +129,11 @@ fn main() {
                     report.push_str(&format!("LOAD {path}\n  {e}\n"));
                 }
             }
-            Outcome::Result { dump_ok: ok, dump_diff, source } => {
+            Outcome::Result {
+                dump_ok: ok,
+                dump_diff,
+                source,
+            } => {
                 if *ok {
                     dump_ok += 1;
                 } else if shown < 30 {
@@ -163,7 +154,11 @@ fn main() {
         if let Some(dir) = &failures_dir {
             let bad = match outcome {
                 Outcome::LoadError(e) => Some(e.clone()),
-                Outcome::Result { dump_ok, dump_diff, source } => {
+                Outcome::Result {
+                    dump_ok,
+                    dump_diff,
+                    source,
+                } => {
                     let mut s = String::new();
                     if !dump_ok {
                         s.push_str(dump_diff);
@@ -185,11 +180,23 @@ fn main() {
     }
     print!("{report}");
     let checked = files - skipped;
-    let pct = |a: usize, b: usize| if b == 0 { 100.0 } else { a as f64 * 100.0 / b as f64 };
+    let pct = |a: usize, b: usize| {
+        if b == 0 {
+            100.0
+        } else {
+            a as f64 * 100.0 / b as f64
+        }
+    };
     println!("files:        {files} ({skipped} without AST or source)");
     println!("load errors:  {load_errors}");
-    println!("ast dump:     {dump_ok}/{checked} identical ({:.2}%)", pct(dump_ok, checked));
+    println!(
+        "ast dump:     {dump_ok}/{checked} identical ({:.2}%)",
+        pct(dump_ok, checked)
+    );
     if src_total > 0 || positional.len() > 1 {
-        println!("to_source:    {src_ok}/{src_total} identical ({:.2}%)", pct(src_ok, src_total));
+        println!(
+            "to_source:    {src_ok}/{src_total} identical ({:.2}%)",
+            pct(src_ok, src_total)
+        );
     }
 }

@@ -15,7 +15,12 @@ pub fn dart_sort<E: Copy>(a: &mut [E], mut compare: impl FnMut(&E, &E) -> i64) {
 
 const INSERTION_SORT_THRESHOLD: isize = 32;
 
-fn do_sort<E: Copy>(a: &mut [E], left: isize, right: isize, compare: &mut impl FnMut(&E, &E) -> i64) {
+fn do_sort<E: Copy>(
+    a: &mut [E],
+    left: isize,
+    right: isize,
+    compare: &mut impl FnMut(&E, &E) -> i64,
+) {
     if right - left <= INSERTION_SORT_THRESHOLD {
         insertion_sort(a, left, right, compare);
     } else {
@@ -23,7 +28,12 @@ fn do_sort<E: Copy>(a: &mut [E], left: isize, right: isize, compare: &mut impl F
     }
 }
 
-fn insertion_sort<E: Copy>(a: &mut [E], left: isize, right: isize, compare: &mut impl FnMut(&E, &E) -> i64) {
+fn insertion_sort<E: Copy>(
+    a: &mut [E],
+    left: isize,
+    right: isize,
+    compare: &mut impl FnMut(&E, &E) -> i64,
+) {
     let mut i = left + 1;
     while i <= right {
         let el = a[i as usize];

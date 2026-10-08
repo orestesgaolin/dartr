@@ -80,8 +80,16 @@ impl Comment {
 
     /// Dart `CommentImpl._childEntities`: references, then tokens.
     pub(crate) fn child_entities_unsorted(&self, ast: &Ast, out: &mut Vec<Entity>) {
-        out.extend(ast.list_raw(self.references).iter().map(|&n| Entity::Node(n)));
-        out.extend(ast.token_list(self.tokens).iter().map(|&t| Entity::Token(t)));
+        out.extend(
+            ast.list_raw(self.references)
+                .iter()
+                .map(|&n| Entity::Node(n)),
+        );
+        out.extend(
+            ast.token_list(self.tokens)
+                .iter()
+                .map(|&t| Entity::Token(t)),
+        );
     }
 }
 
@@ -101,8 +109,16 @@ impl CompilationUnit {
         if let Some(s) = self.script_tag {
             out.push(Entity::Node(s.raw()));
         }
-        out.extend(ast.list_raw(self.directives).iter().map(|&n| Entity::Node(n)));
-        out.extend(ast.list_raw(self.declarations).iter().map(|&n| Entity::Node(n)));
+        out.extend(
+            ast.list_raw(self.directives)
+                .iter()
+                .map(|&n| Entity::Node(n)),
+        );
+        out.extend(
+            ast.list_raw(self.declarations)
+                .iter()
+                .map(|&n| Entity::Node(n)),
+        );
     }
 }
 

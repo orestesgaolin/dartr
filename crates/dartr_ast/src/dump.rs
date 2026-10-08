@@ -56,7 +56,12 @@ pub fn write_token_json(out: &mut String, ast: &Ast, id: TokenId) {
 pub fn write_node_json(out: &mut String, ast: &Ast, id: NodeId) {
     out.push_str("{\"t\":\"");
     out.push_str(ast.kind(id).name());
-    let _ = write!(out, "\",\"o\":{},\"e\":{},\"c\":[", ast.offset(id), ast.end(id));
+    let _ = write!(
+        out,
+        "\",\"o\":{},\"e\":{},\"c\":[",
+        ast.offset(id),
+        ast.end(id)
+    );
     for (i, e) in ast.child_entities(id).into_iter().enumerate() {
         if i > 0 {
             out.push(',');

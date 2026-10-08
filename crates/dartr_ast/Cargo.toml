@@ -17,3 +17,11 @@ rayon = { workspace = true, optional = true }
 [[bin]]
 name = "ast_roundtrip"
 required-features = ["testing"]
+
+[[test]]
+name = "roundtrip"
+required-features = ["testing"]
+
+[dev-dependencies]
+dartr_difftest = { path = "../dartr_difftest" }
+serde_json.workspace = true

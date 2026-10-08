@@ -2,7 +2,32 @@
 
 //! The node arena of one compilation unit.
 //!
-//! See the crate documentation for the design.
+//! # Design
+//!
+//! - One [`Ast`] per compilation unit owns the token arena
+//!   ([`dartr_syntax::Tokens`]) and all nodes. A node is referenced by a
+//!   [`NodeId`] (a `u32`, dense, in creation order) or a typed [`Id<T>`]
+//!   (same layout). `T` is a node struct (`Id<MethodInvocation>`) or a node
+//!   category (`Id<Expression>`): an empty enum per abstract Dart interface.
+//!   [`Id::upcast`] is checked at compile time (`T: SubtypeOf<U>`, from the
+//!   Dart supertypes), [`Ast::cast`] at run time (Dart `is` / `as`).
+//! - Nodes are stored per kind (`Vec<MethodInvocation>`, ...); the arena
+//!   keeps the kind, the index in that vector, and the parent of each node.
+//!   `ast[id]` gives the node struct. Node fields are the Dart properties in
+//!   `childEntities` order: `TokenId` / `Option<TokenId>`, `Id<T>` /
+//!   `Option<Id<T>>`, [`NodeList<T>`] (a range in a shared pool) and
+//!   [`TokenList`].
+//! - The AST builder creates nodes bottom-up with [`Ast::add`], which sets
+//!   the parent of the children (Dart `_becomeParentOf`).
+//! - The resolver keeps static types, elements and other resolution data in
+//!   side tables indexed by [`NodeId`] ([`NodeMap`], or its own `Vec`s), so
+//!   the node structs stay syntax only and the AST can be shared read-only.
+//! - Rewrites (Dart `AstRewriter`, `replaceChild`): make the new node with
+//!   [`Ast::add`] (it adopts the children of the old node), then
+//!   [`Ast::replace_with`] / [`Ast::replace_child`] puts it in the slot of
+//!   the old node, with a run-time check of the slot type like the Dart
+//!   cast. [`crate::AstVisitorMut`] reads the children before it visits them,
+//!   so a visitor can replace the node it visits.
 
 use std::fmt;
 use std::marker::PhantomData;
@@ -380,7 +405,10 @@ impl Ast {
     }
 
     /// Dart `thisOrAncestorOfType<T>()`.
-    pub fn this_or_ancestor_of_type<T: ?Sized + NodeType>(&self, id: impl Into<NodeId>) -> Option<Id<T>> {
+    pub fn this_or_ancestor_of_type<T: ?Sized + NodeType>(
+        &self,
+        id: impl Into<NodeId>,
+    ) -> Option<Id<T>> {
         let mut node = Some(id.into());
         while let Some(n) = node {
             if let Some(t) = self.cast::<T>(n) {
@@ -494,21 +522,34 @@ impl Ast {
 
     /// Dart `AstNode.visitChildren` for an [`crate::AstVisitorMut`]: the
     /// children are read first, then visited.
-    pub fn visit_children_mut<V: crate::AstVisitorMut>(&mut self, id: impl Into<NodeId>, v: &mut V) {
+    pub fn visit_children_mut<V: crate::AstVisitorMut>(
+        &mut self,
+        id: impl Into<NodeId>,
+        v: &mut V,
+    ) {
         for c in self.children(id) {
             self.accept_mut(c, v);
         }
     }
 
     /// Dart `AstNode.visitChildren` for a [`crate::GeneralizingAstVisitor`].
-    pub fn visit_children_generalizing<V: crate::GeneralizingAstVisitor>(&self, id: impl Into<NodeId>, v: &mut V) {
+    pub fn visit_children_generalizing<V: crate::GeneralizingAstVisitor>(
+        &self,
+        id: impl Into<NodeId>,
+        v: &mut V,
+    ) {
         self.for_each_child(id, &mut |c| self.accept_generalizing(c, v));
     }
 
     /// Dart `AstNode.replaceChild`: replaces [old], a child of [parent], with
     /// [new] and makes [parent] the parent of [new]. Panics like Dart (an
     /// `ArgumentError`, or a failed cast if [new] does not fit the slot).
-    pub fn replace_child(&mut self, parent: impl Into<NodeId>, old: impl Into<NodeId>, new: impl Into<NodeId>) {
+    pub fn replace_child(
+        &mut self,
+        parent: impl Into<NodeId>,
+        old: impl Into<NodeId>,
+        new: impl Into<NodeId>,
+    ) {
         let (parent, old, new) = (parent.into(), old.into(), new.into());
         if old == new {
             return;
@@ -534,7 +575,11 @@ impl Ast {
 
     /// Dart `AstNode.removeChild`: clears the nullable slot of [parent] that
     /// holds [old]. Errors like Dart for required slots and list elements.
-    pub fn remove_child(&mut self, parent: impl Into<NodeId>, old: impl Into<NodeId>) -> Result<(), String> {
+    pub fn remove_child(
+        &mut self,
+        parent: impl Into<NodeId>,
+        old: impl Into<NodeId>,
+    ) -> Result<(), String> {
         self.remove_child_raw(parent.into(), old.into())
     }
 
@@ -549,7 +594,13 @@ impl Ast {
 
     /// Replaces element [index] of [list], owned by [owner] (Dart
     /// `NodeList.operator []=`).
-    pub fn list_set<T: ?Sized>(&mut self, owner: impl Into<NodeId>, list: NodeList<T>, index: usize, new: Id<T>) {
+    pub fn list_set<T: ?Sized>(
+        &mut self,
+        owner: impl Into<NodeId>,
+        list: NodeList<T>,
+        index: usize,
+        new: Id<T>,
+    ) {
         list.slots_mut(&mut self.lists)[index] = new.raw();
         self.parents[new.raw().index()] = Some(owner.into());
     }
@@ -563,7 +614,10 @@ impl Ast {
     ) -> Option<TokenId> {
         crate::token::lexically_first(
             &self.tokens,
-            &[comment.map(|c| self.begin_token(c)), self.list_begin_token(metadata)],
+            &[
+                comment.map(|c| self.begin_token(c)),
+                self.list_begin_token(metadata),
+            ],
         )
     }
 
@@ -587,8 +641,14 @@ impl Ast {
                 f(a);
             }
         } else {
-            let mut sorted: Vec<NodeId> = comment.map(|c| c.raw()).into_iter().chain(items.iter().copied()).collect();
-            crate::sort::dart_sort(&mut sorted, |a, b| self.offset(*a) as i64 - self.offset(*b) as i64);
+            let mut sorted: Vec<NodeId> = comment
+                .map(|c| c.raw())
+                .into_iter()
+                .chain(items.iter().copied())
+                .collect();
+            crate::sort::dart_sort(&mut sorted, |a, b| {
+                self.offset(*a) as i64 - self.offset(*b) as i64
+            });
             for n in sorted {
                 f(n);
             }
@@ -615,7 +675,9 @@ impl Ast {
             }
         } else {
             let mut sorted: Vec<NodeId> = d.iter().chain(m).copied().collect();
-            crate::sort::dart_sort(&mut sorted, |a, b| self.offset(*a) as i64 - self.offset(*b) as i64);
+            crate::sort::dart_sort(&mut sorted, |a, b| {
+                self.offset(*a) as i64 - self.offset(*b) as i64
+            });
             for n in sorted {
                 f(n);
             }
