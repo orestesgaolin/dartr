@@ -13,6 +13,7 @@ dartr_ast_builder.workspace = true
 dartr_diagnostics.workspace = true
 dartr_project.workspace = true
 rayon.workspace = true
+libc = "0.2.190"
 
 [dev-dependencies]
 serde_json.workspace = true

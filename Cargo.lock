@@ -276,6 +276,7 @@ dependencies = [
  "dartr_parser",
  "dartr_project",
  "dartr_syntax",
+ "libc",
  "pretty_assertions",
  "rayon",
  "serde_json",

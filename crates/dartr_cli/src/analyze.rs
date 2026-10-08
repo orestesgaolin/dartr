@@ -48,22 +48,27 @@ impl Terminal {
         columns: None,
     };
 
-    /// Detects the terminal of the process stdout. The width comes from
-    /// `$COLUMNS` (80 if unset).
+    /// Detects the terminal of the process stdout. The width is the
+    /// window size of the terminal (`stdout.terminalColumns`); no wrapping
+    /// if the terminal reports a width of 0.
     pub fn detect() -> Terminal {
         if !std::io::stdout().is_terminal() {
             return Terminal::NONE;
         }
         let ansi = std::env::var("TERM").map_or(true, |t| t != "dumb");
-        let columns = std::env::var("COLUMNS")
-            .ok()
-            .and_then(|c| c.parse().ok())
-            .unwrap_or(80);
         Terminal {
             ansi,
-            columns: Some(columns),
+            columns: terminal_columns().filter(|&c| c > 0),
         }
     }
+}
+
+/// The number of columns of the terminal of stdout (`TIOCGWINSZ`).
+fn terminal_columns() -> Option<usize> {
+    let mut size: libc::winsize = unsafe { std::mem::zeroed() };
+    // SAFETY: `ioctl(TIOCGWINSZ)` writes a `winsize` into `size`.
+    let result = unsafe { libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut size) };
+    (result == 0).then_some(size.ws_col as usize)
 }
 
 /// A file system entity named on the command line.
@@ -260,8 +265,21 @@ fn run_parsed(
             enabled_experiments: enabled_experiments.clone(),
         },
     );
+    let t_contexts = start.elapsed();
     let files = analyzed_dart_files(&collection);
+    let t_files = start.elapsed();
     let results = provider.diagnostics_for_files(&collection, &files);
+    let t_diagnostics = start.elapsed();
+    if std::env::var_os("DARTR_TIMINGS").is_some() {
+        let _ = writeln!(
+            stderr,
+            "[timings] contexts {:?}, file list {:?} ({} files), diagnostics {:?}",
+            t_contexts,
+            t_files - t_contexts,
+            files.len(),
+            t_diagnostics - t_files
+        );
+    }
 
     let memory = if print_memory { memory_kb() } else { None };
 
