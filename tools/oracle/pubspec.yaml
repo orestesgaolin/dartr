@@ -6,6 +6,7 @@ dependencies:
   analyzer: any
   _fe_analyzer_shared: any
   linter: any
+  path: any
 dependency_overrides:
   analyzer:
     path: ../../third_party/dart-sdk/pkg/analyzer

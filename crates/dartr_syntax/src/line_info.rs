@@ -4,7 +4,7 @@
 //! (Dart `LineInfo`, `CharacterLocation`). Offsets are UTF-16 code units,
 //! like token offsets.
 
-use std::cell::Cell;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::fmt;
 
 /// A location in a file: one-based line and column numbers (Dart
@@ -22,14 +22,24 @@ impl fmt::Display for CharacterLocation {
 }
 
 /// The offsets of the line starts of a file (Dart `LineInfo`).
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct LineInfo {
     /// The offset of the first character of each line (the first entry is
     /// 0).
     pub line_starts: Vec<u32>,
     /// Dart `_previousLine`: the index of the line found by the last
-    /// [`LineInfo::get_location`].
-    previous_line: Cell<usize>,
+    /// [`LineInfo::get_location`]. Atomic (relaxed) so that a `LineInfo`
+    /// can be shared between threads; it is only a search hint.
+    previous_line: AtomicUsize,
+}
+
+impl Clone for LineInfo {
+    fn clone(&self) -> Self {
+        LineInfo {
+            line_starts: self.line_starts.clone(),
+            previous_line: AtomicUsize::new(self.previous_line.load(Ordering::Relaxed)),
+        }
+    }
 }
 
 impl PartialEq for LineInfo {
@@ -47,7 +57,7 @@ impl LineInfo {
         assert!(!line_starts.is_empty(), "lineStarts must be non-empty");
         LineInfo {
             line_starts,
-            previous_line: Cell::new(0),
+            previous_line: AtomicUsize::new(0),
         }
     }
 
@@ -87,7 +97,7 @@ impl LineInfo {
         let starts = &self.line_starts;
         let mut min = 0usize;
         let mut max = starts.len() - 1;
-        let previous = self.previous_line.get();
+        let previous = self.previous_line.load(Ordering::Relaxed);
         if offset >= starts[previous] {
             min = previous;
             if min == starts.len() - 1 || offset < starts[min + 1] {
@@ -105,7 +115,7 @@ impl LineInfo {
                 min = midpoint;
             }
         }
-        self.previous_line.set(min);
+        self.previous_line.store(min, Ordering::Relaxed);
         CharacterLocation {
             line_number: min as u32 + 1,
             column_number: offset - starts[min] + 1,

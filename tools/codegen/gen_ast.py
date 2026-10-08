@@ -7,7 +7,7 @@ and `GeneralizingAstVisitor` of `lib/dart/ast/visitor.g.dart`) with
 
     (cd tools/oracle && dart run bin/ast_schema.dart > ../../crates/dartr_ast/schema/ast.json)
 
-Output: crates/dartr_ast/src/generated/{nodes,children,visitor}.rs. Run from
+Output: crates/dartr_ast/src/generated/{nodes,children,visitor,copy}.rs. Run from
 the repository root:
 
     python3 tools/codegen/gen_ast.py
@@ -792,6 +792,58 @@ pub trait GeneralizingAstVisitor: Sized {
     return ''.join(out)
 
 
+def gen_copy(schema, nodes, interfaces):
+    """Deep copy of a subtree into another `Ast` (driver: src/copy.rs)."""
+    out = [HEADER]
+    out.append('''// Dart source: pkg/analyzer/lib/src/summary2/detach_nodes.dart (copy instead of detach)
+
+//! Per-kind code of [`crate::copy::AstCopier`]: each function clones the
+//! node struct, maps every token through the token map, copies every child
+//! node and node list, keeps the other fields (literal values, ...) as
+//! cloned, and adds the new node to the destination `Ast` (which sets the
+//! parents of the children).
+
+#![allow(clippy::all)]
+
+use crate::arena::NodeId;
+use crate::copy::AstCopier;
+use crate::generated::nodes::*;
+
+/// Copies node [id] of the source `Ast` of [c] and its subtree into the
+/// destination `Ast`. Returns the new node (without a parent).
+pub(crate) fn copy_node(c: &mut AstCopier<'_>, id: NodeId) -> NodeId {
+    let slot = c.src.slot(id);
+    match c.src.kind(id) {
+''')
+    for n in nodes:
+        out.append('        NodeKind::%s => copy_%s(c, slot),\n' % (n['name'], snake(n['name'])))
+    out.append('    }\n}\n')
+    for n in nodes:
+        s = snake(n['name'])
+        out.append("\n#[inline(never)]\nfn copy_%s(c: &mut AstCopier<'_>, slot: usize) -> NodeId {\n" % s)
+        mut = any(p['kind'] != 'other' for p in all_props(n))
+        out.append('    let %snode = c.src.stores.%s[slot].clone();\n' % ('mut ' if mut else '', s))
+        for p in all_props(n):
+            name = field(p['name'])
+            k = p['kind']
+            if k == 'token':
+                if p['nullable']:
+                    out.append('    node.%s = node.%s.map(|t| c.token(t));\n' % (name, name))
+                else:
+                    out.append('    node.%s = c.token(node.%s);\n' % (name, name))
+            elif k == 'token_list':
+                out.append('    node.%s = c.token_list(node.%s);\n' % (name, name))
+            elif k == 'node':
+                if p['nullable']:
+                    out.append('    node.%s = node.%s.map(|n| c.node(n));\n' % (name, name))
+                else:
+                    out.append('    node.%s = c.node(node.%s);\n' % (name, name))
+            elif k == 'node_list':
+                out.append('    node.%s = c.list(node.%s);\n' % (name, name))
+        out.append('    c.dst.add(node).raw()\n}\n')
+    return ''.join(out)
+
+
 def write(name, text):
     path = os.path.join(OUT, name)
     with open(path, 'w') as f:
@@ -805,8 +857,9 @@ def main():
     write('nodes.rs', gen_nodes(schema, nodes, interfaces))
     write('children.rs', gen_children(schema, nodes, interfaces))
     write('visitor.rs', gen_visitor(schema, nodes, interfaces))
+    write('copy.rs', gen_copy(schema, nodes, interfaces))
     with open(os.path.join(OUT, 'mod.rs'), 'w') as f:
-        f.write(HEADER + '\npub mod children;\npub mod nodes;\npub mod visitor;\n')
+        f.write(HEADER + '\npub mod children;\npub mod copy;\npub mod nodes;\npub mod visitor;\n')
     print('%d node kinds' % len(nodes))
 
 

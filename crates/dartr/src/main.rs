@@ -1,6 +1,7 @@
 //! `dartr`: Dart static analyzer written in Rust.
 
 mod dump;
+mod elements;
 mod json;
 
 use std::path::PathBuf;
