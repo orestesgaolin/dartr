@@ -236,6 +236,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dartr_constant"
+version = "0.1.0"
+dependencies = [
+ "dartr_diagnostics",
+ "dartr_element",
+ "indexmap",
+ "serde_json",
+]
+
+[[package]]
 name = "dartr_diagnostics"
 version = "0.1.0"
 dependencies = [
