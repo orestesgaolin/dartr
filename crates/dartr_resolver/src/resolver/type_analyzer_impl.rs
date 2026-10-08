@@ -75,6 +75,7 @@ impl<'a> TypeAnalysisNullShortingInterface for ResolverVisitor<'a> {
             dartr_flow::flow_analysis::FlowAnalysisNullShortingInterface::null_aware_access_end(
                 self.flow(),
             );
+            #[allow(clippy::let_unit_value)] // Dart: the guard is `Null`.
             let guard = self.guards.pop().expect("null shorting guard");
             inner_result = self.handle_null_shorting_step(inner_result, guard, inferred_type);
             if self.guards.len() <= target_depth {

@@ -48,6 +48,7 @@ pub fn visit_conditional_expression(
     let s = ts.greatest_closure_of_schema(context_type);
     // Dart `_resolver.definingLibrary.featureSet`: the library features are
     // the features of its defining unit.
+    #[allow(clippy::if_same_then_else)] // Keeps the branches of the Dart code.
     let static_type = if !rv.is_enabled(ExperimentalFlag::InferenceUpdate3) {
         t
     } else if ts.is_subtype_of(t, s) {
@@ -108,6 +109,7 @@ pub fn visit_string_interpolation(rv: &mut ResolverVisitor<'_>, node: Id<StringI
     rv.record_static_type(node, t);
 }
 
+#[allow(clippy::unnecessary_unwrap)] // Keeps the condition of the Dart code.
 pub fn visit_super_expression(rv: &mut ResolverVisitor<'_>, node: Id<SuperExpression>) {
     let this_type = rv.this_type();
     let info = rv

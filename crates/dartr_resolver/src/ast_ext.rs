@@ -389,3 +389,26 @@ pub fn in_constant_context(ast: &Ast, node: NodeId) -> bool {
     }
     false
 }
+
+/// Dart `DartPatternImpl.patternContext`: the declaration, assignment or
+/// guarded pattern that contains the pattern [node].
+pub fn pattern_context(ast: &Ast, node: NodeId) -> Option<NodeId> {
+    let mut current = node;
+    loop {
+        let mut parent = ast.parent(current)?;
+        if matches!(
+            ast.kind(parent),
+            NodeKind::MapPatternEntry | NodeKind::PatternField | NodeKind::RestPatternElement
+        ) {
+            parent = ast.parent(parent)?;
+        }
+        match ast.kind(parent) {
+            NodeKind::ForEachPartsWithPattern
+            | NodeKind::PatternVariableDeclaration
+            | NodeKind::PatternAssignment
+            | NodeKind::GuardedPattern => return Some(parent),
+            k if dartr_ast::DartPattern::test(k) => current = parent,
+            _ => return None,
+        }
+    }
+}

@@ -1474,10 +1474,9 @@ pub fn primary_constructor_body_declaration(
         ast[c].name_part.raw()
     } else if let Some(e) = ast.cast::<EnumDeclaration>(grand_parent) {
         ast[e].name_part.raw()
-    } else if let Some(e) = ast.cast::<ExtensionTypeDeclaration>(grand_parent) {
-        ast[e].name_part.raw()
     } else {
-        return None;
+        let e = ast.cast::<ExtensionTypeDeclaration>(grand_parent)?;
+        ast[e].name_part.raw()
     };
     ast.cast::<PrimaryConstructorDeclaration>(name_part)
 }
