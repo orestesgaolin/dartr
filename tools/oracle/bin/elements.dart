@@ -28,7 +28,8 @@
 // `"inf"` marks inferred types: for a variable `hasImplicitType`; for an
 // executable `hasImplicitReturnType` or a formal parameter with
 // `hasImplicitType`; for a getter or setter with `isOriginVariable` (induced
-// by a variable) the `hasImplicitType` of that variable.
+// by a variable) the `hasImplicitType` of that variable; for the `value`
+// parameter of such a setter also the `hasImplicitType` of the variable.
 import 'dart:convert';
 import 'dart:io';
 
@@ -42,6 +43,7 @@ import 'package:analyzer/file_system/physical_file_system.dart';
 import 'package:analyzer/src/dart/element/element.dart';
 // ignore: implementation_imports
 import 'package:analyzer/src/error/inference_error.dart';
+import 'package:path/path.dart' as path;
 
 /// The fixed flag list: `(getter, flag name)`. For each entry, when the
 /// element has the getter (checked by element type in [_flagValue]) and it
@@ -189,7 +191,13 @@ List<String> flagsOf(Element e) => [
 
 Future<void> dumpElements(List<String> inputs) async {
   var sdkPath = oracleSdkPath();
-  var paths = inputs.where((p) => !p.startsWith('dart:')).toList();
+  // `AnalysisContextCollection` throws for a path that is not absolute and
+  // normalized (for example `/a//b.dart`), which would end the whole run.
+  // Such a path is left out here; `contextFor` throws the same
+  // `ArgumentError` for it below, which gives a per-file error line.
+  var paths = inputs
+      .where((p) => !p.startsWith('dart:') && p == path.normalize(p))
+      .toList();
   var collection = AnalysisContextCollection(
     includedPaths: paths,
     resourceProvider: PhysicalResourceProvider.INSTANCE,
@@ -510,8 +518,19 @@ List<Object?> parametersJson(ExecutableElement e) => [
           ? 'requiredNamed'
           : 'optionalNamed',
       'type': typeStr(p.type),
-      'inf': p.hasImplicitType,
+      'inf': parameterInferred(e, p),
       'f': flagsOf(p),
       'default': p.defaultValueCode,
     },
 ];
+
+/// `"inf"` of a formal parameter: `hasImplicitType`; for the `value`
+/// parameter of a synthetic setter of a variable (`isOriginVariable`), the
+/// `hasImplicitType` of that variable (its type is the variable type, so it
+/// is inferred exactly when the variable type is).
+bool parameterInferred(ExecutableElement e, FormalParameterElement p) {
+  if (e is SetterElement && e.isOriginVariable) {
+    return e.variable.hasImplicitType;
+  }
+  return p.hasImplicitType;
+}
