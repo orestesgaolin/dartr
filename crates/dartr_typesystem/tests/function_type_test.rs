@@ -5,18 +5,13 @@
 //! Dart `expect(f1, f2)` / `equals` on types is Dart `==`, which is
 //! `TypeSystem::dart_eq` here. Dart `same` is `TypeId ==`.
 //!
-//! The `test_hash_*` tests check `FunctionTypeImpl.hashCode`. The Rust port
-//! has no Dart `hashCode`: types are hashed by their `TypeId` (identity), and
-//! no map is keyed by Dart `==`. The helpers below use the hash of the
-//! `TypeId`. "Sometimes differ" holds for it (different structures have
-//! different ids); "always equal" cannot hold, because the Dart hash ignores
-//! properties (positional parameter names and types, type formal names) that
-//! are part of the identity. These tests are `#[ignore]`d.
-
-use std::hash::{DefaultHasher, Hash, Hasher};
+//! The `test_hash_*` tests check `FunctionTypeImpl.hashCode`: ported as
+//! `dartr_typesystem::equality::dart_hash`, a hash consistent with Dart `==`
+//! that ignores the same properties as the Dart hash.
 
 use dartr_element::{FnParam, TypeId, TypeKind};
 use dartr_typesystem::TypeExt;
+use dartr_typesystem::equality::dart_hash;
 use dartr_typesystem::test_support::*;
 use dartr_typesystem::type_ext::{is_named, is_optional_positional, is_required_positional};
 use indexmap::IndexMap;
@@ -169,41 +164,39 @@ impl Default for Checks {
     }
 }
 
-/// The hash of a type in Rust: the hash of its `TypeId`.
-fn hash_code(t: TypeId) -> u64 {
-    let mut h = DefaultHasher::new();
-    t.hash(&mut h);
-    h.finish()
+/// Dart `hashCode`: [`dartr_typesystem::equality::dart_hash`].
+fn hash_code(f: &FunctionTypeTest, t: TypeId) -> u64 {
+    dart_hash(&f.t.ctx(), t)
+}
+
+/// Runs the generator of the Dart helpers for `i` in `0..10`. Dart calls it
+/// lazily; generating all types first lets the hash read the context after
+/// the generator (which may add classes) is done.
+fn generate_types<T>(generate: impl FnMut(i32) -> T) -> Vec<T> {
+    (0..10).map(generate).collect()
 }
 
 /// `_testHashesAlwaysEqual`.
-fn test_hashes_always_equal(mut generate: impl FnMut(i32) -> TypeId) {
-    let mut x = generate(0);
-    for i in 1..10 {
-        let y = generate(i);
-        assert_eq!(hash_code(x), hash_code(y));
-        x = y;
+fn check_hashes_always_equal(f: &FunctionTypeTest, types: &[TypeId]) {
+    for w in types.windows(2) {
+        assert_eq!(hash_code(f, w[0]), hash_code(f, w[1]));
     }
 }
 
 /// `_testHashesSometimesDiffer`.
-fn test_hashes_sometimes_differ(mut generate: impl FnMut(i32) -> TypeId) {
-    let mut x = generate(0);
-    for i in 1..10 {
-        let y = generate(i);
-        if hash_code(x) != hash_code(y) {
+fn check_hashes_sometimes_differ(f: &FunctionTypeTest, types: &[TypeId]) {
+    for w in types.windows(2) {
+        if hash_code(f, w[0]) != hash_code(f, w[1]) {
             return;
         }
-        x = y;
     }
     panic!("Hashes never differed");
 }
 
 /// `_testHashesSometimesDifferPairwise`.
-fn test_hashes_sometimes_differ_pairwise(mut generate: impl FnMut(i32) -> (TypeId, TypeId)) {
-    for i in 1..10 {
-        let (x, y) = generate(i);
-        if hash_code(x) != hash_code(y) {
+fn check_hashes_sometimes_differ_pairwise(f: &FunctionTypeTest, pairs: &[(TypeId, TypeId)]) {
+    for &(x, y) in &pairs[1..] {
+        if hash_code(f, x) != hash_code(f, y) {
             return;
         }
     }
@@ -304,123 +297,131 @@ fn equality_required_parameters_extra_right() {
 #[test]
 fn hash_named_parameter_optionality() {
     let f = FunctionTypeTest::new();
-    test_hashes_sometimes_differ_pairwise(|i| {
+    let types = generate_types(|i| {
         (
             f.parse_function_type(&format!("void Function({{int p{i}}})")),
             f.parse_function_type(&format!("void Function({{required int p{i}}})")),
         )
     });
+    check_hashes_sometimes_differ_pairwise(&f, &types);
 }
 
 #[test]
 fn hash_nullability_suffix() {
     let mut f = FunctionTypeTest::new();
-    test_hashes_sometimes_differ_pairwise(|i| {
+    let types = generate_types(|i| {
         f.class_type(&format!("C{i}"));
         (
             f.parse_function_type(&format!("void Function(C{i} x)")),
             f.parse_function_type(&format!("void Function(C{i} x)?")),
         )
     });
+    check_hashes_sometimes_differ_pairwise(&f, &types);
 }
 
 #[test]
 fn hash_optional_named_parameter_name() {
     let f = FunctionTypeTest::new();
-    test_hashes_sometimes_differ(|i| {
+    let types = generate_types(|i| {
         f.parse_function_type(&format!("void Function({{int p{i}}})"))
     });
+    check_hashes_sometimes_differ(&f, &types);
 }
 
 #[test]
 fn hash_optional_named_parameter_type() {
     let mut f = FunctionTypeTest::new();
-    test_hashes_sometimes_differ(|i| {
+    let types = generate_types(|i| {
         f.class_type(&format!("C{i}"));
         f.parse_function_type(&format!("void Function({{C{i} x}})"))
     });
+    check_hashes_sometimes_differ(&f, &types);
 }
 
 #[test]
-#[ignore = "Dart hashCode is not ported: Rust hashes types by TypeId, which includes positional parameter names"]
 fn hash_optional_positional_parameter_name() {
     let f = FunctionTypeTest::new();
     // Optional parameter names are irrelevant
-    test_hashes_always_equal(|i| f.parse_function_type(&format!("void Function([int p{i}])")));
+    let types = generate_types(|i| f.parse_function_type(&format!("void Function([int p{i}])")));
+    check_hashes_always_equal(&f, &types);
 }
 
 #[test]
-#[ignore = "Dart hashCode is not ported: Rust hashes types by TypeId, which includes positional parameter types"]
 fn hash_optional_positional_parameter_type() {
     let mut f = FunctionTypeTest::new();
-    test_hashes_always_equal(|i| {
+    let types = generate_types(|i| {
         f.class_type(&format!("C{i}"));
         f.parse_function_type(&format!("void Function([C{i} x])"))
     });
+    check_hashes_always_equal(&f, &types);
 }
 
 #[test]
 fn hash_positional_parameter_optionality() {
     let f = FunctionTypeTest::new();
-    test_hashes_sometimes_differ_pairwise(|i| {
+    let types = generate_types(|i| {
         (
             f.parse_function_type(&format!("void Function(int p{i})")),
             f.parse_function_type(&format!("void Function([int p{i}])")),
         )
     });
+    check_hashes_sometimes_differ_pairwise(&f, &types);
 }
 
 #[test]
 fn hash_required_named_parameter_name() {
     let f = FunctionTypeTest::new();
-    test_hashes_sometimes_differ(|i| {
+    let types = generate_types(|i| {
         f.parse_function_type(&format!("void Function({{required int p{i}}})"))
     });
+    check_hashes_sometimes_differ(&f, &types);
 }
 
 #[test]
 fn hash_required_named_parameter_type() {
     let mut f = FunctionTypeTest::new();
-    test_hashes_sometimes_differ(|i| {
+    let types = generate_types(|i| {
         f.class_type(&format!("C{i}"));
         f.parse_function_type(&format!("void Function({{required C{i} x}})"))
     });
+    check_hashes_sometimes_differ(&f, &types);
 }
 
 #[test]
-#[ignore = "Dart hashCode is not ported: Rust hashes types by TypeId, which includes positional parameter names"]
 fn hash_required_positional_parameter_name() {
     let f = FunctionTypeTest::new();
     // Required parameter names are irrelevant
-    test_hashes_always_equal(|i| f.parse_function_type(&format!("void Function(int p{i})")));
+    let types = generate_types(|i| f.parse_function_type(&format!("void Function(int p{i})")));
+    check_hashes_always_equal(&f, &types);
 }
 
 #[test]
-#[ignore = "Dart hashCode is not ported: Rust hashes types by TypeId, which includes positional parameter types"]
 fn hash_required_positional_parameter_type() {
     let mut f = FunctionTypeTest::new();
-    test_hashes_always_equal(|i| {
+    let types = generate_types(|i| {
         f.class_type(&format!("C{i}"));
         f.parse_function_type(&format!("void Function(C{i} x)"))
     });
+    check_hashes_always_equal(&f, &types);
 }
 
 #[test]
 fn hash_return_type() {
     let mut f = FunctionTypeTest::new();
-    test_hashes_sometimes_differ(|i| {
+    let types = generate_types(|i| {
         f.class_type(&format!("C{i}"));
         f.parse_function_type(&format!("C{i} Function()"))
     });
+    check_hashes_sometimes_differ(&f, &types);
 }
 
 #[test]
-#[ignore = "Dart hashCode is not ported: Rust hashes types by TypeId, which includes the type formal elements"]
 fn hash_type_formal_names() {
     let f = FunctionTypeTest::new();
-    test_hashes_always_equal(|i| {
+    let types = generate_types(|i| {
         f.parse_function_type(&format!("void Function<T{i}, U{i}>(T{i} x, T{i} y)"))
     });
+    check_hashes_always_equal(&f, &types);
 }
 
 #[test]
