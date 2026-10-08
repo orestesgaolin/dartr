@@ -1,0 +1,16 @@
+[package]
+name = "dartr_link"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The element linker (pkg/analyzer/lib/src/summary2)"
+
+[dependencies]
+dartr_ast.workspace = true
+dartr_ast_builder.workspace = true
+dartr_element.workspace = true
+dartr_syntax.workspace = true
+indexmap.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
