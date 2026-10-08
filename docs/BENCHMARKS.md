@@ -21,3 +21,19 @@ visible-app reports 20 issues (lint infos), no errors. Its nested packages outsi
 workspace are resolved by `bench/setup_corpus.sh`; without that, the clone reports 588
 URI_DOES_NOT_EXIST errors. Line counts: flutter, flutter_tools, analyzer count `lib/` only;
 visible-app counts all Dart files except `.dart_tool`.
+
+## `dartr analyze`, PARSE-ONLY pipeline (2026-10-09) — NOT comparable to the baseline
+
+`dartr analyze` with `ParseOnlyProvider` (crate `dartr_cli`): context discovery, file list,
+scan + parse + AST build of every analyzed `.dart` file in parallel (rayon), ignore comments,
+`errors:` processing and output. No element model, resolution, verifiers or lints, so these
+numbers are a lower bound for the I/O + parse part only. `hyperfine -N -w 2 -r 10`, release
+build, `--format=json`; load average ~21 during the runs (other agents). Phase split from
+`DARTR_TIMINGS=1` (single run).
+
+| corpus | analyzed files | mean | σ | contexts / file list / parse |
+|---|---|---|---|---|
+| flutter (packages/flutter) | 1,697 | 142.2 ms | 8.1 ms | 17 / 18 / 96 ms |
+| flutter_tools | 912 | 110.4 ms | 3.7 ms | 28 / 24 / 69 ms |
+| analyzer-9.0.0 (pub) | 1,660 | 87.5 ms | 2.0 ms | 11 / 8 / 76 ms |
+| visible-app @ 005d4cfad | 3,090 | 472.0 ms | 61.3 ms | 141 / 88 / 272 ms |
