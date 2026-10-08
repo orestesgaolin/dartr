@@ -20,7 +20,7 @@ use serde_json::Value;
 /// Options of a difftest run.
 #[derive(Clone, Debug)]
 pub struct Options {
-    /// `tokens`, `ast` or `resolved`.
+    /// `tokens`, `events`, `ast` or `resolved`.
     pub mode: String,
     /// Files or directories (searched recursively for `.dart` files).
     pub inputs: Vec<PathBuf>,
@@ -162,11 +162,15 @@ pub fn ensure_oracle() -> Result<Vec<String>> {
     let source = oracle_dir.join("bin/oracle.dart");
     let exe = root.join("target/oracle/oracle");
     let modified = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+    // The oracle sources: every file in bin/ (oracle.dart imports the
+    // other modes) and the package lock.
+    let mut inputs = vec![oracle_dir.join("pubspec.lock")];
+    if let Ok(entries) = std::fs::read_dir(oracle_dir.join("bin")) {
+        inputs.extend(entries.filter_map(|e| e.ok()).map(|e| e.path()));
+    }
     let stale = match modified(&exe) {
         None => true,
-        Some(t) => [source.clone(), oracle_dir.join("pubspec.lock")]
-            .iter()
-            .any(|p| modified(p).is_some_and(|s| s > t)),
+        Some(t) => inputs.iter().any(|p| modified(p).is_some_and(|s| s > t)),
     };
     if stale {
         if !oracle_dir.join(".dart_tool/package_config.json").exists() {

@@ -38,6 +38,7 @@ writes JSON Lines. `dartr dump <mode>` writes the same format.
 | mode       | content                                                            |
 |------------|--------------------------------------------------------------------|
 | `tokens`   | scanner only (no parser): token stream (kind, offset, length, lexeme, synthetic, comments), scanner diagnostics |
+| `events`   | parser events: every listener call of the shared parser, recoverable errors, token stream after parsing (`tools/oracle/bin/events.dart`) |
 | `ast`      | unresolved AST as ordered child entities (`childEntities`), parse diagnostics |
 | `resolved` | diagnostics of the resolved unit, static type of each expression  |
 

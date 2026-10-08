@@ -140,12 +140,13 @@ impl<'a, 'c> AbstractScanner<'a, 'c> {
         include_comments: bool,
         in_recovery_option: bool,
     ) -> Self {
-        // Dart `new Token.eof(-1)`: points to itself.
+        // Dart `new Token.eof(-1)`: points to itself. The offset -1 is
+        // `u32::MAX` (`offset as i32 == -1`).
         let head = TokenId(arena.tokens.len() as u32);
         arena.tokens.push(Token {
             ty: TokenType::EOF,
             flags: flags::FIXED_LEXEME,
-            offset: 0,
+            offset: u32::MAX,
             length: 0,
             lex_start: 0,
             lex_end: 0,

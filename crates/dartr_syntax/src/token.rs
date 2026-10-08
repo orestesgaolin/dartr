@@ -66,6 +66,9 @@ pub mod flags {
     pub const ERROR: u8 = 32;
     /// Dart `CommentToken`.
     pub const COMMENT: u8 = 64;
+    /// Dart `ReplacementToken` (a synthetic token made by the parser).
+    /// `end_group` is the replaced token (Dart `replacedToken`).
+    pub const REPLACEMENT: u8 = 128;
 }
 
 /// One token. A port of Dart `SimpleToken` and its subclasses.
@@ -140,7 +143,21 @@ impl Token {
     /// Dart `Token.end`.
     #[inline(always)]
     pub fn end(&self) -> u32 {
-        self.offset + self.length
+        self.offset.wrapping_add(self.length)
+    }
+
+    /// Dart `Token.offset` as a signed value: the synthetic token before
+    /// the first token (Dart `Token.eof(-1)`) has offset -1 (`u32::MAX`).
+    #[inline(always)]
+    pub fn signed_offset(&self) -> i64 {
+        self.offset as i32 as i64
+    }
+
+    /// Dart `ReplacementToken`: a synthetic token that replaces other
+    /// tokens (`TokenStreamRewriter.replaceNextTokenWithSyntheticToken`).
+    #[inline(always)]
+    pub fn is_replacement(&self) -> bool {
+        self.flags & flags::REPLACEMENT != 0
     }
 
     /// Dart `token is ErrorToken`.
@@ -290,6 +307,112 @@ impl Tokens {
         token.lex_start = self.owned_lexemes.len() as u32;
         self.owned_lexemes.push(lexeme.into());
         self.push(token)
+    }
+
+    /// The byte offset in the source text where token [id] starts; for
+    /// tokens made by the parser, the position they were inserted at.
+    pub fn byte_offset(&self, id: TokenId) -> u32 {
+        let t = &self.tokens[id.index()];
+        if t.flags & (flags::OWNED_LEXEME | flags::ERROR) != 0 {
+            t.lex_end
+        } else {
+            t.lex_start
+        }
+    }
+
+    /// Dart `new SimpleToken(type, offset, precedingComments)` /
+    /// `new BeginToken(...)` / `new Token(type, offset)`: a non-synthetic
+    /// token with the lexeme of its type (used to split `>>`, `[]`, ...).
+    /// [byte_offset] is the position in the source text.
+    pub fn push_simple(
+        &mut self,
+        ty: TokenType,
+        offset: u32,
+        byte_offset: u32,
+        preceding_comments: TokenId,
+    ) -> TokenId {
+        let mut token = Token::fixed(ty, offset, byte_offset, false);
+        token.preceding_comments = preceding_comments;
+        self.push(token)
+    }
+
+    /// Dart `new SyntheticToken(type, offset)`, `new SyntheticBeginToken`,
+    /// `new SyntheticKeywordToken(keyword, offset)`: a synthetic token of
+    /// length 0 with the lexeme of its type.
+    pub fn push_synthetic(&mut self, ty: TokenType, offset: u32, byte_offset: u32) -> TokenId {
+        self.push(Token::fixed(ty, offset, byte_offset, true))
+    }
+
+    /// Dart `new SyntheticStringToken(type, value, offset, length)`. Without
+    /// [length] the length is the length of [value] (in UTF-16 code units).
+    pub fn push_synthetic_string(
+        &mut self,
+        ty: TokenType,
+        value: &str,
+        offset: u32,
+        byte_offset: u32,
+        length: Option<u32>,
+    ) -> TokenId {
+        let mut token = Token::fixed(ty, offset, byte_offset, true);
+        token.length = length.unwrap_or_else(|| value.encode_utf16().count() as u32);
+        if value.is_empty() {
+            token.flags &= !flags::FIXED_LEXEME;
+            token.lex_start = byte_offset;
+            token.lex_end = byte_offset;
+            self.push(token)
+        } else {
+            token.lex_end = byte_offset;
+            self.push_with_lexeme(token, value)
+        }
+    }
+
+    /// Dart `new StringToken(type, source.lexeme, source.charOffset)`: a
+    /// non-synthetic token of type [ty] with the lexeme, offset and length of
+    /// [source] (used to turn `new` into an identifier).
+    pub fn push_string_like(&mut self, ty: TokenType, source: TokenId) -> TokenId {
+        let s = &self.tokens[source.index()];
+        let lexeme_is_fixed = s.flags & flags::FIXED_LEXEME != 0;
+        let owned = s.flags & flags::OWNED_LEXEME != 0;
+        let mut token = Token {
+            ty,
+            flags: 0,
+            offset: s.offset,
+            length: s.length,
+            lex_start: s.lex_start,
+            lex_end: s.lex_end,
+            next: TokenId::NONE,
+            previous: TokenId::NONE,
+            preceding_comments: TokenId::NONE,
+            end_group: TokenId::NONE,
+            before_synthetic: TokenId::NONE,
+        };
+        if lexeme_is_fixed || owned {
+            let lexeme = self.lexeme(source).to_string();
+            token.lex_end = self.byte_offset(source);
+            return self.push_with_lexeme(token, &lexeme);
+        }
+        self.push(token)
+    }
+
+    /// Dart `new ReplacementToken(type, replacedToken)`: a synthetic token
+    /// with the lexeme of [ty] at the offset of [replaced].
+    pub fn push_replacement(&mut self, ty: TokenType, replaced: TokenId) -> TokenId {
+        let offset = self.tokens[replaced.index()].offset;
+        let byte_offset = self.byte_offset(replaced);
+        let mut token = Token::fixed(ty, offset, byte_offset, true);
+        token.flags |= flags::REPLACEMENT;
+        token.end_group = replaced;
+        self.push(token)
+    }
+
+    /// Dart `ReplacementToken.replacedToken`.
+    pub fn replaced_token(&self, id: TokenId) -> Option<TokenId> {
+        let t = &self.tokens[id.index()];
+        if t.flags & flags::REPLACEMENT != 0 {
+            Some(t.end_group)
+        } else {
+            None
+        }
     }
 
     /// Dart `Token.setNext`: links `a.next = b`, `b.previous = a`.

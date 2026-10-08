@@ -10,7 +10,9 @@
 use std::collections::HashSet;
 
 use crate::abstract_scanner::{LanguageVersionInfo, ScannerConfiguration};
-use crate::diagnostic::{Diagnostic, ScannerDiagnosticCode as Code};
+use dartr_diagnostics::diag;
+
+use crate::diagnostic::Diagnostic;
 use crate::error_token::{ErrorKind, ScannerMessageCode};
 use crate::scanner::{ScannerResult, scan_string};
 use crate::token::{TokenId, Tokens};
@@ -65,14 +67,14 @@ pub fn scan_for_analyzer(source: &str) -> AnalyzerScanResult {
         let version = (info.major, info.minor);
         override_version = Some(version);
         if version > CURRENT_LANGUAGE_VERSION {
-            let major = CURRENT_LANGUAGE_VERSION.0.to_string();
-            let minor = CURRENT_LANGUAGE_VERSION.1.to_string();
-            diagnostics.on_diagnostic(Diagnostic::new(
-                Code::InvalidLanguageVersionOverrideGreater,
-                info.offset,
-                info.length,
-                &[("latestMajor", &major), ("latestMinor", &minor)],
-            ));
+            diagnostics.on_diagnostic(
+                diag::invalid_language_version_override_greater(
+                    CURRENT_LANGUAGE_VERSION.0,
+                    CURRENT_LANGUAGE_VERSION.1,
+                )
+                .at_offset(info.offset as usize, info.length as usize)
+                .into_diagnostic(),
+            );
             override_version = None;
             None
         } else {
@@ -114,13 +116,13 @@ pub fn scan_for_analyzer(source: &str) -> AnalyzerScanResult {
 #[derive(Default, Debug)]
 pub struct RecordingDiagnosticListener {
     pub diagnostics: Vec<Diagnostic>,
-    seen: HashSet<(Code, u32, u32, String)>,
+    seen: HashSet<(&'static str, usize, usize, String)>,
 }
 
 impl RecordingDiagnosticListener {
     pub fn on_diagnostic(&mut self, diagnostic: Diagnostic) {
         let key = (
-            diagnostic.code,
+            diagnostic.code.unique_name,
             diagnostic.offset,
             diagnostic.length,
             diagnostic.message.clone(),
@@ -140,49 +142,42 @@ pub fn translate_error_token(tokens: &Tokens, token: TokenId, report: &mut dyn F
     // `makeError`: a diagnostic at `charOffset` with length 1, but never past
     // the end of the input (an error there would not be visible in an
     // editor).
-    let make_error = |char_offset: u32, code: Code, arguments: &[(&str, &str)]| {
+    let make_error = |char_offset: u32, diagnostic: dartr_diagnostics::LocatableDiagnostic| {
         let offset = if is_at_end(tokens, token, char_offset) {
             char_offset.wrapping_sub(1)
         } else {
             char_offset
         };
-        Diagnostic::new(code, offset, 1, arguments)
+        diagnostic.at_offset(offset as usize, 1).into_diagnostic()
+    };
+    let at = |offset: u32, diagnostic: dartr_diagnostics::LocatableDiagnostic| {
+        diagnostic.at_offset(offset as usize, 1).into_diagnostic()
     };
 
     let diagnostic = match error.error_code() {
-        ScannerMessageCode::Encoding => Diagnostic::new(Code::Encoding, char_offset, 1, &[]),
+        ScannerMessageCode::Encoding => at(char_offset, diag::encoding()),
         // Fasta reports the error location as the entire string or comment;
         // analyzer expects the end.
-        ScannerMessageCode::UnterminatedString => Diagnostic::new(
-            Code::UnterminatedStringLiteral,
-            end_offset.wrapping_sub(1),
-            1,
-            &[],
-        ),
-        ScannerMessageCode::UnterminatedComment => Diagnostic::new(
-            Code::UnterminatedMultiLineComment,
-            end_offset.wrapping_sub(1),
-            1,
-            &[],
-        ),
+        ScannerMessageCode::UnterminatedString => {
+            at(end_offset.wrapping_sub(1), diag::unterminated_string_literal())
+        }
+        ScannerMessageCode::UnterminatedComment => {
+            at(end_offset.wrapping_sub(1), diag::unterminated_multi_line_comment())
+        }
         ScannerMessageCode::MissingExponent => {
-            make_error(end_offset.wrapping_sub(1), Code::MissingDigit, &[])
+            make_error(end_offset.wrapping_sub(1), diag::missing_digit())
         }
         ScannerMessageCode::ExpectedHexDigit => {
-            make_error(end_offset.wrapping_sub(1), Code::MissingHexDigit, &[])
+            make_error(end_offset.wrapping_sub(1), diag::missing_hex_digit())
         }
         ScannerMessageCode::NonAsciiIdentifier
         | ScannerMessageCode::NonAsciiWhitespace
         | ScannerMessageCode::AsciiControlCharacter => {
-            let code_point = error.character().unwrap().to_string();
-            make_error(
-                char_offset,
-                Code::IllegalCharacter,
-                &[("codePoint", &code_point)],
-            )
+            let code_point = error.character().unwrap() as i64;
+            make_error(char_offset, diag::illegal_character(code_point))
         }
         ScannerMessageCode::UnexpectedSeparatorInNumber => {
-            make_error(char_offset, Code::UnexpectedSeparatorInNumber, &[])
+            make_error(char_offset, diag::unexpected_separator_in_number())
         }
         ScannerMessageCode::UnsupportedOperator => {
             let ErrorKind::UnsupportedOperator { token: operator } = error.kind else {
@@ -190,8 +185,7 @@ pub fn translate_error_token(tokens: &Tokens, token: TokenId, report: &mut dyn F
             };
             make_error(
                 char_offset,
-                Code::UnsupportedOperator,
-                &[("lexeme", tokens.lexeme(operator))],
+                diag::unsupported_operator(tokens.lexeme(operator)),
             )
         }
         ScannerMessageCode::UnmatchedToken => {
@@ -204,14 +198,10 @@ pub fn translate_error_token(tokens: &Tokens, token: TokenId, report: &mut dyn F
                 TokenType::LT => ">",
                 ty => panic!("UnmatchedToken for {ty:?}"),
             };
-            make_error(
-                tokens.offset(end_token),
-                Code::ExpectedToken,
-                &[("token", expected)],
-            )
+            make_error(tokens.offset(end_token), diag::expected_token(expected))
         }
         ScannerMessageCode::UnexpectedDollarInString => {
-            make_error(char_offset, Code::MissingIdentifier, &[])
+            make_error(char_offset, diag::missing_identifier())
         }
     };
     report(diagnostic);

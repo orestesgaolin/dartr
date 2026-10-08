@@ -65,7 +65,7 @@ pub mod token_type;
 
 pub use abstract_scanner::{LanguageVersionInfo, ScannerConfiguration};
 pub use analyzer_scanner::{AnalyzerScanResult, scan_for_analyzer};
-pub use diagnostic::{Diagnostic, ScannerDiagnosticCode, Severity};
+pub use diagnostic::{Diagnostic, DiagnosticSeverity, severity_lower_name};
 pub use error_token::{ErrorKind, ErrorToken, ScannerMessageCode};
 pub use scanner::{ScannerResult, scan_string, strip_bom};
 pub use token::{Token, TokenId, Tokens};

@@ -9,6 +9,7 @@
 //
 // Modes:
 //   tokens   token stream and scanner diagnostics (scanner only, no parser)
+//   events   parser events of the shared parser (see events.dart)
 //   ast      unresolved AST (parser output) and parse diagnostics
 //   resolved diagnostics of a resolved unit, and static types of expressions
 import 'dart:convert';
@@ -36,9 +37,11 @@ import 'package:analyzer/src/string_source.dart';
 // ignore: implementation_imports
 import 'package:_fe_analyzer_shared/src/scanner/error_token.dart';
 
+import 'events.dart';
+
 Future<void> main(List<String> args) async {
   if (args.isEmpty) {
-    stderr.writeln('usage: oracle <tokens|ast|resolved> [file ...]');
+    stderr.writeln('usage: oracle <tokens|events|ast|resolved> [file ...]');
     exit(64);
   }
   var mode = args.first;
@@ -56,6 +59,10 @@ Future<void> main(List<String> args) async {
     case 'tokens':
       for (var p in paths) {
         stdout.writeln(jsonEncode(guarded(p, dumpTokens)));
+      }
+    case 'events':
+      for (var p in paths) {
+        stdout.writeln(jsonEncode(guarded(p, dumpEvents)));
       }
     case 'ast':
       for (var p in paths) {
