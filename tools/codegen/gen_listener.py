@@ -529,7 +529,8 @@ def gen_recorder(methods):
 //! `tools/oracle/bin/event_recorder.g.dart`.
 //!
 //! Arguments: a token is `[offset, lexeme]`, `null` for no token; an error
-//! token is `[offset, errorCode]`; a message is
+//! token is `[offset, errorCode]` (also where a `Token` argument is an
+//! error token); a message is
 //! `{"code": name, "msg": problem, "fix": correction}` (`fix` only when
 //! there is one); enums are their Dart names.
 
@@ -661,6 +662,13 @@ impl EventRecorder {
 /// synthetic token before the first token has offset -1).
 pub fn write_token(out: &mut String, tokens: &Tokens, token: TokenId) {
     use std::fmt::Write;
+    if let Some(error) = tokens.error(token) {
+        // Dart `ErrorToken.lexeme` throws: write the error code.
+        let _ = write!(out, "[{},", error.char_offset);
+        write_json_string(out, error.error_code().name());
+        out.push(']');
+        return;
+    }
     let _ = write!(out, "[{},", tokens.get(token).offset as i32);
     write_json_string(out, tokens.lexeme(token));
     out.push(']');
@@ -766,8 +774,11 @@ class EventRecorder extends Listener {
   final List<Object?> events = [];
   final List<Object?> errors = [];
 
-  Object? t(Token? token) =>
-      token == null ? null : [token.offset, token.lexeme];
+  Object? t(Token? token) => token == null
+      ? null
+      : token is ErrorToken
+      ? e(token)
+      : [token.offset, token.lexeme];
 
   Object? e(ErrorToken token) => [token.charOffset, token.errorCode.name];
 

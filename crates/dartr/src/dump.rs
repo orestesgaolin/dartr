@@ -7,7 +7,9 @@ use std::path::{Path, PathBuf};
 
 use dartr_parser::event_recorder::EventRecorder;
 use dartr_parser::parse_for_analyzer;
-use dartr_syntax::{Diagnostic, TokenId, Tokens, scan_for_analyzer, strip_bom};
+use dartr_syntax::{
+    Diagnostic, TokenId, Tokens, scan_for_analyzer, severity_lower_name, strip_bom,
+};
 use rayon::prelude::*;
 
 use crate::json::write_string;
@@ -201,7 +203,7 @@ fn write_diagnostic(out: &mut String, d: &Diagnostic) {
     out.push_str("{\"code\":");
     write_string(out, d.code.lower_case_name());
     out.push_str(",\"severity\":");
-    write_string(out, d.severity().lower_name());
+    write_string(out, severity_lower_name(d.severity));
     let _ = write!(out, ",\"o\":{},\"l\":{},\"msg\":", d.offset, d.length);
     write_string(out, &d.message);
     out.push('}');

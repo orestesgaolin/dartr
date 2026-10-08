@@ -23,8 +23,11 @@ class EventRecorder extends Listener {
   final List<Object?> events = [];
   final List<Object?> errors = [];
 
-  Object? t(Token? token) =>
-      token == null ? null : [token.offset, token.lexeme];
+  Object? t(Token? token) => token == null
+      ? null
+      : token is ErrorToken
+      ? e(token)
+      : [token.offset, token.lexeme];
 
   Object? e(ErrorToken token) => [token.charOffset, token.errorCode.name];
 
