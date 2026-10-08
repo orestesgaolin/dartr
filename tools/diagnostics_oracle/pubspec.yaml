@@ -1,0 +1,16 @@
+name: dartr_diagnostics_oracle
+description: Lists all diagnostic codes of the pinned analyzer, linter and analysis_server as JSON.
+publish_to: none
+environment:
+  sdk: ^3.11.0
+dependencies:
+  analyzer: any
+  _fe_analyzer_shared: any
+  linter: any
+dependency_overrides:
+  analyzer:
+    path: ../../third_party/dart-sdk/pkg/analyzer
+  _fe_analyzer_shared:
+    path: ../../third_party/dart-sdk/pkg/_fe_analyzer_shared
+  linter:
+    path: ../../third_party/dart-sdk/pkg/linter

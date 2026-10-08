@@ -1,0 +1,15 @@
+[package]
+name = "diagnostics_gen"
+version = "0.1.0"
+edition = "2024"
+license = "BSD-3-Clause"
+publish = false
+description = "Generates crates/dartr_diagnostics/src/generated/*.rs from the messages.yaml files of the pinned Dart SDK."
+
+# Not a member of the dartr workspace: the generator is a tool, the build of
+# dartr does not depend on it or on third_party.
+[workspace]
+
+[dependencies]
+yaml-rust2 = "0.13.0"
+regex = "1.13.1"
