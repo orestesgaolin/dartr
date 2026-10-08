@@ -201,6 +201,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "dartr_ast",
+ "dartr_ast_builder",
  "dartr_difftest",
  "dartr_parser",
  "dartr_syntax",
@@ -219,6 +221,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "dartr_ast_builder"
+version = "0.1.0"
+dependencies = [
+ "dartr_ast",
+ "dartr_diagnostics",
+ "dartr_difftest",
+ "dartr_parser",
+ "dartr_syntax",
+ "rayon",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "dartr_constant"
+version = "0.1.0"
+dependencies = [
+ "dartr_diagnostics",
+ "dartr_element",
+ "indexmap",
+ "serde_json",
+]
+
+[[package]]
 name = "dartr_diagnostics"
 version = "0.1.0"
 dependencies = [
@@ -232,6 +259,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "serde",
  "serde_json",
 ]
 
@@ -288,6 +316,22 @@ name = "dartr_syntax"
 version = "0.1.0"
 dependencies = [
  "dartr_diagnostics",
+]
+
+[[package]]
+name = "dartr_type_analyzer"
+version = "0.1.0"
+dependencies = [
+ "dartr_flow",
+ "indexmap",
+]
+
+[[package]]
+name = "dartr_typesystem"
+version = "0.1.0"
+dependencies = [
+ "dartr_element",
+ "indexmap",
 ]
 
 [[package]]

@@ -19,6 +19,7 @@ use dartr_diagnostics::{ElementArg, ElementRef, TypeArg};
 
 use crate::LibraryFragment;
 use crate::ctx::Ctx;
+use crate::display_string::{self, DisplayOptions};
 use crate::flags::FragmentFlags;
 use crate::ids::FId;
 use crate::ids::{ElementId, FragmentId, Tag};
@@ -27,13 +28,20 @@ use crate::store::AnyElement;
 use crate::types::{TypeId, TypeKind};
 
 /// `type.getDisplayString(preferTypeAlias: true)` (unit A1).
-pub fn type_display_string(_ctx: &Ctx<'_>, _ty: TypeId, _prefer_type_alias: bool) -> String {
-    todo!("TypeImpl.getDisplayString")
+pub fn type_display_string(ctx: &Ctx<'_>, ty: TypeId, prefer_type_alias: bool) -> String {
+    display_string::type_display_string_with(
+        ctx,
+        ty,
+        DisplayOptions {
+            multiline: false,
+            prefer_type_alias,
+        },
+    )
 }
 
 /// `element.displayString()` (unit A1).
-pub fn element_display_string(_ctx: &Ctx<'_>, _element: ElementId) -> String {
-    todo!("ElementImpl.displayString")
+pub fn element_display_string(ctx: &Ctx<'_>, element: ElementId) -> String {
+    display_string::element_display_string_with(ctx, element, DisplayOptions::default())
 }
 
 /// A `DartType` diagnostic argument.

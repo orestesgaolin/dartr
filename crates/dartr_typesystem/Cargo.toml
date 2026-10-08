@@ -1,0 +1,11 @@
+[package]
+name = "dartr_typesystem"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+dartr_element.workspace = true
+indexmap.workspace = true
+
+[dev-dependencies]

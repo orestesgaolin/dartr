@@ -219,6 +219,10 @@ impl Loader {
                 vec![
                     FieldValue::NodeList(refs),
                     FieldValue::TokenList(self.ast.new_token_list(toks)),
+                    // code blocks, doc imports, doc directives, `hasNodoc`
+                    FieldValue::Default,
+                    FieldValue::Default,
+                    FieldValue::Default,
                     FieldValue::Default,
                 ]
             }

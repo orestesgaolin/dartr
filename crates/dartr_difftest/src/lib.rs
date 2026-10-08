@@ -119,6 +119,35 @@ impl Report {
     }
 }
 
+/// Parses a JSON line without the recursion limit of `serde_json` (the
+/// `ast` dump of deeply nested code).
+fn parse_deep(s: &str) -> serde_json::Result<Value> {
+    use serde::Deserialize;
+    let mut de = serde_json::Deserializer::from_str(s);
+    de.disable_recursion_limit();
+    Value::deserialize(&mut de)
+}
+
+/// The `path` of a JSON line `{"path":"...",...}`, read without parsing the
+/// whole line (deeply nested ASTs exceed the recursion limit of
+/// `serde_json`).
+fn path_of_line(line: &str) -> Option<String> {
+    let rest = line.strip_prefix("{\"path\":")?;
+    let bytes = rest.as_bytes();
+    if bytes.first() != Some(&b'"') {
+        return None;
+    }
+    let mut i = 1;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' => i += 2,
+            b'"' => return serde_json::from_str::<String>(&rest[..=i]).ok(),
+            _ => i += 1,
+        }
+    }
+    None
+}
+
 /// The repository root (from the location of this crate).
 pub fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -257,9 +286,7 @@ fn run_batch(program: &[String], mode: &str, files: &[String]) -> Result<BatchOu
         if line.is_empty() {
             continue;
         }
-        let path = serde_json::from_str::<Value>(line)
-            .ok()
-            .and_then(|v| v.get("path").and_then(|p| p.as_str().map(str::to_string)));
+        let path = path_of_line(line);
         if let Some(path) = path {
             lines.insert(path, line.to_string());
         }
@@ -410,10 +437,7 @@ fn compare(
         (None, Some(_)) => diff("", "<no output>".into(), "<output>".into()),
         (Some(_), None) => diff("", "<output>".into(), "<no output>".into()),
         (Some(o), Some(d)) => {
-            let (vo, vd) = match (
-                serde_json::from_str::<Value>(o),
-                serde_json::from_str::<Value>(d),
-            ) {
+            let (vo, vd) = match (parse_deep(o), parse_deep(d)) {
                 (Ok(vo), Ok(vd)) => (vo, vd),
                 _ => return diff("", "<invalid JSON>".into(), "<invalid JSON>".into()),
             };

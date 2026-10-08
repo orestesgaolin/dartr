@@ -116,6 +116,8 @@ pub fn parse_for_analyzer<L: Listener>(source: &str, listener: L) -> AnalyzerPar
         first,
         diagnostics,
         override_version,
+        feature_version,
+        ..
     } = scan_for_analyzer(source);
     let ScannerResult {
         tokens,
@@ -124,7 +126,7 @@ pub fn parse_for_analyzer<L: Listener>(source: &str, listener: L) -> AnalyzerPar
         ..
     } = scan;
     let before_first = tokens.previous(first);
-    let features = features_for_file(override_version);
+    let features = features_for_file(feature_version);
     let mut parser = Parser::new(listener, tokens, true, features);
     let eof = parser.parse_unit(scanner_first);
     let (tokens, listener) = parser.into_parts();

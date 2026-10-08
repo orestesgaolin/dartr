@@ -10,6 +10,7 @@
 use dartr_syntax::TokenId;
 
 use crate::arena::{Concrete, Id, NodeList, NodeType, SubtypeOf, TokenList};
+use crate::doc_comment::{DocDirective, DocImport, MdCodeBlock};
 use crate::node_impl::ParameterKind;
 
 /// The kind of a node: one value per concrete node class of the analyzer
@@ -1448,6 +1449,12 @@ pub struct Comment {
     pub references: NodeList<CommentReference>,
     /// Dart `tokens`.
     pub tokens: TokenList,
+    /// Dart `codeBlocks`.
+    pub code_blocks: Vec<MdCodeBlock>,
+    /// Dart `docImports`.
+    pub doc_imports: Vec<DocImport>,
+    /// Dart `docDirectives`.
+    pub doc_directives: Vec<DocDirective>,
     /// Dart `hasNodoc`.
     pub has_nodoc: bool,
 }
@@ -10110,6 +10117,30 @@ pub static NODE_INFOS: [NodeInfo; NodeKind::COUNT] = [
             FieldInfo {
                 name: "tokens",
                 kind: FieldKind::TokenList,
+                nullable: false,
+                ty: "",
+                accepts: accepts_none,
+                child: true,
+            },
+            FieldInfo {
+                name: "codeBlocks",
+                kind: FieldKind::Other,
+                nullable: false,
+                ty: "",
+                accepts: accepts_none,
+                child: true,
+            },
+            FieldInfo {
+                name: "docImports",
+                kind: FieldKind::Other,
+                nullable: false,
+                ty: "",
+                accepts: accepts_none,
+                child: true,
+            },
+            FieldInfo {
+                name: "docDirectives",
+                kind: FieldKind::Other,
                 nullable: false,
                 ty: "",
                 accepts: accepts_none,

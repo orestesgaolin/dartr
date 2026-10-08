@@ -94,8 +94,14 @@ pub struct AbstractScanner<'a, 'c> {
     pub(crate) language_version_changed: Option<&'c mut LanguageVersionChanged<'c>>,
     pub(crate) enable_triple_shift: bool,
     pub(crate) enable_augmentations: bool,
-    /// Dart `tokenStart`.
+    /// Dart `tokenStart`. Its `off` is the value that the Dart getter
+    /// returns: the scan offset plus [`Self::token_start_delta`].
     pub(crate) token_start: Pos,
+    /// Added to the offset of `tokenStart` (the analyzer
+    /// `DocImportStringScanner` overrides the `tokenStart` getter to map
+    /// offsets of a doc import into the compilation unit). Offsets that Dart
+    /// takes from `stringOffset` (most error tokens) are not changed.
+    pub(crate) token_start_delta: i64,
     /// Dart `tokens`: the sentinel before the first token.
     pub(crate) head: TokenId,
     pub(crate) tail: TokenId,
@@ -169,6 +175,7 @@ impl<'a, 'c> AbstractScanner<'a, 'c> {
             enable_triple_shift: true,
             enable_augmentations: false,
             token_start: Pos { off: -1, byte: 0 },
+            token_start_delta: 0,
             head,
             tail: head,
             error_tail: head,
@@ -316,7 +323,9 @@ impl<'a, 'c> AbstractScanner<'a, 'c> {
     /// Dart `beginToken()`.
     #[inline(always)]
     pub(crate) fn begin_token(&mut self) {
-        self.token_start = self.scan_pos();
+        let mut pos = self.scan_pos();
+        pos.off += self.token_start_delta;
+        self.token_start = pos;
     }
 
     /// Dart `appendSubstringToken`.

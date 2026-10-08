@@ -62,6 +62,33 @@ pub fn scan_string(
     result
 }
 
+/// Scans [source] like the analyzer `DocImportStringScanner` (a
+/// `StringScanner` whose `tokenStart` is mapped into the compilation unit)
+/// with `tokenize()`: the offsets of tokens made from `tokenStart` are
+/// shifted by [token_start_delta]; there is no second scan for curly
+/// bracket recovery (that is part of `scanString` only), and no comments.
+pub fn scan_with_token_start_delta(
+    source: &str,
+    configuration: Option<ScannerConfiguration>,
+    token_start_delta: i64,
+) -> ScannerResult {
+    let shared: Arc<str> = Arc::from(source);
+    let mut scanner = AbstractScanner::new(source, Tokens::new(shared), configuration, false, None);
+    scanner.token_start_delta = token_start_delta;
+    scanner.token_start.off += token_start_delta;
+    let first = scanner.tokenize();
+    let has_errors = scanner.has_errors;
+    let language_version = scanner.language_version();
+    let line_starts = std::mem::take(&mut scanner.line_starts);
+    ScannerResult {
+        tokens: scanner.into_tokens(),
+        first,
+        line_starts,
+        has_errors,
+        language_version,
+    }
+}
+
 fn run(
     source: &str,
     shared: Arc<str>,

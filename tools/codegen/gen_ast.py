@@ -43,6 +43,9 @@ MANUAL = {
     'Comment': [
         {'name': 'references', 'kind': 'node_list', 'nullable': False, 'type': 'CommentReference'},
         {'name': 'tokens', 'kind': 'token_list', 'nullable': False},
+        {'name': 'codeBlocks', 'kind': 'other', 'nullable': False, 'dart_type': 'List<MdCodeBlock>'},
+        {'name': 'docImports', 'kind': 'other', 'nullable': False, 'dart_type': 'List<DocImport>'},
+        {'name': 'docDirectives', 'kind': 'other', 'nullable': False, 'dart_type': 'List<DocDirective>'},
         {'name': 'hasNodoc', 'kind': 'other', 'nullable': False, 'dart_type': 'bool'},
     ],
     'CompilationUnit': [
@@ -66,6 +69,9 @@ OTHER_TYPES = {
     'int?': 'Option<i64>',
     'String': 'Box<str>',
     'ParameterKind': 'ParameterKind',
+    'List<MdCodeBlock>': 'Vec<MdCodeBlock>',
+    'List<DocImport>': 'Vec<DocImport>',
+    'List<DocDirective>': 'Vec<DocDirective>',
     'ExtensionElementImpl': None,
     'MethodElement?': None,
     'List<DartType>': None,
@@ -147,6 +153,7 @@ def gen_nodes(schema, nodes, interfaces):
 use dartr_syntax::TokenId;
 
 use crate::arena::{Concrete, Id, NodeList, NodeType, SubtypeOf, TokenList};
+use crate::doc_comment::{DocDirective, DocImport, MdCodeBlock};
 use crate::node_impl::ParameterKind;
 
 /// The kind of a node: one value per concrete node class of the analyzer
