@@ -257,10 +257,7 @@ impl<'a> ResolverVisitor<'a> {
 
     pub fn visit_simple_identifier(&mut self, node: Id<SimpleIdentifier>, context_type: TypeId) {
         simple_identifier_resolver::visit_simple_identifier(self, node, context_type);
-        // The identifier may be rewritten; continue with the node in its
-        // place.
-        let current = self.peek_rewrite().unwrap_or(node.upcast());
-        let e = self.insert_generic_function_instantiation(current, context_type);
+        let e = self.insert_generic_function_instantiation(node.upcast(), context_type);
         self.insert_implicit_call_reference(e, context_type);
     }
 
