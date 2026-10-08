@@ -268,7 +268,8 @@ fn run_parsed(
     let t_contexts = start.elapsed();
     let files = analyzed_dart_files(&collection);
     let t_files = start.elapsed();
-    let results = provider.diagnostics_for_files(&collection, &files);
+    let mut results = provider.diagnostics_for_files(&collection, &files);
+    results.extend(crate::provider::non_dart_diagnostics(&collection));
     let t_diagnostics = start.elapsed();
     if std::env::var_os("DARTR_TIMINGS").is_some() {
         let _ = writeln!(
@@ -405,8 +406,7 @@ pub fn analyzed_dart_files(collection: &AnalysisContextCollection) -> Vec<Analyz
     let mut seen = std::collections::HashSet::new();
     for (index, context) in collection.contexts.iter().enumerate() {
         for path in context.root.analyzed_files() {
-            // TODO(phase 9+): analysis_options.yaml, pubspec.yaml,
-            // AndroidManifest.xml and fix_data.yaml diagnostics.
+            // Non-Dart files: see `provider::non_dart_diagnostics`.
             if FileKind::of(&path) == FileKind::Dart && seen.insert(path.clone()) {
                 files.push(AnalyzedFile {
                     path,

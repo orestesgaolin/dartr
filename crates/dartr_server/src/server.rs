@@ -37,8 +37,9 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use std::thread;
 
-use dartr_ast_builder::{ParsedUnit, parse_string};
-use dartr_project::{ContextRoot, OptionsParseSession, context_locator::locate_context_roots};
+use dartr_ast_builder::{ParsedUnit, parse_file};
+use dartr_parser::ExperimentalFlag;
+use dartr_project::{AnalysisContextCollection, CollectionOptions, FileKind, non_dart};
 use dartr_syntax::LineInfo;
 use rayon::prelude::*;
 use serde_json::{Value, json};
@@ -97,6 +98,24 @@ pub struct ParsedFile {
     pub unit: ParsedUnit,
 }
 
+/// How a Dart file is parsed (Dart `FileState.parseCode`).
+struct ParseSettings {
+    /// The language version of the package.
+    version: (u32, u32),
+    experiments: Vec<ExperimentalFlag>,
+}
+
+impl ParseSettings {
+    /// No context: the current language version, no experiments.
+    fn latest() -> ParseSettings {
+        let v = dartr_project::experiments::CURRENT_LANGUAGE_VERSION;
+        ParseSettings {
+            version: (v.major, v.minor),
+            experiments: Vec::new(),
+        }
+    }
+}
+
 /// What a request sent to the client is for.
 enum Pending {
     Configuration { folders: Vec<String> },
@@ -126,9 +145,11 @@ pub struct Server {
     overlays: HashMap<String, Document>,
     /// Open files (Dart priority files), in open order.
     priority: Vec<String>,
-    roots: Vec<ContextRoot>,
+    collection: Option<AnalysisContextCollection>,
     excluded: Vec<String>,
     analyzed: BTreeSet<String>,
+    /// The analyzed non-Dart files (options, pubspec, manifest).
+    non_dart_analyzed: BTreeSet<String>,
     /// Files to analyze.
     dirty: BTreeSet<String>,
     roots_dirty: bool,
@@ -222,9 +243,10 @@ impl Server {
             config: json!({}),
             overlays: HashMap::new(),
             priority: Vec::new(),
-            roots: Vec::new(),
+            collection: None,
             excluded: Vec::new(),
             analyzed: BTreeSet::new(),
+            non_dart_analyzed: BTreeSet::new(),
             dirty: BTreeSet::new(),
             roots_dirty: false,
             waiting_for_config: false,
@@ -702,17 +724,19 @@ impl Server {
             .and_then(|d| d.get("text"))
             .and_then(Value::as_str)
             .ok_or_else(|| invalid_params("textDocument/didOpen"))?;
-        self.overlays.insert(
-            path.clone(),
-            Document {
-                content: text.to_string(),
-            },
-        );
+        // Dart analyzes a document with a leading byte order mark like the
+        // text without it (checked with `dart language-server`: no
+        // `illegal_character`, columns without the mark).
+        let text = dartr_syntax::strip_bom(text).to_string();
+        dartr_project::fs::set_overlay(&path, Some(text.clone()));
+        self.overlays.insert(path.clone(), Document { content: text });
         self.file_changed(&path);
         if !self.priority.contains(&path) {
             self.priority.push(path.clone());
             // Open files get closing labels and outlines.
-            self.dirty.insert(path.clone());
+            if path.ends_with(".dart") {
+                self.dirty.insert(path.clone());
+            }
             if self.workspace_folders.is_empty() {
                 self.roots_dirty = true;
             }
@@ -734,14 +758,24 @@ impl Server {
             .get("contentChanges")
             .and_then(Value::as_array)
             .ok_or_else(|| invalid_params("textDocument/didChange"))?;
-        doc.content = apply_changes(&doc.content, changes)?;
+        let content = apply_changes(&doc.content, changes)?;
+        doc.content = dartr_syntax::strip_bom(&content).to_string();
+        dartr_project::fs::set_overlay(&path, Some(doc.content.clone()));
         self.file_changed(&path);
+        // Checked with `dart language-server`: a change of an open
+        // `analysis_options.yaml` creates the contexts again and analyzes all
+        // non-Dart files again. Changes of an open pubspec or manifest do
+        // nothing until the next context rebuild.
+        if FileKind::of(&path) == FileKind::AnalysisOptions {
+            self.roots_dirty = true;
+        }
         Ok(())
     }
 
     fn did_close(&mut self, params: Value) -> ErrorOr<()> {
         let path = self.path_of_doc(&params)?;
         self.overlays.remove(&path);
+        dartr_project::fs::set_overlay(&path, None);
         self.file_changed(&path);
         self.priority.retain(|p| *p != path);
         if self.workspace_folders.is_empty() {
@@ -752,7 +786,9 @@ impl Server {
 
     fn file_changed(&mut self, path: &str) {
         self.parsed.remove(path);
-        if self.analyzed.contains(path) || self.priority.iter().any(|p| p == path) {
+        if self.analyzed.contains(path)
+            || (path.ends_with(".dart") && self.priority.iter().any(|p| p == path))
+        {
             self.dirty.insert(path.to_string());
         }
     }
@@ -767,7 +803,10 @@ impl Server {
 
     /// Dart `isAnalyzed`.
     fn is_analyzed(&self, path: &str) -> bool {
-        self.roots.iter().any(|r| r.is_analyzed(path)) && !self.is_excluded(path)
+        self.collection
+            .as_ref()
+            .is_some_and(|c| c.contexts.iter().any(|x| x.root.is_analyzed(path)))
+            && !self.is_excluded(path)
     }
 
     fn is_excluded(&self, path: &str) -> bool {
@@ -781,17 +820,49 @@ impl Server {
     /// file outside of the analysis roots is parsed too (Dart uses the
     /// first analysis driver), and a missing file has empty content.
     fn parsed_unit(&mut self, path: &str) -> Option<Rc<ParsedFile>> {
-        if !path.ends_with(".dart") || self.roots.is_empty() {
+        if !path.ends_with(".dart") || self.collection.is_none() {
             return None;
         }
         if let Some(p) = self.parsed.get(path) {
             return Some(p.clone());
         }
         let content = self.content(path).unwrap_or_default();
-        let unit = parse_string(&content, path);
+        let settings = self.parse_settings(path);
+        let unit = parse_file(&content, path, settings.version, &settings.experiments);
         let file = Rc::new(ParsedFile { content, unit });
         self.parsed.insert(path.to_string(), file.clone());
         Some(file)
+    }
+
+    /// The language version and experiments to parse [path] with: the
+    /// package of its context (the first context for a file outside of all
+    /// contexts, like Dart's first analysis driver) and the analysis options
+    /// of its folder.
+    fn parse_settings(&self, path: &str) -> ParseSettings {
+        let Some(collection) = &self.collection else {
+            return ParseSettings::latest();
+        };
+        let Some(context) = collection
+            .context_for(path)
+            .or_else(|| collection.contexts.first())
+        else {
+            return ParseSettings::latest();
+        };
+        let version = context.file_info(path).language_version;
+        let options = collection.options_for(context, path);
+        ParseSettings {
+            version: (version.major, version.minor),
+            experiments: options
+                .enabled_experiments()
+                .iter()
+                .filter_map(|name| {
+                    ExperimentalFlag::VALUES
+                        .iter()
+                        .copied()
+                        .find(|f| f.name() == *name)
+                })
+                .collect(),
+        }
     }
 
     /// Dart `requireUnresolvedUnit` / `requireResolvedUnit`.
@@ -839,17 +910,32 @@ impl Server {
                 }
             })
             .collect();
-        let session = OptionsParseSession::new();
-        self.roots = if included.is_empty() {
-            Vec::new()
+        self.collection = if included.is_empty() {
+            None
         } else {
-            locate_context_roots(&included, None, None, &session)
+            Some(AnalysisContextCollection::new(
+                &included,
+                &CollectionOptions::default(),
+            ))
         };
         let mut analyzed = BTreeSet::new();
-        for root in &self.roots {
-            for file in root.analyzed_files() {
-                if file.ends_with(".dart") && !self.is_excluded(&file) {
-                    analyzed.insert(file);
+        let mut non_dart_analyzed = BTreeSet::new();
+        if let Some(collection) = &self.collection {
+            for context in &collection.contexts {
+                for file in context.root.analyzed_files() {
+                    if self.is_excluded(&file) {
+                        continue;
+                    }
+                    match FileKind::of(&file) {
+                        FileKind::Dart => {
+                            analyzed.insert(file);
+                        }
+                        FileKind::Other => {}
+                        // TODO: `fix_data.yaml` (no validator in dartr_project).
+                        _ => {
+                            non_dart_analyzed.insert(file);
+                        }
+                    }
                 }
             }
         }
@@ -859,6 +945,7 @@ impl Server {
             self.publish_diagnostics(&path, Vec::new());
             self.parsed.remove(&path);
         }
+        self.publish_non_dart_diagnostics(non_dart_analyzed);
         // Open files outside of the roots are analyzed too when they are in
         // a context root (for example an open file that is not under a
         // folder, without workspace folders).
@@ -867,6 +954,48 @@ impl Server {
             .extend(self.priority.iter().filter(|p| p.ends_with(".dart")).cloned());
         self.analyzed = analyzed;
         self.parsed.clear();
+    }
+
+    /// Dart `ContextManager._analyzeAnalysisOptionsYaml`,
+    /// `_analyzePubspecYaml` and `_analyzeAndroidManifestXml` for all
+    /// analyzed non-Dart files, after the contexts were created. Files that
+    /// are not analyzed any more get an empty list (Dart `flushResults`).
+    fn publish_non_dart_diagnostics(&mut self, files: BTreeSet<String>) {
+        let removed: Vec<String> = self.non_dart_analyzed.difference(&files).cloned().collect();
+        for path in removed {
+            self.publish_diagnostics(&path, Vec::new());
+        }
+        let mut options = self.client.diagnostic_options();
+        // The analysis server converts these diagnostics without `url`.
+        options.code_description = false;
+        for path in &files {
+            let diagnostics = match self
+                .collection
+                .as_ref()
+                .and_then(|c| c.context_for(path))
+            {
+                Some(context) => non_dart::diagnostics_for_file(context, path),
+                None => Vec::new(),
+            };
+            let line_info = LineInfo::from_content(
+                &dartr_project::fs::read_string_strict(path).unwrap_or_default(),
+            );
+            let values = diagnostics
+                .into_iter()
+                .map(|mut d| {
+                    // `AnalyzerConverter` uses the line info of the file for
+                    // all context messages, with the URL in the text.
+                    for m in &mut d.context_messages {
+                        m.message = m.message_text(true);
+                    }
+                    mapping::to_diagnostic(&line_info, path, &d, &options, &|_| {
+                        Some(line_info.clone())
+                    })
+                })
+                .collect();
+            self.publish_diagnostics(path, values);
+        }
+        self.non_dart_analyzed = files;
     }
 
     /// Dart `_getRootsForOpenFiles`: the package folder of each open file
@@ -906,18 +1035,24 @@ impl Server {
         }
         self.begin_progress();
         let dirty: Vec<String> = std::mem::take(&mut self.dirty).into_iter().collect();
-        let contents: Vec<(String, Option<String>)> = dirty
+        let contents: Vec<(String, Option<String>, ParseSettings)> = dirty
             .iter()
-            .map(|p| (p.clone(), self.overlays.get(p).map(|d| d.content.clone())))
+            .map(|p| {
+                (
+                    p.clone(),
+                    self.overlays.get(p).map(|d| d.content.clone()),
+                    self.parse_settings(p),
+                )
+            })
             .collect();
         let options = self.client.diagnostic_options();
         let results: Vec<(String, Vec<Value>)> = contents
             .into_par_iter()
-            .map(|(path, overlay)| {
+            .map(|(path, overlay, settings)| {
                 let content = overlay
                     .or_else(|| read_file(&path))
                     .unwrap_or_default();
-                let unit = parse_string(&content, &path);
+                let unit = parse_file(&content, &path, settings.version, &settings.experiments);
                 let diagnostics = unit
                     .diagnostics
                     .iter()

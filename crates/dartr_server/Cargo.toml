@@ -11,6 +11,7 @@ rayon.workspace = true
 dartr_syntax.workspace = true
 dartr_ast.workspace = true
 dartr_ast_builder.workspace = true
+dartr_parser.workspace = true
 dartr_diagnostics.workspace = true
 dartr_project.workspace = true
 
