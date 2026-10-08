@@ -110,13 +110,32 @@ pub fn analyze_library(input: &LibraryAnalysisInput<'_>) -> ResolvedLibrary {
         .map(|unit| resolve_file(input, &scopes, &library_features, unit))
         .collect();
 
-    // Dart `_computeConstants`, `_computeDiagnostics`: STUB (wave D).
-
-    ResolvedLibrary {
+    let mut library = ResolvedLibrary {
         library: input.library,
         units,
-    }
+    };
+    compute_constants(input, &mut library);
+    compute_diagnostics(input, &mut library);
+    library
 }
+
+/// Dart `_resolveDirectives` (directive elements, URI diagnostics of
+/// imports, exports and parts). STUB (wave D): the directive elements are
+/// in the linked fragments; the URI diagnostics are not reported yet.
+fn resolve_directives(_input: &LibraryAnalysisInput<'_>, _unit: &UnitInput) {}
+
+/// Dart `_computeConstants`: evaluates the constants of all units
+/// (`computeConstants` over `_findConstants`). STUB (wave D, D1–D2).
+fn compute_constants(_input: &LibraryAnalysisInput<'_>, _library: &mut ResolvedLibrary) {}
+
+/// Dart `_computeDiagnostics`: `InheritanceOverrideVerifier`,
+/// `_computeVerifyErrors` per unit (error verifier, constant verifier,
+/// ...), `MemberDuplicateDefinitionVerifier.checkLibrary`, the constructor
+/// fields verifier, the warnings with the used local elements, lints,
+/// `_checkForInconsistentLanguageVersionOverride`, `IgnoreValidator`, and
+/// the filtering of ignored diagnostics (`_filterIgnoredDiagnostics`).
+/// STUB (wave D).
+fn compute_diagnostics(_input: &LibraryAnalysisInput<'_>, _library: &mut ResolvedLibrary) {}
 
 fn global_ctx<'a>(input: &LibraryAnalysisInput<'a>, sink: &'a NoopSink) -> Ctx<'a> {
     static EMPTY: std::sync::OnceLock<dartr_element::FeatureSet> = std::sync::OnceLock::new();
@@ -138,6 +157,7 @@ fn resolve_file(
     unit: &UnitInput,
 ) -> ResolvedUnit {
     let sink = NoopSink;
+    resolve_directives(input, unit);
     let local = input.world.generation.new_local_arena();
     let mut ast = unit.parsed.ast.clone();
     let root = unit.parsed.unit;
