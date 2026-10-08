@@ -14,6 +14,6 @@ if [[ "$primary" != "$root" && -d "$primary/third_party/dart-sdk" ]]; then
 fi
 [[ -d "$dst" ]] || git clone --depth 1 --filter=blob:none --sparse https://github.com/dart-lang/sdk.git "$dst"
 git -C "$dst" sparse-checkout set pkg/analyzer pkg/_fe_analyzer_shared pkg/analysis_server \
-  pkg/analyzer_cli pkg/linter pkg/analysis_server_plugin pkg/analyzer_plugin pkg/dartdev sdk/lib tests/language
+  pkg/analyzer_cli pkg/analyzer_utilities pkg/analyzer_testing pkg/linter pkg/analysis_server_plugin pkg/analyzer_plugin pkg/dartdev sdk/lib tests/language
 git -C "$dst" fetch --depth 1 --filter=blob:none origin tag "$tag"
 git -C "$dst" checkout -q "$tag"
