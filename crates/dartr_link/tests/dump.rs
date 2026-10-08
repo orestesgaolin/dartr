@@ -367,7 +367,7 @@ fn library_json_of_class_with_field_accessors_constructor_and_function() {
         r#"{"k":"ctor","n":"new","f":["simplyBounded"],"type":"C Function(dynamic)","inf":true,"#,
         r#""params":[{"n":"x","kind":"requiredPositional","type":"dynamic","inf":true,"f":["fieldFormal","final"],"default":null}],"#,
         r#""redirected":null,"superCtor":null}]},"#,
-        r#"{"k":"function","n":"f","u":0,"o":40,"f":["simplyBounded"],"type":"void Function(dynamic)","inf":false,"tp":[],"#,
+        r#"{"k":"function","n":"f","u":0,"o":40,"f":["simplyBounded"],"type":"void Function([dynamic])","inf":false,"tp":[],"#,
         r#""params":[{"n":"a","kind":"optionalPositional","type":"dynamic","inf":false,"f":["hasDefaultValue"],"default":"0"}]}]}"#,
     );
     assert_eq!(line, expected);
