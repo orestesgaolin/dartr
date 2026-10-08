@@ -28,6 +28,7 @@
 #![allow(clippy::collapsible_if, clippy::too_many_arguments)]
 
 pub mod arena;
+pub mod doc_comment;
 pub mod generated;
 pub mod node_impl;
 pub mod precedence;

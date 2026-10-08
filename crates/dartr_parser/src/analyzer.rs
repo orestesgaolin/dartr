@@ -116,6 +116,7 @@ pub fn parse_for_analyzer<L: Listener>(source: &str, listener: L) -> AnalyzerPar
         first,
         diagnostics,
         override_version,
+        ..
     } = scan_for_analyzer(source);
     let ScannerResult {
         tokens,
