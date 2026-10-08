@@ -157,6 +157,7 @@
 //! | `checkAssigned(x, true)`, `checkUnassigned(x, false)` | `check_assigned(x, true)`, `check_unassigned(x, false)` |
 //! | `getSsaNodes((nodes) => s = nodes[x]!)` | `get_ssa_nodes(move \|nodes\| s.set(nodes.get(x).unwrap()))` |
 //! | `getSsaNodes((nodes) => expect(nodes[x], same(s)))` | `get_ssa_nodes(move \|nodes\| assert!(same_ssa(nodes.get(x).as_ref(), Some(&s.get()))))` |
+//! | `info.ifTrue.promotionInfo!.get(h, h.promotionKeyStore.keyForVariable(y))` inside `getSsaNodes((nodes) { ... })` | `promotion_info_get(&info.if_true.promotion_info, nodes.flow(), nodes.key_for_variable(y))` (`h` is borrowed by `h.run`) |
 //! | `e.getExpressionInfo((info) => ...)` | `e.get_expression_info(move \|info\| ...)` (`info: Option<ExprInfo>`) |
 //! | `e.whyNotPromoted((reasons) => ...)` | `e.why_not_promoted(move \|reasons\| ...)` (`reasons: Vec<(SharedTypeView<Type>, NonPromotionReason)>`, in Dart map order) |
 //! | `implicitThis_whyNotPromoted('C', (reasons) => ...)` | `implicit_this_why_not_promoted("C", move \|reasons\| ...)` |
