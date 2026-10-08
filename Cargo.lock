@@ -258,6 +258,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "dartr_mini_ast"
+version = "0.1.0"
+dependencies = [
+ "dartr_flow",
+ "indexmap",
+]
+
+[[package]]
 name = "dartr_parser"
 version = "0.1.0"
 dependencies = [

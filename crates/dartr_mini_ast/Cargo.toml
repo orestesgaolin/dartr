@@ -1,0 +1,11 @@
+[package]
+name = "dartr_mini_ast"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Test support: port of the _fe_analyzer_shared \"mini AST\" and \"mini types\" (pkg/_fe_analyzer_shared/test/mini_*.dart)"
+
+[dependencies]
+dartr_flow.workspace = true
+indexmap.workspace = true
