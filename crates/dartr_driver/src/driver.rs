@@ -18,7 +18,7 @@ use dartr_link::input::{
     LinkCombinator, LinkDirectiveUri, LinkExport, LinkImport, LinkImportPrefix, LinkLibraryInput,
     LinkPart, LinkPartUri, LinkUnitInput,
 };
-use dartr_link::link::{LinkedCycle, LinkedLibraries, LinkedLibrary, link_cycle};
+use dartr_link::link::{ConstExprs, LinkedCycle, LinkedLibraries, LinkedLibrary, link_cycle};
 use indexmap::{IndexMap, IndexSet};
 
 use crate::file_state::{DirectiveUri, FileId, FileSystemState};
@@ -29,11 +29,17 @@ use crate::unlinked_data::UnlinkedCombinator;
 #[derive(Clone, Default)]
 pub struct LinkedRegistry {
     pub libraries: imbl::HashMap<Arc<str>, Arc<LinkedLibrary>>,
+    /// The `ConstExprs` of each linked cycle, by raw store id.
+    pub const_exprs: imbl::HashMap<u32, Arc<ConstExprs>>,
 }
 
 impl LinkedLibraries for LinkedRegistry {
     fn library(&self, uri: &str) -> Option<Arc<LinkedLibrary>> {
         self.libraries.get(uri).cloned()
+    }
+
+    fn const_exprs(&self, store: dartr_element::StoreId) -> Option<Arc<ConstExprs>> {
+        self.const_exprs.get(&store.raw()).cloned()
     }
 }
 
@@ -308,6 +314,10 @@ impl<'a> Job<'a> {
                 for l in &linked.libraries {
                     state.registry.libraries.insert(l.uri.clone(), l.clone());
                 }
+                state
+                    .registry
+                    .const_exprs
+                    .insert(linked.store.id.raw(), linked.const_exprs.clone());
                 results[i] = Some(linked);
             }
             for &user in &self.users[i] {

@@ -1456,6 +1456,7 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
                 .flags
                 .set(FragmentFlags::FIELD_FORMAL_PARAMETER_FRAGMENT_IS_DECLARING, true);
             self.declaring_formal_parameters.insert(p.raw(), (field, formal));
+            self.core.declaring_formal_parameters.push((field, formal));
         }
         self.build_executable_element_children(fragment.raw(), Some(n.formal_parameters), None);
     }

@@ -45,6 +45,8 @@ pub struct LinkedLibrary {
 /// `LinkedElementFactory.libraryOfUri2` and `exportEntries`).
 pub trait LinkedLibraries: Sync {
     fn library(&self, uri: &str) -> Option<Arc<LinkedLibrary>>;
+    /// The `ConstExprs` of the linked cycle with the store [store].
+    fn const_exprs(&self, store: StoreId) -> Option<Arc<ConstExprs>>;
 }
 
 /// The expressions of a cycle that linking copies from the units
@@ -100,6 +102,10 @@ pub struct LinkerCore<'a> {
     pub const_exprs: ConstExprs,
     /// Dart `Linker._fragmentNodes`: (library, unit, node) of a fragment.
     pub fragment_nodes: IndexMap<FragmentId, (usize, usize, NodeId)>,
+    /// Dart `Linker.declaringFormalParameters`: the field and the formal
+    /// parameter fragment of each declaring parameter of a primary
+    /// constructor.
+    pub declaring_formal_parameters: Vec<(FId<FieldFragment>, FId<FormalParameterFragment>)>,
 }
 
 impl LinkerCore<'_> {
@@ -150,6 +156,7 @@ pub fn link_cycle(
             store: generation.new_cycle_store(),
             const_exprs: ConstExprs::new(),
             fragment_nodes: IndexMap::new(),
+            declaring_formal_parameters: Vec::new(),
         },
         builders: Vec::new(),
         builder_by_uri: IndexMap::new(),
@@ -171,19 +178,12 @@ pub fn link_cycle(
     set_library_and_enclosing(&mut linker.core.store);
     build_export_scopes(&mut linker);
 
-    // The structural parts of the later phases.
-    for index in 0..linker.builders.len() {
-        LibraryBuilder::build_class_synthetic_constructors(&mut linker, index);
-    }
-    for index in 0..linker.builders.len() {
-        LibraryBuilder::build_enum_synthetic_constructors(&mut linker, index);
-    }
-    for index in 0..linker.builders.len() {
-        LibraryBuilder::replace_const_fields_if_no_const_constructor(&mut linker, index);
-    }
-    for index in 0..linker.builders.len() {
-        LibraryBuilder::resolve_constructor_field_formals(&mut linker, index);
-    }
+    // _createTypeSystem, _resolveTypes
+    let type_provider = crate::types_builder::create_type_provider(&linker);
+    crate::types_builder::resolve_types(&mut linker, &type_provider);
+
+    // _computeHasNonFinalField ... buildExtensionTypes
+    crate::outline::build_outlines(&mut linker, &type_provider);
     for index in 0..linker.builders.len() {
         LibraryBuilder::collect_mixin_super_invoked_names(&mut linker, index);
     }

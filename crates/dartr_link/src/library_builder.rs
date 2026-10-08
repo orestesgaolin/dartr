@@ -264,7 +264,7 @@ impl LibraryBuilder {
                 let DirectiveUri::Library { library, .. } = &export.directive.uri else {
                     continue;
                 };
-                let combinators = build_combinators(linker, &export.combinators);
+                let combinators = combinators_of(linker, &export.combinators);
                 let export_ = Export {
                     exporter: index,
                     location: ExportLocation {
@@ -507,7 +507,7 @@ pub fn library_uri(linker: &Linker<'_>, library: EId<LibraryElement>) -> Arc<str
 }
 
 /// Dart `NamespaceCombinatorListExtension.build`.
-fn build_combinators(linker: &Linker<'_>, combinators: &[NamespaceCombinator]) -> Vec<Combinator> {
+pub fn combinators_of(linker: &Linker<'_>, combinators: &[NamespaceCombinator]) -> Vec<Combinator> {
     combinators
         .iter()
         .map(|c| match c {
