@@ -13,7 +13,18 @@
 use crate::yaml::{Span, YamlError};
 
 pub(crate) fn normalize_error(text: &str, message: &str, span: Span) -> YamlError {
+    if let Some(error) = incompatible_yaml_version(text, span.start) {
+        return error;
+    }
     let (message, span) = match message {
+        "duplicate version directive" => (
+            "Duplicate %YAML directive.",
+            range(text, span.start, version_directive_end(text, span.start)),
+        ),
+        "mapping values are not allowed in this context" => (
+            "Mapping values are not allowed here. Did you miss a colon earlier?",
+            point(text, span.start),
+        ),
         "while parsing a node, did not find expected node content" => {
             ("Expected node content.", point(text, span.start))
         }
@@ -139,6 +150,61 @@ pub(crate) fn normalize_error(text: &str, message: &str, span: Span) -> YamlErro
         message: message.into(),
         span: Some(span),
     }
+}
+
+/// Package YAML rejects a major version other than 1 and a minor version of
+/// zero. Saphyr deliberately omits this check. Inspect only directives whose
+/// complete version token was consumed before the current event/error.
+pub(crate) fn incompatible_yaml_version(text: &str, limit: usize) -> Option<YamlError> {
+    let mut offset = 0;
+    for line in text.split_inclusive('\n') {
+        let (line, start) = if offset == 0 && line.starts_with('\u{feff}') {
+            (&line[3..], 3)
+        } else {
+            (line, offset)
+        };
+        if start >= limit {
+            break;
+        }
+        if let Some(rest) = line.strip_prefix("%YAML") {
+            if !rest.starts_with(char::is_whitespace) {
+                break;
+            }
+            let version = rest.split_whitespace().next()?;
+            let (major, minor) = version.split_once('.')?;
+            let major: u64 = major.parse().ok()?;
+            let minor: u64 = minor.parse().ok()?;
+            let end = start + 5 + rest.find(version)? + version.len();
+            if end > limit {
+                break;
+            }
+            if major != 1 || minor == 0 {
+                return Some(YamlError {
+                    message:
+                        "Incompatible YAML document. This parser only supports YAML 1.1 and 1.2."
+                            .into(),
+                    span: Some(range(text, start, end)),
+                });
+            }
+        } else if !line.starts_with('%')
+            && !line.trim().is_empty()
+            && !line.trim_start().starts_with('#')
+        {
+            break;
+        }
+        offset += line.len() + if start == 3 && offset == 0 { 3 } else { 0 };
+    }
+    None
+}
+
+fn version_directive_end(text: &str, start: usize) -> usize {
+    let line = &text[start..line_end(text, start)];
+    line.strip_prefix("%YAML")
+        .and_then(|rest| {
+            let version = rest.split_whitespace().next()?;
+            Some(start + 5 + rest.find(version)? + version.len())
+        })
+        .unwrap_or(start)
 }
 
 fn unchanged(message: &str, span: Span) -> YamlError {

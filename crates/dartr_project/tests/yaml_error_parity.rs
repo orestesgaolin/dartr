@@ -7,8 +7,8 @@
 //! `%Y@` and `%FOO` are intentionally outside this error corpus: package:yaml
 //! accepts them as unknown directives and reports warnings through a callback,
 //! while `loadYamlNode` and dartr both return a value. Errors that Saphyr does
-//! not emit, including unsupported YAML versions and some duplicate directive
-//! cases, also cannot be normalized after parsing. The `simple key expected`
+//! not emit, including some duplicate tag directive cases, need separate
+//! parser compatibility work. The `simple key expected`
 //! Saphyr variant remains outside the exact-span set because its error drops
 //! the pending key location that package:yaml reports.
 
@@ -24,6 +24,22 @@ struct Case {
 }
 
 const CASES: &[Case] = &[
+    Case {
+        name: "yaml_major_incompatible",
+        input: "%YAML 2.0\n---\nanalyzer: {}\n",
+    },
+    Case {
+        name: "yaml_zero_minor",
+        input: "%YAML 1.0\n---\nanalyzer: {}\n",
+    },
+    Case {
+        name: "yaml_duplicate",
+        input: "%YAML 1.2\n%YAML 1.2\n---\nanalyzer: {}\n",
+    },
+    Case {
+        name: "mapping_missing_colon",
+        input: "analyzer:\n  language\n  exclude: []\n",
+    },
     Case {
         name: "node_content",
         input: "name: [",

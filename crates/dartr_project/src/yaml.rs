@@ -264,6 +264,12 @@ impl<'a> Loader<'a> {
                 Event::StreamStart | Event::Nothing | Event::DocumentEnd => {}
                 Event::StreamEnd => break,
                 Event::DocumentStart(_) => {
+                    if let Some(error) = crate::yaml_errors::incompatible_yaml_version(
+                        self.text,
+                        self.byte(span.start.index()),
+                    ) {
+                        return Err(error);
+                    }
                     if result.is_some() {
                         return Err(YamlError {
                             message: "Only expected one document.".into(),
