@@ -1,8 +1,10 @@
 // Dart source: pkg/analyzer/lib/src/dart/analysis/library_analyzer.dart (_computeLints)
 //! A JSON-lines differential runner, separate from the dartr CLI.
 use dartr_ast::{PartDirective, PartOfDirective, SimpleStringLiteral};
-use dartr_ast_builder::parse_string;
-use dartr_lints::{Registry, RuleContextUnit, lint_library, rules::implemented_rules};
+use dartr_ast_builder::parse_file;
+use dartr_lints::{
+    ExperimentalFlag, Registry, RuleContextUnit, lint_library, rules::implemented_rules,
+};
 use indexmap::IndexMap;
 use serde_json::{Value, json};
 use std::{
@@ -69,7 +71,29 @@ fn main() {
     let parsed: Vec<_> = sources
         .iter()
         .zip(&paths)
-        .map(|(source, path)| parse_string(source, path))
+        .zip(&requests)
+        .map(|((source, path), request)| {
+            let version = request["languageVersion"].as_array().map_or((3, 13), |v| {
+                (
+                    v[0].as_u64().expect("language major") as u32,
+                    v[1].as_u64().expect("language minor") as u32,
+                )
+            });
+            let experiments: Vec<_> = request["experiments"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|name| {
+                    let name = name.as_str().expect("experiment name");
+                    ExperimentalFlag::VALUES
+                        .iter()
+                        .copied()
+                        .find(|flag| flag.name() == name)
+                        .expect("known experiment")
+                })
+                .collect();
+            parse_file(source, path, version, &experiments)
+        })
         .collect();
     let path_indices: IndexMap<_, _> = paths
         .iter()

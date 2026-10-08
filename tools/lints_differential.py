@@ -27,7 +27,8 @@ def dart_binary():
 def diagnostic_key(path, code, severity, offset, length, message):
     return path, code, severity, offset, length, message
 
-def run(binary, output, fixtures=False, corpus=None, input_dir=None):
+def run(binary, output, fixtures=False, corpus=None, input_dir=None,
+        language_version='3.13', experiments=(), package_config=True):
     started = time.monotonic()
     output.mkdir(parents=True, exist_ok=True)
     metadata = json.loads(subprocess.check_output([str(binary), '--list'], text=True))
@@ -51,12 +52,15 @@ def run(binary, output, fixtures=False, corpus=None, input_dir=None):
     shutil.copytree(source, project / 'lib')
     for options in project.rglob('analysis_options.yaml'):
         options.unlink()
-    (project / 'pubspec.yaml').write_text("name: dartr_lint_corpus\nenvironment:\n  sdk: '>=3.13.0 <4.0.0'\n")
-    (project / 'analysis_options.yaml').write_text('linter:\n  rules:\n' + ''.join(f'    - {rule}\n' for rule in rules))
+    (project / 'pubspec.yaml').write_text(f"name: dartr_lint_corpus\nenvironment:\n  sdk: '>={language_version}.0 <4.0.0'\n")
+    experiment_options = ('analyzer:\n  enable-experiment:\n' +
+                          ''.join(f'    - {name}\n' for name in experiments)) if experiments else ''
+    (project / 'analysis_options.yaml').write_text(experiment_options + 'linter:\n  rules:\n' + ''.join(f'    - {rule}\n' for rule in rules))
     # The analyzer uses package context even without external dependencies.
-    (project / '.dart_tool').mkdir()
-    (project / '.dart_tool/package_config.json').write_text(json.dumps({'configVersion':2, 'packages':[
-        {'name':'dartr_lint_corpus','rootUri':'../','packageUri':'lib/','languageVersion':'3.13'}]}))
+    if package_config:
+        (project / '.dart_tool').mkdir()
+        (project / '.dart_tool/package_config.json').write_text(json.dumps({'configVersion':2, 'packages':[
+            {'name':'dartr_lint_corpus','rootUri':'../','packageUri':'lib/','languageVersion':language_version}]}))
     dart = dart_binary()
     version = subprocess.check_output([dart, '--version'], text=True, stderr=subprocess.STDOUT).strip()
     if '3.13.3 ' not in version:
@@ -68,7 +72,9 @@ def run(binary, output, fixtures=False, corpus=None, input_dir=None):
     if oracle.returncode not in (0, 1, 2, 3):
         raise RuntimeError(f'dart analyze failed: {oracle.returncode}')
     files = sorted((project / 'lib').rglob('*.dart'))
-    request = ''.join(json.dumps({'path':str(path.resolve()), 'enabled':rules}) + '\n' for path in files)
+    request = ''.join(json.dumps({'path':str(path.resolve()), 'enabled':rules,
+                                 'languageVersion':[int(v) for v in language_version.split('.')],
+                                 'experiments':list(experiments)}) + '\n' for path in files)
     rust = subprocess.run([str(binary)], input=request, text=True, capture_output=True)
     (output / 'dartr.stdout.jsonl').write_text(rust.stdout)
     (output / 'dartr.stderr.log').write_text(rust.stderr)
@@ -120,5 +126,10 @@ if __name__ == '__main__':
     group.add_argument('--input-dir')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--binary', type=Path, default=ROOT / 'target/debug/lints_dump')
+    parser.add_argument('--language-version', default='3.13')
+    parser.add_argument('--enable-experiment', action='append', default=[])
+    parser.add_argument('--no-package-config', action='store_true')
     args = parser.parse_args()
-    raise SystemExit(run(args.binary.resolve(), args.output.resolve(), args.fixtures, args.corpus, args.input_dir))
+    raise SystemExit(run(args.binary.resolve(), args.output.resolve(), args.fixtures, args.corpus,
+                         args.input_dir, args.language_version, args.enable_experiment,
+                         not args.no_package_config))

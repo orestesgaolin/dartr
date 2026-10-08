@@ -36,6 +36,10 @@ pub struct LinterContext<'a> {
 }
 pub type RuleContext<'a> = LinterContext<'a>;
 impl<'a> LinterContext<'a> {
+    /// The library's defining unit, including when a processor visits a part.
+    pub fn defining_unit(&self) -> &RuleContextUnit<'a> {
+        &self.all_units[0]
+    }
     /// Workspace package root for the defining unit, if a pubspec exists.
     pub fn package_root(&self) -> Option<std::path::PathBuf> {
         let path = self.all_units.first()?.path;
@@ -56,7 +60,56 @@ impl<'a> LinterContext<'a> {
         })
     }
     pub fn is_feature_enabled(&self, feature: ExperimentalFlag) -> bool {
-        self.parsed.feature_set.is_experiment_enabled(feature)
+        self.defining_unit()
+            .parsed
+            .feature_set
+            .is_experiment_enabled(feature)
+    }
+    /// The visited unit's source URI. The analyzer uses a
+    /// package URI for files mapped by package_config, and a file URI otherwise.
+    pub fn source_uri(&self) -> String {
+        let file = std::path::Path::new(self.path);
+        for root in file.ancestors().skip(1) {
+            let config = root.join(".dart_tool/package_config.json");
+            let Ok(content) = std::fs::read_to_string(&config) else {
+                continue;
+            };
+            let Ok(config_value) = serde_json::from_str::<serde_json::Value>(&content) else {
+                break;
+            };
+            if let Some(packages) = config_value["packages"].as_array() {
+                for package in packages {
+                    let (Some(name), Some(root_uri)) =
+                        (package["name"].as_str(), package["rootUri"].as_str())
+                    else {
+                        continue;
+                    };
+                    let package_root = if let Some(path) = root_uri.strip_prefix("file://") {
+                        std::path::PathBuf::from(path)
+                    } else if root_uri.contains(':') {
+                        continue;
+                    } else {
+                        config.parent().unwrap().join(root_uri)
+                    };
+                    let package_dir =
+                        package_root.join(package["packageUri"].as_str().unwrap_or(""));
+                    if let Ok(package_dir) = package_dir.canonicalize()
+                        && let Ok(relative) = file.strip_prefix(&package_dir)
+                    {
+                        return format!(
+                            "package:{name}/{}",
+                            relative.to_string_lossy().replace('\\', "/")
+                        );
+                    }
+                }
+            }
+            break;
+        }
+        if file.is_absolute() {
+            format!("file://{}", self.path.replace('\\', "/"))
+        } else {
+            self.path.replace('\\', "/")
+        }
     }
     pub fn report_node(
         &self,

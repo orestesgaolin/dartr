@@ -16,6 +16,11 @@ All 266 are classified below.
 The pinned framework uses `AnalysisRule` and `RuleState`; it has no legacy lint category API.
 The metadata preserves the states, descriptions, diagnostic code sets, and incompatible rule lists.
 Upstream `canUseParsedResult` is preserved separately from this classification: many syntactic rules leave that property at its default `false`.
+This classification permits reconstructing library source context from ordered
+parsed units and package configuration. `file_names` uses the defining unit;
+library feature conditions use its feature set, and source-URI checks use the
+visited unit. These are explicit translations of upstream element-backed context
+reads, not semantic resolution of declarations or expressions.
 
 | Rule | Class | Reason | Port status |
 |---|---|---|---|
@@ -42,7 +47,7 @@ Upstream `canUseParsedResult` is preserved separately from this classification: 
 | avoid_equals_and_hash_code_on_mutable_classes | needs resolution | Requires class annotations and declared method elements | deferred |
 | avoid_escaping_inner_quotes | AST-only | Uses string-literal syntax and decoded interpolation text only | implemented |
 | avoid_field_initializers_in_const_classes | needs resolution | Requires enclosing class and constructor elements | deferred |
-| avoid_final_parameters | AST-only | Checks formal-parameter syntax and parser feature output | implemented |
+| avoid_final_parameters | AST-only | Checks formal-parameter syntax with the defining library primary-constructor feature | implemented |
 | avoid_function_literals_in_foreach_calls | needs resolution | Uses receiver static type to identify Iterable.forEach | deferred |
 | avoid_futureor_void | needs resolution | Variance checker consumes resolved DartType objects | deferred |
 | avoid_implementing_value_types | needs resolution | Inspects implemented interface elements and annotations | deferred |
@@ -62,7 +67,7 @@ Upstream `canUseParsedResult` is preserved separately from this classification: 
 | avoid_returning_null_for_void | needs resolution | Uses enclosing executable element return type | deferred |
 | avoid_returning_this | needs resolution | Uses method element and return-type/override information | deferred |
 | avoid_setters_without_getters | needs resolution | Matches getter and setter elements across containers | deferred |
-| avoid_shadowing_type_parameters | AST-only | Compares lexical type-parameter names along AST ancestors | implemented |
+| avoid_shadowing_type_parameters | AST-only | Compares lexical type-parameter names using the defining library wildcard feature | implemented |
 | avoid_single_cascade_in_expression_statements | AST-only | Checks cascade section count, operator token, and AST parent | implemented |
 | avoid_slow_async_io | needs resolution | Identifies dart.io members through resolved method elements | deferred |
 | avoid_type_to_string | needs resolution | Uses expression static types, elements, and type system | deferred |
@@ -98,13 +103,13 @@ Upstream `canUseParsedResult` is preserved separately from this classification: 
 | document_ignores | AST-only | Parses ignore comment tokens and adjacent source lines | implemented |
 | empty_catches | AST-only | Checks catch body, parameter spelling, and comment tokens | implemented |
 | empty_constructor_bodies | AST-only | Checks constructor body shape and trailing comments | implemented |
-| empty_container_bodies | AST-only | Checks primary-constructor container body tokens | implemented |
+| empty_container_bodies | AST-only | Checks container body tokens when the defining library enables primary constructors | implemented |
 | empty_statements | AST-only | Checks EmptyStatement parent and switch-case statement list | implemented |
 | enable_null_safety | removed | Upstream RemovedAnalysisRule since Dart 3 | removed upstream |
 | eol_at_end_of_file | AST-only | Checks current source text at CompilationUnit | implemented |
 | erase_dart_type_extension_types | needs resolution | Internal rule requires resolved extension-type erasure information | deferred |
 | exhaustive_cases | needs resolution | Uses switch expression type and enum/class elements | deferred |
-| file_names | AST-only | Validates the source basename supplied by context.path | implemented |
+| file_names | AST-only | Validates the defining library unit basename even when visiting a part | implemented |
 | flutter_style_todos | AST-only | Scans parser token comments only | implemented |
 | hash_and_equals | needs resolution | Inspects declared class elements and overridden equality/hash members. | deferred |
 | implementation_imports | needs resolution | Uses resolved imported library elements and source URIs. | deferred |
@@ -119,7 +124,7 @@ Upstream `canUseParsedResult` is preserved separately from this classification: 
 | leading_newlines_in_multiline_strings | AST-only | Uses parsed string syntax, source offsets, and line information without resolution. | implemented |
 | library_annotations | needs resolution | Uses annotation and enclosing library elements. | deferred |
 | library_names | AST-only | Checks the syntactic dotted library name. | implemented |
-| library_prefixes | AST-only | Checks the syntactic import prefix and file feature state. | implemented |
+| library_prefixes | AST-only | Checks the syntactic import prefix and defining library wildcard feature. | implemented |
 | library_private_types_in_public_api | needs resolution | Traverses public elements and resolved API types. | deferred |
 | lines_longer_than_80_chars | AST-only | Scans source lines, comments, and syntactic string URI/path exemptions. | implemented |
 | list_remove_unrelated_type | removed | Upstream is RemovedAnalysisRule. | n/a |
@@ -132,7 +137,7 @@ Upstream `canUseParsedResult` is preserved separately from this classification: 
 | no_default_cases | needs resolution | Uses the switch expression static type for enum exemptions. | deferred |
 | no_duplicate_case_values | needs resolution | Computes and compares constant values. | deferred |
 | no_dynamic_casts | needs resolution | Requires static types, read elements, and the type system. | deferred |
-| no_leading_underscores_for_library_prefixes | AST-only | Checks the syntactic import prefix. | implemented |
+| no_leading_underscores_for_library_prefixes | AST-only | Checks the syntactic import prefix and defining library wildcard feature. | implemented |
 | no_leading_underscores_for_local_identifiers | needs resolution | Uses declared parameter elements to exempt field-declaring parameters. | deferred |
 | no_literal_bool_comparisons | needs resolution | Uses static types and the type system. | deferred |
 | no_logic_in_create_state | needs resolution | Identifies resolved Flutter State/createState elements. | deferred |
@@ -140,7 +145,7 @@ Upstream `canUseParsedResult` is preserved separately from this classification: 
 | no_runtimeType_toString | needs resolution | Identifies resolved Object.runtimeType members. | deferred |
 | no_self_assignments | AST-only | Compares identifier syntax on simple assignments. | implemented |
 | no_wildcard_variable_uses | needs resolution | Uses resolved wildcard variable elements and library feature state. | deferred |
-| non_constant_identifier_names | AST-only | Checks declaration tokens and syntactic declaration context. | implemented |
+| non_constant_identifier_names | AST-only | Checks declaration tokens and syntactic context, including augmentation exclusions. | implemented |
 | noop_primitive_operations | needs resolution | Uses operand static types and resolved operator elements. | deferred |
 | null_check_on_nullable_type_parameter | needs resolution | Uses static type-parameter types and the type system. | deferred |
 | null_closures | needs resolution | Requires contextual/static function types. | deferred |
@@ -193,7 +198,7 @@ Upstream `canUseParsedResult` is preserved separately from this classification: 
 | prefer_relative_imports | needs resolution | Requires resolved import sources, package roots, and library URIs. | deferred |
 | prefer_single_quotes | AST-only | Checks string delimiters, contents, nesting, and interpolation syntax. | implemented |
 | prefer_spread_collections | AST-only | Checks list-literal cascades and syntactic constant context. | implemented |
-| prefer_typing_uninitialized_variables | AST-only | Checks untyped declarations without initializers. | implemented |
+| prefer_typing_uninitialized_variables | AST-only | Checks uninitialized variable syntax and excludes augmentation declarations. | implemented |
 | prefer_void_to_null | needs resolution | Uses resolved type annotations, element use sites, and ancestry. | deferred |
 | provide_deprecation_message | needs resolution | Uses resolved ElementAnnotation.isDeprecated to distinguish the core annotation. | deferred |
 | public_member_api_docs | needs resolution | Uses resolved public elements, overrides, and documentation inheritance. | deferred |
@@ -226,7 +231,7 @@ Upstream `canUseParsedResult` is preserved separately from this classification: 
 | unnecessary_async | needs resolution | Uses return static types and element declarations. | deferred |
 | unnecessary_await_in_return | needs resolution | Uses return types and the type system. | deferred |
 | unnecessary_brace_in_string_interps | AST-only | Checks interpolation expression shape and adjacent token text. | implemented |
-| unnecessary_breaks | AST-only | Checks an unlabeled final break in a switch member. | implemented |
+| unnecessary_breaks | AST-only | Checks an unlabeled final break when the defining library enables patterns. | implemented |
 | unnecessary_const | AST-only | Checks explicit const tokens and syntactic constant context. | implemented |
 | unnecessary_const_in_enum_constructor | AST-only | Checks explicit const tokens on enum constructors. | implemented |
 | unnecessary_constructor_name | needs resolution | Uses enclosing constructor elements to suppress duplicate-constructor cases. | deferred |
@@ -236,7 +241,7 @@ Upstream `canUseParsedResult` is preserved separately from this classification: 
 | unnecessary_lambdas | needs resolution | Compares function and invoked elements and static types. | deferred |
 | unnecessary_late | AST-only | Checks static/top-level variable syntax and initializers. | implemented |
 | unnecessary_library_directive | AST-only | Checks directive siblings, annotations, and documentation comments. | implemented |
-| unnecessary_library_name | AST-only | Checks whether a library directive has a name. | implemented |
+| unnecessary_library_name | AST-only | Checks for a library name when the defining library enables unnamed libraries. | implemented |
 | unnecessary_new | AST-only | Checks the instance-creation keyword token. | implemented |
 | unnecessary_null_aware_assignments | needs resolution | Uses write/read elements to prove target identity. | deferred |
 | unnecessary_null_aware_operator_on_extension_on_nullable | needs resolution | Uses resolved extension elements and nullable types. | deferred |

@@ -12,7 +12,7 @@ join_return_with_assignment	needs resolution	Compares canonical elements of assi
 leading_newlines_in_multiline_strings	AST-only	Uses parsed string syntax, source offsets, and line information without resolution.	implemented
 library_annotations	needs resolution	Uses annotation and enclosing library elements.	deferred
 library_names	AST-only	Checks the syntactic dotted library name.	implemented
-library_prefixes	AST-only	Checks the syntactic import prefix and file feature state.	implemented
+library_prefixes	AST-only	Checks the syntactic import prefix and defining library wildcard feature.	implemented
 library_private_types_in_public_api	needs resolution	Traverses public elements and resolved API types.	deferred
 lines_longer_than_80_chars	AST-only	Scans source lines, comments, and syntactic string URI/path exemptions.	implemented
 list_remove_unrelated_type	removed	Upstream is RemovedAnalysisRule.	n/a
@@ -25,7 +25,7 @@ no_adjacent_strings_in_list	AST-only	Checks collection elements and list-pattern
 no_default_cases	needs resolution	Uses the switch expression static type for enum exemptions.	deferred
 no_duplicate_case_values	needs resolution	Computes and compares constant values.	deferred
 no_dynamic_casts	needs resolution	Requires static types, read elements, and the type system.	deferred
-no_leading_underscores_for_library_prefixes	AST-only	Checks the syntactic import prefix.	implemented
+no_leading_underscores_for_library_prefixes	AST-only	Checks the syntactic import prefix and defining library wildcard feature.	implemented
 no_leading_underscores_for_local_identifiers	needs resolution	Uses declared parameter elements to exempt field-declaring parameters.	deferred
 no_literal_bool_comparisons	needs resolution	Uses static types and the type system.	deferred
 no_logic_in_create_state	needs resolution	Identifies resolved Flutter State/createState elements.	deferred
@@ -33,7 +33,7 @@ no_raw_types	needs resolution	Requires resolved generic type elements and type a
 no_runtimeType_toString	needs resolution	Identifies resolved Object.runtimeType members.	deferred
 no_self_assignments	AST-only	Compares identifier syntax on simple assignments.	implemented
 no_wildcard_variable_uses	needs resolution	Uses resolved wildcard variable elements and library feature state.	deferred
-non_constant_identifier_names	AST-only	Checks declaration tokens and syntactic declaration context.	implemented
+non_constant_identifier_names	AST-only	Checks declaration tokens and syntactic context, including augmentation exclusions.	implemented
 noop_primitive_operations	needs resolution	Uses operand static types and resolved operator elements.	deferred
 null_check_on_nullable_type_parameter	needs resolution	Uses static type-parameter types and the type system.	deferred
 null_closures	needs resolution	Requires contextual/static function types.	deferred
@@ -85,7 +85,7 @@ prefer_null_aware_operators	AST-only	Matches null checks and property/invocation
 prefer_relative_imports	needs resolution	Requires resolved import sources, package roots, and library URIs.	deferred
 prefer_single_quotes	AST-only	Checks string delimiters, contents, nesting, and interpolation syntax.	implemented
 prefer_spread_collections	AST-only	Checks list-literal cascades and syntactic constant context.	implemented
-prefer_typing_uninitialized_variables	AST-only	Checks untyped declarations without initializers.	implemented
+prefer_typing_uninitialized_variables	AST-only	Checks uninitialized variable syntax and excludes augmentation declarations.	implemented
 prefer_void_to_null	needs resolution	Uses resolved type annotations, element use sites, and ancestry.	deferred
 provide_deprecation_message	needs resolution	Uses resolved ElementAnnotation.isDeprecated to distinguish the core annotation.	deferred
 public_member_api_docs	needs resolution	Uses resolved public elements, overrides, and documentation inheritance.	deferred

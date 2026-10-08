@@ -496,7 +496,7 @@ fn library_prefixes(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnos
         return;
     };
     let text = token_text(ctx, ctx.ast.get(prefix).token);
-    if text == "_" && ctx.parsed.language_version.effective() >= (3, 7) {
+    if text == "_" && ctx.is_feature_enabled(crate::ExperimentalFlag::WildcardVariables) {
         return;
     }
     if !is_valid_library_prefix(text) {
@@ -572,7 +572,7 @@ fn no_leading_underscores_for_library_prefixes(
         return;
     };
     let name = token_text(ctx, ctx.ast.get(prefix).token);
-    if name == "_" && ctx.parsed.language_version.effective() >= (3, 7) {
+    if name == "_" && ctx.is_feature_enabled(crate::ExperimentalFlag::WildcardVariables) {
         return;
     }
     if name.starts_with('_') {
@@ -656,6 +656,36 @@ fn check_non_constant_name(
     }
 }
 
+// Dart AstNodeExtension.isAugmentation. Variable fragments carry this flag
+// after resolution; a parsed variable gets it from its declaration's keyword.
+fn is_augmentation(ctx: &LinterContext<'_>, node: NodeId) -> bool {
+    match ctx.ast.kind(node) {
+        NodeKind::ConstructorDeclaration => ctx.ast[Id::<ConstructorDeclaration>::from_raw(node)]
+            .augment_keyword
+            .is_some(),
+        NodeKind::FunctionDeclaration => ctx.ast[Id::<FunctionDeclaration>::from_raw(node)]
+            .augment_keyword
+            .is_some(),
+        NodeKind::MethodDeclaration => ctx.ast[Id::<MethodDeclaration>::from_raw(node)]
+            .augment_keyword
+            .is_some(),
+        NodeKind::FieldDeclaration => ctx.ast[Id::<FieldDeclaration>::from_raw(node)]
+            .augment_keyword
+            .is_some(),
+        NodeKind::TopLevelVariableDeclaration => ctx.ast
+            [Id::<TopLevelVariableDeclaration>::from_raw(node)]
+        .augment_keyword
+        .is_some(),
+        NodeKind::FunctionExpression
+        | NodeKind::VariableDeclaration
+        | NodeKind::VariableDeclarationList => ctx
+            .ast
+            .parent(node)
+            .is_some_and(|parent| is_augmentation(ctx, parent)),
+        _ => false,
+    }
+}
+
 fn non_constant_identifier_names(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     match ctx.ast.kind(node) {
         NodeKind::CatchClause => {
@@ -708,9 +738,14 @@ fn non_constant_identifier_names(ctx: &LinterContext<'_>, node: NodeId, out: &mu
             let n = ctx
                 .ast
                 .get(ctx.ast.cast::<FormalParameterList>(node).unwrap());
+            let in_augmentation = ctx
+                .ast
+                .parent(node)
+                .is_some_and(|parent| is_augmentation(ctx, parent));
             for &parameter in ctx.ast.list(n.parameters) {
                 if let Some(p) = ctx.ast.cast::<RegularFormalParameter>(parameter.raw())
                     && let Some(name) = ctx.ast.get(p).name
+                    && !(in_augmentation && ctx.ast.get(p).kind.is_named())
                 {
                     check_non_constant_name(ctx, name, true, out);
                 }
@@ -764,6 +799,9 @@ fn non_constant_identifier_names(ctx: &LinterContext<'_>, node: NodeId, out: &mu
             }
         }
         NodeKind::VariableDeclaration => {
+            if is_augmentation(ctx, node) {
+                return;
+            }
             let n = ctx
                 .ast
                 .get(ctx.ast.cast::<VariableDeclaration>(node).unwrap());
@@ -1326,7 +1364,7 @@ fn prefer_typing_uninitialized_variables(
         &diag::PREFER_TYPING_UNINITIALIZED_VARIABLES_FOR_LOCAL_VARIABLE
     };
     for &variable in ctx.ast.list(list.variables) {
-        if ctx.ast.get(variable).initializer.is_none() {
+        if ctx.ast.get(variable).initializer.is_none() && !is_augmentation(ctx, variable.raw()) {
             ctx.report_node(out, code, variable, &[]);
         }
     }

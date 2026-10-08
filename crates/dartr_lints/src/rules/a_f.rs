@@ -116,7 +116,7 @@ pub fn register(
             }
         }
         "avoid_final_parameters" => {
-            if context.parsed.language_version.effective() < (3, 13) {
+            if !context.is_feature_enabled(crate::ExperimentalFlag::PrimaryConstructors) {
                 registry.add(NodeKind::FormalParameterList, name, avoid_final_parameters);
             }
         }
@@ -213,7 +213,7 @@ pub fn register(
             }
         }
         "empty_container_bodies" => {
-            if context.parsed.language_version.effective() >= (3, 13) {
+            if context.is_feature_enabled(crate::ExperimentalFlag::PrimaryConstructors) {
                 registry.add(NodeKind::BlockClassBody, name, empty_container_bodies)
             }
         }
@@ -730,7 +730,7 @@ fn check_shadowing(
         .collect();
     for parameter in c.ast.list(c.ast.get(current).type_parameters) {
         let name = lexeme(c, c.ast.get(*parameter).name);
-        if name == "_" && c.parsed.language_version.effective() >= (3, 7) {
+        if name == "_" && c.is_feature_enabled(crate::ExperimentalFlag::WildcardVariables) {
             continue;
         }
         if names.contains(&name) {
@@ -1639,7 +1639,7 @@ fn valid_dart_file_name(name: &str) -> bool {
         .all(|(i, ch)| ch.is_ascii_lowercase() || ch == b'_' || (i > 0 && ch.is_ascii_digit()))
 }
 fn file_names(c: &LinterContext<'_>, _: NodeId, out: &mut Vec<Diagnostic>) {
-    let name = c.path.replace('\\', "/");
+    let name = c.defining_unit().path.replace('\\', "/");
     let name = name.rsplit('/').next().unwrap_or(&name);
     if !valid_dart_file_name(name) {
         c.report_offset(out, &diag::FILE_NAMES, 0, 0, &[name]);

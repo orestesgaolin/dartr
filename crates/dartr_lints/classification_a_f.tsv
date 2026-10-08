@@ -22,7 +22,7 @@ avoid_empty_else	AST-only	Checks an IfStatement else child for a real EmptyState
 avoid_equals_and_hash_code_on_mutable_classes	needs resolution	Requires class annotations and declared method elements	deferred
 avoid_escaping_inner_quotes	AST-only	Uses string-literal syntax and decoded interpolation text only	implemented
 avoid_field_initializers_in_const_classes	needs resolution	Requires enclosing class and constructor elements	deferred
-avoid_final_parameters	AST-only	Checks formal-parameter syntax and parser feature output	implemented
+avoid_final_parameters	AST-only	Checks formal-parameter syntax with the defining library primary-constructor feature	implemented
 avoid_function_literals_in_foreach_calls	needs resolution	Uses receiver static type to identify Iterable.forEach	deferred
 avoid_futureor_void	needs resolution	Variance checker consumes resolved DartType objects	deferred
 avoid_implementing_value_types	needs resolution	Inspects implemented interface elements and annotations	deferred
@@ -42,7 +42,7 @@ avoid_returning_null_for_future	removed	Upstream RemovedAnalysisRule since Dart 
 avoid_returning_null_for_void	needs resolution	Uses enclosing executable element return type	deferred
 avoid_returning_this	needs resolution	Uses method element and return-type/override information	deferred
 avoid_setters_without_getters	needs resolution	Matches getter and setter elements across containers	deferred
-avoid_shadowing_type_parameters	AST-only	Compares lexical type-parameter names along AST ancestors	implemented
+avoid_shadowing_type_parameters	AST-only	Compares lexical type-parameter names using the defining library wildcard feature	implemented
 avoid_single_cascade_in_expression_statements	AST-only	Checks cascade section count, operator token, and AST parent	implemented
 avoid_slow_async_io	needs resolution	Identifies dart.io members through resolved method elements	deferred
 avoid_type_to_string	needs resolution	Uses expression static types, elements, and type system	deferred
@@ -77,11 +77,11 @@ do_not_use_environment	needs resolution	Identifies core environment constructors
 document_ignores	AST-only	Parses ignore comment tokens and adjacent source lines	implemented
 empty_catches	AST-only	Checks catch body, parameter spelling, and comment tokens	implemented
 empty_constructor_bodies	AST-only	Checks constructor body shape and trailing comments	implemented
-empty_container_bodies	AST-only	Checks primary-constructor container body tokens	implemented
+empty_container_bodies	AST-only	Checks container body tokens when the defining library enables primary constructors	implemented
 empty_statements	AST-only	Checks EmptyStatement parent and switch-case statement list	implemented
 enable_null_safety	removed	Upstream RemovedAnalysisRule since Dart 3	removed upstream
 eol_at_end_of_file	AST-only	Checks current source text at CompilationUnit	implemented
 erase_dart_type_extension_types	needs resolution	Internal rule requires resolved extension-type erasure information	deferred
 exhaustive_cases	needs resolution	Uses switch expression type and enum/class elements	deferred
-file_names	AST-only	Validates the source basename supplied by context.path	implemented
+file_names	AST-only	Validates the defining library unit basename even when visiting a part	implemented
 flutter_style_todos	AST-only	Scans parser token comments only	implemented

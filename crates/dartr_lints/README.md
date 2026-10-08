@@ -18,9 +18,14 @@ assert_eq!(diagnostics[0].message, "Unnecessary 'new' keyword.");
 Use `lint` for rules that need a real path or package membership. Package membership
 is found from the defining unit's nearest `pubspec.yaml` ancestor. `lint_library`
 accepts ordered `RuleContextUnit` values: defining unit first, then its parts.
+Use this API for parts: `file_names` checks the defining unit's basename and
+reports at offset zero in every unit of a badly named library. Library feature
+conditions also use the defining unit, even when a part has another version.
 It registers processors once, visits every unit, runs after-library callbacks, and
 filters diagnostics using the scanner's ignore comments. Offsets and lengths use
 UTF-16 code units. `lint_with_config` also applies configured severities.
+`simple_directive_paths` uses the visited unit's source URI, derived from the
+nearest package configuration when it maps the file, or the file path otherwise.
 
 Unsupported rules have metadata but no processors. Call
 `Registry::builtin().get_rule(name).is_implemented()` before using a rule when the
@@ -51,6 +56,7 @@ cargo clippy -p dartr_lints --all-targets --no-deps -- -D warnings
 cargo build --release -p dartr_lints
 python3 tools/lints_differential.py --corpus sdk --binary target/release/lints_dump --output target/lints/sdk
 python3 tools/lints_differential.py --corpus flutter --binary target/release/lints_dump --output target/lints/flutter
+python3 tools/lints_differential.py --input-dir /path/to/project/lib --binary target/release/lints_dump --output target/lints/project
 ```
 
 The corpus tool copies sources into temporary fixture projects under its output
@@ -59,3 +65,8 @@ options, sets Dart language version 3.13, and compares only their lint codes. It
 the complete oracle output, Rust output, exact differences, enabled-rule list, summary,
 and per-rule TSV counts. Other diagnostics from unresolved copied SDK/Flutter imports
 are excluded from the comparison; this does not test resolution.
+The context integration tests also compare explicit primary-constructor and
+augmentation experiments, and files without package configuration. The corpus
+tool accepts `--language-version`, repeatable `--enable-experiment`, and
+`--no-package-config` for these cases. The JSON runner accepts matching optional
+`languageVersion: [major, minor]` and `experiments: [name, ...]` fields.

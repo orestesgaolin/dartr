@@ -50,7 +50,7 @@ pub fn register(
         context.is_feature_enabled(crate::ExperimentalFlag::PrimaryConstructors);
     match name {
         "require_trailing_commas" => {
-            if context.parsed.language_version.effective() < (3, 7) {
+            if context.defining_unit().parsed.language_version.effective() < (3, 7) {
                 for kind in [
                     NodeKind::ArgumentList,
                     NodeKind::AssertInitializer,
@@ -127,11 +127,15 @@ pub fn register(
             "unintended_html_in_doc_comment",
             unintended_html_in_doc_comment,
         ),
-        "unnecessary_breaks" => registry.add(
-            NodeKind::BreakStatement,
-            "unnecessary_breaks",
-            unnecessary_breaks,
-        ),
+        "unnecessary_breaks" => {
+            if context.is_feature_enabled(crate::ExperimentalFlag::Patterns) {
+                registry.add(
+                    NodeKind::BreakStatement,
+                    "unnecessary_breaks",
+                    unnecessary_breaks,
+                );
+            }
+        }
         "unnecessary_brace_in_string_interps" => registry.add(
             NodeKind::StringInterpolation,
             "unnecessary_brace_in_string_interps",
@@ -225,11 +229,15 @@ pub fn register(
             "unnecessary_library_directive",
             unnecessary_library_directive,
         ),
-        "unnecessary_library_name" => registry.add(
-            NodeKind::LibraryDirective,
-            "unnecessary_library_name",
-            unnecessary_library_name,
-        ),
+        "unnecessary_library_name" => {
+            if context.is_feature_enabled(crate::ExperimentalFlag::UnnamedLibraries) {
+                registry.add(
+                    NodeKind::LibraryDirective,
+                    "unnecessary_library_name",
+                    unnecessary_library_name,
+                );
+            }
+        }
         "unnecessary_new" => registry.add(
             NodeKind::InstanceCreationExpression,
             "unnecessary_new",
@@ -471,7 +479,7 @@ fn simple_directive_paths(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<D
     if value.is_empty() {
         return;
     }
-    if !uri_is_simple(value, ctx.path) {
+    if !uri_is_simple(value, &ctx.source_uri()) {
         ctx.report_node(out, &diag::SIMPLE_DIRECTIVE_PATHS, uri, &[]);
     }
 }
@@ -512,11 +520,18 @@ fn uri_is_simple(uri: &str, source_path: &str) -> bool {
     }
     let path = path.split(['?', '#']).next().unwrap_or(path);
     let absolute = path.starts_with('/');
-    if !has_scheme
-        && !absolute
-        && let Some((_, within_lib)) = source_path.rsplit_once("/lib/")
-    {
-        let directory_depth = within_lib.split('/').count().saturating_sub(1);
+    if !has_scheme && !absolute && !source_path.is_empty() {
+        let package_uri = source_path.starts_with("package:");
+        let source_path = source_path
+            .strip_prefix("package:")
+            .or_else(|| source_path.strip_prefix("file://"))
+            .unwrap_or(source_path);
+        // Dart package URI resolution never traverses above the package name.
+        let directory_depth = source_path
+            .split('/')
+            .filter(|part| !part.is_empty())
+            .count()
+            .saturating_sub(if package_uri { 2 } else { 1 });
         let leading_parents = path
             .split('/')
             .take_while(|segment| *segment == "..")
