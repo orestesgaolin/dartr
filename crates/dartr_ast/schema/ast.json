@@ -1,0 +1,8655 @@
+{
+  "sdk": "pinned analyzer, third_party/dart-sdk (tag 3.13.3)",
+  "nodes": [
+    {
+      "name": "AdjacentStrings",
+      "impl": "AdjacentStringsImpl",
+      "impl_supertypes": [
+        "StringLiteralImpl",
+        "LiteralImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "strings",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "StringLiteral",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "Annotation",
+      "impl": "AnnotationImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "atSign",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "kind": "node",
+          "nullable": false,
+          "type": "Identifier"
+        },
+        {
+          "name": "typeArguments",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeArgumentList"
+        },
+        {
+          "name": "period",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "constructorName",
+          "kind": "node",
+          "nullable": true,
+          "type": "SimpleIdentifier"
+        },
+        {
+          "name": "arguments",
+          "kind": "node",
+          "nullable": true,
+          "type": "ArgumentList"
+        }
+      ]
+    },
+    {
+      "name": "AnonymousBlockBody",
+      "impl": "AnonymousBlockBodyImpl",
+      "impl_supertypes": [
+        "AnonymousMethodBodyImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "block",
+          "kind": "node",
+          "nullable": false,
+          "type": "Block"
+        }
+      ]
+    },
+    {
+      "name": "AnonymousExpressionBody",
+      "impl": "AnonymousExpressionBodyImpl",
+      "impl_supertypes": [
+        "AnonymousMethodBodyImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "functionDefinition",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "AnonymousMethodInvocation",
+      "impl": "AnonymousMethodInvocationImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "target",
+          "kind": "node",
+          "nullable": true,
+          "type": "Expression"
+        },
+        {
+          "name": "operator",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "parameters",
+          "kind": "node",
+          "nullable": true,
+          "type": "FormalParameterList"
+        },
+        {
+          "name": "body",
+          "kind": "node",
+          "nullable": false,
+          "type": "AnonymousMethodBody"
+        }
+      ]
+    },
+    {
+      "name": "ArgumentList",
+      "impl": "ArgumentListImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "leftParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "arguments",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "Argument",
+          "value_slot": true
+        },
+        {
+          "name": "rightParenthesis",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "AsExpression",
+      "impl": "AsExpressionImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "asOperator",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "type",
+          "kind": "node",
+          "nullable": false,
+          "type": "TypeAnnotation"
+        }
+      ]
+    },
+    {
+      "name": "AssertInitializer",
+      "impl": "AssertInitializerImpl",
+      "impl_supertypes": [
+        "ConstructorInitializerImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "assertKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "leftParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "condition",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "comma",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "message",
+          "kind": "node",
+          "nullable": true,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "rightParenthesis",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "AssertStatement",
+      "impl": "AssertStatementImpl",
+      "impl_supertypes": [
+        "StatementImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "assertKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "leftParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "condition",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "comma",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "message",
+          "kind": "node",
+          "nullable": true,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "rightParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "AssignedVariablePattern",
+      "impl": "AssignedVariablePatternImpl",
+      "impl_supertypes": [
+        "VariablePatternImpl",
+        "DartPatternImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        }
+      ]
+    },
+    {
+      "name": "AssignmentExpression",
+      "impl": "AssignmentExpressionImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "leftHandSide",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression"
+        },
+        {
+          "name": "operator",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "rightHandSide",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "AwaitExpression",
+      "impl": "AwaitExpressionImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "awaitKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "BinaryExpression",
+      "impl": "BinaryExpressionImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "leftOperand",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "operator",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "rightOperand",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "BlockClassBody",
+      "impl": "BlockClassBodyImpl",
+      "impl_supertypes": [
+        "ClassBodyImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "leftBracket",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "members",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "ClassMember"
+        },
+        {
+          "name": "rightBracket",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "BlockEnumBody",
+      "impl": "BlockEnumBodyImpl",
+      "impl_supertypes": [
+        "EnumBodyImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "leftBracket",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "constants",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "EnumConstantDeclaration"
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "members",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "ClassMember"
+        },
+        {
+          "name": "rightBracket",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "BlockFunctionBody",
+      "impl": "BlockFunctionBodyImpl",
+      "impl_supertypes": [
+        "FunctionBodyImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "keyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "star",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "block",
+          "kind": "node",
+          "nullable": false,
+          "type": "Block"
+        }
+      ]
+    },
+    {
+      "name": "Block",
+      "impl": "BlockImpl",
+      "impl_supertypes": [
+        "StatementImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "leftBracket",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "statements",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "Statement"
+        },
+        {
+          "name": "rightBracket",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "BooleanLiteral",
+      "impl": "BooleanLiteralImpl",
+      "impl_supertypes": [
+        "LiteralImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "literal",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "value",
+          "kind": "other",
+          "nullable": false,
+          "dart_type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "BreakStatement",
+      "impl": "BreakStatementImpl",
+      "impl_supertypes": [
+        "StatementImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "breakKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "label",
+          "kind": "node",
+          "nullable": true,
+          "type": "LabelReference"
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "CascadeExpression",
+      "impl": "CascadeExpressionImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "target",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "cascadeSections",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "Expression"
+        }
+      ]
+    },
+    {
+      "name": "CaseClause",
+      "impl": "CaseClauseImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "caseKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "guardedPattern",
+          "kind": "node",
+          "nullable": false,
+          "type": "GuardedPattern"
+        }
+      ]
+    },
+    {
+      "name": "CastPattern",
+      "impl": "CastPatternImpl",
+      "impl_supertypes": [
+        "DartPatternImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "pattern",
+          "kind": "node",
+          "nullable": false,
+          "type": "DartPattern"
+        },
+        {
+          "name": "asToken",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "type",
+          "kind": "node",
+          "nullable": false,
+          "type": "TypeAnnotation"
+        }
+      ]
+    },
+    {
+      "name": "CatchClause",
+      "impl": "CatchClauseImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "onKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "exceptionType",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeAnnotation"
+        },
+        {
+          "name": "catchKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "leftParenthesis",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "exceptionParameter",
+          "kind": "node",
+          "nullable": true,
+          "type": "CatchClauseParameter"
+        },
+        {
+          "name": "comma",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "stackTraceParameter",
+          "kind": "node",
+          "nullable": true,
+          "type": "CatchClauseParameter"
+        },
+        {
+          "name": "rightParenthesis",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "body",
+          "kind": "node",
+          "nullable": false,
+          "type": "Block"
+        }
+      ]
+    },
+    {
+      "name": "CatchClauseParameter",
+      "impl": "CatchClauseParameterImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "ClassDeclaration",
+      "impl": "ClassDeclarationImpl",
+      "impl_supertypes": [
+        "CompilationUnitMemberImpl",
+        "DeclarationImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "augmentKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "abstractKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "sealedKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "baseKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "interfaceKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "finalKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "mixinKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "classKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "namePart",
+          "kind": "node",
+          "nullable": false,
+          "type": "ClassNamePart"
+        },
+        {
+          "name": "extendsClause",
+          "kind": "node",
+          "nullable": true,
+          "type": "ExtendsClause"
+        },
+        {
+          "name": "withClause",
+          "kind": "node",
+          "nullable": true,
+          "type": "WithClause"
+        },
+        {
+          "name": "implementsClause",
+          "kind": "node",
+          "nullable": true,
+          "type": "ImplementsClause"
+        },
+        {
+          "name": "nativeClause",
+          "kind": "node",
+          "nullable": true,
+          "type": "NativeClause"
+        },
+        {
+          "name": "body",
+          "kind": "node",
+          "nullable": false,
+          "type": "ClassBody"
+        }
+      ]
+    },
+    {
+      "name": "ClassTypeAlias",
+      "impl": "ClassTypeAliasImpl",
+      "impl_supertypes": [
+        "TypeAliasImpl",
+        "CompilationUnitMemberImpl",
+        "DeclarationImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "augmentKeyword",
+          "kind": "token",
+          "nullable": true,
+          "is_super": true
+        },
+        {
+          "name": "abstractKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "sealedKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "baseKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "interfaceKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "finalKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "mixinKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "typedefKeyword",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "typeParameters",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeParameterList"
+        },
+        {
+          "name": "equals",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "superclass",
+          "kind": "node",
+          "nullable": false,
+          "type": "NamedType"
+        },
+        {
+          "name": "withClause",
+          "kind": "node",
+          "nullable": false,
+          "type": "WithClause"
+        },
+        {
+          "name": "implementsClause",
+          "kind": "node",
+          "nullable": true,
+          "type": "ImplementsClause"
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        }
+      ]
+    },
+    {
+      "name": "Comment",
+      "impl": "CommentImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": false
+    },
+    {
+      "name": "CommentReference",
+      "impl": "CommentReferenceImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "newKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "CommentReferableExpression"
+        },
+        {
+          "name": "isSynthetic",
+          "kind": "other",
+          "nullable": false,
+          "dart_type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "CompilationUnit",
+      "impl": "CompilationUnitImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": false
+    },
+    {
+      "name": "ConditionalExpression",
+      "impl": "ConditionalExpressionImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "condition",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "question",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "thenExpression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "colon",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "elseExpression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "Configuration",
+      "impl": "ConfigurationImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "ifKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "leftParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "kind": "node",
+          "nullable": false,
+          "type": "DottedName"
+        },
+        {
+          "name": "equalToken",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "value",
+          "kind": "node",
+          "nullable": true,
+          "type": "StringLiteral",
+          "value_slot": true
+        },
+        {
+          "name": "rightParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "uri",
+          "kind": "node",
+          "nullable": false,
+          "type": "StringLiteral"
+        }
+      ]
+    },
+    {
+      "name": "ConstantContextForExpression",
+      "impl": "ConstantContextForExpressionImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": false
+    },
+    {
+      "name": "ConstantPattern",
+      "impl": "ConstantPatternImpl",
+      "impl_supertypes": [
+        "DartPatternImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "constKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "ConstructorDeclaration",
+      "impl": "ConstructorDeclarationImpl",
+      "impl_supertypes": [
+        "ClassMemberImpl",
+        "DeclarationImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "augmentKeyword",
+          "kind": "token",
+          "nullable": true,
+          "token_group": 0
+        },
+        {
+          "name": "externalKeyword",
+          "kind": "token",
+          "nullable": true,
+          "token_group": 0
+        },
+        {
+          "name": "constKeyword",
+          "kind": "token",
+          "nullable": true,
+          "token_group": 0
+        },
+        {
+          "name": "factoryKeyword",
+          "kind": "token",
+          "nullable": true,
+          "token_group": 0
+        },
+        {
+          "name": "newKeyword",
+          "kind": "token",
+          "nullable": true,
+          "token_group": 0
+        },
+        {
+          "name": "typeName",
+          "kind": "node",
+          "nullable": true,
+          "type": "SimpleIdentifier"
+        },
+        {
+          "name": "period",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "parameters",
+          "kind": "node",
+          "nullable": false,
+          "type": "FormalParameterList"
+        },
+        {
+          "name": "separator",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "initializers",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "ConstructorInitializer"
+        },
+        {
+          "name": "redirectedConstructor",
+          "kind": "node",
+          "nullable": true,
+          "type": "ConstructorName"
+        },
+        {
+          "name": "body",
+          "kind": "node",
+          "nullable": false,
+          "type": "FunctionBody"
+        }
+      ]
+    },
+    {
+      "name": "ConstructorFieldInitializer",
+      "impl": "ConstructorFieldInitializerImpl",
+      "impl_supertypes": [
+        "ConstructorInitializerImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "thisKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "period",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "fieldName",
+          "kind": "node",
+          "nullable": false,
+          "type": "SimpleIdentifier"
+        },
+        {
+          "name": "equals",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "ConstructorName",
+      "impl": "ConstructorNameImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "type",
+          "kind": "node",
+          "nullable": false,
+          "type": "NamedType"
+        },
+        {
+          "name": "period",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "name",
+          "kind": "node",
+          "nullable": true,
+          "type": "SimpleIdentifier"
+        }
+      ]
+    },
+    {
+      "name": "ConstructorReference",
+      "impl": "ConstructorReferenceImpl",
+      "impl_supertypes": [
+        "CommentReferableExpressionImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "constructorName",
+          "kind": "node",
+          "nullable": false,
+          "type": "ConstructorName"
+        }
+      ]
+    },
+    {
+      "name": "ConstructorSelector",
+      "impl": "ConstructorSelectorImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "period",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "kind": "node",
+          "nullable": false,
+          "type": "SimpleIdentifier"
+        }
+      ]
+    },
+    {
+      "name": "ContinueStatement",
+      "impl": "ContinueStatementImpl",
+      "impl_supertypes": [
+        "StatementImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "continueKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "label",
+          "kind": "node",
+          "nullable": true,
+          "type": "LabelReference"
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "DeclaredIdentifier",
+      "impl": "DeclaredIdentifierImpl",
+      "impl_supertypes": [
+        "DeclarationImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "keyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "type",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeAnnotation"
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "DeclaredVariablePattern",
+      "impl": "DeclaredVariablePatternImpl",
+      "impl_supertypes": [
+        "VariablePatternImpl",
+        "DartPatternImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "keyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "type",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeAnnotation"
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        }
+      ]
+    },
+    {
+      "name": "DoStatement",
+      "impl": "DoStatementImpl",
+      "impl_supertypes": [
+        "StatementImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "doKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "body",
+          "kind": "node",
+          "nullable": false,
+          "type": "Statement"
+        },
+        {
+          "name": "whileKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "leftParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "condition",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "rightParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "DotShorthandConstructorInvocation",
+      "impl": "DotShorthandConstructorInvocationImpl",
+      "impl_supertypes": [
+        "InvocationExpressionImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "constKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "period",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "constructorName",
+          "kind": "node",
+          "nullable": false,
+          "type": "SimpleIdentifier"
+        },
+        {
+          "name": "typeArguments",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeArgumentList",
+          "is_super": true
+        },
+        {
+          "name": "argumentList",
+          "kind": "node",
+          "nullable": false,
+          "type": "ArgumentList",
+          "is_super": true
+        }
+      ]
+    },
+    {
+      "name": "DotShorthandInvocation",
+      "impl": "DotShorthandInvocationImpl",
+      "impl_supertypes": [
+        "InvocationExpressionImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "period",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "memberName",
+          "kind": "node",
+          "nullable": false,
+          "type": "SimpleIdentifier"
+        },
+        {
+          "name": "typeArguments",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeArgumentList",
+          "is_super": true
+        },
+        {
+          "name": "argumentList",
+          "kind": "node",
+          "nullable": false,
+          "type": "ArgumentList",
+          "is_super": true
+        }
+      ]
+    },
+    {
+      "name": "DotShorthandPropertyAccess",
+      "impl": "DotShorthandPropertyAccessImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "period",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "propertyName",
+          "kind": "node",
+          "nullable": false,
+          "type": "SimpleIdentifier"
+        }
+      ]
+    },
+    {
+      "name": "DottedName",
+      "impl": "DottedNameImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "tokens",
+          "kind": "token_list",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "DoubleLiteral",
+      "impl": "DoubleLiteralImpl",
+      "impl_supertypes": [
+        "LiteralImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "literal",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "value",
+          "kind": "other",
+          "nullable": false,
+          "dart_type": "double"
+        }
+      ]
+    },
+    {
+      "name": "EmptyClassBody",
+      "impl": "EmptyClassBodyImpl",
+      "impl_supertypes": [
+        "ClassBodyImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "EmptyEnumBody",
+      "impl": "EmptyEnumBodyImpl",
+      "impl_supertypes": [
+        "EnumBodyImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "EmptyFunctionBody",
+      "impl": "EmptyFunctionBodyImpl",
+      "impl_supertypes": [
+        "FunctionBodyImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "EmptyStatement",
+      "impl": "EmptyStatementImpl",
+      "impl_supertypes": [
+        "StatementImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "EnumConstantArguments",
+      "impl": "EnumConstantArgumentsImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "typeArguments",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeArgumentList"
+        },
+        {
+          "name": "constructorSelector",
+          "kind": "node",
+          "nullable": true,
+          "type": "ConstructorSelector"
+        },
+        {
+          "name": "argumentList",
+          "kind": "node",
+          "nullable": false,
+          "type": "ArgumentList"
+        }
+      ]
+    },
+    {
+      "name": "EnumConstantDeclaration",
+      "impl": "EnumConstantDeclarationImpl",
+      "impl_supertypes": [
+        "DeclarationImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "augmentKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "arguments",
+          "kind": "node",
+          "nullable": true,
+          "type": "EnumConstantArguments"
+        }
+      ]
+    },
+    {
+      "name": "EnumDeclaration",
+      "impl": "EnumDeclarationImpl",
+      "impl_supertypes": [
+        "CompilationUnitMemberImpl",
+        "DeclarationImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "augmentKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "enumKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "namePart",
+          "kind": "node",
+          "nullable": false,
+          "type": "ClassNamePart"
+        },
+        {
+          "name": "withClause",
+          "kind": "node",
+          "nullable": true,
+          "type": "WithClause"
+        },
+        {
+          "name": "implementsClause",
+          "kind": "node",
+          "nullable": true,
+          "type": "ImplementsClause"
+        },
+        {
+          "name": "body",
+          "kind": "node",
+          "nullable": false,
+          "type": "EnumBody"
+        }
+      ]
+    },
+    {
+      "name": "ExportDirective",
+      "impl": "ExportDirectiveImpl",
+      "impl_supertypes": [
+        "NamespaceDirectiveImpl",
+        "UriBasedDirectiveImpl",
+        "DirectiveImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "exportKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "uri",
+          "kind": "node",
+          "nullable": false,
+          "type": "StringLiteral",
+          "is_super": true
+        },
+        {
+          "name": "configurations",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "Configuration",
+          "is_super": true
+        },
+        {
+          "name": "combinators",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "Combinator",
+          "is_super": true
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        }
+      ]
+    },
+    {
+      "name": "ExpressionFunctionBody",
+      "impl": "ExpressionFunctionBodyImpl",
+      "impl_supertypes": [
+        "FunctionBodyImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "keyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "star",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "functionDefinition",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": true
+        }
+      ]
+    },
+    {
+      "name": "ExpressionStatement",
+      "impl": "ExpressionStatementImpl",
+      "impl_supertypes": [
+        "StatementImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": true
+        }
+      ]
+    },
+    {
+      "name": "ExtendsClause",
+      "impl": "ExtendsClauseImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "extendsKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "superclass",
+          "kind": "node",
+          "nullable": false,
+          "type": "NamedType"
+        }
+      ]
+    },
+    {
+      "name": "ExtensionDeclaration",
+      "impl": "ExtensionDeclarationImpl",
+      "impl_supertypes": [
+        "CompilationUnitMemberImpl",
+        "DeclarationImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "augmentKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "extensionKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "typeKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "typeParameters",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeParameterList"
+        },
+        {
+          "name": "onClause",
+          "kind": "node",
+          "nullable": true,
+          "type": "ExtensionOnClause"
+        },
+        {
+          "name": "body",
+          "kind": "node",
+          "nullable": false,
+          "type": "ClassBody"
+        }
+      ]
+    },
+    {
+      "name": "ExtensionOnClause",
+      "impl": "ExtensionOnClauseImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "onKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "extendedType",
+          "kind": "node",
+          "nullable": false,
+          "type": "TypeAnnotation"
+        }
+      ]
+    },
+    {
+      "name": "ExtensionOverride",
+      "impl": "ExtensionOverrideImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "importPrefix",
+          "kind": "node",
+          "nullable": true,
+          "type": "ImportPrefixReference"
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "typeArguments",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeArgumentList"
+        },
+        {
+          "name": "argumentList",
+          "kind": "node",
+          "nullable": false,
+          "type": "ArgumentList"
+        },
+        {
+          "name": "element",
+          "kind": "other",
+          "nullable": false,
+          "dart_type": "ExtensionElementImpl"
+        }
+      ]
+    },
+    {
+      "name": "ExtensionTypeDeclaration",
+      "impl": "ExtensionTypeDeclarationImpl",
+      "impl_supertypes": [
+        "CompilationUnitMemberImpl",
+        "DeclarationImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "augmentKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "extensionKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "typeKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "namePart",
+          "kind": "node",
+          "nullable": false,
+          "type": "ClassNamePart"
+        },
+        {
+          "name": "implementsClause",
+          "kind": "node",
+          "nullable": true,
+          "type": "ImplementsClause"
+        },
+        {
+          "name": "body",
+          "kind": "node",
+          "nullable": false,
+          "type": "ClassBody"
+        }
+      ]
+    },
+    {
+      "name": "FieldDeclaration",
+      "impl": "FieldDeclarationImpl",
+      "impl_supertypes": [
+        "ClassMemberImpl",
+        "DeclarationImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "augmentKeyword",
+          "kind": "token",
+          "nullable": true,
+          "token_group": 0
+        },
+        {
+          "name": "externalKeyword",
+          "kind": "token",
+          "nullable": true,
+          "token_group": 0
+        },
+        {
+          "name": "staticKeyword",
+          "kind": "token",
+          "nullable": true,
+          "token_group": 0
+        },
+        {
+          "name": "abstractKeyword",
+          "kind": "token",
+          "nullable": true,
+          "token_group": 0
+        },
+        {
+          "name": "covariantKeyword",
+          "kind": "token",
+          "nullable": true,
+          "token_group": 0
+        },
+        {
+          "name": "fields",
+          "kind": "node",
+          "nullable": false,
+          "type": "VariableDeclarationList"
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "FieldFormalParameter",
+      "impl": "FieldFormalParameterImpl",
+      "impl_supertypes": [
+        "FormalParameterImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "do_not_generate": [
+        "visitChildren",
+        "visitChildrenWithHooks"
+      ],
+      "properties": [
+        {
+          "name": "kind",
+          "kind": "other",
+          "nullable": false,
+          "dart_type": "ParameterKind",
+          "is_super": true
+        },
+        {
+          "name": "requiredKeyword",
+          "kind": "token",
+          "nullable": true,
+          "is_super": true
+        },
+        {
+          "name": "covariantKeyword",
+          "kind": "token",
+          "nullable": true,
+          "is_super": true
+        },
+        {
+          "name": "constFinalOrVarKeyword",
+          "kind": "token",
+          "nullable": true,
+          "is_super": true
+        },
+        {
+          "name": "type",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeAnnotation",
+          "is_super": true
+        },
+        {
+          "name": "thisKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "period",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "functionTypedSuffix",
+          "kind": "node",
+          "nullable": true,
+          "type": "FunctionTypedFormalParameterSuffix",
+          "is_super": true
+        },
+        {
+          "name": "defaultClause",
+          "kind": "node",
+          "nullable": true,
+          "type": "FormalParameterDefaultClause",
+          "is_super": true
+        }
+      ]
+    },
+    {
+      "name": "ForEachPartsWithDeclaration",
+      "impl": "ForEachPartsWithDeclarationImpl",
+      "impl_supertypes": [
+        "ForEachPartsImpl",
+        "ForLoopPartsImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "loopVariable",
+          "kind": "node",
+          "nullable": false,
+          "type": "DeclaredIdentifier"
+        },
+        {
+          "name": "inKeyword",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "iterable",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "is_super": true,
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "ForEachPartsWithIdentifier",
+      "impl": "ForEachPartsWithIdentifierImpl",
+      "impl_supertypes": [
+        "ForEachPartsImpl",
+        "ForLoopPartsImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "identifier",
+          "kind": "node",
+          "nullable": false,
+          "type": "SimpleIdentifier"
+        },
+        {
+          "name": "inKeyword",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "iterable",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "is_super": true,
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "ForEachPartsWithPattern",
+      "impl": "ForEachPartsWithPatternImpl",
+      "impl_supertypes": [
+        "ForEachPartsImpl",
+        "ForLoopPartsImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "metadata",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "Annotation"
+        },
+        {
+          "name": "keyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "pattern",
+          "kind": "node",
+          "nullable": false,
+          "type": "DartPattern"
+        },
+        {
+          "name": "inKeyword",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "iterable",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "is_super": true,
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "ForElement",
+      "impl": "ForElementImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "awaitKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "forKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "leftParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "forLoopParts",
+          "kind": "node",
+          "nullable": false,
+          "type": "ForLoopParts"
+        },
+        {
+          "name": "rightParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "body",
+          "kind": "node",
+          "nullable": false,
+          "type": "CollectionElement",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "FormalParameterDefaultClause",
+      "impl": "FormalParameterDefaultClauseImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "separator",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "value",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "FormalParameterList",
+      "impl": "FormalParameterListImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "do_not_generate": [
+        "_childEntities"
+      ],
+      "properties": [
+        {
+          "name": "leftParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "parameters",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "FormalParameter"
+        },
+        {
+          "name": "leftDelimiter",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "rightDelimiter",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "rightParenthesis",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "ForPartsWithDeclarations",
+      "impl": "ForPartsWithDeclarationsImpl",
+      "impl_supertypes": [
+        "ForPartsImpl",
+        "ForLoopPartsImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "variables",
+          "kind": "node",
+          "nullable": false,
+          "type": "VariableDeclarationList"
+        },
+        {
+          "name": "leftSeparator",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "condition",
+          "kind": "node",
+          "nullable": true,
+          "type": "Expression",
+          "is_super": true,
+          "value_slot": true
+        },
+        {
+          "name": "rightSeparator",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "updaters",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "Expression",
+          "is_super": true,
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "ForPartsWithExpression",
+      "impl": "ForPartsWithExpressionImpl",
+      "impl_supertypes": [
+        "ForPartsImpl",
+        "ForLoopPartsImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "initialization",
+          "kind": "node",
+          "nullable": true,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "leftSeparator",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "condition",
+          "kind": "node",
+          "nullable": true,
+          "type": "Expression",
+          "is_super": true,
+          "value_slot": true
+        },
+        {
+          "name": "rightSeparator",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "updaters",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "Expression",
+          "is_super": true,
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "ForPartsWithPattern",
+      "impl": "ForPartsWithPatternImpl",
+      "impl_supertypes": [
+        "ForPartsImpl",
+        "ForLoopPartsImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "variables",
+          "kind": "node",
+          "nullable": false,
+          "type": "PatternVariableDeclaration"
+        },
+        {
+          "name": "leftSeparator",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "condition",
+          "kind": "node",
+          "nullable": true,
+          "type": "Expression",
+          "is_super": true,
+          "value_slot": true
+        },
+        {
+          "name": "rightSeparator",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "updaters",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "Expression",
+          "is_super": true,
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "ForStatement",
+      "impl": "ForStatementImpl",
+      "impl_supertypes": [
+        "StatementImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "awaitKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "forKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "leftParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "forLoopParts",
+          "kind": "node",
+          "nullable": false,
+          "type": "ForLoopParts"
+        },
+        {
+          "name": "rightParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "body",
+          "kind": "node",
+          "nullable": false,
+          "type": "Statement"
+        }
+      ]
+    },
+    {
+      "name": "FunctionDeclaration",
+      "impl": "FunctionDeclarationImpl",
+      "impl_supertypes": [
+        "CompilationUnitMemberImpl",
+        "DeclarationImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "augmentKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "externalKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "returnType",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeAnnotation"
+        },
+        {
+          "name": "propertyKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "functionExpression",
+          "kind": "node",
+          "nullable": false,
+          "type": "FunctionExpression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "FunctionDeclarationStatement",
+      "impl": "FunctionDeclarationStatementImpl",
+      "impl_supertypes": [
+        "StatementImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "functionDeclaration",
+          "kind": "node",
+          "nullable": false,
+          "type": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "FunctionExpression",
+      "impl": "FunctionExpressionImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "typeParameters",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeParameterList"
+        },
+        {
+          "name": "parameters",
+          "kind": "node",
+          "nullable": true,
+          "type": "FormalParameterList"
+        },
+        {
+          "name": "body",
+          "kind": "node",
+          "nullable": false,
+          "type": "FunctionBody"
+        }
+      ]
+    },
+    {
+      "name": "FunctionExpressionInvocation",
+      "impl": "FunctionExpressionInvocationImpl",
+      "impl_supertypes": [
+        "InvocationExpressionImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "function",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression"
+        },
+        {
+          "name": "typeArguments",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeArgumentList",
+          "is_super": true
+        },
+        {
+          "name": "argumentList",
+          "kind": "node",
+          "nullable": false,
+          "type": "ArgumentList",
+          "is_super": true
+        }
+      ]
+    },
+    {
+      "name": "FunctionReference",
+      "impl": "FunctionReferenceImpl",
+      "impl_supertypes": [
+        "CommentReferableExpressionImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "function",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression"
+        },
+        {
+          "name": "typeArguments",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeArgumentList"
+        }
+      ]
+    },
+    {
+      "name": "FunctionTypeAlias",
+      "impl": "FunctionTypeAliasImpl",
+      "impl_supertypes": [
+        "TypeAliasImpl",
+        "CompilationUnitMemberImpl",
+        "DeclarationImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "augmentKeyword",
+          "kind": "token",
+          "nullable": true,
+          "is_super": true
+        },
+        {
+          "name": "typedefKeyword",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "returnType",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeAnnotation"
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "typeParameters",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeParameterList"
+        },
+        {
+          "name": "parameters",
+          "kind": "node",
+          "nullable": false,
+          "type": "FormalParameterList"
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        }
+      ]
+    },
+    {
+      "name": "FunctionTypedFormalParameterSuffix",
+      "impl": "FunctionTypedFormalParameterSuffixImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "typeParameters",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeParameterList"
+        },
+        {
+          "name": "formalParameters",
+          "kind": "node",
+          "nullable": false,
+          "type": "FormalParameterList"
+        },
+        {
+          "name": "question",
+          "kind": "token",
+          "nullable": true
+        }
+      ]
+    },
+    {
+      "name": "GenericFunctionType",
+      "impl": "GenericFunctionTypeImpl",
+      "impl_supertypes": [
+        "TypeAnnotationImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "returnType",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeAnnotation"
+        },
+        {
+          "name": "functionKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "typeParameters",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeParameterList"
+        },
+        {
+          "name": "parameters",
+          "kind": "node",
+          "nullable": false,
+          "type": "FormalParameterList"
+        },
+        {
+          "name": "question",
+          "kind": "token",
+          "nullable": true
+        }
+      ]
+    },
+    {
+      "name": "GenericTypeAlias",
+      "impl": "GenericTypeAliasImpl",
+      "impl_supertypes": [
+        "TypeAliasImpl",
+        "CompilationUnitMemberImpl",
+        "DeclarationImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "augmentKeyword",
+          "kind": "token",
+          "nullable": true,
+          "is_super": true
+        },
+        {
+          "name": "typedefKeyword",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "typeParameters",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeParameterList"
+        },
+        {
+          "name": "equals",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "type",
+          "kind": "node",
+          "nullable": false,
+          "type": "TypeAnnotation"
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        }
+      ]
+    },
+    {
+      "name": "GuardedPattern",
+      "impl": "GuardedPatternImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "pattern",
+          "kind": "node",
+          "nullable": false,
+          "type": "DartPattern"
+        },
+        {
+          "name": "whenClause",
+          "kind": "node",
+          "nullable": true,
+          "type": "WhenClause"
+        }
+      ]
+    },
+    {
+      "name": "HideCombinator",
+      "impl": "HideCombinatorImpl",
+      "impl_supertypes": [
+        "CombinatorImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "keyword",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "hiddenNames",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "SimpleIdentifier"
+        }
+      ]
+    },
+    {
+      "name": "IfElement",
+      "impl": "IfElementImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "ifKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "leftParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "caseClause",
+          "kind": "node",
+          "nullable": true,
+          "type": "CaseClause"
+        },
+        {
+          "name": "rightParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "thenElement",
+          "kind": "node",
+          "nullable": false,
+          "type": "CollectionElement",
+          "value_slot": true
+        },
+        {
+          "name": "elseKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "elseElement",
+          "kind": "node",
+          "nullable": true,
+          "type": "CollectionElement",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "IfStatement",
+      "impl": "IfStatementImpl",
+      "impl_supertypes": [
+        "StatementImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "ifKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "leftParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "caseClause",
+          "kind": "node",
+          "nullable": true,
+          "type": "CaseClause"
+        },
+        {
+          "name": "rightParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "thenStatement",
+          "kind": "node",
+          "nullable": false,
+          "type": "Statement"
+        },
+        {
+          "name": "elseKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "elseStatement",
+          "kind": "node",
+          "nullable": true,
+          "type": "Statement"
+        }
+      ]
+    },
+    {
+      "name": "ImplementsClause",
+      "impl": "ImplementsClauseImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "implementsKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "interfaces",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "NamedType"
+        }
+      ]
+    },
+    {
+      "name": "ImplicitCallReference",
+      "impl": "ImplicitCallReferenceImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression"
+        },
+        {
+          "name": "typeArguments",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeArgumentList"
+        },
+        {
+          "name": "element",
+          "kind": "other",
+          "nullable": true,
+          "dart_type": "MethodElement?"
+        },
+        {
+          "name": "typeArgumentTypes",
+          "kind": "other",
+          "nullable": false,
+          "dart_type": "List<DartType>"
+        }
+      ]
+    },
+    {
+      "name": "ImportDirective",
+      "impl": "ImportDirectiveImpl",
+      "impl_supertypes": [
+        "NamespaceDirectiveImpl",
+        "UriBasedDirectiveImpl",
+        "DirectiveImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "importKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "uri",
+          "kind": "node",
+          "nullable": false,
+          "type": "StringLiteral",
+          "is_super": true
+        },
+        {
+          "name": "configurations",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "Configuration",
+          "is_super": true
+        },
+        {
+          "name": "deferredKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "asKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "prefix",
+          "kind": "node",
+          "nullable": true,
+          "type": "SimpleIdentifier"
+        },
+        {
+          "name": "combinators",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "Combinator",
+          "is_super": true
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        }
+      ]
+    },
+    {
+      "name": "ImportPrefixReference",
+      "impl": "ImportPrefixReferenceImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "period",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "IndexExpression",
+      "impl": "IndexExpressionImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "target",
+          "kind": "node",
+          "nullable": true,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "period",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "question",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "leftBracket",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "index",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "rightBracket",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "InstanceCreationExpression",
+      "impl": "InstanceCreationExpressionImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "keyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "constructorName",
+          "kind": "node",
+          "nullable": false,
+          "type": "ConstructorName"
+        },
+        {
+          "name": "typeArguments",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeArgumentList"
+        },
+        {
+          "name": "argumentList",
+          "kind": "node",
+          "nullable": false,
+          "type": "ArgumentList"
+        }
+      ]
+    },
+    {
+      "name": "IntegerLiteral",
+      "impl": "IntegerLiteralImpl",
+      "impl_supertypes": [
+        "LiteralImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "literal",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "value",
+          "kind": "other",
+          "nullable": true,
+          "dart_type": "int?"
+        }
+      ]
+    },
+    {
+      "name": "InterpolationExpression",
+      "impl": "InterpolationExpressionImpl",
+      "impl_supertypes": [
+        "InterpolationElementImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "leftBracket",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "rightBracket",
+          "kind": "token",
+          "nullable": true
+        }
+      ]
+    },
+    {
+      "name": "InterpolationString",
+      "impl": "InterpolationStringImpl",
+      "impl_supertypes": [
+        "InterpolationElementImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "contents",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "value",
+          "kind": "other",
+          "nullable": false,
+          "dart_type": "String"
+        }
+      ]
+    },
+    {
+      "name": "IsExpression",
+      "impl": "IsExpressionImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "isOperator",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "notOperator",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "type",
+          "kind": "node",
+          "nullable": false,
+          "type": "TypeAnnotation"
+        }
+      ]
+    },
+    {
+      "name": "LabeledStatement",
+      "impl": "LabeledStatementImpl",
+      "impl_supertypes": [
+        "StatementImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "labels",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "Label"
+        },
+        {
+          "name": "statement",
+          "kind": "node",
+          "nullable": false,
+          "type": "Statement"
+        }
+      ]
+    },
+    {
+      "name": "Label",
+      "impl": "LabelImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "colon",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "LabelReference",
+      "impl": "LabelReferenceImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "LibraryDirective",
+      "impl": "LibraryDirectiveImpl",
+      "impl_supertypes": [
+        "DirectiveImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "libraryKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "kind": "node",
+          "nullable": true,
+          "type": "DottedName"
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "ListLiteral",
+      "impl": "ListLiteralImpl",
+      "impl_supertypes": [
+        "TypedLiteralImpl",
+        "LiteralImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "constKeyword",
+          "kind": "token",
+          "nullable": true,
+          "is_super": true
+        },
+        {
+          "name": "typeArguments",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeArgumentList",
+          "is_super": true
+        },
+        {
+          "name": "leftBracket",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "elements",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "CollectionElement",
+          "value_slot": true
+        },
+        {
+          "name": "rightBracket",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "ListPattern",
+      "impl": "ListPatternImpl",
+      "impl_supertypes": [
+        "DartPatternImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "typeArguments",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeArgumentList"
+        },
+        {
+          "name": "leftBracket",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "elements",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "ListPatternElement"
+        },
+        {
+          "name": "rightBracket",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "LogicalAndPattern",
+      "impl": "LogicalAndPatternImpl",
+      "impl_supertypes": [
+        "DartPatternImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "leftOperand",
+          "kind": "node",
+          "nullable": false,
+          "type": "DartPattern"
+        },
+        {
+          "name": "operator",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "rightOperand",
+          "kind": "node",
+          "nullable": false,
+          "type": "DartPattern"
+        }
+      ]
+    },
+    {
+      "name": "LogicalOrPattern",
+      "impl": "LogicalOrPatternImpl",
+      "impl_supertypes": [
+        "DartPatternImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "leftOperand",
+          "kind": "node",
+          "nullable": false,
+          "type": "DartPattern"
+        },
+        {
+          "name": "operator",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "rightOperand",
+          "kind": "node",
+          "nullable": false,
+          "type": "DartPattern"
+        }
+      ]
+    },
+    {
+      "name": "MapLiteralEntry",
+      "impl": "MapLiteralEntryImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "keyQuestion",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "key",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "separator",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "valueQuestion",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "value",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "MapPatternEntry",
+      "impl": "MapPatternEntryImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "key",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "separator",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "value",
+          "kind": "node",
+          "nullable": false,
+          "type": "DartPattern"
+        }
+      ]
+    },
+    {
+      "name": "MapPattern",
+      "impl": "MapPatternImpl",
+      "impl_supertypes": [
+        "DartPatternImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "typeArguments",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeArgumentList"
+        },
+        {
+          "name": "leftBracket",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "elements",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "MapPatternElement"
+        },
+        {
+          "name": "rightBracket",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "MethodDeclaration",
+      "impl": "MethodDeclarationImpl",
+      "impl_supertypes": [
+        "ClassMemberImpl",
+        "DeclarationImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "augmentKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "externalKeyword",
+          "kind": "token",
+          "nullable": true,
+          "token_group": 0
+        },
+        {
+          "name": "modifierKeyword",
+          "kind": "token",
+          "nullable": true,
+          "token_group": 0
+        },
+        {
+          "name": "returnType",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeAnnotation"
+        },
+        {
+          "name": "propertyKeyword",
+          "kind": "token",
+          "nullable": true,
+          "token_group": 1
+        },
+        {
+          "name": "operatorKeyword",
+          "kind": "token",
+          "nullable": true,
+          "token_group": 1
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "typeParameters",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeParameterList"
+        },
+        {
+          "name": "parameters",
+          "kind": "node",
+          "nullable": true,
+          "type": "FormalParameterList"
+        },
+        {
+          "name": "body",
+          "kind": "node",
+          "nullable": false,
+          "type": "FunctionBody"
+        }
+      ]
+    },
+    {
+      "name": "MethodInvocation",
+      "impl": "MethodInvocationImpl",
+      "impl_supertypes": [
+        "InvocationExpressionImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "target",
+          "kind": "node",
+          "nullable": true,
+          "type": "Expression"
+        },
+        {
+          "name": "operator",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "methodName",
+          "kind": "node",
+          "nullable": false,
+          "type": "SimpleIdentifier"
+        },
+        {
+          "name": "typeArguments",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeArgumentList",
+          "is_super": true
+        },
+        {
+          "name": "argumentList",
+          "kind": "node",
+          "nullable": false,
+          "type": "ArgumentList",
+          "is_super": true
+        }
+      ]
+    },
+    {
+      "name": "MixinDeclaration",
+      "impl": "MixinDeclarationImpl",
+      "impl_supertypes": [
+        "CompilationUnitMemberImpl",
+        "DeclarationImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "augmentKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "baseKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "mixinKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "typeParameters",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeParameterList"
+        },
+        {
+          "name": "onClause",
+          "kind": "node",
+          "nullable": true,
+          "type": "MixinOnClause"
+        },
+        {
+          "name": "implementsClause",
+          "kind": "node",
+          "nullable": true,
+          "type": "ImplementsClause"
+        },
+        {
+          "name": "body",
+          "kind": "node",
+          "nullable": false,
+          "type": "ClassBody"
+        }
+      ]
+    },
+    {
+      "name": "MixinOnClause",
+      "impl": "MixinOnClauseImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "onKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "superclassConstraints",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "NamedType"
+        }
+      ]
+    },
+    {
+      "name": "NamedArgument",
+      "impl": "NamedArgumentImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "colon",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "argumentExpression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "NamedType",
+      "impl": "NamedTypeImpl",
+      "impl_supertypes": [
+        "TypeAnnotationImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "importPrefix",
+          "kind": "node",
+          "nullable": true,
+          "type": "ImportPrefixReference"
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "typeArguments",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeArgumentList"
+        },
+        {
+          "name": "question",
+          "kind": "token",
+          "nullable": true
+        }
+      ]
+    },
+    {
+      "name": "NameWithTypeParameters",
+      "impl": "NameWithTypeParametersImpl",
+      "impl_supertypes": [
+        "ClassNamePartImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "typeName",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "typeParameters",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeParameterList"
+        }
+      ]
+    },
+    {
+      "name": "NativeClause",
+      "impl": "NativeClauseImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "nativeKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "kind": "node",
+          "nullable": true,
+          "type": "StringLiteral"
+        }
+      ]
+    },
+    {
+      "name": "NativeFunctionBody",
+      "impl": "NativeFunctionBodyImpl",
+      "impl_supertypes": [
+        "FunctionBodyImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "nativeKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "stringLiteral",
+          "kind": "node",
+          "nullable": true,
+          "type": "StringLiteral"
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "NullAssertPattern",
+      "impl": "NullAssertPatternImpl",
+      "impl_supertypes": [
+        "DartPatternImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "pattern",
+          "kind": "node",
+          "nullable": false,
+          "type": "DartPattern"
+        },
+        {
+          "name": "operator",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "NullAwareElement",
+      "impl": "NullAwareElementImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "question",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "value",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "NullCheckPattern",
+      "impl": "NullCheckPatternImpl",
+      "impl_supertypes": [
+        "DartPatternImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "pattern",
+          "kind": "node",
+          "nullable": false,
+          "type": "DartPattern"
+        },
+        {
+          "name": "operator",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "NullLiteral",
+      "impl": "NullLiteralImpl",
+      "impl_supertypes": [
+        "LiteralImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "literal",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "ObjectPattern",
+      "impl": "ObjectPatternImpl",
+      "impl_supertypes": [
+        "DartPatternImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "type",
+          "kind": "node",
+          "nullable": false,
+          "type": "NamedType"
+        },
+        {
+          "name": "leftParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "fields",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "PatternField"
+        },
+        {
+          "name": "rightParenthesis",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "ParenthesizedExpression",
+      "impl": "ParenthesizedExpressionImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "leftParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "rightParenthesis",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "ParenthesizedPattern",
+      "impl": "ParenthesizedPatternImpl",
+      "impl_supertypes": [
+        "DartPatternImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "leftParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "pattern",
+          "kind": "node",
+          "nullable": false,
+          "type": "DartPattern"
+        },
+        {
+          "name": "rightParenthesis",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "PartDirective",
+      "impl": "PartDirectiveImpl",
+      "impl_supertypes": [
+        "UriBasedDirectiveImpl",
+        "DirectiveImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "partKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "uri",
+          "kind": "node",
+          "nullable": false,
+          "type": "StringLiteral",
+          "is_super": true
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "PartOfDirective",
+      "impl": "PartOfDirectiveImpl",
+      "impl_supertypes": [
+        "DirectiveImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "partKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "ofKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "uri",
+          "kind": "node",
+          "nullable": true,
+          "type": "StringLiteral"
+        },
+        {
+          "name": "libraryName",
+          "kind": "node",
+          "nullable": true,
+          "type": "DottedName"
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "PatternAssignment",
+      "impl": "PatternAssignmentImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "pattern",
+          "kind": "node",
+          "nullable": false,
+          "type": "DartPattern"
+        },
+        {
+          "name": "equals",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "PatternField",
+      "impl": "PatternFieldImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "name",
+          "kind": "node",
+          "nullable": true,
+          "type": "PatternFieldName"
+        },
+        {
+          "name": "pattern",
+          "kind": "node",
+          "nullable": false,
+          "type": "DartPattern"
+        }
+      ]
+    },
+    {
+      "name": "PatternFieldName",
+      "impl": "PatternFieldNameImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "colon",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "PatternVariableDeclaration",
+      "impl": "PatternVariableDeclarationImpl",
+      "impl_supertypes": [
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "keyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "pattern",
+          "kind": "node",
+          "nullable": false,
+          "type": "DartPattern"
+        },
+        {
+          "name": "equals",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "PatternVariableDeclarationStatement",
+      "impl": "PatternVariableDeclarationStatementImpl",
+      "impl_supertypes": [
+        "StatementImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "declaration",
+          "kind": "node",
+          "nullable": false,
+          "type": "PatternVariableDeclaration"
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "PostfixExpression",
+      "impl": "PostfixExpressionImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "do_not_generate": [
+        "isInValueExpressionSlot"
+      ],
+      "properties": [
+        {
+          "name": "operand",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "operator",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "PrefixedIdentifier",
+      "impl": "PrefixedIdentifierImpl",
+      "impl_supertypes": [
+        "IdentifierImpl",
+        "CommentReferableExpressionImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "prefix",
+          "kind": "node",
+          "nullable": false,
+          "type": "SimpleIdentifier"
+        },
+        {
+          "name": "period",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "identifier",
+          "kind": "node",
+          "nullable": false,
+          "type": "SimpleIdentifier"
+        }
+      ]
+    },
+    {
+      "name": "PrefixExpression",
+      "impl": "PrefixExpressionImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "do_not_generate": [
+        "isInValueExpressionSlot"
+      ],
+      "properties": [
+        {
+          "name": "operator",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "operand",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "PrimaryConstructorBody",
+      "impl": "PrimaryConstructorBodyImpl",
+      "impl_supertypes": [
+        "ClassMemberImpl",
+        "DeclarationImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "thisKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "colon",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "initializers",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "ConstructorInitializer"
+        },
+        {
+          "name": "body",
+          "kind": "node",
+          "nullable": false,
+          "type": "FunctionBody"
+        }
+      ]
+    },
+    {
+      "name": "PrimaryConstructorDeclaration",
+      "impl": "PrimaryConstructorDeclarationImpl",
+      "impl_supertypes": [
+        "ClassNamePartImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "constKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "typeName",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "typeParameters",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeParameterList"
+        },
+        {
+          "name": "constructorName",
+          "kind": "node",
+          "nullable": true,
+          "type": "PrimaryConstructorName"
+        },
+        {
+          "name": "formalParameters",
+          "kind": "node",
+          "nullable": false,
+          "type": "FormalParameterList"
+        }
+      ]
+    },
+    {
+      "name": "PrimaryConstructorName",
+      "impl": "PrimaryConstructorNameImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "period",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "PropertyAccess",
+      "impl": "PropertyAccessImpl",
+      "impl_supertypes": [
+        "CommentReferableExpressionImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "target",
+          "kind": "node",
+          "nullable": true,
+          "type": "Expression"
+        },
+        {
+          "name": "operator",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "propertyName",
+          "kind": "node",
+          "nullable": false,
+          "type": "SimpleIdentifier"
+        }
+      ]
+    },
+    {
+      "name": "RecordLiteral",
+      "impl": "RecordLiteralImpl",
+      "impl_supertypes": [
+        "LiteralImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "constKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "leftParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "fields",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "RecordLiteralField",
+          "value_slot": true
+        },
+        {
+          "name": "rightParenthesis",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "RecordLiteralNamedField",
+      "impl": "RecordLiteralNamedFieldImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "colon",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "fieldExpression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "RecordPattern",
+      "impl": "RecordPatternImpl",
+      "impl_supertypes": [
+        "DartPatternImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "leftParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "fields",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "PatternField"
+        },
+        {
+          "name": "rightParenthesis",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "RecordTypeAnnotation",
+      "impl": "RecordTypeAnnotationImpl",
+      "impl_supertypes": [
+        "TypeAnnotationImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "leftParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "positionalFields",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "RecordTypeAnnotationPositionalField"
+        },
+        {
+          "name": "namedFields",
+          "kind": "node",
+          "nullable": true,
+          "type": "RecordTypeAnnotationNamedFields"
+        },
+        {
+          "name": "rightParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "question",
+          "kind": "token",
+          "nullable": true
+        }
+      ]
+    },
+    {
+      "name": "RecordTypeAnnotationNamedField",
+      "impl": "RecordTypeAnnotationNamedFieldImpl",
+      "impl_supertypes": [
+        "RecordTypeAnnotationFieldImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "metadata",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "Annotation",
+          "is_super": true
+        },
+        {
+          "name": "type",
+          "kind": "node",
+          "nullable": false,
+          "type": "TypeAnnotation",
+          "is_super": true
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "RecordTypeAnnotationNamedFields",
+      "impl": "RecordTypeAnnotationNamedFieldsImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "leftBracket",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "fields",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "RecordTypeAnnotationNamedField"
+        },
+        {
+          "name": "rightBracket",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "RecordTypeAnnotationPositionalField",
+      "impl": "RecordTypeAnnotationPositionalFieldImpl",
+      "impl_supertypes": [
+        "RecordTypeAnnotationFieldImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "metadata",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "Annotation",
+          "is_super": true
+        },
+        {
+          "name": "type",
+          "kind": "node",
+          "nullable": false,
+          "type": "TypeAnnotation",
+          "is_super": true
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": true
+        }
+      ]
+    },
+    {
+      "name": "RedirectingConstructorInvocation",
+      "impl": "RedirectingConstructorInvocationImpl",
+      "impl_supertypes": [
+        "ConstructorInitializerImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "thisKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "period",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "constructorName",
+          "kind": "node",
+          "nullable": true,
+          "type": "SimpleIdentifier"
+        },
+        {
+          "name": "argumentList",
+          "kind": "node",
+          "nullable": false,
+          "type": "ArgumentList"
+        }
+      ]
+    },
+    {
+      "name": "RegularFormalParameter",
+      "impl": "RegularFormalParameterImpl",
+      "impl_supertypes": [
+        "FormalParameterImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "do_not_generate": [
+        "visitChildren",
+        "visitChildrenWithHooks"
+      ],
+      "properties": [
+        {
+          "name": "kind",
+          "kind": "other",
+          "nullable": false,
+          "dart_type": "ParameterKind",
+          "is_super": true
+        },
+        {
+          "name": "requiredKeyword",
+          "kind": "token",
+          "nullable": true,
+          "is_super": true
+        },
+        {
+          "name": "covariantKeyword",
+          "kind": "token",
+          "nullable": true,
+          "is_super": true
+        },
+        {
+          "name": "constFinalOrVarKeyword",
+          "kind": "token",
+          "nullable": true,
+          "is_super": true
+        },
+        {
+          "name": "type",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeAnnotation",
+          "is_super": true
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": true,
+          "is_super": true
+        },
+        {
+          "name": "functionTypedSuffix",
+          "kind": "node",
+          "nullable": true,
+          "type": "FunctionTypedFormalParameterSuffix",
+          "is_super": true
+        },
+        {
+          "name": "defaultClause",
+          "kind": "node",
+          "nullable": true,
+          "type": "FormalParameterDefaultClause",
+          "is_super": true
+        }
+      ]
+    },
+    {
+      "name": "RelationalPattern",
+      "impl": "RelationalPatternImpl",
+      "impl_supertypes": [
+        "DartPatternImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "operator",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "operand",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "RestPatternElement",
+      "impl": "RestPatternElementImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "operator",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "pattern",
+          "kind": "node",
+          "nullable": true,
+          "type": "DartPattern"
+        }
+      ]
+    },
+    {
+      "name": "RethrowExpression",
+      "impl": "RethrowExpressionImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "rethrowKeyword",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "ReturnStatement",
+      "impl": "ReturnStatementImpl",
+      "impl_supertypes": [
+        "StatementImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "returnKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": true,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "ScriptTag",
+      "impl": "ScriptTagImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "scriptTag",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "SetOrMapLiteral",
+      "impl": "SetOrMapLiteralImpl",
+      "impl_supertypes": [
+        "TypedLiteralImpl",
+        "LiteralImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "constKeyword",
+          "kind": "token",
+          "nullable": true,
+          "is_super": true
+        },
+        {
+          "name": "typeArguments",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeArgumentList",
+          "is_super": true
+        },
+        {
+          "name": "leftBracket",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "elements",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "CollectionElement",
+          "value_slot": true
+        },
+        {
+          "name": "rightBracket",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "ShowCombinator",
+      "impl": "ShowCombinatorImpl",
+      "impl_supertypes": [
+        "CombinatorImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "keyword",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "shownNames",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "SimpleIdentifier"
+        }
+      ]
+    },
+    {
+      "name": "SimpleIdentifier",
+      "impl": "SimpleIdentifierImpl",
+      "impl_supertypes": [
+        "IdentifierImpl",
+        "CommentReferableExpressionImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "token",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "SimpleStringLiteral",
+      "impl": "SimpleStringLiteralImpl",
+      "impl_supertypes": [
+        "SingleStringLiteralImpl",
+        "StringLiteralImpl",
+        "LiteralImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "literal",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "value",
+          "kind": "other",
+          "nullable": false,
+          "dart_type": "String"
+        }
+      ]
+    },
+    {
+      "name": "SpreadElement",
+      "impl": "SpreadElementImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "spreadOperator",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "StringInterpolation",
+      "impl": "StringInterpolationImpl",
+      "impl_supertypes": [
+        "SingleStringLiteralImpl",
+        "StringLiteralImpl",
+        "LiteralImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "do_not_generate": [
+        "new"
+      ],
+      "properties": [
+        {
+          "name": "elements",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "InterpolationElement"
+        }
+      ]
+    },
+    {
+      "name": "SuperConstructorInvocation",
+      "impl": "SuperConstructorInvocationImpl",
+      "impl_supertypes": [
+        "ConstructorInitializerImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "superKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "period",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "constructorName",
+          "kind": "node",
+          "nullable": true,
+          "type": "SimpleIdentifier"
+        },
+        {
+          "name": "argumentList",
+          "kind": "node",
+          "nullable": false,
+          "type": "ArgumentList"
+        }
+      ]
+    },
+    {
+      "name": "SuperExpression",
+      "impl": "SuperExpressionImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "superKeyword",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "SuperFormalParameter",
+      "impl": "SuperFormalParameterImpl",
+      "impl_supertypes": [
+        "FormalParameterImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "do_not_generate": [
+        "visitChildren",
+        "visitChildrenWithHooks"
+      ],
+      "properties": [
+        {
+          "name": "kind",
+          "kind": "other",
+          "nullable": false,
+          "dart_type": "ParameterKind",
+          "is_super": true
+        },
+        {
+          "name": "requiredKeyword",
+          "kind": "token",
+          "nullable": true,
+          "is_super": true
+        },
+        {
+          "name": "covariantKeyword",
+          "kind": "token",
+          "nullable": true,
+          "is_super": true
+        },
+        {
+          "name": "constFinalOrVarKeyword",
+          "kind": "token",
+          "nullable": true,
+          "is_super": true
+        },
+        {
+          "name": "type",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeAnnotation",
+          "is_super": true
+        },
+        {
+          "name": "superKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "period",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "functionTypedSuffix",
+          "kind": "node",
+          "nullable": true,
+          "type": "FunctionTypedFormalParameterSuffix",
+          "is_super": true
+        },
+        {
+          "name": "defaultClause",
+          "kind": "node",
+          "nullable": true,
+          "type": "FormalParameterDefaultClause",
+          "is_super": true
+        }
+      ]
+    },
+    {
+      "name": "SwitchCase",
+      "impl": "SwitchCaseImpl",
+      "impl_supertypes": [
+        "SwitchMemberImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "labels",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "Label",
+          "is_super": true
+        },
+        {
+          "name": "keyword",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "colon",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "statements",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "Statement",
+          "is_super": true
+        }
+      ]
+    },
+    {
+      "name": "SwitchDefault",
+      "impl": "SwitchDefaultImpl",
+      "impl_supertypes": [
+        "SwitchMemberImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "labels",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "Label",
+          "is_super": true
+        },
+        {
+          "name": "keyword",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "colon",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "statements",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "Statement",
+          "is_super": true
+        }
+      ]
+    },
+    {
+      "name": "SwitchExpressionCase",
+      "impl": "SwitchExpressionCaseImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "guardedPattern",
+          "kind": "node",
+          "nullable": false,
+          "type": "GuardedPattern"
+        },
+        {
+          "name": "arrow",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "SwitchExpression",
+      "impl": "SwitchExpressionImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "switchKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "leftParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "rightParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "leftBracket",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "cases",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "SwitchExpressionCase"
+        },
+        {
+          "name": "rightBracket",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "SwitchPatternCase",
+      "impl": "SwitchPatternCaseImpl",
+      "impl_supertypes": [
+        "SwitchMemberImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "labels",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "Label",
+          "is_super": true
+        },
+        {
+          "name": "keyword",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "guardedPattern",
+          "kind": "node",
+          "nullable": false,
+          "type": "GuardedPattern"
+        },
+        {
+          "name": "colon",
+          "kind": "token",
+          "nullable": false,
+          "is_super": true
+        },
+        {
+          "name": "statements",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "Statement",
+          "is_super": true
+        }
+      ]
+    },
+    {
+      "name": "SwitchStatement",
+      "impl": "SwitchStatementImpl",
+      "impl_supertypes": [
+        "StatementImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "switchKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "leftParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "rightParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "leftBracket",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "members",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "SwitchMember"
+        },
+        {
+          "name": "rightBracket",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "SymbolLiteral",
+      "impl": "SymbolLiteralImpl",
+      "impl_supertypes": [
+        "LiteralImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "poundSign",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "components",
+          "kind": "token_list",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "ThisExpression",
+      "impl": "ThisExpressionImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "thisKeyword",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "ThrowExpression",
+      "impl": "ThrowExpressionImpl",
+      "impl_supertypes": [
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "throwKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "TopLevelVariableDeclaration",
+      "impl": "TopLevelVariableDeclarationImpl",
+      "impl_supertypes": [
+        "CompilationUnitMemberImpl",
+        "DeclarationImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "augmentKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "externalKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "abstractKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "variables",
+          "kind": "node",
+          "nullable": false,
+          "type": "VariableDeclarationList"
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "TryStatement",
+      "impl": "TryStatementImpl",
+      "impl_supertypes": [
+        "StatementImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "tryKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "body",
+          "kind": "node",
+          "nullable": false,
+          "type": "Block"
+        },
+        {
+          "name": "catchClauses",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "CatchClause"
+        },
+        {
+          "name": "finallyKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "finallyBlock",
+          "kind": "node",
+          "nullable": true,
+          "type": "Block"
+        }
+      ]
+    },
+    {
+      "name": "TypeArgumentList",
+      "impl": "TypeArgumentListImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "leftBracket",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "arguments",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "TypeAnnotation"
+        },
+        {
+          "name": "rightBracket",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "TypeLiteral",
+      "impl": "TypeLiteralImpl",
+      "impl_supertypes": [
+        "CommentReferableExpressionImpl",
+        "ExpressionImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "type",
+          "kind": "node",
+          "nullable": false,
+          "type": "NamedType"
+        }
+      ]
+    },
+    {
+      "name": "TypeParameter",
+      "impl": "TypeParameterImpl",
+      "impl_supertypes": [
+        "DeclarationImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "varianceKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "extendsKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "bound",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeAnnotation"
+        }
+      ]
+    },
+    {
+      "name": "TypeParameterList",
+      "impl": "TypeParameterListImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "leftBracket",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "typeParameters",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "TypeParameter"
+        },
+        {
+          "name": "rightBracket",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "VariableDeclaration",
+      "impl": "VariableDeclarationImpl",
+      "impl_supertypes": [
+        "DeclarationImpl",
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "equals",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "initializer",
+          "kind": "node",
+          "nullable": true,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "VariableDeclarationList",
+      "impl": "VariableDeclarationListImpl",
+      "impl_supertypes": [
+        "AnnotatedNodeImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": true,
+      "generated": true,
+      "properties": [
+        {
+          "name": "lateKeyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "keyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "type",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeAnnotation"
+        },
+        {
+          "name": "variables",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "VariableDeclarationStatement",
+      "impl": "VariableDeclarationStatementImpl",
+      "impl_supertypes": [
+        "StatementImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "variables",
+          "kind": "node",
+          "nullable": false,
+          "type": "VariableDeclarationList"
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "WhenClause",
+      "impl": "WhenClauseImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "whenKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        }
+      ]
+    },
+    {
+      "name": "WhileStatement",
+      "impl": "WhileStatementImpl",
+      "impl_supertypes": [
+        "StatementImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "whileKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "leftParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "condition",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "rightParenthesis",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "body",
+          "kind": "node",
+          "nullable": false,
+          "type": "Statement"
+        }
+      ]
+    },
+    {
+      "name": "WildcardPattern",
+      "impl": "WildcardPatternImpl",
+      "impl_supertypes": [
+        "DartPatternImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "keyword",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "type",
+          "kind": "node",
+          "nullable": true,
+          "type": "TypeAnnotation"
+        },
+        {
+          "name": "name",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "WithClause",
+      "impl": "WithClauseImpl",
+      "impl_supertypes": [
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "withKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "mixinTypes",
+          "kind": "node_list",
+          "nullable": false,
+          "type": "NamedType"
+        }
+      ]
+    },
+    {
+      "name": "YieldStatement",
+      "impl": "YieldStatementImpl",
+      "impl_supertypes": [
+        "StatementImpl",
+        "AstNodeImpl"
+      ],
+      "annotated": false,
+      "generated": true,
+      "properties": [
+        {
+          "name": "yieldKeyword",
+          "kind": "token",
+          "nullable": false
+        },
+        {
+          "name": "star",
+          "kind": "token",
+          "nullable": true
+        },
+        {
+          "name": "expression",
+          "kind": "node",
+          "nullable": false,
+          "type": "Expression",
+          "value_slot": true
+        },
+        {
+          "name": "semicolon",
+          "kind": "token",
+          "nullable": false
+        }
+      ]
+    }
+  ],
+  "interfaces": {
+    "AdjacentStrings": {
+      "supertypes": [
+        "StringLiteral"
+      ],
+      "all_supertypes": [
+        "StringLiteral",
+        "Literal",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "AnnotatedNode": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "Annotation": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "AnonymousBlockBody": {
+      "supertypes": [
+        "AnonymousMethodBody"
+      ],
+      "all_supertypes": [
+        "AnonymousMethodBody",
+        "AstNode"
+      ]
+    },
+    "AnonymousExpressionBody": {
+      "supertypes": [
+        "AnonymousMethodBody"
+      ],
+      "all_supertypes": [
+        "AnonymousMethodBody",
+        "AstNode"
+      ]
+    },
+    "AnonymousMethodBody": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "AnonymousMethodInvocation": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "Argument": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "ArgumentList": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "AsExpression": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "AssertInitializer": {
+      "supertypes": [
+        "Assertion",
+        "ConstructorInitializer"
+      ],
+      "all_supertypes": [
+        "Assertion",
+        "AstNode",
+        "ConstructorInitializer"
+      ]
+    },
+    "Assertion": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "AssertStatement": {
+      "supertypes": [
+        "Assertion",
+        "Statement"
+      ],
+      "all_supertypes": [
+        "Assertion",
+        "AstNode",
+        "Statement"
+      ]
+    },
+    "AssignedVariablePattern": {
+      "supertypes": [
+        "VariablePattern"
+      ],
+      "all_supertypes": [
+        "VariablePattern",
+        "DartPattern",
+        "AstNode",
+        "ListPatternElement"
+      ]
+    },
+    "AssignmentExpression": {
+      "supertypes": [
+        "MethodReferenceExpression",
+        "CompoundAssignmentExpression"
+      ],
+      "all_supertypes": [
+        "MethodReferenceExpression",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField",
+        "CompoundAssignmentExpression"
+      ]
+    },
+    "AstNode": {
+      "supertypes": [],
+      "all_supertypes": []
+    },
+    "AwaitExpression": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "BinaryExpression": {
+      "supertypes": [
+        "Expression",
+        "MethodReferenceExpression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField",
+        "MethodReferenceExpression"
+      ]
+    },
+    "Block": {
+      "supertypes": [
+        "Statement"
+      ],
+      "all_supertypes": [
+        "Statement",
+        "AstNode"
+      ]
+    },
+    "BlockClassBody": {
+      "supertypes": [
+        "ClassBody"
+      ],
+      "all_supertypes": [
+        "ClassBody",
+        "AstNode"
+      ]
+    },
+    "BlockEnumBody": {
+      "supertypes": [
+        "EnumBody"
+      ],
+      "all_supertypes": [
+        "EnumBody",
+        "AstNode"
+      ]
+    },
+    "BlockFunctionBody": {
+      "supertypes": [
+        "FunctionBody"
+      ],
+      "all_supertypes": [
+        "FunctionBody",
+        "AstNode"
+      ]
+    },
+    "BooleanLiteral": {
+      "supertypes": [
+        "Literal"
+      ],
+      "all_supertypes": [
+        "Literal",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "BreakStatement": {
+      "supertypes": [
+        "Statement"
+      ],
+      "all_supertypes": [
+        "Statement",
+        "AstNode"
+      ]
+    },
+    "CascadeExpression": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "CaseClause": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "CastPattern": {
+      "supertypes": [
+        "DartPattern"
+      ],
+      "all_supertypes": [
+        "DartPattern",
+        "AstNode",
+        "ListPatternElement"
+      ]
+    },
+    "CatchClause": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "CatchClauseParameter": {
+      "supertypes": [],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "ClassBody": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "ClassDeclaration": {
+      "supertypes": [
+        "CompilationUnitMember"
+      ],
+      "all_supertypes": [
+        "CompilationUnitMember",
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "ClassMember": {
+      "supertypes": [
+        "Declaration"
+      ],
+      "all_supertypes": [
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "ClassNamePart": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "ClassTypeAlias": {
+      "supertypes": [
+        "TypeAlias"
+      ],
+      "all_supertypes": [
+        "TypeAlias",
+        "CompilationUnitMember",
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "CollectionElement": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "Combinator": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "Comment": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "CommentReferableExpression": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "CommentReference": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "CompilationUnit": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "CompilationUnitMember": {
+      "supertypes": [
+        "Declaration"
+      ],
+      "all_supertypes": [
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "CompoundAssignmentExpression": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "ConditionalExpression": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "Configuration": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "ConstantPattern": {
+      "supertypes": [
+        "DartPattern"
+      ],
+      "all_supertypes": [
+        "DartPattern",
+        "AstNode",
+        "ListPatternElement"
+      ]
+    },
+    "ConstructorDeclaration": {
+      "supertypes": [
+        "ClassMember"
+      ],
+      "all_supertypes": [
+        "ClassMember",
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "ConstructorFieldInitializer": {
+      "supertypes": [
+        "ConstructorInitializer"
+      ],
+      "all_supertypes": [
+        "ConstructorInitializer",
+        "AstNode"
+      ]
+    },
+    "ConstructorInitializer": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "ConstructorName": {
+      "supertypes": [
+        "AstNode",
+        "ConstructorReferenceNode"
+      ],
+      "all_supertypes": [
+        "AstNode",
+        "ConstructorReferenceNode"
+      ]
+    },
+    "ConstructorReference": {
+      "supertypes": [
+        "Expression",
+        "CommentReferableExpression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField",
+        "CommentReferableExpression"
+      ]
+    },
+    "ConstructorReferenceNode": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "ConstructorSelector": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "ContinueStatement": {
+      "supertypes": [
+        "Statement"
+      ],
+      "all_supertypes": [
+        "Statement",
+        "AstNode"
+      ]
+    },
+    "DartPattern": {
+      "supertypes": [
+        "AstNode",
+        "ListPatternElement"
+      ],
+      "all_supertypes": [
+        "AstNode",
+        "ListPatternElement"
+      ]
+    },
+    "Declaration": {
+      "supertypes": [
+        "AnnotatedNode"
+      ],
+      "all_supertypes": [
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "DeclaredIdentifier": {
+      "supertypes": [
+        "Declaration"
+      ],
+      "all_supertypes": [
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "DeclaredVariablePattern": {
+      "supertypes": [
+        "VariablePattern"
+      ],
+      "all_supertypes": [
+        "VariablePattern",
+        "DartPattern",
+        "AstNode",
+        "ListPatternElement"
+      ]
+    },
+    "Directive": {
+      "supertypes": [
+        "AnnotatedNode"
+      ],
+      "all_supertypes": [
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "DoStatement": {
+      "supertypes": [
+        "Statement"
+      ],
+      "all_supertypes": [
+        "Statement",
+        "AstNode"
+      ]
+    },
+    "DotShorthandConstructorInvocation": {
+      "supertypes": [
+        "ConstructorReferenceNode"
+      ],
+      "all_supertypes": [
+        "InvocationExpression",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField",
+        "ConstructorReferenceNode"
+      ]
+    },
+    "DotShorthandInvocation": {
+      "supertypes": [],
+      "all_supertypes": [
+        "InvocationExpression",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "DotShorthandPropertyAccess": {
+      "supertypes": [],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "DottedName": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "DoubleLiteral": {
+      "supertypes": [
+        "Literal"
+      ],
+      "all_supertypes": [
+        "Literal",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "EmptyClassBody": {
+      "supertypes": [
+        "ClassBody"
+      ],
+      "all_supertypes": [
+        "ClassBody",
+        "AstNode"
+      ]
+    },
+    "EmptyEnumBody": {
+      "supertypes": [
+        "EnumBody"
+      ],
+      "all_supertypes": [
+        "EnumBody",
+        "AstNode"
+      ]
+    },
+    "EmptyFunctionBody": {
+      "supertypes": [
+        "FunctionBody"
+      ],
+      "all_supertypes": [
+        "FunctionBody",
+        "AstNode"
+      ]
+    },
+    "EmptyStatement": {
+      "supertypes": [
+        "Statement"
+      ],
+      "all_supertypes": [
+        "Statement",
+        "AstNode"
+      ]
+    },
+    "EnumBody": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "EnumConstantArguments": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "EnumConstantDeclaration": {
+      "supertypes": [
+        "Declaration"
+      ],
+      "all_supertypes": [
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "EnumDeclaration": {
+      "supertypes": [
+        "CompilationUnitMember"
+      ],
+      "all_supertypes": [
+        "CompilationUnitMember",
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "ExportDirective": {
+      "supertypes": [
+        "NamespaceDirective"
+      ],
+      "all_supertypes": [
+        "NamespaceDirective",
+        "UriBasedDirective",
+        "Directive",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "Expression": {
+      "supertypes": [
+        "Argument",
+        "CollectionElement",
+        "RecordLiteralField"
+      ],
+      "all_supertypes": [
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "ExpressionFunctionBody": {
+      "supertypes": [
+        "FunctionBody"
+      ],
+      "all_supertypes": [
+        "FunctionBody",
+        "AstNode"
+      ]
+    },
+    "ExpressionStatement": {
+      "supertypes": [
+        "Statement"
+      ],
+      "all_supertypes": [
+        "Statement",
+        "AstNode"
+      ]
+    },
+    "ExtendsClause": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "ExtensionDeclaration": {
+      "supertypes": [
+        "CompilationUnitMember"
+      ],
+      "all_supertypes": [
+        "CompilationUnitMember",
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "ExtensionOnClause": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "ExtensionOverride": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "ExtensionTypeDeclaration": {
+      "supertypes": [
+        "CompilationUnitMember"
+      ],
+      "all_supertypes": [
+        "CompilationUnitMember",
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "FieldDeclaration": {
+      "supertypes": [
+        "ClassMember"
+      ],
+      "all_supertypes": [
+        "ClassMember",
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "FieldFormalParameter": {
+      "supertypes": [
+        "FormalParameter"
+      ],
+      "all_supertypes": [
+        "FormalParameter",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "ForEachParts": {
+      "supertypes": [
+        "ForLoopParts"
+      ],
+      "all_supertypes": [
+        "ForLoopParts",
+        "AstNode"
+      ]
+    },
+    "ForEachPartsWithDeclaration": {
+      "supertypes": [
+        "ForEachParts"
+      ],
+      "all_supertypes": [
+        "ForEachParts",
+        "ForLoopParts",
+        "AstNode"
+      ]
+    },
+    "ForEachPartsWithIdentifier": {
+      "supertypes": [
+        "ForEachParts"
+      ],
+      "all_supertypes": [
+        "ForEachParts",
+        "ForLoopParts",
+        "AstNode"
+      ]
+    },
+    "ForEachPartsWithPattern": {
+      "supertypes": [
+        "ForEachParts"
+      ],
+      "all_supertypes": [
+        "ForEachParts",
+        "ForLoopParts",
+        "AstNode"
+      ]
+    },
+    "ForElement": {
+      "supertypes": [
+        "CollectionElement",
+        "ForLoop"
+      ],
+      "all_supertypes": [
+        "CollectionElement",
+        "AstNode",
+        "ForLoop"
+      ]
+    },
+    "ForLoop": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "ForLoopParts": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "FormalParameter": {
+      "supertypes": [
+        "AnnotatedNode"
+      ],
+      "all_supertypes": [
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "FormalParameterDefaultClause": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "FormalParameterList": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "ForParts": {
+      "supertypes": [
+        "ForLoopParts"
+      ],
+      "all_supertypes": [
+        "ForLoopParts",
+        "AstNode"
+      ]
+    },
+    "ForPartsWithDeclarations": {
+      "supertypes": [
+        "ForParts"
+      ],
+      "all_supertypes": [
+        "ForParts",
+        "ForLoopParts",
+        "AstNode"
+      ]
+    },
+    "ForPartsWithExpression": {
+      "supertypes": [
+        "ForParts"
+      ],
+      "all_supertypes": [
+        "ForParts",
+        "ForLoopParts",
+        "AstNode"
+      ]
+    },
+    "ForPartsWithPattern": {
+      "supertypes": [
+        "ForParts"
+      ],
+      "all_supertypes": [
+        "ForParts",
+        "ForLoopParts",
+        "AstNode"
+      ]
+    },
+    "ForStatement": {
+      "supertypes": [
+        "Statement",
+        "ForLoop"
+      ],
+      "all_supertypes": [
+        "Statement",
+        "AstNode",
+        "ForLoop"
+      ]
+    },
+    "FunctionBody": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "FunctionDeclaration": {
+      "supertypes": [
+        "CompilationUnitMember"
+      ],
+      "all_supertypes": [
+        "CompilationUnitMember",
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "FunctionDeclarationStatement": {
+      "supertypes": [
+        "Statement"
+      ],
+      "all_supertypes": [
+        "Statement",
+        "AstNode"
+      ]
+    },
+    "FunctionExpression": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "FunctionExpressionInvocation": {
+      "supertypes": [
+        "InvocationExpression"
+      ],
+      "all_supertypes": [
+        "InvocationExpression",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "FunctionReference": {
+      "supertypes": [
+        "Expression",
+        "CommentReferableExpression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField",
+        "CommentReferableExpression"
+      ]
+    },
+    "FunctionTypeAlias": {
+      "supertypes": [
+        "TypeAlias"
+      ],
+      "all_supertypes": [
+        "TypeAlias",
+        "CompilationUnitMember",
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "FunctionTypedFormalParameterSuffix": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "GenericFunctionType": {
+      "supertypes": [
+        "TypeAnnotation"
+      ],
+      "all_supertypes": [
+        "TypeAnnotation",
+        "AstNode"
+      ]
+    },
+    "GenericTypeAlias": {
+      "supertypes": [
+        "TypeAlias"
+      ],
+      "all_supertypes": [
+        "TypeAlias",
+        "CompilationUnitMember",
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "GuardedPattern": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "HideCombinator": {
+      "supertypes": [
+        "Combinator"
+      ],
+      "all_supertypes": [
+        "Combinator",
+        "AstNode"
+      ]
+    },
+    "Identifier": {
+      "supertypes": [
+        "Expression",
+        "CommentReferableExpression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField",
+        "CommentReferableExpression"
+      ]
+    },
+    "IfElement": {
+      "supertypes": [
+        "CollectionElement"
+      ],
+      "all_supertypes": [
+        "CollectionElement",
+        "AstNode"
+      ]
+    },
+    "IfStatement": {
+      "supertypes": [
+        "Statement"
+      ],
+      "all_supertypes": [
+        "Statement",
+        "AstNode"
+      ]
+    },
+    "ImplementsClause": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "ImplicitCallReference": {
+      "supertypes": [
+        "MethodReferenceExpression"
+      ],
+      "all_supertypes": [
+        "MethodReferenceExpression",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "ImportDirective": {
+      "supertypes": [
+        "NamespaceDirective"
+      ],
+      "all_supertypes": [
+        "NamespaceDirective",
+        "UriBasedDirective",
+        "Directive",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "ImportPrefixReference": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "IndexExpression": {
+      "supertypes": [
+        "MethodReferenceExpression"
+      ],
+      "all_supertypes": [
+        "MethodReferenceExpression",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "InstanceCreationExpression": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "IntegerLiteral": {
+      "supertypes": [
+        "Literal"
+      ],
+      "all_supertypes": [
+        "Literal",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "InterpolationElement": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "InterpolationExpression": {
+      "supertypes": [
+        "InterpolationElement"
+      ],
+      "all_supertypes": [
+        "InterpolationElement",
+        "AstNode"
+      ]
+    },
+    "InterpolationString": {
+      "supertypes": [
+        "InterpolationElement"
+      ],
+      "all_supertypes": [
+        "InterpolationElement",
+        "AstNode"
+      ]
+    },
+    "InvocationExpression": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "IsExpression": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "Label": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "LabeledStatement": {
+      "supertypes": [
+        "Statement"
+      ],
+      "all_supertypes": [
+        "Statement",
+        "AstNode"
+      ]
+    },
+    "LabelReference": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "LibraryDirective": {
+      "supertypes": [
+        "Directive"
+      ],
+      "all_supertypes": [
+        "Directive",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "ListLiteral": {
+      "supertypes": [
+        "TypedLiteral"
+      ],
+      "all_supertypes": [
+        "TypedLiteral",
+        "Literal",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "ListPattern": {
+      "supertypes": [
+        "DartPattern"
+      ],
+      "all_supertypes": [
+        "DartPattern",
+        "AstNode",
+        "ListPatternElement"
+      ]
+    },
+    "ListPatternElement": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "Literal": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "LogicalAndPattern": {
+      "supertypes": [
+        "DartPattern"
+      ],
+      "all_supertypes": [
+        "DartPattern",
+        "AstNode",
+        "ListPatternElement"
+      ]
+    },
+    "LogicalOrPattern": {
+      "supertypes": [
+        "DartPattern"
+      ],
+      "all_supertypes": [
+        "DartPattern",
+        "AstNode",
+        "ListPatternElement"
+      ]
+    },
+    "MapLiteralEntry": {
+      "supertypes": [
+        "CollectionElement"
+      ],
+      "all_supertypes": [
+        "CollectionElement",
+        "AstNode"
+      ]
+    },
+    "MapPattern": {
+      "supertypes": [
+        "DartPattern"
+      ],
+      "all_supertypes": [
+        "DartPattern",
+        "AstNode",
+        "ListPatternElement"
+      ]
+    },
+    "MapPatternElement": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "MapPatternEntry": {
+      "supertypes": [
+        "AstNode",
+        "MapPatternElement"
+      ],
+      "all_supertypes": [
+        "AstNode",
+        "MapPatternElement"
+      ]
+    },
+    "MethodDeclaration": {
+      "supertypes": [
+        "ClassMember"
+      ],
+      "all_supertypes": [
+        "ClassMember",
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "MethodInvocation": {
+      "supertypes": [
+        "InvocationExpression"
+      ],
+      "all_supertypes": [
+        "InvocationExpression",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "MethodReferenceExpression": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "MixinDeclaration": {
+      "supertypes": [
+        "CompilationUnitMember"
+      ],
+      "all_supertypes": [
+        "CompilationUnitMember",
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "MixinOnClause": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "NamedArgument": {
+      "supertypes": [
+        "Argument"
+      ],
+      "all_supertypes": [
+        "Argument",
+        "AstNode"
+      ]
+    },
+    "NamedType": {
+      "supertypes": [
+        "TypeAnnotation"
+      ],
+      "all_supertypes": [
+        "TypeAnnotation",
+        "AstNode"
+      ]
+    },
+    "NamespaceDirective": {
+      "supertypes": [
+        "UriBasedDirective"
+      ],
+      "all_supertypes": [
+        "UriBasedDirective",
+        "Directive",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "NameWithTypeParameters": {
+      "supertypes": [
+        "ClassNamePart"
+      ],
+      "all_supertypes": [
+        "ClassNamePart",
+        "AstNode"
+      ]
+    },
+    "NativeClause": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "NativeFunctionBody": {
+      "supertypes": [
+        "FunctionBody"
+      ],
+      "all_supertypes": [
+        "FunctionBody",
+        "AstNode"
+      ]
+    },
+    "NullAssertPattern": {
+      "supertypes": [
+        "DartPattern"
+      ],
+      "all_supertypes": [
+        "DartPattern",
+        "AstNode",
+        "ListPatternElement"
+      ]
+    },
+    "NullAwareElement": {
+      "supertypes": [
+        "CollectionElement"
+      ],
+      "all_supertypes": [
+        "CollectionElement",
+        "AstNode"
+      ]
+    },
+    "NullCheckPattern": {
+      "supertypes": [
+        "DartPattern"
+      ],
+      "all_supertypes": [
+        "DartPattern",
+        "AstNode",
+        "ListPatternElement"
+      ]
+    },
+    "NullLiteral": {
+      "supertypes": [
+        "Literal"
+      ],
+      "all_supertypes": [
+        "Literal",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "ObjectPattern": {
+      "supertypes": [
+        "DartPattern"
+      ],
+      "all_supertypes": [
+        "DartPattern",
+        "AstNode",
+        "ListPatternElement"
+      ]
+    },
+    "ParenthesizedExpression": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "ParenthesizedPattern": {
+      "supertypes": [
+        "DartPattern"
+      ],
+      "all_supertypes": [
+        "DartPattern",
+        "AstNode",
+        "ListPatternElement"
+      ]
+    },
+    "PartDirective": {
+      "supertypes": [
+        "UriBasedDirective"
+      ],
+      "all_supertypes": [
+        "UriBasedDirective",
+        "Directive",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "PartOfDirective": {
+      "supertypes": [
+        "Directive"
+      ],
+      "all_supertypes": [
+        "Directive",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "PatternAssignment": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "PatternField": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "PatternFieldName": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "PatternVariableDeclaration": {
+      "supertypes": [
+        "AnnotatedNode"
+      ],
+      "all_supertypes": [
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "PatternVariableDeclarationStatement": {
+      "supertypes": [
+        "Statement"
+      ],
+      "all_supertypes": [
+        "Statement",
+        "AstNode"
+      ]
+    },
+    "PostfixExpression": {
+      "supertypes": [
+        "Expression",
+        "MethodReferenceExpression",
+        "CompoundAssignmentExpression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField",
+        "MethodReferenceExpression",
+        "CompoundAssignmentExpression"
+      ]
+    },
+    "PrefixedIdentifier": {
+      "supertypes": [
+        "Identifier"
+      ],
+      "all_supertypes": [
+        "Identifier",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField",
+        "CommentReferableExpression"
+      ]
+    },
+    "PrefixExpression": {
+      "supertypes": [
+        "Expression",
+        "MethodReferenceExpression",
+        "CompoundAssignmentExpression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField",
+        "MethodReferenceExpression",
+        "CompoundAssignmentExpression"
+      ]
+    },
+    "PrimaryConstructorBody": {
+      "supertypes": [
+        "ClassMember"
+      ],
+      "all_supertypes": [
+        "ClassMember",
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "PrimaryConstructorDeclaration": {
+      "supertypes": [
+        "ClassNamePart"
+      ],
+      "all_supertypes": [
+        "ClassNamePart",
+        "AstNode"
+      ]
+    },
+    "PrimaryConstructorName": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "PropertyAccess": {
+      "supertypes": [
+        "CommentReferableExpression"
+      ],
+      "all_supertypes": [
+        "CommentReferableExpression",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "RecordLiteral": {
+      "supertypes": [
+        "Literal"
+      ],
+      "all_supertypes": [
+        "Literal",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "RecordLiteralField": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "RecordLiteralNamedField": {
+      "supertypes": [
+        "RecordLiteralField"
+      ],
+      "all_supertypes": [
+        "RecordLiteralField",
+        "AstNode"
+      ]
+    },
+    "RecordPattern": {
+      "supertypes": [
+        "DartPattern"
+      ],
+      "all_supertypes": [
+        "DartPattern",
+        "AstNode",
+        "ListPatternElement"
+      ]
+    },
+    "RecordTypeAnnotation": {
+      "supertypes": [
+        "TypeAnnotation"
+      ],
+      "all_supertypes": [
+        "TypeAnnotation",
+        "AstNode"
+      ]
+    },
+    "RecordTypeAnnotationField": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "RecordTypeAnnotationNamedField": {
+      "supertypes": [
+        "RecordTypeAnnotationField"
+      ],
+      "all_supertypes": [
+        "RecordTypeAnnotationField",
+        "AstNode"
+      ]
+    },
+    "RecordTypeAnnotationNamedFields": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "RecordTypeAnnotationPositionalField": {
+      "supertypes": [
+        "RecordTypeAnnotationField"
+      ],
+      "all_supertypes": [
+        "RecordTypeAnnotationField",
+        "AstNode"
+      ]
+    },
+    "RedirectingConstructorInvocation": {
+      "supertypes": [
+        "ConstructorInitializer",
+        "ConstructorReferenceNode"
+      ],
+      "all_supertypes": [
+        "ConstructorInitializer",
+        "AstNode",
+        "ConstructorReferenceNode"
+      ]
+    },
+    "RegularFormalParameter": {
+      "supertypes": [
+        "FormalParameter"
+      ],
+      "all_supertypes": [
+        "FormalParameter",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "RelationalPattern": {
+      "supertypes": [
+        "DartPattern"
+      ],
+      "all_supertypes": [
+        "DartPattern",
+        "AstNode",
+        "ListPatternElement"
+      ]
+    },
+    "RestPatternElement": {
+      "supertypes": [
+        "ListPatternElement",
+        "MapPatternElement"
+      ],
+      "all_supertypes": [
+        "ListPatternElement",
+        "AstNode",
+        "MapPatternElement"
+      ]
+    },
+    "RethrowExpression": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "ReturnStatement": {
+      "supertypes": [
+        "Statement"
+      ],
+      "all_supertypes": [
+        "Statement",
+        "AstNode"
+      ]
+    },
+    "ScriptTag": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "SetOrMapLiteral": {
+      "supertypes": [
+        "TypedLiteral"
+      ],
+      "all_supertypes": [
+        "TypedLiteral",
+        "Literal",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "ShowCombinator": {
+      "supertypes": [
+        "Combinator"
+      ],
+      "all_supertypes": [
+        "Combinator",
+        "AstNode"
+      ]
+    },
+    "SimpleIdentifier": {
+      "supertypes": [
+        "Identifier"
+      ],
+      "all_supertypes": [
+        "Identifier",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField",
+        "CommentReferableExpression"
+      ]
+    },
+    "SimpleStringLiteral": {
+      "supertypes": [
+        "SingleStringLiteral"
+      ],
+      "all_supertypes": [
+        "SingleStringLiteral",
+        "StringLiteral",
+        "Literal",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "SingleStringLiteral": {
+      "supertypes": [
+        "StringLiteral"
+      ],
+      "all_supertypes": [
+        "StringLiteral",
+        "Literal",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "SpreadElement": {
+      "supertypes": [
+        "CollectionElement"
+      ],
+      "all_supertypes": [
+        "CollectionElement",
+        "AstNode"
+      ]
+    },
+    "Statement": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "StringInterpolation": {
+      "supertypes": [
+        "SingleStringLiteral"
+      ],
+      "all_supertypes": [
+        "SingleStringLiteral",
+        "StringLiteral",
+        "Literal",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "StringLiteral": {
+      "supertypes": [
+        "Literal"
+      ],
+      "all_supertypes": [
+        "Literal",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "SuperConstructorInvocation": {
+      "supertypes": [
+        "ConstructorInitializer",
+        "ConstructorReferenceNode"
+      ],
+      "all_supertypes": [
+        "ConstructorInitializer",
+        "AstNode",
+        "ConstructorReferenceNode"
+      ]
+    },
+    "SuperExpression": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "SuperFormalParameter": {
+      "supertypes": [
+        "FormalParameter"
+      ],
+      "all_supertypes": [
+        "FormalParameter",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "SwitchCase": {
+      "supertypes": [
+        "SwitchMember"
+      ],
+      "all_supertypes": [
+        "SwitchMember",
+        "AstNode"
+      ]
+    },
+    "SwitchDefault": {
+      "supertypes": [
+        "SwitchMember"
+      ],
+      "all_supertypes": [
+        "SwitchMember",
+        "AstNode"
+      ]
+    },
+    "SwitchExpression": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "SwitchExpressionCase": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "SwitchMember": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "SwitchPatternCase": {
+      "supertypes": [
+        "SwitchMember"
+      ],
+      "all_supertypes": [
+        "SwitchMember",
+        "AstNode"
+      ]
+    },
+    "SwitchStatement": {
+      "supertypes": [
+        "Statement"
+      ],
+      "all_supertypes": [
+        "Statement",
+        "AstNode"
+      ]
+    },
+    "SymbolLiteral": {
+      "supertypes": [
+        "Literal"
+      ],
+      "all_supertypes": [
+        "Literal",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "SyntheticIdentifier": {
+      "supertypes": [
+        "SimpleIdentifier"
+      ],
+      "all_supertypes": [
+        "SimpleIdentifier",
+        "Identifier",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField",
+        "CommentReferableExpression"
+      ]
+    },
+    "ThisExpression": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "ThrowExpression": {
+      "supertypes": [
+        "Expression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "TopLevelVariableDeclaration": {
+      "supertypes": [
+        "CompilationUnitMember"
+      ],
+      "all_supertypes": [
+        "CompilationUnitMember",
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "TryStatement": {
+      "supertypes": [
+        "Statement"
+      ],
+      "all_supertypes": [
+        "Statement",
+        "AstNode"
+      ]
+    },
+    "TypeAlias": {
+      "supertypes": [
+        "CompilationUnitMember"
+      ],
+      "all_supertypes": [
+        "CompilationUnitMember",
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "TypeAnnotation": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "TypeArgumentList": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "TypedLiteral": {
+      "supertypes": [
+        "Literal"
+      ],
+      "all_supertypes": [
+        "Literal",
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField"
+      ]
+    },
+    "TypeLiteral": {
+      "supertypes": [
+        "Expression",
+        "CommentReferableExpression"
+      ],
+      "all_supertypes": [
+        "Expression",
+        "Argument",
+        "AstNode",
+        "CollectionElement",
+        "RecordLiteralField",
+        "CommentReferableExpression"
+      ]
+    },
+    "TypeParameter": {
+      "supertypes": [
+        "Declaration"
+      ],
+      "all_supertypes": [
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "TypeParameterList": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "UriBasedDirective": {
+      "supertypes": [
+        "Directive"
+      ],
+      "all_supertypes": [
+        "Directive",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "VariableDeclaration": {
+      "supertypes": [
+        "Declaration"
+      ],
+      "all_supertypes": [
+        "Declaration",
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "VariableDeclarationList": {
+      "supertypes": [
+        "AnnotatedNode"
+      ],
+      "all_supertypes": [
+        "AnnotatedNode",
+        "AstNode"
+      ]
+    },
+    "VariableDeclarationStatement": {
+      "supertypes": [
+        "Statement"
+      ],
+      "all_supertypes": [
+        "Statement",
+        "AstNode"
+      ]
+    },
+    "VariablePattern": {
+      "supertypes": [
+        "DartPattern"
+      ],
+      "all_supertypes": [
+        "DartPattern",
+        "AstNode",
+        "ListPatternElement"
+      ]
+    },
+    "WhenClause": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "WhileStatement": {
+      "supertypes": [
+        "Statement"
+      ],
+      "all_supertypes": [
+        "Statement",
+        "AstNode"
+      ]
+    },
+    "WildcardPattern": {
+      "supertypes": [
+        "DartPattern"
+      ],
+      "all_supertypes": [
+        "DartPattern",
+        "AstNode",
+        "ListPatternElement"
+      ]
+    },
+    "WithClause": {
+      "supertypes": [
+        "AstNode"
+      ],
+      "all_supertypes": [
+        "AstNode"
+      ]
+    },
+    "YieldStatement": {
+      "supertypes": [
+        "Statement"
+      ],
+      "all_supertypes": [
+        "Statement",
+        "AstNode"
+      ]
+    }
+  },
+  "generalizing": {
+    "AdjacentStrings": "StringLiteral",
+    "AnnotatedNode": "Node",
+    "Annotation": "Node",
+    "AnonymousBlockBody": "AnonymousMethodBody",
+    "AnonymousExpressionBody": "AnonymousMethodBody",
+    "AnonymousMethodBody": "Node",
+    "AnonymousMethodInvocation": "Expression",
+    "ArgumentList": "Node",
+    "AsExpression": "Expression",
+    "AssertInitializer": "ConstructorInitializer",
+    "AssertStatement": "Statement",
+    "AssignedVariablePattern": "VariablePattern",
+    "AssignmentExpression": "Expression",
+    "AwaitExpression": "Expression",
+    "BinaryExpression": "Expression",
+    "Block": "Statement",
+    "BlockClassBody": "ClassBody",
+    "BlockEnumBody": "EnumBody",
+    "BlockFunctionBody": "FunctionBody",
+    "BooleanLiteral": "Literal",
+    "BreakStatement": "Statement",
+    "CascadeExpression": "Expression",
+    "CaseClause": "Node",
+    "CastPattern": "DartPattern",
+    "CatchClause": "Node",
+    "CatchClauseParameter": "Node",
+    "ClassBody": "Node",
+    "ClassDeclaration": "CompilationUnitMember",
+    "ClassMember": "Declaration",
+    "ClassNamePart": "Node",
+    "ClassTypeAlias": "TypeAlias",
+    "Combinator": "Node",
+    "Comment": "Node",
+    "CommentReferableExpression": "Expression",
+    "CommentReference": "Node",
+    "CompilationUnit": "Node",
+    "CompilationUnitMember": "Declaration",
+    "ConditionalExpression": "Expression",
+    "Configuration": "Node",
+    "ConstantPattern": "DartPattern",
+    "ConstructorDeclaration": "ClassMember",
+    "ConstructorFieldInitializer": "ConstructorInitializer",
+    "ConstructorInitializer": "Node",
+    "ConstructorName": "Node",
+    "ConstructorReference": "CommentReferableExpression",
+    "ConstructorSelector": "Node",
+    "ContinueStatement": "Statement",
+    "DartPattern": "Node",
+    "Declaration": "AnnotatedNode",
+    "DeclaredIdentifier": "Declaration",
+    "DeclaredVariablePattern": "VariablePattern",
+    "Directive": "AnnotatedNode",
+    "DoStatement": "Statement",
+    "DotShorthandConstructorInvocation": "InvocationExpression",
+    "DotShorthandInvocation": "InvocationExpression",
+    "DotShorthandPropertyAccess": "Expression",
+    "DottedName": "Node",
+    "DoubleLiteral": "Literal",
+    "EmptyClassBody": "ClassBody",
+    "EmptyEnumBody": "EnumBody",
+    "EmptyFunctionBody": "FunctionBody",
+    "EmptyStatement": "Statement",
+    "EnumBody": "Node",
+    "EnumConstantArguments": "Node",
+    "EnumConstantDeclaration": "Declaration",
+    "EnumDeclaration": "CompilationUnitMember",
+    "ExportDirective": "NamespaceDirective",
+    "Expression": "Node",
+    "ExpressionFunctionBody": "FunctionBody",
+    "ExpressionStatement": "Statement",
+    "ExtendsClause": "Node",
+    "ExtensionDeclaration": "CompilationUnitMember",
+    "ExtensionOnClause": "Node",
+    "ExtensionOverride": "Expression",
+    "ExtensionTypeDeclaration": "CompilationUnitMember",
+    "FieldDeclaration": "ClassMember",
+    "FieldFormalParameter": "FormalParameter",
+    "ForEachParts": "ForLoopParts",
+    "ForEachPartsWithDeclaration": "ForEachParts",
+    "ForEachPartsWithIdentifier": "ForEachParts",
+    "ForEachPartsWithPattern": "ForEachParts",
+    "ForElement": "Node",
+    "ForLoopParts": "Node",
+    "FormalParameter": "Node",
+    "FormalParameterDefaultClause": "Node",
+    "FormalParameterList": "Node",
+    "ForParts": "ForLoopParts",
+    "ForPartsWithDeclarations": "ForParts",
+    "ForPartsWithExpression": "ForParts",
+    "ForPartsWithPattern": "ForParts",
+    "ForStatement": "Statement",
+    "FunctionBody": "Node",
+    "FunctionDeclaration": null,
+    "FunctionDeclarationStatement": "Statement",
+    "FunctionExpression": "Expression",
+    "FunctionExpressionInvocation": "InvocationExpression",
+    "FunctionReference": "CommentReferableExpression",
+    "FunctionTypeAlias": "TypeAlias",
+    "FunctionTypedFormalParameterSuffix": "Node",
+    "GenericFunctionType": "TypeAnnotation",
+    "GenericTypeAlias": "TypeAlias",
+    "GuardedPattern": "Node",
+    "HideCombinator": "Combinator",
+    "Identifier": "CommentReferableExpression",
+    "IfElement": "Node",
+    "IfStatement": "Statement",
+    "ImplementsClause": "Node",
+    "ImplicitCallReference": "Expression",
+    "ImportDirective": "NamespaceDirective",
+    "ImportPrefixReference": "Node",
+    "IndexExpression": "Expression",
+    "InstanceCreationExpression": "Expression",
+    "IntegerLiteral": "Literal",
+    "InterpolationElement": "Node",
+    "InterpolationExpression": "InterpolationElement",
+    "InterpolationString": "InterpolationElement",
+    "InvocationExpression": "Expression",
+    "IsExpression": "Expression",
+    "Label": "Node",
+    "LabeledStatement": "Statement",
+    "LabelReference": "Node",
+    "LibraryDirective": "Directive",
+    "ListLiteral": "TypedLiteral",
+    "ListPattern": "DartPattern",
+    "Literal": "Expression",
+    "LogicalAndPattern": "DartPattern",
+    "LogicalOrPattern": "DartPattern",
+    "MapLiteralEntry": "Node",
+    "MapPattern": "DartPattern",
+    "MapPatternEntry": "Node",
+    "MethodDeclaration": "ClassMember",
+    "MethodInvocation": "InvocationExpression",
+    "MixinDeclaration": "CompilationUnitMember",
+    "MixinOnClause": "Node",
+    "NamedArgument": "Node",
+    "NamedType": "TypeAnnotation",
+    "NamespaceDirective": "UriBasedDirective",
+    "NameWithTypeParameters": "ClassNamePart",
+    "NativeClause": "Node",
+    "NativeFunctionBody": "FunctionBody",
+    "AstNode": null,
+    "NullAssertPattern": "DartPattern",
+    "NullAwareElement": "Node",
+    "NullCheckPattern": "DartPattern",
+    "NullLiteral": "Literal",
+    "ObjectPattern": "DartPattern",
+    "ParenthesizedExpression": "Expression",
+    "ParenthesizedPattern": "DartPattern",
+    "PartDirective": "UriBasedDirective",
+    "PartOfDirective": "Directive",
+    "PatternAssignment": "Expression",
+    "PatternField": "Node",
+    "PatternFieldName": "Node",
+    "PatternVariableDeclaration": "AnnotatedNode",
+    "PatternVariableDeclarationStatement": "Statement",
+    "PostfixExpression": "Expression",
+    "PrefixedIdentifier": "Identifier",
+    "PrefixExpression": "Expression",
+    "PrimaryConstructorBody": "ClassMember",
+    "PrimaryConstructorDeclaration": "ClassNamePart",
+    "PrimaryConstructorName": "Node",
+    "PropertyAccess": "CommentReferableExpression",
+    "RecordLiteral": "Literal",
+    "RecordLiteralNamedField": "Node",
+    "RecordPattern": "DartPattern",
+    "RecordTypeAnnotation": "TypeAnnotation",
+    "RecordTypeAnnotationField": "Node",
+    "RecordTypeAnnotationNamedField": "RecordTypeAnnotationField",
+    "RecordTypeAnnotationNamedFields": "Node",
+    "RecordTypeAnnotationPositionalField": "RecordTypeAnnotationField",
+    "RedirectingConstructorInvocation": "ConstructorInitializer",
+    "RegularFormalParameter": "FormalParameter",
+    "RelationalPattern": "DartPattern",
+    "RestPatternElement": "Node",
+    "RethrowExpression": "Expression",
+    "ReturnStatement": "Statement",
+    "ScriptTag": "Node",
+    "SetOrMapLiteral": "TypedLiteral",
+    "ShowCombinator": "Combinator",
+    "SimpleIdentifier": "Identifier",
+    "SimpleStringLiteral": "SingleStringLiteral",
+    "SingleStringLiteral": "StringLiteral",
+    "SpreadElement": "Node",
+    "Statement": "Node",
+    "StringInterpolation": "SingleStringLiteral",
+    "StringLiteral": "Literal",
+    "SuperConstructorInvocation": "ConstructorInitializer",
+    "SuperExpression": "Expression",
+    "SuperFormalParameter": "FormalParameter",
+    "SwitchCase": "SwitchMember",
+    "SwitchDefault": "SwitchMember",
+    "SwitchExpression": "Expression",
+    "SwitchExpressionCase": "Node",
+    "SwitchMember": "Node",
+    "SwitchPatternCase": "SwitchMember",
+    "SwitchStatement": "Statement",
+    "SymbolLiteral": "Literal",
+    "ThisExpression": "Expression",
+    "ThrowExpression": "Expression",
+    "TopLevelVariableDeclaration": "CompilationUnitMember",
+    "TryStatement": "Statement",
+    "TypeAlias": "CompilationUnitMember",
+    "TypeAnnotation": "Node",
+    "TypeArgumentList": "Node",
+    "TypedLiteral": "Literal",
+    "TypeLiteral": "CommentReferableExpression",
+    "TypeParameter": "Declaration",
+    "TypeParameterList": "Node",
+    "UriBasedDirective": "Directive",
+    "VariableDeclaration": "Declaration",
+    "VariableDeclarationList": "AnnotatedNode",
+    "VariableDeclarationStatement": "Statement",
+    "VariablePattern": "DartPattern",
+    "WhenClause": "Node",
+    "WhileStatement": "Statement",
+    "WildcardPattern": "DartPattern",
+    "WithClause": "Node",
+    "YieldStatement": "Statement"
+  }
+}
