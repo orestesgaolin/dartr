@@ -21141,6 +21141,9 @@ pub fn build_node(ast: &mut Ast, kind: NodeKind, values: &[FieldValue]) -> NodeI
             let node = Comment {
                 references: list(&values[0]),
                 tokens: toks(&values[1]),
+                code_blocks: Default::default(),
+                doc_imports: Default::default(),
+                doc_directives: Default::default(),
                 has_nodoc: Default::default(),
             };
             ast.add(node).raw()

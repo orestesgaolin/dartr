@@ -38,6 +38,16 @@ pub struct AnalyzerScanResult {
     pub diagnostics: Vec<Diagnostic>,
     /// Dart `Scanner.overrideVersion` (major, minor).
     pub override_version: Option<(i64, i64)>,
+    /// The number of [`Self::diagnostics`] that the scanner reported while
+    /// scanning (language version comments); the rest are the translated
+    /// error tokens, which the parser reports through
+    /// `Listener.handleErrorToken` when the AST is built.
+    pub scan_diagnostic_count: usize,
+    /// The version that the feature set of the file is restricted to (Dart
+    /// `Scanner.featureSet`): the last valid `// @dart = x.y` comment. A
+    /// later comment with a too high version resets
+    /// [`Self::override_version`] but not the feature set.
+    pub feature_version: Option<(i64, i64)>,
 }
 
 impl AnalyzerScanResult {
@@ -59,6 +69,7 @@ impl AnalyzerScanResult {
 pub fn scan_for_analyzer(source: &str) -> AnalyzerScanResult {
     let mut diagnostics = RecordingDiagnosticListener::default();
     let mut override_version = None;
+    let mut feature_version = None;
     let mut callback = |info: LanguageVersionInfo| -> Option<ScannerConfiguration> {
         // Dart `Scanner._languageVersionChanged`.
         if info.major < 0 || info.minor < 0 {
@@ -78,6 +89,7 @@ pub fn scan_for_analyzer(source: &str) -> AnalyzerScanResult {
             override_version = None;
             None
         } else {
+            feature_version = Some(version);
             // `_featureSetForOverriding.restrictToVersion(overrideVersion)`.
             Some(ScannerConfiguration {
                 enable_triple_shift: version >= TRIPLE_SHIFT_VERSION,
@@ -92,6 +104,7 @@ pub fn scan_for_analyzer(source: &str) -> AnalyzerScanResult {
         Some(&mut callback),
     );
 
+    let scan_diagnostic_count = diagnostics.diagnostics.len();
     let tokens = &scan.tokens;
     let mut first = scan.first;
     let mut error_tokens = Vec::new();
@@ -107,6 +120,8 @@ pub fn scan_for_analyzer(source: &str) -> AnalyzerScanResult {
         first,
         diagnostics: diagnostics.diagnostics,
         override_version,
+        scan_diagnostic_count,
+        feature_version,
     }
 }
 
@@ -158,12 +173,14 @@ pub fn translate_error_token(tokens: &Tokens, token: TokenId, report: &mut dyn F
         ScannerMessageCode::Encoding => at(char_offset, diag::encoding()),
         // Fasta reports the error location as the entire string or comment;
         // analyzer expects the end.
-        ScannerMessageCode::UnterminatedString => {
-            at(end_offset.wrapping_sub(1), diag::unterminated_string_literal())
-        }
-        ScannerMessageCode::UnterminatedComment => {
-            at(end_offset.wrapping_sub(1), diag::unterminated_multi_line_comment())
-        }
+        ScannerMessageCode::UnterminatedString => at(
+            end_offset.wrapping_sub(1),
+            diag::unterminated_string_literal(),
+        ),
+        ScannerMessageCode::UnterminatedComment => at(
+            end_offset.wrapping_sub(1),
+            diag::unterminated_multi_line_comment(),
+        ),
         ScannerMessageCode::MissingExponent => {
             make_error(end_offset.wrapping_sub(1), diag::missing_digit())
         }

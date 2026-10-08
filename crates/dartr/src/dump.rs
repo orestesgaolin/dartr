@@ -21,7 +21,7 @@ pub enum DumpMode {
     /// Parser events: every listener call of the parser, the recoverable
     /// errors and the token stream after parsing.
     Events,
-    /// Unresolved AST and parse diagnostics (not implemented yet).
+    /// Unresolved AST (child entities) and parse diagnostics.
     Ast,
     /// Resolved diagnostics and expression types (not implemented yet).
     Resolved,
@@ -63,7 +63,8 @@ pub fn run(mode: DumpMode, files: Vec<PathBuf>) -> anyhow::Result<()> {
         DumpMode::Tokens => dump_tokens,
         DumpMode::Events => dump_events,
         DumpMode::Elements => dump_elements,
-        DumpMode::Ast | DumpMode::Resolved => {
+        DumpMode::Ast => dump_ast,
+        DumpMode::Resolved => {
             anyhow::bail!("dump mode {mode:?} is not implemented yet")
         }
     };
@@ -181,6 +182,30 @@ pub fn dump_events(path: &str) -> String {
             out.push('"');
         }
         out.push(']');
+    }
+    out.push_str("]}");
+    out
+}
+
+/// One line of `dump ast` (oracle `dumpAst`): the AST of `parseString` as
+/// child entities, and the parse diagnostics.
+pub fn dump_ast(path: &str) -> String {
+    let source = match read_source(path) {
+        Ok(s) => s,
+        Err(e) => return error_json(path, e),
+    };
+    let parsed = dartr_ast_builder::parse_string(&source, path);
+    let mut out = String::with_capacity(source.len() * 8 + 64);
+    out.push_str("{\"path\":");
+    write_string(&mut out, path);
+    out.push_str(",\"ast\":");
+    dartr_ast::dump::write_node_json(&mut out, &parsed.ast, parsed.unit.raw());
+    out.push_str(",\"diagnostics\":[");
+    for (i, d) in parsed.diagnostics.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        write_diagnostic(&mut out, d);
     }
     out.push_str("]}");
     out
