@@ -91,9 +91,12 @@
 pub mod assigned_variables;
 pub mod body_inference_context;
 pub mod flow_analysis;
+pub mod flow_analysis_impl;
 pub mod flow_analysis_operations;
+pub mod flow_link;
 pub mod null_shorting;
 pub mod nullability_suffix;
+pub mod promotion_key_store;
 pub mod shared_type;
 pub mod type_analysis_result;
 pub mod type_analyzer;

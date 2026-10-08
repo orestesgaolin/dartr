@@ -42,6 +42,14 @@ pub trait FlowAnalysisOperations: FlowAnalysisTypeOperations {
     /// current library.
     fn is_property_promotable(&self, property: &Self::PropertyMember) -> bool;
 
+    /// Whether `name` is a private name (Dart `name.startsWith('_')`; used by
+    /// `whyNotPromoted` for property names).
+    ///
+    /// Not in Dart: added because [`SharedTypeOperations::Name`] is opaque.
+    ///
+    /// [`SharedTypeOperations::Name`]: crate::shared_type::SharedTypeOperations::Name
+    fn is_private_name(&self, name: Self::Name) -> bool;
+
     /// Returns the static type of the given `variable`.
     fn variable_type(&self, variable: Self::Variable) -> SharedTypeView<Self::Type>;
 
