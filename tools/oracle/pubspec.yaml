@@ -1,0 +1,12 @@
+name: dartr_oracle
+publish_to: none
+environment:
+  sdk: ^3.11.0
+dependencies:
+  analyzer: any
+  _fe_analyzer_shared: any
+dependency_overrides:
+  analyzer:
+    path: ../../third_party/dart-sdk/pkg/analyzer
+  _fe_analyzer_shared:
+    path: ../../third_party/dart-sdk/pkg/_fe_analyzer_shared
