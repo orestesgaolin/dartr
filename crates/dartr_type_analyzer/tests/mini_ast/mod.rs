@@ -10,6 +10,9 @@
     clippy::if_same_then_else
 )]
 
+pub mod harness;
+pub mod mini_flow;
+pub mod mini_ir;
 pub mod mini_type_constraint_gatherer;
 pub mod mini_types;
 pub mod node;
