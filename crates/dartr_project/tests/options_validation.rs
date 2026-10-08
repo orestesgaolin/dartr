@@ -142,6 +142,43 @@ fn incompatible_rule_names_follow_rule_metadata_order() {
 }
 
 #[test]
+fn local_enabled_rules_override_disabled_canonical_duplicates() {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!(
+        "dartr-options-local-override-{}-{nonce}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(root.join("lib")).unwrap();
+    let root = root.canonicalize().unwrap();
+    write(&root.join("pubspec.yaml"), "name: local_override\n");
+    write(
+        &root.join("analysis_options.yaml"),
+        "include: child.yaml\nlinter:\n  rules: [prefer_double_quotes]\n",
+    );
+    write(
+        &root.join("child.yaml"),
+        "linter:\n  rules:\n    PREFER_SINGLE_QUOTES: true\n    prefer_single_quotes: false\n",
+    );
+    write(&root.join("lib/main.dart"), "void main() {}\n");
+
+    let (oracle, actual) = options_diagnostics(&root);
+    assert_eq!(actual, oracle);
+    assert_eq!(actual.len(), 1);
+    assert_eq!(actual[0]["code"], "incompatible_lint");
+    assert!(
+        actual[0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("'PREFER_SINGLE_QUOTES'")
+    );
+
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn sdk_constraint_lower_bound_shapes_match_dart_analyze() {
     for (index, (constraint, expected_count)) in [
         ("3.13.0", 1),
@@ -149,6 +186,7 @@ fn sdk_constraint_lower_bound_shapes_match_dart_analyze() {
         ("<4.0.0 >=3.13.0", 1),
         (">=3.12.0 >=3.13.0 <4.0.0", 1),
         ("^3.13.0 junk", 0),
+        ("^3.13.0-foo+", 0),
         (">=3.13.0 <=3.12.0", 0),
         ("any", 0),
     ]

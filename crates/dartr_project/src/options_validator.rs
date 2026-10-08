@@ -225,7 +225,7 @@ impl Validator<'_> {
         for (_, semantics) in &included {
             apply_rules(&mut rules, &semantics.rules);
         }
-        apply_rules(&mut rules, &local.rules);
+        apply_local_rules(&mut rules, &local.rules);
         EffectiveSemantics {
             rules,
             first_legacy_plugin: included_plugin
@@ -767,6 +767,21 @@ fn apply_rules(target: &mut Vec<RuleOccurrence>, additions: &[RuleOccurrence]) {
     for rule in additions {
         target.retain(|old| old.canonical != rule.canonical);
         target.push(rule.clone());
+    }
+}
+
+fn apply_local_rules(target: &mut Vec<RuleOccurrence>, additions: &[RuleOccurrence]) {
+    // Upstream stores local disabled and enabled declarations separately, then
+    // applies all disabled declarations before all enabled declarations.
+    for enabled in [false, true] {
+        apply_rules(
+            target,
+            &additions
+                .iter()
+                .filter(|rule| rule.enabled == enabled)
+                .cloned()
+                .collect::<Vec<_>>(),
+        );
     }
 }
 
@@ -1394,10 +1409,11 @@ fn parse_version(version: &str) -> Option<MinimumVersion> {
             })
     };
     let suffix_is_valid = if let Some(rest) = suffix.strip_prefix('-') {
-        let (pre, build) = rest.split_once('+').unwrap_or((rest, ""));
-        valid_identifiers(pre, true)
-            && (build.is_empty() || valid_identifiers(build, false))
-            && !build.contains('+')
+        if let Some((pre, build)) = rest.split_once('+') {
+            valid_identifiers(pre, true) && valid_identifiers(build, false) && !build.contains('+')
+        } else {
+            valid_identifiers(rest, true)
+        }
     } else if let Some(build) = suffix.strip_prefix('+') {
         valid_identifiers(build, false) && !build.contains('+')
     } else {
