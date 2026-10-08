@@ -516,10 +516,14 @@ impl Validator<'_> {
                 enabled,
             };
             if enabled {
-                let incompatible: Vec<_> = active
+                let incompatible: Vec<_> = incompatible_rules(canonical)
                     .iter()
-                    .filter(|other| incompatible_rules(canonical).contains(&other.canonical))
-                    .cloned()
+                    .flat_map(|incompatible| {
+                        active
+                            .iter()
+                            .filter(move |other| other.canonical == *incompatible)
+                            .cloned()
+                    })
                     .collect();
                 if !incompatible.is_empty() {
                     semantics.diagnostics.push(incompatible_diagnostic(
@@ -686,8 +690,11 @@ impl Validator<'_> {
                 .iter()
                 .filter(|r| r.enabled && !disabled.contains(r.canonical))
             {
-                for (previous_include_node, old) in &seen {
-                    if incompatible_rules(rule.canonical).contains(&old.canonical) {
+                for incompatible in incompatible_rules(rule.canonical) {
+                    for (previous_include_node, old) in seen
+                        .iter()
+                        .filter(|(_, old)| old.canonical == *incompatible)
+                    {
                         conflicts.push(rule.clone());
                         conflicts.push(old.clone());
                         conflicting_include_spans
@@ -699,7 +706,7 @@ impl Validator<'_> {
                     }
                 }
             }
-            dedup_rules(&mut conflicts);
+            collapse_rules_by_file(&mut conflicts);
             if !conflicts.is_empty() {
                 let names = quoted(
                     &conflicts
@@ -733,12 +740,14 @@ impl Validator<'_> {
             apply_rules(&mut effective, &semantics.rules);
         }
         for rule in local.iter().filter(|r| r.enabled) {
-            let conflicts: Vec<_> = effective
+            let conflicts: Vec<_> = incompatible_rules(rule.canonical)
                 .iter()
-                .filter(|old| {
-                    old.enabled && incompatible_rules(rule.canonical).contains(&old.canonical)
+                .flat_map(|incompatible| {
+                    effective
+                        .iter()
+                        .filter(move |old| old.enabled && old.canonical == *incompatible)
+                        .cloned()
                 })
-                .cloned()
                 .collect();
             if !conflicts.is_empty() {
                 let diagnostic = incompatible_diagnostic(text, rule, &conflicts, true);
@@ -761,9 +770,16 @@ fn apply_rules(target: &mut Vec<RuleOccurrence>, additions: &[RuleOccurrence]) {
     }
 }
 
-fn dedup_rules(rules: &mut Vec<RuleOccurrence>) {
-    let mut seen = HashSet::new();
-    rules.retain(|rule| seen.insert((rule.file.clone(), rule.node.span.start)));
+fn collapse_rules_by_file(rules: &mut Vec<RuleOccurrence>) {
+    let mut collapsed: Vec<RuleOccurrence> = Vec::new();
+    for rule in rules.drain(..) {
+        if let Some(existing) = collapsed.iter_mut().find(|old| old.file == rule.file) {
+            *existing = rule;
+        } else {
+            collapsed.push(rule);
+        }
+    }
+    *rules = collapsed;
 }
 
 fn incompatible_diagnostic(
@@ -772,6 +788,10 @@ fn incompatible_diagnostic(
     conflicts: &[RuleOccurrence],
     across_files: bool,
 ) -> Diagnostic {
+    // Upstream constructs a map keyed by source path. Later rules from the
+    // same file replace earlier ones while the path's insertion order stays.
+    let mut conflicts = conflicts.to_vec();
+    collapse_rules_by_file(&mut conflicts);
     let names = quoted(
         &conflicts
             .iter()
@@ -781,10 +801,10 @@ fn incompatible_diagnostic(
     );
     let located = if across_files {
         diag::incompatible_lint_files(&rule.name, &names)
-            .with_context_messages(context_messages(conflicts, true))
+            .with_context_messages(context_messages(&conflicts, true))
     } else {
         diag::incompatible_lint(&rule.name, &names)
-            .with_context_messages(context_messages(conflicts, false))
+            .with_context_messages(context_messages(&conflicts, false))
     };
     at(text, rule.node.span, located)
 }
@@ -1218,13 +1238,21 @@ fn value_at<'a>(entries: &'a [(YamlNode, YamlNode)], name: &str) -> Option<&'a Y
 }
 
 fn node_value(node: &YamlNode) -> String {
-    node.scalar()
-        .map(Scalar::to_dart_string)
-        .unwrap_or_else(|| match &node.kind {
-            NodeKind::List(_) => "[...]".to_string(),
-            NodeKind::Map(_) => "{...}".to_string(),
-            NodeKind::Scalar(_) => unreachable!(),
-        })
+    match &node.kind {
+        NodeKind::Scalar(value) => value.to_dart_string(),
+        NodeKind::List(values) => format!(
+            "[{}]",
+            values.iter().map(node_value).collect::<Vec<_>>().join(", ")
+        ),
+        NodeKind::Map(entries) => format!(
+            "{{{}}}",
+            entries
+                .iter()
+                .map(|(key, value)| format!("{}: {}", node_value(key), node_value(value)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    }
 }
 
 fn quoted(values: &[&str], conjunction: &str) -> String {
@@ -1282,31 +1310,148 @@ fn sdk_minimum(context: &AnalysisContext, path: &str) -> Option<MinimumVersion> 
 }
 
 fn parse_minimum_version(constraint: &str) -> Option<MinimumVersion> {
-    let constraint = constraint.trim_start();
+    let constraint = constraint.trim();
     // `pub_semver` represents unions separately from `VersionRange`; upstream
     // intentionally does not infer a lifecycle lower bound from a union.
     if constraint.contains("||") {
         return None;
     }
-    let version = constraint
-        .strip_prefix(">=")
-        .or_else(|| constraint.strip_prefix('>'))
-        .or_else(|| constraint.strip_prefix('^'))?
-        .trim_start();
+    let tokens: Vec<_> = constraint.split_whitespace().collect();
+    if tokens.is_empty() || tokens == ["any"] {
+        return None;
+    }
+    let mut terms = Vec::new();
+    let mut index = 0;
+    while index < tokens.len() {
+        let token = tokens[index];
+        let (operator, version) = if matches!(token, ">=" | ">" | "<=" | "<" | "^") {
+            index += 1;
+            (token, *tokens.get(index)?)
+        } else if let Some(version) = token.strip_prefix(">=") {
+            (">=", version)
+        } else if let Some(version) = token.strip_prefix("<=") {
+            ("<=", version)
+        } else if let Some(version) = token.strip_prefix('>') {
+            (">", version)
+        } else if let Some(version) = token.strip_prefix('<') {
+            ("<", version)
+        } else if let Some(version) = token.strip_prefix('^') {
+            ("^", version)
+        } else {
+            ("=", token)
+        };
+        if version.is_empty() {
+            return None;
+        }
+        terms.push((operator, parse_version(version)?));
+        index += 1;
+    }
+    if terms.iter().any(|(operator, _)| *operator == "^") {
+        return (terms.len() == 1).then_some(terms[0].1);
+    }
+
+    let mut minimum: Option<(MinimumVersion, bool)> = None;
+    let mut maximum: Option<(MinimumVersion, bool)> = None;
+    for (operator, version) in terms {
+        match operator {
+            ">=" => update_minimum(&mut minimum, version, true),
+            ">" => update_minimum(&mut minimum, version, false),
+            "<=" => update_maximum(&mut maximum, version, true),
+            "<" => update_maximum(&mut maximum, version, false),
+            "=" => {
+                update_minimum(&mut minimum, version, true);
+                update_maximum(&mut maximum, version, true);
+            }
+            _ => unreachable!(),
+        }
+    }
+    let (minimum, include_minimum) = minimum?;
+    if let Some((maximum, include_maximum)) = maximum {
+        let ordering = version_key(minimum).cmp(&version_key(maximum));
+        if ordering.is_gt() || (ordering.is_eq() && (!include_minimum || !include_maximum)) {
+            return None;
+        }
+    }
+    Some(minimum)
+}
+
+fn parse_version(version: &str) -> Option<MinimumVersion> {
     let numeric_end = version
         .find(|c: char| !c.is_ascii_digit() && c != '.')
         .unwrap_or(version.len());
-    let mut parts = version[..numeric_end]
-        .split(|c: char| !c.is_ascii_digit())
-        .filter(|p| !p.is_empty());
+    let suffix = &version[numeric_end..];
+    let valid_identifiers = |text: &str, reject_numeric_leading_zero: bool| {
+        !text.is_empty()
+            && text.split('.').all(|identifier| {
+                !identifier.is_empty()
+                    && identifier
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '-')
+                    && !(reject_numeric_leading_zero
+                        && identifier.len() > 1
+                        && identifier.starts_with('0')
+                        && identifier.chars().all(|c| c.is_ascii_digit()))
+            })
+    };
+    let suffix_is_valid = if let Some(rest) = suffix.strip_prefix('-') {
+        let (pre, build) = rest.split_once('+').unwrap_or((rest, ""));
+        valid_identifiers(pre, true)
+            && (build.is_empty() || valid_identifiers(build, false))
+            && !build.contains('+')
+    } else if let Some(build) = suffix.strip_prefix('+') {
+        valid_identifiers(build, false) && !build.contains('+')
+    } else {
+        suffix.is_empty()
+    };
+    if !suffix_is_valid {
+        return None;
+    }
+    let parts: Vec<_> = version[..numeric_end].split('.').collect();
+    if parts.len() != 3
+        || parts
+            .iter()
+            .any(|part| part.is_empty() || (part.len() > 1 && part.starts_with('0')))
+    {
+        return None;
+    }
     Some(MinimumVersion {
         version: (
-            parts.next()?.parse().ok()?,
-            parts.next()?.parse().ok()?,
-            parts.next().unwrap_or("0").parse().ok()?,
+            parts[0].parse().ok()?,
+            parts[1].parse().ok()?,
+            parts[2].parse().ok()?,
         ),
-        is_prerelease: version[numeric_end..].starts_with('-'),
+        is_prerelease: suffix.starts_with('-'),
     })
+}
+
+fn version_key(version: MinimumVersion) -> ((u16, u16, u16), bool) {
+    (version.version, !version.is_prerelease)
+}
+
+fn update_minimum(
+    current: &mut Option<(MinimumVersion, bool)>,
+    candidate: MinimumVersion,
+    inclusive: bool,
+) {
+    if current.is_none_or(|(version, current_inclusive)| {
+        version_key(candidate) > version_key(version)
+            || (version_key(candidate) == version_key(version) && !inclusive && current_inclusive)
+    }) {
+        *current = Some((candidate, inclusive));
+    }
+}
+
+fn update_maximum(
+    current: &mut Option<(MinimumVersion, bool)>,
+    candidate: MinimumVersion,
+    inclusive: bool,
+) {
+    if current.is_none_or(|(version, current_inclusive)| {
+        version_key(candidate) < version_key(version)
+            || (version_key(candidate) == version_key(version) && !inclusive && current_inclusive)
+    }) {
+        *current = Some((candidate, inclusive));
+    }
 }
 
 fn version_text(version: Option<(u16, u16, u16)>) -> String {
