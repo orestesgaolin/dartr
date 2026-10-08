@@ -109,6 +109,7 @@ pub fn visit_string_interpolation(rv: &mut ResolverVisitor<'_>, node: Id<StringI
     rv.record_static_type(node, t);
 }
 
+#[allow(clippy::unnecessary_unwrap)] // Keeps the condition of the Dart code.
 pub fn visit_super_expression(rv: &mut ResolverVisitor<'_>, node: Id<SuperExpression>) {
     let this_type = rv.this_type();
     let info = rv

@@ -10,7 +10,8 @@
 //! Name it after the Dart field and document the Dart field.
 
 use dartr_ast::{NodeId, NodeMap};
-use dartr_element::{EId, FragmentId, Name, PromotableElement};
+use dartr_element::{ElementId, FragmentId, Name};
+use indexmap::{IndexMap, IndexSet};
 
 use crate::scope::ScopeLookupResult;
 
@@ -23,27 +24,35 @@ pub struct ResolverTables {
     /// resolvers of the `ResolverVisitor`.
     pub scope_lookup_result: NodeMap<ScopeLookupResult>,
     /// `AnnotationImpl.elementAnnotation`: the fragment that owns the
-    /// metadata of an annotation node.
+    /// metadata of an annotation node (the library fragment of the unit for
+    /// the annotations of directives and annotations without a fragment).
+    /// Set by the element binding visitor.
     pub element_annotation: NodeMap<FragmentId>,
+    /// `BreakStatementImpl.target` / `ContinueStatementImpl.target`: the
+    /// statement (or switch member) that the jump goes to. Set by the
+    /// resolution visitor (`_lookupBreakOrContinueTarget`).
+    pub break_continue_target: NodeMap<NodeId>,
+    /// `LocalVariableInfo.potentiallyMutatedInScope` (one
+    /// `LocalVariableInfo` per unit, shared by the function bodies): the
+    /// promotable elements that are assigned somewhere. Set by the
+    /// resolution visitor.
+    pub potentially_mutated_in_scope: IndexSet<ElementId>,
+    /// `GuardedPatternImpl.variables`: the pattern variables of a guarded
+    /// pattern by name (Dart `Map<String, PatternVariableElementImpl>`).
+    pub guarded_pattern_variables: NodeMap<IndexMap<Name, ElementId>>,
+    /// `SwitchStatementCaseGroup.variables`: the joined variables of a
+    /// group of switch members that share their statements, keyed by the
+    /// last member of the group (the member with the statements).
+    pub switch_case_group_variables: NodeMap<IndexMap<Name, ElementId>>,
+    /// `PatternVariableDeclarationImpl.elements`: the bind pattern variables
+    /// of a pattern variable declaration.
+    pub pattern_variable_declaration_elements: NodeMap<Vec<ElementId>>,
+    /// `ForEachPartsWithPatternImpl.variables`: the bind pattern variables
+    /// of a for-each pattern.
+    pub for_each_pattern_variables: NodeMap<Vec<ElementId>>,
     /// `DotShorthandMixin.isDotShorthand` (from the parser:
     /// `ParsedUnit.dot_shorthands`).
     pub dot_shorthand: NodeMap<()>,
-    /// `GuardedPatternImpl.variables`: the pattern variables of the guarded
-    /// pattern (bind variables and logical-or join variables), by name, in
-    /// Dart map order. Keyed by the `GuardedPattern` node. Written by the
-    /// resolution visitor (`ResolutionVisitor._resolveGuardedPattern`);
-    /// when it is not written, the pattern resolver computes the list from
-    /// `declared_fragment` of the `DeclaredVariablePattern`s and the `join`
-    /// of their fragments (`pattern_resolver::guarded_pattern_variables`).
-    pub guarded_pattern_variables: NodeMap<Vec<(Name, EId<PromotableElement>)>>,
-    /// `SwitchStatementCaseGroup.variables`: the joined pattern variables of
-    /// a group of switch members that share a body, by name, in Dart map
-    /// order. Keyed by the last `SwitchMember` of the group. Written by the
-    /// resolution visitor (`ResolutionVisitor.visitSwitchStatement`, the
-    /// result of `switchStatementSharedCaseScopeFinish`); when it is not
-    /// written, the pattern resolver computes it
-    /// (`pattern_resolver::switch_group_variables`).
-    pub switch_group_variables: NodeMap<Vec<(Name, EId<PromotableElement>)>>,
 }
 
 impl ResolverTables {

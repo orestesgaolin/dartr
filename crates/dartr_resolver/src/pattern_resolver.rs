@@ -283,13 +283,24 @@ fn member_group(ast: &Ast, node: NodeId, case_index: usize) -> Option<SwitchStat
 
 // ------------------------------------------------------------ pattern variables
 
+/// The variables that the resolution visitor recorded, as promotable
+/// elements.
+fn to_pattern_variables(
+    variables: &indexmap::IndexMap<dartr_element::Name, dartr_element::ElementId>,
+) -> PatternVariables {
+    variables
+        .iter()
+        .filter_map(|(&name, &e)| e.cast::<dartr_element::PromotableElement>().map(|e| (name, e)))
+        .collect()
+}
+
 /// Dart `GuardedPatternImpl.variables` of [guarded_pattern].
 pub fn guarded_pattern_variables(
     rv: &ResolverVisitor<'_>,
     guarded_pattern: Id<GuardedPattern>,
 ) -> PatternVariables {
     if let Some(variables) = rv.rt.guarded_pattern_variables.get(guarded_pattern) {
-        return variables.clone();
+        return to_pattern_variables(variables);
     }
     let pattern = rv.ast[guarded_pattern].pattern;
     compute_pattern_variables(rv, pattern)
@@ -374,9 +385,9 @@ pub fn switch_group_variables(
     group: &SwitchStatementCaseGroup,
 ) -> PatternVariables {
     if let Some(&last) = group.members.last()
-        && let Some(variables) = rv.rt.switch_group_variables.get(last)
+        && let Some(variables) = rv.rt.switch_case_group_variables.get(last)
     {
-        return variables.clone();
+        return to_pattern_variables(variables);
     }
     compute_switch_group_variables(rv, group)
 }
