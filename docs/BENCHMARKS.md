@@ -37,3 +37,8 @@ build, `--format=json`; load average ~21 during the runs (other agents). Phase s
 | flutter_tools | 912 | 110.4 ms | 3.7 ms | 28 / 24 / 69 ms |
 | analyzer-9.0.0 (pub) | 1,660 | 87.5 ms | 2.0 ms | 11 / 8 / 76 ms |
 | visible-app @ 005d4cfad | 3,090 | 472.0 ms | 61.3 ms | 141 / 88 / 272 ms |
+
+Note: `bench/setup_corpus.sh` runs `flutter pub get` in `packages/hrv` of visible-app, and
+Flutter then adds `analyzer: exclude: [build/**]` to that package's `analysis_options.yaml`.
+The corpus therefore differs from the commit in this one file. It is reproducible and the
+same for `dart analyze` and `dartr analyze`.
