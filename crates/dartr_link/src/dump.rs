@@ -33,6 +33,16 @@ pub trait DumpSources {
     /// `Expression.toSource()` of a const expression (default values: Dart
     /// `defaultValueCode`).
     fn const_expr_source(&self, store: StoreId, expr: ConstExprId) -> String;
+
+    /// The value of the `"const"` key of the const top-level variable or
+    /// field (enum constants included) [element], as JSON text: a JSON
+    /// string with Dart `DartObjectImpl.toString()`, or `null` for an
+    /// invalid constant. `None`: the key is not written (the default, and
+    /// `dump elements` without `--with-const`).
+    fn const_value_json(&self, ctx: &Ctx<'_>, element: ElementId) -> Option<String> {
+        let _ = (ctx, element);
+        None
+    }
 }
 
 /// One JSON line (without newline) for library [library], `"path"` = [path].
@@ -77,6 +87,8 @@ enum Json {
     Str(String),
     Arr(Vec<Json>),
     Obj(Vec<(String, Json)>),
+    /// JSON text that is written as it is.
+    Raw(String),
 }
 
 impl Json {
@@ -100,6 +112,7 @@ impl Json {
                 let _ = write!(out, "{i}");
             }
             Json::Str(s) => write_json_string(out, s),
+            Json::Raw(s) => out.push_str(s),
             Json::Arr(items) => {
                 out.push('[');
                 for (i, item) in items.iter().enumerate() {
@@ -145,7 +158,9 @@ impl Obj {
 /// Dart `typeStr`: `type.getDisplayString()`; `None` (JSON null) for a null
 /// type. All type strings of the dump go through this function.
 pub fn type_str(ctx: &Ctx<'_>, ty: Option<TypeId>) -> Option<String> {
-    ty.map(|ty| dartr_element::type_display_string_with(ctx, ty, dartr_element::DisplayOptions::default()))
+    ty.map(|ty| {
+        dartr_element::type_display_string_with(ctx, ty, dartr_element::DisplayOptions::default())
+    })
 }
 
 // ---- the dump ----
@@ -513,6 +528,11 @@ impl Dumper<'_, '_> {
                         }
                     });
                 o.put("typeInferenceError", Json::opt_str(error));
+                if is_const(ctx, e)
+                    && let Some(value) = self.sources.const_value_json(ctx, e)
+                {
+                    o.put("const", Json::Raw(value));
+                }
             }
             Tag::Getter | Tag::Setter => {
                 let accessor = EId::<PropertyAccessorElement>::from_raw(e);
@@ -565,15 +585,20 @@ impl Dumper<'_, '_> {
                 o.put("params", self.parameters_json(executable));
                 if let Some(method) = e.cast::<dartr_element::MethodElement>() {
                     let m = ctx.get(method);
-                    if let Some(dartr_element::TopLevelInferenceError::OverrideNoCombinedSuperSignature {
-                        candidate_signatures,
-                    }) = m.type_inference_error.try_get()
+                    if let Some(
+                        dartr_element::TopLevelInferenceError::OverrideNoCombinedSuperSignature {
+                            candidate_signatures,
+                        },
+                    ) = m.type_inference_error.try_get()
                     {
                         o.put(
                             "typeInferenceError",
                             Json::Str("overrideNoCombinedSuperSignature".to_string()),
                         );
-                        o.put("candidateSignatures", Json::Str(candidate_signatures.to_string()));
+                        o.put(
+                            "candidateSignatures",
+                            Json::Str(candidate_signatures.to_string()),
+                        );
                     }
                     if m.is_operator_equal_with_parameter_type_from_object.get() {
                         o.put("opEqParamFromObject", Json::Bool(true));
@@ -1341,7 +1366,12 @@ pub fn default_value_code(
         let super_parameter = crate::outline::super_constructor_parameter(ctx, p)?;
         let code = default_value_code(ctx, sources, super_parameter.raw())?;
         // A default of an unresolved type does not evaluate.
-        if ctx.get(super_parameter).type_.get().is_none_or(|t| t == TypeId::INVALID) {
+        if ctx
+            .get(super_parameter)
+            .type_
+            .get()
+            .is_none_or(|t| t == TypeId::INVALID)
+        {
             return None;
         }
         if code == "null" {

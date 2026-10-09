@@ -5,7 +5,12 @@
 // writes the same format, so the two outputs can be compared byte for byte.
 //
 // Usage:
-//   dart run bin/oracle.dart <mode> [file ...]   (no files: read paths from stdin)
+//   dart run bin/oracle.dart <mode> [--flag ...] [file ...]
+//   (no files: read paths from stdin)
+//
+// Flags (arguments after the mode that start with `--`):
+//   --with-const  mode `elements`: add the constant value `"const"` to
+//                 const variables (see elements.dart)
 //
 // Modes:
 //   tokens   token stream and scanner diagnostics (scanner only, no parser)
@@ -50,8 +55,17 @@ Future<void> main(List<String> args) async {
     exit(64);
   }
   var mode = args.first;
-  var files = args.length > 1
-      ? args.sublist(1)
+  var rest = args.sublist(1);
+  var flags = rest.where((a) => a.startsWith('--')).toSet();
+  rest = rest.where((a) => !a.startsWith('--')).toList();
+  for (var flag in flags) {
+    if (flag != '--with-const' || mode != 'elements') {
+      stderr.writeln('unknown flag for mode $mode: $flag');
+      exit(64);
+    }
+  }
+  var files = rest.isNotEmpty
+      ? rest
       : stdin
             .transform(utf8.decoder)
             .transform(const LineSplitter())
@@ -82,7 +96,7 @@ Future<void> main(List<String> args) async {
     case 'resolved-el':
       await dumpResolvedLibraries(paths, elements: true);
     case 'elements':
-      await dumpElements(paths);
+      await dumpElements(paths, withConst: flags.contains('--with-const'));
     case 'interface':
       await dumpInterface(paths);
     default:
