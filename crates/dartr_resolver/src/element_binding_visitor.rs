@@ -748,7 +748,10 @@ impl<'c, 'a> ElementBindingVisitor<'c, 'a> {
                             annotation_ast: ConstExprId(n.raw()),
                         })
                         .collect(),
-                    ..Metadata::default()
+                    metadata_flags: dartr_element::OnceSlot::with(dartr_element::compute_metadata_flags(
+                        ast,
+                        &nodes.iter().map(|&a| a.into()).collect::<Vec<NodeId>>(),
+                    )),
                 };
                 for &n in &nodes {
                     self.rt.element_annotation.insert(n, fragment);

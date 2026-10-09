@@ -33,7 +33,8 @@ use dartr_ast::{
 use dartr_diagnostics::{Diagnostic, DiagnosticReporter, LocatableDiagnostic, diag};
 use dartr_element::diagnostics::type_arg;
 use dartr_element::{
-    EId, ElemRef, ElementId, ExtensionElement, FnParam, Tag, TypeId, TypeKind, TypeParameterElement,
+    AliasId, Ctx, EId, ElemRef, ElementId, ExtensionElement, FnParam, Tag, TypeId, TypeKind,
+    TypeParameterElement, VariableElement,
 };
 use dartr_flow::flow_analysis::FlowAnalysis;
 use dartr_flow::shared_type::SharedTypeView;
@@ -612,8 +613,6 @@ impl InvocationInferrer {
                 || ast.is::<DotShorthandInvocation>(p))
                 && ast.parent(p).is_some_and(|pp| ast.is::<AsExpression>(pp))
         });
-        // The facts that need `@optionalTypeArgs` metadata are only read with
-        // the `strict-inference` option; the metadata is not checked yet.
         let kind = if let Some(c) = ast.cast::<ConstructorName>(entity) {
             let named_type = ast[c].type_;
             let type_name = ast.qualified_name(named_type);
@@ -621,8 +620,20 @@ impl InvocationInferrer {
                 None => type_name,
                 Some(name) => format!("{}.{}", type_name, rv.lexeme(ast[name].token)),
             };
+            let type_element_has_optional_type_args = match rv
+                .tables
+                .annotation_type
+                .get(named_type)
+                .copied()
+                .map(|t| *rv.ctx.ty(t))
+            {
+                Some(TypeKind::Interface { element, .. }) => {
+                    crate::element_ext::has_optional_type_args(&rv.ctx, element.raw())
+                }
+                _ => false,
+            };
             InferenceErrorEntityKind::ConstructorName {
-                type_element_has_optional_type_args: false,
+                type_element_has_optional_type_args,
                 constructor_name,
             }
         } else if let Some(a) = ast.cast::<Annotation>(entity) {
@@ -633,15 +644,41 @@ impl InvocationInferrer {
                 Some(c) => format!("{}.{}", name, rv.lexeme(ast[c].token)),
             };
             InferenceErrorEntityKind::Annotation {
-                element_has_optional_type_args: rv.element(ast[a].name).map(|_| false),
+                element_has_optional_type_args: rv.element(ast[a].name).map(|e| {
+                    crate::element_ext::has_optional_type_args(
+                        &rv.ctx,
+                        member::base_element(&rv.ctx, e),
+                    )
+                }),
                 constructor_name,
             }
         } else if let Some(s) = ast.cast::<SimpleIdentifier>(entity) {
             InferenceErrorEntityKind::SimpleIdentifier {
                 name: rv.lexeme(ast[s].token).to_string(),
-                element: rv.element(s).map(|_| SimpleIdentifierElementFacts {
-                    variable_type_has_optional_type_args: false,
-                    has_optional_type_args: false,
+                element: rv.element(s).map(|e| {
+                    let ctx = &rv.ctx;
+                    let base = member::base_element(ctx, e);
+                    let mut variable_type_has_optional_type_args = false;
+                    if base.is::<VariableElement>() {
+                        let ty = crate::element_ext::variable_type(ctx, base);
+                        if let TypeKind::Interface { element, .. } = *ctx.ty(ty) {
+                            variable_type_has_optional_type_args =
+                                crate::element_ext::has_optional_type_args(ctx, element.raw());
+                        }
+                        if let Some(alias) = ty_alias(ctx, ty) {
+                            variable_type_has_optional_type_args |=
+                                crate::element_ext::has_optional_type_args(
+                                    ctx,
+                                    ctx.alias(alias).element.raw(),
+                                );
+                        }
+                    }
+                    SimpleIdentifierElementFacts {
+                        variable_type_has_optional_type_args,
+                        has_optional_type_args: crate::element_ext::has_optional_type_args(
+                            ctx, base,
+                        ),
+                    }
                 }),
             }
         } else if ast.is::<Expression>(entity) {
@@ -1562,4 +1599,15 @@ fn type_vars_free_in_param_returns(
     rv.type_system
         .get_free_parameters(ty, Some(type_variables))
         .unwrap_or_default()
+}
+
+/// Dart `DartType.alias` as an id.
+fn ty_alias(ctx: &Ctx<'_>, t: TypeId) -> Option<AliasId> {
+    match *ctx.ty(t) {
+        TypeKind::Interface { alias, .. }
+        | TypeKind::Record { alias, .. }
+        | TypeKind::TypeParameter { alias, .. } => alias,
+        TypeKind::Function(f) => f.alias,
+        _ => None,
+    }
 }
