@@ -69,6 +69,7 @@ pub mod element_resolver;
 pub mod error;
 pub mod error_detection_helpers;
 pub mod error_verifier;
+pub mod ffi_verifier;
 pub mod flow_analysis_visitor;
 pub mod lexical_lookup;
 pub mod shared_type_analyzer;
