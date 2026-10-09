@@ -45,6 +45,58 @@ impl Driver {
         Some(analyze_library(&input))
     }
 
+    /// Analyzes [libraries] (defining units with their options) in
+    /// parallel on the current rayon pool (design §2.5 step 4) and maps each
+    /// result with [f], in the order of [libraries]. The libraries must be
+    /// linked; a library that is not linked, or whose analysis panics, gives
+    /// `Err` with a message. [f] gets the unit inputs of the library (the
+    /// parsed units, for steps that need the unresolved AST) and can drop
+    /// the resolved library, so that not all results are in memory at once.
+    pub fn analyze_libraries<T, F>(&self, libraries: &[(FileId, AnalysisOptions)], f: F) -> Vec<T>
+    where
+        T: Send,
+        F: Fn(FileId, &[UnitInput], Result<ResolvedLibrary, String>) -> T + Sync,
+    {
+        use rayon::prelude::*;
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+
+        let world = &self.state.world;
+        let tp = dartr_link::types_builder::world_type_provider(world);
+        let external =
+            ExternalUnitCache::new(world, &tp, AnalysisOptions::default(), self.unit_sources());
+        let jobs: Vec<(
+            FileId,
+            AnalysisOptions,
+            Option<(EId<LibraryElement>, Vec<UnitInput>)>,
+        )> = libraries
+            .iter()
+            .map(|&(file, options)| (file, options, self.library_units(file)))
+            .collect();
+        jobs.par_iter()
+            .map(|(file, options, job)| {
+                let Some((library, units)) = job else {
+                    return f(*file, &[], Err("library is not linked".to_string()));
+                };
+                let input = LibraryAnalysisInput {
+                    world,
+                    type_provider: &tp,
+                    library: *library,
+                    units: units.clone(),
+                    options: *options,
+                    external: Some(&external),
+                };
+                let result =
+                    catch_unwind(AssertUnwindSafe(|| analyze_library(&input))).map_err(|e| {
+                        e.downcast_ref::<String>()
+                            .cloned()
+                            .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+                            .unwrap_or_else(|| "panic".to_string())
+                    });
+                f(*file, units, result)
+            })
+            .collect()
+    }
+
     /// The parsed units of all discovered files by path, with their URIs
     /// (the sources of an [`ExternalUnitCache`]).
     pub fn unit_sources(&self) -> IndexMap<Arc<str>, (Arc<str>, Arc<ParsedUnit>)> {

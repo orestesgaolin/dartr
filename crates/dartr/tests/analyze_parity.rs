@@ -1,7 +1,8 @@
 //! Differential test of `dartr analyze` against `dart analyze` (the pinned
 //! SDK 3.13.3 on PATH): stdout, stderr and the exit code must be equal for
-//! projects whose diagnostics are all syntactic (dartr has the parse-only
-//! provider for now). Usage text names the program, so `dart ` is replaced
+//! projects whose diagnostics dartr reports (parse, lint, resolution and
+//! constant diagnostics; the error verifiers are not merged yet, see
+//! [PENDING_VERIFIER_CODES]). Usage text names the program, so `dart ` is replaced
 //! by `dartr ` in the output of the real tool before comparing.
 //!
 //! Skipped (with a message) when `dart` is not on PATH.
@@ -549,4 +550,89 @@ fn analyze_parity_lints() {
         cases.len(),
         failures.join("\n")
     );
+}
+
+/// Resolution and constant diagnostics of the analysis driver
+/// (`DriverProvider`): undefined names, methods, getters and types, extra
+/// positional arguments, constant evaluation errors, ignore comments on
+/// semantic diagnostics, parts. All three formats must be equal.
+#[test]
+fn analyze_parity_driver_diagnostics() {
+    if !dart_available() {
+        eprintln!("skipped: dart 3.13.3 is not on PATH");
+        return;
+    }
+    let fixtures =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/analyze_driver/exact");
+    check_fixture_projects(&fixtures, "driver_exact");
+}
+
+/// The codes of the error verifiers that `dartr_resolver` does not report
+/// before the verifier branches merge. Remove codes from this list when
+/// they are reported.
+const PENDING_VERIFIER_CODES: &[&str] = &[
+    "ARGUMENT_TYPE_NOT_ASSIGNABLE",
+    "BODY_MIGHT_COMPLETE_NORMALLY",
+    "INVALID_ASSIGNMENT",
+    "MISSING_REQUIRED_ARGUMENT",
+    "NON_ABSTRACT_CLASS_INHERITS_ABSTRACT_MEMBER",
+    "UNUSED_LOCAL_VARIABLE",
+];
+
+/// Diagnostics of the error verifiers: the machine output of dartr must be
+/// a subset of the output of `dart analyze` (no false positives), the exit
+/// codes must be equal, and every missing diagnostic must have a code of
+/// [PENDING_VERIFIER_CODES].
+#[test]
+fn analyze_parity_driver_pending_verifiers() {
+    if !dart_available() {
+        eprintln!("skipped: dart 3.13.3 is not on PATH");
+        return;
+    }
+    let fixtures =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/analyze_driver/pending");
+    let base = scratch().join("driver_pending");
+    if base.exists() {
+        fs::remove_dir_all(&base).unwrap();
+    }
+    copy_dir(&fixtures, &base);
+    let mut failures = Vec::new();
+    for entry in fs::read_dir(&base).unwrap() {
+        let root = entry.unwrap().path();
+        let args = ["analyze", "--format=machine"];
+        let dart = run("dart", &args, &root);
+        let dartr = run(env!("CARGO_BIN_EXE_dartr"), &args, &root);
+        let mut expected: Vec<&str> = dart.stdout.lines().collect();
+        let mut missing = Vec::new();
+        for line in dartr.stdout.lines() {
+            match expected.iter().position(|l| *l == line) {
+                Some(i) => {
+                    expected.remove(i);
+                }
+                None => failures.push(format!("{}: extra: {line}", root.display())),
+            }
+        }
+        for line in expected {
+            let code = line.split('|').nth(2).unwrap_or("");
+            if PENDING_VERIFIER_CODES.contains(&code) {
+                missing.push(code);
+            } else {
+                failures.push(format!("{}: missing: {line}", root.display()));
+            }
+        }
+        if dart.code != dartr.code {
+            failures.push(format!(
+                "{}: exit dart={} dartr={}",
+                root.display(),
+                dart.code,
+                dartr.code
+            ));
+        }
+        eprintln!(
+            "{}: {} pending verifier diagnostics missing: {missing:?}",
+            root.display(),
+            missing.len()
+        );
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
