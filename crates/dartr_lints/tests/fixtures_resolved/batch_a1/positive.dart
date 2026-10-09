@@ -32,6 +32,10 @@ Future<int> futureValue() async => 1;
 
 Future<int> redundantFuture() async => futureValue();
 
+void inferredDynamicForIn(Iterable<dynamic> values) {
+  for (final value in values) {}
+}
+
 void examples(dynamic target, bool positional, int? nullable) {
   var inferred = 1;
   final values = [1, 2];

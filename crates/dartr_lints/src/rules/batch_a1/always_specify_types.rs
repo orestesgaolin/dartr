@@ -25,32 +25,27 @@ pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
 
 fn report_keyword(
     c: &LinterContext<'_>,
-    _node: NodeId,
     keyword: dartr_syntax::TokenId,
-    ty: Option<TypeId>,
+    ty: TypeId,
     out: &mut Vec<Diagnostic>,
 ) {
-    if lexeme(c, keyword) == "var"
-        && let Some(name) = ty.and_then(|t| display_type(c, t))
-    {
+    let Some(name) = display_type(c, ty) else {
+        return;
+    };
+    if lexeme(c, keyword) == "var" {
         c.report_token(
             out,
             &diag::ALWAYS_SPECIFY_TYPES_REPLACE_KEYWORD,
             keyword,
             &["var", &name],
         );
-    } else if let Some(name) = ty
-        .filter(|&t| t != TypeId::DYNAMIC)
-        .and_then(|t| display_type(c, t))
-    {
+    } else {
         c.report_token(
             out,
             &diag::ALWAYS_SPECIFY_TYPES_SPECIFY_TYPE,
             keyword,
             &[&name],
         );
-    } else {
-        c.report_token(out, &diag::ALWAYS_SPECIFY_TYPES_ADD_TYPE, keyword, &[]);
     }
 }
 
@@ -60,15 +55,18 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             let n = &c.ast[Id::<dartr_ast::DeclaredIdentifier>::from_raw(node)];
             if n.type_.is_none()
                 && let Some(keyword) = n.keyword
+                && let Some(ty) = declared_type(c, node)
             {
-                report_keyword(c, node, keyword, declared_type(c, node), out);
+                report_keyword(c, keyword, ty, out);
             }
         }
         NodeKind::DeclaredVariablePattern => {
             let n = &c.ast[Id::<dartr_ast::DeclaredVariablePattern>::from_raw(node)];
             if n.type_.is_none() {
                 let token = n.keyword.unwrap_or(n.name);
-                report_keyword(c, node, token, declared_type(c, node), out);
+                if let Some(ty) = node_type(c, node) {
+                    report_keyword(c, token, ty, out);
+                }
             }
         }
         NodeKind::NamedType => {

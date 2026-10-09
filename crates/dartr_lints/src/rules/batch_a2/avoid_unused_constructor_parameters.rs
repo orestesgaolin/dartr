@@ -28,6 +28,51 @@ fn parameter_name(context: &LinterContext<'_>, node: NodeId) -> Option<dartr_syn
     }
 }
 
+fn primary_constructor_members(context: &LinterContext<'_>, node: NodeId) -> Vec<NodeId> {
+    let Some(owner) = context.ast.parent(node) else {
+        return vec![];
+    };
+    let body = match context.ast.kind(owner) {
+        NodeKind::ClassDeclaration => context.ast[context
+            .ast
+            .cast::<ClassDeclaration>(owner)
+            .expect("checked kind")]
+        .body
+        .raw(),
+        NodeKind::EnumDeclaration => context.ast[context
+            .ast
+            .cast::<EnumDeclaration>(owner)
+            .expect("checked kind")]
+        .body
+        .raw(),
+        NodeKind::ExtensionTypeDeclaration => context.ast[context
+            .ast
+            .cast::<ExtensionTypeDeclaration>(owner)
+            .expect("checked kind")]
+        .body
+        .raw(),
+        _ => return vec![],
+    };
+    let members = match context.ast.kind(body) {
+        NodeKind::BlockClassBody => {
+            context.ast[context
+                .ast
+                .cast::<BlockClassBody>(body)
+                .expect("checked kind")]
+            .members
+        }
+        NodeKind::BlockEnumBody => {
+            context.ast[context
+                .ast
+                .cast::<BlockEnumBody>(body)
+                .expect("checked kind")]
+            .members
+        }
+        _ => return vec![],
+    };
+    context.ast.list_raw(members).to_vec()
+}
+
 fn check(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let (parameters, mut roots) = match context.ast.kind(node) {
         NodeKind::ConstructorDeclaration => {
@@ -48,31 +93,26 @@ fn check(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                 .cast::<PrimaryConstructorDeclaration>(node)
                 .unwrap()];
             let mut roots = vec![];
-            if let Some(class) = super::helpers::ancestors(context.ast, node)
-                .find_map(|node| context.ast.cast::<ClassDeclaration>(node))
-                && let Some(body) = context.ast.cast::<BlockClassBody>(context.ast[class].body)
-            {
-                for &member in context.ast.list(context.ast[body].members) {
-                    if let Some(primary_body) = context.ast.cast::<PrimaryConstructorBody>(member) {
-                        roots.push(context.ast[primary_body].body.raw());
-                        roots.extend(
-                            context
-                                .ast
-                                .list_raw(context.ast[primary_body].initializers)
-                                .iter()
-                                .copied(),
-                        );
-                    } else if let Some(field) = context.ast.cast::<FieldDeclaration>(member) {
-                        let variables = &context.ast[context.ast[field].fields];
-                        roots.extend(
-                            context
-                                .ast
-                                .list(variables.variables)
-                                .iter()
-                                .filter_map(|variable| context.ast[*variable].initializer)
-                                .map(Id::raw),
-                        );
-                    }
+            for member in primary_constructor_members(context, node) {
+                if let Some(primary_body) = context.ast.cast::<PrimaryConstructorBody>(member) {
+                    roots.push(context.ast[primary_body].body.raw());
+                    roots.extend(
+                        context
+                            .ast
+                            .list_raw(context.ast[primary_body].initializers)
+                            .iter()
+                            .copied(),
+                    );
+                } else if let Some(field) = context.ast.cast::<FieldDeclaration>(member) {
+                    let variables = &context.ast[context.ast[field].fields];
+                    roots.extend(
+                        context
+                            .ast
+                            .list(variables.variables)
+                            .iter()
+                            .filter_map(|variable| context.ast[*variable].initializer)
+                            .map(Id::raw),
+                    );
                 }
             }
             (n.formal_parameters, roots)
