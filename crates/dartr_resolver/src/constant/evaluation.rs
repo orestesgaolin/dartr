@@ -225,6 +225,19 @@ impl<'a> ConstantEvaluationEngine<'a> {
         }
     }
 
+    /// A lookup context with the local arena of the unit with the index
+    /// [unit] (the local elements and types of that unit can be read).
+    pub fn unit_ctx(&self, unit: u32) -> Ctx<'_> {
+        let handle = self.unit(unit);
+        let resolved: *const ResolvedUnit = &*handle;
+        // SAFETY: a unit of the registry is never removed while the engine
+        // lives: a borrowed unit lives for `'a`, a shared unit is kept alive
+        // by the `Arc` in the registry, and the `ResolvedUnit` behind it does
+        // not move when the registry grows.
+        let resolved: &ResolvedUnit = unsafe { &*resolved };
+        self.ctx(resolved)
+    }
+
     /// A lookup context without local arena.
     pub fn global_ctx(&self) -> Ctx<'_> {
         Ctx {
@@ -1157,7 +1170,18 @@ impl ConstantEvaluationEngine<'_> {
     /// redirects to another const constructor, the const constructor it
     /// redirects to.
     pub fn get_const_redirected_constructor(&self, constructor: ElemRef) -> Option<ElemRef> {
-        let ctx = self.global_ctx();
+        self.get_const_redirected_constructor_in(&self.global_ctx(), constructor)
+    }
+
+    /// [Self::get_const_redirected_constructor] with the context [ctx] (the
+    /// context of the unit of the invocation when [constructor] is a member
+    /// with local types).
+    pub fn get_const_redirected_constructor_in(
+        &self,
+        ctx: &Ctx<'_>,
+        constructor: ElemRef,
+    ) -> Option<ElemRef> {
+        let ctx = *ctx;
         let base = member::base_element(&ctx, constructor);
         if !is_factory_constructor(&ctx, base) {
             return None;
@@ -3511,8 +3535,11 @@ struct RedirectionResult {
 const DEFAULT_VALUE_PARAM: &str = "defaultValue";
 
 impl<'e, 'a> InstanceCreationEvaluator<'e, 'a> {
+    /// The context of the unit of the invocation: the constructor can be a
+    /// member with local types of that unit (`const A<T>()` in a generic
+    /// local function).
     fn ctx(&self) -> Ctx<'e> {
-        self.engine.global_ctx()
+        self.engine.unit_ctx(self.error_node.unit)
     }
 
     /// Dart `definingType` (`_constructor.returnType`).
@@ -4409,7 +4436,7 @@ impl<'e, 'a> InstanceCreationEvaluator<'e, 'a> {
         invocation: Option<Arc<ConstructorInvocationImpl>>,
         implicit_argument_values: &IndexMap<ElementId, DartObjectImpl>,
     ) -> Constant {
-        let ctx = engine.global_ctx();
+        let ctx = engine.unit_ctx(node.unit);
         let base = member::base_element(&ctx, constructor);
         if !is_const_constructor(&ctx, base) {
             let u = engine.unit(node.unit);
@@ -4597,7 +4624,9 @@ fn follow_constant_redirection_chain(
 ) -> RedirectionResult {
     let mut constructor = original_constructor;
     let mut constructors_visited = IndexSet::new();
-    while let Some(redirected_constructor) = engine.get_const_redirected_constructor(constructor) {
+    while let Some(redirected_constructor) =
+        engine.get_const_redirected_constructor_in(ctx, constructor)
+    {
         constructors_visited.insert(member::base_element(ctx, constructor));
         if constructors_visited.contains(&member::base_element(ctx, redirected_constructor)) {
             // Cycle in redirecting factory constructors--this is not allowed

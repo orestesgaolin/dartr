@@ -122,6 +122,15 @@ impl<'v, 'a> ConstantVerifier<'v, 'a> {
         self.unit.tables.static_type.get(node.into()).copied()
     }
 
+    /// Dart `expression.typeOrThrow is InvalidType`. An expression without
+    /// static type (Dart: `typeOrThrow` throws) was not resolved, for example
+    /// the default values of a primary constructor, which the resolver does
+    /// not resolve yet (`visit_primary_constructor_declaration` is a stub):
+    /// it is skipped like an expression with an invalid type.
+    fn has_invalid_or_no_type(&self, expression: impl Into<NodeId>) -> bool {
+        matches!(self.static_type(expression), None | Some(TypeId::INVALID))
+    }
+
     /// Dart `node.declaredFragment!.element` (a base element).
     fn declared_element(&self, node: impl Into<NodeId>) -> Option<ElementId> {
         let fragment = *self.unit.tables.declared_fragment.get(node.into())?;
@@ -463,7 +472,7 @@ impl<'v, 'a> ConstantVerifier<'v, 'a> {
                 continue;
             };
             let result =
-                if self.static_type(default_value) == Some(TypeId::INVALID) {
+                if self.has_invalid_or_no_type(default_value) {
                     // We have already reported an error.
                     None
                 } else {
@@ -862,7 +871,7 @@ impl AstVisitor for ConstantVerifier<'_, '_> {
 
     fn visit_constant_pattern(&mut self, ast: &Ast, node: Id<ConstantPattern>) {
         let expression = ast_ext::un_parenthesized(ast, ast[node].expression);
-        if self.static_type(expression) == Some(TypeId::INVALID) {
+        if self.has_invalid_or_no_type(expression) {
             return;
         }
 
