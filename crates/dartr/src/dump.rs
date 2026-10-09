@@ -41,8 +41,8 @@ pub enum DumpMode {
 }
 
 /// Runs `dump` for [files], or for the paths on stdin (one per line) when
-/// [files] is empty.
-pub fn run(mode: DumpMode, files: Vec<PathBuf>) -> anyhow::Result<()> {
+/// [files] is empty. [with_const]: mode `elements` with `--with-const`.
+pub fn run(mode: DumpMode, files: Vec<PathBuf>, with_const: bool) -> anyhow::Result<()> {
     let paths: Vec<PathBuf> = if files.is_empty() {
         io::stdin()
             .lock()
@@ -80,7 +80,7 @@ pub fn run(mode: DumpMode, files: Vec<PathBuf>) -> anyhow::Result<()> {
                 .stack_size(256 << 20)
                 .build()?;
             let lines = pool.install(|| {
-                crate::elements::dump_elements_all(&paths, mode == DumpMode::Interface)
+                crate::elements::dump_elements_all(&paths, mode == DumpMode::Interface, with_const)
             });
             let stdout = io::stdout();
             let mut out = io::BufWriter::new(stdout.lock());
