@@ -148,7 +148,9 @@ pub struct FfiVerifier<'a> {
     ffi_void_type: Option<TypeId>,
     /// The metadata of the declarations of this unit, by declared fragment
     /// (Dart `element.metadata`), built on first use.
-    metadata_by_fragment: Option<IndexMap<FragmentId, NodeList<Annotation>>>,
+    metadata_by_fragment: IndexMap<FragmentId, NodeList<Annotation>>,
+    /// The variable declarations of this unit, by declared fragment.
+    variable_by_fragment: IndexMap<FragmentId, Id<VariableDeclaration>>,
 }
 
 /// Runs the FFI verifier on one resolved unit (Dart
@@ -173,8 +175,10 @@ pub fn verify_unit(
         in_compound: false,
         compound: None,
         ffi_void_type: None,
-        metadata_by_fragment: None,
+        metadata_by_fragment: IndexMap::new(),
+        variable_by_fragment: IndexMap::new(),
     };
+    verifier.collect_declarations();
     ast.accept(root, &mut verifier);
 }
 
@@ -980,7 +984,10 @@ impl<'a> FfiVerifier<'a> {
     fn annotation_value_type(&self, annotation: Id<Annotation>) -> Option<TypeId> {
         let element = self.annotation_element(annotation)?;
         if element.tag() != Tag::Constructor {
-            return None;
+            // A constant variable: the type of its initializer.
+            let initializer = self.const_variable_initializer(element)?;
+            let t = self.static_type(initializer)?;
+            return self.interface(t).map(|_| t);
         }
         let class = self
             .enclosing_element(element)?
@@ -1009,10 +1016,11 @@ impl<'a> FfiVerifier<'a> {
 
     /// Dart `annotationValue.getField('isLeaf')?.toBoolValue() ?? false`.
     fn native_annotation_is_leaf(&self, annotation: Id<Annotation>) -> bool {
-        let Some(arguments) = self.ast[annotation].arguments else {
+        let value_node = self.annotation_value_node(annotation);
+        let Some(arguments) = self.invocation_arguments(value_node) else {
             return false;
         };
-        for &argument in self.ast.list(self.ast[arguments].arguments) {
+        for &argument in self.ast.list(arguments) {
             if let Some(named) = self.ast.cast::<NamedArgument>(argument.raw())
                 && self.lexeme(self.ast[named].name) == IS_LEAF_PARAM_NAME
             {
@@ -1042,16 +1050,63 @@ impl<'a> FfiVerifier<'a> {
 
     /// The metadata of [element] when it is declared in this unit (Dart
     /// `element.metadata`); `None` when it is declared elsewhere.
-    fn element_metadata(&mut self, element: ElementId) -> Option<NodeList<Annotation>> {
+    fn element_metadata(&self, element: ElementId) -> Option<NodeList<Annotation>> {
         let fragment = self.ctx.element_data(element)?.first_fragment;
-        if self.metadata_by_fragment.is_none() {
-            self.metadata_by_fragment = Some(self.collect_metadata());
-        }
-        self.metadata_by_fragment.as_ref()?.get(&fragment).copied()
+        self.metadata_by_fragment.get(&fragment).copied()
     }
 
-    /// The metadata of every declaration of the unit, by declared fragment.
-    fn collect_metadata(&self) -> IndexMap<FragmentId, NodeList<Annotation>> {
+    /// The initializer of the constant variable [element] (or of the
+    /// variable of the getter [element]) when it is declared in this unit:
+    /// the expression whose value Dart computes with the constant
+    /// evaluator.
+    fn const_variable_initializer(&self, element: ElementId) -> Option<Id<Expression>> {
+        let variable = match element.tag() {
+            Tag::Getter => member::base_element(
+                &self.ctx,
+                member::variable(&self.ctx, ElemRef::Base(element))?,
+            ),
+            Tag::TopLevelVariable | Tag::Field => element,
+            _ => return None,
+        };
+        if !crate::element_ext::is_const(&self.ctx, variable) {
+            return None;
+        }
+        let fragment = self.ctx.element_data(variable)?.first_fragment;
+        let declaration = *self.variable_by_fragment.get(&fragment)?;
+        self.ast[declaration].initializer
+    }
+
+    /// The argument list of a constant constructor invocation (an
+    /// annotation or the initializer of a constant variable).
+    fn invocation_arguments(&self, node: NodeId) -> Option<NodeList<Argument>> {
+        let ast = self.ast;
+        let list = if let Some(a) = ast.cast::<Annotation>(node) {
+            ast[a].arguments?
+        } else if let Some(c) = ast.cast::<InstanceCreationExpression>(node) {
+            ast[c].argument_list
+        } else if let Some(m) = ast.cast::<MethodInvocation>(node) {
+            ast[m].argument_list
+        } else {
+            return None;
+        };
+        Some(ast[list].arguments)
+    }
+
+    /// The node that gives the value of [annotation]: the annotation, or
+    /// the initializer of the constant variable that it references.
+    fn annotation_value_node(&self, annotation: Id<Annotation>) -> NodeId {
+        match self.annotation_element(annotation) {
+            Some(e) if e.tag() != Tag::Constructor => match self.const_variable_initializer(e) {
+                Some(init) => crate::ast_ext::un_parenthesized(self.ast, init).raw(),
+                None => annotation.raw(),
+            },
+            _ => annotation.raw(),
+        }
+    }
+
+    /// Collects the metadata and the variable declarations of every
+    /// declaration of the unit, by declared fragment.
+    fn collect_declarations(&mut self) {
         let ast = self.ast;
         let mut map = IndexMap::new();
         for index in 0..ast.node_count() {
@@ -1073,6 +1128,12 @@ impl<'a> FfiVerifier<'a> {
                     Some(ast[n].metadata)
                 }
                 NodeKind::VariableDeclaration => {
+                    if let Some(&fragment) = self.tables.declared_fragment.get(node) {
+                        self.variable_by_fragment.insert(
+                            fragment,
+                            ast.cast::<VariableDeclaration>(node).expect("kind"),
+                        );
+                    }
                     // The metadata of the enclosing field or top-level
                     // variable declaration.
                     ast.parent(node)
@@ -1094,7 +1155,7 @@ impl<'a> FfiVerifier<'a> {
                 map.insert(fragment, metadata);
             }
         }
-        map
+        self.metadata_by_fragment = map;
     }
 
     // ------------------------------------------------------------ constants
@@ -2012,9 +2073,38 @@ impl<'a> FfiVerifier<'a> {
                 return;
             }
         }
-        // Dart then reads the `mapping` field of the constant value of the
-        // annotation (a mapping given by a constant variable): needs the
-        // constant evaluator, not checked.
+        // Dart reads the `mapping` field of the constant value of the
+        // annotation. Without the constant evaluator: a mapping given by a
+        // constant variable of this unit whose initializer is a map
+        // literal (other forms are not checked).
+        let Some(&first) = ast.list(ast[arguments].arguments).first() else {
+            return;
+        };
+        let first_expression = self.argument_expression(first);
+        let Some(element) = self.base_element(first_expression.raw()).or_else(|| {
+            ast.cast::<SimpleIdentifier>(first_expression.raw())
+                .and_then(|i| self.rt.scope_lookup_result.get(i)?.getter)
+        }) else {
+            return;
+        };
+        let Some(initializer) = self.const_variable_initializer(element) else {
+            return;
+        };
+        let initializer = crate::ast_ext::un_parenthesized(ast, initializer);
+        let Some(literal) = ast.cast::<SetOrMapLiteral>(initializer.raw()) else {
+            return;
+        };
+        for &element in ast.list(ast[literal].elements) {
+            if let Some(entry) = ast.cast::<MapLiteralEntry>(element.raw())
+                && let Some(native_type_name) = self.expression_interface_name(ast[entry].value)
+                && !PRIMITIVE_INTEGER_NATIVE_TYPES_FIXED_SIZE.contains(&native_type_name)
+            {
+                self.report_at(
+                    diag::abi_specific_integer_mapping_unsupported(native_type_name),
+                    first,
+                );
+            }
+        }
     }
 
     /// The name of the class of the static type of [expr] (Dart
@@ -2083,7 +2173,7 @@ impl<'a> FfiVerifier<'a> {
 
     /// Dart `MethodInvocation.isNativeLeafInvocation` (`None` when the
     /// metadata of the invoked element is not available).
-    fn is_native_leaf_invocation(&mut self, node: Id<MethodInvocation>) -> Option<bool> {
+    fn is_native_leaf_invocation(&self, node: Id<MethodInvocation>) -> Option<bool> {
         let method_name = self.ast[node].method_name;
         let Some(element) = self.base_element(method_name.raw()) else {
             return Some(false);
