@@ -343,6 +343,8 @@ void f() {}
     let constructor = annotation_element(&a, "@B.named");
     let parameter = member::formal_parameters(&ctx, constructor)[0];
     assert_eq!(a.type_str(member::type_(&ctx, parameter)), "int");
+    let name = a.node_at(NodeKind::PrefixedIdentifier, "B.named", 0, 0);
+    assert_eq!(a.unit().tables.element.get(name), Some(&constructor));
     assert_eq!(
         a.element_name(base(&a, constructor)).as_deref(),
         Some("named")

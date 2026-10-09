@@ -2,23 +2,22 @@
 
 //! Resolution of metadata annotations.
 
-use dartr_ast::{
-    Annotation, ArgumentList, Expression, Id, NamedArgument, PrefixedIdentifier, SimpleIdentifier,
-    TypeAnnotation,
-};
+use dartr_ast::{Annotation, ArgumentList, Id, PrefixedIdentifier, SimpleIdentifier};
 use dartr_diagnostics::diag;
-use dartr_element::diagnostics::type_arg;
 use dartr_element::{
-    EId, ElemRef, ElementId, FormalParameterElement, FragmentFlags, InterfaceElement, Nullability,
-    ParameterKind, PrefixElement, PropertyAccessorElement, Tag, TypeAliasElement, TypeId, TypeKind,
-    TypeParameterElement, VariableElement,
+    EId, ElemRef, ElementId, FragmentFlags, InterfaceElement, Nullability, PrefixElement,
+    PropertyAccessorElement, Tag, TypeAliasElement, TypeId, TypeKind, TypeParameterElement,
+    VariableElement,
 };
-use dartr_typesystem::generic_inferrer::{GenericInferrer, InferenceErrorEntity, InferenceFlags};
-use dartr_typesystem::type_algebra::MapSubstitution;
 use dartr_typesystem::{TypeExt, lookup, member};
 
 use crate::ast_ext::identifier_name;
 use crate::element_ext;
+use crate::invocation_inference_helper::ConstructorElementToInfer;
+use crate::invocation_inferrer::{
+    InferrerKind, InvocationInferrer, InvocationTarget, function_type_parameters,
+    record_corresponding_parameters, resolve_arguments_to_parameters,
+};
 use crate::resolver::ResolverVisitor;
 
 /// Dart `ResolverVisitor.visitAnnotation(node)` =
@@ -65,7 +64,7 @@ fn resolve(rv: &mut ResolverVisitor<'_>, node: Id<Annotation>) {
         let name = identifier_name(rv.ast, name1).to_string();
         let diagnostic = rv.at(diag::undefined_annotation(&name), node);
         rv.report(diagnostic);
-        visit_arguments(rv, argument_list);
+        visit_arguments(rv, node, argument_list);
         return;
     };
 
@@ -127,7 +126,7 @@ fn resolve(rv: &mut ResolverVisitor<'_>, node: Id<Annotation>) {
         } else {
             let diagnostic = rv.at(diag::undefined_annotation(&name), node);
             rv.report(diagnostic);
-            visit_arguments(rv, argument_list);
+            visit_arguments(rv, node, argument_list);
             return;
         }
     }
@@ -150,7 +149,7 @@ fn resolve(rv: &mut ResolverVisitor<'_>, node: Id<Annotation>) {
     }
 
     report_invalid_annotation(rv, node);
-    visit_arguments(rv, argument_list);
+    visit_arguments(rv, node, argument_list);
 }
 
 /// Dart `_classConstructorInvocation`.
@@ -210,7 +209,7 @@ fn class_getter(
     } else if getter.is_none_or(|e| member::base_element(&rv.ctx, e).tag() != Tag::Constructor) {
         report_invalid_annotation(rv, node);
     }
-    visit_arguments(rv, rv.ast[node].arguments);
+    visit_arguments(rv, node, rv.ast[node].arguments);
 }
 
 /// Dart `_extensionGetter`.
@@ -240,7 +239,7 @@ fn extension_getter(
     } else {
         report_invalid_annotation(rv, node);
     }
-    visit_arguments(rv, rv.ast[node].arguments);
+    visit_arguments(rv, node, rv.ast[node].arguments);
 }
 
 /// Dart `_localVariable`.
@@ -253,7 +252,7 @@ fn local_variable(
     if !element_ext::is_const(&rv.ctx, element) || argument_list.is_some() {
         report_invalid_annotation(rv, node);
     }
-    visit_arguments(rv, argument_list);
+    visit_arguments(rv, node, argument_list);
 }
 
 /// Dart `_propertyAccessorElement`.
@@ -266,7 +265,7 @@ fn property_accessor_element(
     set_identifier_element(rv, name, Some(element));
     rv.set_element(node, Some(element));
     resolve_annotation_element_getter(rv, node, element);
-    visit_arguments(rv, rv.ast[node].arguments);
+    visit_arguments(rv, node, rv.ast[node].arguments);
 }
 
 /// Dart `_resolveAnnotationElementGetter`.
@@ -359,7 +358,7 @@ fn type_alias_getter(
     } else if getter.is_none_or(|e| member::base_element(&rv.ctx, e).tag() != Tag::Constructor) {
         report_invalid_annotation(rv, node);
     }
-    visit_arguments(rv, rv.ast[node].arguments);
+    visit_arguments(rv, node, rv.ast[node].arguments);
 }
 
 #[derive(Clone, Copy)]
@@ -368,7 +367,32 @@ enum ConstructorTarget {
     TypeAlias(EId<TypeAliasElement>),
 }
 
-/// Dart `_constructorInvocation` and `AnnotationInferrer.resolveInvocation`.
+impl ConstructorTarget {
+    /// The result of Dart `_constructorInvocation.instantiateElement` with
+    /// the target's own type parameters.
+    fn raw_defining_type(
+        self,
+        rv: &ResolverVisitor<'_>,
+        type_parameters: &[EId<TypeParameterElement>],
+    ) -> TypeId {
+        let type_arguments: Vec<TypeId> = type_parameters
+            .iter()
+            .map(|&parameter| rv.ctx.type_parameter_type(parameter, Nullability::None))
+            .collect();
+        match self {
+            ConstructorTarget::Interface(element) => {
+                rv.ctx
+                    .instantiate_interface(element, &type_arguments, Nullability::None)
+            }
+            ConstructorTarget::TypeAlias(element) => {
+                rv.ctx
+                    .instantiate_type_alias(element, &type_arguments, Nullability::None)
+            }
+        }
+    }
+}
+
+/// Dart `_constructorInvocation`.
 fn constructor_invocation(
     rv: &mut ResolverVisitor<'_>,
     node: Id<Annotation>,
@@ -385,289 +409,97 @@ fn constructor_invocation(
 
     let Some(constructor) = constructor else {
         report_invalid_annotation(rv, node);
-        visit_arguments(rv, Some(argument_list));
+        resolve_annotation_invocation(rv, node, constructor_name, argument_list, None);
         return;
     };
 
-    let explicit_type_arguments = explicit_annotation_type_arguments(rv, node, &type_parameters);
-    let instantiated = if let Some(type_arguments) = explicit_type_arguments {
-        let instantiated =
-            instantiate_constructor(rv, target, constructor_name, constructor, &type_arguments);
-        let parameters = member::formal_parameters(&rv.ctx, instantiated);
-        resolve_arguments(rv, argument_list, &parameters, None);
-        instantiated
-    } else {
-        let raw_parameters = member::formal_parameters(&rv.ctx, constructor);
-        // Dart `FullInvocationInferrer.resolveInvocation`: downward
-        // inference substitutes the preliminary solution into the raw
-        // parameter types before it visits arguments. An annotation has the
-        // unknown context type, so unconstrained type parameters have the
-        // preliminary type `UnknownInferredType`.
-        let unknowns = vec![TypeId::UNKNOWN; type_parameters.len()];
-        let downward_substitution = MapSubstitution::from_pairs(&type_parameters, &unknowns);
-        let resolved_arguments = resolve_arguments(
-            rv,
-            argument_list,
-            &raw_parameters,
-            Some(&downward_substitution),
-        );
-        let type_arguments =
-            infer_annotation_type_arguments(rv, node, &type_parameters, &resolved_arguments);
-        instantiate_constructor(rv, target, constructor_name, constructor, &type_arguments)
+    let raw_defining_type = target.raw_defining_type(rv, &type_parameters);
+    let element_to_infer = ConstructorElementToInfer {
+        type_parameters,
+        element: constructor,
     };
-
-    if let Some(name) = constructor_name {
-        set_identifier_element(rv, name, Some(instantiated));
-    }
-    rv.set_element(node, Some(instantiated));
-
-    let parameters = member::formal_parameters(&rv.ctx, instantiated);
-    store_corresponding_parameters(rv, argument_list, &parameters);
-}
-
-fn explicit_annotation_type_arguments(
-    rv: &mut ResolverVisitor<'_>,
-    node: Id<Annotation>,
-    type_parameters: &[EId<TypeParameterElement>],
-) -> Option<Vec<TypeId>> {
-    if type_parameters.is_empty() {
-        return Some(Vec::new());
-    }
-
-    if let Some(type_argument_list) = rv.ast[node].type_arguments {
-        let argument_nodes: Vec<Id<TypeAnnotation>> =
-            rv.ast.list(rv.ast[type_argument_list].arguments).to_vec();
-        if argument_nodes.len() != type_parameters.len() {
-            let element_name = match rv.ast.cast::<SimpleIdentifier>(rv.ast[node].name.raw()) {
-                Some(name) => identifier_name(rv.ast, name).to_string(),
-                None => "annotation".to_string(),
-            };
-            let diagnostic = rv.at(
-                diag::wrong_number_of_type_arguments_element(
-                    "type",
-                    &element_name,
-                    type_parameters.len() as i64,
-                    argument_nodes.len() as i64,
-                ),
-                type_argument_list,
-            );
-            rv.report(diagnostic);
-            return Some(vec![TypeId::DYNAMIC; type_parameters.len()]);
-        }
-        let type_arguments: Vec<TypeId> = argument_nodes
-            .iter()
-            .map(|argument| {
-                rv.tables
-                    .annotation_type
-                    .get(*argument)
-                    .copied()
-                    .unwrap_or(TypeId::DYNAMIC)
-            })
-            .collect();
-        check_type_arguments_matching_bounds(rv, &argument_nodes, type_parameters, &type_arguments);
-        return Some(type_arguments);
-    }
-
-    if !rv.generic_metadata_is_enabled() {
-        return Some(vec![TypeId::DYNAMIC; type_parameters.len()]);
-    }
-
-    None
-}
-
-fn check_type_arguments_matching_bounds(
-    rv: &mut ResolverVisitor<'_>,
-    argument_nodes: &[Id<TypeAnnotation>],
-    type_parameters: &[EId<TypeParameterElement>],
-    type_arguments: &[TypeId],
-) {
-    let substitution = MapSubstitution::from_pairs(type_parameters, type_arguments);
-    for ((&node, &parameter), &argument) in argument_nodes
-        .iter()
-        .zip(type_parameters)
-        .zip(type_arguments)
-    {
-        let Some(bound) = rv.ctx.type_parameter_bound(parameter) else {
-            continue;
-        };
-        let bound = substitution.substitute_type(&rv.ctx, bound);
-        if rv.type_system.is_subtype_of(argument, bound) {
-            continue;
-        }
-        let Some(parameter_name) = rv.ctx.element_name(parameter.raw()) else {
-            continue;
-        };
-        let diagnostic = diag::type_argument_not_matching_bounds(
-            type_arg(&rv.ctx, argument),
-            parameter_name,
-            type_arg(&rv.ctx, bound),
-        );
-        let diagnostic = rv.at(diagnostic, node);
-        rv.report(diagnostic);
-    }
-}
-
-fn infer_annotation_type_arguments(
-    rv: &mut ResolverVisitor<'_>,
-    node: Id<Annotation>,
-    type_parameters: &[EId<TypeParameterElement>],
-    arguments: &[(Id<Expression>, Option<ElemRef>)],
-) -> Vec<TypeId> {
-    let flags = InferenceFlags {
-        generic_metadata_is_enabled: true,
-        inference_using_bounds_is_enabled: rv.inference_using_bounds_is_enabled(),
-        strict_inference: rv.unit.options.strict_inference,
+    let constructor_raw_type = element_to_infer.as_type(rv);
+    // Dart constructor elements expose the enclosing interface as their
+    // implicit return type. Rust linked constructors keep that return slot
+    // empty, so restore the `_constructorInvocation.instantiateElement`
+    // result on the forwarding function type before shared inference.
+    let constructor_raw_type = match *rv.ctx.ty(constructor_raw_type) {
+        TypeKind::Function(function) => rv.ctx.function_type(
+            rv.ctx.list(function.type_params),
+            rv.ctx.list(function.params),
+            raw_defining_type,
+            function.nullability,
+            function.alias,
+        ),
+        _ => constructor_raw_type,
     };
-    let entity =
-        InferenceErrorEntity::other(rv.ast.offset(node) as usize, rv.ast.length(node) as usize);
-    let mut reported = Vec::new();
-    let inferred = {
-        let mut listener = |diagnostic| reported.push(diagnostic);
-        let mut reporter = dartr_diagnostics::DiagnosticReporter::new(&mut listener);
-        let mut inferrer = GenericInferrer::new(
-            rv.type_system,
-            type_parameters,
-            Some(&mut reporter),
-            Some(entity),
-            flags,
-            rv.flow_analysis.type_operations,
-            None,
-        );
-        for &(argument, parameter) in arguments {
-            let Some(parameter) = parameter else {
-                continue;
-            };
-            let argument_type = rv.static_type(argument).unwrap_or(TypeId::DYNAMIC);
-            let parameter_type = member::type_(&rv.ctx, parameter);
-            let parameter_name = member::name(&rv.ctx, parameter).unwrap_or("");
-            inferrer.constrain_argument(
-                argument_type,
-                parameter_type,
-                parameter_name,
-                Some(argument.raw()),
-            );
-        }
-        inferrer.choose_final_types()
-    };
-    if rv.lock_level == 0 {
-        rv.diagnostics.extend(reported);
-    }
-    inferred
-}
-
-fn instantiate_constructor(
-    rv: &ResolverVisitor<'_>,
-    target: ConstructorTarget,
-    constructor_name: Option<Id<SimpleIdentifier>>,
-    fallback: ElemRef,
-    type_arguments: &[TypeId],
-) -> ElemRef {
-    let defining_type = match target {
-        ConstructorTarget::Interface(element) => {
-            rv.ctx
-                .instantiate_interface(element, type_arguments, Nullability::None)
-        }
-        ConstructorTarget::TypeAlias(element) => {
-            rv.ctx
-                .instantiate_type_alias(element, type_arguments, Nullability::None)
-        }
-    };
-    lookup::type_look_up_constructor(
-        &rv.ctx,
-        defining_type,
-        constructor_name.map(|name| identifier_name(rv.ast, name)),
-        rv.unit.library,
-    )
-    .unwrap_or(fallback)
+    resolve_annotation_invocation(
+        rv,
+        node,
+        constructor_name,
+        argument_list,
+        Some(InvocationTarget::ConstructorElement {
+            element: constructor,
+            raw_type: constructor_raw_type,
+        }),
+    );
 }
 
 /// Dart `_visitArguments` for an unresolved annotation target.
-fn visit_arguments(rv: &mut ResolverVisitor<'_>, argument_list: Option<Id<ArgumentList>>) {
+fn visit_arguments(
+    rv: &mut ResolverVisitor<'_>,
+    node: Id<Annotation>,
+    argument_list: Option<Id<ArgumentList>>,
+) {
     let Some(argument_list) = argument_list else {
         return;
     };
-    let arguments = rv.ast.list_raw(rv.ast[argument_list].arguments).to_vec();
-    for argument in arguments {
-        if let Some(named) = rv.ast.cast::<NamedArgument>(argument) {
-            rv.resolve_expression(rv.ast[named].argument_expression, TypeId::UNKNOWN);
-        } else if let Some(expression) = rv.ast.cast::<Expression>(argument) {
-            rv.resolve_expression(expression, TypeId::UNKNOWN);
-        } else {
-            rv.visit_node(argument);
-        }
-    }
+    resolve_annotation_invocation(rv, node, None, argument_list, None);
 }
 
-fn resolve_arguments(
+/// Dart `AnnotationInferrer(...).resolveInvocation()`.
+fn resolve_annotation_invocation(
     rv: &mut ResolverVisitor<'_>,
+    node: Id<Annotation>,
+    constructor_name: Option<Id<SimpleIdentifier>>,
     argument_list: Id<ArgumentList>,
-    parameters: &[ElemRef],
-    downward_substitution: Option<&MapSubstitution>,
-) -> Vec<(Id<Expression>, Option<ElemRef>)> {
-    let matches = match_arguments(rv, argument_list, parameters);
-    matches
-        .into_iter()
-        .map(|(argument, parameter)| {
-            let context = parameter
-                .map(|parameter| member::type_(&rv.ctx, parameter))
-                .map(|context| {
-                    downward_substitution
-                        .map(|substitution| substitution.substitute_type(&rv.ctx, context))
-                        .unwrap_or(context)
-                })
-                .unwrap_or(TypeId::UNKNOWN);
-            (rv.resolve_expression(argument, context), parameter)
-        })
-        .collect()
-}
-
-fn store_corresponding_parameters(
-    rv: &mut ResolverVisitor<'_>,
-    argument_list: Id<ArgumentList>,
-    parameters: &[ElemRef],
+    target: Option<InvocationTarget>,
 ) {
-    for (argument, parameter) in match_arguments(rv, argument_list, parameters) {
-        if let Some(parameter) = parameter {
-            rv.tables.param_element.insert(argument, parameter);
-        }
+    let has_target = target.is_some();
+    InvocationInferrer {
+        kind: InferrerKind::Annotation {
+            node,
+            constructor_name,
+        },
+        argument_list,
+        context_type: TypeId::UNKNOWN,
+        target,
     }
-}
+    .resolve_invocation(rv);
 
-fn match_arguments(
-    rv: &ResolverVisitor<'_>,
-    argument_list: Id<ArgumentList>,
-    parameters: &[ElemRef],
-) -> Vec<(Id<Expression>, Option<ElemRef>)> {
-    let positional: Vec<ElemRef> = parameters
-        .iter()
-        .copied()
-        .filter(|parameter| parameter_kind(rv, *parameter).is_positional())
-        .collect();
-    let mut positional_index = 0;
-    let mut result = Vec::new();
-
-    for &argument in rv.ast.list_raw(rv.ast[argument_list].arguments) {
-        if let Some(named) = rv.ast.cast::<NamedArgument>(argument) {
-            let name = rv.lexeme(rv.ast[named].name);
-            let parameter = parameters.iter().copied().find(|parameter| {
-                parameter_kind(rv, *parameter).is_named()
-                    && member::name(&rv.ctx, *parameter) == Some(name)
-            });
-            result.push((rv.ast[named].argument_expression, parameter));
-        } else if let Some(expression) = rv.ast.cast::<Expression>(argument) {
-            let parameter = positional.get(positional_index).copied();
-            positional_index += 1;
-            result.push((expression, parameter));
+    if has_target && let Some(constructor) = rv.element(node) {
+        if let Some(name) = constructor_name {
+            // `AnnotationInferrer._storeResult` updates the constructor
+            // identifier. Keep the enclosing `PrefixedIdentifier` result in
+            // sync for inferred `@A.named(...)` metadata.
+            set_identifier_element(rv, name, Some(constructor));
         }
+        // Dart `AnnotationInferrer._storeResult` returns the substituted
+        // constructor's formal parameter elements. The shared Rust inferrer
+        // carries the substituted parameter types but retains the raw
+        // `FnParam.element`, so attach the substituted elements before
+        // recording `Expression.correspondingParameter`.
+        let mut parameters =
+            function_type_parameters(rv, Some(member::type_(&rv.ctx, constructor)));
+        for (parameter, element) in parameters
+            .iter_mut()
+            .zip(member::formal_parameters(&rv.ctx, constructor))
+        {
+            parameter.element = Some(element);
+        }
+        let corresponding = resolve_arguments_to_parameters(rv, argument_list, &parameters, false);
+        record_corresponding_parameters(rv, argument_list, &corresponding);
     }
-    result
-}
-
-fn parameter_kind(rv: &ResolverVisitor<'_>, parameter: ElemRef) -> ParameterKind {
-    let base = member::base_element(&rv.ctx, parameter);
-    base.cast::<FormalParameterElement>()
-        .map(|parameter| rv.ctx.get(parameter).kind)
-        .unwrap_or(ParameterKind::Required)
 }
 
 fn set_identifier_element(
