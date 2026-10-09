@@ -3,8 +3,9 @@
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
-use dartr_element::{EId, InterfaceElement, TypeId, TypeKind};
+use dartr_element::{ClassElement, EId, EnumElement, InterfaceElement, TypeId, TypeKind};
 use dartr_typesystem::TypeExt;
+use indexmap::IndexSet;
 
 pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
     registry.add(
@@ -20,6 +21,18 @@ pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
 }
 
 fn types_are_unrelated(context: &LinterContext<'_>, left: TypeId, right: TypeId) -> bool {
+    types_are_unrelated_inner(context, left, right, &mut IndexSet::new())
+}
+
+fn types_are_unrelated_inner(
+    context: &LinterContext<'_>,
+    left: TypeId,
+    right: TypeId,
+    visited: &mut IndexSet<(TypeId, TypeId)>,
+) -> bool {
+    if !visited.insert((left, right)) {
+        return false;
+    }
     let Some(resolved) = context.resolved else {
         return false;
     };
@@ -54,21 +67,68 @@ fn types_are_unrelated(context: &LinterContext<'_>, left: TypeId, right: TypeId)
                     && la
                         .iter()
                         .zip(ra)
-                        .any(|(&l, &r)| types_are_unrelated(context, l, r))
+                        .any(|(&l, &r)| types_are_unrelated_inner(context, l, r, visited))
             } else {
                 let ls = resolved.ctx.interface(le).supertype.get();
                 let rs = resolved.ctx.interface(re).supertype.get();
                 match (ls, rs) {
                     (None, _) => true,
+                    (Some(_), None) => true,
                     (Some(l), Some(r)) if !ts.dart_eq(l, r) => true,
-                    (Some(l), _) => resolved.ctx.is_dart_core_object(l),
+                    (Some(l), Some(_)) => {
+                        le.raw().is::<EnumElement>()
+                            || is_protobuf_enum(context, l)
+                            || resolved.ctx.is_dart_core_object(l)
+                    }
                 }
             }
         }
+        (
+            TypeKind::TypeParameter { param: left, .. },
+            TypeKind::TypeParameter { param: right, .. },
+        ) => {
+            let (Some(left), Some(right)) = (
+                resolved.ctx.get(left).bound.get(),
+                resolved.ctx.get(right).bound.get(),
+            ) else {
+                return false;
+            };
+            types_are_unrelated_inner(context, left, right, visited)
+        }
+        (TypeKind::Function(_), TypeKind::Function(_)) => false,
+        (TypeKind::Function(_), _) => unrelated_to_function(context, right),
+        (_, TypeKind::Function(_)) => unrelated_to_function(context, left),
         (TypeKind::Record { .. }, _) | (_, TypeKind::Record { .. }) => {
             !ts.is_assignable_to(left, right, false) && !ts.is_assignable_to(right, left, false)
         }
         _ => false,
+    }
+}
+
+fn is_protobuf_enum(context: &LinterContext<'_>, ty: TypeId) -> bool {
+    let Some(resolved) = context.resolved else {
+        return false;
+    };
+    resolved.ctx.interface_element(ty).is_some_and(|element| {
+        resolved.ctx.element_name(element.raw()) == Some("ProtobufEnum")
+            && resolved.ctx.element_library_uri(element.raw())
+                == Some("package:protobuf/src/protobuf/protobuf_enum.dart")
+    })
+}
+
+fn unrelated_to_function(context: &LinterContext<'_>, ty: TypeId) -> bool {
+    let Some(resolved) = context.resolved else {
+        return false;
+    };
+    match *resolved.ctx.ty(ty) {
+        TypeKind::Function(_) => false,
+        TypeKind::Interface { element, .. } => {
+            element.raw().cast::<ClassElement>().is_none()
+                || context
+                    .type_system()
+                    .is_none_or(|ts| ts.get_call_method_type(ty).is_none())
+        }
+        _ => true,
     }
 }
 

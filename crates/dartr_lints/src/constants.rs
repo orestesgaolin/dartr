@@ -241,23 +241,29 @@ fn evaluate(c: &LinterContext<'_>, node: NodeId, depth: usize) -> Option<DartObj
             {
                 return None;
             }
-            // The local unit's initializer is resolved under the same Ctx.
-            let declaration = (0..c.ast.node_count())
-                .map(NodeId::from_index)
-                .find(|&n| c.declared_element(n) == Some(variable))?;
-            let n = c.ast.cast::<VariableDeclaration>(declaration)?;
-            recur(c.ast[n].initializer?.raw())
+            let (unit, declaration) = declaration_context(c, variable)?;
+            let n = unit.ast.cast::<VariableDeclaration>(declaration)?;
+            evaluate(&unit, unit.ast[n].initializer?.raw(), depth + 1)
         }
         _ => None, // Constructors/collections await the shared wave-D evaluator.
     }
 }
 
 pub fn default_value(c: &LinterContext<'_>, parameter: ElemRef) -> Option<DartObjectImpl> {
+    default_value_with_depth(c, parameter, 0)
+}
+fn default_value_with_depth(
+    c: &LinterContext<'_>,
+    parameter: ElemRef,
+    depth: usize,
+) -> Option<DartObjectImpl> {
+    if depth >= 64 {
+        return None;
+    }
     let r = c.resolved?;
     let element = member::base_element(&r.ctx, parameter);
-    let node = (0..c.ast.node_count())
-        .map(NodeId::from_index)
-        .find(|&n| c.declared_element(n) == Some(element))?;
+    let (unit, node) = declaration_context(c, element)?;
+    let c = &unit;
     let clause = match c.ast.kind(node) {
         NodeKind::RegularFormalParameter => {
             c.ast[Id::<RegularFormalParameter>::from_raw(node)].default_clause
@@ -272,6 +278,10 @@ pub fn default_value(c: &LinterContext<'_>, parameter: ElemRef) -> Option<DartOb
     };
     if let Some(clause) = clause {
         constant_value(c, c.ast[clause].value.raw())
+    } else if element.tag() == dartr_element::Tag::SuperFormalParameter {
+        let inherited =
+            dartr_link::outline::super_constructor_parameter(&r.ctx, EId::from_raw(element))?;
+        default_value_with_depth(c, ElemRef::Base(inherited.raw()), depth + 1)
     } else {
         Some(DartObjectImpl::new(
             &ConstantTypeSystem(r.ctx),
@@ -279,4 +289,21 @@ pub fn default_value(c: &LinterContext<'_>, parameter: ElemRef) -> Option<DartOb
             InstanceState::Null(NullState::NULL_STATE),
         ))
     }
+}
+
+fn declaration_context<'a>(
+    c: &LinterContext<'a>,
+    element: dartr_element::ElementId,
+) -> Option<(LinterContext<'a>, NodeId)> {
+    for unit in std::iter::once(*c)
+        .chain((0..c.resolved_units.len()).filter_map(|index| c.resolved_unit(index)))
+    {
+        if let Some(node) = (0..unit.ast.node_count())
+            .map(NodeId::from_index)
+            .find(|&node| unit.declared_element(node) == Some(element))
+        {
+            return Some((unit, node));
+        }
+    }
+    None
 }

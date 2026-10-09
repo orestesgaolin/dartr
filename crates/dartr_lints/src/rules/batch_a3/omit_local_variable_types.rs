@@ -2,12 +2,37 @@
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
-use dartr_element::TypeKind;
-use dartr_typesystem::TypeExt;
+use dartr_element::{LocalFunctionElement, TopLevelFunctionElement, TypeKind};
+use dartr_typesystem::{TypeExt, member};
 
 pub fn register(registry: &mut RuleVisitorRegistry) {
     registry.add_for_statement("omit_local_variable_types", check);
     registry.add_variable_declaration_statement("omit_local_variable_types", check);
+}
+
+fn depends_on_declared_type(ctx: &LinterContext<'_>, node: NodeId) -> bool {
+    let Some(invocation) = ctx.ast.cast::<MethodInvocation>(node) else {
+        return false;
+    };
+    if ctx.ast[invocation].type_arguments.is_some() {
+        return false;
+    }
+    let Some(resolved) = ctx.resolved else {
+        return false;
+    };
+    let Some(element) = ctx.element(ctx.ast[invocation].method_name.raw()) else {
+        return false;
+    };
+    let base = member::base_element(&resolved.ctx, element);
+    if base.cast::<LocalFunctionElement>().is_none()
+        && base.cast::<TopLevelFunctionElement>().is_none()
+    {
+        return false;
+    }
+    matches!(
+        resolved.ctx.ty(member::return_type(&resolved.ctx, element)),
+        TypeKind::TypeParameter { .. }
+    )
 }
 
 fn check_list(
@@ -49,6 +74,9 @@ fn check_list(
         if ctx.ast.kind(initializer) == NodeKind::IntegerLiteral
             && !resolved.ctx.is_dart_core_int(declared)
         {
+            return;
+        }
+        if depends_on_declared_type(ctx, initializer.raw()) {
             return;
         }
     }

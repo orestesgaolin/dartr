@@ -136,41 +136,50 @@ fn check_for_each(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnosti
 }
 
 fn enclosing_return_type(ctx: &LinterContext<'_>, mut node: NodeId) -> Option<TypeId> {
+    let flatten_if_async = |return_type: TypeId, body: Id<FunctionBody>| {
+        let keyword = match ctx.ast.kind(body) {
+            NodeKind::BlockFunctionBody => {
+                ctx.ast[Id::<BlockFunctionBody>::from_raw(body.raw())].keyword
+            }
+            NodeKind::ExpressionFunctionBody => {
+                ctx.ast[Id::<ExpressionFunctionBody>::from_raw(body.raw())].keyword
+            }
+            _ => None,
+        };
+        if keyword.is_some_and(|keyword| ctx.ast.tokens.lexeme(keyword) == "async") {
+            Some(ctx.type_system()?.flatten(return_type))
+        } else {
+            Some(return_type)
+        }
+    };
     while let Some(parent) = ctx.ast.parent(node) {
         if let Some(function) = ctx.ast.cast::<FunctionExpression>(parent) {
             let ty = ctx.static_type(function.raw())?;
             let TypeKind::Function(data) = *ctx.resolved?.ctx.ty(ty) else {
                 return None;
             };
-            let body = ctx.ast[function].body;
-            let asynchronous = match ctx.ast.kind(body) {
-                NodeKind::BlockFunctionBody => {
-                    ctx.ast[Id::<BlockFunctionBody>::from_raw(body.raw())].keyword
-                }
-                NodeKind::ExpressionFunctionBody => {
-                    ctx.ast[Id::<ExpressionFunctionBody>::from_raw(body.raw())].keyword
-                }
-                _ => None,
-            }
-            .is_some_and(|k| ctx.ast.tokens.lexeme(k) == "async");
-            return Some(if asynchronous {
-                ctx.type_system()?.flatten(data.ret)
-            } else {
-                data.ret
-            });
+            return flatten_if_async(data.ret, ctx.ast[function].body);
         }
-        if matches!(
-            ctx.ast.kind(parent),
-            NodeKind::FunctionDeclaration
-                | NodeKind::MethodDeclaration
-                | NodeKind::ConstructorDeclaration
-                | NodeKind::PrimaryConstructorDeclaration
-        ) {
-            let element = ctx.declared_element(parent)?;
-            return Some(member::return_type(
+        let return_type = || {
+            Some(member::return_type(
                 &ctx.resolved?.ctx,
-                dartr_element::ElemRef::Base(element),
-            ));
+                dartr_element::ElemRef::Base(ctx.declared_element(parent)?),
+            ))
+        };
+        match ctx.ast.kind(parent) {
+            NodeKind::MethodDeclaration => {
+                let method = &ctx.ast[Id::<MethodDeclaration>::from_raw(parent)];
+                return flatten_if_async(return_type()?, method.body);
+            }
+            NodeKind::ConstructorDeclaration | NodeKind::PrimaryConstructorDeclaration => {
+                return return_type();
+            }
+            NodeKind::FunctionDeclaration => {
+                let function = &ctx.ast
+                    [ctx.ast[Id::<FunctionDeclaration>::from_raw(parent)].function_expression];
+                return flatten_if_async(return_type()?, function.body);
+            }
+            _ => {}
         }
         node = parent;
     }

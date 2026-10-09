@@ -2,9 +2,9 @@
 
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
-use dartr_diagnostics::{diag, Diagnostic};
-use dartr_element::{ElemRef, InterfaceElement, TypeId, TypeKind};
-use dartr_typesystem::{member, TypeExt};
+use dartr_diagnostics::{Diagnostic, diag};
+use dartr_element::{ElemRef, FieldFormalParameterElement, FragmentFlags, TypeId, TypeKind};
+use dartr_typesystem::{TypeExt, member};
 use indexmap::IndexMap;
 
 pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
@@ -26,17 +26,23 @@ fn widget_property(context: &LinterContext<'_>, ty: TypeId) -> bool {
     let Some(resolved) = context.resolved else {
         return false;
     };
-    if matches!(resolved.ctx.ty(ty), TypeKind::Interface { .. })
-        && [
-            resolved.ctx.tp.list_element().upcast::<InterfaceElement>(),
-            resolved.ctx.tp.set_element().upcast(),
-            resolved.ctx.tp.map_element().upcast(),
+    if matches!(resolved.ctx.ty(ty), TypeKind::Interface { .. }) {
+        let is_collection = [
+            ("dart:core", "List"),
+            ("dart:core", "Map"),
+            ("dart:collection", "LinkedHashMap"),
+            ("dart:core", "Set"),
+            ("dart:collection", "LinkedHashSet"),
         ]
         .into_iter()
-        .any(|e| resolved.ctx.as_instance_of(ty, e).is_some())
-    {
-        let args = resolved.ctx.type_arguments(ty);
-        return args.len() == 1 && widget_property(context, args[0]);
+        .any(|(library, name)| super::helpers::implements(context, ty, library, name));
+        if is_collection
+            && let Some(element) = resolved.ctx.interface_element(ty)
+            && resolved.ctx.interface(element).type_params.len() == 1
+            && let Some(&argument) = resolved.ctx.type_arguments(ty).first()
+        {
+            return widget_property(context, argument);
+        }
     }
     false
 }
@@ -81,6 +87,45 @@ fn check(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     };
     let mut properties: IndexMap<String, dartr_syntax::TokenId> = IndexMap::new();
     let mut debug_bodies = vec![];
+    if let Some(primary) = context
+        .ast
+        .cast::<PrimaryConstructorDeclaration>(declaration.name_part)
+    {
+        let parameters = &context.ast[context.ast[primary].formal_parameters];
+        for &parameter in context.ast.list(parameters.parameters) {
+            let Some(field_formal) = context
+                .declared_element(parameter)
+                .and_then(|element| element.cast::<FieldFormalParameterElement>())
+            else {
+                continue;
+            };
+            let data = resolved.ctx.get(field_formal);
+            let declaring =
+                resolved
+                    .ctx
+                    .fragment_data(data.first_fragment)
+                    .is_some_and(|fragment| {
+                        fragment
+                            .flags
+                            .has(FragmentFlags::FIELD_FORMAL_PARAMETER_FRAGMENT_IS_DECLARING)
+                    });
+            let Some(field) = data.field.get().filter(|_| declaring) else {
+                continue;
+            };
+            let Some(parameter) = context.ast.cast::<FieldFormalParameter>(parameter) else {
+                continue;
+            };
+            let name_token = context.ast[parameter].name;
+            let name = context.ast.tokens.lexeme(name_token);
+            if name.starts_with('_') || overrides(context, class_type, name) {
+                continue;
+            }
+            let ty = member::type_(&resolved.ctx, ElemRef::Base(field.raw()));
+            if !widget_property(context, ty) {
+                properties.insert(name.to_string(), name_token);
+            }
+        }
+    }
     for &member_node in context.ast.list(context.ast[body].members) {
         if let Some(method) = context.ast.cast::<MethodDeclaration>(member_node) {
             let method = &context.ast[method];
@@ -90,7 +135,9 @@ fn check(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                 continue;
             }
             if method.modifier_keyword.is_some()
-                || method.property_keyword.is_none()
+                || method
+                    .property_keyword
+                    .is_none_or(|keyword| context.ast.tokens.lexeme(keyword) != "get")
                 || name.starts_with('_')
                 || overrides(context, class_type, name)
             {
@@ -130,12 +177,21 @@ fn check(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             if let Some(identifier) = context.ast.cast::<SimpleIdentifier>(current) {
                 let name = context.ast.tokens.lexeme(context.ast[identifier].token);
                 properties.shift_remove(name);
-                if let Some(rest) = name.strip_prefix("debug") {
+                if let Some(rest) = name.strip_prefix("debug").filter(|rest| !rest.is_empty()) {
                     let mut chars = rest.chars();
                     if let Some(first) = chars.next() {
                         properties.shift_remove(&format!(
                             "{}{}",
                             first.to_lowercase(),
+                            chars.as_str()
+                        ));
+                    }
+                } else {
+                    let mut chars = name.chars();
+                    if let Some(first) = chars.next() {
+                        properties.shift_remove(&format!(
+                            "debug{}{}",
+                            first.to_uppercase(),
                             chars.as_str()
                         ));
                     }

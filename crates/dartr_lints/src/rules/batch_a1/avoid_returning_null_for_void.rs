@@ -1,6 +1,6 @@
 // Dart source: pkg/linter/lib/src/rules/avoid_returning_null_for_void.dart
 
-use super::helpers::{ancestor, declared_type, is_future_void, is_null_literal, is_void};
+use super::helpers::{declared_type, is_future_void, is_null_literal, is_void};
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::{
     ExpressionFunctionBody, FunctionExpression, Id, MethodDeclaration, NodeId, NodeKind,
@@ -37,12 +37,23 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     if !is_null_literal(c.ast, expression) {
         return;
     }
-    let (owner, code) = if let Some(method) = ancestor(c.ast, node, NodeKind::MethodDeclaration) {
-        (method, &diag::AVOID_RETURNING_NULL_FOR_VOID_FROM_METHOD)
-    } else if let Some(function) = ancestor(c.ast, node, NodeKind::FunctionExpression) {
-        (function, &diag::AVOID_RETURNING_NULL_FOR_VOID_FROM_FUNCTION)
-    } else {
-        return;
+    let mut current = node;
+    let (owner, code) = loop {
+        let Some(candidate) = c.ast.parent(current) else {
+            return;
+        };
+        match c.ast.kind(candidate) {
+            NodeKind::MethodDeclaration => {
+                break (candidate, &diag::AVOID_RETURNING_NULL_FOR_VOID_FROM_METHOD);
+            }
+            NodeKind::FunctionExpression => {
+                break (
+                    candidate,
+                    &diag::AVOID_RETURNING_NULL_FOR_VOID_FROM_FUNCTION,
+                );
+            }
+            _ => current = candidate,
+        }
     };
     let Some(ty) = declared_type(c, owner) else {
         return;

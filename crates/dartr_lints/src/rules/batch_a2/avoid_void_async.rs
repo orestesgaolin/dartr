@@ -45,10 +45,20 @@ fn check(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         }
         _ => false,
     };
-    if is_async
-        && return_type.and_then(|ty| super::helpers::annotation_type(context, ty.raw()))
-            == Some(TypeId::VOID)
-    {
+    let returns_void = return_type.is_some_and(|ty| {
+        super::helpers::annotation_type(context, ty.raw()) == Some(TypeId::VOID)
+            || context
+                .ast
+                .cast::<NamedType>(ty.raw())
+                .is_some_and(|named| {
+                    let named = &context.ast[named];
+                    named.import_prefix.is_none()
+                        && named.type_arguments.is_none()
+                        && named.question.is_none()
+                        && context.ast.tokens.lexeme(named.name) == "void"
+                })
+    });
+    if is_async && returns_void {
         context.report_token(out, &diag::AVOID_VOID_ASYNC, name, &[]);
     }
 }

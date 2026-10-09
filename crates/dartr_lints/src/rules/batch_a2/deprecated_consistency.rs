@@ -3,7 +3,7 @@
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
-use dartr_element::FieldFormalParameterElement;
+use dartr_element::{ConstructorElement, FieldFormalParameterElement};
 use dartr_typesystem::{TypeExt, member};
 
 pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
@@ -24,19 +24,38 @@ pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
     );
 }
 pub(super) fn has_deprecated(context: &LinterContext<'_>, metadata: NodeList<Annotation>) -> bool {
+    has_annotation(
+        context,
+        metadata,
+        "dart:core",
+        &["deprecated", "Deprecated"],
+    )
+}
+
+pub(super) fn has_annotation(
+    context: &LinterContext<'_>,
+    metadata: NodeList<Annotation>,
+    expected_library: &str,
+    expected_names: &[&str],
+) -> bool {
     let Some(resolved) = context.resolved else {
         return false;
     };
     context.ast.list(metadata).iter().any(|&annotation| {
         context.element(annotation).is_some_and(|element| {
             let base = member::base_element(&resolved.ctx, element);
-            let name = resolved.ctx.element_name(base);
-            let library = member::library(&resolved.ctx, element)
-                .and_then(|l| resolved.ctx.element_library_name(l.raw()));
-            matches!(
-                (name, library),
-                (Some("deprecated" | "Deprecated"), Some("dart.core"))
-            )
+            let name = if base.is::<ConstructorElement>() {
+                resolved
+                    .ctx
+                    .element_data(base)
+                    .and_then(|data| data.enclosing)
+                    .and_then(|enclosing| resolved.ctx.element_name(enclosing))
+            } else {
+                resolved.ctx.element_name(base)
+            };
+            let library_matches = member::library(&resolved.ctx, element)
+                .is_some_and(|library| resolved.ctx.library_uri(library) == expected_library);
+            name.is_some_and(|name| expected_names.contains(&name)) && library_matches
         })
     })
 }
@@ -91,7 +110,69 @@ fn check_constructor(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Di
         _ => return,
     };
     if !own_deprecated {
-        context.report_node(out, &diag::DEPRECATED_CONSISTENCY_CONSTRUCTOR, node, &[]);
+        report_constructor(context, node, out);
+    }
+}
+
+fn report_constructor(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
+    let range = match context.ast.kind(node) {
+        NodeKind::ConstructorDeclaration => {
+            let constructor =
+                &context.ast[context.ast.cast::<ConstructorDeclaration>(node).unwrap()];
+            let start = constructor
+                .type_name
+                .map(|name| context.ast.offset(name))
+                .or_else(|| {
+                    constructor
+                        .new_keyword
+                        .map(|keyword| context.ast.tokens.offset(keyword))
+                })
+                .or_else(|| {
+                    constructor
+                        .factory_keyword
+                        .map(|keyword| context.ast.tokens.offset(keyword))
+                });
+            start.map(|start| {
+                let end = constructor
+                    .name
+                    .map(|name| context.ast.tokens.get(name).end())
+                    .or_else(|| constructor.type_name.map(|name| context.ast.end(name)))
+                    .or_else(|| {
+                        constructor
+                            .new_keyword
+                            .map(|keyword| context.ast.tokens.get(keyword).end())
+                    })
+                    .or_else(|| {
+                        constructor
+                            .factory_keyword
+                            .map(|keyword| context.ast.tokens.get(keyword).end())
+                    })
+                    .unwrap_or(start);
+                (start, end)
+            })
+        }
+        NodeKind::PrimaryConstructorDeclaration => {
+            let constructor = &context.ast[context
+                .ast
+                .cast::<PrimaryConstructorDeclaration>(node)
+                .unwrap()];
+            let start = context.ast.tokens.offset(constructor.type_name);
+            let end = constructor
+                .constructor_name
+                .map(|name| context.ast.tokens.get(context.ast[name].name).end())
+                .unwrap_or_else(|| context.ast.tokens.get(constructor.type_name).end());
+            Some((start, end))
+        }
+        _ => None,
+    };
+    if let Some((start, end)) = range {
+        context.report_offset(
+            out,
+            &diag::DEPRECATED_CONSISTENCY_CONSTRUCTOR,
+            start as usize,
+            (end - start) as usize,
+            &[],
+        );
     }
 }
 

@@ -76,8 +76,13 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         return;
     };
     if expression_type == dartr_element::TypeId::DYNAMIC
-        || !(r.ctx.is_dart_async_future(expression_type)
-            || r.ctx.is_dart_async_future_or(expression_type))
+        || !(r
+            .ctx
+            .as_instance_of(expression_type, r.ctx.tp.future_element().upcast())
+            .is_some()
+            || r.ctx
+                .as_instance_of(expression_type, r.ctx.tp.future_or_element().upcast())
+                .is_some())
     {
         return;
     }

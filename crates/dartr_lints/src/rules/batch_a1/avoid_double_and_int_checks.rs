@@ -4,6 +4,7 @@ use super::helpers::{lexeme, node_type};
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::{Id, IfStatement, IsExpression, NodeId, NodeKind, SimpleIdentifier};
 use dartr_diagnostics::{Diagnostic, diag};
+use dartr_element::AnyElement;
 use dartr_typesystem::TypeExt;
 
 pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
@@ -31,9 +32,18 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     if lexeme(c, c.ast[left].token) != lexeme(c, c.ast[right].token) {
         return;
     }
+    let variable = c
+        .element(left)
+        .and_then(|element| super::helpers::base_element(c, element));
+    let is_local_or_parameter = variable.is_some_and(|element| {
+        matches!(
+            r.ctx.any(element),
+            AnyElement::FormalParameter(_) | AnyElement::LocalVariable(_)
+        )
+    });
     if node_type(c, c.ast[first].type_).is_some_and(|t| r.ctx.is_dart_core_double(t))
         && node_type(c, c.ast[second].type_).is_some_and(|t| r.ctx.is_dart_core_int(t))
-        && c.element(left).is_some()
+        && is_local_or_parameter
         && c.element(left) == c.element(right)
     {
         c.report_node(out, &diag::AVOID_DOUBLE_AND_INT_CHECKS, second, &[]);

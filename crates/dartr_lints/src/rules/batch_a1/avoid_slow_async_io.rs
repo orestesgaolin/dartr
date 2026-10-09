@@ -1,10 +1,10 @@
 // Dart source: pkg/linter/lib/src/rules/avoid_slow_async_io.dart
 
-use super::helpers::{element_library_uri, element_name};
+use super::helpers::{base_element, element_library_uri, element_name};
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::{Id, MethodInvocation, NodeId, NodeKind};
 use dartr_diagnostics::{Diagnostic, diag};
-use dartr_element::ElemRef;
+use dartr_element::{AnyElement, ClassElement, ElemRef};
 use dartr_typesystem::member;
 
 pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
@@ -17,12 +17,21 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(element) = c.element(n.method_name) else {
         return;
     };
+    let Some(base) = base_element(c, element) else {
+        return;
+    };
+    if !matches!(r.ctx.any(base), AnyElement::Method(_)) {
+        return;
+    }
     if element_library_uri(c, element) != Some("dart:io") {
         return;
     }
     let Some(enclosing) = member::enclosing_element(&r.ctx, element) else {
         return;
     };
+    if !enclosing.is::<ClassElement>() {
+        return;
+    }
     let class_name = element_name(c, ElemRef::Base(enclosing));
     let method_name = element_name(c, element);
     let slow = class_name == Some("File") && method_name == Some("lastModified")

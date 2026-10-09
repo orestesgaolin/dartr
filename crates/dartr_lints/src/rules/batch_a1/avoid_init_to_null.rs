@@ -51,6 +51,25 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     if default.is_some_and(|value| is_null_literal(c.ast, value))
         && declared_type(c, node).is_some_and(|ty| ts.is_nullable(ty))
     {
+        if c.ast.kind(node) == NodeKind::SuperFormalParameter {
+            let Some(r) = c.resolved else { return };
+            let Some(parameter) = c
+                .declared_element(node)
+                .and_then(|element| element.cast::<dartr_element::FormalParameterElement>())
+            else {
+                return;
+            };
+            let Some(super_parameter) =
+                dartr_link::outline::super_constructor_parameter(&r.ctx, parameter)
+            else {
+                return;
+            };
+            if c.default_value(dartr_element::ElemRef::Base(super_parameter.raw()))
+                .is_some_and(|value| !value.is_null())
+            {
+                return;
+            }
+        }
         c.report_node(out, &diag::AVOID_INIT_TO_NULL, node, &[]);
     }
 }

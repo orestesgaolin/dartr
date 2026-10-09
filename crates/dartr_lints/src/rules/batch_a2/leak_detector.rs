@@ -3,7 +3,11 @@
 use crate::LinterContext;
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, DiagnosticCode};
-use dartr_element::{ElemRef, ElementId, FieldFormalParameterElement, FragmentFlags};
+use dartr_element::{
+    ElemRef, ElementId, ExtensionTypeElement, FieldElement, FieldFormalParameterElement,
+    FormalParameterElement, FragmentFlags, GetterElement, LocalVariableElement, SetterElement,
+    TopLevelVariableElement,
+};
 use dartr_typesystem::{TypeExt, member};
 
 pub struct LeakKind {
@@ -139,7 +143,7 @@ fn check_element(
     else {
         return;
     };
-    if has_valid_use(context, root, element, local, kind.method) {
+    if has_valid_use(context, root, report_node, element, local, kind.method) {
         return;
     }
     context.report_node(out, code, report_node, &[]);
@@ -149,13 +153,58 @@ fn identifier_matches(context: &LinterContext<'_>, node: NodeId, variable: Eleme
     context.ast.kind(node) == NodeKind::SimpleIdentifier
         && context
             .element(node)
-            .and_then(|e| super::helpers::base_element(context, e))
-            == Some(variable)
+            .is_some_and(|element| element_matches(context, element, variable))
+}
+
+fn element_matches(context: &LinterContext<'_>, element: ElemRef, variable: ElementId) -> bool {
+    let Some(resolved) = context.resolved else {
+        return false;
+    };
+    let base = member::base_element(&resolved.ctx, element);
+    let candidate = if let Some(getter) = base.cast::<GetterElement>() {
+        resolved.ctx.get(getter).variable.get().map(|id| id.raw())
+    } else if let Some(setter) = base.cast::<SetterElement>() {
+        resolved.ctx.get(setter).variable.get().map(|id| id.raw())
+    } else {
+        Some(base)
+    };
+    let Some(candidate) = candidate else {
+        return false;
+    };
+    if candidate == variable {
+        return true;
+    }
+    representation_variable(context, candidate) == Some(variable)
+        || representation_variable(context, variable) == Some(candidate)
+}
+
+fn representation_variable(context: &LinterContext<'_>, variable: ElementId) -> Option<ElementId> {
+    if !variable.is::<FieldElement>()
+        && !variable.is::<TopLevelVariableElement>()
+        && !variable.is::<LocalVariableElement>()
+        && !variable.is::<FormalParameterElement>()
+    {
+        return None;
+    }
+    let resolved = context.resolved?;
+    let ty = member::type_(&resolved.ctx, ElemRef::Base(variable));
+    let extension = resolved
+        .ctx
+        .interface_element(ty)?
+        .raw()
+        .cast::<ExtensionTypeElement>()?;
+    resolved
+        .ctx
+        .get(extension)
+        .fields
+        .first()
+        .map(|field| field.raw())
 }
 
 fn has_valid_use(
     context: &LinterContext<'_>,
     root: NodeId,
+    variable_node: NodeId,
     variable: ElementId,
     local: bool,
     required_method: &str,
@@ -170,6 +219,19 @@ fn has_valid_use(
                     && n.target
                         .is_some_and(|target| target_contains(context, target.raw(), variable))
                 {
+                    return true;
+                }
+                if method == required_method
+                    && n.target.is_some()
+                    && std::iter::successors(Some(node), |node| context.ast.parent(*node))
+                        .any(|ancestor| ancestor == variable_node)
+                {
+                    return true;
+                }
+                if n.target.is_some_and(|target| {
+                    context.ast.kind(target) == NodeKind::SimpleIdentifier
+                        && identifier_matches(context, target.raw(), variable)
+                }) {
                     return true;
                 }
                 for &argument in context.ast.list(context.ast[n.argument_list].arguments) {
@@ -258,7 +320,7 @@ fn target_contains(context: &LinterContext<'_>, target: NodeId, variable: Elemen
 }
 
 fn canonical_assignment_target(context: &LinterContext<'_>, node: NodeId) -> Option<ElementId> {
-    context
+    let element = context
         .element(node)
         .and_then(|element| super::helpers::base_element(context, element))
         .or_else(|| {
@@ -267,7 +329,15 @@ fn canonical_assignment_target(context: &LinterContext<'_>, node: NodeId) -> Opt
                 .cast::<PropertyAccess>(node)
                 .and_then(|property| context.element(context.ast[property].property_name))
                 .and_then(|element| super::helpers::base_element(context, element))
-        })
+        })?;
+    let resolved = context.resolved?;
+    if let Some(getter) = element.cast::<GetterElement>() {
+        return resolved.ctx.get(getter).variable.get().map(|id| id.raw());
+    }
+    if let Some(setter) = element.cast::<SetterElement>() {
+        return resolved.ctx.get(setter).variable.get().map(|id| id.raw());
+    }
+    Some(element)
 }
 
 fn assignment_property_has_name(

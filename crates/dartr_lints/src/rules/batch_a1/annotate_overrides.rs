@@ -28,13 +28,16 @@ fn check_member(
     out: &mut Vec<Diagnostic>,
 ) {
     let Some(r) = c.resolved else { return };
-    if has_resolved_annotation(c, owner, "override") {
+    if has_resolved_annotation(c, owner, "override")
+        || has_resolved_annotation(c, declaration, "override")
+    {
         return;
     }
     // Metadata constants are not exposed by the resolver yet. If this
     // declaration has unresolved metadata, it may be `@override`.
     if super::helpers::metadata(c.ast, owner)
         .into_iter()
+        .chain(super::helpers::metadata(c.ast, declaration))
         .any(|annotation| c.element(annotation).is_none())
     {
         return;
@@ -76,13 +79,19 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             if n.augment_keyword.is_none()
                 && n.modifier_keyword
                     .is_none_or(|k| c.ast.tokens.lexeme(k) != "static")
+                && super::helpers::ancestor(c.ast, node, NodeKind::ExtensionTypeDeclaration)
+                    .is_none()
             {
                 check_member(c, node, node, n.name, out);
             }
         }
         NodeKind::FieldDeclaration => {
             let n = &c.ast[Id::<FieldDeclaration>::from_raw(node)];
-            if n.augment_keyword.is_some() || n.static_keyword.is_some() {
+            if n.augment_keyword.is_some()
+                || n.static_keyword.is_some()
+                || super::helpers::ancestor(c.ast, node, NodeKind::ExtensionTypeDeclaration)
+                    .is_some()
+            {
                 return;
             }
             for variable in c.ast.list(c.ast[n.fields].variables) {
@@ -91,13 +100,20 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         }
         NodeKind::PrimaryConstructorDeclaration => {
             let n = &c.ast[Id::<PrimaryConstructorDeclaration>::from_raw(node)];
-            if super::helpers::ancestor(c.ast, node, NodeKind::ClassDeclaration).is_some_and(
-                |class| {
-                    c.ast[Id::<dartr_ast::ClassDeclaration>::from_raw(class)]
-                        .augment_keyword
-                        .is_some()
-                },
-            ) {
+            let class = super::helpers::ancestor(c.ast, node, NodeKind::ClassDeclaration);
+            let enum_ = super::helpers::ancestor(c.ast, node, NodeKind::EnumDeclaration);
+            if class.is_none() && enum_.is_none() {
+                return;
+            }
+            if class.is_some_and(|class| {
+                c.ast[Id::<dartr_ast::ClassDeclaration>::from_raw(class)]
+                    .augment_keyword
+                    .is_some()
+            }) || enum_.is_some_and(|enum_| {
+                c.ast[Id::<dartr_ast::EnumDeclaration>::from_raw(enum_)]
+                    .augment_keyword
+                    .is_some()
+            }) {
                 return;
             }
             for parameter in c.ast.list_raw(c.ast[n.formal_parameters].parameters) {

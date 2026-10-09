@@ -39,16 +39,42 @@ fn parameters(c: &LinterContext<'_>, node: NodeId) -> Option<Id<FormalParameterL
     }
 }
 
+fn is_augmentation(c: &LinterContext<'_>, node: NodeId) -> bool {
+    match c.ast.kind(node) {
+        NodeKind::ConstructorDeclaration => c.ast[Id::<ConstructorDeclaration>::from_raw(node)]
+            .augment_keyword
+            .is_some(),
+        NodeKind::FunctionDeclaration => c.ast[Id::<FunctionDeclaration>::from_raw(node)]
+            .augment_keyword
+            .is_some(),
+        NodeKind::MethodDeclaration => c.ast[Id::<MethodDeclaration>::from_raw(node)]
+            .augment_keyword
+            .is_some(),
+        NodeKind::PrimaryConstructorDeclaration => {
+            super::helpers::ancestor(c.ast, node, NodeKind::ClassDeclaration).is_some_and(|class| {
+                c.ast[Id::<ClassDeclaration>::from_raw(class)]
+                    .augment_keyword
+                    .is_some()
+            }) || super::helpers::ancestor(c.ast, node, NodeKind::EnumDeclaration).is_some_and(
+                |enum_| {
+                    c.ast[Id::<EnumDeclaration>::from_raw(enum_)]
+                        .augment_keyword
+                        .is_some()
+                },
+            ) || super::helpers::ancestor(c.ast, node, NodeKind::ExtensionTypeDeclaration)
+                .is_some_and(|extension| {
+                    c.ast[Id::<ExtensionTypeDeclaration>::from_raw(extension)]
+                        .augment_keyword
+                        .is_some()
+                })
+        }
+        _ => false,
+    }
+}
+
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(r) = c.resolved else { return };
-    if matches!(
-        c.ast.kind(node),
-        NodeKind::ConstructorDeclaration
-            | NodeKind::FunctionDeclaration
-            | NodeKind::MethodDeclaration
-            | NodeKind::PrimaryConstructorDeclaration
-    ) && c.text(node).trim_start().starts_with("augment ")
-    {
+    if is_augmentation(c, node) {
         return;
     }
     if c.ast.kind(node) != NodeKind::GenericFunctionType {

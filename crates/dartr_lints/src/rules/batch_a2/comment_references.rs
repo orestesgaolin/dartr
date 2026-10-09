@@ -4,13 +4,46 @@ use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
 
-pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
+pub fn register(registry: &mut RuleVisitorRegistry, context: &LinterContext<'_>) {
     registry.add(NodeKind::Comment, "comment_references", check_comment);
-    registry.add(
-        NodeKind::CommentReference,
-        "comment_references",
-        check_reference,
-    );
+    if has_resolved_comment_reference(context) {
+        registry.add(
+            NodeKind::CommentReference,
+            "comment_references",
+            check_reference,
+        );
+    }
+}
+
+fn reference_element(
+    context: &LinterContext<'_>,
+    expression: NodeId,
+) -> Option<dartr_element::ElemRef> {
+    match context.ast.kind(expression) {
+        NodeKind::SimpleIdentifier => context.element(expression),
+        NodeKind::PrefixedIdentifier => context
+            .element(context.ast[context.ast.cast::<PrefixedIdentifier>(expression)?].identifier),
+        NodeKind::PropertyAccess => context
+            .element(context.ast[context.ast.cast::<PropertyAccess>(expression)?].property_name),
+        _ => context.element(expression),
+    }
+}
+
+fn has_resolved_comment_reference(context: &LinterContext<'_>) -> bool {
+    std::iter::once(*context)
+        .chain(
+            (0..context.resolved_units.len())
+                .filter(|&index| index != context.current_unit)
+                .filter_map(|index| context.resolved_unit(index)),
+        )
+        .any(|unit| {
+            (0..unit.ast.node_count())
+                .map(NodeId::from_index)
+                .filter_map(|node| unit.ast.cast::<CommentReference>(node))
+                .any(|reference| {
+                    reference_element(&unit, unit.ast[reference].expression.raw()).is_some()
+                })
+        })
 }
 fn check_comment(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let n = &context.ast[context.ast.cast::<Comment>(node).unwrap()];
@@ -39,57 +72,96 @@ fn check_comment(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagno
         }
     }
 }
+fn comment_link_references(context: &LinterContext<'_>, node: NodeId) -> Vec<String> {
+    let Some(comment) = super::helpers::ancestors(context.ast, node)
+        .find_map(|ancestor| context.ast.cast::<Comment>(ancestor))
+    else {
+        return Vec::new();
+    };
+    let mut references = Vec::new();
+    for &token in context.ast.token_list(context.ast[comment].tokens) {
+        let text = context.ast.tokens.lexeme(token);
+        let Some(left) = text.find('[') else {
+            continue;
+        };
+        let Some(right) = text[left + 1..].find(']').map(|index| left + 1 + index) else {
+            continue;
+        };
+        let prefix = &text[..left];
+        let slash_count = prefix.bytes().take_while(|&byte| byte == b'/').count();
+        let is_comment_start =
+            slash_count >= 3 && prefix[slash_count..].chars().all(char::is_whitespace);
+        if is_comment_start && text.as_bytes().get(right + 1) == Some(&b':') {
+            references.push(text[left + 1..right].to_string());
+        }
+    }
+    references
+}
+
+fn identifier_name(context: &LinterContext<'_>, expression: NodeId) -> Option<String> {
+    match context.ast.kind(expression) {
+        NodeKind::SimpleIdentifier => Some(
+            context
+                .ast
+                .tokens
+                .lexeme(context.ast[context.ast.cast::<SimpleIdentifier>(expression)?].token)
+                .to_string(),
+        ),
+        NodeKind::PrefixedIdentifier => {
+            let identifier = &context.ast[context.ast.cast::<PrefixedIdentifier>(expression)?];
+            Some(format!(
+                "{}.{}",
+                context
+                    .ast
+                    .tokens
+                    .lexeme(context.ast[identifier.prefix].token),
+                context
+                    .ast
+                    .tokens
+                    .lexeme(context.ast[identifier.identifier].token)
+            ))
+        }
+        _ => None,
+    }
+}
+
 fn check_reference(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let n = &context.ast[context.ast.cast::<CommentReference>(node).unwrap()];
     if n.is_synthetic || context.is_synthetic(n.expression) {
         return;
     }
-    match context.ast.kind(n.expression) {
-        NodeKind::SimpleIdentifier | NodeKind::PrefixedIdentifier
-            if context.element(n.expression).is_none()
-                && !is_link_reference(context, node, &context.text(n.expression)) =>
+    let expression = n.expression.raw();
+    let link_references = comment_link_references(context, node);
+    if Identifier::test(context.ast.kind(expression)) {
+        if reference_element(context, expression).is_none()
+            && identifier_name(context, expression)
+                .is_some_and(|name| !link_references.contains(&name))
         {
-            context.report_node(out, &diag::COMMENT_REFERENCES, n.expression, &[]);
+            context.report_node(out, &diag::COMMENT_REFERENCES, expression, &[]);
         }
-        NodeKind::PropertyAccess => {
-            let p = &context.ast[context.ast.cast::<PropertyAccess>(n.expression).unwrap()];
-            if context.element(p.property_name).is_none()
-                && p.target.is_some_and(|target| {
-                    context.ast.kind(target) == NodeKind::PrefixedIdentifier
-                        && !is_link_reference(context, node, &context.text(n.expression))
-                })
-            {
-                context.report_node(out, &diag::COMMENT_REFERENCES, n.expression, &[]);
+    } else if let Some(property) = context.ast.cast::<PropertyAccess>(expression) {
+        let property = &context.ast[property];
+        if context.element(property.property_name).is_none()
+            && let Some(target) = property
+                .target
+                .and_then(|target| context.ast.cast::<PrefixedIdentifier>(target.raw()))
+        {
+            let target = &context.ast[target];
+            let name = format!(
+                "{}.{}.{}",
+                context.ast.tokens.lexeme(context.ast[target.prefix].token),
+                context
+                    .ast
+                    .tokens
+                    .lexeme(context.ast[target.identifier].token),
+                context
+                    .ast
+                    .tokens
+                    .lexeme(context.ast[property.property_name].token)
+            );
+            if !link_references.contains(&name) {
+                context.report_node(out, &diag::COMMENT_REFERENCES, expression, &[]);
             }
         }
-        _ => {}
     }
-}
-
-fn is_link_reference(context: &LinterContext<'_>, node: NodeId, name: &str) -> bool {
-    let Some(comment) =
-        std::iter::successors(context.ast.parent(node), |node| context.ast.parent(*node))
-            .find_map(|node| context.ast.cast::<Comment>(node))
-    else {
-        return false;
-    };
-    context
-        .ast
-        .token_list(context.ast[comment].tokens)
-        .iter()
-        .any(|&token| {
-            let text = context.ast.tokens.lexeme(token);
-            let Some(left) = text.find('[') else {
-                return false;
-            };
-            let prefix = &text[..left];
-            let slash_count = prefix.chars().take_while(|&c| c == '/').count();
-            if slash_count < 3 || !prefix[slash_count..].trim().is_empty() {
-                return false;
-            }
-            let Some(right) = text[left + 1..].find(']').map(|i| left + 1 + i) else {
-                return false;
-            };
-            text.get(right + 1..right + 2) == Some(":") && &text[left + 1..right] == name
-        })
 }

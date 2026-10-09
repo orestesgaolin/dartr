@@ -212,6 +212,19 @@ fn resolution_facts(
                     .uri
                     .as_ref()
             });
+        let metadata = |element| {
+            let fragment = ctx.element_data(element)?.first_fragment;
+            Some(&ctx.fragment_data(fragment)?.metadata)
+        };
+        let element_metadata = element.and_then(metadata);
+        let declared_metadata = declared.and_then(metadata);
+        let declared_type = declared.and_then(|element| match ctx.any(element) {
+            dartr_element::AnyElement::Field(e) => e.type_.get(),
+            dartr_element::AnyElement::TopLevelVariable(e) => e.type_.get(),
+            dartr_element::AnyElement::FormalParameter(e) => e.type_.get(),
+            dartr_element::AnyElement::LocalVariable(e) => e.type_.get(),
+            _ => None,
+        });
         out.push(
             json!({"kind":unit.ast.kind(node).name(), "offset":unit.ast.offset(node),
             "length":unit.ast.length(node),
@@ -219,6 +232,11 @@ fn resolution_facts(
             "annotationType":unit.tables.annotation_type.get(node).copied().map(display),
             "elementName":element_name,"elementLibrary":library_uri,
             "declaredKind":declared.map(|e|format!("{:?}",e.kind())),
+            "declaredType":declared_type.map(display),
+            "elementMetadataAnnotations":element_metadata.map(|m|m.annotations.len()),
+            "elementMetadataFlags":element_metadata.and_then(|m|m.metadata_flags.try_get().copied()),
+            "declaredMetadataAnnotations":declared_metadata.map(|m|m.annotations.len()),
+            "declaredMetadataFlags":declared_metadata.and_then(|m|m.metadata_flags.try_get().copied()),
             "hasParameter":unit.tables.param_element.get(node).is_some(),
             "hasReadElement":unit.tables.read_element.get(node).is_some(),
             "hasWriteElement":unit.tables.write_element.get(node).is_some()}),

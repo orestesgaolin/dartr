@@ -22,19 +22,30 @@ fn report(
     type_node: NodeId,
     report_node: NodeId,
     name: &str,
+    constructor: Option<dartr_element::ElementId>,
     out: &mut Vec<Diagnostic>,
 ) {
     let Some(resolved) = context.resolved else {
         return;
     };
-    let Some(ty) = context.static_type(type_node) else {
-        return;
+    let core_class = constructor
+        .and_then(|constructor| resolved.ctx.element_data(constructor))
+        .and_then(|data| data.enclosing)
+        .filter(|enclosing| resolved.ctx.element_library_uri(*enclosing) == Some("dart:core"))
+        .and_then(|enclosing| resolved.ctx.element_name(enclosing));
+    let applies = if let Some(class) = core_class {
+        (name == "fromEnvironment" && matches!(class, "bool" | "int" | "String"))
+            || (name == "hasEnvironment" && class == "bool")
+    } else {
+        let Some(ty) = context.static_type(type_node) else {
+            return;
+        };
+        (name == "fromEnvironment"
+            && (resolved.ctx.is_dart_core_bool(ty)
+                || resolved.ctx.is_dart_core_int(ty)
+                || resolved.ctx.is_dart_core_string(ty)))
+            || (name == "hasEnvironment" && resolved.ctx.is_dart_core_bool(ty))
     };
-    let applies = (name == "fromEnvironment"
-        && (resolved.ctx.is_dart_core_bool(ty)
-            || resolved.ctx.is_dart_core_int(ty)
-            || resolved.ctx.is_dart_core_string(ty)))
-        || (name == "hasEnvironment" && resolved.ctx.is_dart_core_bool(ty));
     if applies {
         context.report_node(out, &diag::DO_NOT_USE_ENVIRONMENT, report_node, &[]);
     }
@@ -50,7 +61,17 @@ fn check(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                 .ast
                 .tokens
                 .lexeme(context.ast[n.constructor_name].token);
-            report(context, node, n.constructor_name.raw(), name, out);
+            let constructor = context
+                .element(n.constructor_name)
+                .and_then(|element| super::helpers::base_element(context, element));
+            report(
+                context,
+                node,
+                n.constructor_name.raw(),
+                name,
+                constructor,
+                out,
+            );
         }
         NodeKind::InstanceCreationExpression => {
             let n = &context.ast[context
@@ -74,7 +95,14 @@ fn check(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                 return;
             };
             if base.is::<dartr_element::ConstructorElement>() {
-                report(context, node, n.constructor_name.raw(), name, out);
+                report(
+                    context,
+                    node,
+                    n.constructor_name.raw(),
+                    name,
+                    Some(base),
+                    out,
+                );
             }
         }
         _ => {}

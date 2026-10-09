@@ -2,7 +2,6 @@
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
-use dartr_element::{Nullability, TypeKind};
 use dartr_typesystem::TypeExt;
 use dartr_typesystem::member;
 
@@ -80,13 +79,7 @@ fn check(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             };
             let name = method_name(ctx, n);
             if resolved.ctx.is_dart_core_string(ty)
-                && matches!(
-                    resolved.ctx.ty(ty),
-                    TypeKind::Interface {
-                        nullability: Nullability::None,
-                        ..
-                    }
-                )
+                && ctx.type_system().unwrap().is_non_nullable(ty)
                 && name == "toString"
                 || resolved.ctx.is_dart_core_int(ty)
                     && matches!(name, "toInt" | "round" | "ceil" | "floor" | "truncate")

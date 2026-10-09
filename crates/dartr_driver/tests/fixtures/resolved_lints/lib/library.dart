@@ -7,3 +7,4 @@ void clean() {}
 void ordered({required int requiredValue, int optional = 0}) {}
 // ignore: avoid_void_async
 void ignoredAsync() async {}
+void crossPartDefault() { takes(value: 42); }

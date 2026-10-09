@@ -3,6 +3,7 @@
 use crate::{ExperimentalFlag, LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
+use dartr_typesystem::TypeExt;
 
 pub fn register(registry: &mut RuleVisitorRegistry, context: &LinterContext<'_>) {
     if !context.is_feature_enabled(ExperimentalFlag::Patterns) {
@@ -17,6 +18,24 @@ fn unparenthesized(ast: &Ast, mut node: NodeId) -> NodeId {
     }
     node
 }
+
+fn is_dart_core_identifier(
+    context: &LinterContext<'_>,
+    identifier: Id<SimpleIdentifier>,
+    name: &str,
+) -> bool {
+    if context.ast.tokens.lexeme(context.ast[identifier].token) != name {
+        return false;
+    }
+    let Some(resolved) = context.resolved else {
+        return false;
+    };
+    context.element(identifier).is_some_and(|element| {
+        dartr_typesystem::member::library(&resolved.ctx, element)
+            .is_some_and(|library| resolved.ctx.library_uri(library) == "dart:core")
+    })
+}
+
 fn check(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let case = &context.ast[context.ast.cast::<SwitchCase>(node).unwrap()];
     let expression = unparenthesized(context.ast, case.expression.raw());
@@ -30,12 +49,7 @@ fn check(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             .is_none(),
         NodeKind::MethodInvocation => {
             let n = &context.ast[context.ast.cast::<MethodInvocation>(expression).unwrap()];
-            context.ast.tokens.lexeme(context.ast[n.method_name].token) == "identical"
-                && context.element(n.method_name).is_some_and(|e| {
-                    context
-                        .resolved
-                        .is_some_and(|r| dartr_typesystem::member::is_object_member(&r.ctx, e))
-                })
+            is_dart_core_identifier(context, n.method_name, "identical")
         }
         NodeKind::PrefixExpression => {
             let n = &context.ast[context.ast.cast::<PrefixExpression>(expression).unwrap()];
@@ -46,11 +60,7 @@ fn check(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         }
         NodeKind::PropertyAccess => {
             let n = &context.ast[context.ast.cast::<PropertyAccess>(expression).unwrap()];
-            context
-                .ast
-                .tokens
-                .lexeme(context.ast[n.property_name].token)
-                == "length"
+            is_dart_core_identifier(context, n.property_name, "length")
         }
         NodeKind::InstanceCreationExpression => {
             let n = &context.ast[context

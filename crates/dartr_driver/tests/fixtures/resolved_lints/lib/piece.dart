@@ -2,3 +2,5 @@ part of 'library.dart';
 void partAsync() async {}
 Future<void> goodAsync() async {}
 bool keep(bool condition) => condition ? true : false;
+const answer = 42;
+void takes({int value = answer}) {}

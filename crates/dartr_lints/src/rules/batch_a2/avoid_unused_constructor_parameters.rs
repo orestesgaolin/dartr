@@ -3,7 +3,7 @@
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
-use dartr_element::ElementId;
+use dartr_element::{ElementId, FieldFormalParameterElement, SuperFormalParameterElement};
 use indexmap::IndexMap;
 
 pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
@@ -94,6 +94,19 @@ fn check(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         let Some(element) = context.declared_element(parameter) else {
             continue;
         };
+        if element.is::<FieldFormalParameterElement>()
+            || element.is::<SuperFormalParameterElement>()
+            || super::deprecated_consistency::has_deprecated(
+                context,
+                context.ast[context
+                    .ast
+                    .cast::<RegularFormalParameter>(parameter)
+                    .unwrap()]
+                .metadata,
+            )
+        {
+            continue;
+        }
         unused.insert(element, (parameter.raw(), name));
     }
     let mut pending = std::mem::take(&mut roots);

@@ -3,21 +3,46 @@ use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
 use dartr_element::TypeKind;
-use dartr_typesystem::member;
+use dartr_typesystem::{TypeExt, member};
 pub fn register(r: &mut RuleVisitorRegistry) {
     r.add_null_assert_pattern("null_check_on_nullable_type_parameter", check);
     r.add_postfix_expression("null_check_on_nullable_type_parameter", check);
 }
 fn expected(ctx: &LinterContext<'_>, node: NodeId) -> Option<dartr_element::TypeId> {
-    let p = ctx.ast.parent(node)?;
+    let mut real_node = node;
+    while let Some(parent) = ctx.ast.parent(real_node)
+        && ctx.ast.kind(parent) == NodeKind::ParenthesizedExpression
+    {
+        real_node = parent;
+    }
+    let mut p = ctx.ast.parent(real_node)?;
+    let with_await = ctx.ast.kind(p) == NodeKind::AwaitExpression;
+    if with_await {
+        p = ctx.ast.parent(p)?;
+    }
     match ctx.ast.kind(p) {
-        NodeKind::AssignmentExpression => ctx.resolved?.tables.write_type.get(p).copied(),
+        NodeKind::AssignmentExpression => {
+            let assignment = &ctx.ast[Id::<AssignmentExpression>::from_raw(p)];
+            if ctx.ast.tokens.lexeme(assignment.operator) != "="
+                || assignment.right_hand_side.raw() != real_node
+            {
+                return None;
+            }
+            if ctx.ast.kind(assignment.left_hand_side) == NodeKind::SimpleIdentifier
+                && ctx
+                    .ast
+                    .kind(ctx.ast[Id::<PostfixExpression>::from_raw(node)].operand)
+                    == NodeKind::SimpleIdentifier
+                && ctx.element(assignment.left_hand_side)
+                    == ctx.element(ctx.ast[Id::<PostfixExpression>::from_raw(node)].operand)
+            {
+                return None;
+            }
+            ctx.resolved?.tables.write_type.get(p).copied()
+        }
         NodeKind::NamedArgument | NodeKind::ArgumentList => ctx
-            .resolved?
-            .tables
-            .param_element
-            .get(node)
-            .copied()
+            .corresponding_parameter(real_node)
+            .or_else(|| ctx.corresponding_parameter(node))
             .map(|e| member::type_(&ctx.resolved.unwrap().ctx, e)),
         NodeKind::VariableDeclaration => {
             let list = ctx
@@ -28,7 +53,18 @@ fn expected(ctx: &LinterContext<'_>, node: NodeId) -> Option<dartr_element::Type
             ctx.resolved?.tables.annotation_type.get(t.raw()).copied()
         }
         NodeKind::ExpressionFunctionBody | NodeKind::ReturnStatement => {
-            enclosing_return_type(ctx, node)
+            let return_type = enclosing_return_type(ctx, node)?;
+            if with_await || enclosing_function_is_async(ctx, node) {
+                let resolved = ctx.resolved?;
+                if !resolved.ctx.is_dart_async_future(return_type)
+                    && !resolved.ctx.is_dart_async_future_or(return_type)
+                {
+                    return None;
+                }
+                Some(ctx.type_system()?.flatten(return_type))
+            } else {
+                Some(return_type)
+            }
         }
         NodeKind::YieldStatement => {
             let return_type = enclosing_return_type(ctx, node)?;
@@ -44,6 +80,38 @@ fn expected(ctx: &LinterContext<'_>, node: NodeId) -> Option<dartr_element::Type
         }
         _ => None,
     }
+}
+
+fn enclosing_function_is_async(ctx: &LinterContext<'_>, mut node: NodeId) -> bool {
+    while let Some(parent) = ctx.ast.parent(node) {
+        let body = match ctx.ast.kind(parent) {
+            NodeKind::FunctionExpression => {
+                Some(ctx.ast[Id::<FunctionExpression>::from_raw(parent)].body)
+            }
+            NodeKind::FunctionDeclaration => Some(
+                ctx.ast[ctx.ast[Id::<FunctionDeclaration>::from_raw(parent)].function_expression]
+                    .body,
+            ),
+            NodeKind::MethodDeclaration => {
+                Some(ctx.ast[Id::<MethodDeclaration>::from_raw(parent)].body)
+            }
+            _ => None,
+        };
+        if let Some(body) = body {
+            let keyword = match ctx.ast.kind(body) {
+                NodeKind::BlockFunctionBody => {
+                    ctx.ast[Id::<BlockFunctionBody>::from_raw(body.raw())].keyword
+                }
+                NodeKind::ExpressionFunctionBody => {
+                    ctx.ast[Id::<ExpressionFunctionBody>::from_raw(body.raw())].keyword
+                }
+                _ => None,
+            };
+            return keyword.is_some_and(|keyword| ctx.ast.tokens.lexeme(keyword) == "async");
+        }
+        node = parent;
+    }
+    false
 }
 
 fn interface_type_argument(

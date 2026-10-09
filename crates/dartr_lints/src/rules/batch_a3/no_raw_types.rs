@@ -48,15 +48,29 @@ fn check(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(resolved) = ctx.resolved else {
         return;
     };
+    if ctx.element(node).is_none() {
+        return;
+    }
     let Some(ty) = resolved.tables.annotation_type.get(node).copied() else {
         return;
     };
-    let args = match *resolved.ctx.ty(ty) {
-        TypeKind::Interface { args, .. } => resolved.ctx.list(args),
-        _ => return,
+    let kind = *resolved.ctx.ty(ty);
+    let alias = match kind {
+        TypeKind::Interface { alias, .. }
+        | TypeKind::Record { alias, .. }
+        | TypeKind::TypeParameter { alias, .. } => alias,
+        TypeKind::Function(function) => function.alias,
+        _ => None,
+    };
+    let args = match alias {
+        Some(alias) => resolved.ctx.list(resolved.ctx.alias(alias).args),
+        None => match kind {
+            TypeKind::Interface { args, .. } => resolved.ctx.list(args),
+            _ => return,
+        },
     };
     if args.contains(&dartr_element::TypeId::DYNAMIC) {
-        let text = ctx.text(node);
-        ctx.report_node(out, &diag::NO_RAW_TYPES, node, &[&text]);
+        let type_display = dartr_element::diagnostics::type_display_string(&resolved.ctx, ty, true);
+        ctx.report_node(out, &diag::NO_RAW_TYPES, node, &[&type_display]);
     }
 }

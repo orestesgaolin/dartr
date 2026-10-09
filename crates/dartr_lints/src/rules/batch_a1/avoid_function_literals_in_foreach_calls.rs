@@ -2,7 +2,7 @@
 
 use super::helpers::lexeme;
 use crate::{LinterContext, RuleVisitorRegistry};
-use dartr_ast::{Id, MethodInvocation, NodeId, NodeKind};
+use dartr_ast::{Id, MethodInvocation, NodeId, NodeKind, NodeType};
 use dartr_diagnostics::{Diagnostic, diag};
 use dartr_typesystem::TypeExt;
 
@@ -31,12 +31,67 @@ fn chained(c: &LinterContext<'_>, mut expression: dartr_ast::Id<dartr_ast::Expre
     }
 }
 
+fn contains_null_aware(
+    c: &LinterContext<'_>,
+    mut expression: dartr_ast::Id<dartr_ast::Expression>,
+) -> bool {
+    loop {
+        if let Some(invocation) = c.ast.cast::<dartr_ast::MethodInvocation>(expression) {
+            if c.ast[invocation]
+                .operator
+                .is_some_and(|operator| lexeme(c, operator).contains('?'))
+            {
+                return true;
+            }
+            let Some(target) = c.ast[invocation].target else {
+                return false;
+            };
+            expression = target;
+        } else if let Some(access) = c.ast.cast::<dartr_ast::PropertyAccess>(expression) {
+            if lexeme(c, c.ast[access].operator).contains('?') {
+                return true;
+            }
+            let Some(target) = c.ast[access].target else {
+                return false;
+            };
+            expression = target;
+        } else if let Some(index) = c.ast.cast::<dartr_ast::IndexExpression>(expression) {
+            if c.ast[index].question.is_some() {
+                return true;
+            }
+            let Some(target) = c.ast[index].target else {
+                return false;
+            };
+            expression = target;
+        } else if let Some(prefixed) = c.ast.cast::<dartr_ast::PrefixedIdentifier>(expression) {
+            expression = c.ast[prefixed].prefix.upcast();
+        } else {
+            return false;
+        }
+    }
+}
+
+fn inside_cascade(c: &LinterContext<'_>, node: NodeId) -> bool {
+    let mut current = c.ast.parent(node);
+    while let Some(node) = current {
+        if dartr_ast::Statement::test(c.ast.kind(node)) {
+            return false;
+        }
+        if c.ast.kind(node) == NodeKind::CascadeExpression {
+            return true;
+        }
+        current = c.ast.parent(node);
+    }
+    false
+}
+
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(r) = c.resolved else { return };
     let n = &c.ast[Id::<MethodInvocation>::from_raw(node)];
     let Some(target) = n.target else { return };
     if lexeme(c, c.ast[n.method_name].token) != "forEach"
         || n.operator.is_some_and(|op| lexeme(c, op).contains('?'))
+        || contains_null_aware(c, target)
     {
         return;
     }
@@ -57,7 +112,7 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     if chained(c, target) {
         return;
     }
-    if super::helpers::ancestor(c.ast, node, NodeKind::CascadeExpression).is_some() {
+    if inside_cascade(c, node) {
         return;
     }
     c.report_node(

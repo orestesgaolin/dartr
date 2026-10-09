@@ -29,9 +29,15 @@ fn only_literals(ctx: &LinterContext<'_>, node: NodeId) -> bool {
         NodeKind::BooleanLiteral
         | NodeKind::DoubleLiteral
         | NodeKind::IntegerLiteral
+        | NodeKind::ListLiteral
         | NodeKind::NullLiteral
+        | NodeKind::RecordLiteral
+        | NodeKind::SetOrMapLiteral
         | NodeKind::SymbolLiteral
         | NodeKind::SimpleStringLiteral => true,
+        NodeKind::AdjacentStrings | NodeKind::StringInterpolation => ctx
+            .constant_value(node)
+            .is_some_and(|value| value.to_string_value().is_some()),
         NodeKind::PrefixExpression => only_literals(
             ctx,
             ctx.ast[Id::<PrefixExpression>::from_raw(node)]
@@ -51,9 +57,17 @@ fn only_literals(ctx: &LinterContext<'_>, node: NodeId) -> bool {
             let n = &ctx.ast[Id::<IsExpression>::from_raw(node)];
             // A type-parameter test requires resolution. Suppress when the annotation resolves
             // to a type parameter; the normal literal case remains exact.
-            if ctx.element(n.type_.raw()).is_some_and(|e| {
-                dartr_typesystem::member::base_element(&ctx.resolved.unwrap().ctx, e).kind()
-                    == dartr_element::ElementKind::TypeParameter
+            if ctx.resolved.is_some_and(|resolved| {
+                resolved
+                    .tables
+                    .annotation_type
+                    .get(n.type_.raw())
+                    .is_some_and(|ty| {
+                        matches!(
+                            resolved.ctx.ty(*ty),
+                            dartr_element::TypeKind::TypeParameter { .. }
+                        )
+                    })
             }) {
                 false
             } else {
@@ -76,7 +90,7 @@ fn check(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             let n = &ctx.ast[Id::<WhileStatement>::from_raw(node)];
             if ctx
                 .ast
-                .cast::<BooleanLiteral>(unparenthesized(ctx, n.condition.raw()))
+                .cast::<BooleanLiteral>(n.condition.raw())
                 .is_some_and(|b| ctx.ast[b].value)
             {
                 return;

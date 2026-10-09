@@ -33,7 +33,7 @@ fn resolved_library_lints_match_pinned_analyzer() {
         serde_json::from_str(&std::fs::read_to_string(output.join("summary.json")).unwrap())
             .unwrap();
     assert_eq!(
-        summary["oracle"], 5,
+        summary["oracle"], 6,
         "positive and clean cases must execute"
     );
 }

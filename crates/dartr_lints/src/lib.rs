@@ -45,6 +45,7 @@ pub struct ResolvedRuleContextUnit<'a> {
     pub path: &'a str,
     pub resolved: Option<ResolvedLintContext<'a>>,
 }
+#[derive(Clone, Copy)]
 pub struct LinterContext<'a> {
     pub parsed: &'a ParsedUnit,
     pub ast: &'a Ast,
@@ -53,9 +54,23 @@ pub struct LinterContext<'a> {
     pub all_units: &'a [RuleContextUnit<'a>],
     pub current_unit: usize,
     pub resolved: Option<ResolvedLintContext<'a>>,
+    pub resolved_units: &'a [ResolvedRuleContextUnit<'a>],
 }
 pub type RuleContext<'a> = LinterContext<'a>;
 impl<'a> LinterContext<'a> {
+    /// The same library context, using the selected unit's AST and local arena.
+    pub fn resolved_unit(&self, index: usize) -> Option<Self> {
+        let unit = self.resolved_units.get(index)?;
+        Some(Self {
+            parsed: unit.parsed,
+            ast: unit.ast,
+            source: unit.source,
+            path: unit.path,
+            current_unit: index,
+            resolved: unit.resolved,
+            ..*self
+        })
+    }
     pub fn constant_value(
         &self,
         node: impl Into<NodeId>,
@@ -76,6 +91,20 @@ impl<'a> LinterContext<'a> {
     }
     pub fn element(&self, node: impl Into<NodeId>) -> Option<dartr_element::ElemRef> {
         self.resolved?.tables.element.get(node.into()).copied()
+    }
+    pub fn corresponding_parameter(
+        &self,
+        node: impl Into<NodeId>,
+    ) -> Option<dartr_element::ElemRef> {
+        let node = node.into();
+        let tables = self.resolved?.tables;
+        tables.param_element.get(node).copied().or_else(|| {
+            let named = self.ast.cast::<dartr_ast::NamedArgument>(node)?;
+            tables
+                .param_element
+                .get(self.ast[named].argument_expression.raw())
+                .copied()
+        })
     }
     pub fn declared_element(&self, node: impl Into<NodeId>) -> Option<dartr_element::ElementId> {
         let resolved = self.resolved?;
@@ -308,6 +337,7 @@ pub fn lint_library(units: &[RuleContextUnit<'_>], enabled: &[&str]) -> Vec<Vec<
             all_units: units,
             current_unit: index,
             resolved: None,
+            resolved_units: &[],
         };
         let ignores = IgnoreInfo::for_dart(&ctx);
         diagnostics.retain(|diagnostic| !ignores.ignored(&ctx, diagnostic));
@@ -335,6 +365,7 @@ pub fn lint_library_unfiltered(
             all_units: units,
             current_unit: index,
             resolved: None,
+            resolved_units: &[],
         }
     };
     let mut registry = RuleVisitorRegistry::default();
@@ -355,6 +386,7 @@ pub fn lint_library_unfiltered(
     }
     let last_index = units.len() - 1;
     visitor.after_library(&context(last_index), &mut out[last_index]);
+    deduplicate_diagnostics(&mut out);
     out
 }
 
@@ -385,6 +417,7 @@ pub fn lint_resolved_library_unfiltered(
             all_units: &parsed_units,
             current_unit: index,
             resolved: unit.resolved,
+            resolved_units: units,
         }
     };
     let mut registry = RuleVisitorRegistry::default();
@@ -401,7 +434,23 @@ pub fn lint_resolved_library_unfiltered(
     }
     let last = units.len() - 1;
     visitor.after_library(&context(last), &mut out[last]);
+    deduplicate_diagnostics(&mut out);
     out
+}
+
+// Dart source: pkg/analyzer/lib/error/listener.dart (RecordingDiagnosticListener)
+fn deduplicate_diagnostics(units: &mut [Vec<Diagnostic>]) {
+    for diagnostics in units {
+        let mut seen = IndexSet::new();
+        diagnostics.retain(|diagnostic| {
+            seen.insert((
+                diagnostic.code.unique_name,
+                diagnostic.offset,
+                diagnostic.length,
+                diagnostic.message.clone(),
+            ))
+        });
+    }
 }
 
 /// Resolved counterpart of [lint_library], including ignore comments.
@@ -428,6 +477,7 @@ pub fn lint_resolved_library(
             all_units: &parsed_units,
             current_unit: index,
             resolved: unit.resolved,
+            resolved_units: units,
         };
         let ignores = IgnoreInfo::for_dart(&ctx);
         diagnostics.retain(|diagnostic| !ignores.ignored(&ctx, diagnostic));

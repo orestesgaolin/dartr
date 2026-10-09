@@ -6,7 +6,33 @@ use dartr_typesystem::{TypeExt, member};
 pub fn register(r: &mut RuleVisitorRegistry) {
     r.add(NodeKind::Annotation, "library_annotations", check);
 }
+
+fn is_checked_top_level_annotation(ctx: &LinterContext<'_>, node: NodeId) -> bool {
+    let Some(site) = ctx.ast.parent(node) else {
+        return false;
+    };
+    let Some(unit) = ctx
+        .ast
+        .parent(site)
+        .and_then(|parent| ctx.ast.cast::<CompilationUnit>(parent))
+    else {
+        return false;
+    };
+    if ctx.ast.kind(site) == NodeKind::LibraryDirective {
+        return false;
+    }
+    !ctx.ast
+        .list(ctx.ast[unit].directives)
+        .iter()
+        .any(|directive| ctx.ast.kind(*directive) == NodeKind::PartOfDirective)
+}
+
 fn check(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
+    // The Dart visitor checks metadata on non-library directives and top-level
+    // declarations only, and it skips part units entirely.
+    if !is_checked_top_level_annotation(ctx, node) {
+        return;
+    }
     let n = &ctx.ast[Id::<Annotation>::from_raw(node)];
     let Some(r) = ctx.resolved else {
         return;

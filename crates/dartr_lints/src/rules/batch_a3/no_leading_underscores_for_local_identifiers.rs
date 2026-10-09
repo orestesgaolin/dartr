@@ -56,11 +56,21 @@ fn check(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             ctx.ast[Id::<DeclaredIdentifier>::from_raw(node)].name,
             out,
         ),
-        NodeKind::DeclaredVariablePattern => check_token(
-            ctx,
-            ctx.ast[Id::<DeclaredVariablePattern>::from_raw(node)].name,
-            out,
-        ),
+        NodeKind::DeclaredVariablePattern => {
+            if ctx
+                .ast
+                .parent(node)
+                .and_then(|parent| ctx.ast.cast::<PatternField>(parent))
+                .is_some_and(|field| ctx.ast[field].name.is_none())
+            {
+                return;
+            }
+            check_token(
+                ctx,
+                ctx.ast[Id::<DeclaredVariablePattern>::from_raw(node)].name,
+                out,
+            );
+        }
         NodeKind::ForPartsWithDeclarations => {
             let list = &ctx.ast[ctx.ast[Id::<ForPartsWithDeclarations>::from_raw(node)].variables];
             for variable in ctx.ast.list(list.variables) {
@@ -102,7 +112,10 @@ fn check(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                 {
                     return;
                 }
-                if let Some(name) = formal_name(ctx, parameter.raw()) {
+                if let Some(name) = formal_name(ctx, parameter.raw())
+                    && ctx.ast[Id::<RegularFormalParameter>::from_raw(parameter.raw())].kind
+                        != dartr_element::ParameterKind::Named
+                {
                     check_token(ctx, name, out);
                 }
             }

@@ -3,7 +3,6 @@
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
-use dartr_element::TypeKind;
 use dartr_typesystem::TypeExt;
 
 pub fn register(registry: &mut RuleVisitorRegistry) {
@@ -18,13 +17,9 @@ fn is_non_nullable_bool(ctx: &LinterContext<'_>, node: NodeId) -> bool {
         return false;
     };
     resolved.ctx.is_dart_core_bool(ty)
-        && matches!(
-            resolved.ctx.ty(ty),
-            TypeKind::Interface {
-                nullability: dartr_element::Nullability::None,
-                ..
-            }
-        )
+        && ctx
+            .type_system()
+            .is_some_and(|type_system| type_system.is_non_nullable(ty))
 }
 
 fn check(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {

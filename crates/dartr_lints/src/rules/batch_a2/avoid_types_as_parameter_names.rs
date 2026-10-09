@@ -4,8 +4,10 @@ use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
 use dartr_element::{
-    ClassElement, ExtensionTypeElement, FragmentFlags, TypeAliasElement, TypeParameterElement,
+    ClassElement, DirectiveUri, ExtensionTypeElement, FragmentFlags, LibraryFragment,
+    MethodElement, NamespaceCombinator, TypeAliasElement, TypeParameterElement,
 };
+use dartr_typesystem::TypeExt;
 
 pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
     registry.add(
@@ -35,39 +37,88 @@ fn visible_type(
     scope: NodeId,
     text: &str,
     excluded: Option<dartr_element::ElementId>,
-) -> bool {
-    let Some(resolved) = context.resolved else {
-        return false;
-    };
+    excluded_enclosing: Option<dartr_element::ElementId>,
+) -> Option<dartr_element::ElementId> {
+    let resolved = context.resolved?;
     let name = resolved.ctx.name(text);
-    let library = resolved.ctx.get(resolved.library);
-    if library
-        .public_namespace
-        .try_get()
-        .and_then(|ns| ns.defined_names.get(&name))
-        .copied()
-        .is_some_and(|e| Some(e) != excluded && is_type_element(e))
-    {
-        return true;
-    }
-    for ancestor in std::iter::successors(Some(scope), |n| context.ast.parent(*n)) {
-        for child in context.ast.children(ancestor) {
-            let Some(list) = context.ast.cast::<TypeParameterList>(child) else {
+    let ancestor_elements: Vec<_> =
+        std::iter::successors(Some(scope), |node| context.ast.parent(*node))
+            .filter_map(|node| context.declared_element(node))
+            .collect();
+    for &ancestor in &ancestor_elements {
+        for candidate in (0..context.ast.node_count()).map(NodeId::from_index) {
+            let Some(element) = context
+                .declared_element(candidate)
+                .filter(|element| element.is::<TypeParameterElement>())
+            else {
                 continue;
             };
-            for &parameter in context.ast.list(context.ast[list].type_parameters) {
-                let token = context.ast[parameter].name;
-                if context.ast.tokens.lexeme(token) == text
-                    && context
-                        .declared_element(parameter)
-                        .is_some_and(|e| Some(e) != excluded)
-                {
-                    return true;
-                }
+            let Some(data) = resolved.ctx.element_data(element) else {
+                continue;
+            };
+            if data.name == Some(name)
+                && data.enclosing == Some(ancestor)
+                && Some(element) != excluded
+                && data.enclosing != excluded_enclosing
+            {
+                return Some(element);
             }
         }
     }
-    false
+    let library = resolved.ctx.get(resolved.library);
+    let own = library
+        .classes
+        .iter()
+        .map(|element| element.raw())
+        .chain(library.extension_types.iter().map(|element| element.raw()))
+        .chain(library.type_aliases.iter().map(|element| element.raw()))
+        .find(|&element| {
+            resolved.ctx.element_name(element) == Some(text) && Some(element) != excluded
+        });
+    if own.is_some() {
+        return own;
+    }
+    let unit = std::iter::successors(Some(scope), |node| context.ast.parent(*node))
+        .find(|node| context.ast.kind(*node) == NodeKind::CompilationUnit)?;
+    let fragment = resolved
+        .tables
+        .declared_fragment
+        .get(unit)
+        .copied()?
+        .cast::<LibraryFragment>()?;
+    for import in &resolved.ctx.fragment(fragment).library_imports {
+        if import.prefix.is_some() {
+            continue;
+        }
+        let allowed = import
+            .combinators
+            .iter()
+            .all(|combinator| match combinator {
+                NamespaceCombinator::Hide { hidden_names, .. } => !hidden_names.contains(&name),
+                NamespaceCombinator::Show { shown_names, .. } => shown_names.contains(&name),
+            });
+        if !allowed {
+            continue;
+        }
+        let Some(imported_library) = (match &import.directive.uri {
+            DirectiveUri::Library { library, .. } => Some(*library),
+            _ => None,
+        }) else {
+            continue;
+        };
+        if let Some(element) = resolved
+            .ctx
+            .get(imported_library)
+            .export_namespace
+            .try_get()
+            .and_then(|namespace| namespace.defined_names.get(&name))
+            .copied()
+            .filter(|element| Some(*element) != excluded && is_type_element(*element))
+        {
+            return Some(element);
+        }
+    }
+    None
 }
 fn check_parameters(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let n = &context.ast[context.ast.cast::<FormalParameterList>(node).unwrap()];
@@ -98,7 +149,15 @@ fn check_parameters(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Dia
             continue;
         }
         let text = context.ast.tokens.lexeme(name);
-        if visible_type(context, node, text, context.declared_element(parameter)) {
+        if visible_type(
+            context,
+            node,
+            text,
+            context.declared_element(parameter),
+            None,
+        )
+        .is_some()
+        {
             context.report_token(
                 out,
                 &diag::AVOID_TYPES_AS_PARAMETER_NAMES_FORMAL_PARAMETER,
@@ -115,7 +174,15 @@ fn check_catch(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnost
     };
     let token = context.ast[parameter].name;
     let text = context.ast.tokens.lexeme(token);
-    if visible_type(context, node, text, context.declared_element(parameter)) {
+    if visible_type(
+        context,
+        node,
+        text,
+        context.declared_element(parameter),
+        None,
+    )
+    .is_some()
+    {
         context.report_node(
             out,
             &diag::AVOID_TYPES_AS_PARAMETER_NAMES_FORMAL_PARAMETER,
@@ -129,12 +196,24 @@ fn check_type_parameters(context: &LinterContext<'_>, node: NodeId, out: &mut Ve
     for &parameter in context.ast.list(n.type_parameters) {
         let token = context.ast[parameter].name;
         let text = context.ast.tokens.lexeme(token);
-        if visible_type(
+        if text == "_" && context.is_feature_enabled(crate::ExperimentalFlag::WildcardVariables) {
+            continue;
+        }
+        let current = context.declared_element(parameter);
+        let enclosing = current
+            .and_then(|element| context.resolved?.ctx.element_data(element))
+            .and_then(|data| data.enclosing);
+        let visible = visible_type(
             context,
             context.ast.parent(node).unwrap_or(node),
             text,
-            context.declared_element(parameter),
-        ) {
+            current,
+            enclosing,
+        );
+        let method_type_parameter_shadow = enclosing
+            .is_some_and(|element| element.is::<MethodElement>())
+            && visible.is_some_and(|element| element.is::<TypeParameterElement>());
+        if visible.is_some() && !method_type_parameter_shadow {
             context.report_token(
                 out,
                 &diag::AVOID_TYPES_AS_PARAMETER_NAMES_TYPE_PARAMETER,

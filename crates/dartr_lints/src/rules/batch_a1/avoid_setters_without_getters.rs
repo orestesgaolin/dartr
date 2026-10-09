@@ -4,8 +4,9 @@ use super::helpers::{element_name, lexeme};
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::{Id, MethodDeclaration, NodeId, NodeKind};
 use dartr_diagnostics::{Diagnostic, diag};
-use dartr_element::{ElemRef, InterfaceElement};
+use dartr_element::{ElemRef, InstanceElement, InterfaceElement};
 use dartr_typesystem::inheritance_manager3::{InheritanceManager3, Name};
+use dartr_typesystem::lookup;
 
 pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
     registry.add(
@@ -19,6 +20,9 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(r) = c.resolved else { return };
     let n = &c.ast[Id::<MethodDeclaration>::from_raw(node)];
     if n.property_keyword.is_none_or(|k| lexeme(c, k) != "set") {
+        return;
+    }
+    if super::helpers::ancestor(c.ast, node, NodeKind::MixinDeclaration).is_some() {
         return;
     }
     let Some(element) = c.declared_element(node) else {
@@ -42,7 +46,15 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         return;
     }
     let getter = Name::for_library(&r.ctx, data.library, name);
-    if manager.get_member(enclosing, getter).is_none() {
+    let Some(instance) = enclosing.cast::<InstanceElement>() else {
+        return;
+    };
+    let declared_getter = lookup::get_getter(&r.ctx, instance, name);
+    let inherited_getter = manager
+        .get_inherited_concrete_map(enclosing)
+        .get(&getter)
+        .copied();
+    if declared_getter.is_none() && inherited_getter.is_none() {
         c.report_token(out, &diag::AVOID_SETTERS_WITHOUT_GETTERS, n.name, &[]);
     }
 }

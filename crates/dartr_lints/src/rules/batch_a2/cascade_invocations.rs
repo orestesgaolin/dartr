@@ -3,7 +3,10 @@
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
-use dartr_element::ElementId;
+use dartr_element::{
+    ElementId, FieldElement, FormalParameterElement, FragmentFlags, GetterElement,
+    LocalVariableElement, MethodElement, SetterElement, TopLevelVariableElement,
+};
 
 pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
     for kind in [
@@ -28,6 +31,66 @@ fn canonical(context: &LinterContext<'_>, node: NodeId) -> Option<ElementId> {
     context
         .element(node)
         .and_then(|e| super::helpers::base_element(context, e))
+}
+
+fn property_variable(context: &LinterContext<'_>, element: ElementId) -> Option<ElementId> {
+    let resolved = context.resolved?;
+    if let Some(getter) = element.cast::<GetterElement>() {
+        return resolved.ctx.get(getter).variable.get().map(|id| id.raw());
+    }
+    if let Some(setter) = element.cast::<SetterElement>() {
+        return resolved.ctx.get(setter).variable.get().map(|id| id.raw());
+    }
+    Some(element)
+}
+
+fn unparenthesized(context: &LinterContext<'_>, mut node: NodeId) -> NodeId {
+    while let Some(parenthesized) = context.ast.cast::<ParenthesizedExpression>(node) {
+        node = context.ast[parenthesized].expression.raw();
+    }
+    node
+}
+
+fn is_static(context: &LinterContext<'_>, element: ElementId) -> bool {
+    context
+        .resolved
+        .and_then(|resolved| resolved.ctx.element_data(element))
+        .and_then(|data| context.resolved?.ctx.fragment_data(data.first_fragment))
+        .is_some_and(|fragment| {
+            fragment
+                .flags
+                .has(FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC)
+                || fragment
+                    .flags
+                    .has(FragmentFlags::VARIABLE_FRAGMENT_IS_STATIC)
+        })
+}
+
+fn is_variable(element: ElementId) -> bool {
+    element.is::<FieldElement>()
+        || element.is::<TopLevelVariableElement>()
+        || element.is::<LocalVariableElement>()
+        || element.is::<FormalParameterElement>()
+}
+
+fn prefix_element(context: &LinterContext<'_>, expression: NodeId) -> Option<ElementId> {
+    let expression = unparenthesized(context, expression);
+    if let Some(prefixed) = context.ast.cast::<PrefixedIdentifier>(expression) {
+        return canonical(context, context.ast[prefixed].prefix.raw());
+    }
+    if let Some(property) = context.ast.cast::<PropertyAccess>(expression) {
+        let property = &context.ast[property];
+        if context.ast.tokens.lexeme(property.operator) == "."
+            && property
+                .target
+                .is_some_and(|target| context.ast.kind(target) == NodeKind::SimpleIdentifier)
+        {
+            return property
+                .target
+                .and_then(|target| canonical(context, target.raw()));
+        }
+    }
+    None
 }
 fn box_for(context: &LinterContext<'_>, statement: NodeId) -> Cascadable {
     if let Some(s) = context.ast.cast::<VariableDeclarationStatement>(statement) {
@@ -54,7 +117,7 @@ fn box_for(context: &LinterContext<'_>, statement: NodeId) -> Cascadable {
     let Some(s) = context.ast.cast::<ExpressionStatement>(statement) else {
         return Cascadable::default();
     };
-    let expression = context.ast[s].expression.raw();
+    let expression = unparenthesized(context, context.ast[s].expression.raw());
     match context.ast.kind(expression) {
         NodeKind::MethodInvocation => {
             let n = &context.ast[context.ast.cast::<MethodInvocation>(expression).unwrap()];
@@ -69,9 +132,18 @@ fn box_for(context: &LinterContext<'_>, statement: NodeId) -> Cascadable {
             {
                 return Cascadable::default();
             }
+            let Some(method) = context
+                .element(n.method_name)
+                .and_then(|element| super::helpers::base_element(context, element))
+            else {
+                return Cascadable::default();
+            };
+            if !method.is::<MethodElement>() || is_static(context, method) {
+                return Cascadable::default();
+            }
             Cascadable {
                 element: canonical(context, target.raw()),
-                critical: vec![n.argument_list.raw()],
+                critical: vec![n.method_name.raw(), n.argument_list.raw()],
                 can_join: true,
                 can_receive: true,
                 can_be_cascaded: true,
@@ -111,15 +183,36 @@ fn box_for(context: &LinterContext<'_>, statement: NodeId) -> Cascadable {
                 .ast
                 .cast::<AssignmentExpression>(expression)
                 .unwrap()];
-            let left = n.left_hand_side.raw();
-            if context.ast.kind(left) != NodeKind::SimpleIdentifier {
-                return Cascadable::default();
+            let left = unparenthesized(context, n.left_hand_side.raw());
+            if context.ast.kind(left) == NodeKind::SimpleIdentifier {
+                return Cascadable {
+                    element: canonical(context, left),
+                    critical: vec![n.right_hand_side.raw()],
+                    can_receive: context.ast.tokens.lexeme(n.operator) != "??=",
+                    ..Default::default()
+                };
             }
+            let element = prefix_element(context, left);
+            let can_receive = context.ast.tokens.lexeme(n.operator) != "??="
+                && element
+                    .is_some_and(|element| is_variable(element) && !is_static(context, element));
             Cascadable {
-                element: canonical(context, left),
+                element,
                 critical: vec![n.right_hand_side.raw()],
-                can_receive: context.ast.tokens.lexeme(n.operator) != "??=",
-                ..Default::default()
+                can_join: true,
+                can_receive,
+                can_be_cascaded: true,
+            }
+        }
+        NodeKind::CascadeExpression => {
+            let n = &context.ast[context.ast.cast::<CascadeExpression>(expression).unwrap()];
+            let simple = context.ast.kind(n.target) == NodeKind::SimpleIdentifier;
+            Cascadable {
+                element: canonical(context, n.target.raw()),
+                critical: context.ast.list_raw(n.cascade_sections).to_vec(),
+                can_join: simple,
+                can_receive: simple,
+                can_be_cascaded: true,
             }
         }
         _ => Cascadable::default(),
@@ -128,10 +221,41 @@ fn box_for(context: &LinterContext<'_>, statement: NodeId) -> Cascadable {
 fn references(context: &LinterContext<'_>, root: NodeId, target: ElementId) -> bool {
     let mut pending = vec![root];
     while let Some(node) = pending.pop() {
-        if canonical(context, node) == Some(target) {
+        let node_element = canonical(context, node);
+        if node_element == Some(target)
+            || node_element.and_then(|element| property_variable(context, element)) == Some(target)
+            || property_variable(context, target)
+                .is_some_and(|target_variable| node_element == Some(target_variable))
+        {
             return true;
         }
-        if context.ast.kind(node) == NodeKind::FunctionExpression {
+        if context.ast.kind(node) == NodeKind::FunctionExpression
+            && property_variable(context, target).is_some_and(|target| {
+                target.is::<FieldElement>() || target.is::<TopLevelVariableElement>()
+            })
+        {
+            return true;
+        }
+        if let Some(element) = context
+            .element(node)
+            .and_then(|element| super::helpers::base_element(context, element))
+            && element.is::<MethodElement>()
+            && property_variable(context, target).is_some_and(|target| {
+                target.is::<FieldElement>() || target.is::<TopLevelVariableElement>()
+            })
+            && context.resolved.is_some_and(|resolved| {
+                let executable_enclosing = resolved
+                    .ctx
+                    .element_data(element)
+                    .and_then(|data| data.enclosing);
+                let target = property_variable(context, target).unwrap_or(target);
+                let target_enclosing = resolved
+                    .ctx
+                    .element_data(target)
+                    .and_then(|data| data.enclosing);
+                executable_enclosing.is_some() && executable_enclosing == target_enclosing
+            })
+        {
             return true;
         }
         pending.extend(context.ast.children(node));

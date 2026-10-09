@@ -49,27 +49,35 @@ fn canonical_element(
     ctx: &LinterContext<'_>,
     expression: NodeId,
 ) -> Option<dartr_element::ElementId> {
-    let mut expression = unparenthesized(ctx, expression);
-    expression = match ctx.ast.kind(expression) {
-        NodeKind::PropertyAccess => ctx.ast[Id::<PropertyAccess>::from_raw(expression)]
-            .property_name
-            .raw(),
-        NodeKind::PrefixedIdentifier => ctx.ast[Id::<PrefixedIdentifier>::from_raw(expression)]
-            .identifier
-            .raw(),
-        _ => expression,
-    };
     let resolved = ctx.resolved?;
     ctx.element(expression)
         .map(|e| member::base_element(&resolved.ctx, e))
 }
 
 fn same_target(ctx: &LinterContext<'_>, a: Option<NodeId>, b: Option<NodeId>) -> bool {
-    match (
-        a.and_then(|n| canonical_element(ctx, n)),
-        b.and_then(|n| canonical_element(ctx, n)),
-    ) {
-        (Some(a), Some(b)) => a == b,
+    let (Some(a), Some(b)) = (a, b) else {
+        return false;
+    };
+    let a = unparenthesized(ctx, a);
+    let b = unparenthesized(ctx, b);
+    match (ctx.ast.kind(a), ctx.ast.kind(b)) {
+        (NodeKind::SimpleIdentifier, NodeKind::SimpleIdentifier) => {
+            canonical_element(ctx, a) == canonical_element(ctx, b)
+        }
+        (NodeKind::PrefixedIdentifier, NodeKind::PrefixedIdentifier) => {
+            let a = &ctx.ast[Id::<PrefixedIdentifier>::from_raw(a)];
+            let b = &ctx.ast[Id::<PrefixedIdentifier>::from_raw(b)];
+            canonical_element(ctx, a.prefix.raw()) == canonical_element(ctx, b.prefix.raw())
+                && canonical_element(ctx, a.identifier.raw())
+                    == canonical_element(ctx, b.identifier.raw())
+        }
+        (NodeKind::PropertyAccess, NodeKind::PropertyAccess) => {
+            let a = &ctx.ast[Id::<PropertyAccess>::from_raw(a)];
+            let b = &ctx.ast[Id::<PropertyAccess>::from_raw(b)];
+            same_target(ctx, a.target.map(Id::raw), b.target.map(Id::raw))
+                && canonical_element(ctx, a.property_name.raw())
+                    == canonical_element(ctx, b.property_name.raw())
+        }
         _ => false,
     }
 }

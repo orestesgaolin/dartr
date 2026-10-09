@@ -22,6 +22,28 @@ fn type_is(ctx: &LinterContext<'_>, ty: dartr_element::TypeId, lib: &str, name: 
                 .is_some_and(|e| r.ctx.is_element(e.raw(), lib, name))
         })
 }
+
+fn extends_class(
+    ctx: &LinterContext<'_>,
+    ty: dartr_element::TypeId,
+    lib: &str,
+    name: &str,
+) -> bool {
+    let resolved = ctx.resolved.unwrap();
+    let mut ty = ctx.type_system().unwrap().extension_type_erasure(ty);
+    loop {
+        let Some(element) = resolved.ctx.interface_element(ty) else {
+            return false;
+        };
+        if resolved.ctx.is_element(element.raw(), lib, name) {
+            return true;
+        }
+        let Some(supertype) = resolved.ctx.element_supertype(element) else {
+            return false;
+        };
+        ty = supertype;
+    }
+}
 fn report_args(
     ctx: &LinterContext<'_>,
     list: Id<ArgumentList>,
@@ -64,7 +86,7 @@ fn check(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                 ("dart.async", "Timer", Some("periodic"), &[1][..]),
                 ("dart.core", "List", Some("generate"), &[1][..]),
             ] {
-                if cname == name && type_is(ctx, ty, lib, class) {
+                if cname == name && extends_class(ctx, ty, lib, class) {
                     report_args(ctx, n.argument_list, pos, &[], out);
                 }
             }
@@ -72,6 +94,19 @@ fn check(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         NodeKind::MethodInvocation => {
             let n = &ctx.ast[Id::<MethodInvocation>::from_raw(node)];
             let method = ctx.ast.tokens.lexeme(ctx.ast[n.method_name].token);
+            if n.target.is_none()
+                && method == "scheduleMicrotask"
+                && let (Some(resolved), Some(element)) =
+                    (ctx.resolved, ctx.element(n.method_name.raw()))
+                && resolved.ctx.is_element(
+                    member::base_element(&resolved.ctx, element),
+                    "dart.async",
+                    "scheduleMicrotask",
+                )
+            {
+                report_args(ctx, n.argument_list, &[0], &[], out);
+                return;
+            }
             let specs: &[(&str, &str, &[usize], &[&str])] = match method {
                 "any" | "every" | "expand" | "map" | "reduce" | "skipWhile" | "takeWhile"
                 | "where" => &[("dart.core", "Iterable", &[0], &[])],
@@ -96,23 +131,26 @@ fn check(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                 _ => &[],
             };
             if let Some(target) = n.target {
-                if let Some(ty) = ctx.static_type(target) {
-                    for (lib, class, pos, names) in specs {
-                        if type_is(ctx, ty, lib, class) {
-                            report_args(ctx, n.argument_list, pos, names, out);
-                        }
-                    }
-                } else if let Some(e) = ctx.element(target) {
+                if let Some(e) = ctx.element(target) {
                     let r = ctx.resolved.unwrap();
                     let base = member::base_element(&r.ctx, e);
                     if r.ctx.is_element(base, "dart.async", "Timer") && method == "run" {
                         report_args(ctx, n.argument_list, &[0], &[], out);
+                        return;
                     } else if r.ctx.is_element(base, "dart.async", "Future") {
                         match method {
                             "doWhile" => report_args(ctx, n.argument_list, &[0], &[], out),
                             "forEach" => report_args(ctx, n.argument_list, &[1], &[], out),
                             "wait" => report_args(ctx, n.argument_list, &[], &["cleanUp"], out),
                             _ => {}
+                        }
+                        return;
+                    }
+                }
+                if let Some(ty) = ctx.static_type(target) {
+                    for (lib, class, pos, names) in specs {
+                        if type_is(ctx, ty, lib, class) {
+                            report_args(ctx, n.argument_list, pos, names, out);
                         }
                     }
                 }

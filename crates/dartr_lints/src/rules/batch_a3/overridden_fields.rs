@@ -38,7 +38,24 @@ fn check_field(
         return;
     };
     if member::base_element(&r.ctx, inherited).kind() != dartr_element::ElementKind::Getter
-        || member::variable(&r.ctx, inherited).is_none()
+        || member::is_abstract(&r.ctx, inherited)
+    {
+        return;
+    }
+    if text.starts_with('_') && member::library(&r.ctx, inherited) != Some(r.library) {
+        return;
+    }
+    let inherited_base = member::base_element(&r.ctx, inherited);
+    let Some(fragment) = r
+        .ctx
+        .element_data(inherited_base)
+        .and_then(|data| r.ctx.fragment_data(data.first_fragment))
+    else {
+        return;
+    };
+    if !fragment
+        .flags
+        .has(dartr_element::FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_VARIABLE)
     {
         return;
     }
@@ -72,6 +89,9 @@ fn check(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                     .formal_parameters]
                     .parameters,
             ) {
+                if ctx.ast.kind(*p) == NodeKind::FieldFormalParameter {
+                    continue;
+                }
                 let Some(e) = ctx
                     .declared_element(p.raw())
                     .and_then(|e| e.cast::<dartr_element::FormalParameterElement>())
@@ -79,8 +99,18 @@ fn check(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                     continue;
                 };
                 if let Some(f) = ctx.resolved.unwrap().ctx.get(e).field.get() {
-                    let token = ctx.ast.begin_token(*p);
-                    check_field(ctx, f, token, out);
+                    let name = match ctx.ast.kind(*p) {
+                        NodeKind::RegularFormalParameter => {
+                            ctx.ast[Id::<RegularFormalParameter>::from_raw(p.raw())].name
+                        }
+                        NodeKind::SuperFormalParameter => {
+                            Some(ctx.ast[Id::<SuperFormalParameter>::from_raw(p.raw())].name)
+                        }
+                        _ => None,
+                    };
+                    if let Some(name) = name {
+                        check_field(ctx, f, name, out);
+                    }
                 }
             }
         }

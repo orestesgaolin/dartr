@@ -5,7 +5,7 @@ use dartr_ast::{
     Ast, BlockFunctionBody, ExpressionFunctionBody, FunctionBody, NodeId, NodeKind, NodeType,
 };
 use dartr_element::{ElemRef, ElementId, TypeId, TypeKind};
-use dartr_typesystem::{member, TypeExt};
+use dartr_typesystem::{TypeExt, member};
 
 pub fn ancestors(ast: &Ast, node: NodeId) -> impl Iterator<Item = NodeId> + '_ {
     std::iter::successors(ast.parent(node), |node| ast.parent(*node))
@@ -55,13 +55,7 @@ pub fn implements(context: &LinterContext<'_>, ty: TypeId, library: &str, name: 
         return false;
     };
     let matches = |candidate: TypeId| {
-        if library.is_empty() {
-            resolved
-                .ctx
-                .interface_element(candidate)
-                .and_then(|e| resolved.ctx.element_name(e.raw()))
-                == Some(name)
-        } else if library.contains(':') {
+        if library.contains(':') {
             resolved.ctx.interface_element(candidate).is_some_and(|e| {
                 resolved.ctx.element_name(e.raw()) == Some(name)
                     && resolved.ctx.element_library_uri(e.raw()) == Some(library)

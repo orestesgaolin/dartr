@@ -13,8 +13,9 @@ fn throwable(ctx: &LinterContext<'_>, ty: dartr_element::TypeId) -> bool {
     let Some(resolved) = ctx.resolved else {
         return true;
     };
-    let mut ty = ctx.type_system().unwrap().extension_type_erasure(ty);
+    let mut ty = ty;
     loop {
+        ty = ctx.type_system().unwrap().extension_type_erasure(ty);
         ty = match *resolved.ctx.ty(ty) {
             TypeKind::Dynamic | TypeKind::Never(_) => return true,
             TypeKind::TypeParameter {

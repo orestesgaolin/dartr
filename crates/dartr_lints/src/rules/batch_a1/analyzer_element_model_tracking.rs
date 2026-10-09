@@ -5,7 +5,7 @@ use dartr_ast::{
     BlockClassBody, ClassDeclaration, FieldDeclaration, Id, MethodDeclaration, NodeId, NodeKind,
 };
 use dartr_diagnostics::{Diagnostic, diag};
-use dartr_element::ElemRef;
+use dartr_element::{AnyElement, ElemRef};
 use dartr_typesystem::member;
 
 use super::helpers::{element_library_uri, element_name, lexeme, metadata};
@@ -20,6 +20,10 @@ pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
 
 fn annotation_kind<'a>(c: &'a LinterContext<'_>, node: NodeId) -> Option<&'a str> {
     let element = c.element(node)?;
+    let base = super::helpers::base_element(c, element)?;
+    if !matches!(c.resolved?.ctx.any(base), AnyElement::Getter(_)) {
+        return None;
+    }
     if element_library_uri(c, element) == Some("package:analyzer/src/fine/annotations.dart") {
         element_name(c, element)
     } else {
@@ -32,8 +36,16 @@ fn tracking<'a>(c: &'a LinterContext<'a>, node: NodeId) -> Vec<(NodeId, &'a str)
         .into_iter()
         .filter_map(|annotation| {
             let kind = annotation_kind(c, annotation.raw())?;
-            kind.starts_with("tracked")
-                .then_some((annotation.raw(), kind))
+            matches!(
+                kind,
+                "trackedDirectly"
+                    | "trackedDirectlyExpensive"
+                    | "trackedDirectlyOpaque"
+                    | "trackedIncludedInId"
+                    | "trackedIndirectly"
+                    | "trackedInternal"
+            )
+            .then_some((annotation.raw(), kind))
         })
         .collect()
 }
@@ -84,6 +96,12 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         return;
     };
     for member in c.ast.list_raw(c.ast[body].members) {
+        if metadata(c.ast, *member)
+            .into_iter()
+            .any(|annotation| c.element(annotation).is_none())
+        {
+            continue;
+        }
         let annotations = tracking(c, *member);
         match c.ast.kind(*member) {
             NodeKind::ConstructorDeclaration => {
@@ -98,11 +116,15 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                     validate(
                         c,
                         &annotations,
-                        &[
-                            "trackedIncludedInId",
-                            "trackedIndirectly",
-                            "trackedInternal",
-                        ],
+                        if required {
+                            &[
+                                "trackedIncludedInId",
+                                "trackedIndirectly",
+                                "trackedInternal",
+                            ]
+                        } else {
+                            &[]
+                        },
                         required,
                         name,
                         out,
@@ -111,13 +133,15 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             }
             NodeKind::MethodDeclaration => {
                 let method = &c.ast[Id::<MethodDeclaration>::from_raw(*member)];
+                let Some(method_element) = c.declared_element(*member) else {
+                    continue;
+                };
                 let is_setter = method
                     .property_keyword
                     .is_some_and(|keyword| lexeme(c, keyword) == "set");
-                let is_abstract = c.declared_element(*member).is_some_and(|element| {
-                    c.resolved
-                        .is_some_and(|r| member::is_abstract(&r.ctx, ElemRef::Base(element)))
-                });
+                let is_abstract = c
+                    .resolved
+                    .is_some_and(|r| member::is_abstract(&r.ctx, ElemRef::Base(method_element)));
                 let required = method
                     .modifier_keyword
                     .is_none_or(|keyword| lexeme(c, keyword) != "static")
@@ -127,14 +151,18 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                 validate(
                     c,
                     &annotations,
-                    &[
-                        "trackedDirectly",
-                        "trackedDirectlyExpensive",
-                        "trackedDirectlyOpaque",
-                        "trackedIncludedInId",
-                        "trackedIndirectly",
-                        "trackedInternal",
-                    ],
+                    if required {
+                        &[
+                            "trackedDirectly",
+                            "trackedDirectlyExpensive",
+                            "trackedDirectlyOpaque",
+                            "trackedIncludedInId",
+                            "trackedIndirectly",
+                            "trackedInternal",
+                        ]
+                    } else {
+                        &[]
+                    },
                     required,
                     method.name,
                     out,

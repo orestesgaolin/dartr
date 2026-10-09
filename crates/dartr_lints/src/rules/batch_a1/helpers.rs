@@ -55,6 +55,23 @@ pub fn element_library_uri<'a>(c: &'a LinterContext<'_>, element: ElemRef) -> Op
     member::library(&resolved.ctx, element).map(|library| resolved.ctx.library_uri(library))
 }
 
+/// Whether semantic metadata flags for this element are required but are not
+/// available yet. Unit C9 fills `metadata_flags`; until then, treating an
+/// annotated element as unannotated can create false-positive diagnostics.
+pub fn element_has_unresolved_metadata(c: &LinterContext<'_>, element: ElementId) -> bool {
+    let Some(resolved) = c.resolved else {
+        return false;
+    };
+    resolved
+        .ctx
+        .element_data(element)
+        .and_then(|data| resolved.ctx.fragment_data(data.first_fragment))
+        .is_some_and(|fragment| {
+            !fragment.metadata.annotations.is_empty()
+                && fragment.metadata.metadata_flags.try_get().is_none()
+        })
+}
+
 pub fn declared_type(c: &LinterContext<'_>, node: impl Into<NodeId>) -> Option<TypeId> {
     let resolved = c.resolved?;
     let element = c.declared_element(node)?;

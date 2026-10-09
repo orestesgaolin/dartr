@@ -20,6 +20,12 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     {
         return;
     }
+    if super::helpers::metadata(c.ast, node)
+        .into_iter()
+        .any(|annotation| c.element(annotation).is_none())
+    {
+        return;
+    }
     if !super::helpers::ancestor(c.ast, node, NodeKind::ExtensionTypeDeclaration).is_some() {
         return;
     }

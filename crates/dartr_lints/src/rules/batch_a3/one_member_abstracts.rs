@@ -2,6 +2,8 @@
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
+use dartr_element::ClassElement;
+use dartr_typesystem::TypeExt;
 
 pub fn register(registry: &mut RuleVisitorRegistry) {
     registry.add_class_declaration("one_member_abstracts", check);
@@ -9,28 +11,39 @@ pub fn register(registry: &mut RuleVisitorRegistry) {
 
 fn check(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let n = &ctx.ast[Id::<ClassDeclaration>::from_raw(node)];
-    if n.abstract_keyword.is_none()
-        || n.extends_clause.is_some()
-        || n.augment_keyword.is_some()
-        || n.implements_clause.is_some()
-        || n.with_clause.is_some()
+    if n.abstract_keyword.is_none() || n.extends_clause.is_some() || n.augment_keyword.is_some() {
+        return;
+    }
+    let Some(resolved) = ctx.resolved else {
+        return;
+    };
+    let Some(class) = ctx
+        .declared_element(node)
+        .and_then(|element| element.cast::<ClassElement>())
+    else {
+        return;
+    };
+    let class_data = resolved.ctx.get(class);
+    if !resolved
+        .ctx
+        .list(class_data.interfaces.get().unwrap_or_default())
+        .is_empty()
+        || !resolved
+            .ctx
+            .list(class_data.mixins.get().unwrap_or_default())
+            .is_empty()
+        || !class_data.fields.is_empty()
+        || class_data.methods.len() != 1
     {
         return;
     }
-    let Some(body) = ctx.ast.cast::<BlockClassBody>(n.body.raw()) else {
-        return;
-    };
-    let members = ctx.ast.list(ctx.ast[body].members);
-    if members.len() != 1 {
+    let method = class_data.methods[0];
+    if !dartr_link::dump::is_abstract(&resolved.ctx, method.raw()) {
         return;
     }
-    let Some(method) = ctx.ast.cast::<MethodDeclaration>(members[0]) else {
+    let Some(method_name) = resolved.ctx.element_name(method.raw()) else {
         return;
     };
-    if ctx.ast.kind(ctx.ast[method].body) != NodeKind::EmptyFunctionBody {
-        return;
-    }
-    let method_name = ctx.ast.tokens.lexeme(ctx.ast[method].name);
     let type_name = ctx.ast.begin_token(n.name_part);
     ctx.report_token(out, &diag::ONE_MEMBER_ABSTRACTS, type_name, &[method_name]);
 }

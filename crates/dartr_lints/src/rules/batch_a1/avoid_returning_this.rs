@@ -16,6 +16,12 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     if n.operator_keyword.is_some() || has_resolved_annotation(c, node, "override") {
         return;
     }
+    if super::helpers::metadata(c.ast, node)
+        .into_iter()
+        .any(|annotation| c.element(annotation).is_none())
+    {
+        return;
+    }
     let Some(owner) = [
         NodeKind::ClassDeclaration,
         NodeKind::EnumDeclaration,
@@ -41,7 +47,7 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         return;
     }
     let mut returns = Vec::new();
-    let mut pending = c.ast.children(n.body);
+    let mut pending = c.ast.children(n.body).into_iter().rev().collect::<Vec<_>>();
     while let Some(child) = pending.pop() {
         if c.ast.kind(child) == NodeKind::FunctionExpression {
             continue;
@@ -56,7 +62,7 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                 return;
             }
         }
-        pending.extend(c.ast.children(child));
+        pending.extend(c.ast.children(child).into_iter().rev());
     }
     if let Some(first) = returns.first().and_then(|r| c.ast[*r].expression) {
         c.report_node(out, &diag::AVOID_RETURNING_THIS, first, &[]);
