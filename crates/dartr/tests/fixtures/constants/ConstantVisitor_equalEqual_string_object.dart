@@ -1,0 +1,2 @@
+
+const v = 'foo' == Object();

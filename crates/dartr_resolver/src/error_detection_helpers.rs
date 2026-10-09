@@ -9,11 +9,20 @@
 //! nothing yet. Their call sites are in place, so that porting a check
 //! makes its diagnostics appear without touching the resolver.
 
-use dartr_ast::{Expression, Id};
+use dartr_ast::{ArgumentList, Expression, Id};
 
 use crate::resolver::ResolverVisitor;
 
 impl<'a> ResolverVisitor<'a> {
+    /// Dart `checkForArgumentTypesNotAssignableInList(argumentList,
+    /// whyNotPromotedArguments)` (`generated/resolver.dart`).
+    pub fn check_for_argument_types_not_assignable_in_list(
+        &mut self,
+        argument_list: Id<ArgumentList>,
+    ) {
+        let _ = argument_list;
+    }
+
     /// Dart `boolExpressionVerifier.checkForNonBoolCondition(condition,
     /// whyNotPromoted: ...)`.
     pub fn check_for_non_bool_condition(&mut self, condition: Id<Expression>) {
