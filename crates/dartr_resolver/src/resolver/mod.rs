@@ -77,6 +77,9 @@ pub type SharedMatchContext = MatchContext<
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CollectionLiteralContext {
     pub element_type: Option<TypeId>,
+    /// Dart `iterableType`: the type context for spread expressions (Dart
+    /// declares it `required`; `None` only in a default value).
+    pub iterable_type: Option<TypeId>,
     pub key_type: Option<TypeId>,
     pub value_type: Option<TypeId>,
 }

@@ -1,0 +1,58 @@
+Usage: dartr format [options...] <files or directories...>
+-h, --help                        Print this usage information.
+-v, --verbose                     Show all options and flags with --help.
+
+Output options:
+-o, --output                      Set where to write formatted output.
+
+          [write] (default)       Overwrite formatted files on disk.
+          [show]                  Print code to terminal.
+          [json]                  Print code and selection as JSON.
+          [none]                  Discard output.
+
+    --show                        Set which filenames to print.
+
+          [all]                   All visited files and directories.
+          [changed] (default)     Only the names of files whose formatting is changed.
+          [none]                  No file names or directories.
+
+    --summary                     Show the specified summary after formatting.
+
+          [line] (default)        Single-line summary.
+          [profile]               How long it took for format each file.
+          [none]                  No summary.
+
+    --language-version            Language version of formatted code.
+                                  Use "latest" to parse as the latest supported version.
+                                  Omit to look for a surrounding package config.
+    --set-exit-if-changed         Return exit code 1 if there are any formatting changes.
+
+Other options:
+    --page-width                  Try to keep lines no longer than this.
+                                  (defaults to "80")
+    --trailing-commas             How trailing commas in input affect formatting.
+
+          [automate] (default)    The formatter adds and removes trailing commas based on
+                                  its decision to split the surrounding construct.
+          [preserve]              A trailing comma forces the surrounding construct to split.
+                                  The formatter will add a trailing comma when it splits a
+                                  construct but will not remove one.
+
+-i, --indent                      Add this many spaces of leading indentation.
+                                  (defaults to "0")
+    --follow-links                Follow links to files and directories.
+                                  If unset, links will be ignored.
+    --version                     Show dart_style version.
+    --enable-experiment           Enable one or more experimental features.
+                                  See dart.dev/go/experiments.
+
+Options when formatting from stdin:
+    --selection                   Track selection (given as "start:length") through formatting.
+    --stdin-name                  The path that code read from stdin is treated as coming from.
+                                  
+                                  This path is used in error messages and also to locate a
+                                  surrounding package to infer the code's language version.
+                                  To avoid searching for a surrounding package config, pass
+                                  in a language version using --language-version.
+
+Run "dartr help" to see global options.

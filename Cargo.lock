@@ -226,6 +226,7 @@ dependencies = [
  "dartr_difftest",
  "dartr_driver",
  "dartr_element",
+ "dartr_format",
  "dartr_legacy",
  "dartr_link",
  "dartr_parser",
@@ -352,6 +353,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dartr_format"
+version = "0.1.0"
+dependencies = [
+ "dartr_ast",
+ "dartr_ast_builder",
+ "dartr_diagnostics",
+ "dartr_parser",
+ "dartr_project",
+ "dartr_syntax",
+ "rayon",
+ "rustc-hash",
+]
+
+[[package]]
 name = "dartr_legacy"
 version = "0.1.0"
 dependencies = [
@@ -451,6 +466,7 @@ dependencies = [
  "dartr_ast_builder",
  "dartr_cli",
  "dartr_diagnostics",
+ "dartr_format",
  "dartr_parser",
  "dartr_project",
  "dartr_syntax",
