@@ -169,6 +169,29 @@ fn member_return_type(rv: &ResolverVisitor<'_>, element: ElemRef) -> String {
     dartr_element::type_display_string_with(&rv.ctx, ty, Default::default())
 }
 
+fn resolved_member(analyzed: &Analyzed, node: dartr_ast::NodeId) -> ElemRef {
+    let element = *analyzed
+        .unit()
+        .tables
+        .element
+        .get(node)
+        .expect("resolved element");
+    assert!(
+        matches!(element, ElemRef::Member(_)),
+        "extension member must retain its substitution"
+    );
+    element
+}
+
+fn analyzed_member_return_type(analyzed: &Analyzed, element: ElemRef) -> String {
+    let ctx = analyzed.ctx(analyzed.unit());
+    dartr_element::type_display_string_with(
+        &ctx,
+        member::return_type(&ctx, element),
+        Default::default(),
+    )
+}
+
 #[test]
 fn generic_extension_substitutes_accessors_and_operators() {
     let source = r#"
@@ -318,4 +341,158 @@ void f(Box<int> box) {
             "int"
         );
     });
+}
+
+#[test]
+fn driver_resolves_implicit_generic_extension_method_call() {
+    let source = r#"
+class Box<T> {}
+extension E<T> on Box<T> {
+  T identity(T value) => value;
+}
+
+void f(Box<int> box) {
+  int result = box.identity(1);
+}
+"#;
+    let Some(analyzed) = run(source) else {
+        return;
+    };
+    let invocation = analyzed.node_at(NodeKind::MethodInvocation, "box.identity(1)", 0, 0);
+    let method_name = analyzed.node_at(NodeKind::SimpleIdentifier, "box.identity(1)", 0, 4);
+    let element = resolved_member(&analyzed, method_name);
+
+    assert_eq!(
+        analyzed.element_name(analyzed.element_of(method_name).expect("base element")),
+        Some("identity".to_string())
+    );
+    assert_eq!(analyzed_member_return_type(&analyzed, element), "int");
+    assert_eq!(
+        analyzed.type_str(
+            *analyzed
+                .unit()
+                .tables
+                .static_type
+                .get(invocation)
+                .expect("invocation static type")
+        ),
+        "int"
+    );
+    assert_eq!(
+        analyzed.type_str(
+            *analyzed
+                .unit()
+                .tables
+                .invoke_type
+                .get(invocation)
+                .expect("invoke type")
+        ),
+        "int Function(int)"
+    );
+    assert!(
+        !analyzed
+            .diagnostic_names()
+            .iter()
+            .any(|name| name.starts_with("undefined_method@"))
+    );
+}
+
+#[test]
+fn driver_resolves_explicit_generic_extension_override_method_call() {
+    let source = r#"
+extension E<T> on T {
+  T method(T value) => value;
+}
+
+void f() {
+  int result = E<int>(1).method(2);
+}
+"#;
+    let Some(analyzed) = run(source) else {
+        return;
+    };
+    let override_node = analyzed.node_at(NodeKind::ExtensionOverride, "E<int>(1)", 0, 0);
+    let invocation = analyzed.node_at(NodeKind::MethodInvocation, "E<int>(1).method(2)", 0, 0);
+    let method_name = analyzed.node_at(NodeKind::SimpleIdentifier, "E<int>(1).method(2)", 0, 10);
+    let element = resolved_member(&analyzed, method_name);
+    let type_arguments = *analyzed
+        .unit()
+        .tables
+        .type_arg_types
+        .get(override_node)
+        .expect("override type arguments");
+    let ctx = analyzed.ctx(analyzed.unit());
+
+    assert_eq!(ctx.list(type_arguments).len(), 1);
+    assert_eq!(
+        dartr_element::type_display_string_with(
+            &ctx,
+            ctx.list(type_arguments)[0],
+            Default::default(),
+        ),
+        "int"
+    );
+    assert_eq!(
+        analyzed.type_str(
+            *analyzed
+                .unit()
+                .tables
+                .extended_type
+                .get(override_node)
+                .expect("override extended type")
+        ),
+        "int"
+    );
+    assert_eq!(analyzed_member_return_type(&analyzed, element), "int");
+    assert_eq!(
+        analyzed.type_str(
+            *analyzed
+                .unit()
+                .tables
+                .static_type
+                .get(invocation)
+                .expect("invocation static type")
+        ),
+        "int"
+    );
+    assert_eq!(
+        analyzed.type_str(
+            *analyzed
+                .unit()
+                .tables
+                .invoke_type
+                .get(invocation)
+                .expect("invoke type")
+        ),
+        "int Function(int)"
+    );
+    assert!(
+        !analyzed
+            .diagnostic_names()
+            .iter()
+            .any(|name| name.starts_with("undefined_extension_method@"))
+    );
+}
+
+#[test]
+fn driver_reports_ambiguous_extension_method_call() {
+    let source = r#"
+class A {}
+extension First on A { int collide() => 1; }
+extension Second on A { int collide() => 2; }
+
+void f(A a) {
+  a.collide();
+}
+"#;
+    let Some(analyzed) = run(source) else {
+        return;
+    };
+    let method_name = analyzed.node_at(NodeKind::SimpleIdentifier, "a.collide()", 0, 2);
+    let offset = analyzed.unit().ast.offset(method_name) as usize;
+
+    assert!(analyzed.unit().tables.element.get(method_name).is_none());
+    assert!(analyzed.unit().diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.name == "ambiguous_extension_member_access" && diagnostic.offset == offset
+    }));
 }
