@@ -253,7 +253,7 @@ The diagnostic checks (`check_for_yield_of_invalid_type`,
   `AssignedVariablePattern`, `annotation_type` of type annotations and
   `element` of `NamedType`s, and the tables
   `ResolverTables::guarded_pattern_variables` (Dart
-  `GuardedPatternImpl.variables`) and `ResolverTables::switch_group_variables`
+  `GuardedPatternImpl.variables`) and `ResolverTables::switch_case_group_variables`
   (Dart `SwitchStatementCaseGroup.variables`, keyed by the last member of
   the group). When the two tables are not written, the pattern resolver
   computes them from the bound variables. If-case collection elements and
@@ -264,3 +264,25 @@ The diagnostic checks (`check_for_yield_of_invalid_type`,
   not reported yet.
 - The library-wide steps of the library analyzer (constants, verifiers,
   imports, ignore comments) are wave D.
+- The type algorithms (`isSubtypeOf`, `isNonNullable`, `UP`, ...) panic
+  with `StackOverflowError` at a fixed recursion depth
+  (`dartr_typesystem::recursion_guard`), where Dart overflows its stack
+  (recursive bounds such as `X extends FutureOr<X>`). The library analyzer
+  catches the panic per unit (`ResolvedUnit::panic`).
+- The linker does not set `LibraryFragment.enclosing_fragment` for part
+  files; `LibraryScopes` finds the parent of a part from the `part`
+  directives instead.
+
+## 8. Measuring
+
+```sh
+cargo build --release -p dartr -p dartr_difftest
+target/release/difftest resolved-el <dirs or dart: URIs> --no-diagnostics
+target/release/difftest resolved <dirs> --no-diagnostics --kinds IntegerLiteral,IsExpression
+```
+
+Both modes print a per-kind table (oracle entries, entries dartr matches
+exactly, parity). A batch is killed after 60 s + 10 s per file
+(`--timeout-per-file`). Run every corpus command with a time limit, for
+example `perl -e 'alarm 1800; exec @ARGV' target/release/difftest ...`.
+
