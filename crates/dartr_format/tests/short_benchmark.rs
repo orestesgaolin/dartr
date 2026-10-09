@@ -111,9 +111,10 @@ fn short_benchmarks() {
         durations.sort();
         if times > 1 {
             eprintln!(
-                "{}: median {:.3} ms",
+                "{}: median {:.3} ms min {:.3} ms",
                 benchmark.name,
-                durations[durations.len() / 2].as_secs_f64() * 1000.0
+                durations[durations.len() / 2].as_secs_f64() * 1000.0,
+                durations[0].as_secs_f64() * 1000.0
             );
         }
 

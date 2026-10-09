@@ -3,6 +3,8 @@
 use std::cmp::Ordering;
 use std::rc::Rc;
 
+use rustc_hash::FxHashMap;
+
 use super::super::arena::Arena;
 use super::line_splitter::SplitterInfo;
 use super::solve_state::SolveState;
@@ -20,6 +22,20 @@ use super::solve_state::SolveState;
 pub struct SolveStateQueue {
     /// List implementation of a heap.
     queue: Vec<Rc<SolveState>>,
+
+    /// The score (cost, overflow characters) of each state in [queue], kept
+    /// in a separate list so that [try_overlap] scans compact memory.
+    scores: Vec<(i32, i32)>,
+
+    /// The number of states in [queue] with each score. [try_overlap] can
+    /// only find an overlapping state with the same score, so it skips the
+    /// heap traversal when there is none.
+    score_counts: FxHashMap<(i32, i32), u32>,
+}
+
+#[inline(always)]
+fn score_of(state: &SolveState) -> (i32, i32) {
+    (state.splits().cost(), state.overflow_chars())
 }
 
 impl SolveStateQueue {
@@ -37,6 +53,9 @@ impl SolveStateQueue {
 
         let index = self.queue.len();
         self.queue.push(state.clone());
+        let score = score_of(&state);
+        self.scores.push(score);
+        *self.score_counts.entry(score).or_insert(0) += 1;
         self.bubble_up(state, index, info, arena);
     }
 
@@ -44,7 +63,12 @@ impl SolveStateQueue {
         debug_assert!(!self.queue.is_empty());
 
         // Remove the highest priority state.
+        let first_score = self.scores[0];
+        if let Some(count) = self.score_counts.get_mut(&first_score) {
+            *count -= 1;
+        }
         let last = self.queue.pop().unwrap();
+        self.scores.pop();
         if self.queue.is_empty() {
             return last;
         }
@@ -115,64 +139,63 @@ impl SolveStateQueue {
             return false;
         }
 
-        // Count positions from one instead of zero. This gives the numbers some
-        // nice properties. For example, all right children are odd, their left
-        // sibling is even, and the parent is found by shifting right by one.
-        // Valid range for position is [1.._length], inclusive.
-        let mut position = 1;
+        // Dart walks the heap in pre-order, depth first, from position 1 (positions
+        // count from one: the children of p are 2p and 2p + 1). It descends
+        // into a node only if the node orders before [state]: a smaller score,
+        // or the same score, no overlap, and smaller bound rule values. Only
+        // nodes with the same score as [state] can overlap, and all nodes below
+        // a node with a greater score have a greater score too.
+        //
+        // So the walk does the same comparisons as Dart on the nodes with the
+        // same score, in pre-order, skipping the subtrees of the nodes it would
+        // not descend into. This avoids visiting all of the cheaper nodes.
+        let state_score = score_of(state);
+        if self.score_counts.get(&state_score).is_none_or(|&count| count == 0) {
+            return false;
+        }
 
-        // Pre-order depth first search, omit child nodes if the current node has
-        // lower priority than [object], because all nodes lower in the heap will
-        // also have lower priority.
-        loop {
+        let mut candidates: Vec<usize> = Vec::new();
+        for (index, &score) in self.scores.iter().enumerate() {
+            if score == state_score {
+                candidates.push(index + 1);
+            }
+        }
+
+        // Sort the positions in pre-order: align each position to the depth of
+        // the deepest level, ancestors first.
+        let depth = |position: usize| usize::BITS - 1 - position.leading_zeros();
+        let max_depth = depth(length);
+        candidates.sort_by_key(|&position| {
+            let d = depth(position);
+            ((position as u64) << (max_depth - d), d)
+        });
+
+        let mut pruned: Vec<usize> = Vec::new();
+        for position in candidates {
+            let d = depth(position);
+            if pruned.iter().any(|&p| {
+                let pd = depth(p);
+                pd < d && position >> (d - pd) == p
+            }) {
+                continue;
+            }
+
             let index = position - 1;
             let enqueued = &self.queue[index];
-
-            let mut comparison = Self::compare_score(enqueued, state);
-
-            if comparison == Ordering::Equal {
-                let overlap = enqueued.compare_overlap(state, info, arena);
-                if overlap == Ordering::Less {
-                    // The old state is better, so just discard the new one.
-                    return true;
-                } else if overlap == Ordering::Greater {
-                    // The new state is better than the enqueued one, so replace it.
-                    self.queue[index] = state.clone();
-                    return true;
-                } else {
-                    // We can't merge them, so sort by their bound rule values.
-                    comparison = Self::compare_rules(enqueued, state, info, arena);
-                }
+            let overlap = enqueued.compare_overlap(state, info, arena);
+            if overlap == Ordering::Less {
+                // The old state is better, so just discard the new one.
+                return true;
+            } else if overlap == Ordering::Greater {
+                // The new state is better than the enqueued one, so replace it.
+                self.queue[index] = state.clone();
+                self.scores[index] = state_score;
+                return true;
             }
 
-            if comparison == Ordering::Less {
-                // Element may be in subtree. Continue with the left child, if any.
-                let left_child_position = position * 2;
-                if left_child_position <= length {
-                    position = left_child_position;
-                    continue;
-                }
-            }
-
-            // Find the next right sibling or right ancestor sibling.
-            loop {
-                while position % 2 == 1 {
-                    // While position is a right child, go to the parent.
-                    position >>= 1;
-                }
-
-                // Then go to the right sibling of the left child.
-                position += 1;
-
-                // Happens if last element is a left child.
-                if position <= length {
-                    break;
-                }
-            }
-
-            // At root again. Happens for right-most element.
-            if position == 1 {
-                break;
+            // We can't merge them, so sort by their bound rule values.
+            if Self::compare_rules(enqueued, state, info, arena) != Ordering::Less {
+                pruned.push(position);
             }
         }
 
@@ -193,9 +216,11 @@ impl SolveStateQueue {
             }
 
             self.queue[index] = parent.clone();
+            self.scores[index] = self.scores[parent_index];
             index = parent_index;
         }
 
+        self.scores[index] = score_of(&element);
         self.queue[index] = element;
     }
 
@@ -222,11 +247,13 @@ impl SolveStateQueue {
             let comparison = Self::compare(&element, &min_child, info, arena);
 
             if comparison != Ordering::Greater {
+                self.scores[index] = score_of(&element);
                 self.queue[index] = element;
                 return;
             }
 
             self.queue[index] = min_child;
+            self.scores[index] = self.scores[min_child_index];
             index = min_child_index;
             right_child_index = index * 2 + 2;
         }
@@ -238,10 +265,12 @@ impl SolveStateQueue {
 
             if comparison == Ordering::Greater {
                 self.queue[index] = child.clone();
+                self.scores[index] = self.scores[left_child_index];
                 index = left_child_index;
             }
         }
 
+        self.scores[index] = score_of(&element);
         self.queue[index] = element;
     }
 }
