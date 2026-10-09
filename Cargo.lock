@@ -349,6 +349,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "dartr_format"
+version = "0.1.0"
+dependencies = [
+ "dartr_ast",
+ "dartr_ast_builder",
+ "dartr_diagnostics",
+ "dartr_parser",
+ "dartr_syntax",
+ "rayon",
+ "rustc-hash",
+]
+
+[[package]]
 name = "dartr_link"
 version = "0.1.0"
 dependencies = [
