@@ -1,0 +1,251 @@
+{
+ "edits": [
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 5,
+     "line": 2
+    },
+    "start": {
+     "character": 5,
+     "line": 2
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 6,
+     "line": 2
+    },
+    "start": {
+     "character": 6,
+     "line": 2
+    }
+   }
+  },
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 9,
+     "line": 2
+    },
+    "start": {
+     "character": 7,
+     "line": 2
+    }
+   }
+  },
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 10,
+     "line": 3
+    },
+    "start": {
+     "character": 9,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 16,
+     "line": 3
+    },
+    "start": {
+     "character": 16,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 22,
+     "line": 3
+    },
+    "start": {
+     "character": 21,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 23,
+     "line": 3
+    },
+    "start": {
+     "character": 23,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": "\n   ",
+   "range": {
+    "end": {
+     "character": 24,
+     "line": 3
+    },
+    "start": {
+     "character": 24,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 27,
+     "line": 3
+    },
+    "start": {
+     "character": 27,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 29,
+     "line": 3
+    },
+    "start": {
+     "character": 29,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 30,
+     "line": 3
+    },
+    "start": {
+     "character": 30,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 32,
+     "line": 3
+    },
+    "start": {
+     "character": 32,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": "\n      ",
+   "range": {
+    "end": {
+     "character": 33,
+     "line": 3
+    },
+    "start": {
+     "character": 33,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 40,
+     "line": 3
+    },
+    "start": {
+     "character": 39,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 44,
+     "line": 3
+    },
+    "start": {
+     "character": 43,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": "\n    ",
+   "range": {
+    "end": {
+     "character": 46,
+     "line": 3
+    },
+    "start": {
+     "character": 46,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": "\n      ",
+   "range": {
+    "end": {
+     "character": 54,
+     "line": 3
+    },
+    "start": {
+     "character": 54,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": "\n    ",
+   "range": {
+    "end": {
+     "character": 65,
+     "line": 3
+    },
+    "start": {
+     "character": 65,
+     "line": 3
+    }
+   }
+  }
+ ],
+ "file": "lib/needs.dart",
+ "formatted": "import 'dart:math';\n\nclass A {\n  int x = 1;\n  void f(int a, int b) {\n    if (a > b) {\n      print('a');\n    } else {\n      print('b');\n    }\n  }\n\n  List<int> get items => [1, 2, 3];\n}\n\nvoid main() {\n  var a = A();\n  a.f(1, 2);\n  var veryLongVariableNameNumberOne =\n      max(1000000, 2000000) + max(3000000, 4000000) + 5;\n  // comment\n  print(veryLongVariableNameNumberOne);\n}\n",
+ "range": {
+  "end": {
+   "character": 3,
+   "line": 4
+  },
+  "start": {
+   "character": 0,
+   "line": 2
+  }
+ },
+ "unformatted": "import 'dart:math';\nclass  A{\nint x=1  ;\n  void f( int a,int b ){ if(a>b){print( 'a' );} else {print('b');}\n  }\n  List<int> get items => [1,2,3,];\n}\nvoid main(){var a=A();a.f(1,2);\n  var veryLongVariableNameNumberOne = max(1000000, 2000000) + max(3000000, 4000000) + 5;\n// comment\n  print(veryLongVariableNameNumberOne);}\n"
+}

@@ -11,6 +11,8 @@
 //! - [`capabilities`]: client capabilities, static capabilities and
 //!   dynamic registrations.
 //! - [`features`]: the LSP results of the AST features.
+//! - [`formatting`]: the formatter of the formatting requests.
+//! - [`client_configuration`]: the `dart` settings of the client.
 //! - [`computer`]: ports of the Dart computers (folding, selection ranges,
 //!   closing labels, outline).
 //! - [`mapping`]: positions, ranges, diagnostics, symbol kinds, errors.
@@ -22,18 +24,22 @@
 //! `textDocument/{didOpen,didChange,didClose}` (incremental),
 //! `workspace/{didChangeWorkspaceFolders,didChangeConfiguration}`,
 //! `textDocument/{documentSymbol,foldingRange,selectionRange}`,
+//! `textDocument/{formatting,rangeFormatting,onTypeFormatting}`,
 //! `dart/workspace/analysis/complete`; server to client:
 //! `textDocument/publishDiagnostics` (parse diagnostics),
 //! `dart/textDocument/{publishClosingLabels,publishOutline}`, `$/progress`
 //! with `window/workDoneProgress/create`, `$/analyzerStatus`,
-//! `workspace/configuration`, `client/registerCapability`.
+//! `workspace/configuration`, `client/registerCapability`,
+//! `client/unregisterCapability`.
 
 #![allow(clippy::collapsible_if, clippy::collapsible_else_if)]
 
 pub mod args;
 pub mod capabilities;
+pub mod client_configuration;
 pub mod computer;
 pub mod features;
+pub mod formatting;
 pub mod mapping;
 pub mod server;
 pub mod source_edits;

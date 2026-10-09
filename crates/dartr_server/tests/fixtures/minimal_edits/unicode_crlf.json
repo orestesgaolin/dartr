@@ -1,0 +1,124 @@
+{
+ "edits": [
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 5,
+     "line": 1
+    },
+    "start": {
+     "character": 4,
+     "line": 1
+    }
+   }
+  },
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 8,
+     "line": 2
+    },
+    "start": {
+     "character": 7,
+     "line": 2
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 9,
+     "line": 2
+    },
+    "start": {
+     "character": 9,
+     "line": 2
+    }
+   }
+  },
+  {
+   "newText": "\r\n  ",
+   "range": {
+    "end": {
+     "character": 10,
+     "line": 2
+    },
+    "start": {
+     "character": 10,
+     "line": 2
+    }
+   }
+  },
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 17,
+     "line": 2
+    },
+    "start": {
+     "character": 16,
+     "line": 2
+    }
+   }
+  },
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 19,
+     "line": 2
+    },
+    "start": {
+     "character": 18,
+     "line": 2
+    }
+   }
+  },
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 24,
+     "line": 2
+    },
+    "start": {
+     "character": 22,
+     "line": 2
+    }
+   }
+  },
+  {
+   "newText": "\r\n ",
+   "range": {
+    "end": {
+     "character": 32,
+     "line": 2
+    },
+    "start": {
+     "character": 32,
+     "line": 2
+    }
+   }
+  },
+  {
+   "newText": "\r\n",
+   "range": {
+    "end": {
+     "character": 42,
+     "line": 2
+    },
+    "start": {
+     "character": 42,
+     "line": 2
+    }
+   }
+  }
+ ],
+ "file": "lib/unicode_crlf.dart",
+ "formatted": "// 😀 émoji\r\nvar s = '😀';\r\nvoid f() {\r\n  print(s); /* 😀 */\r\n  print(s);\r\n}\r\n",
+ "unformatted": "// 😀 émoji\r\nvar  s = '😀';\r\nvoid f( ){print( s );   /* 😀 */ print(s);}\r\n"
+}

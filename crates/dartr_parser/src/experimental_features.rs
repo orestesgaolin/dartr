@@ -40,6 +40,19 @@ impl ExperimentalFeatures {
     /// in [explicit_enabled] enabled on the command line or in
     /// `analysis_options.yaml`.
     pub fn for_language_version(major: u32, minor: u32, explicit_enabled: &[ExperimentalFlag]) -> Self {
+        Self::for_language_version_with_sdk(major, minor, explicit_enabled, DEFAULT_LANGUAGE_VERSION)
+    }
+
+    /// Dart `restrictEnableFlagsToVersion` with an explicit
+    /// `sdkLanguageVersion` (`FeatureSet.fromEnableFlags2(sdkLanguageVersion:
+    /// ...)`, used by the formatter): explicitly enabled experiments are on
+    /// at [sdk_version] and later.
+    pub fn for_language_version_with_sdk(
+        major: u32,
+        minor: u32,
+        explicit_enabled: &[ExperimentalFlag],
+        sdk_version: (u32, u32),
+    ) -> Self {
         let version = (major, minor);
         let mut enabled = 0u64;
         for &flag in ExperimentalFlag::VALUES {
@@ -49,7 +62,7 @@ impl ExperimentalFeatures {
                 enabled |= 1 << flag as u32;
             }
             if explicit_enabled.contains(&flag)
-                && (version >= flag.experiment_released_version() || version >= DEFAULT_LANGUAGE_VERSION)
+                && (version >= flag.experiment_released_version() || version >= sdk_version)
             {
                 enabled |= 1 << flag as u32;
             }
