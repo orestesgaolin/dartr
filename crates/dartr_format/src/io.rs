@@ -92,7 +92,7 @@ pub fn format_stdin(
     let _ = stdin.read_to_end(&mut bytes);
     // Dart `Utf8Decoder()` (not `allowMalformed`): invalid input is an error.
     let input = match String::from_utf8(bytes) {
-        Ok(input) => input,
+        Ok(input) => strip_bom(input),
         Err(err) => {
             let _ = writeln!(
                 console.stderr,
@@ -147,6 +147,15 @@ pub fn format_stdin(
             );
             options.exit_code = 70; // sysexits.h: EX_SOFTWARE
         }
+    }
+}
+
+/// Dart's UTF-8 decoder (`utf8.decode`, `File.readAsStringSync`) drops a
+/// leading byte order mark.
+pub fn strip_bom(text: String) -> String {
+    match text.strip_prefix('\u{feff}') {
+        Some(rest) => rest.to_string(),
+        None => text,
     }
 }
 
@@ -447,7 +456,7 @@ fn process_files(
 fn format_file(file: &str, formatter: &DartFormatter) -> Outcome {
     let text = match std::fs::read(file) {
         Ok(bytes) => match String::from_utf8(bytes) {
-            Ok(text) => text,
+            Ok(text) => strip_bom(text),
             Err(_) => {
                 return Outcome::ReadError(format!(
                     "FileSystemException: Failed to decode data using encoding 'utf-8', path = '{file}'"

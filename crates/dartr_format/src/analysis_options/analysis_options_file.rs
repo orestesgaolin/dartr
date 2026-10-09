@@ -140,7 +140,9 @@ fn parent_directory(path: &str) -> Option<String> {
 /// Dart `IOFileSystem.readFile`.
 fn read_file(path: &str) -> std::io::Result<String> {
     let bytes = std::fs::read(path)?;
-    String::from_utf8(bytes).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+    String::from_utf8(bytes)
+        .map(crate::io::strip_bom)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
 }
 
 /// Reads an "analysis_options.yaml" file in [directory] or in the nearest
@@ -310,9 +312,13 @@ fn uri_scheme(text: &str) -> Option<&str> {
 /// `Error on line L, column C: message` and the highlighted span.
 fn yaml_exception_text(text: &str, error: &dartr_project::yaml::YamlError) -> String {
     match error.utf16_range(text) {
-        Some((start, end)) => {
-            crate::source_span::span_exception_text(text, None, start, end, &error.message)
-        }
+        Some((start, length)) => crate::source_span::span_exception_text(
+            text,
+            None,
+            start,
+            start + length,
+            &error.message,
+        ),
         None => error.message.clone(),
     }
 }
