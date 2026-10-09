@@ -583,15 +583,15 @@ impl DiagnosticsProvider for ParseOnlyProvider {
 }
 
 /// The diagnostics of the analyzed non-Dart files: `analysis_options.yaml`,
-/// `pubspec.yaml` and `AndroidManifest.xml` (Dart `ContextManager` non-Dart
-/// file handling). The `errors:` severity processing is already applied
-/// (see [dartr_project::non_dart]); [crate::server::analysis_errors] does not
+/// `pubspec.yaml`, `AndroidManifest.xml` and the `fix_data.yaml` files of the
+/// context roots (Dart `ContextManager` non-Dart file handling). The
+/// `errors:` severity processing is already applied (see
+/// [dartr_project::non_dart]); [crate::server::analysis_errors] does not
 /// process these files again.
-// TODO: `fix_data.yaml` (dartr_project has no validator for it yet).
 pub fn non_dart_diagnostics(collection: &AnalysisContextCollection) -> Vec<FileDiagnostics> {
     let mut result = Vec::new();
     for path in dartr_project::non_dart::analyzed_files(collection) {
-        let Some(context) = collection.context_for(&path) else {
+        let Some(context) = dartr_project::non_dart::context_for_file(collection, &path) else {
             continue;
         };
         let Ok(bytes) = std::fs::read(&path) else {

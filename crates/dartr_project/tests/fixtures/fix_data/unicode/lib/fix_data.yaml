@@ -1,0 +1,34 @@
+# ünïcödé 😀 comment
+version: 1
+transforms:
+  - title: "😀 emoji"
+    date: 2020-01-01
+    element:
+      uris: ['ä.dart']
+      function: ƒ
+    variables:
+      v:
+        kind: fragment
+        value: 'é'
+    changes:
+      - kind: addParameter
+        index: 0
+        name: 'ñ'
+        style: optional_named
+        argumentValue:
+          expression: "😀 {% 😀 %} é {% ü %}"
+          requiredIf: "é == 'x'"
+  - title: "😀 second"
+    date: 2020-01-01
+    element:
+      uris: ['ä.dart', 5]
+      function: ƒ
+      extra😀: 1
+    changes:
+      - kind: addParameter
+        index: 0
+        name: 'ñ'
+        style: optional_named
+        argumentValue:
+          expression: "😀 {% 😀 %} é {% ü %} {% ö"
+          requiredIf: "x"

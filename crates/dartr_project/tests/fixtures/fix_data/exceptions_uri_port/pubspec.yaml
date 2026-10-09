@@ -1,0 +1,3 @@
+name: exceptions_uri_port
+environment:
+  sdk: ^3.0.0

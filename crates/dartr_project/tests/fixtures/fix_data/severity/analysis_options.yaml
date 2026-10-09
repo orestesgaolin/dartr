@@ -1,0 +1,5 @@
+analyzer:
+  errors:
+    missing_key: ignore
+    unsupported_key: warning
+    invalid_value: info

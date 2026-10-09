@@ -297,22 +297,14 @@ fn copy_dir(from: &Path, to: &Path) {
     }
 }
 
-/// The non-Dart diagnostics (`analysis_options.yaml`, `pubspec.yaml`,
-/// `AndroidManifest.xml`), with the priority-file output of dartdev, for
-/// the fixture projects of `dartr_project`.
-#[test]
-fn analyze_parity_non_dart_files() {
-    if !dart_available() {
-        eprintln!("skipped: dart 3.13.3 is not on PATH");
-        return;
-    }
-    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../dartr_project/tests/fixtures/diagnostics");
-    let base = scratch().join("non_dart");
+/// Compares `dart analyze` and `dartr analyze` (default, json and machine
+/// output) for each project folder in [fixtures].
+fn check_fixture_projects(fixtures: &Path, scratch_name: &str) {
+    let base = scratch().join(scratch_name);
     if base.exists() {
         fs::remove_dir_all(&base).unwrap();
     }
-    let mut names: Vec<String> = fs::read_dir(&fixtures)
+    let mut names: Vec<String> = fs::read_dir(fixtures)
         .unwrap()
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
@@ -346,6 +338,33 @@ fn analyze_parity_non_dart_files() {
         failures.len(),
         failures.join("\n")
     );
+}
+
+/// The non-Dart diagnostics (`analysis_options.yaml`, `pubspec.yaml`,
+/// `AndroidManifest.xml`), with the priority-file output of dartdev, for
+/// the fixture projects of `dartr_project`.
+#[test]
+fn analyze_parity_non_dart_files() {
+    if !dart_available() {
+        eprintln!("skipped: dart 3.13.3 is not on PATH");
+        return;
+    }
+    let fixtures =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../dartr_project/tests/fixtures/diagnostics");
+    check_fixture_projects(&fixtures, "non_dart");
+}
+
+/// The `fix_data.yaml` diagnostics (`TransformSetParser`): reported for
+/// `lib/fix_data.yaml` and `lib/fix_data/**.yaml`, also when excluded.
+#[test]
+fn analyze_parity_fix_data_files() {
+    if !dart_available() {
+        eprintln!("skipped: dart 3.13.3 is not on PATH");
+        return;
+    }
+    let fixtures =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../dartr_project/tests/fixtures/fix_data");
+    check_fixture_projects(&fixtures, "fix_data");
 }
 
 const LINT_RULES: &str = "\
