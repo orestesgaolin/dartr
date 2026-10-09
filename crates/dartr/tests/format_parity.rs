@@ -4,12 +4,6 @@
 //! replaced by `dartr ` in the output of the real tool, and the time in the
 //! summary line ("in 0.01 seconds.") is replaced by a placeholder.
 //!
-//! Cases that need formatted output (not only argument handling, file walk
-//! and syntax errors) can pass only once the formatting styles (the tall and
-//! short style ports in `dartr_format`) are merged. While the styles are
-//! stubs (they return "... not ported yet"), these cases are skipped with a
-//! message. Set `DARTR_FORMAT_PARITY=1` to compare them anyway.
-//!
 //! Skipped (with a message) when `dart` is not on PATH.
 
 use std::fs;
@@ -426,7 +420,7 @@ fn format_matches_dart_format() {
         eprintln!("skipped: dart 3.13.3 is not on PATH");
         return;
     }
-    let force = std::env::var("DARTR_FORMAT_PARITY").is_ok_and(|v| v == "1");
+    let force = true;
     let base = scratch();
     let mut failures = Vec::new();
     let mut skipped = Vec::new();

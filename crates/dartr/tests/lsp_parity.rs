@@ -656,7 +656,9 @@ fn lsp_lints_and_error_processors() {
 const FORMAT_PARITY_ENV: &str = "DARTR_FORMAT_PARITY";
 
 fn format_parity_enabled() -> bool {
-    std::env::var_os(FORMAT_PARITY_ENV).is_some_and(|v| v == "1")
+    // The formatting styles are ported: always compare formatted output.
+    // `DARTR_FORMAT_PARITY=0` skips these steps.
+    std::env::var_os(FORMAT_PARITY_ENV).is_none_or(|v| v != "0")
 }
 
 /// A package with files that need formatting, a nested package whose
