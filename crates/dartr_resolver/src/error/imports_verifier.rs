@@ -511,8 +511,8 @@ impl Replay<'_, '_, '_> {
     }
 
     /// Dart `notifyExtensionUsed` of the extension member resolution: the
-    /// element of [node] is an instance member of an extension of another
-    /// library, and the receiver is not an extension override.
+    /// element of [node] is an instance member of an extension, and the
+    /// receiver is not an extension override.
     fn check_extension_use(&mut self, node: NodeId) {
         let ast = self.v.ast;
         let ctx = self.v.ctx;
@@ -531,9 +531,20 @@ impl Replay<'_, '_, '_> {
             let Some(extension) = ctx.element_data(base).and_then(|d| d.enclosing) else {
                 continue;
             };
+            // Dart notifies every extension that the extension member
+            // resolution picks, also one of this library (an import that
+            // re-exports this library provides it too). An unqualified name
+            // inside the extension is a lexical lookup, not an extension
+            // resolution.
             if extension.tag() != Tag::Extension
-                || self.is_library_element(extension)
                 || member::is_static(&ctx, ElemRef::Base(base))
+                || (ast.is::<SimpleIdentifier>(node)
+                    && self
+                        .v
+                        .rt
+                        .scope_lookup_result
+                        .get(node)
+                        .is_some_and(|r| r.getter.is_some() || r.setter.is_some()))
             {
                 continue;
             }
