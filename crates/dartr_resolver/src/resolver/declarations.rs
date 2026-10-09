@@ -121,7 +121,23 @@ impl<'a> ResolverVisitor<'a> {
         self.check_unreachable_node(node);
         self.visit_children(node);
         self.enclosing_class = outer;
-        // Dart `baseOrFinalTypeVerifier.checkElement` (wave D).
+        // Dart `baseOrFinalTypeVerifier.checkElement(declaredElement,
+        // node.implementsClause)` (visitClassDeclaration,
+        // visitMixinDeclaration).
+        let implements_clause = if let Some(c) = self.ast.cast::<ClassDeclaration>(node) {
+            Some(self.ast[c].implements_clause)
+        } else {
+            self.ast
+                .cast::<MixinDeclaration>(node)
+                .map(|m| self.ast[m].implements_clause)
+        };
+        if let (Some(element), Some(implements_clause)) = (element, implements_clause) {
+            crate::error::base_or_final_type_verifier::check_element(
+                self,
+                element,
+                implements_clause,
+            );
+        }
     }
 
     pub fn visit_class_declaration(&mut self, node: Id<ClassDeclaration>) {
@@ -129,8 +145,20 @@ impl<'a> ResolverVisitor<'a> {
     }
 
     pub fn visit_class_type_alias(&mut self, node: Id<ClassTypeAlias>) {
+        let element = self
+            .declared_element(node)
+            .and_then(|e| e.cast::<InterfaceElement>());
         self.check_unreachable_node(node);
         self.visit_children(node);
+        // Dart `elementResolver.visitClassTypeAlias(node)` does nothing.
+        if let Some(element) = element {
+            let implements_clause = self.ast[node].implements_clause;
+            crate::error::base_or_final_type_verifier::check_element(
+                self,
+                element,
+                implements_clause,
+            );
+        }
     }
 
     pub fn visit_enum_declaration(&mut self, node: Id<EnumDeclaration>) {
