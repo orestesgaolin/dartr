@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  DART_VERSION: 3.13.3
+
+jobs:
+  fmt:
+    # The workspace is not rustfmt-clean yet. Report only; do not block.
+    # Remove `continue-on-error` after one `cargo fmt --all` commit.
+    name: rustfmt (non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - run: cargo fmt --all --check
+
+  clippy:
+    # Errors block. Warnings are reported but do not block: one
+    # `clippy::doc_nested_refdefs` warning exists in dartr_ast_builder.
+    # Switch to `-- -D warnings` after it is fixed.
+    name: clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-targets
+
+  test:
+    name: test (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-latest
+          - name: macos-arm64
+            os: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1.8.1
+        with:
+          sdk: 3.13.3
+      - uses: ./.github/actions/setup-dart-sdk
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --workspace
+      - run: cargo test --release --workspace --no-fail-fast
+
+  determinism:
+    # docs/design/semantics.md: output may not depend on the thread count.
+    name: determinism (elements dump)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1.8.1
+        with:
+          sdk: 3.13.3
+      - uses: ./.github/actions/setup-dart-sdk
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p dartr
+      - name: Dump with 1 and 16 threads
+        run: |
+          libs=crates/dartr/tests/fixtures/elements/dart_libraries.txt
+          mapfile -t uris < <(grep -v '^$' "$libs")
+          RAYON_NUM_THREADS=1 target/release/dartr dump elements "${uris[@]}" > elements-1.jsonl
+          RAYON_NUM_THREADS=16 target/release/dartr dump elements "${uris[@]}" > elements-16.jsonl
+          test -s elements-1.jsonl
+          wc -c elements-1.jsonl elements-16.jsonl
+          cmp elements-1.jsonl elements-16.jsonl
