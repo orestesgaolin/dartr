@@ -146,6 +146,7 @@ fn run() {
             }
         }
         // Detached parts have parse-only context; attached parts are in the defining library.
+        let parsed_rules = dartr_lints::rules::parsed_rules();
         for (&index, &file) in selected.iter().zip(&files) {
             if !results.contains_key(&paths[index]) {
                 let enabled: Vec<_> = requests[index]["enabled"]
@@ -153,6 +154,7 @@ fn run() {
                     .unwrap()
                     .iter()
                     .map(|r| r.as_str().unwrap())
+                    .filter(|rule| parsed_rules.contains(rule))
                     .collect();
                 let parsed = &driver.fs.file(file).c().parsed;
                 let ds =
