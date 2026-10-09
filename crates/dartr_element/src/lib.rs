@@ -55,6 +55,7 @@ mod pool;
 pub mod resolution;
 pub mod slot;
 pub mod store;
+pub mod type_inference;
 pub mod type_provider;
 pub mod types;
 

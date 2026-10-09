@@ -42,7 +42,7 @@ const DROPPED: &[(&str, &str)] = &[
     ),
     (
         "PropertyInducingElementImpl.typeInference",
-        "linker status vectors of top-level inference (unit C10, design §3)",
+        "the dartr_link::top_level_inference hook (status map of the linker, dartr_element::type_inference)",
     ),
     (
         "PropertyInducingElementImpl.internal",

@@ -151,6 +151,16 @@ Output may never depend on id values or on hash iteration order.
 
 ## 7. Placeholders for later units
 
+- Top-level inference (C10): a field or top-level variable whose type comes
+  from its initializer has an empty `type_` slot until it is inferred. While
+  a cycle is linked, `type_inference::ensure_property_type` (and
+  `ensure_accessor_return_type`, `ensure_formal_parameter_type` for the
+  accessors and the setter parameter) infer it on demand (Dart
+  `PropertyInducingElementImpl.type`). Code that reads these slots during
+  linking calls them first; outside of linking they do nothing. Never cache
+  a type computed from an empty slot (`member_type_cached`, an executable
+  `type_`) before the call.
+
 - `todo!("<Dart name>")` bodies: `FieldElementImpl.declaringFormalParameter` (B4).
 - Inheritance (A7, done): `dartr_typesystem::inheritance_manager3` caches the
   interface of each interface element in `InterfaceElementData.inheritance`

@@ -413,6 +413,14 @@ impl<'a> ConstantEvaluationEngine<'a> {
                 for &i in ast.list(ast[node].initializers) {
                     result.push(decl.with(i));
                 }
+            } else if ast.kind(decl.node) == NodeKind::PrimaryConstructorDeclaration
+                && let Some(body) = primary_constructor_body(ast, decl.node)
+            {
+                // Dart: the initializers of a primary constructor are in
+                // the `this : ...;` body of the declaration.
+                for &i in ast.list(ast[body].initializers) {
+                    result.push(decl.with(i));
+                }
             }
         }
         result
@@ -606,10 +614,16 @@ impl<'a> ConstantEvaluationEngine<'a> {
         let Some(enclosing) = ctx.element_data(e).and_then(|d| d.enclosing) else {
             return Constant::Value(null_object(&ts));
         };
-        let element_type = enclosing
-            .cast::<InterfaceElement>()
-            .map(|i| ctx.interface_this_type(i))
-            .unwrap_or(TypeId::DYNAMIC);
+        // Dart: the synthetic literal `const <E<...>>[...]` has the type of
+        // the `values` field (`List<E<dynamic>>` for a generic enum).
+        let values_type = variable_type(&ctx, e);
+        let element_type = match ctx.type_arguments(values_type).first() {
+            Some(&t) if ctx.interface_element(values_type).is_some() => t,
+            _ => enclosing
+                .cast::<InterfaceElement>()
+                .map(|i| ctx.interface_this_type(i))
+                .unwrap_or(TypeId::DYNAMIC),
+        };
         let mut elements = Vec::new();
         for c in crate::element_ext::enum_constants(&ctx, EId::from_raw(enclosing)) {
             match self.evaluation_result(c) {
@@ -821,7 +835,7 @@ impl<'a> ConstantEvaluationEngine<'a> {
         if !is_const_constructor(&ctx, constant) {
             return;
         }
-        if let Some(redirected) = get_const_redirected_constructor(&ctx, ElemRef::Base(constant)) {
+        if let Some(redirected) = self.get_const_redirected_constructor(ElemRef::Base(constant)) {
             callback(ConstantTarget::Element(member::base_element(
                 &ctx, redirected,
             )));
@@ -1125,46 +1139,105 @@ pub fn super_constructor_parameter(ctx: &Ctx<'_>, e: ElementId) -> Option<ElemRe
     }
 }
 
-/// Dart `getConstRedirectedConstructor(constructor)`: if [constructor]
-/// redirects to another const constructor, the const constructor it
-/// redirects to.
-pub fn get_const_redirected_constructor(ctx: &Ctx<'_>, constructor: ElemRef) -> Option<ElemRef> {
-    let base = member::base_element(ctx, constructor);
-    if !is_factory_constructor(ctx, base) {
-        return None;
-    }
-    let enclosing = ctx.element_data(base)?.enclosing?;
-    if enclosing == ctx.tp.symbol_element().raw() {
-        // The dart:core.Symbol has a const factory constructor that
-        // redirects to dart:_internal.Symbol. That in turn redirects to an
-        // external const constructor, which we won't be able to evaluate.
-        // So stop following the chain of redirections at dart:core.Symbol,
-        // and let [evaluateInstanceCreationExpression] handle it specially.
-        return None;
-    }
-    let redirected = ctx
-        .get(EId::<dartr_element::ConstructorElement>::from_raw(base))
-        .redirected_constructor
-        .get()?;
-    // Dart `ConstructorMember.redirectedConstructor` substitutes.
-    let redirected = match constructor {
-        ElemRef::Base(_) => redirected,
-        ElemRef::Member(_) => {
-            member::substitute(ctx, redirected, &member::substitution(ctx, constructor))
+impl ConstantEvaluationEngine<'_> {
+    /// Dart `getConstRedirectedConstructor(constructor)`: if [constructor]
+    /// redirects to another const constructor, the const constructor it
+    /// redirects to.
+    pub fn get_const_redirected_constructor(&self, constructor: ElemRef) -> Option<ElemRef> {
+        let ctx = self.global_ctx();
+        let base = member::base_element(&ctx, constructor);
+        if !is_factory_constructor(&ctx, base) {
+            return None;
         }
-    };
-    if !is_const_constructor(ctx, member::base_element(ctx, redirected)) {
-        // Delegating to a non-const constructor--this is not allowed (and
-        // is checked elsewhere).
-        return None;
+        let enclosing = ctx.element_data(base)?.enclosing?;
+        if enclosing == ctx.tp.symbol_element().raw() {
+            // The dart:core.Symbol has a const factory constructor that
+            // redirects to dart:_internal.Symbol. That in turn redirects to
+            // an external const constructor, which we won't be able to
+            // evaluate. So stop following the chain of redirections at
+            // dart:core.Symbol, and let [evaluateInstanceCreationExpression]
+            // handle it specially.
+            return None;
+        }
+        let redirected = ctx
+            .get(EId::<dartr_element::ConstructorElement>::from_raw(base))
+            .redirected_constructor
+            .get()?;
+        let redirected_base = member::base_element(&ctx, redirected);
+        // Dart `redirectedConstructor` is substituted with the type of the
+        // redirection (`= B<int>.bar`). The linked element may be the base
+        // constructor: take the type from the resolved declaration.
+        let mut redirect_type = member::return_type(&ctx, redirected);
+        if let Some(decl) = self.declaration(base) {
+            let u = self.unit(decl.unit);
+            if let Some(d) = u.ast.cast::<ConstructorDeclaration>(decl.node)
+                && let Some(name) = u.ast[d].redirected_constructor
+                && let Some(&t) = u.tables.annotation_type.get(u.ast[name].type_)
+                && ctx.interface_element(t).is_some()
+                && !t.is_local()
+            {
+                redirect_type = t;
+            }
+        }
+        // Dart `ConstructorMember.redirectedConstructor`:
+        // `from2(redirected.baseElement,
+        // substitution.mapInterfaceType(redirected.returnType))`.
+        if let ElemRef::Member(_) = constructor {
+            redirect_type =
+                member::substitution(&ctx, constructor).substitute_type(&ctx, redirect_type);
+        }
+        let redirected = if ctx.interface_element(redirect_type).is_some()
+            && !ctx.type_arguments(redirect_type).is_empty()
+        {
+            member::constructor_from2(&ctx, redirected_base, redirect_type)
+        } else {
+            redirected
+        };
+        if !is_const_constructor(&ctx, redirected_base) {
+            // Delegating to a non-const constructor--this is not allowed
+            // (and is checked elsewhere).
+            return None;
+        }
+        Some(redirected)
     }
-    Some(redirected)
 }
 
 /// The element of an annotation (Dart `ElementAnnotationImpl.element`:
 /// `annotation.element`).
 fn annotation_element(unit: &ResolvedUnit, annotation: Id<Annotation>) -> Option<ElemRef> {
     unit.tables.element.get(annotation).copied()
+}
+
+/// The `PrimaryConstructorBody` of the type declaration of the primary
+/// constructor [declaration].
+fn primary_constructor_body(
+    ast: &Ast,
+    declaration: NodeId,
+) -> Option<Id<dartr_ast::PrimaryConstructorBody>> {
+    let mut current = ast.parent(declaration);
+    while let Some(c) = current {
+        if matches!(
+            ast.kind(c),
+            NodeKind::ClassDeclaration
+                | NodeKind::EnumDeclaration
+                | NodeKind::ExtensionTypeDeclaration
+        ) {
+            fn find(ast: &Ast, n: NodeId, depth: u32) -> Option<NodeId> {
+                if ast.kind(n) == NodeKind::PrimaryConstructorBody {
+                    return Some(n);
+                }
+                if depth == 0 {
+                    return None;
+                }
+                ast.children(n)
+                    .into_iter()
+                    .find_map(|c| find(ast, c, depth - 1))
+            }
+            return find(ast, c, 3).map(Id::from_raw);
+        }
+        current = ast.parent(c);
+    }
+    None
 }
 
 /// The value of the default clause of a formal parameter node.
@@ -2012,9 +2085,25 @@ impl<'e, 'a> ConstantVisitor<'e, 'a> {
         let ast = &u.ast;
         let ctx = self.engine.ctx(&u);
         let node = Id::<EnumConstantDeclaration>::from_raw(n.node);
-        let Some(constructor) = u.tables.element.get(n.node).copied() else {
+        let Some(mut constructor) = u.tables.element.get(n.node).copied() else {
             return invalid_at_node(ast, n.node, diag::invalid_constant());
         };
+        // Dart: the synthetic `InstanceCreationExpression` is resolved with
+        // the type of the constant (`E<double>` for `v1<double>`); the
+        // constructor is substituted with it.
+        if let Some(&fragment) = u.tables.declared_fragment.get(n.node)
+            && let Some(&field) = ctx
+                .fragment_data(fragment)
+                .and_then(|d| d.element.try_get())
+        {
+            let field_type = variable_type(&ctx, field);
+            let base = member::base_element(&ctx, constructor);
+            if ctx.interface_element(field_type).is_some()
+                && !ctx.type_arguments(field_type).is_empty()
+            {
+                constructor = member::constructor_from2(&ctx, base, field_type);
+            }
+        }
         let type_arguments = ctx
             .type_arguments(member::return_type(&ctx, constructor))
             .to_vec();
@@ -3733,7 +3822,12 @@ impl<'e, 'a> InstanceCreationEvaluator<'e, 'a> {
                 return false;
             }
             let ctx = self.engine.ctx(&u);
-            let Some(element) = u.tables.param_element.get(second_argument.node).copied() else {
+            let Some(element) = u
+                .tables
+                .param_element
+                .get(ast[named].argument_expression)
+                .copied()
+            else {
                 return false;
             };
             let base = member::base_element(&ctx, element);
@@ -4360,7 +4454,13 @@ impl<'e, 'a> InstanceCreationEvaluator<'e, 'a> {
             // an unresolved expression is evaluated. We do this to continue
             // the rest of the evaluation without producing unrelated errors.
             if let Some(named) = au.ast.cast::<NamedArgument>(argument.node) {
-                let corresponding = au.tables.param_element.get(argument.node).copied();
+                // Dart `argument.correspondingParameter` (keyed by the expression
+                // of the named argument).
+                let corresponding = au
+                    .tables
+                    .param_element
+                    .get(au.ast[named].argument_expression)
+                    .copied();
                 let parameter_type =
                     corresponding.map_or(TypeId::INVALID, |p| member::type_(&actx, p));
                 let argument_constant = constant_visitor.value_of(
@@ -4431,6 +4531,7 @@ impl<'e, 'a> InstanceCreationEvaluator<'e, 'a> {
         });
 
         let redirection_result = follow_constant_redirection_chain(
+            engine,
             &ctx,
             constructor,
             &invocation_positional_values,
@@ -4471,6 +4572,7 @@ impl<'e, 'a> InstanceCreationEvaluator<'e, 'a> {
 /// Dart `_followConstantRedirectionChain`.
 #[allow(clippy::too_many_arguments)]
 fn follow_constant_redirection_chain(
+    engine: &ConstantEvaluationEngine<'_>,
     ctx: &Ctx<'_>,
     original_constructor: ElemRef,
     positional_values: &[DartObjectImpl],
@@ -4482,7 +4584,7 @@ fn follow_constant_redirection_chain(
 ) -> RedirectionResult {
     let mut constructor = original_constructor;
     let mut constructors_visited = IndexSet::new();
-    while let Some(redirected_constructor) = get_const_redirected_constructor(ctx, constructor) {
+    while let Some(redirected_constructor) = engine.get_const_redirected_constructor(constructor) {
         constructors_visited.insert(member::base_element(ctx, constructor));
         if constructors_visited.contains(&member::base_element(ctx, redirected_constructor)) {
             // Cycle in redirecting factory constructors--this is not allowed
