@@ -40,6 +40,7 @@ use std::sync::mpsc;
 use std::thread;
 
 use dartr_ast_builder::{ParsedUnit, parse_file};
+use dartr_cli::DriverSession;
 use dartr_cli::provider::{AnalyzedFile, diagnostics_with_reader};
 use dartr_cli::server::processed_diagnostics;
 use dartr_parser::ExperimentalFlag;
@@ -163,6 +164,11 @@ pub struct Server {
     waiting_for_config: bool,
     files_with_client_diagnostics: HashSet<String>,
     parsed: HashMap<String, Rc<ParsedFile>>,
+    /// The analysis drivers of the contexts of [Self::collection] (full
+    /// diagnostics; design §4.2 invalidation on file changes).
+    session: DriverSession,
+    /// `DARTR_PARSE_ONLY=1`: the parse-only diagnostics (for comparison).
+    parse_only: bool,
     next_request_id: i64,
     pending: HashMap<i64, Pending>,
     progress: Option<ProgressReporter>,
@@ -260,6 +266,8 @@ impl Server {
             waiting_for_config: false,
             files_with_client_diagnostics: HashSet::new(),
             parsed: HashMap::new(),
+            session: DriverSession::default(),
+            parse_only: std::env::var_os("DARTR_PARSE_ONLY").is_some(),
             next_request_id: 1,
             pending: HashMap::new(),
             progress: None,
@@ -870,6 +878,17 @@ impl Server {
 
     fn file_changed(&mut self, path: &str) {
         self.parsed.remove(path);
+        if path.ends_with(".dart") && !self.parse_only {
+            // Dart `AnalysisDriver.changeFile`: the units of the libraries
+            // to analyze again (only the library of the file when only
+            // function bodies changed; after an API change the relinked
+            // libraries too).
+            for affected in self.session.change_file(path) {
+                if self.analyzed.contains(&affected) || self.priority.contains(&affected) {
+                    self.dirty.insert(affected);
+                }
+            }
+        }
         if self.analyzed.contains(path)
             || (path.ends_with(".dart") && self.priority.iter().any(|p| p == path))
         {
@@ -1063,6 +1082,8 @@ impl Server {
                 }
             })
             .collect();
+        // New contexts: new drivers.
+        self.session = DriverSession::default();
         self.collection = if included.is_empty() {
             None
         } else {
@@ -1180,13 +1201,13 @@ impl Server {
         out
     }
 
-    /// The diagnostics of Dart files, as LSP diagnostics: parse diagnostics,
-    /// AST-only lints, ignore-comment handling and the `errors:` processors
-    /// of the analysis options (the same pipeline as `dartr analyze`, with
-    /// the content of open documents). Files without content get an empty
-    /// list.
+    /// The diagnostics of Dart files, as LSP diagnostics: the diagnostics of
+    /// the analysis driver, AST-only lints, ignore-comment handling and the
+    /// `errors:` processors of the analysis options (the same pipeline as
+    /// `dartr analyze`, with the content of open documents). Files without
+    /// content get an empty list.
     fn dart_diagnostics(
-        &self,
+        &mut self,
         paths: &[String],
         options: &DiagnosticOptions,
     ) -> Vec<(String, Vec<Value>)> {
@@ -1217,7 +1238,13 @@ impl Server {
             Some(content) => Some(content.to_string()),
             None => read_file(path),
         };
-        let results = diagnostics_with_reader(collection, &files, &reader);
+        let results = if self.parse_only {
+            diagnostics_with_reader(collection, &files, &reader)
+        } else {
+            // The driver reads open documents through the overlays of
+            // `dartr_project::fs`.
+            self.session.diagnostics(collection, &files)
+        };
         let mut by_path: HashMap<String, Vec<Value>> = HashMap::new();
         for file in &results {
             let values = processed_diagnostics(collection, file)
