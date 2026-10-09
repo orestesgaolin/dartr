@@ -134,3 +134,168 @@ pub fn cp(
     case.packages = packages;
     (case, source)
 }
+
+/// A test ported mechanically from an analyzer diagnostic test file (see
+/// `wd_g3_ported.rs`).
+pub struct Ported {
+    pub name: &'static str,
+    pub strict_inference: bool,
+    /// Packages (name, files relative to `lib`); `test` adds files next to
+    /// the test file.
+    pub packages: &'static [(&'static str, &'static [(&'static str, &'static str)])],
+    /// The test code; with inline diagnostic markers when [expected] is
+    /// `None` (Dart `resolveTestCodeWithDiagnostics`).
+    pub source: &'static str,
+    /// Dart `assertErrorsInCode`: (camelCase name, offset, length).
+    pub expected: Option<&'static [(&'static str, usize, usize)]>,
+}
+
+/// The code name of the diagnostic with the Dart camelCase name.
+fn code_name_of(camel: &str) -> Option<&'static str> {
+    dartr_diagnostics::diag::ALL_CODES
+        .iter()
+        .find(|c| c.camel_case_name == camel)
+        .map(|c| c.name)
+}
+
+/// Dart `removeDiagnosticExpectations` and the expected diagnostics of
+/// the markers: (code name or camel name if unknown, offset, length) in
+/// UTF-16 units.
+pub fn parse_markers(source: &str) -> (String, Vec<(String, usize, usize)>) {
+    let caret = |l: &str| {
+        let t = l.trim_start();
+        t.starts_with("//") && {
+            let r = t[2..].trim();
+            !r.is_empty() && r.chars().all(|c| c == '^')
+        }
+    };
+    let expectation = |l: &str| {
+        let t = l.trim_start();
+        t.starts_with("//") && {
+            let r = t[2..].trim_start();
+            r.starts_with("[diag.") || r.starts_with("[context")
+        }
+    };
+    let mut code = String::new();
+    let mut expected = Vec::new();
+    let mut last_line_start = 0usize;
+    let mut current_caret: Option<(usize, usize)> = None;
+    let lines: Vec<&str> = source.split_inclusive('\n').collect();
+    let mut retained: Vec<&str> = Vec::new();
+    for line in &lines {
+        let text = line.trim_end_matches(['\n', '\r']);
+        if caret(text) {
+            let col = text.find('^').unwrap();
+            let len = text.matches('^').count();
+            current_caret = Some((col, len));
+            continue;
+        }
+        if expectation(text) {
+            let r = text.trim_start()[2..].trim_start();
+            if let Some(rest) = r.strip_prefix("[diag.") {
+                let name_end = rest.find(']').unwrap_or(rest.len());
+                let camel = &rest[..name_end];
+                let after = &rest[name_end + 1..];
+                let mut range = current_caret;
+                if let Some(c) = after.strip_prefix("[column ") {
+                    let c_end = c.find(']').unwrap();
+                    let column: usize = c[..c_end].trim().parse().unwrap();
+                    let l = &c[c_end + 1..];
+                    let length: usize = l
+                        .strip_prefix("[length ")
+                        .and_then(|l| l.split(']').next())
+                        .and_then(|n| n.trim().parse().ok())
+                        .unwrap_or(0);
+                    range = Some((column - 1, length));
+                }
+                if let Some((col, len)) = range {
+                    let name = code_name_of(camel).map(str::to_string).unwrap_or_else(|| camel.to_string());
+                    expected.push((name, last_line_start + col, len));
+                }
+            }
+            continue;
+        }
+        current_caret = None;
+        retained.push(line);
+        last_line_start = code.encode_utf16().count();
+        code.push_str(line);
+    }
+    // A terminator before removed marker lines is not a trailing one.
+    if lines.last().is_some_and(|l| {
+        let t = l.trim_end_matches(['\n', '\r']);
+        caret(t) || expectation(t)
+    }) {
+        while code.ends_with('\n') || code.ends_with('\r') {
+            code.pop();
+        }
+    }
+    let _ = retained;
+    // Columns are UTF-16 offsets within ASCII test lines.
+    (code, expected)
+}
+
+/// Runs the [cases] whose names pass [filter]; returns (failures, run).
+pub fn run_ported(cases: &[Ported], filter: impl Fn(&str) -> bool) -> (Vec<String>, usize) {
+    let codes: Vec<&str> = CODES
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .collect();
+    let mut failures = Vec::new();
+    let mut count = 0;
+    let Some(meta) = mock_package_files("addMetaPackageFiles") else {
+        eprintln!("skipped: no SDK sources");
+        return (failures, 0);
+    };
+    let angular = mock_package_files("addAngularMetaPackageFiles").unwrap_or_default();
+    for case in cases.iter().filter(|c| filter(c.name)) {
+        count += 1;
+        let (code, mut expected) = match case.expected {
+            None => parse_markers(case.source),
+            Some(list) => (
+                case.source.to_string(),
+                list.iter()
+                    .map(|&(camel, o, l)| {
+                        (code_name_of(camel).map(str::to_string).unwrap_or_else(|| camel.to_string()), o, l)
+                    })
+                    .collect(),
+            ),
+        };
+        expected.retain(|(c, _, _)| codes.contains(&c.as_str()));
+        let mut packages: Vec<(&str, Vec<(String, String)>)> =
+            vec![("meta", meta.clone()), ("angular_meta", angular.clone())];
+        let mut test_files: Vec<(&str, &str)> = vec![("test.dart", code.as_str())];
+        for (name, files) in case.packages {
+            if *name == "test" {
+                test_files.extend(files.iter().copied());
+            } else {
+                packages.push((name, files.iter().map(|(p, c)| (p.to_string(), c.to_string())).collect()));
+            }
+        }
+        let options = AnalysisOptions {
+            strict_inference: case.strict_inference,
+            ..AnalysisOptions::default()
+        };
+        let Some(a) = analyze_in_packages(&test_files, &packages, options) else {
+            eprintln!("skipped: no Dart SDK on PATH");
+            return (failures, 0);
+        };
+        if let Some(panic) = &a.unit().panic {
+            failures.push(format!("{}: panic {panic}", case.name));
+            continue;
+        }
+        let mut actual: Vec<(String, usize, usize)> = a
+            .unit()
+            .diagnostics
+            .iter()
+            .filter(|d| codes.contains(&d.code.name))
+            .map(|d| (d.code.name.to_string(), d.offset, d.length))
+            .collect();
+        actual.sort();
+        expected.sort();
+        if actual != expected {
+            failures.push(format!("{}:\n  expected {expected:?}\n  actual   {actual:?}", case.name));
+        }
+    }
+    (failures, count)
+}
