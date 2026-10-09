@@ -352,7 +352,7 @@ fn is_valid_wrapping_target(ast: &Ast, expression: Option<NodeId>) -> bool {
 pub struct ArgumentSublist {
     /// The first argument of the full argument list from the AST (Dart
     /// `_allArguments.first`), and whether there is more than one argument.
-    all_arguments_first: NodeId,
+    all_arguments_first: Option<NodeId>,
     all_arguments_length: usize,
 
     /// If all positional arguments occur before all named arguments, then this
@@ -436,7 +436,7 @@ impl ArgumentSublist {
         }
 
         ArgumentSublist {
-            all_arguments_first: all_arguments[0],
+            all_arguments_first: all_arguments.first().copied(),
             all_arguments_length: all_arguments.len(),
             positional,
             named,
@@ -521,7 +521,7 @@ impl ArgumentSublist {
         // Split before the first argument.
         let split = visitor
             .builder
-            .split(true, arguments[0] != self.all_arguments_first);
+            .split(true, Some(arguments[0]) != self.all_arguments_first);
         self.previous_split = Some(split);
         visitor.builder.arena.rule_mut(rule).before_argument(Some(split));
 
@@ -552,7 +552,7 @@ impl ArgumentSublist {
         let ast = visitor.ast;
         let is_named = ast.kind(argument) == NodeKind::NamedArgument;
         let nest_block_argument = self.all_arguments_length > 1
-            || ast.kind(self.all_arguments_first) == NodeKind::RecordLiteral;
+            || ast.kind(self.all_arguments_first.unwrap()) == NodeKind::RecordLiteral;
 
         // If we're about to write a block argument, handle it specially.
         let argument_block = self
