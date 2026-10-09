@@ -81,7 +81,7 @@ fn build() -> SourceTest {
 #[test]
 fn property_promotability_of_getters_and_methods() {
     let test = build();
-    let ops = test.t.type_system_operations();
+    let ops = test.mock().type_system_operations();
     let cases: [(ElemRef, Option<PropertyNonPromotabilityReason>, bool); 7] = [
         (test.getter("A", "_promotable"), None, true),
         (
@@ -133,7 +133,7 @@ fn property_promotability_of_getters_and_methods() {
 fn property_promotability_of_substituted_getter() {
     let test = build();
     let ctx = test.ctx();
-    let ops = test.t.type_system_operations();
+    let ops = test.mock().type_system_operations();
     let t = test.type_parameter("T");
     let substitution = MapSubstitution::from_pairs(&[t], &[ctx.tp.int_type()]);
     let generic = member::substitute(&ctx, test.getter("A", "_generic"), &substitution);
@@ -159,7 +159,7 @@ fn local_variable(
     ty: Option<TypeId>,
 ) -> EId<PromotableElement> {
     let ctx = test.ctx();
-    let store = &test.t.store;
+    let store = &test.mock().store;
     let fd = FragmentData::new(Some(ctx.name(name)), Some(0));
     for &flag in flags {
         fd.flags.set(flag, true);
@@ -189,7 +189,7 @@ fn formal_parameter(
     ty: TypeId,
 ) -> EId<PromotableElement> {
     let ctx = test.ctx();
-    let store = &test.t.store;
+    let store = &test.mock().store;
     let fd = FragmentData::new(Some(ctx.name(name)), Some(0));
     for &flag in flags {
         fd.flags.set(flag, true);
@@ -221,7 +221,7 @@ fn formal_parameter(
 fn is_final_of_local_variables_and_parameters() {
     let test = SourceTest::new("");
     let ctx = test.ctx();
-    let ops = test.t.type_system_operations();
+    let ops = test.mock().type_system_operations();
     let int = ctx.tp.int_type();
     let cases = [
         (local_variable(&test, "v", &[], Some(int)), false),
@@ -287,8 +287,8 @@ fn is_final_of_local_variables_and_parameters() {
 fn variable_type_of_local_variables_and_parameters() {
     let test = SourceTest::new("");
     let ctx = test.ctx();
-    let ops = test.t.type_system_operations();
-    let int_q = test.t.parse_type("int?");
+    let ops = test.mock().type_system_operations();
+    let int_q = test.mock().parse_type("int?");
     let string = ctx.tp.string_type();
 
     let local = local_variable(&test, "v", &[], Some(int_q));
