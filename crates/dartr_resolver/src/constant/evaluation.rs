@@ -449,7 +449,40 @@ impl<'a> ConstantEvaluationEngine<'a> {
             let base = member::base_element(&ctx, super_parameter);
             return self.evaluation_result(base);
         }
+        if let Some(forwarded) = self.forwarded_parameter(e) {
+            return self.evaluation_result(forwarded);
+        }
         self.values.borrow().elements.get(&e).cloned()
+    }
+
+    /// The super constructor parameter of [e] when [e] is a parameter of a
+    /// synthetic forwarding constructor of a mixin application (Dart: the
+    /// linker copies the default value of the super constructor parameter).
+    fn forwarded_parameter(&self, e: ElementId) -> Option<ElementId> {
+        if !is_formal_parameter(e) || e.store().is_local() {
+            return None;
+        }
+        let ctx = self.global_ctx();
+        let constructor = ctx.element_data(e)?.enclosing?;
+        if constructor.tag() != Tag::Constructor
+            || !first_fragment_flags(&ctx, constructor)
+                .contains(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_MIXIN_APPLICATION)
+        {
+            return None;
+        }
+        let index = ctx
+            .executable(EId::<ExecutableElement>::from_raw(constructor))
+            .formal_params
+            .iter()
+            .position(|p| p.raw() == e)?;
+        let super_constructor = ctx
+            .get(EId::<dartr_element::ConstructorElement>::from_raw(
+                constructor,
+            ))
+            .super_constructor
+            .get()?;
+        let super_parameter = *member::formal_parameters(&ctx, super_constructor).get(index)?;
+        Some(member::base_element(&ctx, super_parameter))
     }
 
     fn set_evaluation_result(&self, e: ElementId, value: Constant) {
@@ -796,6 +829,10 @@ impl<'a> ConstantEvaluationEngine<'a> {
                             callback,
                         );
                     }
+                    return;
+                }
+                if let Some(forwarded) = self.forwarded_parameter(e) {
+                    callback(ConstantTarget::Element(forwarded));
                     return;
                 }
                 if let Some(initializer) = self.constant_initializer(e) {
