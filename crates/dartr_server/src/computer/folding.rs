@@ -319,7 +319,8 @@ impl AstVisitor for Visitor<'_, '_> {
     }
 
     fn visit_export_directive(&mut self, ast: &Ast, node: Id<ExportDirective>) {
-        self.c.record_directive(node.raw(), ast[node].export_keyword);
+        self.c
+            .record_directive(node.raw(), ast[node].export_keyword);
         self.visit_node(ast, node.raw());
     }
 
@@ -328,11 +329,7 @@ impl AstVisitor for Visitor<'_, '_> {
         self.visit_node(ast, node.raw());
     }
 
-    fn visit_extension_type_declaration(
-        &mut self,
-        ast: &Ast,
-        node: Id<ExtensionTypeDeclaration>,
-    ) {
+    fn visit_extension_type_declaration(&mut self, ast: &Ast, node: Id<ExtensionTypeDeclaration>) {
         self.c.add_region_for_annotations(ast[node].metadata);
         self.visit_node(ast, node.raw());
     }
@@ -404,12 +401,14 @@ impl AstVisitor for Visitor<'_, '_> {
     }
 
     fn visit_import_directive(&mut self, ast: &Ast, node: Id<ImportDirective>) {
-        self.c.record_directive(node.raw(), ast[node].import_keyword);
+        self.c
+            .record_directive(node.raw(), ast[node].import_keyword);
         self.visit_node(ast, node.raw());
     }
 
     fn visit_library_directive(&mut self, ast: &Ast, node: Id<LibraryDirective>) {
-        self.c.record_directive(node.raw(), ast[node].library_keyword);
+        self.c
+            .record_directive(node.raw(), ast[node].library_keyword);
         self.visit_node(ast, node.raw());
     }
 
@@ -563,7 +562,8 @@ impl AstVisitor for Visitor<'_, '_> {
         let n = &ast[node];
         self.c.add_region_for_conditional_block(n.body);
         for &catch_clause in ast.list(n.catch_clauses) {
-            self.c.add_region_for_conditional_block(ast[catch_clause].body);
+            self.c
+                .add_region_for_conditional_block(ast[catch_clause].body);
         }
         if let Some(finally_block) = n.finally_block {
             self.c.add_region_for_conditional_block(finally_block);

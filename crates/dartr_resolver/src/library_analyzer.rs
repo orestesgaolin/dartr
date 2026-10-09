@@ -185,7 +185,14 @@ fn resolve_file(
             features: unit.parsed.feature_set,
         };
         let result = catch_unwind(AssertUnwindSafe(|| {
-            crate::element_binding_visitor::bind_unit(&ctx, &ast, root, unit.fragment, &mut tables, &mut rt);
+            crate::element_binding_visitor::bind_unit(
+                &ctx,
+                &ast,
+                root,
+                unit.fragment,
+                &mut tables,
+                &mut rt,
+            );
             crate::resolution_visitor::resolve_unit(
                 &ctx,
                 unit_ctx,
@@ -195,7 +202,14 @@ fn resolve_file(
                 &mut rt,
                 &mut diagnostics,
             );
-            let mut resolver = ResolverVisitor::new(ctx, &mut ast, &mut tables, &mut rt, &mut diagnostics, unit_ctx);
+            let mut resolver = ResolverVisitor::new(
+                ctx,
+                &mut ast,
+                &mut tables,
+                &mut rt,
+                &mut diagnostics,
+                unit_ctx,
+            );
             resolver.visit_node(root.raw());
             resolver.flush_type_analyzer_errors();
         }));

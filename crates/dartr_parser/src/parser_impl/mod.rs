@@ -92,7 +92,10 @@ pub(crate) const TOKEN_RECOVERY_REPLACEMENTS: &[(&str, &[TokenType])] = &[
     // E.g. in Kotlin binary operators are written out, see.
     // https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-int/.
     ("xor", &[TokenType::CARET]),
-    ("and", &[TokenType::AMPERSAND, TokenType::AMPERSAND_AMPERSAND]),
+    (
+        "and",
+        &[TokenType::AMPERSAND, TokenType::AMPERSAND_AMPERSAND],
+    ),
     ("or", &[TokenType::BAR, TokenType::BAR_BAR]),
     ("shl", &[TokenType::LT_LT]),
     ("shr", &[TokenType::GT_GT]),
@@ -497,7 +500,8 @@ impl<L: Listener> Parser<L> {
     /// originalRewriter`.
     #[inline]
     pub fn end_undoable_rewriter(&mut self, original: Option<Vec<TokenStreamChange>>) {
-        let mut log = std::mem::replace(&mut self.undo_log, original).expect("no undoable rewriter");
+        let mut log =
+            std::mem::replace(&mut self.undo_log, original).expect("no undoable rewriter");
         crate::token_stream_rewriter::undo(&mut self.listener.tokens, &mut log);
     }
 
@@ -507,7 +511,8 @@ impl<L: Listener> Parser<L> {
     pub fn report_recoverable_error(&mut self, token: TokenId, message: CfeMessage) {
         // Find a non-synthetic token on which to report the error.
         let token = find_non_zero_length_token(self.tokens(), token);
-        self.listener.handle_recoverable_error(message, token, token);
+        self.listener
+            .handle_recoverable_error(message, token, token);
     }
 
     pub fn report_recoverable_error_with_end(
@@ -540,7 +545,8 @@ impl<L: Listener> Parser<L> {
         // Find a non-synthetic token on which to report the error.
         let token = find_non_zero_length_token(self.tokens(), token);
         let message = template(self.lexeme(token));
-        self.listener.handle_recoverable_error(message, token, token);
+        self.listener
+            .handle_recoverable_error(message, token, token);
     }
 
     pub fn report_all_error_tokens(&mut self, mut token: TokenId) -> TokenId {

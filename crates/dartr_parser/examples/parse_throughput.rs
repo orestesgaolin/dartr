@@ -115,7 +115,10 @@ fn run() {
     let mb = bytes as f64 / 1e6;
     let mean = total / iterations as f64;
     println!("files:      {}", sources.len());
-    println!("source:     {:.2} MB, {} tokens (arena entries incl. comments)", mb, tokens);
+    println!(
+        "source:     {:.2} MB, {} tokens (arena entries incl. comments)",
+        mb, tokens
+    );
     println!(
         "allocs:     {} scan + parse, {} scan only ({} in the parser for {} tokens)",
         parse_allocations,
@@ -129,7 +132,11 @@ fn run() {
         mean * 1e3,
         mb / mean
     );
-    println!("best:       {:.1} ms/iteration, {:.1} MB/s", best * 1e3, mb / best);
+    println!(
+        "best:       {:.1} ms/iteration, {:.1} MB/s",
+        best * 1e3,
+        mb / best
+    );
 }
 
 fn main() {

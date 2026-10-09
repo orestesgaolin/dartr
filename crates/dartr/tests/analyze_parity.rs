@@ -485,7 +485,10 @@ fn lint_project(base: &Path, name: &str, options: &str) -> PathBuf {
             ("lib/bad_name_two.dart", LINT_PART_TWO),
             ("lib/finally.dart", LINT_FINALLY),
             ("lib/no_eol.dart", "int z() => 1;"),
-            ("lib/syntax.dart", "int y() => 1 // ignore: expected_token\nint w() { return 1 }\nclass sx {}\n"),
+            (
+                "lib/syntax.dart",
+                "int y() => 1 // ignore: expected_token\nint w() { return 1 }\nclass sx {}\n",
+            ),
         ],
     );
     root

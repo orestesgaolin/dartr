@@ -7,8 +7,8 @@
 
 use dartr_ast::{Id, VariableDeclaration, VariableDeclarationList};
 use dartr_element::{
-    EId, ElementId, FieldElement, LocalVariableElement, PromotableElement, PropertyInducingElement,
-    TypeId, ElementFlags,
+    EId, ElementFlags, ElementId, FieldElement, LocalVariableElement, PromotableElement,
+    PropertyInducingElement, TypeId,
 };
 use dartr_flow::flow_analysis::FlowAnalysis;
 use dartr_typesystem::TypeExt;
@@ -17,7 +17,11 @@ use crate::element_ext;
 use crate::resolver::ResolverVisitor;
 
 /// Dart `ResolverVisitor.setVariableType`.
-pub fn set_variable_type(rv: &mut ResolverVisitor<'_>, variable: EId<PromotableElement>, ty: TypeId) {
+pub fn set_variable_type(
+    rv: &mut ResolverVisitor<'_>,
+    variable: EId<PromotableElement>,
+    ty: TypeId,
+) {
     if let Some(local) = variable.raw().cast::<LocalVariableElement>() {
         element_ext::set_local_variable_type(&rv.ctx, local, ty);
     } else {
@@ -35,7 +39,10 @@ pub fn variable_type_from_initializer_type(rv: &mut ResolverVisitor<'_>, ty: Typ
 
 /// The element of the declaration [node] (Dart
 /// `node.declaredFragment!.element`).
-pub fn declared_element(rv: &ResolverVisitor<'_>, node: Id<VariableDeclaration>) -> Option<ElementId> {
+pub fn declared_element(
+    rv: &ResolverVisitor<'_>,
+    node: Id<VariableDeclaration>,
+) -> Option<ElementId> {
     let fragment = *rv.tables.declared_fragment.get(node)?;
     let data = rv.ctx.fragment_data(fragment)?;
     data.element.try_get().copied()
@@ -68,7 +75,8 @@ pub fn resolve(rv: &mut ResolverVisitor<'_>, node: Id<VariableDeclaration>) {
         }
         return;
     };
-    let is_top_level = element.is::<FieldElement>() || element.tag() == dartr_element::Tag::TopLevelVariable;
+    let is_top_level =
+        element.is::<FieldElement>() || element.tag() == dartr_element::Tag::TopLevelVariable;
     let is_late = element_ext::is_late(&rv.ctx, element);
 
     // Dart `inScopePrimaryConstructorParameters` (primary constructors, an
@@ -85,10 +93,10 @@ pub fn resolve(rv: &mut ResolverVisitor<'_>, node: Id<VariableDeclaration>) {
 
     let context_type = match element.cast::<PropertyInducingElement>() {
         Some(p)
-            if rv
-                .ctx
-                .element_data(p.raw())
-                .is_some_and(|d| d.flags.has(ElementFlags::PROPERTY_INDUCING_ELEMENT_IS_TYPE_INFERRED_FROM_INITIALIZER)) =>
+            if rv.ctx.element_data(p.raw()).is_some_and(|d| {
+                d.flags
+                    .has(ElementFlags::PROPERTY_INDUCING_ELEMENT_IS_TYPE_INFERRED_FROM_INITIALIZER)
+            }) =>
         {
             TypeId::UNKNOWN
         }

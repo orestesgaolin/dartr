@@ -10,8 +10,8 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use dartr_diagnostics::{Diagnostic, DiagnosticSeverity};
-use dartr_project::{AnalysisContextCollection, FileKind};
 use dartr_project::analysis_options::DiagnosticSeverity as OptionsSeverity;
+use dartr_project::{AnalysisContextCollection, FileKind};
 use dartr_syntax::LineInfo;
 
 use crate::provider::FileDiagnostics;

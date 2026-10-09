@@ -27,7 +27,10 @@ use dartr_typesystem::type_algebra::{MapSubstitution, replace_type_parameters};
 use dartr_typesystem::{TypeExt, TypeSystem};
 use indexmap::IndexSet;
 
-use crate::dump::{has_implicit_return_type, has_implicit_type, is_final, is_origin_getter_setter, is_origin_variable, is_static};
+use crate::dump::{
+    has_implicit_return_type, has_implicit_type, is_final, is_origin_getter_setter,
+    is_origin_variable, is_static,
+};
 use crate::link::Linker;
 use crate::types_builder::{set_return_type, set_variable_type};
 
@@ -49,7 +52,9 @@ pub fn perform(lk: &Linker<'_>, ctx: &Ctx<'_>) {
         interfaces_to_infer: IndexSet::new(),
         current: None,
     };
-    inferrer.interfaces_to_infer.extend(elements.iter().copied());
+    inferrer
+        .interfaces_to_infer
+        .extend(elements.iter().copied());
     for &element in &elements {
         inferrer.infer_class(element);
     }
@@ -73,7 +78,11 @@ struct ParamDesc {
 
 /// Dart `_getCorrespondingParameter`: the index in [parameters] of the
 /// parameter that corresponds to [parameter] at [index].
-fn corresponding_parameter(parameter: ParamDesc, index: usize, parameters: &[ParamDesc]) -> Option<usize> {
+fn corresponding_parameter(
+    parameter: ParamDesc,
+    index: usize,
+    parameters: &[ParamDesc],
+) -> Option<usize> {
     if parameter.kind.is_named() {
         // lastWhereOrNull
         return parameters
@@ -212,7 +221,11 @@ impl<'a> InstanceMemberInferrer<'_, 'a> {
         let getter_name = MemberName::new(ctx, library, element_name);
         let overridden_getters: Vec<ElemRef> = self
             .get_overridden(getter_name)
-            .map(|list| list.into_iter().filter(|&e| member::is_getter(ctx, e)).collect())
+            .map(|list| {
+                list.into_iter()
+                    .filter(|&e| member::is_getter(ctx, e))
+                    .collect()
+            })
             .unwrap_or_default();
 
         let setter_name = MemberName::new(ctx, library, &format!("{element_name}="));
@@ -228,9 +241,9 @@ impl<'a> InstanceMemberInferrer<'_, 'a> {
             }
         };
         let combined_setter_type = || -> TypeId {
-            if let Some(t) = self
-                .inheritance
-                .combine_signature_types(&overridden_setters, setter_name, None)
+            if let Some(t) =
+                self.inheritance
+                    .combine_signature_types(&overridden_setters, setter_name, None)
                 && let Some(p) = function_params(ctx, t).first()
             {
                 return p.ty;
@@ -259,7 +272,10 @@ impl<'a> InstanceMemberInferrer<'_, 'a> {
                 let Some(&value) = ctx.get(setter).formal_params.first() else {
                     return;
                 };
-                if overridden_setters.iter().any(|&s| is_covariant_setter(ctx, s)) {
+                if overridden_setters
+                    .iter()
+                    .any(|&s| is_covariant_setter(ctx, s))
+                {
                     set_covariant(ctx, value);
                     reset_executable_type(ctx, setter.upcast());
                 }
@@ -288,7 +304,9 @@ impl<'a> InstanceMemberInferrer<'_, 'a> {
             }
             Accessor::Field(field) => {
                 if let Some(setter) = ctx.property_inducing(field.upcast()).setter
-                    && overridden_setters.iter().any(|&s| is_covariant_setter(ctx, s))
+                    && overridden_setters
+                        .iter()
+                        .any(|&s| is_covariant_setter(ctx, s))
                     && let Some(&value) = ctx.get(setter).formal_params.first()
                 {
                     set_covariant(ctx, value);
@@ -299,7 +317,8 @@ impl<'a> InstanceMemberInferrer<'_, 'a> {
                     return;
                 }
 
-                let field_type = if !overridden_getters.is_empty() && overridden_setters.is_empty() {
+                let field_type = if !overridden_getters.is_empty() && overridden_setters.is_empty()
+                {
                     combined_getter_type()
                 } else if overridden_getters.is_empty() && !overridden_setters.is_empty() {
                     combined_setter_type()
@@ -368,7 +387,11 @@ impl<'a> InstanceMemberInferrer<'_, 'a> {
     }
 
     /// Dart `_inferConstructor`.
-    fn infer_constructor(&self, class: EId<InterfaceElement>, constructor: EId<ConstructorElement>) {
+    fn infer_constructor(
+        &self,
+        class: EId<InterfaceElement>,
+        constructor: EId<ConstructorElement>,
+    ) {
         let ctx = self.ctx;
         let c = ctx.get(constructor);
         let mut changed = false;
@@ -378,7 +401,9 @@ impl<'a> InstanceMemberInferrer<'_, 'a> {
             }
             let pe = ctx.get(p);
             match p.raw().tag() {
-                Tag::FieldFormalParameter if pe.first_fragment().raw().tag() == Tag::FieldFormalParameter => {
+                Tag::FieldFormalParameter
+                    if pe.first_fragment().raw().tag() == Tag::FieldFormalParameter =>
+                {
                     if let Some(field) = pe.field.get() {
                         // Dart reads `field.type`, which infers it from the
                         // initializer when needed.
@@ -389,8 +414,15 @@ impl<'a> InstanceMemberInferrer<'_, 'a> {
                         }
                     }
                 }
-                Tag::SuperFormalParameter if pe.first_fragment().raw().tag() == Tag::SuperFormalParameter => {
-                    let t = crate::outline::super_constructor_parameter_type(ctx, class, constructor, p);
+                Tag::SuperFormalParameter
+                    if pe.first_fragment().raw().tag() == Tag::SuperFormalParameter =>
+                {
+                    let t = crate::outline::super_constructor_parameter_type(
+                        ctx,
+                        class,
+                        constructor,
+                        p,
+                    );
                     pe.type_.set(Some(t.unwrap_or(TypeId::DYNAMIC)));
                     changed = true;
                 }
@@ -411,8 +443,11 @@ impl<'a> InstanceMemberInferrer<'_, 'a> {
     /// Dart `_inferExecutable`.
     fn infer_executable(&self, element: EId<MethodElement>) {
         let ctx = self.ctx;
-        if !crate::dump::first_fragment_has(ctx, element.raw(), FragmentFlags::METHOD_FRAGMENT_IS_ORIGIN_DECLARATION)
-            || is_static(ctx, element.raw())
+        if !crate::dump::first_fragment_has(
+            ctx,
+            element.raw(),
+            FragmentFlags::METHOD_FRAGMENT_IS_ORIGIN_DECLARATION,
+        ) || is_static(ctx, element.raw())
         {
             return;
         }
@@ -436,12 +471,16 @@ impl<'a> InstanceMemberInferrer<'_, 'a> {
         let parameters: Vec<EId<FormalParameterElement>> = m.formal_params.clone();
         let mut combined_signature_type: Option<TypeId> = None;
         let has_implicit_type = has_implicit_return_type(ctx, element.upcast())
-            || parameters.iter().any(|p| crate::dump::has_implicit_type(ctx, p.raw()));
+            || parameters
+                .iter()
+                .any(|p| crate::dump::has_implicit_type(ctx, p.raw()));
         if has_implicit_type {
             let mut conflicts: Vec<Conflict> = Vec::new();
-            combined_signature_type =
-                self.inheritance
-                    .combine_signature_types(&overridden_elements, name, Some(&mut conflicts));
+            combined_signature_type = self.inheritance.combine_signature_types(
+                &overridden_elements,
+                name,
+                Some(&mut conflicts),
+            );
             if let Some(t) = combined_signature_type {
                 combined_signature_type = self.to_overridden_function_type(element, t);
             } else {
@@ -467,15 +506,17 @@ impl<'a> InstanceMemberInferrer<'_, 'a> {
                         .collect::<Vec<_>>()
                         .join(", ");
                 }
-                m.type_inference_error
-                    .set_once(TopLevelInferenceError::OverrideNoCombinedSuperSignature {
+                m.type_inference_error.set_once(
+                    TopLevelInferenceError::OverrideNoCombinedSuperSignature {
                         candidate_signatures: candidate_signatures.into(),
-                    });
+                    },
+                );
             }
         }
 
         // Infer the return type.
-        if has_implicit_return_type(ctx, element.upcast()) && self.name_text(element.raw()) != "[]=" {
+        if has_implicit_return_type(ctx, element.upcast()) && self.name_text(element.raw()) != "[]="
+        {
             let return_type = match combined_signature_type {
                 Some(t) => function_return_type(ctx, t),
                 None => TypeId::DYNAMIC,
@@ -496,19 +537,20 @@ impl<'a> InstanceMemberInferrer<'_, 'a> {
                     .collect()
             })
             .collect();
-        let combined_params: Option<(Vec<ParamDesc>, &[FnParam])> = combined_signature_type.map(|t| {
-            let params = function_params(ctx, t);
-            (
-                params
-                    .iter()
-                    .map(|p| ParamDesc {
-                        name: p.name,
-                        kind: p.kind,
-                    })
-                    .collect(),
-                params,
-            )
-        });
+        let combined_params: Option<(Vec<ParamDesc>, &[FnParam])> =
+            combined_signature_type.map(|t| {
+                let params = function_params(ctx, t);
+                (
+                    params
+                        .iter()
+                        .map(|p| ParamDesc {
+                            name: p.name,
+                            kind: p.kind,
+                        })
+                        .collect(),
+                    params,
+                )
+            });
         for (index, &parameter) in parameters.iter().enumerate() {
             let desc = element_param_desc(ctx, parameter.raw());
             if !is_covariant_parameter(ctx, parameter) {
@@ -544,7 +586,11 @@ impl<'a> InstanceMemberInferrer<'_, 'a> {
     /// constructor among the constructors of the class is used for the
     /// accessible constructors of the superclass (also factories, as in
     /// Dart).
-    fn infer_mixin_application_constructor(&self, class: EId<ClassElement>, constructor: EId<ConstructorElement>) {
+    fn infer_mixin_application_constructor(
+        &self,
+        class: EId<ClassElement>,
+        constructor: EId<ConstructorElement>,
+    ) {
         let ctx = self.ctx;
         let Some(super_type) = ctx.get(class).supertype.get() else {
             return;
@@ -552,7 +598,12 @@ impl<'a> InstanceMemberInferrer<'_, 'a> {
         let Some(super_element) = ctx.interface_element(super_type) else {
             return;
         };
-        let Some(index) = ctx.get(class).constructors.iter().position(|&c| c == constructor) else {
+        let Some(index) = ctx
+            .get(class)
+            .constructors
+            .iter()
+            .position(|&c| c == constructor)
+        else {
             return;
         };
         let library = self.library_of(class.raw());
@@ -572,8 +623,17 @@ impl<'a> InstanceMemberInferrer<'_, 'a> {
         };
         let substitution = MapSubstitution::from_interface_type(ctx, super_type);
         let base_params = &ctx.get(base_constructor).formal_params;
-        for (&parameter, &base_parameter) in ctx.get(constructor).formal_params.iter().zip(base_params.iter()) {
-            let t = ctx.get(base_parameter).type_.get().unwrap_or(TypeId::INVALID);
+        for (&parameter, &base_parameter) in ctx
+            .get(constructor)
+            .formal_params
+            .iter()
+            .zip(base_params.iter())
+        {
+            let t = ctx
+                .get(base_parameter)
+                .type_
+                .get()
+                .unwrap_or(TypeId::INVALID);
             ctx.get(parameter)
                 .type_
                 .set(Some(substitution.substitute_type(ctx, t)));
@@ -585,7 +645,11 @@ impl<'a> InstanceMemberInferrer<'_, 'a> {
     }
 
     /// Dart `_resetOperatorEqualParameterTypeToDynamic`.
-    fn reset_operator_equal_parameter_type_to_dynamic(&self, element: EId<MethodElement>, overridden_elements: &[ElemRef]) {
+    fn reset_operator_equal_parameter_type_to_dynamic(
+        &self,
+        element: EId<MethodElement>,
+        overridden_elements: &[ElemRef],
+    ) {
         let ctx = self.ctx;
         if self.name_text(element.raw()) != "==" {
             return;
@@ -625,7 +689,11 @@ impl<'a> InstanceMemberInferrer<'_, 'a> {
     }
 
     /// Dart `_toOverriddenFunctionType`.
-    fn to_overridden_function_type(&self, element: EId<MethodElement>, overridden_type: TypeId) -> Option<TypeId> {
+    fn to_overridden_function_type(
+        &self,
+        element: EId<MethodElement>,
+        overridden_type: TypeId,
+    ) -> Option<TypeId> {
         let ctx = self.ctx;
         let element_type_parameters = &ctx.get(element).type_params;
         if element_type_parameters.len() != function_type_params(ctx, overridden_type) {
@@ -634,6 +702,10 @@ impl<'a> InstanceMemberInferrer<'_, 'a> {
         if element_type_parameters.is_empty() {
             return Some(overridden_type);
         }
-        Some(replace_type_parameters(ctx, overridden_type, element_type_parameters))
+        Some(replace_type_parameters(
+            ctx,
+            overridden_type,
+            element_type_parameters,
+        ))
     }
 }

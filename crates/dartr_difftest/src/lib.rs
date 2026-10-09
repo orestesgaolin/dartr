@@ -744,8 +744,12 @@ pub fn run(options: &Options) -> Result<Report> {
                     let batch = batches[index];
                     let result = (|| -> Result<BatchResult> {
                         let (o, d) = std::thread::scope(|s| {
-                            let o = s.spawn(|| run_batch(&oracle, &options.mode, batch, options.timeout_per_file));
-                            let d = s.spawn(|| run_batch(&dartr, &options.mode, batch, options.timeout_per_file));
+                            let o = s.spawn(|| {
+                                run_batch(&oracle, &options.mode, batch, options.timeout_per_file)
+                            });
+                            let d = s.spawn(|| {
+                                run_batch(&dartr, &options.mode, batch, options.timeout_per_file)
+                            });
                             (o.join().unwrap(), d.join().unwrap())
                         });
                         let (o, d) = (o?, d?);

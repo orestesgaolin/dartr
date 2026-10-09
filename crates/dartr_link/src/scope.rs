@@ -149,7 +149,9 @@ impl LibraryScopes {
     pub fn build(linker: &Linker<'_>) -> LibraryScopes {
         let mut scopes = LibraryScopes::default();
         for (index, builder) in linker.builders.iter().enumerate() {
-            scopes.declarations.push(library_declarations(linker, builder.element, &builder.uri));
+            scopes
+                .declarations
+                .push(library_declarations(linker, builder.element, &builder.uri));
             for unit in &builder.units {
                 scopes.build_fragment_scope(linker, index, unit.fragment);
             }
@@ -157,13 +159,20 @@ impl LibraryScopes {
         scopes
     }
 
-    fn build_fragment_scope(&mut self, linker: &Linker<'_>, library: usize, fragment: FId<LibraryFragment>) {
+    fn build_fragment_scope(
+        &mut self,
+        linker: &Linker<'_>,
+        library: usize,
+        fragment: FId<LibraryFragment>,
+    ) {
         let store = &linker.core.store;
         let f = store.fragment(fragment);
         // Dart `fragment.enclosingFragment?.scope`: the unit that has the
         // `part` directive.
         let parent = enclosing_unit(linker, library, fragment);
-        let parent_no_prefix = parent.and_then(|p| self.fragment_scopes.get(&p)).map(|s| s.no_prefix_scope);
+        let parent_no_prefix = parent
+            .and_then(|p| self.fragment_scopes.get(&p))
+            .map(|s| s.no_prefix_scope);
         let no_prefix = self.prefix_scope(linker, &f.library_imports, None, parent_no_prefix);
         let wildcard_variables = linker.builders[library]
             .is_enabled(dartr_parser::experimental_flags::ExperimentalFlag::WildcardVariables);
@@ -224,7 +233,9 @@ impl LibraryScopes {
             let DirectiveUri::Library { library, .. } = &import.directive.uri else {
                 continue;
             };
-            let import_prefix = import.prefix.and_then(|p| store.fragment(p).element.try_get().copied());
+            let import_prefix = import
+                .prefix
+                .and_then(|p| store.fragment(p).element.try_get().copied());
             if import_prefix != prefix.map(|p| p.raw()) {
                 continue;
             }
@@ -270,7 +281,11 @@ impl LibraryScopes {
     }
 
     /// Dart `_lookupCombined`.
-    fn lookup_combined(&self, fragment: FId<LibraryFragment>, id: &str) -> Option<ScopeLookupResult> {
+    fn lookup_combined(
+        &self,
+        fragment: FId<LibraryFragment>,
+        id: &str,
+    ) -> Option<ScopeLookupResult> {
         let scope = &self.fragment_scopes[&fragment];
         let try_prefix = id != "_" || !scope.wildcard_variables;
         if try_prefix && let Some(&(prefix, s)) = scope.prefix_elements.get(id) {
@@ -288,11 +303,17 @@ impl LibraryScopes {
 }
 
 /// The unit that includes [fragment] with a `part` directive.
-fn enclosing_unit(linker: &Linker<'_>, library: usize, fragment: FId<LibraryFragment>) -> Option<FId<LibraryFragment>> {
+fn enclosing_unit(
+    linker: &Linker<'_>,
+    library: usize,
+    fragment: FId<LibraryFragment>,
+) -> Option<FId<LibraryFragment>> {
     let store = &linker.core.store;
     for unit in &linker.builders[library].units {
         for part in &store.fragment(unit.fragment).parts {
-            if let DirectiveUri::Unit { library_fragment, .. } = &part.directive.uri
+            if let DirectiveUri::Unit {
+                library_fragment, ..
+            } = &part.directive.uri
                 && *library_fragment == fragment
             {
                 return Some(unit.fragment);
@@ -354,7 +375,11 @@ fn add_to_prefix_scope(linker: &Linker<'_>, scope: &mut PrefixScope, entry: &Exp
 }
 
 /// Dart `LibraryDeclarations(library)`.
-fn library_declarations(linker: &Linker<'_>, library: EId<LibraryElement>, uri: &str) -> LibraryDeclarations {
+fn library_declarations(
+    linker: &Linker<'_>,
+    library: EId<LibraryElement>,
+    uri: &str,
+) -> LibraryDeclarations {
     let store = &linker.core.store;
     let l = store.get(library);
     let mut d = LibraryDeclarations::default();

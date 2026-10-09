@@ -39,8 +39,17 @@ impl ExperimentalFeatures {
     /// a library with language version `major.minor`, with the experiments
     /// in [explicit_enabled] enabled on the command line or in
     /// `analysis_options.yaml`.
-    pub fn for_language_version(major: u32, minor: u32, explicit_enabled: &[ExperimentalFlag]) -> Self {
-        Self::for_language_version_with_sdk(major, minor, explicit_enabled, DEFAULT_LANGUAGE_VERSION)
+    pub fn for_language_version(
+        major: u32,
+        minor: u32,
+        explicit_enabled: &[ExperimentalFlag],
+    ) -> Self {
+        Self::for_language_version_with_sdk(
+            major,
+            minor,
+            explicit_enabled,
+            DEFAULT_LANGUAGE_VERSION,
+        )
     }
 
     /// Dart `restrictEnableFlagsToVersion` with an explicit

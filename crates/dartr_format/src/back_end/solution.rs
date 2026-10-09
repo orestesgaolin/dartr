@@ -134,7 +134,14 @@ impl<'p> Solution<'p> {
         root_state: Option<State>,
     ) -> Solution<'p> {
         let mut solution = Solution::internal(pieces, root, 0, None, None, root_state);
-        solution.format(cache, pieces, root, page_width, leading_indent, subsequent_indent);
+        solution.format(
+            cache,
+            pieces,
+            root,
+            page_width,
+            leading_indent,
+            subsequent_indent,
+        );
         solution
     }
 
@@ -200,7 +207,12 @@ impl<'p> Solution<'p> {
     /// unexpected formatting changes.
     ///
     /// See: https://github.com/dart-lang/dart_style/issues/1847
-    pub fn try_bind_by_page_width(&mut self, pieces: &Pieces, piece: PieceId, page_width: i32) -> bool {
+    pub fn try_bind_by_page_width(
+        &mut self,
+        pieces: &Pieces,
+        piece: PieceId,
+        page_width: i32,
+    ) -> bool {
         if let Some(state) = pieces.fixed_state_for_page_width(piece, page_width) {
             self.bind(pieces, piece, state);
             return true;

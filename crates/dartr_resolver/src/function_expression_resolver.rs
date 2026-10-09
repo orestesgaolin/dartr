@@ -34,7 +34,11 @@ pub fn function_expression_element(
 }
 
 /// Dart `ResolverVisitor.visitFunctionExpression(node, contextType:)`.
-pub fn visit_function_expression(rv: &mut ResolverVisitor<'_>, node: Id<FunctionExpression>, context_type: TypeId) {
+pub fn visit_function_expression(
+    rv: &mut ResolverVisitor<'_>,
+    node: Id<FunctionExpression>,
+    context_type: TypeId,
+) {
     let Some(element) = function_expression_element(rv, node) else {
         // Not bound yet (element binding not ported for this node).
         rv.record_static_type(node, TypeId::DYNAMIC);
@@ -71,7 +75,12 @@ pub fn resolve(
     if was_function_type_supplied {
         let type_parameters = rv.ast[node].type_parameters;
         if let Some(instantiated) = match_type_parameters(rv, type_parameters, context_type) {
-            infer_formal_parameters(rv, rv.ast[node].parameters, &formal_parameters, instantiated);
+            infer_formal_parameters(
+                rv,
+                rv.ast[node].parameters,
+                &formal_parameters,
+                instantiated,
+            );
             let TypeKind::Function(f) = *rv.ctx.ty(instantiated) else {
                 unreachable!()
             };
@@ -127,7 +136,9 @@ fn infer_formal_parameters(
         // Check that there is no declared type, and that we have not already
         // inferred a type in some fashion.
         let current = ctx.get(p).type_.get().unwrap_or(TypeId::INVALID);
-        if element_ext::has_implicit_type(&ctx, p.raw()) && matches!(ctx.ty(current), TypeKind::Dynamic) {
+        if element_ext::has_implicit_type(&ctx, p.raw())
+            && matches!(ctx.ty(current), TypeKind::Dynamic)
+        {
             // If no type is declared for a parameter and there is a
             // corresponding parameter in the context type schema with type
             // schema `K`, the parameter is given an inferred type `T` where
@@ -155,7 +166,11 @@ fn infer_formal_parameters(
         }
     }
     {
-        for p in formal_parameters.iter().copied().filter(|&p| ctx.get(p).kind.is_named()) {
+        for p in formal_parameters
+            .iter()
+            .copied()
+            .filter(|&p| ctx.get(p).kind.is_named())
+        {
             let name = ctx.get(p).name;
             if let Some(c) = context_params
                 .iter()
@@ -184,7 +199,11 @@ fn match_type_parameters(
     };
     let fn_type_params = ctx.list(f.type_params);
     let Some(list) = type_parameter_list else {
-        return if fn_type_params.is_empty() { Some(ty) } else { None };
+        return if fn_type_params.is_empty() {
+            Some(ty)
+        } else {
+            None
+        };
     };
     let type_parameters = rv.ast.list(rv.ast[list].type_parameters).to_vec();
     if type_parameters.len() != fn_type_params.len() {
@@ -223,7 +242,8 @@ fn should_update_return_type(rv: &ResolverVisitor<'_>, node: Id<FunctionExpressi
     if let Some(declaration) = rv.ast.cast::<FunctionDeclaration>(parent) {
         // Local function without declared return type.
         let grandparent = rv.ast.parent(parent).expect("parent");
-        rv.ast.is::<FunctionDeclarationStatement>(grandparent) && rv.ast[declaration].return_type.is_none()
+        rv.ast.is::<FunctionDeclarationStatement>(grandparent)
+            && rv.ast[declaration].return_type.is_none()
     } else {
         // Pure function expression.
         true

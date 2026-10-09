@@ -9,7 +9,6 @@
 //! the Dart name.
 
 use dartr_ast::{
-    Statement, SwitchCase, SwitchDefault, SwitchMember, SwitchPatternCase, SwitchStatement,
     Annotation, AssignmentExpression, Ast, BlockFunctionBody, CascadeExpression, Comment,
     ConstantPattern, ConstructorFieldInitializer, DotShorthandConstructorInvocation, Expression,
     ExpressionFunctionBody, FieldFormalParameter, ForEachPartsWithIdentifier,
@@ -17,8 +16,8 @@ use dartr_ast::{
     InstanceCreationExpression, Label, LabeledStatement, ListLiteral, MethodInvocation, NodeId,
     NodeKind, NodeList, NodeType, ParameterKind, ParenthesizedExpression, PostfixExpression,
     PrefixExpression, PrefixedIdentifier, PropertyAccess, RecordLiteral, RegularFormalParameter,
-    SetOrMapLiteral, SimpleIdentifier, SuperFormalParameter, TypeAnnotation,
-    VariableDeclarationList,
+    SetOrMapLiteral, SimpleIdentifier, Statement, SuperFormalParameter, SwitchCase, SwitchDefault,
+    SwitchMember, SwitchPatternCase, SwitchStatement, TypeAnnotation, VariableDeclarationList,
 };
 use dartr_syntax::{TokenId, TokenType};
 

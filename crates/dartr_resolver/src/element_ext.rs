@@ -48,7 +48,10 @@ pub fn has_implicit_type(ctx: &Ctx<'_>, e: ElementId) -> bool {
 pub fn is_local_variable(e: ElementId) -> bool {
     matches!(
         e.tag(),
-        Tag::LocalVariable | Tag::PatternVariable | Tag::BindPatternVariable | Tag::JoinPatternVariable
+        Tag::LocalVariable
+            | Tag::PatternVariable
+            | Tag::BindPatternVariable
+            | Tag::JoinPatternVariable
     )
 }
 
@@ -185,7 +188,8 @@ pub fn set_is_final(ctx: &Ctx<'_>, e: ElementId, value: bool) {
     if let Some(data) = ctx.element_data(e)
         && let Some(f) = ctx.fragment_data(data.first_fragment)
     {
-        f.flags.set(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL, value);
+        f.flags
+            .set(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL, value);
     }
 }
 
@@ -196,7 +200,10 @@ pub fn is_enum_constant(ctx: &Ctx<'_>, e: ElementId) -> bool {
 
 /// Dart `EnumElementImpl.constants`: the fields of [element] that are enum
 /// constants, in declaration order.
-pub fn enum_constants(ctx: &Ctx<'_>, element: EId<dartr_element::InstanceElement>) -> Vec<ElementId> {
+pub fn enum_constants(
+    ctx: &Ctx<'_>,
+    element: EId<dartr_element::InstanceElement>,
+) -> Vec<ElementId> {
     ctx.instance(element)
         .fields
         .iter()

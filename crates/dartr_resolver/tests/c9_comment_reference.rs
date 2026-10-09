@@ -5,7 +5,7 @@ mod support;
 use dartr_ast::NodeKind;
 use dartr_element::{ElemRef, Tag};
 
-use support::{analyze, Analyzed};
+use support::{Analyzed, analyze};
 
 fn run(files: &[(&str, &str)]) -> Option<Analyzed> {
     let analyzed = analyze(files);

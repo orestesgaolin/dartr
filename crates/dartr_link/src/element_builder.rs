@@ -23,8 +23,8 @@
 
 use std::sync::Arc;
 
-use dartr_ast::*;
 use dartr_ast::NamedType;
+use dartr_ast::*;
 use dartr_ast_builder::ParsedUnit;
 use dartr_element::*;
 use dartr_parser::experimental_flags::ExperimentalFlag;
@@ -100,7 +100,11 @@ fn new_setter_fragment(name: Option<Name>) -> SetterFragment {
     }
 }
 
-fn new_formal_parameter_fragment(name: Option<Name>, kind: ParameterKind, private_name: Option<Name>) -> FormalParameterFragment {
+fn new_formal_parameter_fragment(
+    name: Option<Name>,
+    kind: ParameterKind,
+    private_name: Option<Name>,
+) -> FormalParameterFragment {
     FormalParameterFragment {
         variable: VariableFragmentData::new(fd(name)),
         parameter_kind: kind,
@@ -117,15 +121,22 @@ fn has(store: &ElementStore, f: FragmentId, flag: FragmentFlags) -> bool {
 }
 
 /// Dart `TypeParameterElementImpl(firstFragment:)`.
-pub fn new_type_parameter_element(store: &mut ElementStore, fragment: FId<TypeParameterFragment>) -> EId<TypeParameterElement> {
+pub fn new_type_parameter_element(
+    store: &mut ElementStore,
+    fragment: FId<TypeParameterFragment>,
+) -> EId<TypeParameterElement> {
     let name = store.fragment(fragment).name;
-    let element = store.add::<TypeParameterElement>(TypeParameterElement::new(ed(name, fragment.raw())));
+    let element =
+        store.add::<TypeParameterElement>(TypeParameterElement::new(ed(name, fragment.raw())));
     store.fragment(fragment).element.set_once(element.raw());
     element
 }
 
 /// Dart `FormalParameterFragmentImpl.initElement`.
-pub fn init_formal_parameter_element(store: &mut ElementStore, first: FId<FormalParameterFragment>) -> EId<FormalParameterElement> {
+pub fn init_formal_parameter_element(
+    store: &mut ElementStore,
+    first: FId<FormalParameterFragment>,
+) -> EId<FormalParameterElement> {
     let mut chain = vec![first];
     while let Some(next) = store.fragment(*chain.last().unwrap()).next_fragment {
         chain.push(FId::from_raw(next));
@@ -162,7 +173,10 @@ pub fn init_formal_parameter_element(store: &mut ElementStore, first: FId<Formal
 }
 
 /// Dart `GenericFunctionTypeElementImpl(fragment)`.
-fn new_generic_function_type_element(store: &mut ElementStore, fragment: FId<GenericFunctionTypeFragment>) {
+fn new_generic_function_type_element(
+    store: &mut ElementStore,
+    fragment: FId<GenericFunctionTypeFragment>,
+) {
     let f = store.fragment(fragment);
     let tps = f.type_params.clone();
     let ps = f.formal_params.clone();
@@ -208,7 +222,8 @@ pub struct FragmentBuilder<'l, 'a> {
     declared: IndexMap<NodeId, FragmentId>,
     /// Dart `Linker.declaringFormalParameters`: field and formal fragment
     /// of a declaring parameter of a primary constructor.
-    declaring_formal_parameters: IndexMap<NodeId, (FId<FieldFragment>, FId<FormalParameterFragment>)>,
+    declaring_formal_parameters:
+        IndexMap<NodeId, (FId<FieldFragment>, FId<FormalParameterFragment>)>,
 }
 
 impl<'l, 'a> FragmentBuilder<'l, 'a> {
@@ -241,7 +256,9 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
     /// Stores the declared fragments in the linking unit.
     pub fn finish(self) {
         let declared = self.declared;
-        self.lib.units[self.unit_index].declared_fragments.extend(declared);
+        self.lib.units[self.unit_index]
+            .declared_fragments
+            .extend(declared);
     }
 
     fn name_of(&self, token: Option<TokenId>) -> Option<Name> {
@@ -285,7 +302,11 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
         self.core.const_exprs.copy(&parsed.ast, node)
     }
 
-    fn with_enclosing(&mut self, fragment: FragmentId, f: impl FnOnce(&mut Self)) -> EnclosingContext {
+    fn with_enclosing(
+        &mut self,
+        fragment: FragmentId,
+        f: impl FnOnce(&mut Self),
+    ) -> EnclosingContext {
         self.stack.push(EnclosingContext {
             fragment,
             formal_parameters: Vec::new(),
@@ -304,7 +325,8 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
 
     fn add_top_fragment(&mut self, fragment: FragmentId) {
         let store = &mut self.core.store;
-        self.lib.add_top_fragment(store, self.library_fragment, fragment);
+        self.lib
+            .add_top_fragment(store, self.library_fragment, fragment);
     }
 
     /// Dart `_EnclosingContext.addParameter`.
@@ -333,7 +355,11 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
         set_type_params_of(store, fragment, list);
     }
 
-    fn set_formal_parameters(&mut self, fragment: FragmentId, list: Vec<FId<FormalParameterFragment>>) {
+    fn set_formal_parameters(
+        &mut self,
+        fragment: FragmentId,
+        list: Vec<FId<FormalParameterFragment>>,
+    ) {
         let store = &mut self.core.store;
         for &p in &list {
             store.fragment_mut(p).enclosing_fragment = Some(fragment);
@@ -354,7 +380,12 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
                 self.export_directive_index += 1;
                 let metadata = self.build_metadata(ast.get(n).metadata);
                 let unit = self.library_fragment;
-                if let Some(e) = self.store().fragment_mut(unit).library_exports.get_mut(index) {
+                if let Some(e) = self
+                    .store()
+                    .fragment_mut(unit)
+                    .library_exports
+                    .get_mut(index)
+                {
                     e.directive.metadata = metadata;
                 }
             } else if let Some(n) = ast.cast::<ImportDirective>(d) {
@@ -362,7 +393,12 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
                 self.import_directive_index += 1;
                 let metadata = self.build_metadata(ast.get(n).metadata);
                 let unit = self.library_fragment;
-                if let Some(e) = self.store().fragment_mut(unit).library_imports.get_mut(index) {
+                if let Some(e) = self
+                    .store()
+                    .fragment_mut(unit)
+                    .library_imports
+                    .get_mut(index)
+                {
                     e.directive.metadata = metadata;
                 }
             } else if let Some(n) = ast.cast::<PartDirective>(d) {
@@ -397,7 +433,9 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
                 Some(ast.get(n).metadata)
             } else if let Some(n) = ast.cast::<ImportDirective>(f) {
                 Some(ast.get(n).metadata)
-            } else { ast.cast::<PartDirective>(f).map(|n| ast.get(n).metadata) };
+            } else {
+                ast.cast::<PartDirective>(f).map(|n| ast.get(n).metadata)
+            };
             if let Some(list) = metadata {
                 let metadata = self.build_metadata(list);
                 self.store().get_mut(library).metadata = metadata;
@@ -562,7 +600,9 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
         // Dart `_libraryFragment.encloseElement(fragment)`.
         data.fragment.enclosing_fragment = Some(self.library_fragment.raw());
         data.fragment.first_token_offset = Some(ast.offset(node));
-        let fragment = self.store().add_fragment::<GenericFunctionTypeFragment>(data);
+        let fragment = self
+            .store()
+            .add_fragment::<GenericFunctionTypeFragment>(data);
         self.bind(fragment.raw(), node.raw());
         let holder = self.with_enclosing(fragment.raw(), |b| {
             if let Some(tps) = n.type_parameters {
@@ -609,14 +649,46 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
             interface: InterfaceFragmentData::new(fd(name)),
         };
         let f = &data.fragment;
-        set(f, FragmentFlags::CLASS_FRAGMENT_IS_ABSTRACT, n.abstract_keyword.is_some());
-        set(f, FragmentFlags::FRAGMENT_IS_AUGMENTATION, n.augment_keyword.is_some());
-        set(f, FragmentFlags::CLASS_FRAGMENT_IS_BASE, n.base_keyword.is_some());
-        set(f, FragmentFlags::CLASS_FRAGMENT_IS_FINAL, n.final_keyword.is_some());
-        set(f, FragmentFlags::CLASS_FRAGMENT_IS_INTERFACE, n.interface_keyword.is_some());
-        set(f, FragmentFlags::CLASS_FRAGMENT_IS_MIXIN_CLASS, n.mixin_keyword.is_some());
-        set(f, FragmentFlags::CLASS_FRAGMENT_IS_SEALED, n.sealed_keyword.is_some());
-        set(f, FragmentFlags::CLASS_FRAGMENT_HAS_EXTENDS_CLAUSE, n.extends_clause.is_some());
+        set(
+            f,
+            FragmentFlags::CLASS_FRAGMENT_IS_ABSTRACT,
+            n.abstract_keyword.is_some(),
+        );
+        set(
+            f,
+            FragmentFlags::FRAGMENT_IS_AUGMENTATION,
+            n.augment_keyword.is_some(),
+        );
+        set(
+            f,
+            FragmentFlags::CLASS_FRAGMENT_IS_BASE,
+            n.base_keyword.is_some(),
+        );
+        set(
+            f,
+            FragmentFlags::CLASS_FRAGMENT_IS_FINAL,
+            n.final_keyword.is_some(),
+        );
+        set(
+            f,
+            FragmentFlags::CLASS_FRAGMENT_IS_INTERFACE,
+            n.interface_keyword.is_some(),
+        );
+        set(
+            f,
+            FragmentFlags::CLASS_FRAGMENT_IS_MIXIN_CLASS,
+            n.mixin_keyword.is_some(),
+        );
+        set(
+            f,
+            FragmentFlags::CLASS_FRAGMENT_IS_SEALED,
+            n.sealed_keyword.is_some(),
+        );
+        set(
+            f,
+            FragmentFlags::CLASS_FRAGMENT_HAS_EXTENDS_CLAUSE,
+            n.extends_clause.is_some(),
+        );
         data.fragment.metadata = self.build_metadata(n.metadata);
         let fragment = self.store().add_fragment::<ClassFragment>(data);
         self.bind(fragment.raw(), node.raw());
@@ -647,13 +719,37 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
             interface: InterfaceFragmentData::new(fd(name)),
         };
         let f = &data.fragment;
-        set(f, FragmentFlags::CLASS_FRAGMENT_IS_ABSTRACT, n.abstract_keyword.is_some());
-        set(f, FragmentFlags::CLASS_FRAGMENT_IS_BASE, n.base_keyword.is_some());
-        set(f, FragmentFlags::CLASS_FRAGMENT_IS_FINAL, n.final_keyword.is_some());
-        set(f, FragmentFlags::CLASS_FRAGMENT_IS_INTERFACE, n.interface_keyword.is_some());
+        set(
+            f,
+            FragmentFlags::CLASS_FRAGMENT_IS_ABSTRACT,
+            n.abstract_keyword.is_some(),
+        );
+        set(
+            f,
+            FragmentFlags::CLASS_FRAGMENT_IS_BASE,
+            n.base_keyword.is_some(),
+        );
+        set(
+            f,
+            FragmentFlags::CLASS_FRAGMENT_IS_FINAL,
+            n.final_keyword.is_some(),
+        );
+        set(
+            f,
+            FragmentFlags::CLASS_FRAGMENT_IS_INTERFACE,
+            n.interface_keyword.is_some(),
+        );
         set(f, FragmentFlags::CLASS_FRAGMENT_IS_MIXIN_APPLICATION, true);
-        set(f, FragmentFlags::CLASS_FRAGMENT_IS_MIXIN_CLASS, n.mixin_keyword.is_some());
-        set(f, FragmentFlags::CLASS_FRAGMENT_IS_SEALED, n.sealed_keyword.is_some());
+        set(
+            f,
+            FragmentFlags::CLASS_FRAGMENT_IS_MIXIN_CLASS,
+            n.mixin_keyword.is_some(),
+        );
+        set(
+            f,
+            FragmentFlags::CLASS_FRAGMENT_IS_SEALED,
+            n.sealed_keyword.is_some(),
+        );
         data.fragment.metadata = self.build_metadata(n.metadata);
         let fragment = self.store().add_fragment::<ClassFragment>(data);
         self.bind(fragment.raw(), node.raw());
@@ -678,23 +774,49 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
         let parsed = self.parsed.clone();
         let ast = &parsed.ast;
         let n = ast.get(node);
-        let name = self.name_of(n.name).unwrap_or_else(|| self.core.name("new"));
+        let name = self
+            .name_of(n.name)
+            .unwrap_or_else(|| self.core.name("new"));
         let mut data = new_constructor_fragment(fd(Some(name)));
         let is_factory = n.factory_keyword.is_some();
         let mut is_const = n.const_keyword.is_some();
         {
             let f = &data.fragment;
-            set(f, FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_DECLARATION, true);
-            set(f, FragmentFlags::FRAGMENT_IS_AUGMENTATION, n.augment_keyword.is_some());
-            set(f, FragmentFlags::EXECUTABLE_FRAGMENT_IS_EXTERNAL, n.external_keyword.is_some());
-            set(f, FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_FACTORY, is_factory);
+            set(
+                f,
+                FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_DECLARATION,
+                true,
+            );
+            set(
+                f,
+                FragmentFlags::FRAGMENT_IS_AUGMENTATION,
+                n.augment_keyword.is_some(),
+            );
+            set(
+                f,
+                FragmentFlags::EXECUTABLE_FRAGMENT_IS_EXTERNAL,
+                n.external_keyword.is_some(),
+            );
+            set(
+                f,
+                FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_FACTORY,
+                is_factory,
+            );
             let redirecting = n.redirected_constructor.is_some()
                 || ast
                     .list(n.initializers)
                     .iter()
                     .any(|i| ast.is::<RedirectingConstructorInvocation>(i.raw()));
-            set(f, FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_REDIRECTING, redirecting);
-            set(f, FragmentFlags::FRAGMENT_IS_COMPLETE, constructor_is_complete(ast, node));
+            set(
+                f,
+                FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_REDIRECTING,
+                redirecting,
+            );
+            set(
+                f,
+                FragmentFlags::FRAGMENT_IS_COMPLETE,
+                constructor_is_complete(ast, node),
+            );
         }
         data.fragment.metadata = self.build_metadata(n.metadata);
         data.type_name = n
@@ -704,7 +826,11 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
         if enclosing_is_enum && !is_factory && self.feature(ExperimentalFlag::PrimaryConstructors) {
             is_const = true;
         }
-        set(&data.fragment, FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_CONST, is_const);
+        set(
+            &data.fragment,
+            FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_CONST,
+            is_const,
+        );
         if is_const || is_factory {
             let initializers: Vec<ConstExprId> = ast
                 .list(n.initializers)
@@ -731,7 +857,11 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
         let mut data = EnumFragment {
             interface: InterfaceFragmentData::new(fd(name)),
         };
-        set(&data.fragment, FragmentFlags::FRAGMENT_IS_AUGMENTATION, n.augment_keyword.is_some());
+        set(
+            &data.fragment,
+            FragmentFlags::FRAGMENT_IS_AUGMENTATION,
+            n.augment_keyword.is_some(),
+        );
         data.fragment.metadata = self.build_metadata(n.metadata);
         let fragment = self.store().add_fragment::<EnumFragment>(data);
         self.bind(fragment.raw(), node.raw());
@@ -752,11 +882,23 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
                 {
                     let f = &field.fragment;
                     set(f, FragmentFlags::VARIABLE_FRAGMENT_HAS_IMPLICIT_TYPE, true);
-                    set(f, FragmentFlags::NON_PARAMETER_VARIABLE_FRAGMENT_HAS_INITIALIZER, true);
-                    set(f, FragmentFlags::FRAGMENT_IS_AUGMENTATION, c.augment_keyword.is_some());
+                    set(
+                        f,
+                        FragmentFlags::NON_PARAMETER_VARIABLE_FRAGMENT_HAS_INITIALIZER,
+                        true,
+                    );
+                    set(
+                        f,
+                        FragmentFlags::FRAGMENT_IS_AUGMENTATION,
+                        c.augment_keyword.is_some(),
+                    );
                     set(f, FragmentFlags::VARIABLE_FRAGMENT_IS_CONST, true);
                     set(f, FragmentFlags::FIELD_FRAGMENT_IS_ENUM_CONSTANT, true);
-                    set(f, FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_DECLARATION, true);
+                    set(
+                        f,
+                        FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_DECLARATION,
+                        true,
+                    );
                     set(f, FragmentFlags::VARIABLE_FRAGMENT_IS_STATIC, true);
                 }
                 field.fragment.metadata = b.build_metadata(c.metadata);
@@ -775,7 +917,8 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
                 set(f, FragmentFlags::VARIABLE_FRAGMENT_IS_STATIC, true);
                 set(f, FragmentFlags::FIELD_FRAGMENT_IS_ORIGIN_ENUM_VALUES, true);
             }
-            let (values_initializer, values_type_node) = b.enum_values_nodes(&enum_name_text, &values_elements);
+            let (values_initializer, values_type_node) =
+                b.enum_values_nodes(&enum_name_text, &values_elements);
             values.constant_initializer = Some(values_initializer);
             let values = b.store().add_fragment::<FieldFragment>(values);
             b.add_child_fragment(values.raw());
@@ -799,7 +942,11 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
 
     /// The synthetic `InstanceCreationExpression` of an enum constant
     /// (`E<typeArguments>.name(arguments)`), in the `ConstExprs`.
-    fn enum_constant_initializer(&mut self, enum_name: &str, arguments: Option<Id<EnumConstantArguments>>) -> ConstExprId {
+    fn enum_constant_initializer(
+        &mut self,
+        enum_name: &str,
+        arguments: Option<Id<EnumConstantArguments>>,
+    ) -> ConstExprId {
         let parsed = self.parsed.clone();
         let ast = &parsed.ast;
         let args = arguments.map(|a| ast.get(a));
@@ -807,9 +954,11 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
             .and_then(|a| a.type_arguments)
             .map(|t| self.core.const_exprs.copy(ast, t).0);
         let argument_list = args.map(|a| self.core.const_exprs.copy(ast, a.argument_list).0);
-        let constructor_name = args
-            .and_then(|a| a.constructor_selector)
-            .map(|s| ast.tokens.lexeme(ast.get(ast.get(s).name).token).to_string());
+        let constructor_name = args.and_then(|a| a.constructor_selector).map(|s| {
+            ast.tokens
+                .lexeme(ast.get(ast.get(s).name).token)
+                .to_string()
+        });
         let dst = &mut self.core.const_exprs.ast;
         let type_name = synthetic_string(dst, enum_name);
         let named_type = dst.add(NamedType {
@@ -856,15 +1005,23 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
 
     /// The synthetic `values` initializer `[a, b, ...]` and its type
     /// `List<E>`, in the `ConstExprs`.
-    fn enum_values_nodes(&mut self, enum_name: &str, names: &[String]) -> (ConstExprId, ConstExprId) {
+    fn enum_values_nodes(
+        &mut self,
+        enum_name: &str,
+        names: &[String],
+    ) -> (ConstExprId, ConstExprId) {
         let dst = &mut self.core.const_exprs.ast;
         let mut elements = Vec::new();
         for n in names {
             let token = synthetic_string(dst, n);
             elements.push(dst.add(SimpleIdentifier { token }).raw());
         }
-        let open = dst.tokens.push_synthetic(TokenType::OPEN_SQUARE_BRACKET, 0, 0);
-        let close = dst.tokens.push_synthetic(TokenType::CLOSE_SQUARE_BRACKET, 0, 0);
+        let open = dst
+            .tokens
+            .push_synthetic(TokenType::OPEN_SQUARE_BRACKET, 0, 0);
+        let close = dst
+            .tokens
+            .push_synthetic(TokenType::CLOSE_SQUARE_BRACKET, 0, 0);
         let elements = dst.new_list(elements.into_iter().map(Id::<CollectionElement>::from_raw));
         let list = dst.add(ListLiteral {
             const_keyword: None,
@@ -907,7 +1064,11 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
         let mut data = ExtensionFragment {
             instance: InstanceFragmentData::new(fd(name)),
         };
-        set(&data.fragment, FragmentFlags::FRAGMENT_IS_AUGMENTATION, n.augment_keyword.is_some());
+        set(
+            &data.fragment,
+            FragmentFlags::FRAGMENT_IS_AUGMENTATION,
+            n.augment_keyword.is_some(),
+        );
         data.fragment.metadata = self.build_metadata(n.metadata);
         let fragment = self.store().add_fragment::<ExtensionFragment>(data);
         self.bind(fragment.raw(), node.raw());
@@ -933,7 +1094,11 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
         let mut data = ExtensionTypeFragment {
             interface: InterfaceFragmentData::new(fd(name)),
         };
-        set(&data.fragment, FragmentFlags::FRAGMENT_IS_AUGMENTATION, n.augment_keyword.is_some());
+        set(
+            &data.fragment,
+            FragmentFlags::FRAGMENT_IS_AUGMENTATION,
+            n.augment_keyword.is_some(),
+        );
         data.fragment.metadata = self.build_metadata(n.metadata);
         let fragment = self.store().add_fragment::<ExtensionTypeFragment>(data);
         self.bind(fragment.raw(), node.raw());
@@ -962,17 +1127,49 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
             let mut data = new_field_fragment(self.name_of(Some(v.name)));
             {
                 let f = &data.fragment;
-                set(f, FragmentFlags::NON_PARAMETER_VARIABLE_FRAGMENT_HAS_INITIALIZER, v.initializer.is_some());
-                set(f, FragmentFlags::VARIABLE_FRAGMENT_IS_ABSTRACT, n.abstract_keyword.is_some());
-                set(f, FragmentFlags::FRAGMENT_IS_AUGMENTATION, n.augment_keyword.is_some());
+                set(
+                    f,
+                    FragmentFlags::NON_PARAMETER_VARIABLE_FRAGMENT_HAS_INITIALIZER,
+                    v.initializer.is_some(),
+                );
+                set(
+                    f,
+                    FragmentFlags::VARIABLE_FRAGMENT_IS_ABSTRACT,
+                    n.abstract_keyword.is_some(),
+                );
+                set(
+                    f,
+                    FragmentFlags::FRAGMENT_IS_AUGMENTATION,
+                    n.augment_keyword.is_some(),
+                );
                 set(f, FragmentFlags::VARIABLE_FRAGMENT_IS_CONST, is_const);
-                set(f, FragmentFlags::FIELD_FRAGMENT_IS_EXPLICITLY_COVARIANT, n.covariant_keyword.is_some());
-                set(f, FragmentFlags::VARIABLE_FRAGMENT_IS_EXTERNAL, n.external_keyword.is_some());
+                set(
+                    f,
+                    FragmentFlags::FIELD_FRAGMENT_IS_EXPLICITLY_COVARIANT,
+                    n.covariant_keyword.is_some(),
+                );
+                set(
+                    f,
+                    FragmentFlags::VARIABLE_FRAGMENT_IS_EXTERNAL,
+                    n.external_keyword.is_some(),
+                );
                 set(f, FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL, is_final);
-                set(f, FragmentFlags::VARIABLE_FRAGMENT_IS_LATE, variable_list_is_late(ast, list));
-                set(f, FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_DECLARATION, true);
+                set(
+                    f,
+                    FragmentFlags::VARIABLE_FRAGMENT_IS_LATE,
+                    variable_list_is_late(ast, list),
+                );
+                set(
+                    f,
+                    FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_DECLARATION,
+                    true,
+                );
                 set(f, FragmentFlags::VARIABLE_FRAGMENT_IS_STATIC, is_static);
-                set(f, FragmentFlags::VARIABLE_FRAGMENT_HAS_IMPLICIT_TYPE, ast.get(list).type_.is_none());
+                set(
+                    f,
+                    FragmentFlags::VARIABLE_FRAGMENT_HAS_IMPLICIT_TYPE,
+                    ast.get(list).type_.is_none(),
+                );
             }
             // Dart shares one metadata object for all variables.
             data.fragment.metadata = self.build_metadata(n.metadata);
@@ -1015,10 +1212,14 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
             let f = self.store().fragment_mut(fragment);
             f.constant_initializer = initializer;
             f.fragment.metadata = metadata;
-            f.flags
-                .set(FragmentFlags::VARIABLE_FRAGMENT_HAS_IMPLICIT_TYPE, has_implicit_type);
-            f.flags
-                .set(FragmentFlags::FORMAL_PARAMETER_FRAGMENT_IS_ORIGIN_DECLARATION, true);
+            f.flags.set(
+                FragmentFlags::VARIABLE_FRAGMENT_HAS_IMPLICIT_TYPE,
+                has_implicit_type,
+            );
+            f.flags.set(
+                FragmentFlags::FORMAL_PARAMETER_FRAGMENT_IS_ORIGIN_DECLARATION,
+                true,
+            );
         }
         self.declared.insert(node, fragment.raw());
         self.build_function_typed_parameter_suffix(fragment, suffix);
@@ -1038,12 +1239,15 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
             None => {
                 let name = self.name_of(n.name);
                 self.store()
-                    .add_fragment::<FormalParameterFragment>(new_formal_parameter_fragment(name, n.kind, None))
+                    .add_fragment::<FormalParameterFragment>(new_formal_parameter_fragment(
+                        name, n.kind, None,
+                    ))
             }
         };
-        self.core
-            .fragment_nodes
-            .insert(fragment.raw(), (self.lib_index, self.unit_index, node.raw()));
+        self.core.fragment_nodes.insert(
+            fragment.raw(),
+            (self.lib_index, self.unit_index, node.raw()),
+        );
         {
             let is_final = n
                 .const_final_or_var_keyword
@@ -1053,7 +1257,8 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
                 FragmentFlags::FORMAL_PARAMETER_FRAGMENT_IS_EXPLICITLY_COVARIANT,
                 declaring.is_none() && n.covariant_keyword.is_some(),
             );
-            f.flags.set(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL, is_final);
+            f.flags
+                .set(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL, is_final);
         }
         self.finish_formal_parameter(
             fragment,
@@ -1085,11 +1290,16 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
         let private_name = self.core.name_opt(private_name.as_deref());
         let fragment: FId<FormalParameterFragment> = self
             .store()
-            .add_fragment::<FieldFormalParameterFragment>(new_formal_parameter_fragment(name, n.kind, private_name))
+            .add_fragment::<FieldFormalParameterFragment>(new_formal_parameter_fragment(
+                name,
+                n.kind,
+                private_name,
+            ))
             .upcast();
-        self.core
-            .fragment_nodes
-            .insert(fragment.raw(), (self.lib_index, self.unit_index, node.raw()));
+        self.core.fragment_nodes.insert(
+            fragment.raw(),
+            (self.lib_index, self.unit_index, node.raw()),
+        );
         self.finish_formal_parameter(
             fragment,
             node.raw(),
@@ -1109,11 +1319,14 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
         let name = self.name_of(Some(n.name));
         let fragment: FId<FormalParameterFragment> = self
             .store()
-            .add_fragment::<SuperFormalParameterFragment>(new_formal_parameter_fragment(name, n.kind, None))
+            .add_fragment::<SuperFormalParameterFragment>(new_formal_parameter_fragment(
+                name, n.kind, None,
+            ))
             .upcast();
-        self.core
-            .fragment_nodes
-            .insert(fragment.raw(), (self.lib_index, self.unit_index, node.raw()));
+        self.core.fragment_nodes.insert(
+            fragment.raw(),
+            (self.lib_index, self.unit_index, node.raw()),
+        );
         self.finish_formal_parameter(
             fragment,
             node.raw(),
@@ -1135,17 +1348,41 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
         let body = fe.body;
         let fragment: FragmentId = if function_is_getter(ast, node) {
             let data = new_getter_fragment(name);
-            set(&data.fragment, FragmentFlags::FRAGMENT_IS_AUGMENTATION, n.augment_keyword.is_some());
-            set(&data.fragment, FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_DECLARATION, true);
-            set(&data.fragment, FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC, true);
+            set(
+                &data.fragment,
+                FragmentFlags::FRAGMENT_IS_AUGMENTATION,
+                n.augment_keyword.is_some(),
+            );
+            set(
+                &data.fragment,
+                FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_DECLARATION,
+                true,
+            );
+            set(
+                &data.fragment,
+                FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC,
+                true,
+            );
             let f = self.store().add_fragment::<GetterFragment>(data).raw();
             self.add_top_fragment(f);
             f
         } else if function_is_setter(ast, node) {
             let data = new_setter_fragment(name);
-            set(&data.fragment, FragmentFlags::FRAGMENT_IS_AUGMENTATION, n.augment_keyword.is_some());
-            set(&data.fragment, FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_DECLARATION, true);
-            set(&data.fragment, FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC, true);
+            set(
+                &data.fragment,
+                FragmentFlags::FRAGMENT_IS_AUGMENTATION,
+                n.augment_keyword.is_some(),
+            );
+            set(
+                &data.fragment,
+                FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_DECLARATION,
+                true,
+            );
+            set(
+                &data.fragment,
+                FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC,
+                true,
+            );
             let f = self.store().add_fragment::<SetterFragment>(data).raw();
             self.add_top_fragment(f);
             f
@@ -1153,21 +1390,51 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
             let data = TopLevelFunctionFragment {
                 executable: ExecutableFragmentData::new(fd(name)),
             };
-            set(&data.fragment, FragmentFlags::FRAGMENT_IS_AUGMENTATION, n.augment_keyword.is_some());
-            set(&data.fragment, FragmentFlags::TOP_LEVEL_FUNCTION_FRAGMENT_IS_ORIGIN_DECLARATION, true);
-            set(&data.fragment, FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC, true);
-            let f = self.store().add_fragment::<TopLevelFunctionFragment>(data).raw();
+            set(
+                &data.fragment,
+                FragmentFlags::FRAGMENT_IS_AUGMENTATION,
+                n.augment_keyword.is_some(),
+            );
+            set(
+                &data.fragment,
+                FragmentFlags::TOP_LEVEL_FUNCTION_FRAGMENT_IS_ORIGIN_DECLARATION,
+                true,
+            );
+            set(
+                &data.fragment,
+                FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC,
+                true,
+            );
+            let f = self
+                .store()
+                .add_fragment::<TopLevelFunctionFragment>(data)
+                .raw();
             self.add_top_fragment(f);
             f
         };
         let metadata = self.build_metadata(n.metadata);
         {
             let f = fragment_data_mut(self.store(), fragment);
-            f.flags.set(FragmentFlags::EXECUTABLE_FRAGMENT_HAS_IMPLICIT_RETURN_TYPE, n.return_type.is_none());
-            f.flags.set(FragmentFlags::EXECUTABLE_FRAGMENT_IS_ASYNCHRONOUS, is_asynchronous(ast, body));
-            f.flags.set(FragmentFlags::EXECUTABLE_FRAGMENT_IS_EXTERNAL, n.external_keyword.is_some());
-            f.flags.set(FragmentFlags::EXECUTABLE_FRAGMENT_IS_GENERATOR, is_generator(ast, body));
-            f.flags.set(FragmentFlags::FRAGMENT_IS_COMPLETE, function_is_complete(ast, node));
+            f.flags.set(
+                FragmentFlags::EXECUTABLE_FRAGMENT_HAS_IMPLICIT_RETURN_TYPE,
+                n.return_type.is_none(),
+            );
+            f.flags.set(
+                FragmentFlags::EXECUTABLE_FRAGMENT_IS_ASYNCHRONOUS,
+                is_asynchronous(ast, body),
+            );
+            f.flags.set(
+                FragmentFlags::EXECUTABLE_FRAGMENT_IS_EXTERNAL,
+                n.external_keyword.is_some(),
+            );
+            f.flags.set(
+                FragmentFlags::EXECUTABLE_FRAGMENT_IS_GENERATOR,
+                is_generator(ast, body),
+            );
+            f.flags.set(
+                FragmentFlags::FRAGMENT_IS_COMPLETE,
+                function_is_complete(ast, node),
+            );
             f.metadata = metadata;
         }
         self.bind(fragment, node.raw());
@@ -1220,7 +1487,11 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
             has_self_reference: BoolSlot::new(false),
         };
         data.fragment.first_token_offset = Some(ast.offset(node));
-        set(&data.fragment, FragmentFlags::FRAGMENT_IS_AUGMENTATION, n.augment_keyword.is_some());
+        set(
+            &data.fragment,
+            FragmentFlags::FRAGMENT_IS_AUGMENTATION,
+            n.augment_keyword.is_some(),
+        );
         data.fragment.metadata = self.build_metadata(n.metadata);
         let fragment = self.store().add_fragment::<TypeAliasFragment>(data);
         self.bind(fragment.raw(), node.raw());
@@ -1244,26 +1515,74 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
         let is_static = method_is_static(ast, node);
         let fragment: FragmentId = if method_is_getter(ast, node) {
             let data = new_getter_fragment(name);
-            set(&data.fragment, FragmentFlags::EXECUTABLE_FRAGMENT_IS_ABSTRACT, !is_complete);
-            set(&data.fragment, FragmentFlags::FRAGMENT_IS_AUGMENTATION, n.augment_keyword.is_some());
-            set(&data.fragment, FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_DECLARATION, true);
-            set(&data.fragment, FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC, is_static);
+            set(
+                &data.fragment,
+                FragmentFlags::EXECUTABLE_FRAGMENT_IS_ABSTRACT,
+                !is_complete,
+            );
+            set(
+                &data.fragment,
+                FragmentFlags::FRAGMENT_IS_AUGMENTATION,
+                n.augment_keyword.is_some(),
+            );
+            set(
+                &data.fragment,
+                FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_DECLARATION,
+                true,
+            );
+            set(
+                &data.fragment,
+                FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC,
+                is_static,
+            );
             self.store().add_fragment::<GetterFragment>(data).raw()
         } else if method_is_setter(ast, node) {
             let data = new_setter_fragment(name);
-            set(&data.fragment, FragmentFlags::EXECUTABLE_FRAGMENT_IS_ABSTRACT, !is_complete);
-            set(&data.fragment, FragmentFlags::FRAGMENT_IS_AUGMENTATION, n.augment_keyword.is_some());
-            set(&data.fragment, FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_DECLARATION, true);
-            set(&data.fragment, FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC, is_static);
+            set(
+                &data.fragment,
+                FragmentFlags::EXECUTABLE_FRAGMENT_IS_ABSTRACT,
+                !is_complete,
+            );
+            set(
+                &data.fragment,
+                FragmentFlags::FRAGMENT_IS_AUGMENTATION,
+                n.augment_keyword.is_some(),
+            );
+            set(
+                &data.fragment,
+                FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_DECLARATION,
+                true,
+            );
+            set(
+                &data.fragment,
+                FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC,
+                is_static,
+            );
             self.store().add_fragment::<SetterFragment>(data).raw()
         } else {
             let data = MethodFragment {
                 executable: ExecutableFragmentData::new(fd(name)),
             };
-            set(&data.fragment, FragmentFlags::EXECUTABLE_FRAGMENT_IS_ABSTRACT, !is_complete);
-            set(&data.fragment, FragmentFlags::FRAGMENT_IS_AUGMENTATION, n.augment_keyword.is_some());
-            set(&data.fragment, FragmentFlags::METHOD_FRAGMENT_IS_ORIGIN_DECLARATION, true);
-            set(&data.fragment, FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC, is_static);
+            set(
+                &data.fragment,
+                FragmentFlags::EXECUTABLE_FRAGMENT_IS_ABSTRACT,
+                !is_complete,
+            );
+            set(
+                &data.fragment,
+                FragmentFlags::FRAGMENT_IS_AUGMENTATION,
+                n.augment_keyword.is_some(),
+            );
+            set(
+                &data.fragment,
+                FragmentFlags::METHOD_FRAGMENT_IS_ORIGIN_DECLARATION,
+                true,
+            );
+            set(
+                &data.fragment,
+                FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC,
+                is_static,
+            );
             self.store().add_fragment::<MethodFragment>(data).raw()
         };
         self.add_child_fragment(fragment);
@@ -1271,15 +1590,28 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
         let invokes_super = invokes_super_self(ast, node);
         {
             let f = fragment_data_mut(self.store(), fragment);
-            f.flags.set(FragmentFlags::EXECUTABLE_FRAGMENT_HAS_IMPLICIT_RETURN_TYPE, n.return_type.is_none());
-            f.flags.set(FragmentFlags::EXECUTABLE_FRAGMENT_INVOKES_SUPER_SELF, invokes_super);
-            f.flags.set(FragmentFlags::EXECUTABLE_FRAGMENT_IS_ASYNCHRONOUS, is_asynchronous(ast, n.body));
+            f.flags.set(
+                FragmentFlags::EXECUTABLE_FRAGMENT_HAS_IMPLICIT_RETURN_TYPE,
+                n.return_type.is_none(),
+            );
+            f.flags.set(
+                FragmentFlags::EXECUTABLE_FRAGMENT_INVOKES_SUPER_SELF,
+                invokes_super,
+            );
+            f.flags.set(
+                FragmentFlags::EXECUTABLE_FRAGMENT_IS_ASYNCHRONOUS,
+                is_asynchronous(ast, n.body),
+            );
             f.flags.set(
                 FragmentFlags::EXECUTABLE_FRAGMENT_IS_EXTERNAL,
                 n.external_keyword.is_some() || ast.is::<NativeFunctionBody>(n.body.raw()),
             );
-            f.flags.set(FragmentFlags::EXECUTABLE_FRAGMENT_IS_GENERATOR, is_generator(ast, n.body));
-            f.flags.set(FragmentFlags::FRAGMENT_IS_COMPLETE, is_complete);
+            f.flags.set(
+                FragmentFlags::EXECUTABLE_FRAGMENT_IS_GENERATOR,
+                is_generator(ast, n.body),
+            );
+            f.flags
+                .set(FragmentFlags::FRAGMENT_IS_COMPLETE, is_complete);
             f.metadata = metadata;
         }
         self.bind(fragment, node.raw());
@@ -1299,8 +1631,16 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
             interface: InterfaceFragmentData::new(fd(name)),
             super_invoked_names: OnceSlot::new(),
         };
-        set(&data.fragment, FragmentFlags::FRAGMENT_IS_AUGMENTATION, n.augment_keyword.is_some());
-        set(&data.fragment, FragmentFlags::MIXIN_FRAGMENT_IS_BASE, n.base_keyword.is_some());
+        set(
+            &data.fragment,
+            FragmentFlags::FRAGMENT_IS_AUGMENTATION,
+            n.augment_keyword.is_some(),
+        );
+        set(
+            &data.fragment,
+            FragmentFlags::MIXIN_FRAGMENT_IS_BASE,
+            n.base_keyword.is_some(),
+        );
         data.fragment.metadata = self.build_metadata(n.metadata);
         let fragment = self.store().add_fragment::<MixinFragment>(data);
         self.bind(fragment.raw(), node.raw());
@@ -1340,26 +1680,33 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
         {
             let f = &data.fragment;
             set(f, FragmentFlags::FRAGMENT_IS_AUGMENTATION, is_augmentation);
-            set(f, FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_DECLARATION, true);
+            set(
+                f,
+                FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_DECLARATION,
+                true,
+            );
             set(f, FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_CONST, is_const);
             set(f, FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_PRIMARY, true);
             set(f, FragmentFlags::FRAGMENT_IS_COMPLETE, true);
         }
         data.type_name = Some(self.core.name(ast.tokens.lexeme(n.type_name)));
         // The primary constructor body is a member of the class body.
-        let body = ast.parent(parent).and(None::<Id<PrimaryConstructorBody>>).or_else(|| {
-            let body = if let Some(c) = ast.cast::<ClassDeclaration>(parent) {
-                class_body_members(ast, ast.get(c).body)
-            } else if let Some(e) = ast.cast::<EnumDeclaration>(parent) {
-                enum_body_members(ast, ast.get(e).body)
-            } else if let Some(e) = extension_type {
-                class_body_members(ast, ast.get(e).body)
-            } else {
-                Vec::new()
-            };
-            body.into_iter()
-                .find_map(|m| ast.cast::<PrimaryConstructorBody>(m.raw()))
-        });
+        let body = ast
+            .parent(parent)
+            .and(None::<Id<PrimaryConstructorBody>>)
+            .or_else(|| {
+                let body = if let Some(c) = ast.cast::<ClassDeclaration>(parent) {
+                    class_body_members(ast, ast.get(c).body)
+                } else if let Some(e) = ast.cast::<EnumDeclaration>(parent) {
+                    enum_body_members(ast, ast.get(e).body)
+                } else if let Some(e) = extension_type {
+                    class_body_members(ast, ast.get(e).body)
+                } else {
+                    Vec::new()
+                };
+                body.into_iter()
+                    .find_map(|m| ast.cast::<PrimaryConstructorBody>(m.raw()))
+            });
         if let Some(body) = body {
             let b = ast.get(body);
             data.fragment.metadata = self.build_metadata(b.metadata);
@@ -1384,8 +1731,16 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
                 .is_some_and(|p| ast.is::<RegularFormalParameter>(p.raw()));
             if !is_first_representation {
                 let field = new_field_fragment(None);
-                set(&field.fragment, FragmentFlags::FRAGMENT_IS_AUGMENTATION, is_augmentation);
-                set(&field.fragment, FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL, true);
+                set(
+                    &field.fragment,
+                    FragmentFlags::FRAGMENT_IS_AUGMENTATION,
+                    is_augmentation,
+                );
+                set(
+                    &field.fragment,
+                    FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL,
+                    true,
+                );
                 set(
                     &field.fragment,
                     FragmentFlags::FIELD_FRAGMENT_IS_ORIGIN_EXTENSION_TYPE_RECOVERY_REPRESENTATION,
@@ -1413,9 +1768,21 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
             {
                 let f = &field.fragment;
                 set(f, FragmentFlags::FRAGMENT_IS_AUGMENTATION, is_augmentation);
-                set(f, FragmentFlags::FIELD_FRAGMENT_IS_EXPLICITLY_COVARIANT, pn.covariant_keyword.is_some());
-                set(f, FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL, is_final || is_representation);
-                set(f, FragmentFlags::FIELD_FRAGMENT_IS_ORIGIN_DECLARING_FORMAL_PARAMETER, true);
+                set(
+                    f,
+                    FragmentFlags::FIELD_FRAGMENT_IS_EXPLICITLY_COVARIANT,
+                    pn.covariant_keyword.is_some(),
+                );
+                set(
+                    f,
+                    FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL,
+                    is_final || is_representation,
+                );
+                set(
+                    f,
+                    FragmentFlags::FIELD_FRAGMENT_IS_ORIGIN_DECLARING_FORMAL_PARAMETER,
+                    true,
+                );
                 set(
                     f,
                     FragmentFlags::VARIABLE_FRAGMENT_HAS_IMPLICIT_TYPE,
@@ -1447,11 +1814,12 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
                     private_name,
                 ))
                 .upcast();
-            self.store()
-                .fragment(formal)
-                .flags
-                .set(FragmentFlags::FIELD_FORMAL_PARAMETER_FRAGMENT_IS_DECLARING, true);
-            self.declaring_formal_parameters.insert(p.raw(), (field, formal));
+            self.store().fragment(formal).flags.set(
+                FragmentFlags::FIELD_FORMAL_PARAMETER_FRAGMENT_IS_DECLARING,
+                true,
+            );
+            self.declaring_formal_parameters
+                .insert(p.raw(), (field, formal));
             self.core.declaring_formal_parameters.push((field, formal));
         }
         self.build_executable_element_children(fragment.raw(), Some(n.formal_parameters), None);
@@ -1469,15 +1837,47 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
             let mut data = new_top_level_variable_fragment(self.name_of(Some(v.name)));
             {
                 let f = &data.fragment;
-                set(f, FragmentFlags::NON_PARAMETER_VARIABLE_FRAGMENT_HAS_INITIALIZER, v.initializer.is_some());
-                set(f, FragmentFlags::VARIABLE_FRAGMENT_IS_ABSTRACT, n.abstract_keyword.is_some());
-                set(f, FragmentFlags::FRAGMENT_IS_AUGMENTATION, n.augment_keyword.is_some());
+                set(
+                    f,
+                    FragmentFlags::NON_PARAMETER_VARIABLE_FRAGMENT_HAS_INITIALIZER,
+                    v.initializer.is_some(),
+                );
+                set(
+                    f,
+                    FragmentFlags::VARIABLE_FRAGMENT_IS_ABSTRACT,
+                    n.abstract_keyword.is_some(),
+                );
+                set(
+                    f,
+                    FragmentFlags::FRAGMENT_IS_AUGMENTATION,
+                    n.augment_keyword.is_some(),
+                );
                 set(f, FragmentFlags::VARIABLE_FRAGMENT_IS_CONST, is_const);
-                set(f, FragmentFlags::VARIABLE_FRAGMENT_IS_EXTERNAL, n.external_keyword.is_some());
-                set(f, FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL, variable_list_is_final(ast, list));
-                set(f, FragmentFlags::VARIABLE_FRAGMENT_IS_LATE, variable_list_is_late(ast, list));
-                set(f, FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_DECLARATION, true);
-                set(f, FragmentFlags::VARIABLE_FRAGMENT_HAS_IMPLICIT_TYPE, ast.get(list).type_.is_none());
+                set(
+                    f,
+                    FragmentFlags::VARIABLE_FRAGMENT_IS_EXTERNAL,
+                    n.external_keyword.is_some(),
+                );
+                set(
+                    f,
+                    FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL,
+                    variable_list_is_final(ast, list),
+                );
+                set(
+                    f,
+                    FragmentFlags::VARIABLE_FRAGMENT_IS_LATE,
+                    variable_list_is_late(ast, list),
+                );
+                set(
+                    f,
+                    FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_DECLARATION,
+                    true,
+                );
+                set(
+                    f,
+                    FragmentFlags::VARIABLE_FRAGMENT_HAS_IMPLICIT_TYPE,
+                    ast.get(list).type_.is_none(),
+                );
             }
             data.fragment.metadata = self.build_metadata(n.metadata);
             if is_const && let Some(initializer) = v.initializer {
@@ -1573,7 +1973,11 @@ pub fn corresponding_public_name(identifier: &str) -> Option<String> {
     Some(public.to_string())
 }
 
-fn set_type_params_of(store: &mut ElementStore, fragment: FragmentId, list: Vec<FId<TypeParameterFragment>>) {
+fn set_type_params_of(
+    store: &mut ElementStore,
+    fragment: FragmentId,
+    list: Vec<FId<TypeParameterFragment>>,
+) {
     let i = fragment.index();
     let f = &mut store.fragments;
     match fragment.tag() {
@@ -1593,7 +1997,11 @@ fn set_type_params_of(store: &mut ElementStore, fragment: FragmentId, list: Vec<
     }
 }
 
-fn set_formal_params_of(store: &mut ElementStore, fragment: FragmentId, list: Vec<FId<FormalParameterFragment>>) {
+fn set_formal_params_of(
+    store: &mut ElementStore,
+    fragment: FragmentId,
+    list: Vec<FId<FormalParameterFragment>>,
+) {
     let i = fragment.index();
     let f = &mut store.fragments;
     match fragment.tag() {
@@ -1647,7 +2055,13 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
         self.build_formal_parameter_elements();
     }
 
-    fn declare_top(&mut self, kind: TopLevelReferenceKind, name: Option<Name>, element: ElementId, lookup: Option<Arc<str>>) -> RefId {
+    fn declare_top(
+        &mut self,
+        kind: TopLevelReferenceKind,
+        name: Option<Name>,
+        element: ElementId,
+        lookup: Option<Arc<str>>,
+    ) -> RefId {
         let text = name.map(|n| self.core.name_str(n).to_string());
         let r = self.lib.references.declare_top_level(kind, text.as_deref());
         self.lib.references.reference.set_element(r, element);
@@ -1658,10 +2072,19 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
         r
     }
 
-    fn declare_member(&mut self, container: ElementId, kind: MemberReferenceKind, name: Option<Name>, element: ElementId) {
+    fn declare_member(
+        &mut self,
+        container: ElementId,
+        kind: MemberReferenceKind,
+        name: Option<Name>,
+        element: ElementId,
+    ) {
         let text = name.map(|n| self.core.name_str(n).to_string());
         let container = self.lib.element_references[&container];
-        let r = self.lib.references.declare_member(container, kind, text.as_deref());
+        let r = self
+            .lib
+            .references
+            .declare_member(container, kind, text.as_deref());
         self.lib.references.reference.set_element(r, element);
         self.lib.element_references.insert(element, r);
     }
@@ -1679,11 +2102,24 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
     /// constructors of `element.dart`) and returns them.
     fn type_parameter_elements(&mut self, fragment: FragmentId) -> Vec<EId<TypeParameterElement>> {
         let tps: Vec<FId<TypeParameterFragment>> = match fragment.tag() {
-            Tag::Class | Tag::Enum | Tag::Mixin | Tag::Extension | Tag::ExtensionType => {
-                self.core.store.instance_fragment(FId::from_raw(fragment)).type_params.clone()
-            }
-            Tag::TypeAlias => self.core.store.fragment(FId::<TypeAliasFragment>::from_raw(fragment)).type_params.clone(),
-            _ => self.core.store.executable_fragment(FId::from_raw(fragment)).type_params.clone(),
+            Tag::Class | Tag::Enum | Tag::Mixin | Tag::Extension | Tag::ExtensionType => self
+                .core
+                .store
+                .instance_fragment(FId::from_raw(fragment))
+                .type_params
+                .clone(),
+            Tag::TypeAlias => self
+                .core
+                .store
+                .fragment(FId::<TypeAliasFragment>::from_raw(fragment))
+                .type_params
+                .clone(),
+            _ => self
+                .core
+                .store
+                .executable_fragment(FId::from_raw(fragment))
+                .type_params
+                .clone(),
         };
         tps.into_iter()
             .map(|tp| new_type_parameter_element(&mut self.core.store, tp))
@@ -1706,14 +2142,28 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
                 match fragment.tag() {
                     Tag::Class => self.handle_class_fragment(unit, last, FId::from_raw(fragment)),
                     Tag::Enum => self.handle_enum_fragment(unit, last, FId::from_raw(fragment)),
-                    Tag::Extension => self.handle_extension_fragment(unit, last, FId::from_raw(fragment)),
-                    Tag::ExtensionType => self.handle_extension_type_fragment(unit, last, FId::from_raw(fragment)),
-                    Tag::Getter => self.handle_top_level_getter_fragment(unit, last, FId::from_raw(fragment)),
+                    Tag::Extension => {
+                        self.handle_extension_fragment(unit, last, FId::from_raw(fragment))
+                    }
+                    Tag::ExtensionType => {
+                        self.handle_extension_type_fragment(unit, last, FId::from_raw(fragment))
+                    }
+                    Tag::Getter => {
+                        self.handle_top_level_getter_fragment(unit, last, FId::from_raw(fragment))
+                    }
                     Tag::Mixin => self.handle_mixin_fragment(unit, last, FId::from_raw(fragment)),
-                    Tag::Setter => self.handle_top_level_setter_fragment(unit, last, FId::from_raw(fragment)),
-                    Tag::TopLevelFunction => self.handle_top_level_function_fragment(unit, last, FId::from_raw(fragment)),
-                    Tag::TopLevelVariable => self.handle_top_level_variable_fragment(unit, last, FId::from_raw(fragment)),
-                    Tag::TypeAlias => self.handle_type_alias_fragment(unit, FId::from_raw(fragment)),
+                    Tag::Setter => {
+                        self.handle_top_level_setter_fragment(unit, last, FId::from_raw(fragment))
+                    }
+                    Tag::TopLevelFunction => {
+                        self.handle_top_level_function_fragment(unit, last, FId::from_raw(fragment))
+                    }
+                    Tag::TopLevelVariable => {
+                        self.handle_top_level_variable_fragment(unit, last, FId::from_raw(fragment))
+                    }
+                    Tag::TypeAlias => {
+                        self.handle_type_alias_fragment(unit, FId::from_raw(fragment))
+                    }
                     t => panic!("unexpected top fragment {t:?}"),
                 }
                 last_fragments.insert(name, fragment);
@@ -1738,17 +2188,25 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
         }
         fragment_data_mut(store, tail).next_fragment = Some(fragment);
         fragment_data_mut(store, fragment).previous_fragment = Some(tail);
-        store.fragment_data(fragment).unwrap().element.set_once(element);
+        store
+            .fragment_data(fragment)
+            .unwrap()
+            .element
+            .set_once(element);
     }
 
     fn link_type_parameters(&mut self, previous: FragmentId, current: FragmentId) {
         let store = &mut self.core.store;
         let get = |store: &ElementStore, f: FragmentId| -> Vec<FId<TypeParameterFragment>> {
             match f.tag() {
-                Tag::Class | Tag::Enum | Tag::Mixin | Tag::Extension | Tag::ExtensionType => {
-                    store.instance_fragment(FId::from_raw(f)).type_params.clone()
-                }
-                _ => store.executable_fragment(FId::from_raw(f)).type_params.clone(),
+                Tag::Class | Tag::Enum | Tag::Mixin | Tag::Extension | Tag::ExtensionType => store
+                    .instance_fragment(FId::from_raw(f))
+                    .type_params
+                    .clone(),
+                _ => store
+                    .executable_fragment(FId::from_raw(f))
+                    .type_params
+                    .clone(),
             }
         };
         let p = get(store, previous);
@@ -1764,20 +2222,35 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
 
     fn link_formal_parameters(&mut self, previous: FragmentId, current: FragmentId) {
         let store = &mut self.core.store;
-        let p = store.executable_fragment(FId::from_raw(previous)).formal_params.clone();
-        let c = store.executable_fragment(FId::from_raw(current)).formal_params.clone();
+        let p = store
+            .executable_fragment(FId::from_raw(previous))
+            .formal_params
+            .clone();
+        let c = store
+            .executable_fragment(FId::from_raw(current))
+            .formal_params
+            .clone();
         for (a, b) in p.iter().zip(c.iter()) {
             store.fragment_mut(*a).next_fragment = Some(b.raw());
             store.fragment_mut(*b).previous_fragment = Some(a.raw());
         }
     }
 
-    fn handle_class_fragment(&mut self, unit: FId<LibraryFragment>, last: Option<FragmentId>, fragment: FId<ClassFragment>) {
+    fn handle_class_fragment(
+        &mut self,
+        unit: FId<LibraryFragment>,
+        last: Option<FragmentId>,
+        fragment: FId<ClassFragment>,
+    ) {
         self.store().fragment_mut(unit).classes.push(fragment);
         if self.is_augmentation(fragment.raw())
             && let Some(last) = last
             && last.tag() == Tag::Class
-            && !has(&self.core.store, last, FragmentFlags::CLASS_FRAGMENT_IS_MIXIN_APPLICATION)
+            && !has(
+                &self.core.store,
+                last,
+                FragmentFlags::CLASS_FRAGMENT_IS_MIXIN_APPLICATION,
+            )
         {
             self.add_fragment(last, fragment.raw());
             self.link_type_parameters(last, fragment.raw());
@@ -1793,7 +2266,11 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
         let element = self.store().add::<ClassElement>(ClassElement {
             interface: InterfaceElementData::new(ed(name, fragment.raw())),
         });
-        self.core.store.fragment(fragment).element.set_once(element.raw());
+        self.core
+            .store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
         {
             let flags = &self.core.store.get(element).flags;
             flags.set(ElementFlags::CLASS_ELEMENT_IS_ABSTRACT, is_abstract);
@@ -1804,7 +2281,9 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
         let tps = self.type_parameter_elements(fragment.raw());
         self.store().get_mut(element).type_params = tps;
         if self.is_augmentation(fragment.raw()) && last.is_some() {
-            self.store().get_mut(element).previous_fragment_of_different_kind = last;
+            self.store()
+                .get_mut(element)
+                .previous_fragment_of_different_kind = last;
         }
         let library = self.library();
         self.store().get_mut(library).classes.push(element);
@@ -1812,7 +2291,12 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
         self.declare_top(TopLevelReferenceKind::Class, name, element.raw(), lookup);
     }
 
-    fn handle_enum_fragment(&mut self, unit: FId<LibraryFragment>, last: Option<FragmentId>, fragment: FId<EnumFragment>) {
+    fn handle_enum_fragment(
+        &mut self,
+        unit: FId<LibraryFragment>,
+        last: Option<FragmentId>,
+        fragment: FId<EnumFragment>,
+    ) {
         self.store().fragment_mut(unit).enums.push(fragment);
         if self.is_augmentation(fragment.raw())
             && let Some(last) = last
@@ -1826,11 +2310,17 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
         let element = self.store().add::<EnumElement>(EnumElement {
             interface: InterfaceElementData::new(ed(name, fragment.raw())),
         });
-        self.core.store.fragment(fragment).element.set_once(element.raw());
+        self.core
+            .store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
         let tps = self.type_parameter_elements(fragment.raw());
         self.store().get_mut(element).type_params = tps;
         if self.is_augmentation(fragment.raw()) && last.is_some() {
-            self.store().get_mut(element).previous_fragment_of_different_kind = last;
+            self.store()
+                .get_mut(element)
+                .previous_fragment_of_different_kind = last;
         }
         let library = self.library();
         self.store().get_mut(library).enums.push(element);
@@ -1838,7 +2328,12 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
         self.declare_top(TopLevelReferenceKind::Enum, name, element.raw(), lookup);
     }
 
-    fn handle_extension_fragment(&mut self, unit: FId<LibraryFragment>, last: Option<FragmentId>, fragment: FId<ExtensionFragment>) {
+    fn handle_extension_fragment(
+        &mut self,
+        unit: FId<LibraryFragment>,
+        last: Option<FragmentId>,
+        fragment: FId<ExtensionFragment>,
+    ) {
         self.store().fragment_mut(unit).extensions.push(fragment);
         if self.is_augmentation(fragment.raw())
             && let Some(last) = last
@@ -1853,20 +2348,39 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
             instance: InstanceElementData::new(ed(name, fragment.raw())),
             extended_type: VarSlot::with(TypeId::INVALID),
         });
-        self.core.store.fragment(fragment).element.set_once(element.raw());
+        self.core
+            .store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
         let tps = self.type_parameter_elements(fragment.raw());
         self.store().get_mut(element).type_params = tps;
         if self.is_augmentation(fragment.raw()) && last.is_some() {
-            self.store().get_mut(element).previous_fragment_of_different_kind = last;
+            self.store()
+                .get_mut(element)
+                .previous_fragment_of_different_kind = last;
         }
         let library = self.library();
         self.store().get_mut(library).extensions.push(element);
         let lookup = self.lookup_name(name, false);
-        self.declare_top(TopLevelReferenceKind::Extension, name, element.raw(), lookup);
+        self.declare_top(
+            TopLevelReferenceKind::Extension,
+            name,
+            element.raw(),
+            lookup,
+        );
     }
 
-    fn handle_extension_type_fragment(&mut self, unit: FId<LibraryFragment>, last: Option<FragmentId>, fragment: FId<ExtensionTypeFragment>) {
-        self.store().fragment_mut(unit).extension_types.push(fragment);
+    fn handle_extension_type_fragment(
+        &mut self,
+        unit: FId<LibraryFragment>,
+        last: Option<FragmentId>,
+        fragment: FId<ExtensionTypeFragment>,
+    ) {
+        self.store()
+            .fragment_mut(unit)
+            .extension_types
+            .push(fragment);
         if self.is_augmentation(fragment.raw())
             && let Some(last) = last
             && last.tag() == Tag::ExtensionType
@@ -1876,25 +2390,43 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
             return;
         }
         let name = self.core.store.fragment(fragment).name;
-        let element = self.store().add::<ExtensionTypeElement>(ExtensionTypeElement {
-            interface: InterfaceElementData::new(ed(name, fragment.raw())),
-            has_representation_self_reference: BoolSlot::new(false),
-            has_implements_self_reference: BoolSlot::new(false),
-            type_erasure: OnceSlot::new(),
-        });
-        self.core.store.fragment(fragment).element.set_once(element.raw());
+        let element = self
+            .store()
+            .add::<ExtensionTypeElement>(ExtensionTypeElement {
+                interface: InterfaceElementData::new(ed(name, fragment.raw())),
+                has_representation_self_reference: BoolSlot::new(false),
+                has_implements_self_reference: BoolSlot::new(false),
+                type_erasure: OnceSlot::new(),
+            });
+        self.core
+            .store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
         let tps = self.type_parameter_elements(fragment.raw());
         self.store().get_mut(element).type_params = tps;
         if self.is_augmentation(fragment.raw()) && last.is_some() {
-            self.store().get_mut(element).previous_fragment_of_different_kind = last;
+            self.store()
+                .get_mut(element)
+                .previous_fragment_of_different_kind = last;
         }
         let library = self.library();
         self.store().get_mut(library).extension_types.push(element);
         let lookup = self.lookup_name(name, false);
-        self.declare_top(TopLevelReferenceKind::ExtensionType, name, element.raw(), lookup);
+        self.declare_top(
+            TopLevelReferenceKind::ExtensionType,
+            name,
+            element.raw(),
+            lookup,
+        );
     }
 
-    fn handle_mixin_fragment(&mut self, unit: FId<LibraryFragment>, last: Option<FragmentId>, fragment: FId<MixinFragment>) {
+    fn handle_mixin_fragment(
+        &mut self,
+        unit: FId<LibraryFragment>,
+        last: Option<FragmentId>,
+        fragment: FId<MixinFragment>,
+    ) {
         self.store().fragment_mut(unit).mixins.push(fragment);
         if self.is_augmentation(fragment.raw())
             && let Some(last) = last
@@ -1909,11 +2441,17 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
             interface: InterfaceElementData::new(ed(name, fragment.raw())),
             superclass_constraints: VarSlot::with(TypeList::EMPTY),
         });
-        self.core.store.fragment(fragment).element.set_once(element.raw());
+        self.core
+            .store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
         let tps = self.type_parameter_elements(fragment.raw());
         self.store().get_mut(element).type_params = tps;
         if self.is_augmentation(fragment.raw()) && last.is_some() {
-            self.store().get_mut(element).previous_fragment_of_different_kind = last;
+            self.store()
+                .get_mut(element)
+                .previous_fragment_of_different_kind = last;
         }
         let library = self.library();
         self.store().get_mut(library).mixins.push(element);
@@ -1921,7 +2459,12 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
         self.declare_top(TopLevelReferenceKind::Mixin, name, element.raw(), lookup);
     }
 
-    fn handle_top_level_function_fragment(&mut self, unit: FId<LibraryFragment>, last: Option<FragmentId>, fragment: FId<TopLevelFunctionFragment>) {
+    fn handle_top_level_function_fragment(
+        &mut self,
+        unit: FId<LibraryFragment>,
+        last: Option<FragmentId>,
+        fragment: FId<TopLevelFunctionFragment>,
+    ) {
         self.store().fragment_mut(unit).functions.push(fragment);
         if let Some(last) = last
             && last.tag() == Tag::TopLevelFunction
@@ -1933,16 +2476,27 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
             return;
         }
         let name = self.core.store.fragment(fragment).name;
-        let element = self.store().add::<TopLevelFunctionElement>(TopLevelFunctionElement {
-            executable: ExecutableElementData::new(ed(name, fragment.raw())),
-        });
-        self.core.store.fragment(fragment).element.set_once(element.raw());
+        let element = self
+            .store()
+            .add::<TopLevelFunctionElement>(TopLevelFunctionElement {
+                executable: ExecutableElementData::new(ed(name, fragment.raw())),
+            });
+        self.core
+            .store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
         self.init_executable(element.upcast(), fragment.raw());
         if self.is_augmentation(fragment.raw()) && last.is_some() {
-            self.store().get_mut(element).previous_fragment_of_different_kind = last;
+            self.store()
+                .get_mut(element)
+                .previous_fragment_of_different_kind = last;
         }
         let library = self.library();
-        self.store().get_mut(library).top_level_functions.push(element);
+        self.store()
+            .get_mut(library)
+            .top_level_functions
+            .push(element);
         let lookup = self.lookup_name(name, false);
         self.declare_top(TopLevelReferenceKind::Function, name, element.raw(), lookup);
     }
@@ -1969,7 +2523,11 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
                 variable: VarSlot::new(),
             },
         });
-        self.core.store.fragment(fragment).element.set_once(element.raw());
+        self.core
+            .store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
         self.init_executable(element.upcast(), fragment.raw());
         element
     }
@@ -1982,17 +2540,30 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
                 variable: VarSlot::new(),
             },
         });
-        self.core.store.fragment(fragment).element.set_once(element.raw());
+        self.core
+            .store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
         self.init_executable(element.upcast(), fragment.raw());
         element
     }
 
-    fn new_top_level_variable_element(&mut self, fragment: FId<TopLevelVariableFragment>) -> EId<TopLevelVariableElement> {
+    fn new_top_level_variable_element(
+        &mut self,
+        fragment: FId<TopLevelVariableFragment>,
+    ) -> EId<TopLevelVariableElement> {
         let name = self.core.store.fragment(fragment).name;
-        let element = self.store().add::<TopLevelVariableElement>(TopLevelVariableElement {
-            property: PropertyInducingElementData::new(ed(name, fragment.raw())),
-        });
-        self.core.store.fragment(fragment).element.set_once(element.raw());
+        let element = self
+            .store()
+            .add::<TopLevelVariableElement>(TopLevelVariableElement {
+                property: PropertyInducingElementData::new(ed(name, fragment.raw())),
+            });
+        self.core
+            .store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
         element
     }
 
@@ -2001,7 +2572,11 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
         let element = self.store().add::<FieldElement>(FieldElement {
             property: PropertyInducingElementData::new(ed(name, fragment.raw())),
         });
-        self.core.store.fragment(fragment).element.set_once(element.raw());
+        self.core
+            .store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
         self.core.store.get(element).flags.set(
             ElementFlags::FIELD_ELEMENT_HAS_ENCLOSING_TYPE_PARAMETER_REFERENCE,
             true,
@@ -2010,11 +2585,19 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
     }
 
     /// Dart `_topLevelVariableElement`.
-    fn top_level_variable_element(&self, fragment: Option<FragmentId>) -> Option<EId<TopLevelVariableElement>> {
+    fn top_level_variable_element(
+        &self,
+        fragment: Option<FragmentId>,
+    ) -> Option<EId<TopLevelVariableElement>> {
         let f = fragment?;
         let store = &self.core.store;
         match f.tag() {
-            Tag::TopLevelVariable => store.fragment_data(f).unwrap().element.try_get().and_then(|e| e.cast()),
+            Tag::TopLevelVariable => store
+                .fragment_data(f)
+                .unwrap()
+                .element
+                .try_get()
+                .and_then(|e| e.cast()),
             Tag::Getter | Tag::Setter => {
                 let e = *store.fragment_data(f).unwrap().element.try_get()?;
                 store
@@ -2032,7 +2615,12 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
         let f = fragment?;
         let store = &self.core.store;
         match f.tag() {
-            Tag::Field => store.fragment_data(f).unwrap().element.try_get().and_then(|e| e.cast()),
+            Tag::Field => store
+                .fragment_data(f)
+                .unwrap()
+                .element
+                .try_get()
+                .and_then(|e| e.cast()),
             Tag::Getter | Tag::Setter => {
                 let e = *store.fragment_data(f).unwrap().element.try_get()?;
                 store
@@ -2054,7 +2642,12 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
         f
     }
 
-    fn handle_top_level_getter_fragment(&mut self, unit: FId<LibraryFragment>, last: Option<FragmentId>, fragment: FId<GetterFragment>) {
+    fn handle_top_level_getter_fragment(
+        &mut self,
+        unit: FId<LibraryFragment>,
+        last: Option<FragmentId>,
+        fragment: FId<GetterFragment>,
+    ) {
         self.store().fragment_mut(unit).getters.push(fragment);
         let mut last_variable = self.top_level_variable_element(last);
         let last_getter = last_variable.and_then(|v| self.core.store.get(v).getter);
@@ -2069,7 +2662,9 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
         let name = self.core.store.fragment(fragment).name;
         let getter = self.new_getter_element(fragment);
         if self.is_augmentation(fragment.raw()) && last.is_some() {
-            self.store().get_mut(getter).previous_fragment_of_different_kind = last;
+            self.store()
+                .get_mut(getter)
+                .previous_fragment_of_different_kind = last;
         }
         let library = self.library();
         self.store().get_mut(library).getters.push(getter);
@@ -2084,7 +2679,11 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
             Some(v) => v,
             None => {
                 let data = new_top_level_variable_fragment(name);
-                set(&data.fragment, FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_GETTER_SETTER, true);
+                set(
+                    &data.fragment,
+                    FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_GETTER_SETTER,
+                    true,
+                );
                 let vf = self.store().add_fragment::<TopLevelVariableFragment>(data);
                 self.store().fragment_mut(vf).enclosing_fragment = Some(unit.raw());
                 self.store().fragment_mut(unit).variables.push(vf);
@@ -2094,11 +2693,20 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
                 v
             }
         };
-        self.core.store.get(getter).variable.set(Some(variable.upcast()));
+        self.core
+            .store
+            .get(getter)
+            .variable
+            .set(Some(variable.upcast()));
         self.store().get_mut(variable).getter = Some(getter);
     }
 
-    fn handle_top_level_setter_fragment(&mut self, unit: FId<LibraryFragment>, last: Option<FragmentId>, fragment: FId<SetterFragment>) {
+    fn handle_top_level_setter_fragment(
+        &mut self,
+        unit: FId<LibraryFragment>,
+        last: Option<FragmentId>,
+        fragment: FId<SetterFragment>,
+    ) {
         self.store().fragment_mut(unit).setters.push(fragment);
         let mut last_variable = self.top_level_variable_element(last);
         let last_setter = last_variable.and_then(|v| self.core.store.get(v).setter);
@@ -2114,7 +2722,9 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
         let name = self.core.store.fragment(fragment).name;
         let setter = self.new_setter_element(fragment);
         if self.is_augmentation(fragment.raw()) && last.is_some() {
-            self.store().get_mut(setter).previous_fragment_of_different_kind = last;
+            self.store()
+                .get_mut(setter)
+                .previous_fragment_of_different_kind = last;
         }
         let library = self.library();
         self.store().get_mut(library).setters.push(setter);
@@ -2129,7 +2739,11 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
             Some(v) => v,
             None => {
                 let data = new_top_level_variable_fragment(name);
-                set(&data.fragment, FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_GETTER_SETTER, true);
+                set(
+                    &data.fragment,
+                    FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_GETTER_SETTER,
+                    true,
+                );
                 let vf = self.store().add_fragment::<TopLevelVariableFragment>(data);
                 self.store().fragment_mut(vf).enclosing_fragment = Some(unit.raw());
                 self.store().fragment_mut(unit).variables.push(vf);
@@ -2139,11 +2753,20 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
                 v
             }
         };
-        self.core.store.get(setter).variable.set(Some(variable.upcast()));
+        self.core
+            .store
+            .get(setter)
+            .variable
+            .set(Some(variable.upcast()));
         self.store().get_mut(variable).setter = Some(setter);
     }
 
-    fn handle_top_level_variable_fragment(&mut self, unit: FId<LibraryFragment>, last: Option<FragmentId>, fragment: FId<TopLevelVariableFragment>) {
+    fn handle_top_level_variable_fragment(
+        &mut self,
+        unit: FId<LibraryFragment>,
+        last: Option<FragmentId>,
+        fragment: FId<TopLevelVariableFragment>,
+    ) {
         self.store().fragment_mut(unit).variables.push(fragment);
         let last_variable = self.top_level_variable_element(last);
         let name = self.core.store.fragment(fragment).name;
@@ -2174,15 +2797,32 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
         {
             let data = new_getter_fragment(name);
             let g = &data.fragment;
-            set(g, FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_VARIABLE, true);
-            set(g, FragmentFlags::EXECUTABLE_FRAGMENT_IS_ABSTRACT, is_abstract);
+            set(
+                g,
+                FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_VARIABLE,
+                true,
+            );
+            set(
+                g,
+                FragmentFlags::EXECUTABLE_FRAGMENT_IS_ABSTRACT,
+                is_abstract,
+            );
             set(g, FragmentFlags::FRAGMENT_IS_AUGMENTATION, is_augmentation);
-            set(g, FragmentFlags::FRAGMENT_IS_COMPLETE, is_external || !is_abstract);
+            set(
+                g,
+                FragmentFlags::FRAGMENT_IS_COMPLETE,
+                is_external || !is_abstract,
+            );
             set(g, FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC, true);
             let getter_fragment = self.store().add_fragment::<GetterFragment>(data);
             self.induce_getter(fragment.raw(), getter_fragment);
-            self.store().fragment_mut(getter_fragment).enclosing_fragment = Some(unit.raw());
-            self.store().fragment_mut(unit).getters.push(getter_fragment);
+            self.store()
+                .fragment_mut(getter_fragment)
+                .enclosing_fragment = Some(unit.raw());
+            self.store()
+                .fragment_mut(unit)
+                .getters
+                .push(getter_fragment);
             match self.core.store.get(variable).getter {
                 Some(g) => {
                     let first = self.core.store.get(g).first_fragment().raw();
@@ -2195,22 +2835,43 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
                     let lookup = self.lookup_name(name, false);
                     self.declare_top(TopLevelReferenceKind::Getter, name, getter.raw(), lookup);
                     self.store().get_mut(variable).getter = Some(getter);
-                    self.core.store.get(getter).variable.set(Some(variable.upcast()));
+                    self.core
+                        .store
+                        .get(getter)
+                        .variable
+                        .set(Some(variable.upcast()));
                 }
             }
         }
         if has_setter {
             let data = new_setter_fragment(name);
             let s = &data.fragment;
-            set(s, FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_VARIABLE, true);
-            set(s, FragmentFlags::EXECUTABLE_FRAGMENT_IS_ABSTRACT, is_abstract);
+            set(
+                s,
+                FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_VARIABLE,
+                true,
+            );
+            set(
+                s,
+                FragmentFlags::EXECUTABLE_FRAGMENT_IS_ABSTRACT,
+                is_abstract,
+            );
             set(s, FragmentFlags::FRAGMENT_IS_AUGMENTATION, is_augmentation);
-            set(s, FragmentFlags::FRAGMENT_IS_COMPLETE, is_external || !is_abstract);
+            set(
+                s,
+                FragmentFlags::FRAGMENT_IS_COMPLETE,
+                is_external || !is_abstract,
+            );
             set(s, FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC, true);
             let setter_fragment = self.store().add_fragment::<SetterFragment>(data);
             self.induce_setter(fragment.raw(), setter_fragment);
-            self.store().fragment_mut(setter_fragment).enclosing_fragment = Some(unit.raw());
-            self.store().fragment_mut(unit).setters.push(setter_fragment);
+            self.store()
+                .fragment_mut(setter_fragment)
+                .enclosing_fragment = Some(unit.raw());
+            self.store()
+                .fragment_mut(unit)
+                .setters
+                .push(setter_fragment);
             let value = self.value_parameter(false);
             self.set_formal_params(setter_fragment.raw(), vec![value]);
             match self.core.store.get(variable).setter {
@@ -2226,7 +2887,11 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
                     let lookup = self.lookup_name(name, true);
                     self.declare_top(TopLevelReferenceKind::Setter, name, setter.raw(), lookup);
                     self.store().get_mut(variable).setter = Some(setter);
-                    self.core.store.get(setter).variable.set(Some(variable.upcast()));
+                    self.core
+                        .store
+                        .get(setter)
+                        .variable
+                        .set(Some(variable.upcast()));
                 }
             }
         }
@@ -2254,8 +2919,16 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
     fn induce_getter(&mut self, variable: FragmentId, getter: FId<GetterFragment>) {
         let store = &mut self.core.store;
         match variable.tag() {
-            Tag::Field => store.fragment_mut(FId::<FieldFragment>::from_raw(variable)).induced_getter = Some(getter),
-            _ => store.fragment_mut(FId::<TopLevelVariableFragment>::from_raw(variable)).induced_getter = Some(getter),
+            Tag::Field => {
+                store
+                    .fragment_mut(FId::<FieldFragment>::from_raw(variable))
+                    .induced_getter = Some(getter)
+            }
+            _ => {
+                store
+                    .fragment_mut(FId::<TopLevelVariableFragment>::from_raw(variable))
+                    .induced_getter = Some(getter)
+            }
         }
         store.fragment_mut(getter).inducing_variable = Some(FId::from_raw(variable));
     }
@@ -2264,13 +2937,25 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
     fn induce_setter(&mut self, variable: FragmentId, setter: FId<SetterFragment>) {
         let store = &mut self.core.store;
         match variable.tag() {
-            Tag::Field => store.fragment_mut(FId::<FieldFragment>::from_raw(variable)).induced_setter = Some(setter),
-            _ => store.fragment_mut(FId::<TopLevelVariableFragment>::from_raw(variable)).induced_setter = Some(setter),
+            Tag::Field => {
+                store
+                    .fragment_mut(FId::<FieldFragment>::from_raw(variable))
+                    .induced_setter = Some(setter)
+            }
+            _ => {
+                store
+                    .fragment_mut(FId::<TopLevelVariableFragment>::from_raw(variable))
+                    .induced_setter = Some(setter)
+            }
         }
         store.fragment_mut(setter).inducing_variable = Some(FId::from_raw(variable));
     }
 
-    fn handle_type_alias_fragment(&mut self, unit: FId<LibraryFragment>, fragment: FId<TypeAliasFragment>) {
+    fn handle_type_alias_fragment(
+        &mut self,
+        unit: FId<LibraryFragment>,
+        fragment: FId<TypeAliasFragment>,
+    ) {
         self.store().fragment_mut(unit).type_aliases.push(fragment);
         let name = self.core.store.fragment(fragment).name;
         let element = self.store().add::<TypeAliasElement>(TypeAliasElement {
@@ -2278,13 +2963,22 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
             type_params: Vec::new(),
             aliased_type: VarSlot::new(),
         });
-        self.core.store.fragment(fragment).element.set_once(element.raw());
+        self.core
+            .store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
         let tps = self.type_parameter_elements(fragment.raw());
         self.store().get_mut(element).type_params = tps;
         let library = self.library();
         self.store().get_mut(library).type_aliases.push(element);
         let lookup = self.lookup_name(name, false);
-        self.declare_top(TopLevelReferenceKind::TypeAlias, name, element.raw(), lookup);
+        self.declare_top(
+            TopLevelReferenceKind::TypeAlias,
+            name,
+            element.raw(),
+            lookup,
+        );
     }
 
     /// Dart `_addExtensionTypeRecoveryFragments`.
@@ -2293,9 +2987,19 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
         let extension_types = self.core.store.get(library).extension_types.clone();
         for et in extension_types {
             let first = self.core.store.get(et).first_fragment().raw();
-            let children = self.lib.parent_child_fragments.entry(first).or_default().clone();
+            let children = self
+                .lib
+                .parent_child_fragments
+                .entry(first)
+                .or_default()
+                .clone();
             let has_primary = children.iter().any(|&c| {
-                c.tag() == Tag::Constructor && has(&self.core.store, c, FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_PRIMARY)
+                c.tag() == Tag::Constructor
+                    && has(
+                        &self.core.store,
+                        c,
+                        FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_PRIMARY,
+                    )
             });
             if has_primary {
                 continue;
@@ -2304,15 +3008,39 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
             let mut ctor = new_constructor_fragment(fd(Some(self.core.name("new"))));
             ctor.type_name = name;
             ctor.fragment.enclosing_fragment = Some(first);
-            set(&ctor.fragment, FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_PRIMARY, true);
-            set(&ctor.fragment, FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_CONST, true);
-            set(&ctor.fragment, FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_EXTENSION_TYPE_RECOVERY, true);
+            set(
+                &ctor.fragment,
+                FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_PRIMARY,
+                true,
+            );
+            set(
+                &ctor.fragment,
+                FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_CONST,
+                true,
+            );
+            set(
+                &ctor.fragment,
+                FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_EXTENSION_TYPE_RECOVERY,
+                true,
+            );
             let ctor = self.store().add_fragment::<ConstructorFragment>(ctor);
             let mut field = new_field_fragment(None);
             field.fragment.enclosing_fragment = Some(first);
-            set(&field.fragment, FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL, true);
-            set(&field.fragment, FragmentFlags::FIELD_FRAGMENT_IS_ORIGIN_EXTENSION_TYPE_RECOVERY_REPRESENTATION, true);
-            set(&field.fragment, FragmentFlags::VARIABLE_FRAGMENT_HAS_IMPLICIT_TYPE, true);
+            set(
+                &field.fragment,
+                FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL,
+                true,
+            );
+            set(
+                &field.fragment,
+                FragmentFlags::FIELD_FRAGMENT_IS_ORIGIN_EXTENSION_TYPE_RECOVERY_REPRESENTATION,
+                true,
+            );
+            set(
+                &field.fragment,
+                FragmentFlags::VARIABLE_FRAGMENT_HAS_IMPLICIT_TYPE,
+                true,
+            );
             let field = self.store().add_fragment::<FieldFragment>(field);
             let list = self.lib.parent_child_fragments.entry(first).or_default();
             list.insert(0, ctor.raw());
@@ -2335,14 +3063,31 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
             .collect();
         let dart_core_enum = &*self.lib.uri == "dart:core";
         for instance in instances {
-            let first = self.core.store.element_data(instance).unwrap().first_fragment;
+            let first = self
+                .core
+                .store
+                .element_data(instance)
+                .unwrap()
+                .first_fragment;
             let mut fragments = vec![first];
-            while let Some(next) = self.core.store.fragment_data(*fragments.last().unwrap()).unwrap().next_fragment {
+            while let Some(next) = self
+                .core
+                .store
+                .fragment_data(*fragments.last().unwrap())
+                .unwrap()
+                .next_fragment
+            {
                 fragments.push(next);
             }
             let children: Vec<FragmentId> = fragments
                 .iter()
-                .flat_map(|f| self.lib.parent_child_fragments.get(f).cloned().unwrap_or_default())
+                .flat_map(|f| {
+                    self.lib
+                        .parent_child_fragments
+                        .get(f)
+                        .cloned()
+                        .unwrap_or_default()
+                })
                 .collect();
             let mut last_instance: IndexMap<Option<Name>, FragmentId> = IndexMap::new();
             let mut last_static: IndexMap<Option<Name>, FragmentId> = IndexMap::new();
@@ -2365,12 +3110,31 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
                 let mut to_track = fragment;
                 match fragment.tag() {
                     Tag::Field => {
-                        to_track = self.handle_instance_field_fragment(instance, last, FId::from_raw(fragment)).raw();
+                        to_track = self
+                            .handle_instance_field_fragment(instance, last, FId::from_raw(fragment))
+                            .raw();
                     }
-                    Tag::Getter => self.handle_instance_getter_fragment(instance, last, FId::from_raw(fragment), dart_core_enum),
-                    Tag::Setter => self.handle_instance_setter_fragment(instance, last, FId::from_raw(fragment)),
-                    Tag::Method => self.handle_instance_method_fragment(instance, last, FId::from_raw(fragment)),
-                    Tag::Constructor => self.handle_instance_constructor_fragment(instance, last, FId::from_raw(fragment)),
+                    Tag::Getter => self.handle_instance_getter_fragment(
+                        instance,
+                        last,
+                        FId::from_raw(fragment),
+                        dart_core_enum,
+                    ),
+                    Tag::Setter => self.handle_instance_setter_fragment(
+                        instance,
+                        last,
+                        FId::from_raw(fragment),
+                    ),
+                    Tag::Method => self.handle_instance_method_fragment(
+                        instance,
+                        last,
+                        FId::from_raw(fragment),
+                    ),
+                    Tag::Constructor => self.handle_instance_constructor_fragment(
+                        instance,
+                        last,
+                        FId::from_raw(fragment),
+                    ),
                     t => panic!("unexpected member fragment {t:?}"),
                 }
                 let track_name = self.core.store.fragment_data(to_track).unwrap().name;
@@ -2398,19 +3162,27 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
                         .map(|e| e.raw()),
                 );
                 for e in executables {
-                    self.core
-                        .store
-                        .element_data(e)
-                        .unwrap()
-                        .flags
-                        .set(ElementFlags::EXECUTABLE_ELEMENT_IS_EXTENSION_TYPE_MEMBER, true);
+                    self.core.store.element_data(e).unwrap().flags.set(
+                        ElementFlags::EXECUTABLE_ELEMENT_IS_EXTENSION_TYPE_MEMBER,
+                        true,
+                    );
                 }
             }
         }
     }
 
-    fn handle_instance_constructor_fragment(&mut self, instance: ElementId, last: Option<FragmentId>, fragment: FId<ConstructorFragment>) {
-        let enclosing = self.core.store.fragment(fragment).enclosing_fragment.unwrap();
+    fn handle_instance_constructor_fragment(
+        &mut self,
+        instance: ElementId,
+        last: Option<FragmentId>,
+        fragment: FId<ConstructorFragment>,
+    ) {
+        let enclosing = self
+            .core
+            .store
+            .fragment(fragment)
+            .enclosing_fragment
+            .unwrap();
         push_constructor_fragment(self.store(), enclosing, fragment);
         if self.is_augmentation(fragment.raw())
             && let Some(last) = last
@@ -2427,27 +3199,67 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
             redirected_constructor: VarSlot::new(),
             super_constructor: VarSlot::new(),
         });
-        self.core.store.fragment(fragment).element.set_once(element.raw());
-        self.declare_member(instance, MemberReferenceKind::Constructor, name, element.raw());
+        self.core
+            .store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
+        self.declare_member(
+            instance,
+            MemberReferenceKind::Constructor,
+            name,
+            element.raw(),
+        );
         self.init_executable(element.upcast(), fragment.raw());
         if self.is_augmentation(fragment.raw()) && last.is_some() {
-            self.store().get_mut(element).previous_fragment_of_different_kind = last;
+            self.store()
+                .get_mut(element)
+                .previous_fragment_of_different_kind = last;
         }
-        interface_data_mut(self.store(), instance).constructors.push(element);
+        interface_data_mut(self.store(), instance)
+            .constructors
+            .push(element);
     }
 
-    fn handle_instance_field_fragment(&mut self, instance: ElementId, last: Option<FragmentId>, fragment: FId<FieldFragment>) -> FId<FieldFragment> {
-        let enclosing = self.core.store.fragment(fragment).enclosing_fragment.unwrap();
+    fn handle_instance_field_fragment(
+        &mut self,
+        instance: ElementId,
+        last: Option<FragmentId>,
+        fragment: FId<FieldFragment>,
+    ) -> FId<FieldFragment> {
+        let enclosing = self
+            .core
+            .store
+            .fragment(fragment)
+            .enclosing_fragment
+            .unwrap();
         let f = self.core.store.fragment(fragment);
-        if f.flags.has(FragmentFlags::FIELD_FRAGMENT_IS_ORIGIN_ENUM_VALUES)
+        if f.flags
+            .has(FragmentFlags::FIELD_FRAGMENT_IS_ORIGIN_ENUM_VALUES)
             && enclosing.tag() == Tag::Enum
-            && self.core.store.fragment_data(enclosing).unwrap().previous_fragment.is_some()
+            && self
+                .core
+                .store
+                .fragment_data(enclosing)
+                .unwrap()
+                .previous_fragment
+                .is_some()
         {
             // Dart: the `values` of an enum augmentation add their
             // elements to the `values` of the first fragment.
-            let first = self.core.store.element_data(instance).unwrap().first_fragment;
-            let augmentation = self.lib.implicit_enum_nodes.shift_remove(&FId::from_raw(enclosing));
-            if let Some(first_implicit) = self.lib.implicit_enum_nodes.get_mut(&FId::from_raw(first)) {
+            let first = self
+                .core
+                .store
+                .element_data(instance)
+                .unwrap()
+                .first_fragment;
+            let augmentation = self
+                .lib
+                .implicit_enum_nodes
+                .shift_remove(&FId::from_raw(enclosing));
+            if let Some(first_implicit) =
+                self.lib.implicit_enum_nodes.get_mut(&FId::from_raw(first))
+            {
                 if let Some(a) = augmentation {
                     first_implicit.values_names.extend(a.values_names);
                 }
@@ -2462,7 +3274,9 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
             self.last_fragment(first)
         });
         let field = match (last_field, last_field_fragment) {
-            (Some(e), Some(lf)) if self.is_augmentation(fragment.raw()) && lf.tag() == Tag::Field => {
+            (Some(e), Some(lf))
+                if self.is_augmentation(fragment.raw()) && lf.tag() == Tag::Field =>
+            {
                 self.add_fragment(lf, fragment.raw());
                 e
             }
@@ -2482,13 +3296,23 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
         let is_abstract = f.flags.has(FragmentFlags::VARIABLE_FRAGMENT_IS_ABSTRACT);
         let is_augmentation = f.flags.has(FragmentFlags::FRAGMENT_IS_AUGMENTATION);
         let is_static = f.flags.has(FragmentFlags::VARIABLE_FRAGMENT_IS_STATIC);
-        let explicitly_covariant = f.flags.has(FragmentFlags::FIELD_FRAGMENT_IS_EXPLICITLY_COVARIANT);
+        let explicitly_covariant = f
+            .flags
+            .has(FragmentFlags::FIELD_FRAGMENT_IS_EXPLICITLY_COVARIANT);
         let has_setter = variable_fragment_has_setter(&self.core.store, fragment.raw());
         {
             let data = new_getter_fragment(name);
             let g = &data.fragment;
-            set(g, FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_VARIABLE, true);
-            set(g, FragmentFlags::EXECUTABLE_FRAGMENT_IS_ABSTRACT, is_abstract);
+            set(
+                g,
+                FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_VARIABLE,
+                true,
+            );
+            set(
+                g,
+                FragmentFlags::EXECUTABLE_FRAGMENT_IS_ABSTRACT,
+                is_abstract,
+            );
             set(g, FragmentFlags::FRAGMENT_IS_AUGMENTATION, is_augmentation);
             set(g, FragmentFlags::FRAGMENT_IS_COMPLETE, !is_abstract);
             set(g, FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC, is_static);
@@ -2504,17 +3328,31 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
                 None => {
                     let getter = self.new_getter_element(getter_fragment);
                     self.declare_member(instance, MemberReferenceKind::Getter, name, getter.raw());
-                    instance_data_mut(self.store(), instance).getters.push(getter);
+                    instance_data_mut(self.store(), instance)
+                        .getters
+                        .push(getter);
                     self.store().get_mut(field).getter = Some(getter);
-                    self.core.store.get(getter).variable.set(Some(field.upcast()));
+                    self.core
+                        .store
+                        .get(getter)
+                        .variable
+                        .set(Some(field.upcast()));
                 }
             }
         }
         if has_setter {
             let data = new_setter_fragment(name);
             let s = &data.fragment;
-            set(s, FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_VARIABLE, true);
-            set(s, FragmentFlags::EXECUTABLE_FRAGMENT_IS_ABSTRACT, is_abstract);
+            set(
+                s,
+                FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_VARIABLE,
+                true,
+            );
+            set(
+                s,
+                FragmentFlags::EXECUTABLE_FRAGMENT_IS_ABSTRACT,
+                is_abstract,
+            );
             set(s, FragmentFlags::FRAGMENT_IS_AUGMENTATION, is_augmentation);
             set(s, FragmentFlags::FRAGMENT_IS_COMPLETE, !is_abstract);
             set(s, FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC, is_static);
@@ -2533,17 +3371,34 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
                 None => {
                     let setter = self.new_setter_element(setter_fragment);
                     self.declare_member(instance, MemberReferenceKind::Setter, name, setter.raw());
-                    instance_data_mut(self.store(), instance).setters.push(setter);
+                    instance_data_mut(self.store(), instance)
+                        .setters
+                        .push(setter);
                     self.store().get_mut(field).setter = Some(setter);
-                    self.core.store.get(setter).variable.set(Some(field.upcast()));
+                    self.core
+                        .store
+                        .get(setter)
+                        .variable
+                        .set(Some(field.upcast()));
                 }
             }
         }
         fragment
     }
 
-    fn handle_instance_getter_fragment(&mut self, instance: ElementId, last: Option<FragmentId>, fragment: FId<GetterFragment>, dart_core: bool) {
-        let enclosing = self.core.store.fragment(fragment).enclosing_fragment.unwrap();
+    fn handle_instance_getter_fragment(
+        &mut self,
+        instance: ElementId,
+        last: Option<FragmentId>,
+        fragment: FId<GetterFragment>,
+        dart_core: bool,
+    ) {
+        let enclosing = self
+            .core
+            .store
+            .fragment(fragment)
+            .enclosing_fragment
+            .unwrap();
         push_getter_fragment(self.store(), enclosing, fragment);
         let mut last_field = self.field_element(last);
         let last_getter = last_field.and_then(|f| self.core.store.get(f).getter);
@@ -2559,9 +3414,13 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
         let getter = self.new_getter_element(fragment);
         self.declare_member(instance, MemberReferenceKind::Getter, name, getter.raw());
         if self.is_augmentation(fragment.raw()) && last.is_some() {
-            self.store().get_mut(getter).previous_fragment_of_different_kind = last;
+            self.store()
+                .get_mut(getter)
+                .previous_fragment_of_different_kind = last;
         }
-        instance_data_mut(self.store(), instance).getters.push(getter);
+        instance_data_mut(self.store(), instance)
+            .getters
+            .push(getter);
         // Dart `isDartCoreEnum && name == 'index'`.
         if dart_core
             && instance.tag() == Tag::Class
@@ -2589,8 +3448,16 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
                     .flags
                     .has(FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC);
                 let data = new_field_fragment(name);
-                set(&data.fragment, FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_GETTER_SETTER, true);
-                set(&data.fragment, FragmentFlags::VARIABLE_FRAGMENT_IS_STATIC, is_static);
+                set(
+                    &data.fragment,
+                    FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_GETTER_SETTER,
+                    true,
+                );
+                set(
+                    &data.fragment,
+                    FragmentFlags::VARIABLE_FRAGMENT_IS_STATIC,
+                    is_static,
+                );
                 let ff = self.store().add_fragment::<FieldFragment>(data);
                 push_field_fragment(self.store(), enclosing, ff);
                 let f = self.new_field_element(ff);
@@ -2599,12 +3466,26 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
                 f
             }
         };
-        self.core.store.get(getter).variable.set(Some(field.upcast()));
+        self.core
+            .store
+            .get(getter)
+            .variable
+            .set(Some(field.upcast()));
         self.store().get_mut(field).getter = Some(getter);
     }
 
-    fn handle_instance_setter_fragment(&mut self, instance: ElementId, last: Option<FragmentId>, fragment: FId<SetterFragment>) {
-        let enclosing = self.core.store.fragment(fragment).enclosing_fragment.unwrap();
+    fn handle_instance_setter_fragment(
+        &mut self,
+        instance: ElementId,
+        last: Option<FragmentId>,
+        fragment: FId<SetterFragment>,
+    ) {
+        let enclosing = self
+            .core
+            .store
+            .fragment(fragment)
+            .enclosing_fragment
+            .unwrap();
         push_setter_fragment(self.store(), enclosing, fragment);
         let mut last_field = self.field_element(last);
         let last_setter = last_field.and_then(|f| self.core.store.get(f).setter);
@@ -2621,9 +3502,13 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
         let setter = self.new_setter_element(fragment);
         self.declare_member(instance, MemberReferenceKind::Setter, name, setter.raw());
         if self.is_augmentation(fragment.raw()) && last.is_some() {
-            self.store().get_mut(setter).previous_fragment_of_different_kind = last;
+            self.store()
+                .get_mut(setter)
+                .previous_fragment_of_different_kind = last;
         }
-        instance_data_mut(self.store(), instance).setters.push(setter);
+        instance_data_mut(self.store(), instance)
+            .setters
+            .push(setter);
         if let Some(f) = last_field
             && self.core.store.get(f).setter.is_some()
         {
@@ -2639,8 +3524,16 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
                     .flags
                     .has(FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC);
                 let data = new_field_fragment(name);
-                set(&data.fragment, FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_GETTER_SETTER, true);
-                set(&data.fragment, FragmentFlags::VARIABLE_FRAGMENT_IS_STATIC, is_static);
+                set(
+                    &data.fragment,
+                    FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_GETTER_SETTER,
+                    true,
+                );
+                set(
+                    &data.fragment,
+                    FragmentFlags::VARIABLE_FRAGMENT_IS_STATIC,
+                    is_static,
+                );
                 let ff = self.store().add_fragment::<FieldFragment>(data);
                 push_field_fragment(self.store(), enclosing, ff);
                 let f = self.new_field_element(ff);
@@ -2649,12 +3542,26 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
                 f
             }
         };
-        self.core.store.get(setter).variable.set(Some(field.upcast()));
+        self.core
+            .store
+            .get(setter)
+            .variable
+            .set(Some(field.upcast()));
         self.store().get_mut(field).setter = Some(setter);
     }
 
-    fn handle_instance_method_fragment(&mut self, instance: ElementId, last: Option<FragmentId>, fragment: FId<MethodFragment>) {
-        let enclosing = self.core.store.fragment(fragment).enclosing_fragment.unwrap();
+    fn handle_instance_method_fragment(
+        &mut self,
+        instance: ElementId,
+        last: Option<FragmentId>,
+        fragment: FId<MethodFragment>,
+    ) {
+        let enclosing = self
+            .core
+            .store
+            .fragment(fragment)
+            .enclosing_fragment
+            .unwrap();
         push_method_fragment(self.store(), enclosing, fragment);
         if let Some(last) = last
             && last.tag() == Tag::Method
@@ -2671,13 +3578,21 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
             is_operator_equal_with_parameter_type_from_object: BoolSlot::new(false),
             type_inference_error: OnceSlot::new(),
         });
-        self.core.store.fragment(fragment).element.set_once(element.raw());
+        self.core
+            .store
+            .fragment(fragment)
+            .element
+            .set_once(element.raw());
         self.declare_member(instance, MemberReferenceKind::Method, name, element.raw());
         self.init_executable(element.upcast(), fragment.raw());
         if self.is_augmentation(fragment.raw()) && last.is_some() {
-            self.store().get_mut(element).previous_fragment_of_different_kind = last;
+            self.store()
+                .get_mut(element)
+                .previous_fragment_of_different_kind = last;
         }
-        instance_data_mut(self.store(), instance).methods.push(element);
+        instance_data_mut(self.store(), instance)
+            .methods
+            .push(element);
     }
 
     /// Dart `_buildFormalParameterElements`, and the cached
@@ -2685,8 +3600,18 @@ impl<'l, 'a> ElementBuilder<'l, 'a> {
     fn build_formal_parameter_elements(&mut self) {
         let executables = std::mem::take(&mut self.executable_elements);
         for element in executables {
-            let first = self.core.store.element_data(element.raw()).unwrap().first_fragment;
-            let ps = self.core.store.executable_fragment(FId::from_raw(first)).formal_params.clone();
+            let first = self
+                .core
+                .store
+                .element_data(element.raw())
+                .unwrap()
+                .first_fragment;
+            let ps = self
+                .core
+                .store
+                .executable_fragment(FId::from_raw(first))
+                .formal_params
+                .clone();
             let elements: Vec<EId<FormalParameterElement>> = ps
                 .into_iter()
                 .map(|p| init_formal_parameter_element(&mut self.core.store, p))
@@ -2712,7 +3637,11 @@ fn variable_fragment_has_setter(store: &ElementStore, f: FragmentId) -> bool {
     !is_final
 }
 
-fn push_constructor_fragment(store: &mut ElementStore, enclosing: FragmentId, f: FId<ConstructorFragment>) {
+fn push_constructor_fragment(
+    store: &mut ElementStore,
+    enclosing: FragmentId,
+    f: FId<ConstructorFragment>,
+) {
     let i = enclosing.index();
     let fr = &mut store.fragments;
     match enclosing.tag() {

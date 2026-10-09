@@ -141,7 +141,10 @@ impl LibraryBuilder {
                 .flags
                 .set(ElementFlags::LIBRARY_ELEMENT_IS_SYNTHETIC, true);
         }
-        core.store.fragment(fragment).element.set_once(library_id.raw());
+        core.store
+            .fragment(fragment)
+            .element
+            .set_once(library_id.raw());
 
         let uri = unit.uri.clone();
         let mut references = LibraryReferenceBuilder::new(LibraryReference::new(uri.clone()));
@@ -150,7 +153,10 @@ impl LibraryBuilder {
             .set_element(RefId::LIBRARY, library_id.raw());
         // Dart `_createLoadLibraryReference`: the `loadLibrary` function is
         // created on first use (`LoadLibraryFunctionProvider`).
-        references.declare_top_level(crate::reference::TopLevelReferenceKind::Function, Some("loadLibrary"));
+        references.declare_top_level(
+            crate::reference::TopLevelReferenceKind::Function,
+            Some("loadLibrary"),
+        );
 
         LibraryBuilder {
             uri,
@@ -175,14 +181,28 @@ impl LibraryBuilder {
     }
 
     /// Dart `addChildFragment`.
-    pub fn add_child_fragment(&mut self, store: &mut ElementStore, parent: FragmentId, child: FragmentId) {
+    pub fn add_child_fragment(
+        &mut self,
+        store: &mut ElementStore,
+        parent: FragmentId,
+        child: FragmentId,
+    ) {
         crate::informative_data::fragment_data_mut(store, child).enclosing_fragment = Some(parent);
-        self.parent_child_fragments.entry(parent).or_default().push(child);
+        self.parent_child_fragments
+            .entry(parent)
+            .or_default()
+            .push(child);
     }
 
     /// Dart `addTopFragment`.
-    pub fn add_top_fragment(&mut self, store: &mut ElementStore, parent: FId<LibraryFragment>, fragment: FragmentId) {
-        crate::informative_data::fragment_data_mut(store, fragment).enclosing_fragment = Some(parent.raw());
+    pub fn add_top_fragment(
+        &mut self,
+        store: &mut ElementStore,
+        parent: FId<LibraryFragment>,
+        fragment: FragmentId,
+    ) {
+        crate::informative_data::fragment_data_mut(store, fragment).enclosing_fragment =
+            Some(parent.raw());
         self.top_fragments.entry(parent).or_default().push(fragment);
     }
 
@@ -228,11 +248,23 @@ impl LibraryBuilder {
         // Dart `_declareDartCoreDynamicNever`.
         let builder = &mut linker.builders[index];
         if &*builder.uri == "dart:core" {
-            let r = builder.references.reference.built_in(BuiltInReferenceKind::Dynamic);
-            builder.references.reference.set_element(r, ElementId::DYNAMIC);
+            let r = builder
+                .references
+                .reference
+                .built_in(BuiltInReferenceKind::Dynamic);
+            builder
+                .references
+                .reference
+                .set_element(r, ElementId::DYNAMIC);
             builder.declare(Some("dynamic".into()), r, ElementId::DYNAMIC);
-            let r = builder.references.reference.built_in(BuiltInReferenceKind::Never);
-            builder.references.reference.set_element(r, ElementId::NEVER);
+            let r = builder
+                .references
+                .reference
+                .built_in(BuiltInReferenceKind::Never);
+            builder
+                .references
+                .reference
+                .set_element(r, ElementId::NEVER);
             builder.declare(Some("Never".into()), r, ElementId::NEVER);
         }
     }
@@ -294,7 +326,10 @@ impl LibraryBuilder {
                 .defined_names
                 .insert(linker.core.name(&entry.name), entry.element);
         }
-        let main = namespace.defined_names.get(&linker.core.name("main")).copied();
+        let main = namespace
+            .defined_names
+            .get(&linker.core.name("main"))
+            .copied();
         let library = linker.core.store.get(builder.element);
         library.export_namespace.set_once(Arc::new(namespace));
         let entry_point = main.and_then(|m| m.cast::<TopLevelFunctionElement>());
@@ -320,20 +355,26 @@ impl LibraryBuilder {
             }
             let class_name = store.get(class).name;
             let new = linker.core.name("new");
-            let mut data = crate::element_builder::new_constructor_fragment(FragmentData::new(Some(new), None));
+            let mut data = crate::element_builder::new_constructor_fragment(FragmentData::new(
+                Some(new),
+                None,
+            ));
             data.type_name = class_name;
             data.fragment.enclosing_fragment = Some(first.raw());
-            data.flags
-                .set(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_IMPLICIT_DEFAULT, true);
+            data.flags.set(
+                FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_IMPLICIT_DEFAULT,
+                true,
+            );
             let fragment = linker.core.store.add_fragment::<ConstructorFragment>(data);
             linker.core.store.fragment_mut(first).constructors = vec![fragment];
             let element = new_constructor_element(&mut linker.core, fragment, new);
             let builder = &mut linker.builders[index];
             let container = builder.element_references[&class.raw()];
-            let r = builder
-                .references
-                .reference
-                .declare_member(container, MemberReferenceKind::Constructor, "new");
+            let r = builder.references.reference.declare_member(
+                container,
+                MemberReferenceKind::Constructor,
+                "new",
+            );
             builder.references.reference.set_element(r, element.raw());
             builder.element_references.insert(element.raw(), r);
             linker.core.store.get_mut(class).constructors = vec![element];
@@ -359,21 +400,33 @@ impl LibraryBuilder {
                 continue;
             }
             let first = store.get(enum_).first_fragment();
-            let mut data = crate::element_builder::new_constructor_fragment(FragmentData::new(Some(new), None));
+            let mut data = crate::element_builder::new_constructor_fragment(FragmentData::new(
+                Some(new),
+                None,
+            ));
             data.type_name = store.get(enum_).name;
             data.fragment.enclosing_fragment = Some(first.raw());
+            data.flags.set(
+                FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_IMPLICIT_DEFAULT,
+                true,
+            );
             data.flags
-                .set(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_IMPLICIT_DEFAULT, true);
-            data.flags.set(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_CONST, true);
+                .set(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_CONST, true);
             let fragment = linker.core.store.add_fragment::<ConstructorFragment>(data);
-            linker.core.store.fragment_mut(first).constructors.push(fragment);
+            linker
+                .core
+                .store
+                .fragment_mut(first)
+                .constructors
+                .push(fragment);
             let element = new_constructor_element(&mut linker.core, fragment, new);
             let builder = &mut linker.builders[index];
             let container = builder.element_references[&enum_.raw()];
-            let r = builder
-                .references
-                .reference
-                .declare_member(container, MemberReferenceKind::Constructor, "new");
+            let r = builder.references.reference.declare_member(
+                container,
+                MemberReferenceKind::Constructor,
+                "new",
+            );
             builder.references.reference.set_element(r, element.raw());
             builder.element_references.insert(element.raw(), r);
             linker.core.store.get_mut(enum_).constructors.push(element);
@@ -382,8 +435,11 @@ impl LibraryBuilder {
 
     /// Dart `replaceConstFieldsIfNoConstConstructor`.
     pub fn replace_const_fields_if_no_const_constructor(linker: &mut Linker<'_>, index: usize) {
-        let fields: Vec<FId<FieldFragment>> =
-            linker.builders[index].final_instance_fields.iter().copied().collect();
+        let fields: Vec<FId<FieldFragment>> = linker.builders[index]
+            .final_instance_fields
+            .iter()
+            .copied()
+            .collect();
         let mut cache: IndexMap<ElementId, bool> = IndexMap::new();
         for field in fields {
             let store = &linker.core.store;
@@ -531,15 +587,21 @@ pub fn combinators_of(linker: &Linker<'_>, combinators: &[NamespaceCombinator]) 
 
 /// A new `LibraryFragmentImpl` for [unit] (Dart constructor +
 /// `isOriginNotExistingFile` + `setCodeRange(0, length)`).
-fn new_library_fragment(core: &mut LinkerCore<'_>, library: EId<LibraryElement>, unit: &LinkUnitInput) -> FId<LibraryFragment> {
+fn new_library_fragment(
+    core: &mut LinkerCore<'_>,
+    library: EId<LibraryElement>,
+    unit: &LinkUnitInput,
+) -> FId<LibraryFragment> {
     let parsed = &unit.parsed;
     let mut data = FragmentData::new(None, None);
     data.first_token_offset = Some(0);
     data.code_offset = Some(0);
     data.code_length = Some(parsed.ast.length(parsed.unit));
     if !unit.exists {
-        data.flags
-            .set(FragmentFlags::LIBRARY_FRAGMENT_IS_ORIGIN_NOT_EXISTING_FILE, true);
+        data.flags.set(
+            FragmentFlags::LIBRARY_FRAGMENT_IS_ORIGIN_NOT_EXISTING_FILE,
+            true,
+        );
     }
     let mut fragment = LibraryFragment::new(
         data,
@@ -555,13 +617,20 @@ fn new_library_fragment(core: &mut LinkerCore<'_>, library: EId<LibraryElement>,
 
 /// Dart `ConstructorElementImpl(...)` for a fragment without type
 /// parameters (synthetic constructors).
-pub fn new_constructor_element(core: &mut LinkerCore<'_>, fragment: FId<ConstructorFragment>, name: Name) -> EId<ConstructorElement> {
+pub fn new_constructor_element(
+    core: &mut LinkerCore<'_>,
+    fragment: FId<ConstructorFragment>,
+    name: Name,
+) -> EId<ConstructorElement> {
     let element = core.store.add::<ConstructorElement>(ConstructorElement {
         executable: ExecutableElementData::new(ElementData::new(Some(name), fragment.raw())),
         redirected_constructor: VarSlot::new(),
         super_constructor: VarSlot::new(),
     });
-    core.store.fragment(fragment).element.set_once(element.raw());
+    core.store
+        .fragment(fragment)
+        .element
+        .set_once(element.raw());
     core.store.get(element).flags.set(
         ElementFlags::EXECUTABLE_ELEMENT_HAS_ENCLOSING_TYPE_PARAMETER_REFERENCE,
         true,
@@ -570,7 +639,12 @@ pub fn new_constructor_element(core: &mut LinkerCore<'_>, fragment: FId<Construc
 }
 
 /// Dart `LibraryBuilder._buildDirectives`.
-fn build_directives(linker: &mut Linker<'_>, index: usize, kind: &LinkUnitInput, container: FId<LibraryFragment>) {
+fn build_directives(
+    linker: &mut Linker<'_>,
+    index: usize,
+    kind: &LinkUnitInput,
+    container: FId<LibraryFragment>,
+) {
     let exports: Vec<LibraryExport> = kind
         .exports
         .iter()
@@ -599,7 +673,11 @@ fn build_directives(linker: &mut Linker<'_>, index: usize, kind: &LinkUnitInput,
         .values()
         .copied()
         .collect();
-    linker.core.store.fragment_mut(container).library_import_prefixes = prefixes;
+    linker
+        .core
+        .store
+        .fragment_mut(container)
+        .library_import_prefixes = prefixes;
 
     let mut parts = Vec::new();
     for state in &kind.parts {
@@ -611,7 +689,12 @@ fn build_directives(linker: &mut Linker<'_>, index: usize, kind: &LinkUnitInput,
             } => {
                 let library = linker.builders[index].element;
                 let fragment = new_library_fragment(&mut linker.core, library, unit);
-                linker.core.store.fragment(fragment).element.set_once(library.raw());
+                linker
+                    .core
+                    .store
+                    .fragment(fragment)
+                    .element
+                    .set_once(library.raw());
                 linker.builders[index].units.push(LinkingUnit {
                     parsed: unit.parsed.clone(),
                     fragment,
@@ -717,7 +800,10 @@ fn bind_library_import_prefix_element(
             element
         }
     };
-    core.store.fragment(fragment).element.set_once(element.raw());
+    core.store
+        .fragment(fragment)
+        .element
+        .set_once(element.raw());
 }
 
 /// The `DirectiveUri*Impl` of a selected directive URI.
@@ -758,9 +844,16 @@ fn build_directive_uri(linker: &Linker<'_>, uri: &LinkDirectiveUri) -> Directive
                 let store = if library.store() == linker.core.store.id {
                     &linker.core.store
                 } else {
-                    linker.core.world.store(library.store()).expect("library store")
+                    linker
+                        .core
+                        .world
+                        .store(library.store())
+                        .expect("library store")
                 };
-                let source = store.fragment(store.get(library).first_fragment()).source.clone();
+                let source = store
+                    .fragment(store.get(library).first_fragment())
+                    .source
+                    .clone();
                 DirectiveUri::Library {
                     relative_uri_string: relative_uri_string.clone(),
                     relative_uri: relative_uri.clone(),
@@ -777,7 +870,10 @@ fn build_directive_uri(linker: &Linker<'_>, uri: &LinkDirectiveUri) -> Directive
 }
 
 /// Dart `_buildCombinators`.
-fn build_namespace_combinators(core: &LinkerCore<'_>, combinators: &[LinkCombinator]) -> Vec<NamespaceCombinator> {
+fn build_namespace_combinators(
+    core: &LinkerCore<'_>,
+    combinators: &[LinkCombinator],
+) -> Vec<NamespaceCombinator> {
     combinators
         .iter()
         .map(|c| {

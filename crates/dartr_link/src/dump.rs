@@ -145,7 +145,9 @@ impl Obj {
 /// Dart `typeStr`: `type.getDisplayString()`; `None` (JSON null) for a null
 /// type. All type strings of the dump go through this function.
 pub fn type_str(ctx: &Ctx<'_>, ty: Option<TypeId>) -> Option<String> {
-    ty.map(|ty| dartr_element::type_display_string_with(ctx, ty, dartr_element::DisplayOptions::default()))
+    ty.map(|ty| {
+        dartr_element::type_display_string_with(ctx, ty, dartr_element::DisplayOptions::default())
+    })
 }
 
 // ---- the dump ----
@@ -565,15 +567,20 @@ impl Dumper<'_, '_> {
                 o.put("params", self.parameters_json(executable));
                 if let Some(method) = e.cast::<dartr_element::MethodElement>() {
                     let m = ctx.get(method);
-                    if let Some(dartr_element::TopLevelInferenceError::OverrideNoCombinedSuperSignature {
-                        candidate_signatures,
-                    }) = m.type_inference_error.try_get()
+                    if let Some(
+                        dartr_element::TopLevelInferenceError::OverrideNoCombinedSuperSignature {
+                            candidate_signatures,
+                        },
+                    ) = m.type_inference_error.try_get()
                     {
                         o.put(
                             "typeInferenceError",
                             Json::Str("overrideNoCombinedSuperSignature".to_string()),
                         );
-                        o.put("candidateSignatures", Json::Str(candidate_signatures.to_string()));
+                        o.put(
+                            "candidateSignatures",
+                            Json::Str(candidate_signatures.to_string()),
+                        );
                     }
                     if m.is_operator_equal_with_parameter_type_from_object.get() {
                         o.put("opEqParamFromObject", Json::Bool(true));
@@ -1341,7 +1348,12 @@ pub fn default_value_code(
         let super_parameter = crate::outline::super_constructor_parameter(ctx, p)?;
         let code = default_value_code(ctx, sources, super_parameter.raw())?;
         // A default of an unresolved type does not evaluate.
-        if ctx.get(super_parameter).type_.get().is_none_or(|t| t == TypeId::INVALID) {
+        if ctx
+            .get(super_parameter)
+            .type_
+            .get()
+            .is_none_or(|t| t == TypeId::INVALID)
+        {
             return None;
         }
         if code == "null" {

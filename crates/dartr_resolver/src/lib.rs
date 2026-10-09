@@ -52,11 +52,11 @@ pub mod resolver;
 pub mod tables;
 
 // C1: scopes, element binding, resolution visitor.
+pub mod ast_resolver;
 pub mod ast_rewrite;
 pub mod element_binding_visitor;
 pub mod element_ext;
 pub mod element_walker;
-pub mod ast_resolver;
 pub mod named_type_resolver;
 pub mod record_type_annotation_resolver;
 pub mod resolution_visitor;
@@ -106,6 +106,8 @@ pub mod type_property_resolver;
 pub mod typed_literal_resolver;
 pub mod yield_statement_resolver;
 
-pub use library_analyzer::{LibraryAnalysisInput, ResolvedLibrary, ResolvedUnit, UnitInput, analyze_library};
+pub use library_analyzer::{
+    LibraryAnalysisInput, ResolvedLibrary, ResolvedUnit, UnitInput, analyze_library,
+};
 pub use resolver::ResolverVisitor;
 pub use tables::ResolverTables;

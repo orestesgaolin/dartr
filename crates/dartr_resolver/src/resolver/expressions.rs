@@ -57,8 +57,11 @@ impl<'a> ResolverVisitor<'a> {
     pub fn visit_await_expression(&mut self, node: Id<AwaitExpression>, context_type: TypeId) {
         self.check_unreachable_node(node);
         let expression = self.ast[node].expression;
-        let result =
-            self.analyze_await_expression(node.upcast(), expression, SharedTypeSchemaView::new(context_type));
+        let result = self.analyze_await_expression(
+            node.upcast(),
+            expression,
+            SharedTypeSchemaView::new(context_type),
+        );
         self.pop_rewrite();
         self.record_static_type(node, result.type_.unwrap_type_view());
         let e = self.insert_generic_function_instantiation(node.upcast(), context_type);
@@ -67,8 +70,13 @@ impl<'a> ResolverVisitor<'a> {
 
     pub fn visit_boolean_literal(&mut self, node: Id<BooleanLiteral>, _context_type: TypeId) {
         let value = self.ast[node].value;
-        let info = self.flow_analysis.flow.as_mut().map(|f| f.boolean_literal(value));
-        self.flow_analysis.store_expression_info(node.upcast(), info);
+        let info = self
+            .flow_analysis
+            .flow
+            .as_mut()
+            .map(|f| f.boolean_literal(value));
+        self.flow_analysis
+            .store_expression_info(node.upcast(), info);
         self.check_unreachable_node(node);
         static_type_analyzer::visit_boolean_literal(self, node);
     }
@@ -80,18 +88,25 @@ impl<'a> ResolverVisitor<'a> {
         let target_type = self.static_type(target).unwrap_or(TypeId::DYNAMIC);
         let is_null_aware = self.cascade_is_null_aware(node);
         let target_info = self.flow_analysis.get_expression_info(Some(target));
-        self.flow()
-            .cascade_expression_after_target(target_info, SharedTypeView::new(target_type), is_null_aware, None);
+        self.flow().cascade_expression_after_target(
+            target_info,
+            SharedTypeView::new(target_type),
+            is_null_aware,
+            None,
+        );
         let sections = self.ast.list(self.ast[node].cascade_sections).to_vec();
         for section in sections {
             self.resolve_expression(section, TypeId::UNKNOWN);
         }
         static_type_analyzer::visit_cascade_expression(self, node);
         if is_null_aware {
-            dartr_flow::flow_analysis::FlowAnalysisNullShortingInterface::null_aware_access_end(self.flow());
+            dartr_flow::flow_analysis::FlowAnalysisNullShortingInterface::null_aware_access_end(
+                self.flow(),
+            );
         }
         let info = self.flow().cascade_expression_end();
-        self.flow_analysis.store_expression_info(node.upcast(), Some(info));
+        self.flow_analysis
+            .store_expression_info(node.upcast(), Some(info));
         self.insert_implicit_call_reference(node.upcast(), context_type);
     }
 
@@ -107,7 +122,11 @@ impl<'a> ResolverVisitor<'a> {
         self.ast.tokens.ty(begin) == TokenType::QUESTION_PERIOD_PERIOD
     }
 
-    pub fn visit_conditional_expression(&mut self, node: Id<ConditionalExpression>, context_type: TypeId) {
+    pub fn visit_conditional_expression(
+        &mut self,
+        node: Id<ConditionalExpression>,
+        context_type: TypeId,
+    ) {
         self.check_unreachable_node(node);
         let flow_active = self.flow_analysis.is_active();
         if flow_active {
@@ -129,9 +148,12 @@ impl<'a> ResolverVisitor<'a> {
 
         let else_expression = self.ast[node].else_expression;
         if flow_active {
-            let info = self.flow_analysis.get_expression_info(Some(then_expression));
+            let info = self
+                .flow_analysis
+                .get_expression_info(Some(then_expression));
             let then_type = self.type_or_throw(then_expression);
-            self.flow().conditional_else_begin(info, SharedTypeView::new(then_type));
+            self.flow()
+                .conditional_else_begin(info, SharedTypeView::new(then_type));
             self.check_unreachable_node(else_expression);
         }
         let else_expression = self.resolve_expression(else_expression, context_type);
@@ -139,14 +161,17 @@ impl<'a> ResolverVisitor<'a> {
         static_type_analyzer::visit_conditional_expression(self, node, context_type);
         if flow_active {
             let ty = self.type_or_throw(node);
-            let info = self.flow_analysis.get_expression_info(Some(else_expression));
+            let info = self
+                .flow_analysis
+                .get_expression_info(Some(else_expression));
             let else_type = self.type_or_throw(else_expression);
             let result = self.flow().conditional_end(
                 SharedTypeView::new(ty),
                 info,
                 SharedTypeView::new(else_type),
             );
-            self.flow_analysis.store_expression_info(node.upcast(), Some(result));
+            self.flow_analysis
+                .store_expression_info(node.upcast(), Some(result));
         }
         self.insert_implicit_call_reference(node.upcast(), context_type);
     }
@@ -180,12 +205,17 @@ impl<'a> ResolverVisitor<'a> {
             .flow
             .as_mut()
             .map(|f| f.null_literal(SharedTypeView::new(null_type)));
-        self.flow_analysis.store_expression_info(node.upcast(), info);
+        self.flow_analysis
+            .store_expression_info(node.upcast(), info);
         self.check_unreachable_node(node);
         static_type_analyzer::visit_null_literal(self, node);
     }
 
-    pub fn visit_parenthesized_expression(&mut self, node: Id<ParenthesizedExpression>, context_type: TypeId) {
+    pub fn visit_parenthesized_expression(
+        &mut self,
+        node: Id<ParenthesizedExpression>,
+        context_type: TypeId,
+    ) {
         self.check_unreachable_node(node);
         let expression = self.ast[node].expression;
         let expression = self.resolve_expression(expression, context_type);
@@ -196,7 +226,8 @@ impl<'a> ResolverVisitor<'a> {
             .flow
             .as_mut()
             .and_then(|f| f.parenthesized_expression(info));
-        self.flow_analysis.store_expression_info(node.upcast(), result);
+        self.flow_analysis
+            .store_expression_info(node.upcast(), result);
     }
 
     pub fn visit_rethrow_expression(&mut self, node: Id<RethrowExpression>, _context_type: TypeId) {
@@ -207,12 +238,20 @@ impl<'a> ResolverVisitor<'a> {
         }
     }
 
-    pub fn visit_simple_string_literal(&mut self, node: Id<SimpleStringLiteral>, _context_type: TypeId) {
+    pub fn visit_simple_string_literal(
+        &mut self,
+        node: Id<SimpleStringLiteral>,
+        _context_type: TypeId,
+    ) {
         self.check_unreachable_node(node);
         static_type_analyzer::visit_simple_string_literal(self, node);
     }
 
-    pub fn visit_string_interpolation(&mut self, node: Id<StringInterpolation>, _context_type: TypeId) {
+    pub fn visit_string_interpolation(
+        &mut self,
+        node: Id<StringInterpolation>,
+        _context_type: TypeId,
+    ) {
         self.check_unreachable_node(node);
         self.visit_children(node);
         static_type_analyzer::visit_string_interpolation(self, node);
@@ -261,17 +300,29 @@ impl<'a> ResolverVisitor<'a> {
         self.insert_implicit_call_reference(e, context_type);
     }
 
-    pub fn visit_function_expression(&mut self, node: Id<FunctionExpression>, context_type: TypeId) {
+    pub fn visit_function_expression(
+        &mut self,
+        node: Id<FunctionExpression>,
+        context_type: TypeId,
+    ) {
         function_expression_resolver::visit_function_expression(self, node, context_type);
     }
 
     // ------------------------------------------------------------ delegated
 
-    pub fn visit_anonymous_method_invocation(&mut self, node: Id<AnonymousMethodInvocation>, context_type: TypeId) {
+    pub fn visit_anonymous_method_invocation(
+        &mut self,
+        node: Id<AnonymousMethodInvocation>,
+        context_type: TypeId,
+    ) {
         function_expression_resolver::visit_anonymous_method_invocation(self, node, context_type);
     }
 
-    pub fn visit_assignment_expression(&mut self, node: Id<AssignmentExpression>, context_type: TypeId) {
+    pub fn visit_assignment_expression(
+        &mut self,
+        node: Id<AssignmentExpression>,
+        context_type: TypeId,
+    ) {
         self.check_unreachable_node(node);
         assignment_expression_resolver::visit_assignment_expression(self, node, context_type);
     }
@@ -281,7 +332,11 @@ impl<'a> ResolverVisitor<'a> {
         binary_expression_resolver::visit_binary_expression(self, node, context_type);
     }
 
-    pub fn visit_constructor_reference(&mut self, node: Id<ConstructorReference>, context_type: TypeId) {
+    pub fn visit_constructor_reference(
+        &mut self,
+        node: Id<ConstructorReference>,
+        context_type: TypeId,
+    ) {
         constructor_reference_resolver::visit_constructor_reference(self, node, context_type);
     }
 
@@ -290,10 +345,18 @@ impl<'a> ResolverVisitor<'a> {
         node: Id<DotShorthandConstructorInvocation>,
         context_type: TypeId,
     ) {
-        dot_shorthand_resolver::visit_dot_shorthand_constructor_invocation(self, node, context_type);
+        dot_shorthand_resolver::visit_dot_shorthand_constructor_invocation(
+            self,
+            node,
+            context_type,
+        );
     }
 
-    pub fn visit_dot_shorthand_invocation(&mut self, node: Id<DotShorthandInvocation>, context_type: TypeId) {
+    pub fn visit_dot_shorthand_invocation(
+        &mut self,
+        node: Id<DotShorthandInvocation>,
+        context_type: TypeId,
+    ) {
         dot_shorthand_resolver::visit_dot_shorthand_invocation(self, node, context_type);
     }
 
@@ -314,14 +377,22 @@ impl<'a> ResolverVisitor<'a> {
         node: Id<FunctionExpressionInvocation>,
         context_type: TypeId,
     ) {
-        function_expression_invocation_resolver::visit_function_expression_invocation(self, node, context_type);
+        function_expression_invocation_resolver::visit_function_expression_invocation(
+            self,
+            node,
+            context_type,
+        );
     }
 
     pub fn visit_function_reference(&mut self, node: Id<FunctionReference>, context_type: TypeId) {
         function_reference_resolver::visit_function_reference(self, node, context_type);
     }
 
-    pub fn visit_implicit_call_reference(&mut self, node: Id<ImplicitCallReference>, context_type: TypeId) {
+    pub fn visit_implicit_call_reference(
+        &mut self,
+        node: Id<ImplicitCallReference>,
+        context_type: TypeId,
+    ) {
         function_reference_resolver::visit_implicit_call_reference(self, node, context_type);
     }
 
@@ -334,7 +405,11 @@ impl<'a> ResolverVisitor<'a> {
         node: Id<InstanceCreationExpression>,
         context_type: TypeId,
     ) {
-        instance_creation_expression_resolver::visit_instance_creation_expression(self, node, context_type);
+        instance_creation_expression_resolver::visit_instance_creation_expression(
+            self,
+            node,
+            context_type,
+        );
     }
 
     pub fn visit_list_literal(&mut self, node: Id<ListLiteral>, context_type: TypeId) {
@@ -353,7 +428,11 @@ impl<'a> ResolverVisitor<'a> {
         postfix_expression_resolver::visit_postfix_expression(self, node, context_type);
     }
 
-    pub fn visit_prefixed_identifier(&mut self, node: Id<PrefixedIdentifier>, context_type: TypeId) {
+    pub fn visit_prefixed_identifier(
+        &mut self,
+        node: Id<PrefixedIdentifier>,
+        context_type: TypeId,
+    ) {
         prefixed_identifier_resolver::visit_prefixed_identifier(self, node, context_type);
     }
 
@@ -416,11 +495,14 @@ impl<'a> ResolverVisitor<'a> {
         }
         // If the constructor-tearoffs feature is enabled, then so is
         // generic-metadata.
-        let type_argument_types = self.infer_function_type_instantiation(context, static_type, expression, true);
+        let type_argument_types =
+            self.infer_function_type_instantiation(context, static_type, expression, true);
         let mut static_type = static_type;
         if !type_argument_types.is_empty() {
             use dartr_typesystem::TypeExt;
-            static_type = self.ctx.instantiate_function_type(static_type, &type_argument_types);
+            static_type = self
+                .ctx
+                .instantiate_function_type(static_type, &type_argument_types);
         }
         let reference = self.ast.add(FunctionReference {
             function: expression,
@@ -442,7 +524,9 @@ impl<'a> ResolverVisitor<'a> {
         error_node: Id<Expression>,
         generic_metadata_is_enabled: bool,
     ) -> Vec<TypeId> {
-        use dartr_typesystem::generic_inferrer::{InferenceErrorEntity, InferenceErrorEntityKind, InferenceFlags};
+        use dartr_typesystem::generic_inferrer::{
+            InferenceErrorEntity, InferenceErrorEntityKind, InferenceFlags,
+        };
         let flags = InferenceFlags {
             generic_metadata_is_enabled,
             inference_using_bounds_is_enabled: self.inference_using_bounds_is_enabled(),
@@ -481,7 +565,11 @@ impl<'a> ResolverVisitor<'a> {
     /// Dart `_insertImplicitCallReference(expression, contextType:)`: if
     /// [expression] should be treated as `expression.call`, wraps it in an
     /// `ImplicitCallReference`.
-    pub fn insert_implicit_call_reference(&mut self, expression: Id<Expression>, context_type: TypeId) {
+    pub fn insert_implicit_call_reference(
+        &mut self,
+        expression: Id<Expression>,
+        context_type: TypeId,
+    ) {
         let parent = self.ast.parent(expression);
         if self.should_skip_implicit_call_reference_due_to_form(expression, parent) {
             return;
@@ -521,7 +609,9 @@ impl<'a> ResolverVisitor<'a> {
             }
         }
         if let Some(c) = self.ast.cast::<ConditionalExpression>(parent) {
-            if self.ast[c].then_expression == expression || self.ast[c].else_expression == expression {
+            if self.ast[c].then_expression == expression
+                || self.ast[c].else_expression == expression
+            {
                 // Do not perform an "implicit tear-off conversion" on the
                 // branches of a conditional expression.
                 return true;

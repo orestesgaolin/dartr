@@ -203,7 +203,11 @@ pub fn split_gt_gt(tokens: &mut Tokens, token: TokenId) -> TokenId {
 /// Split `>>=` into three separate tokens.
 pub fn split_gt_gt_eq(tokens: &mut Tokens, token: TokenId) -> TokenId {
     debug_assert!(tokens.ty(token) == TokenType::GT_GT_EQ);
-    split(tokens, token, &[TokenType::GT, TokenType::GT, TokenType::EQ])
+    split(
+        tokens,
+        token,
+        &[TokenType::GT, TokenType::GT, TokenType::EQ],
+    )
 }
 
 /// Split `>>=` into two separate tokens... `>` followed by `>=`.
@@ -284,7 +288,11 @@ pub fn dart_int_try_parse(text: &str) -> Option<i64> {
         }
         let value = u64::from_str_radix(hex, 16).ok()?;
         let value = value as i64;
-        return Some(if negative { value.wrapping_neg() } else { value });
+        return Some(if negative {
+            value.wrapping_neg()
+        } else {
+            value
+        });
     }
     if body.is_empty() || !body.bytes().all(|b| b.is_ascii_digit()) {
         return None;

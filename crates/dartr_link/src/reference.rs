@@ -214,7 +214,12 @@ impl LibraryReference {
     }
 
     /// Dart `MemberContainerReference._declareMember`.
-    pub fn declare_member(&mut self, container: RefId, kind: MemberReferenceKind, key: &str) -> RefId {
+    pub fn declare_member(
+        &mut self,
+        container: RefId,
+        kind: MemberReferenceKind,
+        key: &str,
+    ) -> RefId {
         if self.references[container.0 as usize].members[kind as usize].contains_key(key) {
             panic!("Duplicate reference key: {key}");
         }
@@ -222,7 +227,12 @@ impl LibraryReference {
     }
 
     /// Dart `MemberContainerReference._getOrCreateMember`.
-    pub fn get_or_create_member(&mut self, container: RefId, kind: MemberReferenceKind, key: &str) -> RefId {
+    pub fn get_or_create_member(
+        &mut self,
+        container: RefId,
+        kind: MemberReferenceKind,
+        key: &str,
+    ) -> RefId {
         if let Some(&id) = self.references[container.0 as usize].members[kind as usize].get(key) {
             return id;
         }
@@ -257,7 +267,11 @@ impl LibraryReference {
                 container,
                 kind,
                 key,
-            } => format!("{}::{}::{key}", self.debug_string(*container), kind.debug_name()),
+            } => format!(
+                "{}::{}::{key}",
+                self.debug_string(*container),
+                kind.debug_name()
+            ),
             ReferenceKind::BuiltIn(kind) => format!("{}::{}", self.uri_string, kind.identifier()),
         }
     }
@@ -322,7 +336,12 @@ impl LibraryReferenceBuilder {
     }
 
     /// Dart `declareMemberConstructor`, `declareMemberField`, ...
-    pub fn declare_member(&mut self, container: RefId, kind: MemberReferenceKind, name: Option<&str>) -> RefId {
+    pub fn declare_member(
+        &mut self,
+        container: RefId,
+        kind: MemberReferenceKind,
+        name: Option<&str>,
+    ) -> RefId {
         let key = self
             .member_keys
             .entry(container)

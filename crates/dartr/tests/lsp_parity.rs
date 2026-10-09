@@ -34,9 +34,13 @@ fn is_syntactic(code: &str) -> bool {
 
 /// Whether [uri] is a non-Dart file with diagnostics of the context manager.
 fn is_non_dart(uri: &str) -> bool {
-    ["analysis_options.yaml", "pubspec.yaml", "AndroidManifest.xml"]
-        .iter()
-        .any(|n| uri.ends_with(&format!("/{n}")))
+    [
+        "analysis_options.yaml",
+        "pubspec.yaml",
+        "AndroidManifest.xml",
+    ]
+    .iter()
+    .any(|n| uri.ends_with(&format!("/{n}")))
 }
 
 /// The document state, normalized: syntactic diagnostics (and all
@@ -98,7 +102,11 @@ fn run_session(mut c: LspClient, root: &Path) -> (Transcript, i32) {
     c.settle(true);
     t.push(("initial analysis".into(), snapshot(&c, &root_uri)));
 
-    for (u, rel) in [(&errors, "lib/errors.dart"), (&shapes, "lib/shapes.dart"), (&widgets, "lib/widgets.dart")] {
+    for (u, rel) in [
+        (&errors, "lib/errors.dart"),
+        (&shapes, "lib/shapes.dart"),
+        (&widgets, "lib/widgets.dart"),
+    ] {
         c.notify(
             "textDocument/didOpen",
             json!({"textDocument": {"uri": u, "languageId": "dart", "version": 1, "text": read(rel)}}),
@@ -162,11 +170,17 @@ fn run_session(mut c: LspClient, root: &Path) -> (Transcript, i32) {
     ));
     t.push((
         "documentSymbol of a file outside the roots".into(),
-        c.request("textDocument/documentSymbol", doc("file:///tmp/dartr_not_analyzed.dart")),
+        c.request(
+            "textDocument/documentSymbol",
+            doc("file:///tmp/dartr_not_analyzed.dart"),
+        ),
     ));
     t.push((
         "foldingRange of a file outside the roots".into(),
-        c.request("textDocument/foldingRange", doc("file:///tmp/dartr_not_analyzed.dart")),
+        c.request(
+            "textDocument/foldingRange",
+            doc("file:///tmp/dartr_not_analyzed.dart"),
+        ),
     ));
     t.push((
         "documentSymbol of a non-file URI".into(),
@@ -181,7 +195,10 @@ fn run_session(mut c: LspClient, root: &Path) -> (Transcript, i32) {
         ]}),
     );
     c.settle(true);
-    t.push(("incremental change errors.dart".into(), snapshot(&c, &root_uri)));
+    t.push((
+        "incremental change errors.dart".into(),
+        snapshot(&c, &root_uri),
+    ));
 
     // Two changes in one notification: break the class body of `Shape` and
     // add an unterminated string at the end.
@@ -248,9 +265,15 @@ fn run_session(mut c: LspClient, root: &Path) -> (Transcript, i32) {
     // Both servers analyze again after a change of the roots.
     c.settle(true);
     t.push(("remove workspace folder".into(), snapshot(&c, &root2_uri)));
-    t.push(("first workspace folder after remove".into(), snapshot(&c, &root_uri)));
+    t.push((
+        "first workspace folder after remove".into(),
+        snapshot(&c, &root_uri),
+    ));
 
-    c.notify("workspace/didChangeConfiguration", json!({"settings": null}));
+    c.notify(
+        "workspace/didChangeConfiguration",
+        json!({"settings": null}),
+    );
     c.settle(false);
     t.push((
         "didChangeConfiguration: server requests".into(),
@@ -283,7 +306,10 @@ fn first_difference(a: &Value, b: &Value, path: &str) -> Option<String> {
         (Value::Object(x), Value::Object(y)) => {
             let keys: std::collections::BTreeSet<&String> = x.keys().chain(y.keys()).collect();
             for k in keys {
-                let (va, vb) = (x.get(k).unwrap_or(&Value::Null), y.get(k).unwrap_or(&Value::Null));
+                let (va, vb) = (
+                    x.get(k).unwrap_or(&Value::Null),
+                    y.get(k).unwrap_or(&Value::Null),
+                );
                 if let Some(d) = first_difference(va, vb, &format!("{path}/{k}")) {
                     return Some(d);
                 }
@@ -292,7 +318,10 @@ fn first_difference(a: &Value, b: &Value, path: &str) -> Option<String> {
         }
         (Value::Array(x), Value::Array(y)) => {
             for i in 0..x.len().max(y.len()) {
-                let (va, vb) = (x.get(i).unwrap_or(&Value::Null), y.get(i).unwrap_or(&Value::Null));
+                let (va, vb) = (
+                    x.get(i).unwrap_or(&Value::Null),
+                    y.get(i).unwrap_or(&Value::Null),
+                );
                 if let Some(d) = first_difference(va, vb, &format!("{path}/{i}")) {
                     return Some(d);
                 }
@@ -319,7 +348,11 @@ fn report(label: &str, expected: &Transcript, actual: &Transcript) -> usize {
             }
         }
     }
-    println!("  {} of {} steps at parity", expected.len() - failures, expected.len());
+    println!(
+        "  {} of {} steps at parity",
+        expected.len() - failures,
+        expected.len()
+    );
     failures
 }
 
@@ -346,7 +379,11 @@ fn lsp_session_parity_with_dart_language_server() {
     let (dartr, dartr_code) = run_session(LspClient::spawn(dartr_bin(), &dartr_args, &[]), &root);
     assert_eq!(dart_code, 0);
     assert_eq!(dartr_code, 0);
-    let failures = report("dart language-server vs dartr language-server", &dart, &dartr);
+    let failures = report(
+        "dart language-server vs dartr language-server",
+        &dart,
+        &dartr,
+    );
     if std::env::var_os("DARTR_LSP_TRANSCRIPTS").is_some() {
         let dir = std::path::PathBuf::from(std::env::var_os("DARTR_LSP_TRANSCRIPTS").unwrap());
         for (name, t) in [("dart", &dart), ("dartr", &dartr)] {
@@ -379,7 +416,11 @@ fn lsp_session_through_dart_shim() {
     let (direct, direct_code) =
         run_session(LspClient::spawn(dartr_bin(), &direct_args, &[]), &root);
     assert_eq!(shim_code, direct_code);
-    let failures = report("dartr language-server vs dart dartr_shim.dart --lsp", &direct, &via_shim);
+    let failures = report(
+        "dartr language-server vs dart dartr_shim.dart --lsp",
+        &direct,
+        &via_shim,
+    );
     assert_eq!(failures, 0);
 
     // Exit codes are forwarded: `exit` without `shutdown` is 1.
@@ -419,7 +460,10 @@ fn write_non_dart_project() -> std::path::PathBuf {
     )
     .unwrap();
     copy("pubspec_fields/pubspec.yaml", "pubspec.yaml");
-    copy("manifest_required/AndroidManifest.xml", "android/AndroidManifest.xml");
+    copy(
+        "manifest_required/AndroidManifest.xml",
+        "android/AndroidManifest.xml",
+    );
     std::fs::write(
         root.join(".dart_tool/package_config.json"),
         "{\"configVersion\":2,\"packages\":[{\"name\":\"p\",\"rootUri\":\"../\",\"packageUri\":\"lib/\",\"languageVersion\":\"2.19\"}]}",
@@ -483,7 +527,10 @@ fn run_non_dart_session(mut c: LspClient, root: &Path) -> (Transcript, i32) {
     // and no re-analysis, the diagnostics stay stale), so an analysis is
     // awaited for a short grace period only. See [OPTIONS_DEFECT_STEPS].
     c.settle_with_grace(std::time::Duration::from_secs(5));
-    t.push(("change analysis_options.yaml".into(), snapshot(&c, &root_uri)));
+    t.push((
+        "change analysis_options.yaml".into(),
+        snapshot(&c, &root_uri),
+    ));
 
     // Change the pubspec and the manifest.
     c.notify(
@@ -503,7 +550,11 @@ fn run_non_dart_session(mut c: LspClient, root: &Path) -> (Transcript, i32) {
     c.settle(false);
     t.push(("change AndroidManifest.xml".into(), snapshot(&c, &root_uri)));
 
-    for rel in ["analysis_options.yaml", "pubspec.yaml", "android/AndroidManifest.xml"] {
+    for rel in [
+        "analysis_options.yaml",
+        "pubspec.yaml",
+        "android/AndroidManifest.xml",
+    ] {
         c.notify("textDocument/didClose", doc(&uri(rel)));
     }
     c.settle(false);
@@ -533,7 +584,8 @@ fn take_options_diagnostics(snapshot: &mut Value) -> (Value, Value) {
     let d = snapshot["diagnostics"].as_object_mut().unwrap();
     (
         d.remove("analysis_options.yaml").unwrap_or(Value::Null),
-        d.remove("android/AndroidManifest.xml").unwrap_or(Value::Null),
+        d.remove("android/AndroidManifest.xml")
+            .unwrap_or(Value::Null),
     )
 }
 
@@ -564,7 +616,8 @@ fn lsp_non_dart_files_and_package_language_version() {
         if !OPTIONS_DEFECT_STEPS.contains(&name.as_str()) {
             continue;
         }
-        let (dart_options, dartr_options) = (take_options_diagnostics(d), take_options_diagnostics(r));
+        let (dart_options, dartr_options) =
+            (take_options_diagnostics(d), take_options_diagnostics(r));
         let (dart_options, dart_manifest) = dart_options;
         let (dartr_options, dartr_manifest) = dartr_options;
         assert_eq!(
@@ -585,7 +638,9 @@ fn lsp_non_dart_files_and_package_language_version() {
         );
         if dart_options != dartr_options || dart_manifest != dartr_manifest {
             defect = true;
-            println!("  KNOWN ORACLE DEFECT  {name}: dart keeps stale analysis_options.yaml and manifest diagnostics");
+            println!(
+                "  KNOWN ORACLE DEFECT  {name}: dart keeps stale analysis_options.yaml and manifest diagnostics"
+            );
         }
     }
     if !defect {
@@ -740,7 +795,10 @@ fn write_format_project() -> std::path::PathBuf {
     write("pubspec.yaml", "name: p\nenvironment:\n  sdk: ^3.13.0\n");
     write("lib/needs.dart", needs);
     write("lib/formatted.dart", "class A {\n  int x = 1;\n}\n");
-    write("lib/broken.dart", "void main() {\n  var x = ;\n  print(x)\n}\n");
+    write(
+        "lib/broken.dart",
+        "void main() {\n  var x = ;\n  print(x)\n}\n",
+    );
     write(
         "lib/short_style.dart",
         "// @dart = 3.6\nvoid f(int a,int b,{int c=1}){var list=[a,b,c,];print(list);}\n",
@@ -749,7 +807,10 @@ fn write_format_project() -> std::path::PathBuf {
         "lib/unicode_crlf.dart",
         "// \u{1F600} \u{e9}moji\r\nvar  s = '\u{1F600}';\r\nvoid f( ){print( s );   /* \u{1F600} */ print(s);}\r\n",
     );
-    write("wide/pubspec.yaml", "name: wide\nenvironment:\n  sdk: ^3.13.0\n");
+    write(
+        "wide/pubspec.yaml",
+        "name: wide\nenvironment:\n  sdk: ^3.13.0\n",
+    );
     write(
         "wide/analysis_options.yaml",
         "formatter:\n  page_width: 120\n  trailing_commas: preserve\n",
@@ -835,14 +896,23 @@ fn run_format_session(mut c: LspClient, root: &Path, with_formatter: bool) -> (T
     c.settle(true);
 
     // Results that do not depend on the formatter output.
-    t.push(("formatting: syntax errors".into(), c.request("textDocument/formatting", formatting_params(&broken))));
+    t.push((
+        "formatting: syntax errors".into(),
+        c.request("textDocument/formatting", formatting_params(&broken)),
+    ));
     t.push((
         "rangeFormatting: syntax errors".into(),
-        c.request("textDocument/rangeFormatting", range_formatting_params(&broken, (1, 0), (2, 5))),
+        c.request(
+            "textDocument/rangeFormatting",
+            range_formatting_params(&broken, (1, 0), (2, 5)),
+        ),
     ));
     t.push((
         "onTypeFormatting: syntax errors".into(),
-        c.request("textDocument/onTypeFormatting", on_type_params(&broken, (1, 11), ";")),
+        c.request(
+            "textDocument/onTypeFormatting",
+            on_type_params(&broken, (1, 11), ";"),
+        ),
     ));
     t.push((
         "formatting: already formatted".into(),
@@ -850,33 +920,54 @@ fn run_format_session(mut c: LspClient, root: &Path, with_formatter: bool) -> (T
     ));
     t.push((
         "formatting: missing file".into(),
-        c.request("textDocument/formatting", formatting_params(&uri("lib/missing.dart"))),
+        c.request(
+            "textDocument/formatting",
+            formatting_params(&uri("lib/missing.dart")),
+        ),
     ));
     t.push((
         "formatting: non-Dart file".into(),
-        c.request("textDocument/formatting", formatting_params(&uri("pubspec.yaml"))),
+        c.request(
+            "textDocument/formatting",
+            formatting_params(&uri("pubspec.yaml")),
+        ),
     ));
     t.push((
         "formatting: non-file URI".into(),
-        c.request("textDocument/formatting", formatting_params("untitled:Untitled-1")),
+        c.request(
+            "textDocument/formatting",
+            formatting_params("untitled:Untitled-1"),
+        ),
     ));
     // Not a trigger: `;` and `}` that do not end a statement or block, and
     // another character.
     t.push((
         "onTypeFormatting: ';' not at a statement end".into(),
-        c.request("textDocument/onTypeFormatting", on_type_params(&needs, (2, 4), ";")),
+        c.request(
+            "textDocument/onTypeFormatting",
+            on_type_params(&needs, (2, 4), ";"),
+        ),
     ));
     t.push((
         "onTypeFormatting: '}' inside a string".into(),
-        c.request("textDocument/onTypeFormatting", on_type_params(&needs, (3, 41), "}")),
+        c.request(
+            "textDocument/onTypeFormatting",
+            on_type_params(&needs, (3, 41), "}"),
+        ),
     ));
     t.push((
         "onTypeFormatting: other character".into(),
-        c.request("textDocument/onTypeFormatting", on_type_params(&needs, (2, 10), "x")),
+        c.request(
+            "textDocument/onTypeFormatting",
+            on_type_params(&needs, (2, 10), "x"),
+        ),
     ));
     t.push((
         "onTypeFormatting: line after the end".into(),
-        c.request("textDocument/onTypeFormatting", on_type_params(&needs, (900, 0), ";")),
+        c.request(
+            "textDocument/onTypeFormatting",
+            on_type_params(&needs, (900, 0), ";"),
+        ),
     ));
 
     if with_formatter {
@@ -884,26 +975,44 @@ fn run_format_session(mut c: LspClient, root: &Path, with_formatter: bool) -> (T
         for (name, u) in [
             ("needs.dart", &needs),
             ("wide/lib/needs.dart (analysis options)", &wide),
-            ("short_style.dart (language version 3.6)", &uri("lib/short_style.dart")),
+            (
+                "short_style.dart (language version 3.6)",
+                &uri("lib/short_style.dart"),
+            ),
             ("unicode_crlf.dart", &uri("lib/unicode_crlf.dart")),
         ] {
-            t.push((format!("formatting {name}"), c.request("textDocument/formatting", formatting_params(u))));
+            t.push((
+                format!("formatting {name}"),
+                c.request("textDocument/formatting", formatting_params(u)),
+            ));
         }
         t.push((
             "rangeFormatting in the middle".into(),
-            c.request("textDocument/rangeFormatting", range_formatting_params(&needs, (2, 0), (4, 3))),
+            c.request(
+                "textDocument/rangeFormatting",
+                range_formatting_params(&needs, (2, 0), (4, 3)),
+            ),
         ));
         t.push((
             "rangeFormatting: invalid line".into(),
-            c.request("textDocument/rangeFormatting", range_formatting_params(&needs, (200, 0), (400, 0))),
+            c.request(
+                "textDocument/rangeFormatting",
+                range_formatting_params(&needs, (200, 0), (400, 0)),
+            ),
         ));
         t.push((
             "onTypeFormatting after '}'".into(),
-            c.request("textDocument/onTypeFormatting", on_type_params(&needs, (4, 3), "}")),
+            c.request(
+                "textDocument/onTypeFormatting",
+                on_type_params(&needs, (4, 3), "}"),
+            ),
         ));
         t.push((
             "onTypeFormatting after ';'".into(),
-            c.request("textDocument/onTypeFormatting", on_type_params(&needs, (2, 10), ";")),
+            c.request(
+                "textDocument/onTypeFormatting",
+                on_type_params(&needs, (2, 10), ";"),
+            ),
         ));
         // An edited open document is formatted from the overlay.
         c.notify(
@@ -924,7 +1033,10 @@ fn run_format_session(mut c: LspClient, root: &Path, with_formatter: bool) -> (T
         // `dart.lineLength` from `workspace/configuration` (global and
         // workspace folder); the analysis options of `wide` win.
         c.configuration = json!({"lineLength": 40});
-        c.notify("workspace/didChangeConfiguration", json!({"settings": null}));
+        c.notify(
+            "workspace/didChangeConfiguration",
+            json!({"settings": null}),
+        );
         c.settle(false);
         t.push((
             "formatting with dart.lineLength 40".into(),
@@ -940,19 +1052,37 @@ fn run_format_session(mut c: LspClient, root: &Path, with_formatter: bool) -> (T
     // requests return `null`, also for missing files.
     let before = c.server_requests.len();
     c.configuration = json!({"enableSdkFormatter": false});
-    c.notify("workspace/didChangeConfiguration", json!({"settings": null}));
+    c.notify(
+        "workspace/didChangeConfiguration",
+        json!({"settings": null}),
+    );
     c.settle(false);
-    t.push(("enableSdkFormatter false: server requests".into(), server_requests_since(&c, before)));
-    t.push(("formatting: disabled".into(), c.request("textDocument/formatting", formatting_params(&needs))));
+    t.push((
+        "enableSdkFormatter false: server requests".into(),
+        server_requests_since(&c, before),
+    ));
+    t.push((
+        "formatting: disabled".into(),
+        c.request("textDocument/formatting", formatting_params(&needs)),
+    ));
     t.push((
         "formatting: disabled, missing file".into(),
-        c.request("textDocument/formatting", formatting_params(&uri("lib/missing.dart"))),
+        c.request(
+            "textDocument/formatting",
+            formatting_params(&uri("lib/missing.dart")),
+        ),
     ));
     let before = c.server_requests.len();
     c.configuration = json!({});
-    c.notify("workspace/didChangeConfiguration", json!({"settings": null}));
+    c.notify(
+        "workspace/didChangeConfiguration",
+        json!({"settings": null}),
+    );
     c.settle(false);
-    t.push(("enableSdkFormatter default: server requests".into(), server_requests_since(&c, before)));
+    t.push((
+        "enableSdkFormatter default: server requests".into(),
+        server_requests_since(&c, before),
+    ));
 
     let (response, code) = c.shutdown_and_exit();
     t.push(("shutdown".into(), response));
@@ -977,8 +1107,11 @@ fn lsp_formatting_parity() {
     args.extend(session_args());
     let (dart, dart_code) =
         run_format_session(LspClient::spawn("dart", &args, &[]), &root, with_formatter);
-    let (dartr, dartr_code) =
-        run_format_session(LspClient::spawn(dartr_bin(), &args, &[]), &root, with_formatter);
+    let (dartr, dartr_code) = run_format_session(
+        LspClient::spawn(dartr_bin(), &args, &[]),
+        &root,
+        with_formatter,
+    );
     assert_eq!(dart_code, 0);
     assert_eq!(dartr_code, 0);
     if let Some(dir) = std::env::var_os("DARTR_LSP_TRANSCRIPTS") {
@@ -990,8 +1123,15 @@ fn lsp_formatting_parity() {
     }
     // The comparison is not empty: the real server formats.
     if with_formatter {
-        let full = &dart.iter().find(|(n, _)| n == "formatting needs.dart").unwrap().1;
-        assert!(full["result"].as_array().is_some_and(|e| e.len() > 10), "{full}");
+        let full = &dart
+            .iter()
+            .find(|(n, _)| n == "formatting needs.dart")
+            .unwrap()
+            .1;
+        assert!(
+            full["result"].as_array().is_some_and(|e| e.len() > 10),
+            "{full}"
+        );
     }
     let failures = report("formatting", &dart, &dartr);
     assert_eq!(failures, 0, "LSP session differs from dart language-server");

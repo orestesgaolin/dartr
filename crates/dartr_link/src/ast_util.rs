@@ -96,8 +96,7 @@ pub fn is_empty_body(ast: &Ast, body: Id<FunctionBody>) -> bool {
 /// Dart `FunctionDeclarationImpl.isComplete`.
 pub fn function_is_complete(ast: &Ast, node: Id<FunctionDeclaration>) -> bool {
     let n = ast.get(node);
-    n.external_keyword.is_some()
-        || !is_empty_body(ast, ast.get(n.function_expression).body)
+    n.external_keyword.is_some() || !is_empty_body(ast, ast.get(n.function_expression).body)
 }
 
 /// Dart `MethodDeclarationImpl.isComplete`.
@@ -448,17 +447,24 @@ pub fn class_name_part_name(ast: &Ast, node: Id<ClassNamePart>) -> TokenId {
     if let Some(n) = ast.cast::<NameWithTypeParameters>(node.raw()) {
         ast.get(n).type_name
     } else {
-        let p = ast.cast::<PrimaryConstructorDeclaration>(node.raw()).expect("ClassNamePart");
+        let p = ast
+            .cast::<PrimaryConstructorDeclaration>(node.raw())
+            .expect("ClassNamePart");
         ast.get(p).type_name
     }
 }
 
 /// Dart `ClassNamePart.typeParameters`.
-pub fn class_name_part_type_parameters(ast: &Ast, node: Id<ClassNamePart>) -> Option<Id<TypeParameterList>> {
+pub fn class_name_part_type_parameters(
+    ast: &Ast,
+    node: Id<ClassNamePart>,
+) -> Option<Id<TypeParameterList>> {
     if let Some(n) = ast.cast::<NameWithTypeParameters>(node.raw()) {
         ast.get(n).type_parameters
     } else {
-        let p = ast.cast::<PrimaryConstructorDeclaration>(node.raw()).expect("ClassNamePart");
+        let p = ast
+            .cast::<PrimaryConstructorDeclaration>(node.raw())
+            .expect("ClassNamePart");
         ast.get(p).type_parameters
     }
 }

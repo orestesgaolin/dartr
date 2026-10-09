@@ -73,7 +73,10 @@ impl<E> HeapPriorityQueue<E> {
         let mut right_child_index = index * 2 + 2;
         while right_child_index < length {
             let left_child_index = right_child_index - 1;
-            let comp = comparison(&self.queue[left_child_index], &self.queue[right_child_index]);
+            let comp = comparison(
+                &self.queue[left_child_index],
+                &self.queue[right_child_index],
+            );
             let min_child_index = if comp == Ordering::Less {
                 left_child_index
             } else {

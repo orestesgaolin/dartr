@@ -130,9 +130,9 @@ fn capabilities_match_dart_language_server() {
             for (key, value) in r {
                 match d.get(key) {
                     None => problems.push(format!("{client} {kind} {key}: not advertised by dart")),
-                    Some(v) if v != value => problems.push(format!(
-                        "{client} {kind} {key}: dart={v} dartr={value}"
-                    )),
+                    Some(v) if v != value => {
+                        problems.push(format!("{client} {kind} {key}: dart={v} dartr={value}"))
+                    }
                     Some(_) => {}
                 }
             }
@@ -146,7 +146,11 @@ fn capabilities_match_dart_language_server() {
     for m in &missing {
         println!("  {m}");
     }
-    assert!(problems.is_empty(), "capability differences:\n{}", problems.join("\n"));
+    assert!(
+        problems.is_empty(),
+        "capability differences:\n{}",
+        problems.join("\n")
+    );
 
     let path = fixtures().join("missing_capabilities.txt");
     let actual = missing.join("\n") + "\n";
@@ -155,7 +159,8 @@ fn capabilities_match_dart_language_server() {
     }
     let expected = std::fs::read_to_string(&path).unwrap_or_default();
     assert_eq!(
-        expected, actual,
+        expected,
+        actual,
         "the missing capabilities changed: update {} (DARTR_UPDATE_MISSING=1)",
         path.display()
     );

@@ -65,7 +65,11 @@ impl ClientCapabilities {
 
     /// `textDocument.documentSymbol.hierarchicalDocumentSymbolSupport`.
     pub fn hierarchical_symbols(&self) -> bool {
-        self.flag(&["textDocument", "documentSymbol", "hierarchicalDocumentSymbolSupport"])
+        self.flag(&[
+            "textDocument",
+            "documentSymbol",
+            "hierarchicalDocumentSymbolSupport",
+        ])
     }
 
     /// `textDocument.documentSymbol.symbolKind.valueSet`, or the defaults.
@@ -87,7 +91,12 @@ impl ClientCapabilities {
     /// The options of the diagnostic conversion.
     pub fn diagnostic_options(&self) -> DiagnosticOptions {
         let tags = self
-            .get(&["textDocument", "publishDiagnostics", "tagSupport", "valueSet"])
+            .get(&[
+                "textDocument",
+                "publishDiagnostics",
+                "tagSupport",
+                "valueSet",
+            ])
             .and_then(Value::as_array)
             .map(|l| l.iter().filter_map(Value::as_i64).collect())
             .unwrap_or_default();
@@ -114,39 +123,107 @@ pub struct Feature {
 
 /// The features of the Dart server in `LspFeatures.allFeatures` order.
 pub const DART_FEATURES: &[Feature] = &[
-    feature("CallHierarchyRegistrations", Some("callHierarchyProvider"), false),
+    feature(
+        "CallHierarchyRegistrations",
+        Some("callHierarchyProvider"),
+        false,
+    ),
     feature("ChangeWorkspaceFoldersRegistrations", None, true),
     feature("CodeActionRegistrations", Some("codeActionProvider"), false),
     feature("CodeLensRegistrations", Some("codeLensProvider"), false),
     feature("CompletionRegistrations", Some("completionProvider"), false),
     feature("DefinitionRegistrations", Some("definitionProvider"), false),
-    feature("DocumentLinkRegistrations", Some("documentLinkProvider"), false),
+    feature(
+        "DocumentLinkRegistrations",
+        Some("documentLinkProvider"),
+        false,
+    ),
     feature("DocumentColorRegistrations", Some("colorProvider"), false),
-    feature("DocumentHighlightsRegistrations", Some("documentHighlightProvider"), false),
-    feature("DocumentSymbolsRegistrations", Some("documentSymbolProvider"), true),
-    feature("ExecuteCommandRegistrations", Some("executeCommandProvider"), false),
+    feature(
+        "DocumentHighlightsRegistrations",
+        Some("documentHighlightProvider"),
+        false,
+    ),
+    feature(
+        "DocumentSymbolsRegistrations",
+        Some("documentSymbolProvider"),
+        true,
+    ),
+    feature(
+        "ExecuteCommandRegistrations",
+        Some("executeCommandProvider"),
+        false,
+    ),
     feature("FoldingRegistrations", Some("foldingRangeProvider"), true),
-    feature("FormatOnTypeRegistrations", Some("documentOnTypeFormattingProvider"), true),
-    feature("FormatRangeRegistrations", Some("documentRangeFormattingProvider"), true),
-    feature("FormattingRegistrations", Some("documentFormattingProvider"), true),
+    feature(
+        "FormatOnTypeRegistrations",
+        Some("documentOnTypeFormattingProvider"),
+        true,
+    ),
+    feature(
+        "FormatRangeRegistrations",
+        Some("documentRangeFormattingProvider"),
+        true,
+    ),
+    feature(
+        "FormattingRegistrations",
+        Some("documentFormattingProvider"),
+        true,
+    ),
     feature("HoverRegistrations", Some("hoverProvider"), false),
-    feature("ImplementationRegistrations", Some("implementationProvider"), false),
+    feature(
+        "ImplementationRegistrations",
+        Some("implementationProvider"),
+        false,
+    ),
     feature("InlayHintRegistrations", Some("inlayHintProvider"), false),
-    feature("InlineValueRegistrations", Some("inlineValueProvider"), false),
+    feature(
+        "InlineValueRegistrations",
+        Some("inlineValueProvider"),
+        false,
+    ),
     feature("ReferencesRegistrations", Some("referencesProvider"), false),
     feature("RenameRegistrations", Some("renameProvider"), false),
-    feature("SelectionRangeRegistrations", Some("selectionRangeProvider"), true),
-    feature("SemanticTokensRegistrations", Some("semanticTokensProvider"), false),
-    feature("SignatureHelpRegistrations", Some("signatureHelpProvider"), false),
+    feature(
+        "SelectionRangeRegistrations",
+        Some("selectionRangeProvider"),
+        true,
+    ),
+    feature(
+        "SemanticTokensRegistrations",
+        Some("semanticTokensProvider"),
+        false,
+    ),
+    feature(
+        "SignatureHelpRegistrations",
+        Some("signatureHelpProvider"),
+        false,
+    ),
     feature("TextDocumentRegistrations", Some("textDocumentSync"), true),
-    feature("TypeDefinitionRegistrations", Some("typeDefinitionProvider"), false),
-    feature("TypeHierarchyRegistrations", Some("typeHierarchyProvider"), false),
+    feature(
+        "TypeDefinitionRegistrations",
+        Some("typeDefinitionProvider"),
+        false,
+    ),
+    feature(
+        "TypeHierarchyRegistrations",
+        Some("typeHierarchyProvider"),
+        false,
+    ),
     feature("WillRenameFilesRegistrations", None, false),
     feature("WorkspaceDidChangeConfigurationRegistrations", None, true),
-    feature("WorkspaceSymbolRegistrations", Some("workspaceSymbolProvider"), false),
+    feature(
+        "WorkspaceSymbolRegistrations",
+        Some("workspaceSymbolProvider"),
+        false,
+    ),
 ];
 
-const fn feature(name: &'static str, capability: Option<&'static str>, implemented: bool) -> Feature {
+const fn feature(
+    name: &'static str,
+    capability: Option<&'static str>,
+    implemented: bool,
+) -> Feature {
     Feature {
         name,
         capability,
@@ -174,8 +251,14 @@ fn synchronised_types() -> Value {
 /// `DocumentOnTypeFormattingOptions` of `FormatOnTypeRegistrations`).
 fn on_type_formatting_options() -> Map<String, Value> {
     let mut m = Map::new();
-    m.insert("firstTriggerCharacter".into(), json!(DART_TYPE_FORMATTING_CHARACTERS[0]));
-    m.insert("moreTriggerCharacter".into(), json!(DART_TYPE_FORMATTING_CHARACTERS[1..]));
+    m.insert(
+        "firstTriggerCharacter".into(),
+        json!(DART_TYPE_FORMATTING_CHARACTERS[0]),
+    );
+    m.insert(
+        "moreTriggerCharacter".into(),
+        json!(DART_TYPE_FORMATTING_CHARACTERS[1..]),
+    );
     m
 }
 
@@ -243,10 +326,16 @@ pub fn dynamic_registrations(
         options: Some(options),
     };
     if client.text_document_dynamic("documentSymbol") {
-        out.push(reg("textDocument/documentSymbol", json!({"documentSelector": dart_files()})));
+        out.push(reg(
+            "textDocument/documentSymbol",
+            json!({"documentSelector": dart_files()}),
+        ));
     }
     if client.text_document_dynamic("foldingRange") {
-        out.push(reg("textDocument/foldingRange", json!({"documentSelector": dart_files()})));
+        out.push(reg(
+            "textDocument/foldingRange",
+            json!({"documentSelector": dart_files()}),
+        ));
     }
     if enable_formatter && client.text_document_dynamic("onTypeFormatting") {
         let mut options = on_type_formatting_options();
@@ -254,15 +343,24 @@ pub fn dynamic_registrations(
         out.push(reg("textDocument/onTypeFormatting", Value::Object(options)));
     }
     if enable_formatter && client.text_document_dynamic("rangeFormatting") {
-        out.push(reg("textDocument/rangeFormatting", json!({"documentSelector": dart_files()})));
+        out.push(reg(
+            "textDocument/rangeFormatting",
+            json!({"documentSelector": dart_files()}),
+        ));
     }
     // Dart `fullySupportedTypes`: the Dart files and the types of plugins
     // (dartr has no plugins).
     if enable_formatter && client.text_document_dynamic("formatting") {
-        out.push(reg("textDocument/formatting", json!({"documentSelector": dart_files()})));
+        out.push(reg(
+            "textDocument/formatting",
+            json!({"documentSelector": dart_files()}),
+        ));
     }
     if client.text_document_dynamic("selectionRange") {
-        out.push(reg("textDocument/selectionRange", json!({"documentSelector": dart_files()})));
+        out.push(reg(
+            "textDocument/selectionRange",
+            json!({"documentSelector": dart_files()}),
+        ));
     }
     if client.text_document_dynamic("synchronization") {
         out.push(reg(

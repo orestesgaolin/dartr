@@ -57,10 +57,7 @@ pub fn dart_code_initialize_params(root: &Path) -> Value {
     let text = text
         .replace("${ROOT_PATH}", &root.display().to_string())
         .replace("${ROOT_URI}", &file_uri(root))
-        .replace(
-            "${ROOT_NAME}",
-            &root.file_name().unwrap().to_string_lossy(),
-        );
+        .replace("${ROOT_NAME}", &root.file_name().unwrap().to_string_lossy());
     serde_json::from_str(&text).unwrap()
 }
 
@@ -265,7 +262,11 @@ impl LspClient {
             Err(RecvTimeoutError::Timeout) | Err(RecvTimeoutError::Disconnected) => return None,
         };
         if std::env::var_os("LSP_TRACE").is_some() {
-            eprintln!("[{}] {}", self.program, m.to_string().chars().take(300).collect::<String>());
+            eprintln!(
+                "[{}] {}",
+                self.program,
+                m.to_string().chars().take(300).collect::<String>()
+            );
         }
         self.handle(&m);
         self.log.push(m.clone());
@@ -279,7 +280,8 @@ impl LspClient {
         let params = m.get("params").cloned().unwrap_or(Value::Null);
         if let Some(id) = m.get("id") {
             // A request of the server: answer like Dart-Code.
-            self.server_requests.push((method.to_string(), params.clone()));
+            self.server_requests
+                .push((method.to_string(), params.clone()));
             let result = match method {
                 "workspace/configuration" => {
                     let n = params["items"].as_array().map(|a| a.len()).unwrap_or(0);
@@ -297,11 +299,16 @@ impl LspClient {
             .to_string();
         match method {
             "textDocument/publishDiagnostics" => {
-                let list = params["diagnostics"].as_array().cloned().unwrap_or_default();
+                let list = params["diagnostics"]
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default();
                 self.state.diagnostics.insert(uri, list);
             }
             "dart/textDocument/publishClosingLabels" => {
-                self.state.closing_labels.insert(uri, params["labels"].clone());
+                self.state
+                    .closing_labels
+                    .insert(uri, params["labels"].clone());
             }
             "dart/textDocument/publishOutline" => {
                 self.state.outlines.insert(uri, params["outline"].clone());

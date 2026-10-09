@@ -20,8 +20,7 @@ use crate::listener_stack::{ImportRecovery, Layer};
 use crate::member_kind::MemberKind;
 use crate::modifier_context::{ModifierContext, is_modifier};
 use crate::type_info::{
-    NO_TYPE, NO_TYPE_PARAM_OR_ARG, TypeParamOrArgInfo,
-    is_valid_non_record_type_reference,
+    NO_TYPE, NO_TYPE_PARAM_OR_ARG, TypeParamOrArgInfo, is_valid_non_record_type_reference,
 };
 
 impl<L: Listener> Parser<L> {
@@ -375,7 +374,8 @@ impl<L: Listener> Parser<L> {
                 if let Some(end_paren) = end_paren {
                     if self.is_identifier_or_question_identifier(self.next(end_paren)) {
                         // Looks like a typedef with a record.
-                        let type_info = compute_type_mut(self.tokens_mut(),
+                        let type_info = compute_type_mut(
+                            self.tokens_mut(),
                             keyword,
                             /* required = */ false,
                             false,
@@ -1019,7 +1019,8 @@ impl<L: Listener> Parser<L> {
         let mut token = token;
         let next = self.next(token);
         self.listener.begin_type_list(next);
-        token = compute_type_mut(self.tokens_mut(),
+        token = compute_type_mut(
+            self.tokens_mut(),
             token,
             /* required = */ true,
             false,
@@ -1029,7 +1030,8 @@ impl<L: Listener> Parser<L> {
         let mut count: i32 = 1;
         while self.is_a(self.next(token), TokenType::COMMA) {
             let next = self.next(token);
-            token = compute_type_mut(self.tokens_mut(),
+            token = compute_type_mut(
+                self.tokens_mut(),
                 next,
                 /* required = */ true,
                 false,
@@ -1242,7 +1244,8 @@ impl<L: Listener> Parser<L> {
         self.listener
             .begin_uncategorized_top_level_declaration(typedef_keyword);
         self.listener.begin_typedef(typedef_keyword);
-        let type_info = compute_type_mut(self.tokens_mut(),
+        let type_info = compute_type_mut(
+            self.tokens_mut(),
             typedef_keyword,
             /* required = */ false,
             false,
@@ -1251,8 +1254,12 @@ impl<L: Listener> Parser<L> {
         let mut token = type_info.skip_type_mut(self.tokens_mut(), typedef_keyword);
         let mut next = self.next(token);
         let mut equals: Option<TokenId> = None;
-        let mut type_param =
-            compute_type_param_or_arg_mut(self.tokens_mut(), next, /* inDeclaration = */ true, false);
+        let mut type_param = compute_type_param_or_arg_mut(
+            self.tokens_mut(),
+            next,
+            /* inDeclaration = */ true,
+            false,
+        );
         let mut new_style = false;
         let mut new_style_parse_as_recovered = false;
         if type_info == NO_TYPE {
@@ -1271,7 +1278,8 @@ impl<L: Listener> Parser<L> {
                 new_style_parse_as_recovered = false;
             } else if self.is_a(skip, TokenType::LT) {
                 if self.end_group_next_is_a(skip, TokenType::EQ) {
-                    let new_type_param = compute_type_param_or_arg_mut(self.tokens_mut(),
+                    let new_type_param = compute_type_param_or_arg_mut(
+                        self.tokens_mut(),
                         token,
                         /* inDeclaration = */ true,
                         false,
@@ -1308,7 +1316,8 @@ impl<L: Listener> Parser<L> {
             if self.is_a(next, TokenType::EQ) {
                 let equals_token = next;
                 equals = Some(equals_token);
-                let mut ty = compute_type_mut(self.tokens_mut(),
+                let mut ty = compute_type_mut(
+                    self.tokens_mut(),
                     equals_token,
                     /* required = */ true,
                     false,
@@ -1336,7 +1345,8 @@ impl<L: Listener> Parser<L> {
                             function_token,
                             diag::expected_but_got("Function"),
                         );
-                        ty = compute_type_mut(self.tokens_mut(),
+                        ty = compute_type_mut(
+                            self.tokens_mut(),
                             equals_token,
                             /* required = */ true,
                             false,
@@ -1383,7 +1393,8 @@ impl<L: Listener> Parser<L> {
                                 function_token,
                                 diag::expected_but_got("Function"),
                             );
-                            ty = compute_type_mut(self.tokens_mut(),
+                            ty = compute_type_mut(
+                                self.tokens_mut(),
                                 equals_token,
                                 /* required = */ true,
                                 false,
@@ -1679,7 +1690,8 @@ impl<L: Listener> Parser<L> {
     ) -> TokenId {
         self.listener.begin_record_type_entry();
         let mut token = self.parse_metadata_star(token);
-        token = compute_type_mut(self.tokens_mut(),
+        token = compute_type_mut(
+            self.tokens_mut(),
             token,
             /* required = */ true,
             false,
@@ -2025,7 +2037,8 @@ impl<L: Listener> Parser<L> {
 
         // Type is required in a generalized function type, but optional otherwise.
         let before_type = token;
-        let mut type_info = compute_type_mut(self.tokens_mut(),
+        let mut type_info = compute_type_mut(
+            self.tokens_mut(),
             token,
             in_function_type,
             /* inDeclaration = */ false,
@@ -2038,7 +2051,8 @@ impl<L: Listener> Parser<L> {
                 || (self.is_identifier(next) && self.is_a(self.next(next), TokenType::PERIOD)))
         {
             // Recovery: Malformed type reference.
-            type_info = compute_type_mut(self.tokens_mut(),
+            type_info = compute_type_mut(
+                self.tokens_mut(),
                 before_type,
                 /* required = */ true,
                 false,

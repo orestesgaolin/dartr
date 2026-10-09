@@ -54,7 +54,10 @@ impl Uri {
         let mut host = None;
         let mut port = None;
         let mut path = rest;
-        if let Some(after) = rest.strip_prefix("//").or_else(|| rest.strip_prefix("\\\\")) {
+        if let Some(after) = rest
+            .strip_prefix("//")
+            .or_else(|| rest.strip_prefix("\\\\"))
+        {
             let end = after.find(['/', '\\']).unwrap_or(after.len());
             let authority = &after[..end];
             path = &after[end..];
@@ -84,9 +87,8 @@ impl Uri {
                     return None;
                 }
                 if !p.is_empty() {
-                    port = Some(p.trim_start_matches('0').to_string()).map(|s| {
-                        if s.is_empty() { "0".to_string() } else { s }
-                    });
+                    port = Some(p.trim_start_matches('0').to_string())
+                        .map(|s| if s.is_empty() { "0".to_string() } else { s });
                 }
             }
             host = Some(normalize(h, HOST_MASK, false).to_ascii_lowercase());
@@ -541,7 +543,10 @@ mod tests {
     fn parse_and_resolve_like_dart() {
         assert_eq!(parse("%zz").as_deref(), Some("%25zz"));
         assert_eq!(parse("a b.dart").as_deref(), Some("a%20b.dart"));
-        assert_eq!(parse("Package:Foo/../x.dart").as_deref(), Some("package:/x.dart"));
+        assert_eq!(
+            parse("Package:Foo/../x.dart").as_deref(),
+            Some("package:/x.dart")
+        );
         assert_eq!(parse("http://[::1"), None);
         assert_eq!(parse(":foo"), None);
         assert_eq!(parse("1a:b"), None);
@@ -550,7 +555,10 @@ mod tests {
         assert_eq!(parse("é.dart").as_deref(), Some("%C3%A9.dart"));
         assert_eq!(parse("%41.dart").as_deref(), Some("A.dart"));
         assert_eq!(parse("a/./b/../c.dart").as_deref(), Some("a/c.dart"));
-        assert_eq!(parse("file:///a/../b.dart").as_deref(), Some("file:///b.dart"));
+        assert_eq!(
+            parse("file:///a/../b.dart").as_deref(),
+            Some("file:///b.dart")
+        );
         assert_eq!(parse("package:").as_deref(), Some("package:"));
         assert_eq!(parse("#x").as_deref(), Some("#x"));
         let base = "package:foo/src/a.dart";
