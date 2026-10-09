@@ -132,6 +132,10 @@ pub fn analyze_library(input: &LibraryAnalysisInput<'_>) -> ResolvedLibrary {
     compute_constants(input, &mut library);
     compute_diagnostics(input, &mut library);
     for (unit, unit_input) in library.units.iter_mut().zip(&input.units) {
+        // Dart `RecordingDiagnosticListener` is a set: a diagnostic equal
+        // to one already recorded (from any pass) is dropped.
+        let diagnostics = std::mem::take(&mut unit.diagnostics);
+        append_unique(&mut unit.diagnostics, diagnostics);
         filter_ignored_diagnostics(unit, &unit_input.parsed);
     }
     library

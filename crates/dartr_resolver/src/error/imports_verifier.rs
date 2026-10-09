@@ -117,26 +117,55 @@ struct PrefixScopeTracking {
     import_to_used_elements: IndexMap<usize, IndexSet<ElementId>>,
     /// Dart `hasPrefixUsedInCommentReference`.
     has_prefix_used_in_comment_reference: bool,
+    /// Dart `_deferredLibrary != null`: `loadLibrary` is found without
+    /// tracking.
+    deferred: bool,
 }
 
 impl PrefixScopeTracking {
     /// Dart `lookupResult(element)` for the elements of a found name: a
     /// name with more than one element is a `MultiplyDefinedElement`, which
     /// is not recorded.
-    fn record(&mut self, found: Option<ScopeEntry>) {
+    fn record(&mut self, ctx: &Ctx<'_>, found: Option<ScopeEntry>) {
         let Some(found) = found else {
             return;
         };
-        if found.len() != 1 {
-            return;
+        // Dart `PrefixScope._addTo` / `_merge`, in the order of the imports:
+        // an SDK element yields to a non-SDK element; two different
+        // elements otherwise make a `MultiplyDefinedElement`.
+        enum Merged {
+            Single(ElementId),
+            Multiple,
         }
-        for (element, imports) in found {
-            for import in imports {
-                self.import_to_used_elements
-                    .entry(import)
-                    .or_default()
-                    .insert(element);
-            }
+        let is_sdk = |e: ElementId| {
+            matches!(e.tag(), Tag::Dynamic | Tag::Never)
+                || ctx
+                    .element_data(e)
+                    .and_then(|d| d.library)
+                    .is_some_and(|l| crate::scope::library_is_in_sdk(ctx, l))
+        };
+        let mut merged: Option<Merged> = None;
+        for &element in found.keys() {
+            merged = Some(match merged {
+                None => Merged::Single(element),
+                Some(Merged::Single(existing)) if existing == element => Merged::Single(existing),
+                Some(Merged::Single(existing)) => match (is_sdk(existing), is_sdk(element)) {
+                    (true, false) => Merged::Single(element),
+                    (false, true) => Merged::Single(existing),
+                    _ => Merged::Multiple,
+                },
+                // A multiply defined element is not an SDK element.
+                Some(Merged::Multiple) => Merged::Multiple,
+            });
+        }
+        let Some(Merged::Single(element)) = merged else {
+            return;
+        };
+        for &import in &found[&element] {
+            self.import_to_used_elements
+                .entry(import)
+                .or_default()
+                .insert(element);
         }
     }
 }
@@ -153,17 +182,20 @@ impl ImportsTracking {
     }
 
     /// Dart `PrefixScope.lookup(id)` of the scope [key] (and its parents).
-    fn prefix_scope_lookup(&mut self, key: ScopeKey, id: &str) -> bool {
+    fn prefix_scope_lookup(&mut self, ctx: &Ctx<'_>, key: ScopeKey, id: &str) -> bool {
         let mut current = Some(key);
         while let Some(k) = current {
             let Some(scope) = self.scopes.get_mut(&k) else {
                 return false;
             };
+            if scope.deferred && id == "loadLibrary" {
+                return true;
+            }
             let getter = scope.getters.get(id).cloned();
             let setter = scope.setters.get(id).cloned();
             if getter.is_some() || setter.is_some() {
-                scope.record(getter);
-                scope.record(setter);
+                scope.record(ctx, getter);
+                scope.record(ctx, setter);
                 return true;
             }
             current = scope.parent;
@@ -301,6 +333,9 @@ fn build_prefix_scope(
         if import_prefix != prefix.map(|p| p.raw()) {
             continue;
         }
+        if import.prefix.is_some_and(|p| ctx.fragment(p).is_deferred) {
+            scope.deferred = true;
+        }
         let Some(namespace) = ctx.get(imported_library).export_namespace.try_get() else {
             continue;
         };
@@ -387,7 +422,10 @@ impl Replay<'_, '_, '_> {
             {
                 return;
             }
-            if self.tracking.prefix_scope_lookup((fragment, None), id) {
+            if self
+                .tracking
+                .prefix_scope_lookup(&ctx, (fragment, None), id)
+            {
                 return;
             }
             current = scopes.enclosing_fragment(fragment);
@@ -397,7 +435,7 @@ impl Replay<'_, '_, '_> {
     /// Dart `prefixElement.scope.lookup(id)`.
     fn prefix_lookup(&mut self, prefix: EId<PrefixElement>, id: &str) {
         if let Some(key) = self.prefix_scope_key(prefix) {
-            self.tracking.prefix_scope_lookup(key, id);
+            self.tracking.prefix_scope_lookup(&self.v.ctx, key, id);
         }
     }
 

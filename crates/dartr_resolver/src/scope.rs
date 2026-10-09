@@ -115,7 +115,7 @@ fn lookup_name<'a>(ctx: &Ctx<'a>, e: ElementId) -> Option<&'a str> {
 }
 
 /// Dart `LibraryElement.isInSdk`.
-fn library_is_in_sdk(ctx: &Ctx<'_>, library: EId<LibraryElement>) -> bool {
+pub(crate) fn library_is_in_sdk(ctx: &Ctx<'_>, library: EId<LibraryElement>) -> bool {
     ctx.library_uri(library).starts_with("dart:")
 }
 

@@ -209,7 +209,9 @@ pub fn parse_markers(source: &str) -> (String, Vec<(String, usize, usize)>) {
                     range = Some((column - 1, length));
                 }
                 if let Some((col, len)) = range {
-                    let name = code_name_of(camel).map(str::to_string).unwrap_or_else(|| camel.to_string());
+                    let name = code_name_of(camel)
+                        .map(str::to_string)
+                        .unwrap_or_else(|| camel.to_string());
                     expected.push((name, last_line_start + col, len));
                 }
             }
@@ -256,7 +258,13 @@ pub fn run_ported(cases: &[Ported], filter: impl Fn(&str) -> bool) -> (Vec<Strin
                 case.source.to_string(),
                 list.iter()
                     .map(|&(camel, o, l)| {
-                        (code_name_of(camel).map(str::to_string).unwrap_or_else(|| camel.to_string()), o, l)
+                        (
+                            code_name_of(camel)
+                                .map(str::to_string)
+                                .unwrap_or_else(|| camel.to_string()),
+                            o,
+                            l,
+                        )
                     })
                     .collect(),
             ),
@@ -269,7 +277,13 @@ pub fn run_ported(cases: &[Ported], filter: impl Fn(&str) -> bool) -> (Vec<Strin
             if *name == "test" {
                 test_files.extend(files.iter().copied());
             } else {
-                packages.push((name, files.iter().map(|(p, c)| (p.to_string(), c.to_string())).collect()));
+                packages.push((
+                    name,
+                    files
+                        .iter()
+                        .map(|(p, c)| (p.to_string(), c.to_string()))
+                        .collect(),
+                ));
             }
         }
         let options = AnalysisOptions {
@@ -294,7 +308,10 @@ pub fn run_ported(cases: &[Ported], filter: impl Fn(&str) -> bool) -> (Vec<Strin
         actual.sort();
         expected.sort();
         if actual != expected {
-            failures.push(format!("{}:\n  expected {expected:?}\n  actual   {actual:?}", case.name));
+            failures.push(format!(
+                "{}:\n  expected {expected:?}\n  actual   {actual:?}",
+                case.name
+            ));
         }
     }
     (failures, count)
