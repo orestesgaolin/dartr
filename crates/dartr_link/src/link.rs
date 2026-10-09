@@ -113,8 +113,9 @@ pub enum ExpressionSource<'r> {
     Synthetic {
         ast: &'r Ast,
         expression: NodeId,
-        /// The features of the unit of the declaration.
-        features: dartr_parser::experimental_features::ExperimentalFeatures,
+        /// The unit of the declaration: its features, and the dot
+        /// shorthands of the nodes that the expression copies.
+        unit: &'r Arc<ParsedUnit>,
     },
 }
 

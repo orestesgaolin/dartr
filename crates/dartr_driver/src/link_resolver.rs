@@ -46,11 +46,11 @@ impl LinkResolverSession for Session {
                     ExpressionSource::Synthetic {
                         ast,
                         expression,
-                        features,
+                        unit,
                     } => ast_resolver::ExpressionSource::Synthetic {
                         ast,
                         expression: *expression,
-                        features: *features,
+                        unit,
                     },
                 },
                 options: AnalysisOptions::default(),

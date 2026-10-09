@@ -53,7 +53,6 @@ use dartr_element::{
     InstanceElement, InterfaceElement, LibraryElement, LibraryFragment, LocalArena, NamedType,
     ResolutionTables, Tag, TypeId, TypeKind, TypeParameterElement,
 };
-use dartr_parser::experimental_features::ExperimentalFeatures;
 use indexmap::IndexMap;
 
 use crate::options::AnalysisOptions;
@@ -107,8 +106,10 @@ pub enum ExpressionSource<'r> {
     Synthetic {
         ast: &'r Ast,
         expression: NodeId,
-        /// The features of the unit of the declaration.
-        features: ExperimentalFeatures,
+        /// The unit of the declaration: its features, and the dot
+        /// shorthands (Dart `isDotShorthand`) of the nodes that the
+        /// expression copies (the copies keep the offsets).
+        unit: &'r Arc<ParsedUnit>,
     },
 }
 
@@ -224,13 +225,20 @@ fn pool_key(request: &ExpressionRequest<'_>) -> Option<FId<LibraryFragment>> {
 /// [request]). A synthetic expression gets a synthetic
 /// `VariableDeclaration` parent (Dart `ElementBuilder` creates one for each
 /// enum constant).
-fn owner_in_copy(ast: &mut Ast, request: &ExpressionRequest<'_>) -> NodeId {
+fn owner_in_copy(
+    ast: &mut Ast,
+    rt: &mut ResolverTables,
+    request: &ExpressionRequest<'_>,
+) -> NodeId {
     match request.source {
         ExpressionSource::Unit { owner, .. } => owner,
-        ExpressionSource::Synthetic { expression, .. } => {
+        ExpressionSource::Synthetic {
+            expression, unit, ..
+        } => {
             if let Some(parent) = ast.parent(expression) {
                 return parent;
             }
+            mark_copied_dot_shorthands(ast, rt, expression, unit);
             let name = ast.tokens.push_synthetic_string(
                 dartr_syntax::TokenType::IDENTIFIER,
                 "",
@@ -251,6 +259,27 @@ fn owner_in_copy(ast: &mut Ast, request: &ExpressionRequest<'_>) -> NodeId {
     }
 }
 
+/// Dart `isDotShorthand` of the nodes of the copied subtree [root]: the
+/// nodes with the offset, length and kind of a dot shorthand of [unit].
+fn mark_copied_dot_shorthands(ast: &Ast, rt: &mut ResolverTables, root: NodeId, unit: &ParsedUnit) {
+    if unit.dot_shorthands.is_empty() {
+        return;
+    }
+    let key = |a: &Ast, n: NodeId| (a.offset(n), a.length(n), a.kind(n));
+    let originals: Vec<_> = unit
+        .dot_shorthands
+        .iter()
+        .map(|&n| key(&unit.ast, n))
+        .collect();
+    let mut stack = vec![root];
+    while let Some(n) = stack.pop() {
+        if originals.contains(&key(ast, n)) {
+            rt.dot_shorthand.insert(n, ());
+        }
+        stack.extend(ast.children(n));
+    }
+}
+
 fn resolve_in_copy(
     link_ctx: &Ctx<'_>,
     scopes: &LibraryScopes,
@@ -263,11 +292,11 @@ fn resolve_in_copy(
         rt,
         local,
     } = copy;
-    let owner = owner_in_copy(ast, request);
+    let owner = owner_in_copy(ast, rt, request);
     let expression = owner_expression(ast, owner)?;
     let unit_features = match &request.source {
         ExpressionSource::Unit { parsed, .. } => parsed.feature_set,
-        ExpressionSource::Synthetic { features, .. } => *features,
+        ExpressionSource::Synthetic { unit, .. } => unit.feature_set,
     };
     let library_features = link_ctx.get(request.library).feature_set.clone();
     let ctx = Ctx {

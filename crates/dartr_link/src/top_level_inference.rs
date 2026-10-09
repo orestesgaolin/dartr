@@ -326,7 +326,7 @@ impl TopLevelInference<'_, '_, '_> {
                 InitializerNode::Synthetic(expression) => ExpressionSource::Synthetic {
                     ast: &lk.core.const_exprs.ast,
                     expression: expression.0,
-                    features: unit.parsed.feature_set,
+                    unit: &unit.parsed,
                 },
             },
             enclosing_instance: enclosing,
