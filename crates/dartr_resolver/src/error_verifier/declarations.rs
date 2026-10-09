@@ -865,6 +865,24 @@ impl ErrorVerifier<'_> {
         false
     }
 
+    /// Dart `diagnosticReporter.report(diagnostic)` into the listener of
+    /// the library analyzer, which keeps a set of diagnostics: an equal
+    /// diagnostic (code, offset, length, message) is reported once. A
+    /// declared field has a getter and a setter that report the same
+    /// conflict.
+    fn report_unique(&mut self, diagnostic: dartr_diagnostics::LocatedDiagnostic) {
+        let d = diagnostic.into_diagnostic();
+        let duplicate = self.diagnostics.iter().any(|e| {
+            std::ptr::eq(e.code, d.code)
+                && e.offset == d.offset
+                && e.length == d.length
+                && e.message == d.message
+        });
+        if !duplicate {
+            self.diagnostics.push(d);
+        }
+    }
+
     /// Dart `_checkForConflictingClassMembers`.
     fn check_for_conflicting_class_members(&mut self, fragment: FragmentId) {
         let Some(enclosing_class) = self.enclosing_class else {
@@ -896,7 +914,7 @@ impl ErrorVerifier<'_> {
                             .map(|e| self.name_of(e))
                             .unwrap_or_default();
                         let (offset, length) = self.diagnostic_range(declared_base);
-                        self.report(
+                        self.report_unique(
                             diag::conflicting_static_and_instance(
                                 &class_name,
                                 &member_name,
@@ -910,7 +928,7 @@ impl ErrorVerifier<'_> {
                             continue;
                         }
                         let (offset, length) = self.diagnostic_range(enclosing_class.raw());
-                        self.report(
+                        self.report_unique(
                             diag::conflicting_inherited_method_and_setter(
                                 enclosing_class.raw().kind().display_name(),
                                 &class_name,
@@ -963,7 +981,7 @@ impl ErrorVerifier<'_> {
                 let conflicting = member::enclosing_element(&ctx, inherited)
                     .map(|e| self.name_of(e))
                     .unwrap_or_default();
-                self.report(
+                self.report_unique(
                     diag::conflicting_static_and_instance(&class_name, &name, &conflicting)
                         .at_offset(range.0, range.1),
                 );
@@ -979,7 +997,7 @@ impl ErrorVerifier<'_> {
                 let conflicting = member::enclosing_element(&ctx, inherited)
                     .map(|e| self.name_of(e))
                     .unwrap_or_default();
-                self.report(
+                self.report_unique(
                     diag::conflicting_method_and_field(&class_name, &name, &conflicting)
                         .at_offset(range.0, range.1),
                 );
@@ -1017,7 +1035,7 @@ impl ErrorVerifier<'_> {
                     let conflicting = member::enclosing_element(&ctx, inherited)
                         .map(|e| self.name_of(e))
                         .unwrap_or_default();
-                    self.report(
+                    self.report_unique(
                         diag::conflicting_static_and_instance(&class_name, &name, &conflicting)
                             .at_offset(range.0, range.1),
                     );
@@ -1027,7 +1045,7 @@ impl ErrorVerifier<'_> {
                     let conflicting = member::enclosing_element(&ctx, inherited)
                         .map(|e| self.name_of(e))
                         .unwrap_or_default();
-                    self.report(
+                    self.report_unique(
                         diag::conflicting_field_and_method(&class_name, &name, &conflicting)
                             .at_offset(range.0, range.1),
                     );
@@ -1051,7 +1069,7 @@ impl ErrorVerifier<'_> {
                 && member::is_setter(&ctx, setter)
             {
                 let (offset, length) = self.diagnostic_range(enclosing_class.raw());
-                self.report(
+                self.report_unique(
                     diag::conflicting_inherited_method_and_setter(
                         enclosing_class.raw().kind().display_name(),
                         &class_name,
@@ -2451,15 +2469,14 @@ impl ErrorVerifier<'_> {
         let ast = self.ast;
         let mut problem_reported = false;
         for &named_type in ast.list(ast[on_clause].superclass_constraints) {
-            if self.named_type_interface(named_type).is_some() {
-                if self.check_for_extends_or_implements_disallowed_class(named_type) {
-                    problem_reported = true;
-                } else if self.check_for_extends_or_implements_deferred_class(
-                    named_type,
-                    diag::mixin_super_class_constraint_deferred_class(),
-                ) {
-                    problem_reported = true;
-                }
+            if self.named_type_interface(named_type).is_some()
+                && (self.check_for_extends_or_implements_disallowed_class(named_type)
+                    || self.check_for_extends_or_implements_deferred_class(
+                        named_type,
+                        diag::mixin_super_class_constraint_deferred_class(),
+                    ))
+            {
+                problem_reported = true;
             }
         }
         problem_reported

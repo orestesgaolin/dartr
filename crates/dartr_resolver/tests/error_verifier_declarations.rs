@@ -23,10 +23,7 @@ fn at(source: &str, needle: &str, nth: usize) -> usize {
 #[test]
 fn class_used_as_mixin_inside() {
     let code = "class Foo {}\nclass Bar with Foo {}\n";
-    assert_errors_in_code(
-        code,
-        &[("class_used_as_mixin", at(code, "Foo", 1), 3)],
-    );
+    assert_errors_in_code(code, &[("class_used_as_mixin", at(code, "Foo", 1), 3)]);
 }
 
 #[test]
@@ -64,17 +61,21 @@ fn mixin_inherits_from_not_object_class_extends() {
 // conflicting_static_and_instance_test.dart
 
 #[test]
-fn conflicting_static_and_instance_static_getter_instance_method() {
-    let code = "class C {\n  static int get foo => 0;\n  void foo() {}\n}\n";
+fn conflicting_static_and_instance_static_getter_inherited_method() {
+    // The conflict inside one class is reported by the
+    // MemberDuplicateDefinitionVerifier (error/*), not by ErrorVerifier.
+    let code =
+        "class A {\n  void foo() {}\n}\nclass B extends A {\n  static int get foo => 0;\n}\n";
     assert_errors_in_code(
         code,
-        &[("conflicting_static_and_instance", at(code, "foo", 0), 3)],
+        &[("conflicting_static_and_instance", at(code, "foo", 1), 3)],
     );
 }
 
 #[test]
 fn conflicting_static_and_instance_in_superclass() {
-    let code = "class A {\n  int get foo => 0;\n}\nclass B extends A {\n  static void foo() {}\n}\n";
+    let code =
+        "class A {\n  int get foo => 0;\n}\nclass B extends A {\n  static void foo() {}\n}\n";
     assert_errors_in_code(
         code,
         &[("conflicting_static_and_instance", at(code, "foo", 1), 3)],
@@ -106,19 +107,13 @@ fn conflicting_field_and_method_inherited_method() {
 #[test]
 fn type_alias_cannot_reference_itself_function_with_it() {
     let code = "typedef T = void Function(T);\n";
-    assert_errors_in_code(
-        code,
-        &[("type_alias_cannot_reference_itself", 8, 1)],
-    );
+    assert_errors_in_code(code, &[("type_alias_cannot_reference_itself", 8, 1)]);
 }
 
 #[test]
 fn type_alias_cannot_reference_itself_question() {
     let code = "typedef T = T?;\n";
-    assert_errors_in_code(
-        code,
-        &[("type_alias_cannot_reference_itself", 8, 1)],
-    );
+    assert_errors_in_code(code, &[("type_alias_cannot_reference_itself", 8, 1)]);
 }
 
 // enum_without_constants_test.dart, enum_with_name_values_test.dart,
@@ -132,10 +127,7 @@ fn enum_without_constants() {
 #[test]
 fn enum_constant_same_name_as_enclosing() {
     let code = "enum E {\n  E\n}\n";
-    assert_errors_in_code(
-        code,
-        &[("enum_constant_same_name_as_enclosing", 11, 1)],
-    );
+    assert_errors_in_code(code, &[("enum_constant_same_name_as_enclosing", 11, 1)]);
 }
 
 // implements_repeated_test.dart
@@ -214,7 +206,11 @@ fn conflicting_generic_interfaces() {
     let code = "class I<T> {}\nclass A implements I<int> {}\nclass B implements I<String> {}\nclass C extends A implements B {}\n";
     assert_errors_in_code(
         code,
-        &[("conflicting_generic_interfaces", at(code, "C extends", 0), 1)],
+        &[(
+            "conflicting_generic_interfaces",
+            at(code, "C extends", 0),
+            1,
+        )],
     );
 }
 
@@ -224,19 +220,13 @@ fn conflicting_generic_interfaces() {
 #[test]
 fn conflicting_type_variable_and_member_class_method() {
     let code = "class A<T> {\n  T() {}\n}\n";
-    assert_errors_in_code(
-        code,
-        &[("conflicting_type_variable_and_member", 8, 1)],
-    );
+    assert_errors_in_code(code, &[("conflicting_type_variable_and_member", 8, 1)]);
 }
 
 #[test]
 fn conflicting_type_variable_and_class() {
     let code = "class T<T> {}\n";
-    assert_errors_in_code(
-        code,
-        &[("conflicting_type_variable_and_container", 8, 1)],
-    );
+    assert_errors_in_code(code, &[("conflicting_type_variable_and_container", 8, 1)]);
 }
 
 // not_initialized_non_nullable_variable_test.dart,
@@ -249,8 +239,16 @@ fn not_initialized_fields() {
     assert_errors_in_code(
         code,
         &[
-            ("not_initialized_non_nullable_variable", at(code, "a;", 0), 1),
-            ("not_initialized_non_nullable_instance_field", at(code, "b;", 0), 1),
+            (
+                "not_initialized_non_nullable_variable",
+                at(code, "a;", 0),
+                1,
+            ),
+            (
+                "not_initialized_non_nullable_instance_field",
+                at(code, "b;", 0),
+                1,
+            ),
             ("final_not_initialized", at(code, "c;", 0), 1),
             ("const_not_initialized", at(code, "d;", 0), 1),
         ],
@@ -295,7 +293,11 @@ fn final_class_extended_outside_of_library() {
     let code = "import 'foo.dart';\nclass B extends A {}\n";
     assert_errors_in_files(
         &[("main.dart", code), ("foo.dart", "final class A {}\n")],
-        &[("invalid_use_of_type_outside_library", at(code, "A {}", 0), 1)],
+        &[(
+            "invalid_use_of_type_outside_library",
+            at(code, "A {}", 0),
+            1,
+        )],
     );
 }
 
@@ -304,7 +306,11 @@ fn base_class_implemented_outside_of_library() {
     let code = "import 'foo.dart';\nbase class B implements A {}\n";
     assert_errors_in_files(
         &[("main.dart", code), ("foo.dart", "base class A {}\n")],
-        &[("invalid_use_of_type_outside_library", at(code, "A {}", 0), 1)],
+        &[(
+            "invalid_use_of_type_outside_library",
+            at(code, "A {}", 0),
+            1,
+        )],
     );
 }
 
@@ -313,7 +319,11 @@ fn interface_class_extended_outside_of_library() {
     let code = "import 'foo.dart';\nclass B extends A {}\n";
     assert_errors_in_files(
         &[("main.dart", code), ("foo.dart", "interface class A {}\n")],
-        &[("invalid_use_of_type_outside_library", at(code, "A {}", 0), 1)],
+        &[(
+            "invalid_use_of_type_outside_library",
+            at(code, "A {}", 0),
+            1,
+        )],
     );
 }
 
@@ -322,7 +332,11 @@ fn sealed_class_subtype_outside_of_library() {
     let code = "import 'foo.dart';\nclass B extends A {}\n";
     assert_errors_in_files(
         &[("main.dart", code), ("foo.dart", "sealed class A {}\n")],
-        &[("invalid_use_of_type_outside_library", at(code, "A {}", 0), 1)],
+        &[(
+            "invalid_use_of_type_outside_library",
+            at(code, "A {}", 0),
+            1,
+        )],
     );
 }
 
@@ -348,10 +362,7 @@ fn multiple_combinators() {
 #[test]
 fn native_clause_in_non_sdk_code() {
     let code = "class A native 'string' {}\n";
-    assert_errors_in_code(
-        code,
-        &[("native_clause_in_non_sdk_code", 8, 15)],
-    );
+    assert_errors_in_code(code, &[("native_clause_in_non_sdk_code", 8, 15)]);
 }
 
 // main_is_not_function_test.dart
