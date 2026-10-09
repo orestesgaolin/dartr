@@ -13,14 +13,14 @@ use dartr_ast::*;
 use dartr_diagnostics::diag;
 use dartr_element::diagnostics::type_arg;
 use dartr_element::{
-    DirectiveUri, EId, ElemRef, ElementId, ExecutableElement, FormalParameterElement,
-    FragmentFlags, InterfaceElement, Tag, TypeAliasElement, TypeId, TypeKind, VariableElement,
+    EId, ElemRef, ElementId, ExecutableElement, FormalParameterElement, FragmentFlags,
+    InterfaceElement, Tag, TypeAliasElement, TypeId, TypeKind, VariableElement,
 };
 use dartr_syntax::{TokenId, TokenType};
 use dartr_typesystem::{TypeExt, member};
 use indexmap::IndexSet;
 
-use super::{ErrorVerifier, EnclosingExecutableContext, NullAwareKind, ThisContext};
+use super::{EnclosingExecutableContext, ErrorVerifier, NullAwareKind, ThisContext};
 use crate::ast_ext;
 use crate::element_ext;
 use crate::error::{
@@ -230,7 +230,9 @@ impl ErrorVerifier<'_> {
         node: Id<ForEachPartsWithIdentifier>,
     ) {
         let identifier = self.ast[node].identifier;
-        let element = self.element(identifier).map(|e| member::base_element(&self.ctx, e));
+        let element = self
+            .element(identifier)
+            .map(|e| member::base_element(&self.ctx, e));
         if self.check_for_each_parts(node.raw(), element) {
             self.check_for_assignment_to_final(identifier.upcast());
         }
@@ -672,12 +674,6 @@ impl ErrorVerifier<'_> {
 
     // ------------------------------------------------------------ helpers
 
-    /// Dart `node.declaredFragment?.element`.
-    fn declared_element(&self, node: NodeId) -> Option<ElementId> {
-        let fragment = *self.tables.declared_fragment.get(node)?;
-        self.ctx.fragment_data(fragment)?.element.try_get().copied()
-    }
-
     /// Dart `PatternVariableDeclarationImpl.elements`.
     fn pattern_variable_declaration_elements(
         &self,
@@ -735,13 +731,16 @@ impl ErrorVerifier<'_> {
     /// The nearest enclosing cascade of [node] (Dart `_ancestorCascade`).
     fn enclosing_cascade(&self, node: NodeId) -> Option<Id<CascadeExpression>> {
         let parent = self.ast.parent(node)?;
-        self.ast.this_or_ancestor_of_type::<CascadeExpression>(parent)
+        self.ast
+            .this_or_ancestor_of_type::<CascadeExpression>(parent)
     }
 
     /// Dart `IndexExpression.realTarget`.
     fn index_expression_real_target(&self, node: Id<IndexExpression>) -> Option<Id<Expression>> {
         if self.ast[node].period.is_some() {
-            return self.enclosing_cascade(node.raw()).map(|c| self.ast[c].target);
+            return self
+                .enclosing_cascade(node.raw())
+                .map(|c| self.ast[c].target);
         }
         self.ast[node].target
     }
@@ -749,7 +748,9 @@ impl ErrorVerifier<'_> {
     /// Dart `PropertyAccess.realTarget`.
     fn property_access_real_target(&self, node: Id<PropertyAccess>) -> Option<Id<Expression>> {
         if ast_ext::property_access_is_cascaded(self.ast, node) {
-            return self.enclosing_cascade(node.raw()).map(|c| self.ast[c].target);
+            return self
+                .enclosing_cascade(node.raw())
+                .map(|c| self.ast[c].target);
         }
         self.ast[node].target
     }
@@ -823,8 +824,7 @@ impl ErrorVerifier<'_> {
 
     /// Dart `_checkForAssignmentToPrimaryConstructorParameter(node)`.
     fn check_for_assignment_to_primary_constructor_parameter(&mut self, node: NodeId) {
-        if !self.ast.is::<AssignedVariablePattern>(node) && !self.ast.is::<SimpleIdentifier>(node)
-        {
+        if !self.ast.is::<AssignedVariablePattern>(node) && !self.ast.is::<SimpleIdentifier>(node) {
             return;
         }
         let ctx = self.ctx;
@@ -855,9 +855,17 @@ impl ErrorVerifier<'_> {
 
     /// Dart `_checkForAwaitInLateLocalVariableInitializer(node)`.
     fn check_for_await_in_late_local_variable_initializer(&mut self, node: Id<AwaitExpression>) {
-        if self.is_in_late_local_variable.last().copied().unwrap_or(false) {
+        if self
+            .is_in_late_local_variable
+            .last()
+            .copied()
+            .unwrap_or(false)
+        {
             let await_keyword = self.ast[node].await_keyword;
-            self.report_at_token(diag::await_in_late_local_variable_initializer(), await_keyword);
+            self.report_at_token(
+                diag::await_in_late_local_variable_initializer(),
+                await_keyword,
+            );
         }
     }
 
@@ -1027,9 +1035,11 @@ impl ErrorVerifier<'_> {
                         TypeKind::Function(f) if !ctx.list(f.type_params).is_empty()
                     );
                     if !is_generic
-                        && !self
-                            .type_system
-                            .is_assignable_to(tearoff_type, variable_type, strict_casts)
+                        && !self.type_system.is_assignable_to(
+                            tearoff_type,
+                            variable_type,
+                            strict_casts,
+                        )
                     {
                         self.report_at(
                             diag::for_in_of_invalid_element_type(
@@ -1177,7 +1187,10 @@ impl ErrorVerifier<'_> {
             | ThisContext::StaticFieldDeclaration
             | ThisContext::TopLevel => {
                 let name = ast_ext::identifier_name(self.ast, identifier).to_string();
-                self.report_at(diag::implicit_this_reference_in_initializer(&name), identifier);
+                self.report_at(
+                    diag::implicit_this_reference_in_initializer(&name),
+                    identifier,
+                );
             }
             ThisContext::FactoryConstructorBody => {
                 self.report_at(diag::instance_member_access_from_factory(), identifier);
@@ -1496,7 +1509,10 @@ impl ErrorVerifier<'_> {
             .type_system
             .is_assignable_to(ty, object_none, self.strict_casts())
         {
-            self.report_at(diag::throw_of_invalid_type(type_arg(&self.ctx, ty)), expression);
+            self.report_at(
+                diag::throw_of_invalid_type(type_arg(&self.ctx, ty)),
+                expression,
+            );
         }
     }
 
@@ -1581,7 +1597,10 @@ impl ErrorVerifier<'_> {
     /// `_checkForUnnecessaryNullAware`: if the operator is not valid because
     /// the target already makes use of a null aware operator, the null
     /// aware operator of the target.
-    fn previous_short_circuiting_operator(&self, target: Option<Id<Expression>>) -> Option<TokenId> {
+    fn previous_short_circuiting_operator(
+        &self,
+        target: Option<Id<Expression>>,
+    ) -> Option<TokenId> {
         let target = target?;
         if let Some(t) = self.ast.cast::<PropertyAccess>(target) {
             let operator = self.ast[t].operator;
@@ -1654,7 +1673,10 @@ impl ErrorVerifier<'_> {
             // [MethodInvocationResolver._reportInstanceAccessToStaticMember].
             return;
         }
-        let display_name = ctx.element_name(enclosing_element).unwrap_or("").to_string();
+        let display_name = ctx
+            .element_name(enclosing_element)
+            .unwrap_or("")
+            .to_string();
         if self.enclosing_extension.is_some() {
             self.report_at(
                 diag::unqualified_reference_to_static_member_of_extended_type(&display_name),
@@ -1672,15 +1694,17 @@ impl ErrorVerifier<'_> {
     fn get_constant_name(&self, expression: Id<Expression>) -> Option<String> {
         // TODO(brianwilkerson): Convert this to return the element
         // representing the constant.
-        let name = if let Some(e) = self.ast.cast::<SimpleIdentifier>(expression) {
-            e
-        } else if let Some(e) = self.ast.cast::<PrefixedIdentifier>(expression) {
-            self.ast[e].identifier
-        } else if let Some(e) = self.ast.cast::<PropertyAccess>(expression) {
-            self.ast[e].property_name
-        } else {
-            return None;
-        };
+        let ast = self.ast;
+        let name = ast
+            .cast::<SimpleIdentifier>(expression)
+            .or_else(|| {
+                ast.cast::<PrefixedIdentifier>(expression)
+                    .map(|e| ast[e].identifier)
+            })
+            .or_else(|| {
+                ast.cast::<PropertyAccess>(expression)
+                    .map(|e| ast[e].property_name)
+            })?;
         Some(ast_ext::identifier_name(self.ast, name).to_string())
     }
 
@@ -1770,7 +1794,10 @@ impl ErrorVerifier<'_> {
             if let Some(labeled) = self.ast.cast::<LabeledStatement>(statement) {
                 statement = self.ast[labeled].statement;
             }
-            if let Some(s) = self.ast.cast::<PatternVariableDeclarationStatement>(statement) {
+            if let Some(s) = self
+                .ast
+                .cast::<PatternVariableDeclarationStatement>(statement)
+            {
                 let declaration = self.ast[s].declaration;
                 elements.extend(self.pattern_variable_declaration_elements(declaration));
             } else if let Some(s) = self.ast.cast::<VariableDeclarationStatement>(statement) {
@@ -1819,92 +1846,17 @@ impl ErrorVerifier<'_> {
         let conflicting_members = ctx.get(multiply_defined).conflicting_elements.clone();
         let mut library_names: Vec<String> = conflicting_members
             .iter()
-            .map(|&e| self.get_library_name(e))
+            .map(|&e| self.get_library_name(Some(e)))
             .collect();
         library_names.sort();
         let lexeme = self.ast.tokens.lexeme(name).to_string();
         self.report_at_token(
-            diag::ambiguous_import(&lexeme, &quoted_and_comma_separated_with_and(&library_names)),
+            diag::ambiguous_import(
+                &lexeme,
+                &quoted_and_comma_separated_with_and(&library_names),
+            ),
             name,
         );
-    }
-
-    /// Dart `_getLibraryName(element)`: the name of the library that
-    /// defines [element].
-    fn get_library_name(&self, element: ElementId) -> String {
-        let ctx = self.ctx;
-        let Some(data) = ctx.element_data(element) else {
-            return String::new();
-        };
-        let Some(library) = data.library else {
-            return String::new();
-        };
-        let Some(name) = data.name else {
-            return String::new();
-        };
-        let name = ctx.name_str(name);
-        // Dart `_currentUnit.withEnclosing.expand((f) => f.libraryImports)`.
-        let mut fragments = vec![self.current_unit()];
-        let mut current = self.current_unit();
-        while let Some(enclosing) = ctx
-            .fragment_data(current.raw())
-            .and_then(|f| f.enclosing_fragment)
-            .and_then(|f| f.cast::<dartr_element::LibraryFragment>())
-        {
-            fragments.push(enclosing);
-            current = enclosing;
-        }
-        let imports: Vec<&dartr_element::LibraryImport> = fragments
-            .iter()
-            .flat_map(|&f| ctx.fragment(f).library_imports.iter())
-            .collect();
-        let imported_library = |import: &dartr_element::LibraryImport| match &import.directive.uri
-        {
-            DirectiveUri::Library { library, .. } => Some(*library),
-            _ => None,
-        };
-        let library_uri = ctx.library_uri(library).to_string();
-        for import in &imports {
-            if imported_library(import) == Some(library) {
-                return library_uri;
-            }
-        }
-        let mut indirect_sources = Vec::<String>::new();
-        for import in &imports {
-            let Some(imported) = imported_library(import) else {
-                continue;
-            };
-            // Dart `import.namespace.get2(name) == element`: a prefixed
-            // import namespace has the names with the prefix.
-            if import.prefix.is_some() {
-                continue;
-            }
-            if !crate::scope::combinators_allow(&ctx, &import.combinators, name) {
-                continue;
-            }
-            let Some(namespace) = ctx.get(imported).export_namespace.try_get() else {
-                continue;
-            };
-            let found = namespace
-                .defined_names
-                .iter()
-                .any(|(&n, &e)| e == element && ctx.name_str(n) == name);
-            if found {
-                indirect_sources.push(ctx.library_uri(imported).to_string());
-            }
-        }
-        let mut buffer = library_uri;
-        if !indirect_sources.is_empty() {
-            buffer.push_str(" (via ");
-            if indirect_sources.len() > 1 {
-                indirect_sources.sort();
-                buffer.push_str(&quoted_and_comma_separated_with_and(&indirect_sources));
-            } else {
-                buffer.push_str(&indirect_sources[0]);
-            }
-            buffer.push(')');
-        }
-        buffer
     }
 
     /// Dart `ErrorVerifier.getTypeReference(expression)`: the class that

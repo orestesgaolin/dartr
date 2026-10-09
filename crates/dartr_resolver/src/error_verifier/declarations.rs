@@ -2916,7 +2916,7 @@ impl ErrorVerifier<'_> {
         }
     }
 
-    fn fragment_has(&self, fragment: FragmentId, flag: FragmentFlags) -> bool {
+    pub(super) fn fragment_has(&self, fragment: FragmentId, flag: FragmentFlags) -> bool {
         self.ctx
             .fragment_data(fragment)
             .is_some_and(|f| f.flags.has(flag))
@@ -3048,7 +3048,7 @@ impl ErrorVerifier<'_> {
     }
 
     /// Dart `NamedType.isDeferred`.
-    fn named_type_is_deferred(&self, named_type: Id<NamedType>) -> bool {
+    pub(super) fn named_type_is_deferred(&self, named_type: Id<NamedType>) -> bool {
         let ctx = self.ctx;
         let Some(prefix) = self.ast[named_type].import_prefix else {
             return false;

@@ -49,7 +49,7 @@ fn assert_ffi_errors_in_code(source: &str, expected: &[(&str, usize, usize)]) {
 
 /// Dart `abi_specific_integer_mapping_test.dart` `test_doubleMapping`.
 #[test]
-fn abi_specific_integer_mapping__double_mapping() {
+fn abi_specific_integer_mapping_double_mapping() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @AbiSpecificIntegerMapping({})
@@ -64,7 +64,7 @@ final class UintPtr extends AbiSpecificInteger {
 
 /// Dart `abi_specific_integer_mapping_test.dart` `test_invalidMapping`.
 #[test]
-fn abi_specific_integer_mapping__invalid_mapping() {
+fn abi_specific_integer_mapping_invalid_mapping() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @AbiSpecificIntegerMapping({
@@ -76,13 +76,16 @@ final class UintPtr extends AbiSpecificInteger {
   const UintPtr();
 }
 "#,
-        &[("abi_specific_integer_mapping_unsupported", 96, 8), ("abi_specific_integer_mapping_unsupported", 125, 9)],
+        &[
+            ("abi_specific_integer_mapping_unsupported", 96, 8),
+            ("abi_specific_integer_mapping_unsupported", 125, 9),
+        ],
     );
 }
 
 /// Dart `abi_specific_integer_mapping_test.dart` `test_invalidMapping_identifier`.
 #[test]
-fn abi_specific_integer_mapping__invalid_mapping_identifier() {
+fn abi_specific_integer_mapping_invalid_mapping_identifier() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 const c = {
@@ -95,13 +98,16 @@ final class UintPtr extends AbiSpecificInteger {
   const UintPtr();
 }
 "#,
-        &[("abi_specific_integer_mapping_unsupported", 149, 1), ("abi_specific_integer_mapping_unsupported", 149, 1)],
+        &[
+            ("abi_specific_integer_mapping_unsupported", 149, 1),
+            ("abi_specific_integer_mapping_unsupported", 149, 1),
+        ],
     );
 }
 
 /// Dart `abi_specific_integer_mapping_test.dart` `test_noMapping`.
 #[test]
-fn abi_specific_integer_mapping__no_mapping() {
+fn abi_specific_integer_mapping_no_mapping() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class UintPtr extends AbiSpecificInteger {
@@ -114,7 +120,7 @@ final class UintPtr extends AbiSpecificInteger {
 
 /// Dart `abi_specific_integer_mapping_test.dart` `test_singleMapping`.
 #[test]
-fn abi_specific_integer_mapping__single_mapping() {
+fn abi_specific_integer_mapping_single_mapping() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @AbiSpecificIntegerMapping({})
@@ -128,7 +134,7 @@ final class UintPtr extends AbiSpecificInteger {
 
 /// Dart `abi_specific_integer_mapping_test.dart` `test_validMapping`.
 #[test]
-fn abi_specific_integer_mapping__valid_mapping() {
+fn abi_specific_integer_mapping_valid_mapping() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @AbiSpecificIntegerMapping({
@@ -146,7 +152,7 @@ final class UintPtr extends AbiSpecificInteger {
 
 /// Dart `annotation_on_pointer_field_test.dart` `test_double`.
 #[test]
-fn annotation_on_pointer_field__double() {
+fn annotation_on_pointer_field_double() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C extends Struct {
@@ -160,7 +166,7 @@ final class C extends Struct {
 
 /// Dart `annotation_on_pointer_field_test.dart` `test_int32`.
 #[test]
-fn annotation_on_pointer_field__int32() {
+fn annotation_on_pointer_field_int32() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C extends Struct {
@@ -175,7 +181,7 @@ final class C extends Struct {
 /// Dart `argument_must_be_a_constant_test.dart` `test_AsFunctionIsLeafGlobal`.
 #[test]
 #[ignore = "the FFI members are extension members (asFunction, lookupFunction, address): needs the extension resolution of unit C6"]
-fn argument_must_be_a_constant__as_function_is_leaf_global() {
+fn argument_must_be_a_constant_as_function_is_leaf_global() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef Int8UnOp = Int8 Function(Int8);
@@ -194,7 +200,7 @@ doThings() {
 /// Dart `argument_must_be_a_constant_test.dart` `test_AsFunctionIsLeafLocal`.
 #[test]
 #[ignore = "the FFI members are extension members (asFunction, lookupFunction, address): needs the extension resolution of unit C6"]
-fn argument_must_be_a_constant__as_function_is_leaf_local() {
+fn argument_must_be_a_constant_as_function_is_leaf_local() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef Int8UnOp = Int8 Function(Int8);
@@ -213,7 +219,7 @@ doThings() {
 /// Dart `argument_must_be_a_constant_test.dart` `test_AsFunctionIsLeafParam`.
 #[test]
 #[ignore = "the FFI members are extension members (asFunction, lookupFunction, address): needs the extension resolution of unit C6"]
-fn argument_must_be_a_constant__as_function_is_leaf_param() {
+fn argument_must_be_a_constant_as_function_is_leaf_param() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef Int8UnOp = Int8 Function(Int8);
@@ -230,7 +236,7 @@ doThings(bool isLeaf) {
 
 /// Dart `argument_must_be_a_constant_test.dart` `test_FromFunctionExceptionReturn`.
 #[test]
-fn argument_must_be_a_constant__from_function_exception_return() {
+fn argument_must_be_a_constant_from_function_exception_return() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef NativeDoubleUnOp = Double Function(Double);
@@ -247,7 +253,7 @@ void testFromFunctionFunctionExceptionValueMustBeConst() {
 /// Dart `argument_must_be_a_constant_test.dart` `test_LookupFunctionIsLeaf`.
 #[test]
 #[ignore = "the FFI members are extension members (asFunction, lookupFunction, address): needs the extension resolution of unit C6"]
-fn argument_must_be_a_constant__lookup_function_is_leaf() {
+fn argument_must_be_a_constant_lookup_function_is_leaf() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef Int8UnOp = Int8 Function(Int8);
@@ -263,7 +269,7 @@ doThings(bool isLeaf) {
 
 /// Dart `creation_of_struct_or_union_test.dart` `test_struct`.
 #[test]
-fn creation_of_struct_or_union__struct() {
+fn creation_of_struct_or_union_struct() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -282,7 +288,7 @@ void f() {
 
 /// Dart `creation_of_struct_or_union_test.dart` `test_union`.
 #[test]
-fn creation_of_struct_or_union__union() {
+fn creation_of_struct_or_union_union() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -301,7 +307,7 @@ void f() {
 
 /// Dart `extra_annotation_on_struct_field_test.dart` `test_one`.
 #[test]
-fn extra_annotation_on_struct_field__one() {
+fn extra_annotation_on_struct_field_one() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C extends Struct {
@@ -315,7 +321,7 @@ final class C extends Struct {
 
 /// Dart `extra_annotation_on_struct_field_test.dart` `test_two`.
 #[test]
-fn extra_annotation_on_struct_field__two() {
+fn extra_annotation_on_struct_field_two() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C extends Struct {
@@ -330,7 +336,7 @@ final class C extends Struct {
 
 /// Dart `extra_size_annotation_carray_test.dart` `test_const`.
 #[test]
-fn extra_size_annotation_carray__const() {
+fn extra_size_annotation_carray_const() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -347,7 +353,7 @@ final class Struct8BytesInlineArrayInt extends Struct {
 
 /// Dart `extra_size_annotation_carray_test.dart` `test_one`.
 #[test]
-fn extra_size_annotation_carray__one() {
+fn extra_size_annotation_carray_one() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -362,7 +368,7 @@ final class C extends Struct {
 
 /// Dart `extra_size_annotation_carray_test.dart` `test_two`.
 #[test]
-fn extra_size_annotation_carray__two() {
+fn extra_size_annotation_carray_two() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -379,7 +385,7 @@ final class C extends Struct {
 /// Dart `ffi_address_of_cast_test.dart` `test_struct_error_1`.
 #[test]
 #[ignore = "the FFI members are extension members (asFunction, lookupFunction, address): needs the extension resolution of unit C6"]
-fn ffi_address_of_cast__struct_error_1() {
+fn ffi_address_of_cast_struct_error_1() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -405,7 +411,7 @@ final class MyStruct extends Struct {
 /// Dart `ffi_address_of_cast_test.dart` `test_struct_error_2`.
 #[test]
 #[ignore = "the FFI members are extension members (asFunction, lookupFunction, address): needs the extension resolution of unit C6"]
-fn ffi_address_of_cast__struct_error_2() {
+fn ffi_address_of_cast_struct_error_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -430,7 +436,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_address_of_cast_test.dart` `test_struct_no_error`.
 #[test]
-fn ffi_address_of_cast__struct_no_error() {
+fn ffi_address_of_cast_struct_no_error() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -457,7 +463,7 @@ final class MyStruct extends Struct {
 /// Dart `ffi_address_of_cast_test.dart` `test_typed_data_error`.
 #[test]
 #[ignore = "the FFI members are extension members (asFunction, lookupFunction, address): needs the extension resolution of unit C6"]
-fn ffi_address_of_cast__typed_data_error() {
+fn ffi_address_of_cast_typed_data_error() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 import 'dart:typed_data';
@@ -476,7 +482,7 @@ main() {
 
 /// Dart `ffi_address_of_cast_test.dart` `test_typed_data_no_error`.
 #[test]
-fn ffi_address_of_cast__typed_data_no_error() {
+fn ffi_address_of_cast_typed_data_no_error() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 import 'dart:typed_data';
@@ -496,7 +502,7 @@ main() {
 /// Dart `ffi_address_of_cast_test.dart` `test_union_error_1`.
 #[test]
 #[ignore = "the FFI members are extension members (asFunction, lookupFunction, address): needs the extension resolution of unit C6"]
-fn ffi_address_of_cast__union_error_1() {
+fn ffi_address_of_cast_union_error_1() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -522,7 +528,7 @@ final class MyUnion extends Union {
 /// Dart `ffi_address_of_cast_test.dart` `test_union_error_2`.
 #[test]
 #[ignore = "the FFI members are extension members (asFunction, lookupFunction, address): needs the extension resolution of unit C6"]
-fn ffi_address_of_cast__union_error_2() {
+fn ffi_address_of_cast_union_error_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -546,7 +552,7 @@ final class MyUnion extends Union {
 
 /// Dart `ffi_address_of_cast_test.dart` `test_union_no_error`.
 #[test]
-fn ffi_address_of_cast__union_no_error() {
+fn ffi_address_of_cast_union_no_error() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -571,7 +577,7 @@ final class MyUnion extends Union {
 
 /// Dart `ffi_array_test.dart` `test_array_negativeDimension`.
 #[test]
-fn ffi_array__array_negative_dimension() {
+fn ffi_array_array_negative_dimension() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -586,7 +592,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_array_test.dart` `test_array_positiveDimension`.
 #[test]
-fn ffi_array__array_positive_dimension() {
+fn ffi_array_array_positive_dimension() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -601,7 +607,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_array_test.dart` `test_array_zeroDimension`.
 #[test]
-fn ffi_array__array_zero_dimension() {
+fn ffi_array_array_zero_dimension() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -616,7 +622,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_array_test.dart` `test_multi_negativeDimension`.
 #[test]
-fn ffi_array__multi_negative_dimension() {
+fn ffi_array_multi_negative_dimension() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -631,7 +637,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_array_test.dart` `test_multi_positiveDimension`.
 #[test]
-fn ffi_array__multi_positive_dimension() {
+fn ffi_array_multi_positive_dimension() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -646,7 +652,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_array_test.dart` `test_multi_zeroDimension`.
 #[test]
-fn ffi_array__multi_zero_dimension() {
+fn ffi_array_multi_zero_dimension() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -661,7 +667,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_array_test.dart` `test_variable_negativeDimension`.
 #[test]
-fn ffi_array__variable_negative_dimension() {
+fn ffi_array_variable_negative_dimension() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -676,7 +682,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_array_test.dart` `test_variable_positiveDimension`.
 #[test]
-fn ffi_array__variable_positive_dimension() {
+fn ffi_array_variable_positive_dimension() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -691,7 +697,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_array_test.dart` `test_variable_valid`.
 #[test]
-fn ffi_array__variable_valid() {
+fn ffi_array_variable_valid() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -706,7 +712,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_array_test.dart` `test_variable_zeroDimension`.
 #[test]
-fn ffi_array__variable_zero_dimension() {
+fn ffi_array_variable_zero_dimension() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -721,7 +727,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_array_test.dart` `test_variableMulti_negativeDimension`.
 #[test]
-fn ffi_array__variable_multi_negative_dimension() {
+fn ffi_array_variable_multi_negative_dimension() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -736,7 +742,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_array_test.dart` `test_variableMulti_positiveDimension`.
 #[test]
-fn ffi_array__variable_multi_positive_dimension() {
+fn ffi_array_variable_multi_positive_dimension() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -751,7 +757,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_array_test.dart` `test_variableMulti_valid`.
 #[test]
-fn ffi_array__variable_multi_valid() {
+fn ffi_array_variable_multi_valid() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -766,7 +772,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_array_test.dart` `test_variableMulti_zeroDimension`.
 #[test]
-fn ffi_array__variable_multi_zero_dimension() {
+fn ffi_array_variable_multi_zero_dimension() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -781,7 +787,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_array_test.dart` `test_variableWithVariableDimension_negativeDimension`.
 #[test]
-fn ffi_array__variable_with_variable_dimension_negative_dimension() {
+fn ffi_array_variable_with_variable_dimension_negative_dimension() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -796,7 +802,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_array_test.dart` `test_variableWithVariableDimension_positiveDimension`.
 #[test]
-fn ffi_array__variable_with_variable_dimension_positive_dimension() {
+fn ffi_array_variable_with_variable_dimension_positive_dimension() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -811,7 +817,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_array_test.dart` `test_variableWithVariableDimension_zeroDimension`.
 #[test]
-fn ffi_array__variable_with_variable_dimension_zero_dimension() {
+fn ffi_array_variable_with_variable_dimension_zero_dimension() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -826,7 +832,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_async_callback_test.dart` `test_NativeCallable_isolateLocal_argumentMustBeAConstant`.
 #[test]
-fn ffi_async_callback__native_callable_isolate_local_argument_must_be_aconstant() {
+fn ffi_async_callback_native_callable_isolate_local_argument_must_be_aconstant() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 int f(int i) => i * 2;
@@ -841,7 +847,7 @@ void g() {
 
 /// Dart `ffi_async_callback_test.dart` `test_NativeCallable_isolateLocal_exceptionMustBeASubtype`.
 #[test]
-fn ffi_async_callback__native_callable_isolate_local_exception_must_be_asubtype() {
+fn ffi_async_callback_native_callable_isolate_local_exception_must_be_asubtype() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 int f(int i) => i * 2;
@@ -855,7 +861,7 @@ void g() {
 
 /// Dart `ffi_async_callback_test.dart` `test_NativeCallable_isolateLocal_inferred`.
 #[test]
-fn ffi_async_callback__native_callable_isolate_local_inferred() {
+fn ffi_async_callback_native_callable_isolate_local_inferred() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 int f(int i) => i * 2;
@@ -871,7 +877,7 @@ void g() {
 
 /// Dart `ffi_async_callback_test.dart` `test_NativeCallable_isolateLocal_invalidExceptionValue`.
 #[test]
-fn ffi_async_callback__native_callable_isolate_local_invalid_exception_value() {
+fn ffi_async_callback_native_callable_isolate_local_invalid_exception_value() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 void f(int i) => i * 2;
@@ -885,7 +891,7 @@ void g() {
 
 /// Dart `ffi_async_callback_test.dart` `test_NativeCallable_isolateLocal_missingExceptionValue`.
 #[test]
-fn ffi_async_callback__native_callable_isolate_local_missing_exception_value() {
+fn ffi_async_callback_native_callable_isolate_local_missing_exception_value() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 int f(int i) => i * 2;
@@ -899,7 +905,7 @@ void g() {
 
 /// Dart `ffi_async_callback_test.dart` `test_NativeCallable_isolateLocal_mustBeANativeFunctionType`.
 #[test]
-fn ffi_async_callback__native_callable_isolate_local_must_be_anative_function_type() {
+fn ffi_async_callback_native_callable_isolate_local_must_be_anative_function_type() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 int f(int i) => i * 2;
@@ -913,7 +919,7 @@ void g() {
 
 /// Dart `ffi_async_callback_test.dart` `test_NativeCallable_isolateLocal_mustBeASubtype`.
 #[test]
-fn ffi_async_callback__native_callable_isolate_local_must_be_asubtype() {
+fn ffi_async_callback_native_callable_isolate_local_must_be_asubtype() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 int f(int i) => i * 2;
@@ -927,7 +933,7 @@ void g() {
 
 /// Dart `ffi_async_callback_test.dart` `test_NativeCallable_isolateLocal_mustHaveTypeArgs`.
 #[test]
-fn ffi_async_callback__native_callable_isolate_local_must_have_type_args() {
+fn ffi_async_callback_native_callable_isolate_local_must_have_type_args() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 int f(int i) => i * 2;
@@ -941,7 +947,7 @@ void g() {
 
 /// Dart `ffi_async_callback_test.dart` `test_NativeCallable_isolateLocal_ok`.
 #[test]
-fn ffi_async_callback__native_callable_isolate_local_ok() {
+fn ffi_async_callback_native_callable_isolate_local_ok() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 int f(int i) => i * 2;
@@ -955,7 +961,7 @@ void g() {
 
 /// Dart `ffi_async_callback_test.dart` `test_NativeCallable_isolateLocal_okVoid`.
 #[test]
-fn ffi_async_callback__native_callable_isolate_local_ok_void() {
+fn ffi_async_callback_native_callable_isolate_local_ok_void() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 void f(int i) => i * 2;
@@ -969,7 +975,7 @@ void g() {
 
 /// Dart `ffi_async_callback_test.dart` `test_NativeCallable_isolateLocal_voidReturnPermissive`.
 #[test]
-fn ffi_async_callback__native_callable_isolate_local_void_return_permissive() {
+fn ffi_async_callback_native_callable_isolate_local_void_return_permissive() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 int f(int i) => i * 2;
@@ -983,7 +989,7 @@ void g() {
 
 /// Dart `ffi_async_callback_test.dart` `test_NativeCallable_listener_inferred`.
 #[test]
-fn ffi_async_callback__native_callable_listener_inferred() {
+fn ffi_async_callback_native_callable_listener_inferred() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 void f(int i) => i * 2;
@@ -999,7 +1005,7 @@ void g() {
 
 /// Dart `ffi_async_callback_test.dart` `test_NativeCallable_listener_mustBeANativeFunctionType`.
 #[test]
-fn ffi_async_callback__native_callable_listener_must_be_anative_function_type() {
+fn ffi_async_callback_native_callable_listener_must_be_anative_function_type() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 void f(int i) => i * 2;
@@ -1013,7 +1019,7 @@ void g() {
 
 /// Dart `ffi_async_callback_test.dart` `test_NativeCallable_listener_mustBeASubtype`.
 #[test]
-fn ffi_async_callback__native_callable_listener_must_be_asubtype() {
+fn ffi_async_callback_native_callable_listener_must_be_asubtype() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 void f(int i) => i * 2;
@@ -1027,7 +1033,7 @@ void g() {
 
 /// Dart `ffi_async_callback_test.dart` `test_NativeCallable_listener_mustHaveTypeArgs`.
 #[test]
-fn ffi_async_callback__native_callable_listener_must_have_type_args() {
+fn ffi_async_callback_native_callable_listener_must_have_type_args() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 int f(int i) => i * 2;
@@ -1041,7 +1047,7 @@ void g() {
 
 /// Dart `ffi_async_callback_test.dart` `test_NativeCallable_listener_mustReturnVoid`.
 #[test]
-fn ffi_async_callback__native_callable_listener_must_return_void() {
+fn ffi_async_callback_native_callable_listener_must_return_void() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 int f(int i) => i * 2;
@@ -1055,7 +1061,7 @@ void g() {
 
 /// Dart `ffi_async_callback_test.dart` `test_NativeCallable_listener_ok`.
 #[test]
-fn ffi_async_callback__native_callable_listener_ok() {
+fn ffi_async_callback_native_callable_listener_ok() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 void f(int i) => i * 2;
@@ -1069,7 +1075,7 @@ void g() {
 
 /// Dart `ffi_async_callback_test.dart` `test_NativeCallable_listener_voidReturnPermissive`.
 #[test]
-fn ffi_async_callback__native_callable_listener_void_return_permissive() {
+fn ffi_async_callback_native_callable_listener_void_return_permissive() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 int f(int i) => i * 2;
@@ -1084,7 +1090,7 @@ void g() {
 /// Dart `ffi_leaf_call_must_not_use_handle_test.dart` `test_AsFunctionReturnsHandle`.
 #[test]
 #[ignore = "the FFI members are extension members (asFunction, lookupFunction, address): needs the extension resolution of unit C6"]
-fn ffi_leaf_call_must_not_use_handle__as_function_returns_handle() {
+fn ffi_leaf_call_must_not_use_handle_as_function_returns_handle() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef NativeReturnsHandle = Handle Function();
@@ -1102,7 +1108,7 @@ doThings() {
 /// Dart `ffi_leaf_call_must_not_use_handle_test.dart` `test_AsFunctionTakesHandle`.
 #[test]
 #[ignore = "the FFI members are extension members (asFunction, lookupFunction, address): needs the extension resolution of unit C6"]
-fn ffi_leaf_call_must_not_use_handle__as_function_takes_handle() {
+fn ffi_leaf_call_must_not_use_handle_as_function_takes_handle() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef NativeTakesHandle = Void Function(Handle);
@@ -1120,7 +1126,7 @@ doThings() {
 
 /// Dart `ffi_leaf_call_must_not_use_handle_test.dart` `test_class_getter`.
 #[test]
-fn ffi_leaf_call_must_not_use_handle__class_getter() {
+fn ffi_leaf_call_must_not_use_handle_class_getter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1138,7 +1144,7 @@ base class A extends NativeFieldWrapperClass1 {
 /// Dart `ffi_leaf_call_must_not_use_handle_test.dart` `test_LookupFunctionReturnsHandle`.
 #[test]
 #[ignore = "the FFI members are extension members (asFunction, lookupFunction, address): needs the extension resolution of unit C6"]
-fn ffi_leaf_call_must_not_use_handle__lookup_function_returns_handle() {
+fn ffi_leaf_call_must_not_use_handle_lookup_function_returns_handle() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef NativeReturnsHandle = Handle Function();
@@ -1155,7 +1161,7 @@ doThings() {
 /// Dart `ffi_leaf_call_must_not_use_handle_test.dart` `test_LookupFunctionTakesHandle`.
 #[test]
 #[ignore = "the FFI members are extension members (asFunction, lookupFunction, address): needs the extension resolution of unit C6"]
-fn ffi_leaf_call_must_not_use_handle__lookup_function_takes_handle() {
+fn ffi_leaf_call_must_not_use_handle_lookup_function_takes_handle() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef NativeTakesHandle = Void Function(Handle);
@@ -1172,7 +1178,7 @@ doThings() {
 
 /// Dart `ffi_leaf_call_must_not_use_handle_test.dart` `test_unit_getter`.
 #[test]
-fn ffi_leaf_call_must_not_use_handle__unit_getter() {
+fn ffi_leaf_call_must_not_use_handle_unit_getter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1185,7 +1191,7 @@ external Object get foo;
 
 /// Dart `ffi_native_test.dart` `test_invalid_Lambda`.
 #[test]
-fn ffi_native__invalid_lambda() {
+fn ffi_native_invalid_lambda() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1197,7 +1203,7 @@ void main() => print(Native.addressOf(() => 3));
 
 /// Dart `ffi_native_test.dart` `test_invalid_MismatchedInferredType`.
 #[test]
-fn ffi_native__invalid_mismatched_inferred_type() {
+fn ffi_native_invalid_mismatched_inferred_type() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1212,7 +1218,7 @@ void main() => print(Native.addressOf<Pointer<Double>>(global));
 
 /// Dart `ffi_native_test.dart` `test_invalid_MismatchingType`.
 #[test]
-fn ffi_native__invalid_mismatching_type() {
+fn ffi_native_invalid_mismatching_type() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1229,7 +1235,7 @@ void main() {
 
 /// Dart `ffi_native_test.dart` `test_invalid_MissingType`.
 #[test]
-fn ffi_native__invalid_missing_type() {
+fn ffi_native_invalid_missing_type() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1246,7 +1252,7 @@ void main() {
 
 /// Dart `ffi_native_test.dart` `test_invalid_MissingType2`.
 #[test]
-fn ffi_native__invalid_missing_type2() {
+fn ffi_native_invalid_missing_type2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1263,7 +1269,7 @@ void main() {
 
 /// Dart `ffi_native_test.dart` `test_invalid_MissingType3`.
 #[test]
-fn ffi_native__invalid_missing_type3() {
+fn ffi_native_invalid_missing_type3() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1278,7 +1284,7 @@ void main() => print(Native.addressOf(global));
 
 /// Dart `ffi_native_test.dart` `test_invalid_NotAConstant`.
 #[test]
-fn ffi_native__invalid_not_aconstant() {
+fn ffi_native_invalid_not_aconstant() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1297,7 +1303,7 @@ void entry(bool condition) {
 
 /// Dart `ffi_native_test.dart` `test_invalid_NotAPreciseType`.
 #[test]
-fn ffi_native__invalid_not_aprecise_type() {
+fn ffi_native_invalid_not_aprecise_type() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1312,7 +1318,7 @@ void main() => print(Native.addressOf<NativeFunction>(foo));
 
 /// Dart `ffi_native_test.dart` `test_invalid_NotAPreciseType2`.
 #[test]
-fn ffi_native__invalid_not_aprecise_type2() {
+fn ffi_native_invalid_not_aprecise_type2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1327,7 +1333,7 @@ void main() => print(Native.addressOf<NativeFunction>(foo));
 
 /// Dart `ffi_native_test.dart` `test_invalid_String`.
 #[test]
-fn ffi_native__invalid_string() {
+fn ffi_native_invalid_string() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1339,7 +1345,7 @@ void main() => print(Native.addressOf('malloc'));
 
 /// Dart `ffi_native_test.dart` `test_valid`.
 #[test]
-fn ffi_native__valid() {
+fn ffi_native_valid() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1364,7 +1370,7 @@ void main() {
 
 /// Dart `ffi_native_test.dart` `test_invalid_duplicate`.
 #[test]
-fn ffi_native__invalid_duplicate() {
+fn ffi_native_invalid_duplicate() {
     assert_ffi_errors_in_code(
         r#"@DefaultAsset('foo')
 @DefaultAsset('bar')
@@ -1378,7 +1384,7 @@ import 'dart:ffi';
 
 /// Dart `ffi_native_test.dart` `test_invalid_duplicateFromConst`.
 #[test]
-fn ffi_native__invalid_duplicate_from_const() {
+fn ffi_native_invalid_duplicate_from_const() {
     assert_ffi_errors_in_code(
         r#"@DefaultAsset('bar')
 @defaults
@@ -1394,7 +1400,7 @@ const defaults = DefaultAsset('foo');
 
 /// Dart `ffi_native_test.dart` `test_valid`.
 #[test]
-fn ffi_native__valid_2() {
+fn ffi_native_valid_2() {
     assert_ffi_errors_in_code(
         r#"@DefaultAsset('bar')
 library;
@@ -1410,7 +1416,7 @@ external void foo();
 
 /// Dart `ffi_native_test.dart` `test_validFromConst`.
 #[test]
-fn ffi_native__valid_from_const() {
+fn ffi_native_valid_from_const() {
     assert_ffi_errors_in_code(
         r#"@defaults
 library;
@@ -1428,7 +1434,7 @@ external void foo();
 
 /// Dart `ffi_native_test.dart` `test_annotation_FfiNative_getters`.
 #[test]
-fn ffi_native__annotation_ffi_native_getters() {
+fn ffi_native_annotation_ffi_native_getters() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1448,7 +1454,7 @@ base class Paragraph extends NativeFieldWrapperClass1 {
 
 /// Dart `ffi_native_test.dart` `test_annotation_FfiNative_noArguments`.
 #[test]
-fn ffi_native__annotation_ffi_native_no_arguments() {
+fn ffi_native_annotation_ffi_native_no_arguments() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1461,7 +1467,7 @@ external int foo();
 
 /// Dart `ffi_native_test.dart` `test_annotation_FfiNative_noTypeArguments`.
 #[test]
-fn ffi_native__annotation_ffi_native_no_type_arguments() {
+fn ffi_native_annotation_ffi_native_no_type_arguments() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1474,7 +1480,7 @@ external int foo();
 
 /// Dart `ffi_native_test.dart` `test_FfiNativeCanUseHandles`.
 #[test]
-fn ffi_native__ffi_native_can_use_handles() {
+fn ffi_native_ffi_native_can_use_handles() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<Handle Function(Handle)>(symbol: 'DoesntMatter')
@@ -1486,7 +1492,7 @@ external Object doesntMatter(Object);
 
 /// Dart `ffi_native_test.dart` `test_FfiNativeCanUseLeaf`.
 #[test]
-fn ffi_native__ffi_native_can_use_leaf() {
+fn ffi_native_ffi_native_can_use_leaf() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<Int8 Function(Int64)>(symbol: 'DoesntMatter', isLeaf:true)
@@ -1498,7 +1504,7 @@ external int doesntMatter(int x);
 
 /// Dart `ffi_native_test.dart` `test_FfiNativeInstanceMethodsMustHaveReceiver`.
 #[test]
-fn ffi_native__ffi_native_instance_methods_must_have_receiver() {
+fn ffi_native_ffi_native_instance_methods_must_have_receiver() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class K {
@@ -1506,13 +1512,17 @@ class K {
   external void doesntMatter(double x);
 }
 "#,
-        &[("ffi_native_unexpected_number_of_parameters_with_receiver", 102, 12)],
+        &[(
+            "ffi_native_unexpected_number_of_parameters_with_receiver",
+            102,
+            12,
+        )],
     );
 }
 
 /// Dart `ffi_native_test.dart` `test_FfiNativeLeafMustNotReturnHandle`.
 #[test]
-fn ffi_native__ffi_native_leaf_must_not_return_handle() {
+fn ffi_native_ffi_native_leaf_must_not_return_handle() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<Handle Function()>(symbol: 'DoesntMatter', isLeaf:true)
@@ -1524,7 +1534,7 @@ external Object doesntMatter();
 
 /// Dart `ffi_native_test.dart` `test_FfiNativeLeafMustNotTakeHandles`.
 #[test]
-fn ffi_native__ffi_native_leaf_must_not_take_handles() {
+fn ffi_native_ffi_native_leaf_must_not_take_handles() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<Void Function(Handle)>(symbol: 'DoesntMatter', isLeaf:true)
@@ -1536,7 +1546,7 @@ external void doesntMatter(Object o);
 
 /// Dart `ffi_native_test.dart` `test_FfiNativeNonFfiParameter`.
 #[test]
-fn ffi_native__ffi_native_non_ffi_parameter() {
+fn ffi_native_ffi_native_non_ffi_parameter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<IntPtr Function(int)>(symbol: 'doesntmatter')
@@ -1548,7 +1558,7 @@ external int nonFfiParameter(int v);
 
 /// Dart `ffi_native_test.dart` `test_FfiNativeNonFfiReturnType`.
 #[test]
-fn ffi_native__ffi_native_non_ffi_return_type() {
+fn ffi_native_ffi_native_non_ffi_return_type() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<double Function(IntPtr)>(symbol: 'doesntmatter')
@@ -1560,7 +1570,7 @@ external double nonFfiReturnType(int v);
 
 /// Dart `ffi_native_test.dart` `test_FfiNativeOnExtension_valid`.
 #[test]
-fn ffi_native__ffi_native_on_extension_valid() {
+fn ffi_native_ffi_native_on_extension_valid() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1579,7 +1589,7 @@ void g() {
 
 /// Dart `ffi_native_test.dart` `test_FfiNativeOnExtension_wrongNumberOfParameters`.
 #[test]
-fn ffi_native__ffi_native_on_extension_wrong_number_of_parameters() {
+fn ffi_native_ffi_native_on_extension_wrong_number_of_parameters() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1598,7 +1608,7 @@ void g() {
 
 /// Dart `ffi_native_test.dart` `test_FfiNativeOnExtension_wrongReceiverType`.
 #[test]
-fn ffi_native__ffi_native_on_extension_wrong_receiver_type() {
+fn ffi_native_ffi_native_on_extension_wrong_receiver_type() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1617,7 +1627,7 @@ void f() {
 
 /// Dart `ffi_native_test.dart` `test_FfiNativeOnExtensionType_wrongReceiverType`.
 #[test]
-fn ffi_native__ffi_native_on_extension_type_wrong_receiver_type() {
+fn ffi_native_ffi_native_on_extension_type_wrong_receiver_type() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1632,7 +1642,7 @@ extension type NativeSendPort(int id) {
 
 /// Dart `ffi_native_test.dart` `test_FfiNativeOnExtensionType_wrongRepresentationType`.
 #[test]
-fn ffi_native__ffi_native_on_extension_type_wrong_representation_type() {
+fn ffi_native_ffi_native_on_extension_type_wrong_representation_type() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1647,7 +1657,7 @@ extension type InvalidNativeSendPort._(double id) {
 
 /// Dart `ffi_native_test.dart` `test_FfiNativePointerParameter`.
 #[test]
-fn ffi_native__ffi_native_pointer_parameter() {
+fn ffi_native_ffi_native_pointer_parameter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<Void Function(Pointer)>(symbol: 'free')
@@ -1659,7 +1669,7 @@ external void posixFree(Pointer pointer);
 
 /// Dart `ffi_native_test.dart` `test_FfiNativeTooFewParameters`.
 #[test]
-fn ffi_native__ffi_native_too_few_parameters() {
+fn ffi_native_ffi_native_too_few_parameters() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<Void Function(Double)>(symbol: 'DoesntMatter')
@@ -1671,7 +1681,7 @@ external void doesntMatter(double x, double y);
 
 /// Dart `ffi_native_test.dart` `test_FfiNativeTooManyParameters`.
 #[test]
-fn ffi_native__ffi_native_too_many_parameters() {
+fn ffi_native_ffi_native_too_many_parameters() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<Void Function(Double, Double)>(symbol: 'DoesntMatter')
@@ -1683,7 +1693,7 @@ external void doesntMatter(double x);
 
 /// Dart `ffi_native_test.dart` `test_FfiNativeVoidReturn`.
 #[test]
-fn ffi_native__ffi_native_void_return() {
+fn ffi_native_ffi_native_void_return() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<Handle Function(Uint32, Uint32, Handle)>(symbol: 'doesntmatter')
@@ -1695,7 +1705,7 @@ external void voidReturn(int width, int height, Object outImage);
 
 /// Dart `ffi_native_test.dart` `test_FfiNativeWrongFfiParameter`.
 #[test]
-fn ffi_native__ffi_native_wrong_ffi_parameter() {
+fn ffi_native_ffi_native_wrong_ffi_parameter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<IntPtr Function(Double)>(symbol: 'doesntmatter')
@@ -1707,7 +1717,7 @@ external int wrongFfiParameter(int v);
 
 /// Dart `ffi_native_test.dart` `test_FfiNativeWrongFfiReturnType`.
 #[test]
-fn ffi_native__ffi_native_wrong_ffi_return_type() {
+fn ffi_native_ffi_native_wrong_ffi_return_type() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<IntPtr Function(IntPtr)>(symbol: 'doesntmatter')
@@ -1719,7 +1729,7 @@ external double wrongFfiReturnType(int v);
 
 /// Dart `ffi_native_test.dart` `test_AbiSpecific`.
 #[test]
-fn ffi_native__abi_specific() {
+fn ffi_native_abi_specific() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1732,7 +1742,7 @@ external int foo;
 
 /// Dart `ffi_native_test.dart` `test_Accessors`.
 #[test]
-fn ffi_native__accessors() {
+fn ffi_native_accessors() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1748,7 +1758,7 @@ external set foo(int value);
 
 /// Dart `ffi_native_test.dart` `test_Array_InvalidDimension`.
 #[test]
-fn ffi_native__array_invalid_dimension() {
+fn ffi_native_array_invalid_dimension() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1762,7 +1772,7 @@ external Array<IntPtr> field;
 
 /// Dart `ffi_native_test.dart` `test_Array_InvalidDimensionCount`.
 #[test]
-fn ffi_native__array_invalid_dimension_count() {
+fn ffi_native_array_invalid_dimension_count() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1776,7 +1786,7 @@ external Array<IntPtr> field;
 
 /// Dart `ffi_native_test.dart` `test_Array_MissingAnnotation`.
 #[test]
-fn ffi_native__array_missing_annotation() {
+fn ffi_native_array_missing_annotation() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1789,7 +1799,7 @@ external Array<IntPtr> field;
 
 /// Dart `ffi_native_test.dart` `test_Array_Valid`.
 #[test]
-fn ffi_native__array_valid() {
+fn ffi_native_array_valid() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1807,7 +1817,7 @@ external Array<Array<IntPtr>> field1;
 
 /// Dart `ffi_native_test.dart` `test_Infer`.
 #[test]
-fn ffi_native__infer() {
+fn ffi_native_infer() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1827,7 +1837,7 @@ external Pointer<MyStruct> last;
 
 /// Dart `ffi_native_test.dart` `test_InvalidFunctionType`.
 #[test]
-fn ffi_native__invalid_function_type() {
+fn ffi_native_invalid_function_type() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<IntPtr Function(IntPtr)>()
@@ -1839,7 +1849,7 @@ external int field;
 
 /// Dart `ffi_native_test.dart` `test_InvalidInstanceMember`.
 #[test]
-fn ffi_native__invalid_instance_member() {
+fn ffi_native_invalid_instance_member() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1854,7 +1864,7 @@ class Foo {
 
 /// Dart `ffi_native_test.dart` `test_InvalidNotExternal`.
 #[test]
-fn ffi_native__invalid_not_external() {
+fn ffi_native_invalid_not_external() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1867,7 +1877,7 @@ int field;
 
 /// Dart `ffi_native_test.dart` `test_MismatchingFunctionType`.
 #[test]
-fn ffi_native__mismatching_function_type() {
+fn ffi_native_mismatching_function_type() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1880,7 +1890,7 @@ external int Function() field;
 
 /// Dart `ffi_native_test.dart` `test_MismatchingType`.
 #[test]
-fn ffi_native__mismatching_type() {
+fn ffi_native_mismatching_type() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1893,7 +1903,7 @@ external int field;
 
 /// Dart `ffi_native_test.dart` `test_MissingType`.
 #[test]
-fn ffi_native__missing_type() {
+fn ffi_native_missing_type() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1909,7 +1919,7 @@ external Pointer<IntPtr> valid;
 
 /// Dart `ffi_native_test.dart` `test_Unsupported_Function`.
 #[test]
-fn ffi_native__unsupported_function() {
+fn ffi_native_unsupported_function() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1922,7 +1932,7 @@ external void Function() field;
 
 /// Dart `ffi_native_test.dart` `test_Unsupported_Handle`.
 #[test]
-fn ffi_native__unsupported_handle() {
+fn ffi_native_unsupported_handle() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1935,7 +1945,7 @@ external Object field;
 
 /// Dart `ffi_native_test.dart` `test_annotation_InvalidFieldType`.
 #[test]
-fn ffi_native__annotation_invalid_field_type() {
+fn ffi_native_annotation_invalid_field_type() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1948,7 +1958,7 @@ external int foo();
 
 /// Dart `ffi_native_test.dart` `test_annotation_MissingType`.
 #[test]
-fn ffi_native__annotation_missing_type() {
+fn ffi_native_annotation_missing_type() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1961,7 +1971,7 @@ external int foo();
 
 /// Dart `ffi_native_test.dart` `test_annotation_MissingTypeConst`.
 #[test]
-fn ffi_native__annotation_missing_type_const() {
+fn ffi_native_annotation_missing_type_const() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1976,7 +1986,7 @@ external int foo();
 
 /// Dart `ffi_native_test.dart` `test_annotation_Native_getters`.
 #[test]
-fn ffi_native__annotation_native_getters() {
+fn ffi_native_annotation_native_getters() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -1996,7 +2006,7 @@ base class Paragraph extends NativeFieldWrapperClass1 {
 
 /// Dart `ffi_native_test.dart` `test_annotation_Native_noArguments`.
 #[test]
-fn ffi_native__annotation_native_no_arguments() {
+fn ffi_native_annotation_native_no_arguments() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2009,7 +2019,7 @@ external int foo();
 
 /// Dart `ffi_native_test.dart` `test_InferPointerReturnNoParameters`.
 #[test]
-fn ffi_native__infer_pointer_return_no_parameters() {
+fn ffi_native_infer_pointer_return_no_parameters() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2022,7 +2032,7 @@ external Pointer foo();
 
 /// Dart `ffi_native_test.dart` `test_InferPointerReturnPointerParameter`.
 #[test]
-fn ffi_native__infer_pointer_return_pointer_parameter() {
+fn ffi_native_infer_pointer_return_pointer_parameter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2035,7 +2045,7 @@ external Pointer foo(Pointer x);
 
 /// Dart `ffi_native_test.dart` `test_InferPointerReturnStructParameter`.
 #[test]
-fn ffi_native__infer_pointer_return_struct_parameter() {
+fn ffi_native_infer_pointer_return_struct_parameter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2053,7 +2063,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_native_test.dart` `test_InferPointerReturnUnionParameter`.
 #[test]
-fn ffi_native__infer_pointer_return_union_parameter() {
+fn ffi_native_infer_pointer_return_union_parameter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2073,7 +2083,7 @@ final class MyUnion extends Union {
 
 /// Dart `ffi_native_test.dart` `test_InferStructReturnNoParameters`.
 #[test]
-fn ffi_native__infer_struct_return_no_parameters() {
+fn ffi_native_infer_struct_return_no_parameters() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2091,7 +2101,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_native_test.dart` `test_InferStructReturnPointerParameter`.
 #[test]
-fn ffi_native__infer_struct_return_pointer_parameter() {
+fn ffi_native_infer_struct_return_pointer_parameter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2109,7 +2119,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_native_test.dart` `test_InferStructReturnStructParameter`.
 #[test]
-fn ffi_native__infer_struct_return_struct_parameter() {
+fn ffi_native_infer_struct_return_struct_parameter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2127,7 +2137,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_native_test.dart` `test_InferStructReturnUnionParameter`.
 #[test]
-fn ffi_native__infer_struct_return_union_parameter() {
+fn ffi_native_infer_struct_return_union_parameter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2152,7 +2162,7 @@ final class MyUnion extends Union {
 
 /// Dart `ffi_native_test.dart` `test_InferUnionReturnNoParameters`.
 #[test]
-fn ffi_native__infer_union_return_no_parameters() {
+fn ffi_native_infer_union_return_no_parameters() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2172,7 +2182,7 @@ final class MyUnion extends Union {
 
 /// Dart `ffi_native_test.dart` `test_InferUnionReturnPointerParameter`.
 #[test]
-fn ffi_native__infer_union_return_pointer_parameter() {
+fn ffi_native_infer_union_return_pointer_parameter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2192,7 +2202,7 @@ final class MyUnion extends Union {
 
 /// Dart `ffi_native_test.dart` `test_InferUnionReturnStructParameter`.
 #[test]
-fn ffi_native__infer_union_return_struct_parameter() {
+fn ffi_native_infer_union_return_struct_parameter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2217,7 +2227,7 @@ final class MyUnion extends Union {
 
 /// Dart `ffi_native_test.dart` `test_InferUnionReturnUnionParameter`.
 #[test]
-fn ffi_native__infer_union_return_union_parameter() {
+fn ffi_native_infer_union_return_union_parameter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2237,7 +2247,7 @@ final class MyUnion extends Union {
 
 /// Dart `ffi_native_test.dart` `test_InferVoidReturnNoParameters`.
 #[test]
-fn ffi_native__infer_void_return_no_parameters() {
+fn ffi_native_infer_void_return_no_parameters() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2250,7 +2260,7 @@ external void foo();
 
 /// Dart `ffi_native_test.dart` `test_InferVoidReturnPointerParameter`.
 #[test]
-fn ffi_native__infer_void_return_pointer_parameter() {
+fn ffi_native_infer_void_return_pointer_parameter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2263,7 +2273,7 @@ external void foo(Pointer x);
 
 /// Dart `ffi_native_test.dart` `test_InferVoidReturnStructParameter`.
 #[test]
-fn ffi_native__infer_void_return_struct_parameter() {
+fn ffi_native_infer_void_return_struct_parameter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2281,7 +2291,7 @@ final class MyStruct extends Struct {
 
 /// Dart `ffi_native_test.dart` `test_InferVoidReturnUnionParameter`.
 #[test]
-fn ffi_native__infer_void_return_union_parameter() {
+fn ffi_native_infer_void_return_union_parameter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2301,7 +2311,7 @@ final class MyUnion extends Union {
 
 /// Dart `ffi_native_test.dart` `test_NativeCanUseHandles`.
 #[test]
-fn ffi_native__native_can_use_handles() {
+fn ffi_native_native_can_use_handles() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<Handle Function(Handle)>()
@@ -2313,7 +2323,7 @@ external Object doesntMatter(Object);
 
 /// Dart `ffi_native_test.dart` `test_NativeCanUseLeaf`.
 #[test]
-fn ffi_native__native_can_use_leaf() {
+fn ffi_native_native_can_use_leaf() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<Int8 Function(Int64)>(isLeaf:true)
@@ -2325,7 +2335,7 @@ external int doesntMatter(int x);
 
 /// Dart `ffi_native_test.dart` `test_NativeDuplicateAnnotation`.
 #[test]
-fn ffi_native__native_duplicate_annotation() {
+fn ffi_native_native_duplicate_annotation() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<Int32 Function(Int32)>()
@@ -2338,7 +2348,7 @@ external int foo(int v);
 
 /// Dart `ffi_native_test.dart` `test_NativeDuplicateAnnotationConst`.
 #[test]
-fn ffi_native__native_duplicate_annotation_const() {
+fn ffi_native_native_duplicate_annotation_const() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2354,7 +2364,7 @@ external int foo(int v);
 
 /// Dart `ffi_native_test.dart` `test_NativeFromConst`.
 #[test]
-fn ffi_native__native_from_const() {
+fn ffi_native_native_from_const() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2369,7 +2379,7 @@ external int wrongFfiReturnType(int v);
 
 /// Dart `ffi_native_test.dart` `test_NativeInstanceMethodsMustHaveReceiver`.
 #[test]
-fn ffi_native__native_instance_methods_must_have_receiver() {
+fn ffi_native_native_instance_methods_must_have_receiver() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class K {
@@ -2377,13 +2387,17 @@ class K {
   external void doesntMatter(double x);
 }
 "#,
-        &[("ffi_native_unexpected_number_of_parameters_with_receiver", 80, 12)],
+        &[(
+            "ffi_native_unexpected_number_of_parameters_with_receiver",
+            80,
+            12,
+        )],
     );
 }
 
 /// Dart `ffi_native_test.dart` `test_NativeLeafMustNotReturnHandle`.
 #[test]
-fn ffi_native__native_leaf_must_not_return_handle() {
+fn ffi_native_native_leaf_must_not_return_handle() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<Handle Function()>(isLeaf:true)
@@ -2395,7 +2409,7 @@ external Object doesntMatter();
 
 /// Dart `ffi_native_test.dart` `test_NativeLeafMustNotReturnHandleConst`.
 #[test]
-fn ffi_native__native_leaf_must_not_return_handle_const() {
+fn ffi_native_native_leaf_must_not_return_handle_const() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 const annotation = Native<Handle Function()>(isLeaf:true);
@@ -2409,7 +2423,7 @@ external Object doesntMatter();
 
 /// Dart `ffi_native_test.dart` `test_NativeLeafMustNotTakeHandles`.
 #[test]
-fn ffi_native__native_leaf_must_not_take_handles() {
+fn ffi_native_native_leaf_must_not_take_handles() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<Void Function(Handle)>(symbol: 'DoesntMatter', isLeaf:true)
@@ -2421,7 +2435,7 @@ external void doesntMatter(Object o);
 
 /// Dart `ffi_native_test.dart` `test_NativeLeafMustNotTakeHandlesConst`.
 #[test]
-fn ffi_native__native_leaf_must_not_take_handles_const() {
+fn ffi_native_native_leaf_must_not_take_handles_const() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 const annotation = Native<Void Function(Handle)>(symbol: 'DoesntMatter', isLeaf:true);
@@ -2435,7 +2449,7 @@ external void doesntMatter(Object o);
 
 /// Dart `ffi_native_test.dart` `test_NativeNonFfiParameter`.
 #[test]
-fn ffi_native__native_non_ffi_parameter() {
+fn ffi_native_native_non_ffi_parameter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<IntPtr Function(int)>()
@@ -2447,7 +2461,7 @@ external int nonFfiParameter(int v);
 
 /// Dart `ffi_native_test.dart` `test_NativeNonFfiReturnType`.
 #[test]
-fn ffi_native__native_non_ffi_return_type() {
+fn ffi_native_native_non_ffi_return_type() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<double Function(IntPtr)>()
@@ -2459,7 +2473,7 @@ external double nonFfiReturnType(int v);
 
 /// Dart `ffi_native_test.dart` `test_NativePointerParameter`.
 #[test]
-fn ffi_native__native_pointer_parameter() {
+fn ffi_native_native_pointer_parameter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<Void Function(Pointer)>()
@@ -2471,7 +2485,7 @@ external void free(Pointer pointer);
 
 /// Dart `ffi_native_test.dart` `test_NativeTooFewParameters`.
 #[test]
-fn ffi_native__native_too_few_parameters() {
+fn ffi_native_native_too_few_parameters() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<Void Function(Double)>()
@@ -2483,7 +2497,7 @@ external void doesntMatter(double x, double y);
 
 /// Dart `ffi_native_test.dart` `test_NativeTooManyParameters`.
 #[test]
-fn ffi_native__native_too_many_parameters() {
+fn ffi_native_native_too_many_parameters() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<Void Function(Double, Double)>()
@@ -2495,7 +2509,7 @@ external void doesntMatter(double x);
 
 /// Dart `ffi_native_test.dart` `test_NativeVarArgs`.
 #[test]
-fn ffi_native__native_var_args() {
+fn ffi_native_native_var_args() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<Int8 Function(Int64, VarArgs<(Int32, Double)>)>()
@@ -2507,7 +2521,7 @@ external int doesntMatter(int x, int y, double z);
 
 /// Dart `ffi_native_test.dart` `test_NativeVarArgsTooFew`.
 #[test]
-fn ffi_native__native_var_args_too_few() {
+fn ffi_native_native_var_args_too_few() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<Int8 Function(Int64, VarArgs<(Int32, Double)>)>()
@@ -2519,7 +2533,7 @@ external int doesntMatter(int x, int y);
 
 /// Dart `ffi_native_test.dart` `test_NativeVarArgsTooMany`.
 #[test]
-fn ffi_native__native_var_args_too_many() {
+fn ffi_native_native_var_args_too_many() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<Int8 Function(Int64, VarArgs<(Int32, Double)>)>()
@@ -2531,7 +2545,7 @@ external int doesntMatter(int x, int y, double z, int superfluous);
 
 /// Dart `ffi_native_test.dart` `test_NativeVoidReturn`.
 #[test]
-fn ffi_native__native_void_return() {
+fn ffi_native_native_void_return() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<Handle Function(Uint32, Uint32, Handle)>()
@@ -2543,7 +2557,7 @@ external void voidReturn(int width, int height, Object outImage);
 
 /// Dart `ffi_native_test.dart` `test_NativeWrongFfiParameter`.
 #[test]
-fn ffi_native__native_wrong_ffi_parameter() {
+fn ffi_native_native_wrong_ffi_parameter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<IntPtr Function(Double)>()
@@ -2555,7 +2569,7 @@ external int wrongFfiParameter(int v);
 
 /// Dart `ffi_native_test.dart` `test_NativeWrongFfiReturnType`.
 #[test]
-fn ffi_native__native_wrong_ffi_return_type() {
+fn ffi_native_native_wrong_ffi_return_type() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @Native<IntPtr Function(IntPtr)>()
@@ -2567,7 +2581,7 @@ external double wrongFfiReturnType(int v);
 
 /// Dart `field_must_be_external_in_struct_test.dart` `test_struct`.
 #[test]
-fn field_must_be_external_in_struct__struct() {
+fn field_must_be_external_in_struct_struct() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2582,7 +2596,7 @@ final class A extends Struct {
 
 /// Dart `field_must_be_external_in_struct_test.dart` `test_union`.
 #[test]
-fn field_must_be_external_in_struct__union() {
+fn field_must_be_external_in_struct_union() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2597,7 +2611,7 @@ final class A extends Union {
 
 /// Dart `generic_struct_subclass_test.dart` `test_genericStruct`.
 #[test]
-fn generic_struct_subclass__generic_struct() {
+fn generic_struct_subclass_generic_struct() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class S<T> extends Struct {
@@ -2610,7 +2624,7 @@ final class S<T> extends Struct {
 
 /// Dart `generic_struct_subclass_test.dart` `test_genericUnion`.
 #[test]
-fn generic_struct_subclass__generic_union() {
+fn generic_struct_subclass_generic_union() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class S<T> extends Union {
@@ -2623,7 +2637,7 @@ final class S<T> extends Union {
 
 /// Dart `generic_struct_subclass_test.dart` `test_validStruct`.
 #[test]
-fn generic_struct_subclass__valid_struct() {
+fn generic_struct_subclass_valid_struct() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class S extends Struct {
@@ -2636,7 +2650,7 @@ final class S extends Struct {
 
 /// Dart `invalid_exception_value_test.dart` `test_missing`.
 #[test]
-fn invalid_exception_value__missing() {
+fn invalid_exception_value_missing() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef T = Void Function(Int8);
@@ -2651,7 +2665,7 @@ void g() {
 
 /// Dart `invalid_field_type_in_struct_test.dart` `test_instance_invalid`.
 #[test]
-fn invalid_field_type_in_struct__instance_invalid() {
+fn invalid_field_type_in_struct_instance_invalid() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C extends Struct {
@@ -2666,7 +2680,7 @@ final class C extends Struct {
 
 /// Dart `invalid_field_type_in_struct_test.dart` `test_instance_invalid2`.
 #[test]
-fn invalid_field_type_in_struct__instance_invalid2() {
+fn invalid_field_type_in_struct_instance_invalid2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C extends Union {
@@ -2681,7 +2695,7 @@ final class C extends Union {
 
 /// Dart `invalid_field_type_in_struct_test.dart` `test_instance_invalid3`.
 #[test]
-fn invalid_field_type_in_struct__instance_invalid3() {
+fn invalid_field_type_in_struct_instance_invalid3() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C extends Struct {
@@ -2694,7 +2708,7 @@ final class C extends Struct {
 
 /// Dart `invalid_field_type_in_struct_test.dart` `test_instance_valid`.
 #[test]
-fn invalid_field_type_in_struct__instance_valid() {
+fn invalid_field_type_in_struct_instance_valid() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C extends Struct {
@@ -2707,7 +2721,7 @@ final class C extends Struct {
 
 /// Dart `invalid_field_type_in_struct_test.dart` `test_static`.
 #[test]
-fn invalid_field_type_in_struct__static() {
+fn invalid_field_type_in_struct_static() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C extends Struct {
@@ -2722,7 +2736,7 @@ final class C extends Struct {
 
 /// Dart `mismatched_annotation_on_struct_field_test.dart` `test_double_on_int`.
 #[test]
-fn mismatched_annotation_on_struct_field__double_on_int() {
+fn mismatched_annotation_on_struct_field_double_on_int() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C extends Struct {
@@ -2736,7 +2750,7 @@ final class C extends Struct {
 
 /// Dart `mismatched_annotation_on_struct_field_test.dart` `test_int32_on_double`.
 #[test]
-fn mismatched_annotation_on_struct_field__int32_on_double() {
+fn mismatched_annotation_on_struct_field_int32_on_double() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C extends Struct {
@@ -2750,7 +2764,7 @@ final class C extends Struct {
 
 /// Dart `missing_annotation_on_struct_field_test.dart` `test_missing_int`.
 #[test]
-fn missing_annotation_on_struct_field__missing_int() {
+fn missing_annotation_on_struct_field_missing_int() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C extends Struct {
@@ -2763,7 +2777,7 @@ final class C extends Struct {
 
 /// Dart `missing_annotation_on_struct_field_test.dart` `test_notMissing`.
 #[test]
-fn missing_annotation_on_struct_field__not_missing() {
+fn missing_annotation_on_struct_field_not_missing() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C extends Struct {
@@ -2777,7 +2791,7 @@ final class C extends Struct {
 
 /// Dart `missing_exception_value_test.dart` `test_missing`.
 #[test]
-fn missing_exception_value__missing() {
+fn missing_exception_value_missing() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef T = Int8 Function(Int8);
@@ -2792,7 +2806,7 @@ void g() {
 
 /// Dart `missing_field_type_in_struct_test.dart` `test_missing`.
 #[test]
-fn missing_field_type_in_struct__missing() {
+fn missing_field_type_in_struct_missing() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C extends Struct {
@@ -2807,7 +2821,7 @@ final class C extends Struct {
 
 /// Dart `missing_field_type_in_struct_test.dart` `test_valid`.
 #[test]
-fn missing_field_type_in_struct__valid() {
+fn missing_field_type_in_struct_valid() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C extends Struct {
@@ -2820,7 +2834,7 @@ final class C extends Struct {
 
 /// Dart `missing_size_annotation_carray_test.dart` `test_one`.
 #[test]
-fn missing_size_annotation_carray__one() {
+fn missing_size_annotation_carray_one() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2835,7 +2849,7 @@ final class C extends Struct {
 
 /// Dart `missing_size_annotation_carray_test.dart` `test_two`.
 #[test]
-fn missing_size_annotation_carray__two() {
+fn missing_size_annotation_carray_two() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -2850,7 +2864,7 @@ final class C extends Struct {
 /// Dart `must_be_a_native_function_type_test.dart` `test_lookupFunction`.
 #[test]
 #[ignore = "the FFI members are extension members (asFunction, lookupFunction, address): needs the extension resolution of unit C6"]
-fn must_be_a_native_function_type__lookup_function() {
+fn must_be_a_native_function_type_lookup_function() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef S = int Function(int);
@@ -2865,7 +2879,7 @@ void f(DynamicLibrary lib) {
 
 /// Dart `must_be_a_native_function_type_test.dart` `test_lookupFunction_Pointer`.
 #[test]
-fn must_be_a_native_function_type__lookup_function_pointer() {
+fn must_be_a_native_function_type_lookup_function_pointer() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef S = Void Function(Pointer);
@@ -2881,7 +2895,7 @@ void f(DynamicLibrary lib) {
 /// Dart `must_be_a_native_function_type_test.dart` `test_lookupFunction_PointerNativeFunction`.
 #[test]
 #[ignore = "the FFI members are extension members (asFunction, lookupFunction, address): needs the extension resolution of unit C6"]
-fn must_be_a_native_function_type__lookup_function_pointer_native_function() {
+fn must_be_a_native_function_type_lookup_function_pointer_native_function() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef S = Void Function(Pointer<NativeFunction>);
@@ -2896,7 +2910,7 @@ void f(DynamicLibrary lib) {
 
 /// Dart `must_be_a_native_function_type_test.dart` `test_lookupFunction_PointerNativeFunction2`.
 #[test]
-fn must_be_a_native_function_type__lookup_function_pointer_native_function2() {
+fn must_be_a_native_function_type_lookup_function_pointer_native_function2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef S = Void Function(Pointer<NativeFunction<Int8 Function()>>);
@@ -2911,7 +2925,7 @@ void f(DynamicLibrary lib) {
 
 /// Dart `must_be_a_native_function_type_test.dart` `test_lookupFunction_PointerVoid`.
 #[test]
-fn must_be_a_native_function_type__lookup_function_pointer_void() {
+fn must_be_a_native_function_type_lookup_function_pointer_void() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef S = Pointer<Void> Function(Pointer<Void>);
@@ -2926,7 +2940,7 @@ void f(DynamicLibrary lib) {
 
 /// Dart `must_be_a_native_function_type_test.dart` `test_lookupFunction_VarArgs1`.
 #[test]
-fn must_be_a_native_function_type__lookup_function_var_args1() {
+fn must_be_a_native_function_type_lookup_function_var_args1() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final lib = DynamicLibrary.open('dontcare');
@@ -2944,7 +2958,7 @@ final variadicAt1Doublex2 =
 
 /// Dart `must_be_a_native_function_type_test.dart` `test_lookupFunction_VarArgs2`.
 #[test]
-fn must_be_a_native_function_type__lookup_function_var_args2() {
+fn must_be_a_native_function_type_lookup_function_var_args2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final lib = DynamicLibrary.open('dontcare');
@@ -2964,7 +2978,7 @@ final variadicAt1Int64x5Leaf =
 /// Dart `must_be_a_native_function_type_test.dart` `test_lookupFunction_VarArgs3`.
 #[test]
 #[ignore = "the FFI members are extension members (asFunction, lookupFunction, address): needs the extension resolution of unit C6"]
-fn must_be_a_native_function_type__lookup_function_var_args3() {
+fn must_be_a_native_function_type_lookup_function_var_args3() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final lib = DynamicLibrary.open('dontcare');
@@ -2984,7 +2998,7 @@ final variadicAt1Int64x5Leaf =
 /// Dart `must_be_a_native_function_type_test.dart` `test_lookupFunction_VarArgs4`.
 #[test]
 #[ignore = "the FFI members are extension members (asFunction, lookupFunction, address): needs the extension resolution of unit C6"]
-fn must_be_a_native_function_type__lookup_function_var_args4() {
+fn must_be_a_native_function_type_lookup_function_var_args4() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final lib = DynamicLibrary.open('dontcare');
@@ -3004,7 +3018,7 @@ final variadicAt1Int64x5Leaf =
 /// Dart `must_be_a_native_function_type_test.dart` `test_lookupFunction_VarArgs5`.
 #[test]
 #[ignore = "the FFI members are extension members (asFunction, lookupFunction, address): needs the extension resolution of unit C6"]
-fn must_be_a_native_function_type__lookup_function_var_args5() {
+fn must_be_a_native_function_type_lookup_function_var_args5() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final lib = DynamicLibrary.open('dontcare');
@@ -3023,7 +3037,7 @@ final variadicAt1Int64x5Leaf =
 
 /// Dart `must_be_a_subtype_test.dart` `test_fromFunction_firstArgument`.
 #[test]
-fn must_be_a_subtype__from_function_first_argument() {
+fn must_be_a_subtype_from_function_first_argument() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef T = Int8 Function(Int8);
@@ -3038,7 +3052,7 @@ void g() {
 
 /// Dart `must_be_a_subtype_test.dart` `test_fromFunction_secondArgument`.
 #[test]
-fn must_be_a_subtype__from_function_second_argument() {
+fn must_be_a_subtype_from_function_second_argument() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef T = Int8 Function(Int8);
@@ -3053,7 +3067,7 @@ void g() {
 
 /// Dart `must_be_a_subtype_test.dart` `test_fromFunction_valid_oneArgument`.
 #[test]
-fn must_be_a_subtype__from_function_valid_one_argument() {
+fn must_be_a_subtype_from_function_valid_one_argument() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef T = Void Function(Int8);
@@ -3068,7 +3082,7 @@ void g() {
 
 /// Dart `must_be_a_subtype_test.dart` `test_fromFunction_valid_twoArguments`.
 #[test]
-fn must_be_a_subtype__from_function_valid_two_arguments() {
+fn must_be_a_subtype_from_function_valid_two_arguments() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef T = Int8 Function(Int8);
@@ -3083,7 +3097,7 @@ void g() {
 
 /// Dart `must_be_a_subtype_test.dart` `test_fromFunction_valid_voidReturnPermissive`.
 #[test]
-fn must_be_a_subtype__from_function_valid_void_return_permissive() {
+fn must_be_a_subtype_from_function_valid_void_return_permissive() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 typedef T = Void Function(Int8);
@@ -3098,7 +3112,7 @@ void g() {
 
 /// Dart `non_constant_type_argument_test.dart` `test_ref_class`.
 #[test]
-fn non_constant_type_argument__ref_class() {
+fn non_constant_type_argument_ref_class() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3118,7 +3132,7 @@ void main() {
 
 /// Dart `non_constant_type_argument_test.dart` `test_ref_class_cascade`.
 #[test]
-fn non_constant_type_argument__ref_class_cascade() {
+fn non_constant_type_argument_ref_class_cascade() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3140,7 +3154,7 @@ void main() {
 /// Dart `non_constant_type_argument_test.dart` `test_ref_typeParameter`.
 #[test]
 #[ignore = "the FFI members are extension members (asFunction, lookupFunction, address): needs the extension resolution of unit C6"]
-fn non_constant_type_argument__ref_type_parameter() {
+fn non_constant_type_argument_ref_type_parameter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3153,7 +3167,7 @@ T genericRef<T extends Struct>(Pointer<T> p) =>
 
 /// Dart `non_constant_type_argument_test.dart` `test_refWithFinalizer_class`.
 #[test]
-fn non_constant_type_argument__ref_with_finalizer_class() {
+fn non_constant_type_argument_ref_with_finalizer_class() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3173,7 +3187,7 @@ void main() {
 
 /// Dart `non_constant_type_argument_test.dart` `test_refWithFinalizer_class_cascade`.
 #[test]
-fn non_constant_type_argument__ref_with_finalizer_class_cascade() {
+fn non_constant_type_argument_ref_with_finalizer_class_cascade() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3195,7 +3209,7 @@ void main() {
 /// Dart `non_constant_type_argument_test.dart` `test_refWithFinalizer_typeParameter`.
 #[test]
 #[ignore = "the FFI members are extension members (asFunction, lookupFunction, address): needs the extension resolution of unit C6"]
-fn non_constant_type_argument__ref_with_finalizer_type_parameter() {
+fn non_constant_type_argument_ref_with_finalizer_type_parameter() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3208,7 +3222,7 @@ T genericRefWithFinalizer<T extends Struct>(Pointer<T> p) =>
 
 /// Dart `non_native_function_type_argument_to_pointer_test.dart` `test_asFunction_Pointer_Opaque`.
 #[test]
-fn non_native_function_type_argument_to_pointer__as_function_pointer_opaque() {
+fn non_native_function_type_argument_to_pointer_as_function_pointer_opaque() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 main() {
@@ -3223,7 +3237,7 @@ main() {
 
 /// Dart `non_sized_type_argument_test.dart` `test_invalid_struct`.
 #[test]
-fn non_sized_type_argument__invalid_struct() {
+fn non_sized_type_argument_invalid_struct() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3238,7 +3252,7 @@ final class C extends Struct {
 
 /// Dart `non_sized_type_argument_test.dart` `test_invalid_union`.
 #[test]
-fn non_sized_type_argument__invalid_union() {
+fn non_sized_type_argument_invalid_union() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3253,7 +3267,7 @@ final class C extends Union {
 
 /// Dart `non_sized_type_argument_test.dart` `test_valid`.
 #[test]
-fn non_sized_type_argument__valid() {
+fn non_sized_type_argument_valid() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3268,7 +3282,7 @@ final class C extends Struct {
 
 /// Dart `packed_annotation_alignment_test.dart` `test_error`.
 #[test]
-fn packed_annotation_alignment__error() {
+fn packed_annotation_alignment_error() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3283,7 +3297,7 @@ final class C extends Struct {
 
 /// Dart `packed_annotation_alignment_test.dart` `test_no_error`.
 #[test]
-fn packed_annotation_alignment__no_error() {
+fn packed_annotation_alignment_no_error() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3298,7 +3312,7 @@ final class C extends Struct {
 
 /// Dart `packed_annotation_test.dart` `test_error_double`.
 #[test]
-fn packed_annotation__error_double() {
+fn packed_annotation_error_double() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3314,7 +3328,7 @@ final class C extends Struct {
 
 /// Dart `packed_annotation_test.dart` `test_error_missing`.
 #[test]
-fn packed_annotation__error_missing() {
+fn packed_annotation_error_missing() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3329,7 +3343,7 @@ final class C extends Struct {
 
 /// Dart `packed_annotation_test.dart` `test_no_error_struct_no_annotation`.
 #[test]
-fn packed_annotation__no_error_struct_no_annotation() {
+fn packed_annotation_no_error_struct_no_annotation() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3343,7 +3357,7 @@ final class C extends Struct {
 
 /// Dart `packed_annotation_test.dart` `test_no_error_struct_one_annotation`.
 #[test]
-fn packed_annotation__no_error_struct_one_annotation() {
+fn packed_annotation_no_error_struct_one_annotation() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3358,7 +3372,7 @@ final class C extends Struct {
 
 /// Dart `packed_annotation_test.dart` `test_no_error_union_no_annotation`.
 #[test]
-fn packed_annotation__no_error_union_no_annotation() {
+fn packed_annotation_no_error_union_no_annotation() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3372,7 +3386,7 @@ final class C extends Union {
 
 /// Dart `packed_annotation_test.dart` `test_no_error_union_one_annotation`.
 #[test]
-fn packed_annotation__no_error_union_one_annotation() {
+fn packed_annotation_no_error_union_one_annotation() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3387,7 +3401,7 @@ final class C extends Union {
 
 /// Dart `packed_annotation_test.dart` `test_no_error_union_two_annotations`.
 #[test]
-fn packed_annotation__no_error_union_two_annotations() {
+fn packed_annotation_no_error_union_two_annotations() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3403,7 +3417,7 @@ final class C extends Union {
 
 /// Dart `size_annotation_dimensions_test.dart` `test_error_array_2_3`.
 #[test]
-fn size_annotation_dimensions__error_array_2_3() {
+fn size_annotation_dimensions_error_array_2_3() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3418,7 +3432,7 @@ final class C extends Struct {
 
 /// Dart `size_annotation_dimensions_test.dart` `test_error_array_3_2`.
 #[test]
-fn size_annotation_dimensions__error_array_3_2() {
+fn size_annotation_dimensions_error_array_3_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3433,7 +3447,7 @@ final class C extends Struct {
 
 /// Dart `size_annotation_dimensions_test.dart` `test_error_multi_2_3`.
 #[test]
-fn size_annotation_dimensions__error_multi_2_3() {
+fn size_annotation_dimensions_error_multi_2_3() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3448,7 +3462,7 @@ final class C extends Struct {
 
 /// Dart `size_annotation_dimensions_test.dart` `test_no_error`.
 #[test]
-fn size_annotation_dimensions__no_error() {
+fn size_annotation_dimensions_no_error() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 
@@ -3463,7 +3477,7 @@ final class C extends Struct {
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Double`.
 #[test]
-fn subtype_of_ffi_class__double() {
+fn subtype_of_ffi_class_double() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C extends Double {}
@@ -3474,7 +3488,7 @@ final class C extends Double {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Double_language219`.
 #[test]
-fn subtype_of_ffi_class__double_language219() {
+fn subtype_of_ffi_class_double_language219() {
     assert_ffi_errors_in_code(
         r#"// @dart=2.19
 import 'dart:ffi';
@@ -3486,7 +3500,7 @@ class C extends Double {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Finalizable`.
 #[test]
-fn subtype_of_ffi_class__finalizable() {
+fn subtype_of_ffi_class_finalizable() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C extends Finalizable {}
@@ -3497,7 +3511,7 @@ class C extends Finalizable {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Float`.
 #[test]
-fn subtype_of_ffi_class__float() {
+fn subtype_of_ffi_class_float() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C extends Float {}
@@ -3508,7 +3522,7 @@ class C extends Float {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Int16`.
 #[test]
-fn subtype_of_ffi_class__int16() {
+fn subtype_of_ffi_class_int16() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C extends Int16 {}
@@ -3519,7 +3533,7 @@ class C extends Int16 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Int32`.
 #[test]
-fn subtype_of_ffi_class__int32() {
+fn subtype_of_ffi_class_int32() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C extends Int32 {}
@@ -3530,7 +3544,7 @@ class C extends Int32 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Int64`.
 #[test]
-fn subtype_of_ffi_class__int64() {
+fn subtype_of_ffi_class_int64() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C extends Int64 {}
@@ -3541,7 +3555,7 @@ class C extends Int64 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Int8`.
 #[test]
-fn subtype_of_ffi_class__int8() {
+fn subtype_of_ffi_class_int8() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C extends Int8 {}
@@ -3552,7 +3566,7 @@ class C extends Int8 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Pointer`.
 #[test]
-fn subtype_of_ffi_class__pointer() {
+fn subtype_of_ffi_class_pointer() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C extends Pointer {
@@ -3565,7 +3579,7 @@ class C extends Pointer {
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Struct`.
 #[test]
-fn subtype_of_ffi_class__struct() {
+fn subtype_of_ffi_class_struct() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C extends Struct {
@@ -3578,7 +3592,7 @@ final class C extends Struct {
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Uint16`.
 #[test]
-fn subtype_of_ffi_class__uint16() {
+fn subtype_of_ffi_class_uint16() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C extends Uint16 {}
@@ -3589,7 +3603,7 @@ class C extends Uint16 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Uint32`.
 #[test]
-fn subtype_of_ffi_class__uint32() {
+fn subtype_of_ffi_class_uint32() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C extends Uint32 {}
@@ -3600,7 +3614,7 @@ class C extends Uint32 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Uint64`.
 #[test]
-fn subtype_of_ffi_class__uint64() {
+fn subtype_of_ffi_class_uint64() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C extends Uint64 {}
@@ -3611,7 +3625,7 @@ class C extends Uint64 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Uint8`.
 #[test]
-fn subtype_of_ffi_class__uint8() {
+fn subtype_of_ffi_class_uint8() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C extends Uint8 {}
@@ -3622,7 +3636,7 @@ class C extends Uint8 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Union`.
 #[test]
-fn subtype_of_ffi_class__union() {
+fn subtype_of_ffi_class_union() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C extends Union {
@@ -3635,7 +3649,7 @@ final class C extends Union {
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Void`.
 #[test]
-fn subtype_of_ffi_class__void() {
+fn subtype_of_ffi_class_void() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C extends Void {}
@@ -3646,7 +3660,7 @@ class C extends Void {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Double`.
 #[test]
-fn subtype_of_ffi_class__double_2() {
+fn subtype_of_ffi_class_double_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C implements Double {}
@@ -3657,7 +3671,7 @@ class C implements Double {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Double_language219`.
 #[test]
-fn subtype_of_ffi_class__double_language219_2() {
+fn subtype_of_ffi_class_double_language219_2() {
     assert_ffi_errors_in_code(
         r#"// @dart=2.19
 import 'dart:ffi';
@@ -3669,7 +3683,7 @@ class C implements Double {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Double_prefixed`.
 #[test]
-fn subtype_of_ffi_class__double_prefixed() {
+fn subtype_of_ffi_class_double_prefixed() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi' as ffi;
 class C implements ffi.Double {}
@@ -3680,7 +3694,7 @@ class C implements ffi.Double {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Finalizable`.
 #[test]
-fn subtype_of_ffi_class__finalizable_2() {
+fn subtype_of_ffi_class_finalizable_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C implements Finalizable {}
@@ -3691,7 +3705,7 @@ class C implements Finalizable {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Float`.
 #[test]
-fn subtype_of_ffi_class__float_2() {
+fn subtype_of_ffi_class_float_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C implements Float {}
@@ -3702,7 +3716,7 @@ class C implements Float {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Int16`.
 #[test]
-fn subtype_of_ffi_class__int16_2() {
+fn subtype_of_ffi_class_int16_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C implements Int16 {}
@@ -3713,7 +3727,7 @@ class C implements Int16 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Int32`.
 #[test]
-fn subtype_of_ffi_class__int32_2() {
+fn subtype_of_ffi_class_int32_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C implements Int32 {}
@@ -3724,7 +3738,7 @@ class C implements Int32 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Int64`.
 #[test]
-fn subtype_of_ffi_class__int64_2() {
+fn subtype_of_ffi_class_int64_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C implements Int64 {}
@@ -3735,7 +3749,7 @@ class C implements Int64 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Int8`.
 #[test]
-fn subtype_of_ffi_class__int8_2() {
+fn subtype_of_ffi_class_int8_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C implements Int8 {}
@@ -3746,7 +3760,7 @@ class C implements Int8 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Pointer`.
 #[test]
-fn subtype_of_ffi_class__pointer_2() {
+fn subtype_of_ffi_class_pointer_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C implements Pointer {}
@@ -3757,7 +3771,7 @@ class C implements Pointer {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Struct`.
 #[test]
-fn subtype_of_ffi_class__struct_2() {
+fn subtype_of_ffi_class_struct_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C implements Struct {}
@@ -3768,7 +3782,7 @@ final class C implements Struct {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Uint16`.
 #[test]
-fn subtype_of_ffi_class__uint16_2() {
+fn subtype_of_ffi_class_uint16_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C implements Uint16 {}
@@ -3779,7 +3793,7 @@ class C implements Uint16 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Uint32`.
 #[test]
-fn subtype_of_ffi_class__uint32_2() {
+fn subtype_of_ffi_class_uint32_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C implements Uint32 {}
@@ -3790,7 +3804,7 @@ class C implements Uint32 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Uint64`.
 #[test]
-fn subtype_of_ffi_class__uint64_2() {
+fn subtype_of_ffi_class_uint64_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C implements Uint64 {}
@@ -3801,7 +3815,7 @@ class C implements Uint64 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Uint8`.
 #[test]
-fn subtype_of_ffi_class__uint8_2() {
+fn subtype_of_ffi_class_uint8_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C implements Uint8 {}
@@ -3812,7 +3826,7 @@ class C implements Uint8 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Union`.
 #[test]
-fn subtype_of_ffi_class__union_2() {
+fn subtype_of_ffi_class_union_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C implements Union {}
@@ -3823,7 +3837,7 @@ final class C implements Union {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Void`.
 #[test]
-fn subtype_of_ffi_class__void_2() {
+fn subtype_of_ffi_class_void_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C implements Void {}
@@ -3834,7 +3848,7 @@ class C implements Void {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Double`.
 #[test]
-fn subtype_of_ffi_class__double_2_2() {
+fn subtype_of_ffi_class_double_2_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C with Double {}
@@ -3845,7 +3859,7 @@ class C with Double {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Double_language219`.
 #[test]
-fn subtype_of_ffi_class__double_language219_2_2() {
+fn subtype_of_ffi_class_double_language219_2_2() {
     assert_ffi_errors_in_code(
         r#"// @dart=2.19
 import 'dart:ffi';
@@ -3857,7 +3871,7 @@ class C with Double {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Double_prefixed`.
 #[test]
-fn subtype_of_ffi_class__double_prefixed_2() {
+fn subtype_of_ffi_class_double_prefixed_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi' as ffi;
 class C with ffi.Double {}
@@ -3868,7 +3882,7 @@ class C with ffi.Double {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Float`.
 #[test]
-fn subtype_of_ffi_class__float_2_2() {
+fn subtype_of_ffi_class_float_2_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C with Float {}
@@ -3879,7 +3893,7 @@ class C with Float {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Int16`.
 #[test]
-fn subtype_of_ffi_class__int16_2_2() {
+fn subtype_of_ffi_class_int16_2_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C with Int16 {}
@@ -3890,7 +3904,7 @@ class C with Int16 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Int32`.
 #[test]
-fn subtype_of_ffi_class__int32_2_2() {
+fn subtype_of_ffi_class_int32_2_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C with Int32 {}
@@ -3901,7 +3915,7 @@ class C with Int32 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Int64`.
 #[test]
-fn subtype_of_ffi_class__int64_2_2() {
+fn subtype_of_ffi_class_int64_2_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C with Int64 {}
@@ -3912,7 +3926,7 @@ class C with Int64 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Int8`.
 #[test]
-fn subtype_of_ffi_class__int8_2_2() {
+fn subtype_of_ffi_class_int8_2_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C with Int8 {}
@@ -3923,7 +3937,7 @@ class C with Int8 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Pointer`.
 #[test]
-fn subtype_of_ffi_class__pointer_2_2() {
+fn subtype_of_ffi_class_pointer_2_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C with Pointer {}
@@ -3934,7 +3948,7 @@ class C with Pointer {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Struct`.
 #[test]
-fn subtype_of_ffi_class__struct_2_2() {
+fn subtype_of_ffi_class_struct_2_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C with Struct {}
@@ -3945,7 +3959,7 @@ final class C with Struct {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Uint16`.
 #[test]
-fn subtype_of_ffi_class__uint16_2_2() {
+fn subtype_of_ffi_class_uint16_2_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C with Uint16 {}
@@ -3956,7 +3970,7 @@ class C with Uint16 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Uint32`.
 #[test]
-fn subtype_of_ffi_class__uint32_2_2() {
+fn subtype_of_ffi_class_uint32_2_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C with Uint32 {}
@@ -3967,7 +3981,7 @@ class C with Uint32 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Uint64`.
 #[test]
-fn subtype_of_ffi_class__uint64_2_2() {
+fn subtype_of_ffi_class_uint64_2_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C with Uint64 {}
@@ -3978,7 +3992,7 @@ class C with Uint64 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Uint8`.
 #[test]
-fn subtype_of_ffi_class__uint8_2_2() {
+fn subtype_of_ffi_class_uint8_2_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C with Uint8 {}
@@ -3989,7 +4003,7 @@ class C with Uint8 {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Union`.
 #[test]
-fn subtype_of_ffi_class__union_2_2() {
+fn subtype_of_ffi_class_union_2_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class C with Union {}
@@ -4000,7 +4014,7 @@ final class C with Union {}
 
 /// Dart `subtype_of_ffi_class_test.dart` `test_Void`.
 #[test]
-fn subtype_of_ffi_class__void_2_2() {
+fn subtype_of_ffi_class_void_2_2() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 class C with Void {}
@@ -4011,7 +4025,7 @@ class C with Void {}
 
 /// Dart `subtype_of_struct_class_test.dart` `test_extends_struct`.
 #[test]
-fn subtype_of_struct_class__extends_struct() {
+fn subtype_of_struct_class_extends_struct() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class S extends Struct {
@@ -4025,7 +4039,7 @@ final class C extends S {}
 
 /// Dart `subtype_of_struct_class_test.dart` `test_extends_union`.
 #[test]
-fn subtype_of_struct_class__extends_union() {
+fn subtype_of_struct_class_extends_union() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class S extends Union {
@@ -4039,7 +4053,7 @@ final class C extends S {}
 
 /// Dart `subtype_of_struct_class_test.dart` `test_implements_abi_specific_int`.
 #[test]
-fn subtype_of_struct_class__implements_abi_specific_int() {
+fn subtype_of_struct_class_implements_abi_specific_int() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 @AbiSpecificIntegerMapping({
@@ -4058,7 +4072,7 @@ final class AbiSpecificInteger4 implements AbiSpecificInteger1 {
 
 /// Dart `subtype_of_struct_class_test.dart` `test_implements_struct`.
 #[test]
-fn subtype_of_struct_class__implements_struct() {
+fn subtype_of_struct_class_implements_struct() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class S extends Struct {}
@@ -4070,7 +4084,7 @@ final class C implements S {}
 
 /// Dart `subtype_of_struct_class_test.dart` `test_implements_union`.
 #[test]
-fn subtype_of_struct_class__implements_union() {
+fn subtype_of_struct_class_implements_union() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class S extends Union {}
@@ -4082,7 +4096,7 @@ final class C implements S {}
 
 /// Dart `subtype_of_struct_class_test.dart` `test_with_struct`.
 #[test]
-fn subtype_of_struct_class__with_struct() {
+fn subtype_of_struct_class_with_struct() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class S extends Struct {}
@@ -4094,7 +4108,7 @@ final class C with S {}
 
 /// Dart `subtype_of_struct_class_test.dart` `test_with_union`.
 #[test]
-fn subtype_of_struct_class__with_union() {
+fn subtype_of_struct_class_with_union() {
     assert_ffi_errors_in_code(
         r#"import 'dart:ffi';
 final class S extends Union {}

@@ -427,7 +427,7 @@ impl ErrorVerifier<'_> {
     }
 
     /// Dart `node.declaredFragment!.element`.
-    fn declared_element(&self, node: impl Into<dartr_ast::NodeId>) -> Option<ElementId> {
+    pub(super) fn declared_element(&self, node: impl Into<dartr_ast::NodeId>) -> Option<ElementId> {
         let fragment = *self.tables.declared_fragment.get(node)?;
         self.ctx.fragment_data(fragment)?.element.try_get().copied()
     }
@@ -1303,7 +1303,6 @@ impl ErrorVerifier<'_> {
 
     /// Dart `_getLibraryName(element)`: the URI of the library of
     /// [element], with the libraries that export it to this unit.
-    #[allow(dead_code)] // Called by D5 (`_checkForAmbiguousImport`).
     pub(crate) fn get_library_name(&self, element: Option<ElementId>) -> String {
         let Some(element) = element else {
             return String::new();
@@ -1421,33 +1420,6 @@ impl ErrorVerifier<'_> {
             let type_name = self.ast.qualified_name(named_type);
             self.report_at(diag::type_annotation_deferred_class(&type_name), named_type);
         }
-    }
-
-    /// Dart `NamedType.isDeferred`: the import prefix has a deferred
-    /// fragment.
-    fn named_type_is_deferred(&self, named_type: Id<NamedType>) -> bool {
-        let Some(prefix) = self.ast[named_type].import_prefix else {
-            return false;
-        };
-        let Some(ElemRef::Base(prefix_element)) = self.element(prefix) else {
-            return false;
-        };
-        if prefix_element.tag() != Tag::Prefix {
-            return false;
-        }
-        let mut fragment = self
-            .ctx
-            .element_data(prefix_element)
-            .map(|d| d.first_fragment);
-        while let Some(f) = fragment {
-            if let Some(pf) = f.cast::<dartr_element::PrefixFragment>()
-                && self.ctx.fragment(pf).is_deferred
-            {
-                return true;
-            }
-            fragment = self.ctx.fragment_data(f).and_then(|d| d.next_fragment);
-        }
-        false
     }
 
     /// Dart `_checkForTypeParameterReferencedByStatic(name:, element:)`.

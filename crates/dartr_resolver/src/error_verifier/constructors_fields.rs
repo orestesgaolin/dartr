@@ -735,10 +735,10 @@ impl ErrorVerifier<'_> {
                     self.report_at_token(diag::external_field_initializer(), name);
                 }
             }
-            Tag::TopLevelVariable => {
-                if flags.contains(FragmentFlags::VARIABLE_FRAGMENT_IS_EXTERNAL) {
-                    self.report_at_token(diag::external_variable_initializer(), name);
-                }
+            Tag::TopLevelVariable
+                if flags.contains(FragmentFlags::VARIABLE_FRAGMENT_IS_EXTERNAL) =>
+            {
+                self.report_at_token(diag::external_variable_initializer(), name);
             }
             _ => {}
         }
@@ -1384,7 +1384,7 @@ impl ErrorVerifier<'_> {
 
     /// Dart `_checkForFactoryBodyCompleteness`.
     fn check_for_factory_body_completeness(&mut self, node: Id<ConstructorDeclaration>) {
-        if !self.feature_enabled(ExperimentalFlag::Augmentations) {
+        if !self.unit_feature_enabled(ExperimentalFlag::Augmentations) {
             return;
         }
         // Report only on the introductory declaration.
@@ -1461,7 +1461,7 @@ impl ErrorVerifier<'_> {
         name_token: TokenId,
         fragment: FragmentId,
     ) {
-        if !self.feature_enabled(ExperimentalFlag::Augmentations) {
+        if !self.unit_feature_enabled(ExperimentalFlag::Augmentations) {
             return;
         }
         if self.fragment_has(fragment, FragmentFlags::FRAGMENT_IS_AUGMENTATION) {
@@ -2207,13 +2207,6 @@ impl ErrorVerifier<'_> {
         self.fragment_element(self.declared_fragment_of(node)?)
     }
 
-    /// Whether [fragment] has [flag].
-    fn fragment_has(&self, fragment: FragmentId, flag: FragmentFlags) -> bool {
-        self.ctx
-            .fragment_data(fragment)
-            .is_some_and(|f| f.flags.has(flag))
-    }
-
     /// Dart `fragment.previousFragment`.
     fn previous_fragment(&self, fragment: FragmentId) -> Option<FragmentId> {
         self.ctx.fragment_data(fragment)?.previous_fragment
@@ -2405,25 +2398,8 @@ impl ErrorVerifier<'_> {
             || crate::ast_ext::in_constant_context(self.ast, node.raw())
     }
 
-    /// Dart `NamedType.isDeferred`.
-    fn named_type_is_deferred(&self, named_type: Id<NamedType>) -> bool {
-        let Some(import_prefix) = self.ast[named_type].import_prefix else {
-            return false;
-        };
-        let Some(ElemRef::Base(prefix)) = self.element(import_prefix) else {
-            return false;
-        };
-        if prefix.tag() != Tag::Prefix {
-            return false;
-        }
-        self.element_fragments(prefix).iter().any(|&f| {
-            f.cast::<dartr_element::PrefixFragment>()
-                .is_some_and(|f| self.ctx.fragment(f).is_deferred)
-        })
-    }
-
     /// Dart `_featureSet.isEnabled(feature)` (the features of the unit).
-    fn feature_enabled(&self, flag: ExperimentalFlag) -> bool {
+    fn unit_feature_enabled(&self, flag: ExperimentalFlag) -> bool {
         self.unit.features.is_experiment_enabled(flag)
     }
 

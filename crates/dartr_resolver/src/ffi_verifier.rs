@@ -1082,12 +1082,13 @@ impl<'a> FfiVerifier<'a> {
         let ast = self.ast;
         let list = if let Some(a) = ast.cast::<Annotation>(node) {
             ast[a].arguments?
-        } else if let Some(c) = ast.cast::<InstanceCreationExpression>(node) {
-            ast[c].argument_list
-        } else if let Some(m) = ast.cast::<MethodInvocation>(node) {
-            ast[m].argument_list
         } else {
-            return None;
+            ast.cast::<InstanceCreationExpression>(node)
+                .map(|c| ast[c].argument_list)
+                .or_else(|| {
+                    ast.cast::<MethodInvocation>(node)
+                        .map(|m| ast[m].argument_list)
+                })?
         };
         Some(ast[list].arguments)
     }
@@ -2125,11 +2126,10 @@ impl<'a> FfiVerifier<'a> {
                 .scope_lookup_result
                 .get(ast[m].method_name)?
                 .getter?
-        } else if let Some(c) = ast.cast::<InstanceCreationExpression>(expr.raw()) {
+        } else {
+            let c = ast.cast::<InstanceCreationExpression>(expr.raw())?;
             let named_type = ast[ast[c].constructor_name].type_;
             self.base_element(named_type.raw())?
-        } else {
-            return None;
         };
         class.cast::<InterfaceElement>()?;
         self.ctx.element_name(class)
