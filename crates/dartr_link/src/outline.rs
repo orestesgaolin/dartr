@@ -89,6 +89,11 @@ pub fn build_outlines(lk: &mut Linker<'_>, tp: &TypeProvider, resolver: &dyn cra
         }
     }
     complete_classes(lk, tp);
+    // The elements built since `_computeLibraryScopes` (synthetic and mixin
+    // application constructors) get their `enclosingElement` and `library`:
+    // top-level inference resolves initializers that read them (Dart
+    // computes both from the fragments on demand).
+    crate::link::set_library_and_enclosing(&mut lk.core.store);
     let lk_ref: &Linker<'_> = lk;
     let ctx = link_ctx(lk_ref, tp, &features);
     // _performTopLevelInference

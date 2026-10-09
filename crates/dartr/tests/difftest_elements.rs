@@ -72,6 +72,38 @@ fn elements_parity_on_override_inference_fixtures() {
     );
 }
 
+/// Top-level inference (unit C10, `fixtures/top_level_inference`), without
+/// masking the inferred types: initializers of top-level variables and
+/// fields inferred on demand (also from override inference and field
+/// formal parameters), dependency cycles (`typeInferenceError`), function
+/// expressions with local parameters and type parameters.
+#[test]
+fn elements_parity_on_top_level_inference_fixtures() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/top_level_inference");
+    let report = run(&Options {
+        mask_inferred: false,
+        ..options(vec![dir.join("variables.dart")])
+    })
+    .unwrap();
+    assert_eq!(report.files, 1);
+    assert_eq!(report.different(), 0, "{}{}", report.difference_report(20), report.summary());
+}
+
+/// Enum constants: Dart infers their types from the synthetic instance
+/// creation of each constant.
+#[test]
+#[ignore = "needs the instance creation resolver (unit C8)"]
+fn elements_parity_on_top_level_inference_enum_fixtures() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/top_level_inference");
+    let report = run(&Options {
+        mask_inferred: false,
+        ..options(vec![dir.join("enums.dart")])
+    })
+    .unwrap();
+    assert_eq!(report.files, 1);
+    assert_eq!(report.different(), 0, "{}{}", report.difference_report(20), report.summary());
+}
+
 /// The `dart:` libraries of the SDK of the `dart` on PATH, linked from
 /// source (the `dart:core` cycle and every other SDK cycle).
 #[test]
