@@ -202,20 +202,13 @@ impl<'a> ResolverVisitor<'a> {
         self.visit_children(node);
     }
 
-    /// Dart `visitEnumConstantDeclaration`. Partly STUB (C8): the
-    /// constructor invocation of the constant is not resolved; the
-    /// arguments are resolved in the fallback way.
+    /// Dart `visitEnumConstantDeclaration`.
     pub fn visit_enum_constant_declaration(&mut self, node: Id<EnumConstantDeclaration>) {
-        let documentation_comment = self.ast[node].documentation_comment;
-        self.visit_opt(documentation_comment);
+        let doc = self.ast[node].documentation_comment;
+        self.visit_opt(doc);
         let metadata = self.ast[node].metadata;
         self.visit_list(metadata);
-        self.check_unreachable_node(node);
-        if let Some(arguments) = self.ast[node].arguments {
-            self.with_flow_analysis(node.raw(), |rv| {
-                rv.fallback_visit_expressions_below(arguments.raw());
-            });
-        }
+        crate::instance_creation_expression_resolver::visit_enum_constant_declaration(self, node);
     }
 
     pub fn visit_enum_constant_arguments(&mut self, node: Id<EnumConstantArguments>) {
@@ -305,7 +298,7 @@ impl<'a> ResolverVisitor<'a> {
     pub fn visit_constructor_name(&mut self, node: Id<ConstructorName>) {
         let ty = self.ast[node].type_;
         self.visit_node(ty.raw());
-        // Dart `elementResolver.visitConstructorName` (C8).
+        crate::element_resolver::visit_constructor_name(self, node);
     }
 
     pub fn visit_constructor_selector(&mut self, node: Id<ConstructorSelector>) {
@@ -313,15 +306,14 @@ impl<'a> ResolverVisitor<'a> {
         self.visit_children(node);
     }
 
-    /// Dart `visitSuperConstructorInvocation`. STUB (C8): the invocation is
-    /// not resolved; the arguments are resolved in the fallback way.
+    /// Dart `visitSuperConstructorInvocation`.
     pub fn visit_super_constructor_invocation(&mut self, node: Id<SuperConstructorInvocation>) {
-        self.fallback_visit_expressions_below(node.raw());
+        crate::instance_creation_expression_resolver::visit_super_constructor_invocation(self, node);
     }
 
-    /// Dart `visitRedirectingConstructorInvocation`. STUB (C8).
+    /// Dart `visitRedirectingConstructorInvocation`.
     pub fn visit_redirecting_constructor_invocation(&mut self, node: Id<RedirectingConstructorInvocation>) {
-        self.fallback_visit_expressions_below(node.raw());
+        crate::instance_creation_expression_resolver::visit_redirecting_constructor_invocation(self, node);
     }
 
     pub fn visit_method_declaration(&mut self, node: Id<MethodDeclaration>) {
