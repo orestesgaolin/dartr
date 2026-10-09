@@ -154,7 +154,14 @@ class A {
         Some("named")
     );
     let prefix = a.node_at(NodeKind::SimpleIdentifier, "model.A", 0, 0);
-    assert_eq!(a.element_of(prefix).unwrap().tag(), Tag::Prefix);
+    let prefix_element = a.element_of(prefix).expect("import prefix element");
+    assert_eq!(prefix_element.tag(), Tag::Prefix);
+    assert_eq!(
+        a.ctx(a.unit())
+            .element_data(prefix_element)
+            .and_then(|data| data.library),
+        Some(a.library.library)
+    );
     let class_name = a.node_at(NodeKind::SimpleIdentifier, "A.named", 0, 0);
     assert_eq!(a.element_of(class_name).unwrap().tag(), Tag::Class);
     let constructor_name = a.node_at(NodeKind::SimpleIdentifier, "named(42)", 0, 0);
@@ -394,6 +401,23 @@ void f() {}
         "{:?}",
         a.diagnostic_names()
     );
+}
+
+#[test]
+fn extension_type_representation_parameter_metadata_is_resolved_during_recovery() {
+    let source = r#"
+const anno = 0;
+
+extension type E26(@anno int) {}
+"#;
+    let Some(a) = run(&[("main.dart", source)]) else {
+        return;
+    };
+
+    let name = a.node_at(NodeKind::SimpleIdentifier, "anno int", 0, 0);
+    let element = a.element_of(name).expect("annotation element");
+    assert_eq!(element.tag(), Tag::Getter);
+    assert_eq!(a.element_name(element).as_deref(), Some("anno"));
 }
 
 #[test]
