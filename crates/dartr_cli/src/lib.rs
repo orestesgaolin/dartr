@@ -4,7 +4,9 @@
 //!
 //! - [args]: the options and usage errors of `dart analyze` (`package:args` rules);
 //! - [provider]: [provider::DiagnosticsProvider], the source of the diagnostics of
-//!   each file, and [provider::ParseOnlyProvider] (parse diagnostics only);
+//!   each file, and [provider::ParseOnlyProvider] (parse diagnostics and the
+//!   AST-only lint rules of `dartr_lints`, run per library with its parts;
+//!   enabled rules that need resolution are skipped);
 //! - [ignore_info], [ignore_validator]: `// ignore:` and `// ignore_for_file:`
 //!   comments (`IgnoreInfo`, `IgnoreValidator`, `_filterIgnoredDiagnostics`);
 //! - [server]: protocol `AnalysisError`s with the `errors:` processors of

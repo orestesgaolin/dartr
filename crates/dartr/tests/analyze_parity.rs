@@ -361,6 +361,7 @@ linter:
     - empty_statements
     - eol_at_end_of_file
     - file_names
+    - throw_in_finally
     - unnecessary_new
     - unawaited_futures
 ";
@@ -422,6 +423,33 @@ f4() {}
 Object q() => new Object();
 ";
 
+/// The nearest `try` decides: the second `throw` is not reported.
+const LINT_FINALLY: &str = "\
+void a() {
+  try {
+    print(1);
+  } finally {
+    throw StateError('direct');
+  }
+}
+
+void b() {
+  try {
+    print(1);
+  } finally {
+    try {
+      print(2);
+    } on Object {
+      throw StateError('nested');
+    }
+    void inner() {
+      throw StateError('in function');
+    }
+    inner();
+  }
+}
+";
+
 fn lint_project(base: &Path, name: &str, options: &str) -> PathBuf {
     let root = base.join(name);
     let pc = package_config("3.13");
@@ -436,6 +464,7 @@ fn lint_project(base: &Path, name: &str, options: &str) -> PathBuf {
             ("lib/Bad_Name.dart", LINT_LIB),
             ("lib/Bad_Name_part.dart", LINT_PART),
             ("lib/bad_name_two.dart", LINT_PART_TWO),
+            ("lib/finally.dart", LINT_FINALLY),
             ("lib/no_eol.dart", "int z() => 1;"),
             ("lib/syntax.dart", "int y() => 1 // ignore: expected_token\nint w() { return 1 }\nclass sx {}\n"),
         ],

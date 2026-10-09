@@ -691,24 +691,40 @@ fn formal_parameter_name(ast: &Ast, node: Id<FormalParameter>) -> Option<dartr_s
     }
 }
 
+// Dart `ControlFlowInFinallyBlockReporter.reportIfFinallyAncestorExists`:
+// only the nearest `TryStatement` is checked.
 fn throw_in_finally(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
-    let mut current = node;
-    while let Some(parent) = ctx.ast.parent(current) {
-        if FunctionBody::test(ctx.ast.kind(parent)) {
-            return;
+    let mut current = Some(node);
+    let mut try_statement = None;
+    while let Some(n) = current {
+        if let Some(t) = ctx.ast.cast::<TryStatement>(n) {
+            try_statement = Some(t);
+            break;
         }
-        if let Some(try_node) = ctx.ast.cast::<TryStatement>(parent)
-            && let Some(finally_block) = ctx.ast[try_node].finally_block
-            && ctx
-                .ast
-                .this_or_ancestor_matching(node, |_, n| n == finally_block.raw())
-                .is_some()
-        {
-            ctx.report_node(out, &diag::THROW_IN_FINALLY, node, &["throw"]);
-            return;
-        }
-        current = parent;
+        current = ctx.ast.parent(n);
     }
+    let Some(finally_block) = try_statement.and_then(|t| ctx.ast[t].finally_block) else {
+        return;
+    };
+    let finally_raw = finally_block.raw();
+    let in_finally = |n: NodeId| {
+        ctx.ast
+            .this_or_ancestor_matching(n, |_, m| m == finally_raw)
+            .is_some()
+    };
+    if !in_finally(node) {
+        return;
+    }
+    // A function body inside the `finally` block that contains the node
+    // enables the `throw`.
+    let mut current = Some(node);
+    while let Some(n) = current {
+        if FunctionBody::test(ctx.ast.kind(n)) && in_finally(n) {
+            return;
+        }
+        current = ctx.ast.parent(n);
+    }
+    ctx.report_node(out, &diag::THROW_IN_FINALLY, node, &["throw"]);
 }
 
 const VALID_HTML_TAGS: &[&str] = &[
