@@ -264,3 +264,44 @@ pub fn find_package_config(directory: &str) -> Result<Option<Packages>, String> 
     }
     Ok(None)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finds_language_version_and_included_formatter_options() {
+        let root = std::env::temp_dir().join(format!("dartr_config_cache_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("lib/src")).unwrap();
+        std::fs::create_dir_all(root.join(".dart_tool")).unwrap();
+        std::fs::write(
+            root.join("analysis_options.yaml"),
+            "include: base.yaml\nformatter:\n  trailing_commas: preserve\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("base.yaml"), "formatter:\n  page_width: 40\n").unwrap();
+        std::fs::write(
+            root.join(".dart_tool/package_config.json"),
+            r#"{"configVersion":2,"packages":[{"name":"p","rootUri":"../","packageUri":"lib/","languageVersion":"3.6"}]}"#,
+        )
+        .unwrap();
+        let file = root.join("lib/src/a.dart").display().to_string();
+
+        let mut cache = ConfigCache::new();
+        let mut messages = String::new();
+        assert_eq!(
+            cache.find_language_version(&file, &file, &mut messages),
+            Some(Version::new(3, 6))
+        );
+        assert_eq!(
+            cache.find_formatter_options(&file, &mut messages),
+            Ok(FormatterConfig {
+                page_width: Some(40),
+                trailing_commas: Some(TrailingCommas::Preserve),
+            })
+        );
+        assert_eq!(messages, "");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
