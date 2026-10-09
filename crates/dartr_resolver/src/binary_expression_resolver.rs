@@ -458,7 +458,7 @@ fn resolve_user_definable_type(rv: &mut ResolverVisitor<'_>, node: Id<BinaryExpr
             .extended_type
             .get(left_operand)
             .copied()
-            .unwrap_or(TypeId::DYNAMIC)
+            .unwrap_or(TypeId::INVALID)
     } else {
         let t = type_of(rv, left_operand);
         rv.type_system.resolve_to_bound(t)
