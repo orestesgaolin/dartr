@@ -12,7 +12,9 @@
 use std::collections::BTreeSet;
 use std::sync::OnceLock;
 
-use crate::support::analyze;
+use dartr_parser::experimental_flags::ExperimentalFlag;
+
+use crate::support::analyze_with_experiments;
 
 /// The codes of `tools/difftest/error_verifier_codes.txt`.
 pub fn error_verifier_codes() -> &'static BTreeSet<String> {
@@ -40,7 +42,16 @@ pub fn assert_errors_in_code(source: &str, expected: &[(&str, usize, usize)]) {
 /// `main.dart`, the library that is checked; the others are imported or
 /// parts).
 pub fn assert_errors_in_files(files: &[(&str, &str)], expected: &[(&str, usize, usize)]) {
-    let Some(a) = analyze(files) else {
+    // Dart `experimentsForTests` (analyzer_testing/experiments/experiments.dart),
+    // which `PubPackageResolutionTest` enables in the analysis options.
+    let experiments = vec![
+        ExperimentalFlag::Augmentations,
+        ExperimentalFlag::EnhancedParts,
+        ExperimentalFlag::StaticExtensions,
+        ExperimentalFlag::ThisPromotion,
+        ExperimentalFlag::Variance,
+    ];
+    let Some(a) = analyze_with_experiments(files, experiments) else {
         eprintln!("skipped: no Dart SDK on PATH");
         return;
     };
