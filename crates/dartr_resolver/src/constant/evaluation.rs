@@ -3733,7 +3733,12 @@ impl<'e, 'a> InstanceCreationEvaluator<'e, 'a> {
                 return false;
             }
             let ctx = self.engine.ctx(&u);
-            let Some(element) = u.tables.param_element.get(second_argument.node).copied() else {
+            let Some(element) = u
+                .tables
+                .param_element
+                .get(ast[named].argument_expression)
+                .copied()
+            else {
                 return false;
             };
             let base = member::base_element(&ctx, element);
@@ -4360,7 +4365,13 @@ impl<'e, 'a> InstanceCreationEvaluator<'e, 'a> {
             // an unresolved expression is evaluated. We do this to continue
             // the rest of the evaluation without producing unrelated errors.
             if let Some(named) = au.ast.cast::<NamedArgument>(argument.node) {
-                let corresponding = au.tables.param_element.get(argument.node).copied();
+                // Dart `argument.correspondingParameter` (keyed by the expression
+                // of the named argument).
+                let corresponding = au
+                    .tables
+                    .param_element
+                    .get(au.ast[named].argument_expression)
+                    .copied();
                 let parameter_type =
                     corresponding.map_or(TypeId::INVALID, |p| member::type_(&actx, p));
                 let argument_constant = constant_visitor.value_of(
