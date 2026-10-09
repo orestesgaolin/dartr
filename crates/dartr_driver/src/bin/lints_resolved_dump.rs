@@ -1,9 +1,6 @@
 // Dart source: pkg/analyzer/lib/src/dart/analysis/library_analyzer.dart (_computeLints)
 //! JSON-lines lint runner that links and resolves before running lint processors.
-use dartr_driver::{
-    driver::Driver,
-    file_state::{FileConfig, FileId, FileSystemState, SourceFactory},
-};
+use dartr_driver::file_state::FileId;
 use dartr_element::Generation;
 use dartr_lints::{Registry, rules::implemented_rules};
 use dartr_project::{AnalysisContextCollection, CollectionOptions, paths};
@@ -12,7 +9,6 @@ use indexmap::IndexMap;
 use serde_json::{Value, json};
 use std::{
     io::{self, BufRead},
-    rc::Rc,
     sync::Arc,
 };
 
@@ -43,13 +39,13 @@ fn run() {
         .iter()
         .map(|r| paths::normalize(r["path"].as_str().expect("path")))
         .collect();
-    let collection = Rc::new(AnalysisContextCollection::new(
+    let collection = AnalysisContextCollection::new(
         &paths,
         &CollectionOptions {
             sdk_path: dartr_project::sdk::find_sdk_path(),
             ..Default::default()
         },
-    ));
+    );
     let generation = Arc::new(Generation::new(0));
     let mut results: IndexMap<String, Value> = IndexMap::new();
     for context_index in 0..collection.contexts.len() {
@@ -63,30 +59,8 @@ fn run() {
         if selected.is_empty() {
             continue;
         }
-        let source_factory = SourceFactory {
-            workspace: context.root.workspace.clone(),
-            sdk: context.sdk.as_deref().cloned(),
-        };
-        let config_collection = collection.clone();
-        let config_for = Box::new(move |path: &str, uri: &str| {
-            let context = &config_collection.contexts[context_index];
-            let version = context.language_version(path, uri);
-            let options = config_collection.options_for(context, path);
-            let flags = options.enable_experiment_flags.clone().unwrap_or_default();
-            let enabled = dartr_project::experiments::enabled_experiments(&flags);
-            FileConfig {
-                package_language_version: (version.major, version.minor),
-                experiments: dartr_lints::ExperimentalFlag::VALUES
-                    .iter()
-                    .copied()
-                    .filter(|flag| enabled.contains(&flag.name()))
-                    .collect(),
-            }
-        });
-        let mut driver = Driver::new(
-            FileSystemState::new(source_factory, config_for),
-            generation.clone(),
-        );
+        let mut driver =
+            dartr_driver::project::context_driver(&collection, context_index, generation.clone());
         let files: Vec<_> = selected
             .iter()
             .map(|&i| driver.fs.get_file_for_path(&paths[i]))
