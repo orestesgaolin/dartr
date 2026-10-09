@@ -52,10 +52,6 @@ const KNOWN_FAILURES: &[(&str, &str)] = &[
         "equal_keys_in_map_test.dart::EqualKeysInMapTest::test_literal_constant",
         "needs computeConstantValue() of non-const expressions; the port compares literal values only",
     ),
-    (
-        "invalid_use_of_visible_for_testing_member_test.dart::InvalidUseOfVisibleForTestingMemberTest::test_import_show",
-        "the names of combinators have no element (library_analyzer resolve_directives is a stub)",
-    ),
 ];
 
 #[test]

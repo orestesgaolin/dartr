@@ -486,3 +486,65 @@ fn enum_constant_type_name(rv: &ResolverVisitor<'_>, node: NodeId) -> Option<Str
         &rv.ctx, ty, true,
     ))
 }
+
+/// Dart `ElementResolver.visitImportDirective` / `visitExportDirective`:
+/// `_resolveCombinators(importedLibrary, node.combinators)` (the prefix
+/// element is set by the resolution visitor). [node] is an
+/// `ImportDirective` or an `ExportDirective` of the unit.
+pub fn visit_namespace_directive(rv: &mut ResolverVisitor<'_>, node: NodeId) {
+    use dartr_ast::{CompilationUnit, ExportDirective, HideCombinator, ImportDirective, ShowCombinator};
+    // The index of the directive in `libraryImports` / `libraryExports`.
+    let is_import = rv.ast.is::<ImportDirective>(node);
+    let Some(unit) = rv.ast.parent(node).and_then(|p| rv.ast.cast::<CompilationUnit>(p)) else {
+        return;
+    };
+    let index = rv
+        .ast
+        .list(rv.ast[unit].directives)
+        .iter()
+        .filter(|&&d| {
+            if is_import {
+                rv.ast.is::<ImportDirective>(d)
+            } else {
+                rv.ast.is::<ExportDirective>(d)
+            }
+        })
+        .position(|&d| d.raw() == node);
+    let Some(index) = index else {
+        return;
+    };
+    let fragment = rv.ctx.fragment(rv.unit.fragment);
+    let uri = if is_import {
+        fragment.library_imports.get(index).map(|i| &i.directive.uri)
+    } else {
+        fragment.library_exports.get(index).map(|e| &e.directive.uri)
+    };
+    // Dart: the library is null when the URI is not valid.
+    let Some(dartr_element::DirectiveUri::Library { library, .. }) = uri else {
+        return;
+    };
+    let library = *library;
+    let combinators = if let Some(i) = rv.ast.cast::<ImportDirective>(node) {
+        rv.ast[i].combinators
+    } else if let Some(e) = rv.ast.cast::<ExportDirective>(node) {
+        rv.ast[e].combinators
+    } else {
+        return;
+    };
+    let mut names = Vec::new();
+    for &combinator in rv.ast.list(combinators) {
+        if let Some(h) = rv.ast.cast::<HideCombinator>(combinator) {
+            names.extend(rv.ast.list(rv.ast[h].hidden_names).iter().copied());
+        } else if let Some(s) = rv.ast.cast::<ShowCombinator>(combinator) {
+            names.extend(rv.ast.list(rv.ast[s].shown_names).iter().copied());
+        }
+    }
+    for name in names {
+        let name_str = crate::ast_ext::identifier_name(rv.ast, name).to_string();
+        // Dart `namespace.get2(name) ?? namespace.get2('$name=')`; a getter
+        // or setter resolves to its variable.
+        if let Some(element) = crate::error::imports_verifier::combinator_name_element(&rv.ctx, library, &name_str) {
+            rv.set_element(name, Some(ElemRef::Base(element)));
+        }
+    }
+}

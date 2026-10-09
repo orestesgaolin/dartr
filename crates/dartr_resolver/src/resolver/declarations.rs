@@ -59,13 +59,15 @@ impl<'a> ResolverVisitor<'a> {
     pub fn visit_import_directive(&mut self, node: Id<ImportDirective>) {
         self.check_unreachable_node(node);
         self.visit_children(node);
-        // Dart `elementResolver.visitImportDirective`: combinators (C9).
+        // Dart `elementResolver.visitImportDirective`: combinators.
+        crate::element_resolver::visit_namespace_directive(self, node.raw());
     }
 
     pub fn visit_export_directive(&mut self, node: Id<ExportDirective>) {
         self.check_unreachable_node(node);
         self.visit_children(node);
-        // Dart `elementResolver.visitExportDirective`: combinators (C9).
+        // Dart `elementResolver.visitExportDirective`: combinators.
+        crate::element_resolver::visit_namespace_directive(self, node.raw());
     }
 
     pub fn visit_part_directive(&mut self, node: Id<PartDirective>) {

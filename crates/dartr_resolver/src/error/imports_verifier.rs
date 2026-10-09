@@ -1084,7 +1084,7 @@ fn tracker_of(
 /// Dart `ElementResolver._resolveCombinators`: the element of a name of a
 /// combinator, in the export namespace of [library] (the variable of an
 /// accessor).
-fn combinator_name_element(
+pub(crate) fn combinator_name_element(
     ctx: &Ctx<'_>,
     library: EId<LibraryElement>,
     name: &str,
