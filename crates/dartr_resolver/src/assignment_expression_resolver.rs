@@ -442,7 +442,7 @@ pub fn resolve_for_write(
 
         if property_element_resolver::index_expression_is_null_aware(rv, index_expression) {
             let target = rv.ast[index_expression].target;
-            property_element_resolver::start_null_aware_access(rv, target);
+            crate::method_invocation_resolver::start_null_aware_access(rv, target);
             // Dart `nullSafetyDeadCodeVerifier.visitNode(node.index)` (wave D).
         }
 
@@ -516,7 +516,7 @@ pub fn resolve_for_write(
         }
         if property_element_resolver::property_access_is_null_aware(rv, property_access) {
             let target = rv.ast[property_access].target;
-            property_element_resolver::start_null_aware_access(rv, target);
+            crate::method_invocation_resolver::start_null_aware_access(rv, target);
             // Dart `nullSafetyDeadCodeVerifier.visitNode(node.propertyName)`
             // (wave D).
         }

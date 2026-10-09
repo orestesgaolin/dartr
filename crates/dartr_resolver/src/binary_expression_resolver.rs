@@ -25,7 +25,7 @@ use dartr_typesystem::TypeExt;
 use dartr_typesystem::lookup;
 use dartr_typesystem::member;
 
-use crate::property_element_resolver;
+use crate::method_invocation_resolver;
 use crate::resolver::ResolverVisitor;
 use crate::type_property_resolver::{self, PropertyQuery};
 
@@ -339,7 +339,8 @@ fn resolve_user_definable(
     let left = rv.resolve_expression(left, TypeId::UNKNOWN);
 
     if let Some(super_) = rv.ast.cast::<SuperExpression>(left)
-        && !property_element_resolver::super_context_is_valid(rv, super_)
+        && method_invocation_resolver::super_context_of(rv, super_)
+            != method_invocation_resolver::SuperContext::Valid
     {
         let right = rv.ast[node].right_operand;
         rv.resolve_expression(right, TypeId::INVALID);

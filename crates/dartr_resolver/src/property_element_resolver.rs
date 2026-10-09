@@ -1,8 +1,7 @@
 // Dart source: pkg/analyzer/lib/src/dart/resolver/property_element_resolver.dart,
 // pkg/analyzer/lib/src/generated/resolver.dart (visitPropertyAccess,
 // visitIndexExpression, _resolvePropertyAccessRhs,
-// _resolvePropertyAccessRhs_common, _startNullAwareAccess),
-// pkg/analyzer/lib/src/generated/super_context.dart (SuperContext.of)
+// _resolvePropertyAccessRhs_common)
 
 //! `PropertyElementResolver`: the elements and the read types of property
 //! accesses (`a.b`, `a?.b`, `..b`, `super.b`, `E(a).b`, `C.b`, `p.b` with an
@@ -19,11 +18,8 @@
 //! and the null-safety dead code verifier (wave D).
 
 use dartr_ast::{
-    Annotation, AnonymousMethodBody, AnonymousMethodInvocation, CascadeExpression,
-    ClassDeclaration, CompilationUnit, ConstructorDeclaration, ConstructorInitializer,
-    EnumDeclaration, Expression, ExtensionDeclaration, ExtensionOverride, ExtensionTypeDeclaration,
-    FieldDeclaration, Id, IndexExpression, MethodDeclaration, MixinDeclaration, NamedArgument,
-    NodeId, PrefixedIdentifier, PropertyAccess, SimpleIdentifier, SuperExpression, TypeLiteral,
+    CascadeExpression, Expression, ExtensionOverride, Id, IndexExpression, NodeId,
+    PrefixedIdentifier, PropertyAccess, SimpleIdentifier, SuperExpression, TypeLiteral,
 };
 use dartr_diagnostics::{LocatableDiagnostic, diag};
 use dartr_element::diagnostics::type_arg;
@@ -42,6 +38,7 @@ use dartr_typesystem::member;
 use dartr_typesystem::type_algebra::MapSubstitution;
 
 use crate::extension_member_resolver::ExtensionResolutionResult;
+use crate::method_invocation_resolver::{self, SuperContext};
 use crate::resolver::ResolverVisitor;
 use crate::type_property_resolver::{self, PropertyQuery};
 
@@ -109,7 +106,7 @@ pub fn visit_index_expression(
 
     if index_expression_is_null_aware(rv, node) {
         let target = rv.ast[node].target;
-        start_null_aware_access(rv, target);
+        method_invocation_resolver::start_null_aware_access(rv, target);
         // Dart `nullSafetyDeadCodeVerifier.visitNode(node.index)` (wave D).
     }
 
@@ -154,7 +151,7 @@ pub fn resolve_property_access_rhs(
 ) {
     if property_access_is_null_aware(rv, node) {
         let target = rv.ast[node].target;
-        start_null_aware_access(rv, target);
+        method_invocation_resolver::start_null_aware_access(rv, target);
         // Dart `nullSafetyDeadCodeVerifier.visitNode(node.propertyName)`
         // (wave D).
     }
@@ -214,49 +211,6 @@ pub fn resolve_property_access_rhs_common(
     rv.record_static_type(node, ty);
     let replacement = rv.insert_generic_function_instantiation(node, context_type);
     rv.insert_implicit_call_reference(replacement, context_type);
-}
-
-/// Dart `ResolverVisitor._startNullAwareAccess(target)`.
-pub fn start_null_aware_access(rv: &mut ResolverVisitor<'_>, target: Option<Id<Expression>>) {
-    if rv.flow_analysis.flow.is_none() {
-        return;
-    }
-    let Some(target) = target else {
-        // This means the property access target is the target of a
-        // cascade. For this case, `node.isNullAware=true` means that the
-        // cascade is null aware, but that has already been taken care of in
-        // `visitCascadeExpression`. So there is nothing further to do.
-        return;
-    };
-    if let Some(identifier) = rv.ast.cast::<SimpleIdentifier>(target)
-        && rv
-            .base_element(identifier)
-            .is_some_and(|e| e.is::<InterfaceElement>())
-    {
-        // `?.` to access static methods is equivalent to `.`, so do nothing.
-        return;
-    }
-    let mut expression = target;
-    if let Some(e) = rv.ast.cast::<ExtensionOverride>(target) {
-        let argument_list = rv.ast[e].argument_list;
-        let arguments = rv.ast.list(rv.ast[argument_list].arguments).to_vec();
-        if let [argument] = arguments[..] {
-            expression = match rv.ast.cast::<NamedArgument>(argument) {
-                Some(named) => rv.ast[named].argument_expression,
-                None => Id::from_raw(argument.raw()),
-            };
-        }
-    }
-    let info = rv.flow_analysis.get_expression_info(Some(expression));
-    let ty = rv.static_type(expression).unwrap_or(TypeId::DYNAMIC);
-    let result = dartr_flow::null_shorting::TypeAnalysisNullShortingInterface::start_null_shorting(
-        rv,
-        (),
-        info,
-        SharedTypeView::new(ty),
-        None,
-    );
-    rv.flow_analysis.store_expression_info(expression, result);
 }
 
 // ------------------------------------------------------------------ result
@@ -361,57 +315,6 @@ pub fn index_expression_is_null_aware(rv: &ResolverVisitor<'_>, node: Id<IndexEx
         return enclosing_cascade(rv, node.raw()).is_some_and(|c| cascade_is_null_aware(rv, c));
     }
     rv.ast[node].question.is_some()
-}
-
-/// Dart `SuperContext.of(expression) == SuperContext.valid`.
-pub fn super_context_is_valid(rv: &ResolverVisitor<'_>, expression: Id<SuperExpression>) -> bool {
-    let ast = &*rv.ast;
-    let mut current = Some(expression.raw());
-    while let Some(node) = current {
-        if ast.is::<Annotation>(node) {
-            return false;
-        } else if ast.is::<AnonymousMethodBody>(node) {
-            if let Some(invocation) = ast
-                .parent(node)
-                .and_then(|p| ast.cast::<AnonymousMethodInvocation>(p))
-                && ast[invocation].parameters.is_none()
-            {
-                return false;
-            }
-        } else if ast.is::<ClassDeclaration>(node) {
-            return true;
-        } else if ast.is::<CompilationUnit>(node) {
-            return false;
-        } else if let Some(c) = ast.cast::<ConstructorDeclaration>(node) {
-            if ast[c].factory_keyword.is_some() {
-                return false;
-            }
-        } else if ast.is::<ConstructorInitializer>(node) {
-            return false;
-        } else if ast.is::<EnumDeclaration>(node) {
-            return true;
-        } else if ast.is::<ExtensionDeclaration>(node) || ast.is::<ExtensionTypeDeclaration>(node) {
-            return false;
-        } else if let Some(f) = ast.cast::<FieldDeclaration>(node) {
-            if ast[f].static_keyword.is_some() {
-                return false;
-            }
-            if ast[ast[f].fields].late_keyword.is_none() {
-                return false;
-            }
-        } else if let Some(m) = ast.cast::<MethodDeclaration>(node) {
-            if ast[m]
-                .modifier_keyword
-                .is_some_and(|k| ast.tokens.lexeme(k) == "static")
-            {
-                return false;
-            }
-        } else if ast.is::<MixinDeclaration>(node) {
-            return true;
-        }
-        current = ast.parent(node);
-    }
-    false
 }
 
 /// The name of [node] (Dart `SimpleIdentifier.name`).
@@ -1381,7 +1284,7 @@ fn resolve_target_super_expression(
     has_read: bool,
     has_write: bool,
 ) -> PropertyElementResolverResult {
-    if !super_context_is_valid(rv, target) {
+    if method_invocation_resolver::super_context_of(rv, target) != SuperContext::Valid {
         return PropertyElementResolverResult::default();
     }
     let ctx = rv.ctx;
