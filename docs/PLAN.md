@@ -107,3 +107,5 @@ Data model rules:
 `styles_ordering`, `prefer_html_components`, `sort_children_last`). dartr does not run plugins yet.
 Options: run Dart plugins out of process like the analysis server does (plugin isolates need a
 Dart VM), or port popular plugins. Decide after phase 10b.
+Research and recommendation (run plugins out of process, dartr implements the server side of the
+plugin protocol): `docs/research/analyzer-plugins.md`.
