@@ -3,7 +3,7 @@
 
 Usage:
   tools/format_parity.py [--dartr PATH] [--work DIR] [--language-version V]
-                         [--page-width N] [--show-diffs N] [--write-failures DIR]
+                         [--page-width N] [--trailing-commas M] [--show-diffs N] [--write-failures DIR]
                          [CORPUS_DIR...]
 
 Without CORPUS_DIR, the default corpora are used:
@@ -113,6 +113,7 @@ def main():
     parser.add_argument("--work", default=None, help="work directory (default: a new temp dir)")
     parser.add_argument("--language-version", default="latest")
     parser.add_argument("--page-width", default=None)
+    parser.add_argument("--trailing-commas", default=None)
     parser.add_argument("--show-diffs", type=int, default=10, help="differing files to print per corpus")
     parser.add_argument("--write-failures", default=None, help="write dart/dartr outputs of differing files here")
     args = parser.parse_args()
@@ -133,6 +134,8 @@ def main():
     options = ["-o", "json", "--language-version", args.language_version]
     if args.page_width:
         options += ["--page-width", args.page_width]
+    if args.trailing_commas:
+        options += ["--trailing-commas", args.trailing_commas]
 
     all_equal = True
     rows = []
