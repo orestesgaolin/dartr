@@ -1,0 +1,129 @@
+version: 1
+transforms:
+  - title: not a map
+    date: 2020-01-01
+    element: foo
+    changes: []
+  - title: no uris
+    date: 2020-01-01
+    element:
+      class: C
+    changes: []
+  - title: empty uris
+    date: 2020-01-01
+    element:
+      uris: []
+      class: C
+    changes: []
+  - title: bad uris
+    date: 2020-01-01
+    element:
+      uris: [1, ~, [a], 'x.dart']
+      class: C
+    changes: []
+  - title: uris not list
+    date: 2020-01-01
+    element:
+      uris: x.dart
+      class: C
+    changes: []
+  - title: no kind key
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+    changes: []
+  - title: two kinds
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      class: C
+      method: m
+      mixin: M
+    changes: []
+  - title: name type
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      class: [C]
+    changes: []
+  - title: method without container
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      method: m
+    changes: []
+  - title: getter without container
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      getter: g
+    changes: []
+  - title: constructor without container
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      constructor: c
+    changes: []
+  - title: constant without container
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      constant: c
+    changes: []
+  - title: field without container
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      field: f
+    changes: []
+  - title: two containers
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      method: m
+      inClass: C
+      inMixin: M
+    changes: []
+  - title: wrong container
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      constant: c
+      inClass: C
+    changes: []
+  - title: container type
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      method: m
+      inClass: 3
+    changes: []
+  - title: static
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      class: C
+      static: true
+    changes: []
+  - title: static no container
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      setter: s
+      static: true
+    changes: []
+  - title: static type
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      setter: s
+      inClass: C
+      static: 1
+    changes: []
+  - title: unknown element key
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      function: f
+      other: 1
+    changes: []

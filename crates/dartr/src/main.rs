@@ -3,6 +3,7 @@
 mod dump;
 mod elements;
 mod json;
+mod resolved;
 
 use std::path::PathBuf;
 
@@ -73,10 +74,10 @@ fn main() -> anyhow::Result<()> {
         Command::Dump { mode, files } => dump::run(mode, files),
         Command::Analyze { .. } => unreachable!("handled before clap"),
         Command::LanguageServer { args } => {
-            std::process::exit(dartr_server::run_with_args(&args, true))
+            std::process::exit(dartr_legacy::run_with_args(&args, true))
         }
         Command::AnalysisServer { args } => {
-            std::process::exit(dartr_server::run_with_args(&args, false))
+            std::process::exit(dartr_legacy::run_with_args(&args, false))
         }
     }
 }

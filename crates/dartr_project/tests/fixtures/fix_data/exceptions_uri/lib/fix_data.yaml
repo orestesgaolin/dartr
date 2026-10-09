@@ -1,0 +1,9 @@
+version: 1
+bogus: 1
+transforms:
+  - title: x
+    date: 2020-01-01
+    element:
+      uris: ['1abc:x']
+      class: C
+    changes: []

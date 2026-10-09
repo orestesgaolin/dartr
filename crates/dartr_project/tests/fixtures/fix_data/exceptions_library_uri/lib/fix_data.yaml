@@ -1,0 +1,9 @@
+version: 1
+bogus: 1
+transforms:
+  - title: x
+    date: 2020-01-01
+    library: 'a b.dart'
+    changes:
+      - kind: replacedBy
+        newLibrary: ':bad'

@@ -1,0 +1,154 @@
+version: 1
+transforms:
+  - title: templates
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      function: f
+    variables:
+      a:
+        kind: fragment
+        value: 'arguments[0]'
+      b:
+        kind: fragment
+        value: 'arguments[name]'
+      c:
+        kind: fragment
+        value: 'typeArguments[1]'
+      d:
+        kind: fragment
+        value: 'bogus[1]'
+      e:
+        kind: fragment
+        value: 'arguments[0].typeArguments[0]'
+      f:
+        kind: fragment
+        value: 'arguments[0]]'
+      g:
+        kind: fragment
+        value: 'arguments 0'
+      h:
+        kind: fragment
+        value: 'arguments[ ]'
+      i:
+        kind: fragment
+        value: 'arguments[0'
+      j:
+        kind: fragment
+        value: ''
+      k:
+        kind: fragment
+        value: 'arguments[0].'
+      l:
+        kind: fragment
+        value: 'arguments[0] # x'
+      m:
+        kind: fragment
+        value: 7
+      n:
+        kind: other
+      o:
+        kind: 1
+      p:
+        kind: import
+        uris: []
+        name: x
+      q:
+        kind: import
+        uris: ['a.dart']
+      r:
+        kind: import
+        name: x
+        extra: 1
+      s: 1
+      12: x
+      t:
+        value: 'arguments[0]'
+      u:
+        kind: fragment
+        extra: 1
+        value: 'arguments[99999999999]'
+    changes:
+      - kind: addParameter
+        index: 0
+        name: n
+        style: optional_named
+        argumentValue:
+          expression: 'a {% a %} {% zz %} {%b%}{% unknown}'
+          requiredIf: "a == 'x' && zz"
+      - kind: addParameter
+        index: 0
+        name: n
+        style: optional_named
+        argumentValue:
+          expression: '{% a'
+          requiredIf: "a &&"
+          variables:
+            local:
+              kind: fragment
+              value: 'arguments[1]'
+      - kind: addParameter
+        index: 0
+        name: n
+        style: optional_named
+        argumentValue:
+          expression: '{% local %}'
+          requiredIf: "== a"
+      - kind: addParameter
+        index: 0
+        name: n
+        style: optional_named
+        argumentValue:
+          expression: 'x'
+          requiredIf: "a ! b"
+      - kind: addParameter
+        index: 0
+        name: n
+        style: optional_named
+        argumentValue:
+          expression: 'x'
+          requiredIf: "a b"
+      - kind: addParameter
+        index: 0
+        name: n
+        style: optional_named
+        argumentValue:
+          expression: 'x'
+          requiredIf: "a = b"
+      - kind: addParameter
+        index: 0
+        name: n
+        style: optional_named
+        argumentValue:
+          expression: 'x'
+          requiredIf: ""
+      - kind: addParameter
+        index: 0
+        name: n
+        style: optional_named
+        argumentValue:
+          expression: 'x'
+          requiredIf: "a == 'b' == 'c'"
+      - kind: addParameter
+        index: 0
+        name: n
+        style: optional_named
+        argumentValue:
+          expression: 'x'
+          requiredIf: "a == 5"
+      - kind: addParameter
+        index: 0
+        name: n
+        style: optional_named
+        argumentValue:
+          expression: |
+            multi {% a %}
+            {% undefinedInBlock %}
+          requiredIf: 3
+      - kind: addParameter
+        index: 0
+        name: n
+        style: optional_named
+        argumentValue:
+          expression: "double {% undefinedDouble %}"
+          variables: [x]

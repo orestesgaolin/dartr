@@ -92,6 +92,8 @@ pub struct LspClient {
     pub messages: Vec<Value>,
     /// The `dart` settings that `workspace/configuration` returns.
     pub configuration: Value,
+    /// The program that was started (for failure messages).
+    program: String,
 }
 
 impl LspClient {
@@ -148,6 +150,7 @@ impl LspClient {
             server_requests: Vec::new(),
             messages: Vec::new(),
             configuration: json!({}),
+            program: program.to_string(),
         }
     }
 
@@ -207,6 +210,7 @@ impl LspClient {
     /// Waits until the server is quiet and analysis is not running. With
     /// [expect_analysis], also waits for the end of an analysis that
     /// started after the call.
+    #[track_caller]
     pub fn settle(&mut self, expect_analysis: bool) {
         let ends_before = self.progress_ends;
         let deadline = Instant::now() + STEP_TIMEOUT;
@@ -221,7 +225,15 @@ impl LspClient {
                     }
                 }
             }
-            assert!(Instant::now() < deadline, "the server did not settle");
+            assert!(
+                Instant::now() < deadline,
+                "the server did not settle: program={} caller={} expect_analysis={expect_analysis} \
+                 open_progress={} progress_ends={} (before: {ends_before})",
+                self.program,
+                std::panic::Location::caller(),
+                self.open_progress,
+                self.progress_ends,
+            );
         }
     }
 
@@ -237,6 +249,9 @@ impl LspClient {
             }
             Err(RecvTimeoutError::Timeout) | Err(RecvTimeoutError::Disconnected) => return None,
         };
+        if std::env::var_os("LSP_TRACE").is_some() {
+            eprintln!("[{}] {}", self.program, m.to_string().chars().take(300).collect::<String>());
+        }
         self.handle(&m);
         self.log.push(m.clone());
         Some(m)

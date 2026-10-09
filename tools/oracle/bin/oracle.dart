@@ -11,23 +11,23 @@
 //   tokens   token stream and scanner diagnostics (scanner only, no parser)
 //   events   parser events of the shared parser (see events.dart)
 //   ast      unresolved AST (parser output) and parse diagnostics
-//   resolved diagnostics of a resolved unit, and static types of expressions
+//   resolved diagnostics and static types of expressions of a resolved
+//            library (resolved_el.dart)
+//   resolved-el the elements of identifiers, named types and constructor
+//            names of a resolved library (resolved_el.dart)
 //   elements the element model of a library (elements.dart)
 //   interface the interfaces of the classes of a library (interface.dart)
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:analyzer/dart/analysis/analysis_context_collection.dart';
 import 'package:analyzer/dart/analysis/features.dart';
 import 'package:analyzer/dart/analysis/results.dart';
 import 'package:analyzer/dart/analysis/utilities.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/syntactic_entity.dart';
 import 'package:analyzer/dart/ast/token.dart';
-import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/diagnostic/diagnostic.dart';
 import 'package:analyzer/error/listener.dart';
-import 'package:analyzer/file_system/physical_file_system.dart';
 // ignore: implementation_imports
 import 'package:analyzer/src/dart/scanner/scanner.dart';
 // ignore: implementation_imports
@@ -42,10 +42,11 @@ import 'package:_fe_analyzer_shared/src/scanner/error_token.dart';
 import 'elements.dart';
 import 'events.dart';
 import 'interface.dart';
+import 'resolved_el.dart';
 
 Future<void> main(List<String> args) async {
   if (args.isEmpty) {
-    stderr.writeln('usage: oracle <tokens|events|ast|resolved|elements|interface> [file ...]');
+    stderr.writeln('usage: oracle <tokens|events|ast|resolved|resolved-el|elements|interface> [file ...]');
     exit(64);
   }
   var mode = args.first;
@@ -57,7 +58,8 @@ Future<void> main(List<String> args) async {
             .where((l) => l.isNotEmpty)
             .toList();
   var paths = files is List<String> ? files : await (files as Future<List<String>>);
-  // `dart:` URIs (modes `elements`, `interface`) are kept as they are.
+  // `dart:` URIs (modes `elements`, `interface`, `resolved`, `resolved-el`)
+  // are kept as they are.
   paths = paths
       .map((p) => p.startsWith('dart:') ? p : File(p).absolute.path)
       .toList();
@@ -76,7 +78,9 @@ Future<void> main(List<String> args) async {
         stdout.writeln(jsonEncode(guarded(p, dumpAst)));
       }
     case 'resolved':
-      await dumpResolved(paths);
+      await dumpResolvedLibraries(paths, elements: false);
+    case 'resolved-el':
+      await dumpResolvedLibraries(paths, elements: true);
     case 'elements':
       await dumpElements(paths);
     case 'interface':
@@ -158,30 +162,6 @@ Map<String, Object?> dumpAst(String path) {
   };
 }
 
-Future<void> dumpResolved(List<String> paths) async {
-  var collection = AnalysisContextCollection(
-    includedPaths: paths,
-    resourceProvider: PhysicalResourceProvider.INSTANCE,
-  );
-  for (var p in paths) {
-    var context = collection.contextFor(p);
-    var result = await context.currentSession.getResolvedUnit(p);
-    if (result is! ResolvedUnitResult) {
-      stdout.writeln(jsonEncode({'path': p, 'error': result.runtimeType.toString()}));
-      continue;
-    }
-    var types = <Object?>[];
-    result.unit.accept(_TypeCollector(types));
-    stdout.writeln(
-      jsonEncode({
-        'path': p,
-        'diagnostics': result.diagnostics.map(diagnosticJson).toList(),
-        'types': types,
-      }),
-    );
-  }
-}
-
 Map<String, Object?> tokenJson(Token t, {bool withComments = false}) {
   var json = <String, Object?>{
     'k': t.type.name,
@@ -223,17 +203,3 @@ Map<String, Object?> diagnosticJson(Diagnostic d) => {
   'l': d.length,
   'msg': d.message,
 };
-
-class _TypeCollector extends GeneralizingAstVisitor<void> {
-  final List<Object?> out;
-  _TypeCollector(this.out);
-
-  @override
-  void visitExpression(Expression node) {
-    var type = node.staticType;
-    if (type != null) {
-      out.add({'o': node.offset, 'e': node.end, 'type': type.getDisplayString()});
-    }
-    super.visitExpression(node);
-  }
-}

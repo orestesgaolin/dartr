@@ -85,8 +85,12 @@ pub fn validate_analysis_options(context: &AnalysisContext, path: &str) -> Vec<D
         }
         FileContent::Parsed { .. } => {
             let graph = result.includes.iter().cloned().collect();
+            // The analysis server codes (`TransformSetErrorCode`) are not in
+            // the analyzer's `errorCodeByUniqueName`: the analyzer reports
+            // them as unrecognized in `errors:` and `ignore:` lists.
             let known_codes = all_codes()
                 .iter()
+                .filter(|code| code.origin != dartr_diagnostics::Origin::AnalysisServer)
                 .map(|code| code.name.to_ascii_uppercase())
                 .chain(LINT_RULE_NAMES.iter().map(|name| name.to_ascii_uppercase()))
                 .chain(std::iter::once("MISSING_RETURN".to_string()))

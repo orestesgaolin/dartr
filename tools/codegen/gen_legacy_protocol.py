@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+"""Generate Rust types from the Dart legacy analysis-server specification."""
+from __future__ import annotations
+import argparse, pathlib, re, subprocess
+from dataclasses import dataclass, field
+from html.parser import HTMLParser
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+SPEC = ROOT / "third_party/dart-sdk/pkg/analysis_server/tool/spec/spec_input.html"
+COMMON = ROOT / "third_party/dart-sdk/pkg/analyzer_plugin/tool/spec/common_types_spec.html"
+OUTPUT = ROOT / "crates/dartr_legacy/src/protocol.rs"
+
+@dataclass
+class Node:
+    tag: str
+    attrs: dict[str, str] = field(default_factory=dict)
+    children: list["Node"] = field(default_factory=list)
+    text: str = ""
+    def direct(self, tag): return [c for c in self.children if c.tag == tag]
+    def first(self, tag): return next(iter(self.direct(tag)), None)
+    def all_text(self): return self.text + "".join(c.all_text() for c in self.children)
+
+class HtmlTree(HTMLParser):
+    def __init__(self): super().__init__(convert_charrefs=True); self.root=Node("root"); self.stack=[self.root]
+    def handle_starttag(self, tag, attrs):
+        node=Node(tag, {k:v or "" for k,v in attrs}); self.stack[-1].children.append(node)
+        if tag not in {"meta","br","hr","img","input","link"}: self.stack.append(node)
+    def handle_startendtag(self, tag, attrs): self.handle_starttag(tag, attrs); self.stack.pop()
+    def handle_endtag(self, tag):
+        for i in range(len(self.stack)-1,0,-1):
+            if self.stack[i].tag == tag: del self.stack[i:]; return
+    def handle_data(self, data): self.stack[-1].text += data
+
+def parse(path): p=HtmlTree(); p.feed(path.read_text()); return p.root
+def descendants(node, tag):
+    return [x for c in node.children for x in (([c] if c.tag == tag else []) + descendants(c, tag))]
+def pascal(s):
+    if "_" in s:
+        return "".join(part[0].upper()+part[1:].lower() for part in s.split("_") if part)
+    return "".join(w[0].upper()+w[1:] for w in re.findall(r"[A-Z]+(?=[A-Z][a-z]|\d|$)|[A-Z]?[a-z]+|\d+",s))
+KEYWORDS={"type","ref","match","move","where","loop","self","crate","super","mod","use","enum","struct","fn","impl","trait","const","static","async","await","dyn","in","as","extern","false","true","unsafe","return","break","continue","for","while","pub"}
+def snake(s):
+    value=re.sub(r"(?<=[a-z0-9])(?=[A-Z])","_",s).replace("-","_").lower()
+    return value+"_" if value in KEYWORDS else value
+def child_type(node): return next((c for c in node.children if c.tag in {"ref","list","map","object","enum","union"}),None)
+PRIMITIVES={"String":"String","bool":"bool","int":"i64","long":"i64","double":"f64","num":"f64","object":"serde_json::Value"}
+FIXED_VALUES={}
+def rust_type(node, context, unions):
+    if node.tag=="ref":
+        name=node.all_text().strip(); return PRIMITIVES.get(name,name)
+    if node.tag=="list": return f"Vec<{rust_type(child_type(node),context+'Item',unions)}>"
+    if node.tag=="map":
+        k=child_type(node.first("key")); v=child_type(node.first("value"))
+        return f"indexmap::IndexMap<{rust_type(k,context+'Key',unions)}, {rust_type(v,context+'Value',unions)}>"
+    if node.tag=="union": unions[context]=node; return context
+    raise ValueError(f"unsupported {node.tag} in {context}")
+def object_fields(node, owner, unions):
+    result=[]
+    for f in node.direct("field"):
+        j=f.attrs["name"]; ty=rust_type(child_type(f),owner+pascal(j),unions)
+        if "value" in f.attrs:
+            ty=owner+pascal(j); FIXED_VALUES[ty]=f.attrs["value"]
+        if ty == owner: ty=f"Box<{ty}>"
+        result.append((snake(j),j,ty,f.attrs.get("optional")=="true"))
+    return result
+def emit_struct(out,name,node,unions):
+    out += ["#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]",f"pub struct {name} {{"]
+    for r,j,t,opt in object_fields(node,name,unions):
+        attrs=[]
+        if r != j: attrs.append(f'rename = "{j}"')
+        if opt: attrs.append('skip_serializing_if = "Option::is_none"'); t=f"Option<{t}>"
+        if attrs: out.append(f"    #[serde({', '.join(attrs)})]")
+        out.append(f"    pub {r}: {t},")
+    out += ["}",""]
+def emit_enum(out,name,node):
+    out += ["#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]",f"pub enum {name} {{"]
+    for v in node.direct("value"):
+        code=v.first("code").all_text().strip(); out += [f'    #[serde(rename = "{code}")]',f"    {pascal(code)},"]
+    out += ["}",""]
+
+def generate():
+    FIXED_VALUES.clear()
+    spec,common=parse(SPEC),parse(COMMON); domains=descendants(spec,"domain")
+    version=descendants(spec,"version")[0].all_text().strip()
+    requests=[r for d in domains for r in d.direct("request")]; notes=[n for d in domains for n in d.direct("notification")]
+    if (len(domains),len(requests),len(notes)) != (10,59,22): raise RuntimeError("unexpected protocol shape")
+    out=["// Generated by tools/codegen/gen_legacy_protocol.py. DO NOT EDIT.","// Dart source: pkg/analysis_server/tool/spec/spec_input.html","","use serde::{Deserialize, Serialize};","",f'pub const PROTOCOL_VERSION: &str = "{version}";',"pub const DOMAIN_COUNT: usize = 10;","pub const REQUEST_COUNT: usize = 59;","pub const NOTIFICATION_COUNT: usize = 22;","","#[derive(Clone, Copy, Debug, PartialEq, Eq)]","pub struct DomainMetadata { pub name: &'static str, pub request_count: usize, pub notification_count: usize }","","pub const DOMAINS: &[DomainMetadata] = &["]
+    for d in domains: out.append(f'    DomainMetadata {{ name: "{d.attrs["name"]}", request_count: {len(d.direct("request"))}, notification_count: {len(d.direct("notification"))} }},')
+    out += ["];","","pub const REQUEST_METHODS: &[&str] = &["]
+    for d in domains:
+        for r in d.direct("request"): out.append(f'    "{d.attrs["name"]}.{r.attrs["method"]}",')
+    out += ["];","","pub const NOTIFICATION_EVENTS: &[&str] = &["]
+    for d in domains:
+        for n in d.direct("notification"): out.append(f'    "{d.attrs["name"]}.{n.attrs["event"]}",')
+    out += ["];",""]
+    unions={}; types=descendants(common,"types")[0].direct("type")+descendants(spec,"types")[0].direct("type")
+    for item in types:
+        name=item.attrs["name"]; definition=child_type(item)
+        if definition.tag=="object": emit_struct(out,name,definition,unions)
+        elif definition.tag=="enum": emit_enum(out,name,definition)
+        else: out += [f"pub type {name} = {rust_type(definition,name,unions)};",""]
+    for d in domains:
+        prefix=pascal(d.attrs["name"])
+        for r in d.direct("request"):
+            stem=prefix+pascal(r.attrs["method"])
+            if r.first("params") is not None: emit_struct(out,stem+"Params",r.first("params"),unions)
+            if r.first("result") is not None: emit_struct(out,stem+"Result",r.first("result"),unions)
+        for n in d.direct("notification"):
+            if n.first("params") is not None: emit_struct(out,prefix+pascal(n.attrs["event"])+"Params",n.first("params"),unions)
+    for ref in descendants(spec,"refactoring"):
+        stem=pascal(ref.attrs["kind"])
+        if ref.first("feedback") is not None: emit_struct(out,stem+"Feedback",ref.first("feedback"),unions)
+        if ref.first("options") is not None: emit_struct(out,stem+"Options",ref.first("options"),unions)
+    for name,value in FIXED_VALUES.items():
+        out += ["#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]",f"pub enum {name} {{",f'    #[serde(rename = "{value}")]',"    Value,","}",""]
+    for name,union in unions.items():
+        out += ["#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]","#[serde(untagged)]",f"pub enum {name} {{"]
+        for ref in union.direct("ref"):
+            target=ref.all_text().strip()
+            out.append(f"    {target}({target}),")
+        out += ["}",""]
+    out += ["#[cfg(test)]","mod tests {","    use super::*;","","    #[test]","    fn omits_absent_optional_fields() {","        let status = AnalysisStatus { is_analyzing: false, analysis_target: None };",'        assert_eq!(serde_json::to_value(status).unwrap(), serde_json::json!({"isAnalyzing": false}));',"    }","","    #[test]","    fn request_error_round_trips_wire_names_and_code() {",'        let json = serde_json::json!({"code":"UNKNOWN_REQUEST","message":"Unknown request","stackTrace":"trace"});',"        let error: RequestError = serde_json::from_value(json.clone()).unwrap();","        assert_eq!(error.code, RequestErrorCode::UnknownRequest);","        assert_eq!(serde_json::to_value(error).unwrap(), json);","    }","","    #[test]","    fn content_overlay_union_uses_the_protocol_discriminator() {",'        let json = serde_json::json!({"type":"add","content":"void main() {}","version":3});',"        let overlay: AnalysisUpdateContentParamsFilesValue = serde_json::from_value(json.clone()).unwrap();","        assert!(matches!(overlay, AnalysisUpdateContentParamsFilesValue::AddContentOverlay(_)));","        assert_eq!(serde_json::to_value(overlay).unwrap(), json);","    }","}",""]
+    return "\n".join(out).rstrip()+"\n"
+def main():
+    p=argparse.ArgumentParser(); p.add_argument("--check",action="store_true"); args=p.parse_args(); generated=generate()
+    generated=subprocess.run(["rustfmt","--edition","2021"],input=generated,text=True,stdout=subprocess.PIPE,check=True).stdout
+    if args.check:
+        if not OUTPUT.exists() or OUTPUT.read_text()!=generated: raise SystemExit(f"{OUTPUT} is out of date")
+    else: OUTPUT.parent.mkdir(parents=True,exist_ok=True); OUTPUT.write_text(generated)
+if __name__=="__main__": main()
