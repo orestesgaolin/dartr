@@ -435,6 +435,20 @@ impl<'a> ConstantEvaluationEngine<'a> {
         self.values.borrow_mut().elements.insert(e, value);
     }
 
+    /// Dart `element.evaluationResult = result` of the constant verifier
+    /// (`_validateDefaultValues`); `None` is Dart `null`.
+    pub fn replace_evaluation_result(&self, e: ElementId, result: Option<Constant>) {
+        let mut values = self.values.borrow_mut();
+        match result {
+            Some(value) => {
+                values.elements.insert(e, value);
+            }
+            None => {
+                values.elements.shift_remove(&e);
+            }
+        }
+    }
+
     /// Dart `ConstantEvaluationTarget.isConstantEvaluated`.
     pub fn is_constant_evaluated(&self, target: ConstantTarget) -> bool {
         match target {
@@ -853,7 +867,12 @@ impl<'a> ConstantEvaluationEngine<'a> {
             // No explicit superconstructor invocation found, so we need to
             // manually insert a reference to the implicit superconstructor.
             let return_type = member::return_type(&ctx, ElemRef::Base(constant));
-            if let Some(superclass) = ctx.superclass(return_type)
+            // Dart `returnType` is always an interface type. Without the
+            // `ConstructorElementImpl.returnType` fallback of unit C8 the
+            // return type of a constructor is `InvalidType` here, and
+            // `superclass` panics on a type that is not an interface type.
+            if ctx.interface_element(return_type).is_some()
+                && let Some(superclass) = ctx.superclass(return_type)
                 && !ctx.is_dart_core_object(superclass)
                 && let Some(element) = ctx.interface_element(superclass)
                 && let Some(unnamed) = lookup::get_named_constructor(&ctx, element, "new")
@@ -1168,7 +1187,7 @@ fn annotation_element(unit: &ResolvedUnit, annotation: Id<Annotation>) -> Option
 }
 
 /// The value of the default clause of a formal parameter node.
-fn formal_parameter_default_value(ast: &Ast, node: NodeId) -> Option<NodeId> {
+pub fn formal_parameter_default_value(ast: &Ast, node: NodeId) -> Option<NodeId> {
     let clause = match ast.kind(node) {
         NodeKind::RegularFormalParameter => {
             ast[Id::<RegularFormalParameter>::from_raw(node)].default_clause
@@ -4534,7 +4553,7 @@ fn follow_constant_redirection_chain(
 }
 
 /// Dart `InterfaceElement.primaryConstructor != null`.
-fn has_primary_constructor(ctx: &Ctx<'_>, interface: ElementId) -> bool {
+pub fn has_primary_constructor(ctx: &Ctx<'_>, interface: ElementId) -> bool {
     let Some(element) = interface.cast::<InterfaceElement>() else {
         return false;
     };
