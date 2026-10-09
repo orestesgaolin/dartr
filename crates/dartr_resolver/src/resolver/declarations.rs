@@ -269,6 +269,7 @@ impl<'a> ResolverVisitor<'a> {
         }
         self.flow_analysis.executable_declaration_exit(body.raw(), false);
         self.flow_analysis.body_or_initializer_exit();
+        crate::error::dead_code_verifier::flow_end(self, node);
         self.enclosing_function = outer_function;
         self.set_this_type(None);
     }
@@ -374,6 +375,7 @@ impl<'a> ResolverVisitor<'a> {
         }
         self.flow_analysis.executable_declaration_exit(body.raw(), false);
         self.flow_analysis.body_or_initializer_exit();
+        crate::error::dead_code_verifier::flow_end(self, node);
         self.enclosing_function = outer_function;
         self.set_this_type(None);
     }
@@ -448,6 +450,7 @@ impl<'a> ResolverVisitor<'a> {
         } else {
             self.flow_analysis.body_or_initializer_exit();
         }
+        crate::error::dead_code_verifier::flow_end(self, node);
         self.enclosing_function = outer_function;
     }
 

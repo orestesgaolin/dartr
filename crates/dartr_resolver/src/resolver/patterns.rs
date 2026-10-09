@@ -232,7 +232,8 @@ impl<'a> ResolverVisitor<'a> {
         let right = self.ast[node].right_operand;
         let analysis_result =
             self.analyze_logical_or_pattern(context, node.upcast(), left.raw(), right.raw());
-        // Dart `nullSafetyDeadCodeVerifier.flowEnd(rightOperand)`: wave D.
+        let right = self.ast[node].right_operand;
+        crate::error::dead_code_verifier::flow_end(self, right);
         analysis_result.into()
     }
 

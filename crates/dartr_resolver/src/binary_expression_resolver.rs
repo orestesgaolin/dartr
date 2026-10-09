@@ -264,7 +264,7 @@ fn resolve_logical_binary(rv: &mut ResolverVisitor<'_>, node: Id<BinaryExpressio
 
     let right = rv.resolve_expression(right, bool_type);
 
-    // Dart `nullSafetyDeadCodeVerifier.flowEnd(right)` (wave D).
+    crate::error::dead_code_verifier::flow_end(rv, right);
     let info = if flow_active {
         let right_info = rv.flow_analysis.get_expression_info(Some(right));
         Some(rv.flow().logical_binary_op_end(right_info, is_and))
