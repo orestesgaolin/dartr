@@ -8,6 +8,7 @@ description = "Constant values of the analyzer (pkg/analyzer/lib/src/dart/consta
 [dependencies]
 dartr_element.workspace = true
 dartr_diagnostics.workspace = true
+dartr_typesystem.workspace = true
 indexmap.workspace = true
 
 [dev-dependencies]
