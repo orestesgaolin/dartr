@@ -386,7 +386,7 @@ impl<'a> ResolverVisitor<'a> {
     }
 
     pub fn visit_primary_constructor_declaration(&mut self, node: Id<PrimaryConstructorDeclaration>) {
-        let _ = node;
+        self.visit_children(node);
     }
 
     pub fn visit_primary_constructor_name(&mut self, node: Id<PrimaryConstructorName>) {

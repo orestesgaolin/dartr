@@ -365,18 +365,28 @@ pub fn set_library_and_enclosing(store: &mut ElementStore) {
     }
     // Libraries: walk up.
     for (id, _) in &updates {
-        let mut current = *id;
-        let library = loop {
-            if current.tag() == Tag::Library {
-                break Some(EId::<LibraryElement>::from_raw(current));
-            }
-            let Some(data) = store.element_data(current) else {
-                break None;
-            };
-            match data.enclosing {
-                Some(e) if e.store() == store.id => current = e,
-                // Only library elements are outside of the store chain.
-                _ => break None,
+        let library = if id.tag() == Tag::Prefix {
+            let first = store.element_data(*id).unwrap().first_fragment;
+            store
+                .fragment_data(first)
+                .and_then(|f| f.enclosing_fragment)
+                .and_then(|f| store.fragment_data(f))
+                .and_then(|f| f.element.try_get().copied())
+                .and_then(|e| e.cast::<LibraryElement>())
+        } else {
+            let mut current = *id;
+            loop {
+                if current.tag() == Tag::Library {
+                    break Some(EId::<LibraryElement>::from_raw(current));
+                }
+                let Some(data) = store.element_data(current) else {
+                    break None;
+                };
+                match data.enclosing {
+                    Some(e) if e.store() == store.id => current = e,
+                    // Only library elements are outside of the store chain.
+                    _ => break None,
+                }
             }
         };
         element_data_mut(store, *id).library = library;
