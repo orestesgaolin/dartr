@@ -176,7 +176,7 @@ impl Resolver<'_> {
             return self.resolve_receiver_prefix(rv, prefix);
         }
 
-        let receiver_element = rv.ast.is::<Identifier>(receiver).then(|| rv.base_element(receiver)).flatten();
+        let receiver_element = identifier_element(rv, receiver);
         if let Some(extension) = receiver_element.and_then(|e| e.cast::<ExtensionElement>()) {
             return self.resolve_extension_member(rv, extension);
         }
@@ -1004,6 +1004,18 @@ impl Resolver<'_> {
             }
         }
     }
+}
+
+/// Dart `Identifier.element` of [expression] (the element of the
+/// identifier of a `PrefixedIdentifier`), if it is an identifier.
+fn identifier_element(rv: &ResolverVisitor<'_>, expression: Id<Expression>) -> Option<ElementId> {
+    if !rv.ast.is::<Identifier>(expression) {
+        return None;
+    }
+    if let Some(p) = rv.ast.cast::<PrefixedIdentifier>(expression) {
+        return rv.base_element(p).or_else(|| rv.base_element(rv.ast[p].identifier));
+    }
+    rv.base_element(expression)
 }
 
 /// Dart `_reportUseOfVoidType(errorNode)`.
