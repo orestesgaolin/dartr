@@ -7,8 +7,8 @@
 
 use dartr_ast::{Id, VariableDeclaration, VariableDeclarationList};
 use dartr_element::{
-    EId, ElementFlags, ElementId, FieldElement, FormalParameterElement, InstanceElement,
-    LocalVariableElement, PromotableElement, PropertyInducingElement, TypeId,
+    EId, ElementFlags, ElementId, FieldElement, LocalVariableElement, PromotableElement,
+    PropertyInducingElement, TypeId,
 };
 use dartr_flow::flow_analysis::FlowAnalysis;
 use dartr_typesystem::TypeExt;
@@ -79,20 +79,22 @@ pub fn resolve(rv: &mut ResolverVisitor<'_>, node: Id<VariableDeclaration>) {
         element.is::<FieldElement>() || element.tag() == dartr_element::Tag::TopLevelVariable;
     let is_late = element_ext::is_late(&rv.ctx, element);
 
-    // Dart `inScopePrimaryConstructorParameters`.
-    let mut in_scope_primary_constructor_parameters: Option<Vec<EId<FormalParameterElement>>> =
-        None;
+    // Dart `inScopePrimaryConstructorParameters`: the formal parameters of
+    // the primary constructor of the enclosing class, for the initializer of
+    // a non-late instance field.
+    let mut in_scope_primary_constructor_parameters = None;
     if element.is::<FieldElement>()
-        && !dartr_typesystem::member::is_static(&rv.ctx, element.into())
         && !is_late
-    {
-        in_scope_primary_constructor_parameters = rv
+        && !dartr_typesystem::member::is_static(&rv.ctx, dartr_element::ElemRef::Base(element))
+        && let Some(enclosing) = rv
             .ctx
             .element_data(element)
             .and_then(|d| d.enclosing)
-            .and_then(|e| e.cast::<InstanceElement>())
-            .and_then(|e| crate::scope_context::primary_constructor_of(&rv.ctx, e))
-            .map(|c| rv.ctx.get(c).formal_params.clone());
+            .and_then(|e| e.cast::<dartr_element::InstanceElement>())
+        && let Some(constructor) = crate::scope_context::primary_constructor_of(&rv.ctx, enclosing)
+    {
+        in_scope_primary_constructor_parameters =
+            Some(rv.formal_parameters_of(constructor.upcast()));
     }
     if is_top_level {
         let ast = &*rv.ast;
@@ -136,6 +138,7 @@ pub fn resolve(rv: &mut ResolverVisitor<'_>, node: Id<VariableDeclaration>) {
 
     if is_top_level {
         rv.flow_analysis.body_or_initializer_exit();
+        crate::error::dead_code_verifier::flow_end(rv, node);
     } else if is_late {
         if let Some(flow) = rv.flow_analysis.flow.as_mut() {
             flow.late_initializer_end();
@@ -147,6 +150,11 @@ pub fn resolve(rv: &mut ResolverVisitor<'_>, node: Id<VariableDeclaration>) {
     // initializer` for local constants: the constant evaluation of local
     // constants reads the initializer node from the tables (wave D).
 
-    // Dart `checkForAssignableExpressionAtType(initializer, initializerType,
-    // element.type, ...)`: wave D.
+    let element_type = element_ext::variable_type(&rv.ctx, element);
+    rv.check_for_assignable_expression_at_type(
+        initializer,
+        initializer_type,
+        element_type,
+        crate::error_detection_helpers::NonAssignabilityReporter::ForAssignment,
+    );
 }

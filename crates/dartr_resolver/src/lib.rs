@@ -47,6 +47,7 @@ pub mod generated {
 
 pub mod ast_ext;
 pub mod constant;
+pub mod error;
 pub mod library_analyzer;
 pub mod options;
 pub mod resolver;
@@ -68,6 +69,8 @@ pub mod scope_context;
 pub mod body_inference_context;
 pub mod element_resolver;
 pub mod error_detection_helpers;
+pub mod error_verifier;
+pub mod ffi_verifier;
 pub mod flow_analysis_visitor;
 pub mod lexical_lookup;
 pub mod shared_type_analyzer;
@@ -85,6 +88,7 @@ pub mod binary_expression_resolver;
 pub mod comment_reference_resolver;
 pub mod constructor_reference_resolver;
 pub mod dot_shorthand_resolver;
+pub mod element_metadata;
 pub mod exit_detector;
 pub mod extension_member_resolver;
 pub mod for_resolver;
@@ -109,6 +113,7 @@ pub mod yield_statement_resolver;
 
 pub use library_analyzer::{
     LibraryAnalysisInput, ResolvedLibrary, ResolvedUnit, UnitInput, analyze_library,
+    analyze_library_with_unignorable,
 };
 pub use resolver::ResolverVisitor;
 pub use tables::ResolverTables;

@@ -71,6 +71,13 @@ pub fn resolve(
     }
 
     let was_function_type_supplied = matches!(rv.ctx.ty(context_type), TypeKind::Function(_));
+    if was_function_type_supplied {
+        // Dart `node.wasFunctionTypeSupplied = true` (read by the best
+        // practices verifier).
+        let mut flags = rv.tables.flags.get(node.raw()).copied().unwrap_or_default();
+        flags.insert(dartr_element::NodeFlags::FUNCTION_TYPE_SUPPLIED);
+        rv.tables.flags.insert(node.raw(), flags);
+    }
     let mut imposed_type = None;
     if was_function_type_supplied {
         let type_parameters = rv.ast[node].type_parameters;
@@ -109,6 +116,7 @@ pub fn resolve(
         if let Some(flow) = rv.flow_analysis.flow.as_mut() {
             flow.function_expression_end();
         }
+        crate::error::dead_code_verifier::flow_end(rv, node);
     }
 
     // Dart: `checkForTypeParameterBoundRecursion` and `DefaultTypesBuilder`

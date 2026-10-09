@@ -10,6 +10,7 @@ use dartr_flow::flow_analysis::FlowAnalysis;
 use dartr_flow::type_analyzer::TypeAnalyzer;
 
 use crate::body_inference_context::BodyInferenceContext;
+use crate::error::dead_code_verifier;
 use crate::resolver::ResolverVisitor;
 use crate::{for_resolver, pattern_resolver, yield_statement_resolver};
 
@@ -31,7 +32,10 @@ impl<'a> ResolverVisitor<'a> {
         }
         let bool_type = self.ctx.tp.bool_type();
         let condition = self.resolve_expression(condition, bool_type);
-        self.check_for_non_bool_expression(condition);
+        self.check_for_non_bool_expression(
+            condition,
+            dartr_diagnostics::diag::non_bool_expression(),
+        );
         let info = self.flow_analysis.get_expression_info(Some(condition));
         if let Some(flow) = self.flow_analysis.flow.as_mut() {
             flow.assert_after_condition(info);
@@ -175,9 +179,12 @@ impl<'a> ResolverVisitor<'a> {
             self.flow().try_catch_statement_body_begin();
         }
         self.visit_node(body.raw());
+        dead_code_verifier::flow_end(self, body);
+        dead_code_verifier::try_statement_enter(self, node);
         if !catch_clauses.is_empty() {
             self.flow().try_catch_statement_body_end(body.raw());
             for catch_clause in catch_clauses {
+                dead_code_verifier::verify_catch_clause(self, catch_clause);
                 let exception =
                     self.catch_parameter_element(self.ast[catch_clause].exception_parameter);
                 let stack_trace =
@@ -186,9 +193,12 @@ impl<'a> ResolverVisitor<'a> {
                     .try_catch_statement_catch_begin(exception, stack_trace);
                 self.visit_node(catch_clause.raw());
                 self.flow().try_catch_statement_catch_end();
+                let catch_body = self.ast[catch_clause].body;
+                dead_code_verifier::flow_end(self, catch_body);
             }
             self.flow().try_catch_statement_end();
         }
+        dead_code_verifier::try_statement_exit(self, node);
         if let Some(finally_block) = finally_block {
             let target = if !self.ast.list(self.ast[node].catch_clauses).is_empty() {
                 node.raw()
@@ -244,6 +254,7 @@ impl<'a> ResolverVisitor<'a> {
         if let Some(flow) = self.flow_analysis.flow.as_mut() {
             flow.while_statement_end();
         }
+        dead_code_verifier::flow_end(self, body);
     }
 
     pub fn visit_yield_statement(&mut self, node: Id<YieldStatement>) {
@@ -307,6 +318,9 @@ impl<'a> ResolverVisitor<'a> {
         self.check_unreachable_node(node);
         self.visit_children(node);
         let result = self.finish_function_body_inference();
+        if let Some(body_context) = self.body_context.clone() {
+            self.rt.body_context.insert(node, body_context);
+        }
         self.body_context = old_body_context;
         result
     }
@@ -335,6 +349,9 @@ impl<'a> ResolverVisitor<'a> {
             .unwrap()
             .add_return_expression(&ts, Some(expression_type));
         let result = self.finish_function_body_inference();
+        if let Some(body_context) = self.body_context.clone() {
+            self.rt.body_context.insert(node, body_context);
+        }
         self.body_context = old_body_context;
         result
     }

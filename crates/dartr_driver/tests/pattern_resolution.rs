@@ -380,8 +380,16 @@ void f() {
         a.matched_value_type(NodeKind::NullCheckPattern, "z?"),
         "String"
     );
-    // `?` on a value of a non-nullable type.
-    assert_eq!(a.diagnostic_names(), vec!["unnecessary_null_check_pattern"]);
+    // `?` on a value of a non-nullable type; `y` and `z` are not used (the
+    // analyzer reports the same three warnings).
+    assert_eq!(
+        a.diagnostic_names(),
+        vec![
+            "unnecessary_null_check_pattern",
+            "unused_local_variable",
+            "unused_local_variable"
+        ]
+    );
 }
 
 #[test]
@@ -520,10 +528,10 @@ void f((int, int) r) {
     };
     assert_eq!(a.variable_type("v) ||"), "int");
     assert_eq!(a.variable_type("v, 0)"), "int");
-    assert!(
-        a.diagnostic_names().is_empty(),
-        "{:?}",
-        a.diagnostic_names()
+    // Both `v` are not used (the analyzer reports the same warnings).
+    assert_eq!(
+        a.diagnostic_names(),
+        vec!["unused_local_variable", "unused_local_variable"]
     );
 }
 

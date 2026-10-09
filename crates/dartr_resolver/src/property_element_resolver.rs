@@ -107,7 +107,8 @@ pub fn visit_index_expression(
     if index_expression_is_null_aware(rv, node) {
         let target = rv.ast[node].target;
         method_invocation_resolver::start_null_aware_access(rv, target);
-        // Dart `nullSafetyDeadCodeVerifier.visitNode(node.index)` (wave D).
+        let index = rv.ast[node].index;
+        crate::error::dead_code_verifier::visit_node(rv, index);
     }
 
     let result = resolve_index_expression(rv, node, true, false);
@@ -116,9 +117,8 @@ pub fn visit_index_expression(
     rv.set_element(node, element);
 
     let index = rv.ast[node].index;
-    rv.resolve_expression(index, result.index_context_type.unwrap_or(TypeId::UNKNOWN));
-    // Dart `checkIndexExpressionIndex(node.index, readElement:,
-    // writeElement: null, whyNotPromoted:)` (wave D).
+    let index = rv.resolve_expression(index, result.index_context_type.unwrap_or(TypeId::UNKNOWN));
+    rv.check_index_expression_index(index, result.read_element(), None);
 
     let ctx = rv.ctx;
     let ty = if target_type == Some(TypeId::NEVER) {
@@ -134,7 +134,7 @@ pub fn visit_index_expression(
     rv.record_static_type(node, ty);
     let replacement = rv.insert_generic_function_instantiation(node.upcast(), context_type);
     rv.insert_implicit_call_reference(replacement, context_type);
-    // Dart `nullSafetyDeadCodeVerifier.verifyIndexExpression(node)` (wave D).
+    crate::error::dead_code_verifier::verify_index_expression(rv, node);
 
     if is_dot_shorthand {
         rv.pop_dot_shorthand_context();
@@ -152,15 +152,15 @@ pub fn resolve_property_access_rhs(
     if property_access_is_null_aware(rv, node) {
         let target = rv.ast[node].target;
         method_invocation_resolver::start_null_aware_access(rv, target);
-        // Dart `nullSafetyDeadCodeVerifier.visitNode(node.propertyName)`
-        // (wave D).
+        let property_name = rv.ast[node].property_name;
+        crate::error::dead_code_verifier::visit_node(rv, property_name);
     }
 
     let result = resolve_property_access(rv, node, true, false, original_node);
 
     let property_name = rv.ast[node].property_name;
     resolve_property_access_rhs_common(rv, result, node.upcast(), property_name, context_type);
-    // Dart `nullSafetyDeadCodeVerifier.verifyPropertyAccess(node)` (wave D).
+    crate::error::dead_code_verifier::verify_property_access(rv, node);
 }
 
 /// Dart `ResolverVisitor._resolvePropertyAccessRhs_common(resolverResult,

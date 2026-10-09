@@ -33,8 +33,7 @@ use dartr_ast::{
 use dartr_diagnostics::{Diagnostic, DiagnosticReporter, LocatableDiagnostic, diag};
 use dartr_element::diagnostics::type_arg;
 use dartr_element::{
-    AliasId, Ctx, EId, ElemRef, ElementId, ExtensionElement, FnParam, Tag, TypeId, TypeKind,
-    TypeParameterElement, VariableElement,
+    EId, ElemRef, ElementId, ExtensionElement, FnParam, Tag, TypeId, TypeKind, TypeParameterElement,
 };
 use dartr_flow::flow_analysis::FlowAnalysis;
 use dartr_flow::shared_type::SharedTypeView;
@@ -613,6 +612,22 @@ impl InvocationInferrer {
                 || ast.is::<DotShorthandInvocation>(p))
                 && ast.parent(p).is_some_and(|pp| ast.is::<AsExpression>(pp))
         });
+        // The facts that need `@optionalTypeArgs` metadata (Dart
+        // `metadata.hasOptionalTypeArgs`); the generic inferrer reads them
+        // only with the `strict-inference` option.
+        let ctx = rv.ctx;
+        let unit = Some(crate::element_metadata::UnitAst {
+            ast,
+            tables: &rv.tables,
+        });
+        let has_optional_type_args = |element: dartr_element::ElementId| {
+            crate::element_metadata::element_has(
+                &ctx,
+                element,
+                crate::element_metadata::flags::OPTIONAL_TYPE_ARGS,
+                unit,
+            )
+        };
         let kind = if let Some(c) = ast.cast::<ConstructorName>(entity) {
             let named_type = ast[c].type_;
             let type_name = ast.qualified_name(named_type);
@@ -620,18 +635,17 @@ impl InvocationInferrer {
                 None => type_name,
                 Some(name) => format!("{}.{}", type_name, rv.lexeme(ast[name].token)),
             };
-            let type_element_has_optional_type_args = match rv
+            // Dart `(errorEntity.type.type as InterfaceType).element`.
+            let type_ = rv
                 .tables
                 .annotation_type
                 .get(named_type)
                 .copied()
-                .map(|t| *rv.ctx.ty(t))
-            {
-                Some(TypeKind::Interface { element, .. }) => {
-                    crate::element_ext::has_optional_type_args(&rv.ctx, element.raw())
-                }
-                _ => false,
-            };
+                .or_else(|| rv.static_type(named_type));
+            let type_element_has_optional_type_args = type_.is_some_and(|t| {
+                matches!(ctx.ty(t), TypeKind::Interface { element, .. }
+                    if has_optional_type_args(element.raw()))
+            });
             InferenceErrorEntityKind::ConstructorName {
                 type_element_has_optional_type_args,
                 constructor_name,
@@ -644,40 +658,30 @@ impl InvocationInferrer {
                 Some(c) => format!("{}.{}", name, rv.lexeme(ast[c].token)),
             };
             InferenceErrorEntityKind::Annotation {
-                element_has_optional_type_args: rv.element(ast[a].name).map(|e| {
-                    crate::element_ext::has_optional_type_args(
-                        &rv.ctx,
-                        member::base_element(&rv.ctx, e),
-                    )
-                }),
+                element_has_optional_type_args: rv
+                    .element(ast[a].name)
+                    .map(|e| has_optional_type_args(member::base_element(&ctx, e))),
                 constructor_name,
             }
         } else if let Some(s) = ast.cast::<SimpleIdentifier>(entity) {
             InferenceErrorEntityKind::SimpleIdentifier {
                 name: rv.lexeme(ast[s].token).to_string(),
-                element: rv.element(s).map(|e| {
-                    let ctx = &rv.ctx;
-                    let base = member::base_element(ctx, e);
-                    let mut variable_type_has_optional_type_args = false;
-                    if base.is::<VariableElement>() {
-                        let ty = crate::element_ext::variable_type(ctx, base);
-                        if let TypeKind::Interface { element, .. } = *ctx.ty(ty) {
-                            variable_type_has_optional_type_args =
-                                crate::element_ext::has_optional_type_args(ctx, element.raw());
-                        }
-                        if let Some(alias) = ty_alias(ctx, ty) {
-                            variable_type_has_optional_type_args |=
-                                crate::element_ext::has_optional_type_args(
-                                    ctx,
-                                    ctx.alias(alias).element.raw(),
-                                );
-                        }
-                    }
+                element: rv.element(s).map(|element| {
+                    let e = member::base_element(&ctx, element);
+                    // Dart: for a variable, its type's element or alias.
+                    let variable_type_has_optional_type_args =
+                        e.is::<dartr_element::VariableElement>() && {
+                            let t = member::type_(&ctx, element);
+                            let interface = matches!(ctx.ty(t), TypeKind::Interface { element, .. }
+                                if has_optional_type_args(element.raw()));
+                            interface
+                                || ctx.type_alias(t).is_some_and(|a| {
+                                    has_optional_type_args(ctx.alias(a).element.raw())
+                                })
+                        };
                     SimpleIdentifierElementFacts {
                         variable_type_has_optional_type_args,
-                        has_optional_type_args: crate::element_ext::has_optional_type_args(
-                            ctx, base,
-                        ),
+                        has_optional_type_args: has_optional_type_args(e),
                     }
                 }),
             }
@@ -1127,6 +1131,18 @@ pub fn record_corresponding_parameters(
             }
             None => {
                 rv.tables.param_element.remove(argument.expression);
+            }
+        }
+        match parameter {
+            Some(p) => {
+                rv.rt
+                    .corresponding_parameter_type
+                    .insert(argument.expression, p.ty);
+            }
+            None => {
+                rv.rt
+                    .corresponding_parameter_type
+                    .remove(argument.expression);
             }
         }
     }
@@ -1599,15 +1615,4 @@ fn type_vars_free_in_param_returns(
     rv.type_system
         .get_free_parameters(ty, Some(type_variables))
         .unwrap_or_default()
-}
-
-/// Dart `DartType.alias` as an id.
-fn ty_alias(ctx: &Ctx<'_>, t: TypeId) -> Option<AliasId> {
-    match *ctx.ty(t) {
-        TypeKind::Interface { alias, .. }
-        | TypeKind::Record { alias, .. }
-        | TypeKind::TypeParameter { alias, .. } => alias,
-        TypeKind::Function(f) => f.alias,
-        _ => None,
-    }
 }

@@ -62,13 +62,15 @@ impl<'a> ResolverVisitor<'a> {
     pub fn visit_import_directive(&mut self, node: Id<ImportDirective>) {
         self.check_unreachable_node(node);
         self.visit_children(node);
-        // Dart `elementResolver.visitImportDirective`: combinators (C9).
+        // Dart `elementResolver.visitImportDirective`: combinators.
+        crate::element_resolver::visit_namespace_directive(self, node.raw());
     }
 
     pub fn visit_export_directive(&mut self, node: Id<ExportDirective>) {
         self.check_unreachable_node(node);
         self.visit_children(node);
-        // Dart `elementResolver.visitExportDirective`: combinators (C9).
+        // Dart `elementResolver.visitExportDirective`: combinators.
+        crate::element_resolver::visit_namespace_directive(self, node.raw());
     }
 
     pub fn visit_part_directive(&mut self, node: Id<PartDirective>) {
@@ -124,7 +126,23 @@ impl<'a> ResolverVisitor<'a> {
         self.check_unreachable_node(node);
         self.visit_children(node);
         self.enclosing_class = outer;
-        // Dart `baseOrFinalTypeVerifier.checkElement` (wave D).
+        // Dart `baseOrFinalTypeVerifier.checkElement(declaredElement,
+        // node.implementsClause)` (visitClassDeclaration,
+        // visitMixinDeclaration).
+        let implements_clause = if let Some(c) = self.ast.cast::<ClassDeclaration>(node) {
+            Some(self.ast[c].implements_clause)
+        } else {
+            self.ast
+                .cast::<MixinDeclaration>(node)
+                .map(|m| self.ast[m].implements_clause)
+        };
+        if let (Some(element), Some(implements_clause)) = (element, implements_clause) {
+            crate::error::base_or_final_type_verifier::check_element(
+                self,
+                element,
+                implements_clause,
+            );
+        }
     }
 
     pub fn visit_class_declaration(&mut self, node: Id<ClassDeclaration>) {
@@ -132,8 +150,20 @@ impl<'a> ResolverVisitor<'a> {
     }
 
     pub fn visit_class_type_alias(&mut self, node: Id<ClassTypeAlias>) {
+        let element = self
+            .declared_element(node)
+            .and_then(|e| e.cast::<InterfaceElement>());
         self.check_unreachable_node(node);
         self.visit_children(node);
+        // Dart `elementResolver.visitClassTypeAlias(node)` does nothing.
+        if let Some(element) = element {
+            let implements_clause = self.ast[node].implements_clause;
+            crate::error::base_or_final_type_verifier::check_element(
+                self,
+                element,
+                implements_clause,
+            );
+        }
     }
 
     pub fn visit_enum_declaration(&mut self, node: Id<EnumDeclaration>) {
@@ -276,6 +306,7 @@ impl<'a> ResolverVisitor<'a> {
         self.flow_analysis
             .executable_declaration_exit(body.raw(), false);
         self.flow_analysis.body_or_initializer_exit();
+        crate::error::dead_code_verifier::flow_end(self, node);
         self.enclosing_function = outer_function;
         self.set_this_type(None);
     }
@@ -303,8 +334,20 @@ impl<'a> ResolverVisitor<'a> {
             .map(|f| crate::element_ext::variable_type(&self.ctx, f.raw()))
             .unwrap_or(TypeId::UNKNOWN);
         let expression = self.ast[node].expression;
-        self.resolve_expression(expression, field_type);
-        // Dart `checkForFieldInitializerNotAssignable` (wave D).
+        let expression = self.resolve_expression(expression, field_type);
+        if let Some(field) = field
+            && let Some(enclosing_function) = self.enclosing_function
+        {
+            let is_const_constructor =
+                crate::element_ext::first_fragment_flags(&self.ctx, enclosing_function.raw())
+                    .contains(dartr_element::FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_CONST);
+            let _ = field;
+            self.check_for_field_initializer_not_assignable(
+                expression,
+                field_type,
+                is_const_constructor,
+            );
+        }
     }
 
     pub fn visit_constructor_name(&mut self, node: Id<ConstructorName>) {
@@ -396,6 +439,7 @@ impl<'a> ResolverVisitor<'a> {
         self.flow_analysis
             .executable_declaration_exit(body.raw(), false);
         self.flow_analysis.body_or_initializer_exit();
+        crate::error::dead_code_verifier::flow_end(self, node);
         self.enclosing_function = outer_function;
         self.set_this_type(None);
     }
@@ -540,6 +584,7 @@ impl<'a> ResolverVisitor<'a> {
         } else {
             self.flow_analysis.body_or_initializer_exit();
         }
+        crate::error::dead_code_verifier::flow_end(self, node);
         self.enclosing_function = outer_function;
     }
 

@@ -131,7 +131,8 @@ fn resolve_instance_creation_expression(
         .copied()
         .unwrap_or(TypeId::DYNAMIC);
     rv.record_static_type(node, ty);
-    // Dart `checkForArgumentTypesNotAssignableInList` (wave D).
+    let argument_list = rv.ast[node].argument_list;
+    rv.check_for_argument_types_not_assignable_in_list(argument_list);
 }
 
 /// Dart `ResolverVisitor.visitDotShorthandConstructorInvocation(node,
@@ -262,7 +263,8 @@ fn resolve_dot_shorthand_constructor_invocation(
     }
     .resolve_invocation(rv);
     rv.record_static_type(node, return_type);
-    // Dart `checkForArgumentTypesNotAssignableInList` (wave D).
+    let argument_list = rv.ast[node].argument_list;
+    rv.check_for_argument_types_not_assignable_in_list(argument_list);
 }
 
 /// Dart `ResolverVisitor.visitSuperConstructorInvocation(node)`.
@@ -282,7 +284,7 @@ pub fn visit_super_constructor_invocation(
         });
     let argument_list = rv.ast[node].argument_list;
     resolve_invocation_base(rv, node.raw(), argument_list, target);
-    // Dart `checkForArgumentTypesNotAssignableInList` (wave D).
+    rv.check_for_argument_types_not_assignable_in_list(argument_list);
 }
 
 /// Dart `ResolverVisitor.visitRedirectingConstructorInvocation(node)`.
@@ -302,7 +304,7 @@ pub fn visit_redirecting_constructor_invocation(
         });
     let argument_list = rv.ast[node].argument_list;
     resolve_invocation_base(rv, node.raw(), argument_list, target);
-    // Dart `checkForArgumentTypesNotAssignableInList` (wave D).
+    rv.check_for_argument_types_not_assignable_in_list(argument_list);
 }
 
 /// Dart `ResolverVisitor.visitEnumConstantDeclaration(node)` (after the
@@ -328,6 +330,25 @@ pub fn visit_enum_constant_declaration(
     let element_to_infer = enum_element
         .and_then(|e| constructor_element_to_infer(rv, Some(e.raw()), constructor_name.as_deref()));
     let constructor_element = element_to_infer.as_ref().map(|e| e.element);
+    // Dart reads the constructor from the constant initializer of the
+    // linked fragment (`constructorName.element`), a member substituted
+    // with the inferred type arguments of the constant: substitute the
+    // constructor with the type arguments of the constant's type.
+    let constructor_element = constructor_element.map(|c| {
+        let constant_type = rv
+            .declared_element(node)
+            .map(|e| crate::element_ext::variable_type(&ctx, e));
+        match constant_type {
+            Some(t)
+                if matches!(ctx.ty(t), dartr_element::TypeKind::Interface { args, .. } if !ctx.list(*args).is_empty()) =>
+            {
+                let substitution =
+                    dartr_typesystem::type_algebra::MapSubstitution::from_interface_type(&ctx, t);
+                member::substitute(&ctx, c, &substitution)
+            }
+            _ => c,
+        }
+    });
 
     match constructor_element {
         Some(constructor_element) => {
@@ -385,7 +406,7 @@ pub fn visit_enum_constant_declaration(
                 resolve_invocation_base(rv, node.raw(), argument_list, target);
             });
             rv.visit_opt(type_arguments);
-            // Dart `checkForArgumentTypesNotAssignableInList` (wave D).
+            rv.check_for_argument_types_not_assignable_in_list(argument_list);
         }
         None => {
             // Dart: `definingLibrary.featureSet.isEnabled(enhanced_enums)`.

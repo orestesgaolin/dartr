@@ -256,9 +256,26 @@ fn analyze_context(
     let library_ids: Vec<FileId> = libraries.keys().copied().collect();
     driver.link_libraries(&library_ids);
 
-    let jobs: Vec<(FileId, ResolverOptions)> = library_ids
+    // The unignorable codes of each library: the library analyzer keeps
+    // them in its ignore filtering, like `finish_file` does.
+    let unignorable: Vec<Vec<String>> = library_ids
         .iter()
-        .map(|&l| (l, options.for_path(&driver.fs.file(l).path).1))
+        .map(|&l| {
+            let mut names: Vec<String> = options
+                .for_path(&driver.fs.file(l).path)
+                .0
+                .unignorable_names
+                .iter()
+                .cloned()
+                .collect();
+            names.sort();
+            names
+        })
+        .collect();
+    let jobs: Vec<(FileId, ResolverOptions, &[String])> = library_ids
+        .iter()
+        .zip(&unignorable)
+        .map(|(&l, names)| (l, options.for_path(&driver.fs.file(l).path).1, &names[..]))
         .collect();
     let requested = &requested;
     let libraries = &libraries;

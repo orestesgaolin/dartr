@@ -58,7 +58,8 @@ pub fn visit_dot_shorthand_invocation(
         rewritten_expression.is_some_and(|e| rv.ast.is::<DotShorthandConstructorInvocation>(e));
     if !rewritten_to_constructor {
         let replacement = rv.insert_generic_function_instantiation(node.upcast(), context_type);
-        // Dart `checkForArgumentTypesNotAssignableInList` (wave D).
+        let argument_list = rv.ast[node].argument_list;
+        rv.check_for_argument_types_not_assignable_in_list(argument_list);
         rv.insert_implicit_call_reference(replacement, context_type);
     }
 

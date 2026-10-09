@@ -294,11 +294,15 @@ pub fn resolve_arguments_to_parameters(
 
     let mut used_names: Option<indexmap::IndexSet<String>> = None;
     if let Some(list) = enclosing_constructor_formal_parameter_list {
-        let (positional, named) =
-            verify_super_formal_parameters(rv, list, positional_argument_count != 0, report);
-        positional_argument_count += positional;
-        if !named.is_empty() {
-            used_names = Some(named.into_iter().collect());
+        let result = crate::error::super_formal_parameters_verifier::verify_super_formal_parameters(
+            rv,
+            list,
+            report,
+            positional_argument_count != 0,
+        );
+        positional_argument_count += result.positional_argument_count;
+        if !result.named_argument_names.is_empty() {
+            used_names = Some(result.named_argument_names.into_iter().collect());
         }
     }
 
@@ -382,9 +386,12 @@ pub fn resolve_arguments_to_parameters(
         match resolved_parameters[i] {
             Some(p) => {
                 rv.tables.param_element.insert(expression, p);
+                let ty = member::type_(&rv.ctx, p);
+                rv.rt.corresponding_parameter_type.insert(expression, ty);
             }
             None => {
                 rv.tables.param_element.remove(expression);
+                rv.rt.corresponding_parameter_type.remove(expression);
             }
         }
     }
@@ -492,39 +499,78 @@ fn enum_constant_type_name(rv: &ResolverVisitor<'_>, node: NodeId) -> Option<Str
     ))
 }
 
-/// Dart `verifySuperFormalParameters(formalParameterList:,
-/// diagnosticReporter:, hasExplicitPositionalArguments:)`: the count of
-/// positional super parameters and the names of the named super
-/// parameters of [formal_parameter_list].
-pub fn verify_super_formal_parameters(
-    rv: &mut ResolverVisitor<'_>,
-    formal_parameter_list: Id<dartr_ast::FormalParameterList>,
-    has_explicit_positional_arguments: bool,
-    report: bool,
-) -> (usize, Vec<String>) {
-    let mut positional_argument_count = 0;
-    let mut named_argument_names = Vec::new();
-    let parameters = rv
+/// Dart `ElementResolver.visitImportDirective` / `visitExportDirective`:
+/// `_resolveCombinators(importedLibrary, node.combinators)` (the prefix
+/// element is set by the resolution visitor). [node] is an
+/// `ImportDirective` or an `ExportDirective` of the unit.
+pub fn visit_namespace_directive(rv: &mut ResolverVisitor<'_>, node: NodeId) {
+    use dartr_ast::{
+        CompilationUnit, ExportDirective, HideCombinator, ImportDirective, ShowCombinator,
+    };
+    // The index of the directive in `libraryImports` / `libraryExports`.
+    let is_import = rv.ast.is::<ImportDirective>(node);
+    let Some(unit) = rv
         .ast
-        .list(rv.ast[formal_parameter_list].parameters)
-        .to_vec();
-    for parameter in parameters {
-        let Some(parameter) = rv.ast.cast::<dartr_ast::SuperFormalParameter>(parameter) else {
-            continue;
-        };
-        let name_token = rv.ast[parameter].name;
-        if rv.ast[parameter].kind.is_named() {
-            named_argument_names.push(rv.lexeme(name_token).to_string());
-        } else {
-            positional_argument_count += 1;
-            if has_explicit_positional_arguments && report {
-                let d = rv.at_token(
-                    diag::positional_super_formal_parameter_with_positional_argument(),
-                    name_token,
-                );
-                rv.report(d);
+        .parent(node)
+        .and_then(|p| rv.ast.cast::<CompilationUnit>(p))
+    else {
+        return;
+    };
+    let index = rv
+        .ast
+        .list(rv.ast[unit].directives)
+        .iter()
+        .filter(|&&d| {
+            if is_import {
+                rv.ast.is::<ImportDirective>(d)
+            } else {
+                rv.ast.is::<ExportDirective>(d)
             }
+        })
+        .position(|&d| d.raw() == node);
+    let Some(index) = index else {
+        return;
+    };
+    let fragment = rv.ctx.fragment(rv.unit.fragment);
+    let uri = if is_import {
+        fragment
+            .library_imports
+            .get(index)
+            .map(|i| &i.directive.uri)
+    } else {
+        fragment
+            .library_exports
+            .get(index)
+            .map(|e| &e.directive.uri)
+    };
+    // Dart: the library is null when the URI is not valid.
+    let Some(dartr_element::DirectiveUri::Library { library, .. }) = uri else {
+        return;
+    };
+    let library = *library;
+    let combinators = if let Some(i) = rv.ast.cast::<ImportDirective>(node) {
+        rv.ast[i].combinators
+    } else if let Some(e) = rv.ast.cast::<ExportDirective>(node) {
+        rv.ast[e].combinators
+    } else {
+        return;
+    };
+    let mut names = Vec::new();
+    for &combinator in rv.ast.list(combinators) {
+        if let Some(h) = rv.ast.cast::<HideCombinator>(combinator) {
+            names.extend(rv.ast.list(rv.ast[h].hidden_names).iter().copied());
+        } else if let Some(s) = rv.ast.cast::<ShowCombinator>(combinator) {
+            names.extend(rv.ast.list(rv.ast[s].shown_names).iter().copied());
         }
     }
-    (positional_argument_count, named_argument_names)
+    for name in names {
+        let name_str = crate::ast_ext::identifier_name(rv.ast, name).to_string();
+        // Dart `namespace.get2(name) ?? namespace.get2('$name=')`; a getter
+        // or setter resolves to its variable.
+        if let Some(element) =
+            crate::error::imports_verifier::combinator_name_element(&rv.ctx, library, &name_str)
+        {
+            rv.set_element(name, Some(ElemRef::Base(element)));
+        }
+    }
 }
