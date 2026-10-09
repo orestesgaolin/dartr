@@ -18,14 +18,17 @@
 //! messages.
 
 use dartr_ast::{
-    ArgumentList, AssignmentExpression, BinaryExpression, IndexExpression, Ast, BlockFunctionBody, ConstructorDeclaration, Expression,
-    FunctionDeclaration, FunctionExpressionInvocation, Id, MethodDeclaration, MethodInvocation,
-    NamedArgument, NodeId, ParenthesizedExpression, CascadeExpression,
+    ArgumentList, AssignmentExpression, Ast, BinaryExpression, BlockFunctionBody,
+    CascadeExpression, ConstructorDeclaration, Expression, FunctionDeclaration,
+    FunctionExpressionInvocation, Id, IndexExpression, MethodDeclaration, MethodInvocation,
+    NamedArgument, NodeId, ParenthesizedExpression,
 };
-use dartr_flow::flow_analysis::FlowAnalysis;
 use dartr_diagnostics::{LocatableDiagnostic, LocatedDiagnostic, diag};
 use dartr_element::diagnostics::type_arg;
-use dartr_element::{Ctx, ElemRef, ElementId, Nullability, ResolutionTables, Tag, TypeId, TypeKind};
+use dartr_element::{
+    Ctx, ElemRef, ElementId, Nullability, ResolutionTables, Tag, TypeId, TypeKind,
+};
+use dartr_flow::flow_analysis::FlowAnalysis;
 use dartr_syntax::TokenType;
 use dartr_typesystem::inheritance_manager3::{GetMemberOptions, InheritanceManager3, Name};
 use dartr_typesystem::{TypeExt, TypeSystem, member};
@@ -93,8 +96,7 @@ impl NonAssignabilityReporter {
                     if !named_fields.is_empty() {
                         for field in ctx.list(actual_named) {
                             if !named_fields.iter().any(|element| {
-                                element.name == field.name
-                                    && ctx.dart_eq(field.ty, element.ty)
+                                element.name == field.name && ctx.dart_eq(field.ty, element.ty)
                             }) {
                                 additional_info.push(format!(
                                     "Unexpected named argument `{}` with type `{}`.",
@@ -769,15 +771,12 @@ impl<'a> ResolverVisitor<'a> {
         let ast = &*self.ast;
         let d = if let Some(c) = ast.cast::<ConstructorDeclaration>(error_node) {
             // Dart `ConstructorDeclaration.errorRange`.
-            let start = ast[c]
-                .type_name
-                .map(|t| ast.offset(t.raw()))
-                .or_else(|| {
-                    ast[c]
-                        .new_keyword
-                        .or(ast[c].factory_keyword)
-                        .map(|t| ast.tokens.get(t).offset)
-                });
+            let start = ast[c].type_name.map(|t| ast.offset(t.raw())).or_else(|| {
+                ast[c]
+                    .new_keyword
+                    .or(ast[c].factory_keyword)
+                    .map(|t| ast.tokens.get(t).offset)
+            });
             let Some(start) = start else {
                 return;
             };
@@ -835,7 +834,8 @@ impl<'a> ResolverVisitor<'a> {
         if !matches!(ctx.ty(target_type), TypeKind::Interface { .. }) {
             return;
         }
-        let Some(instance_of_future) = ctx.as_instance_of(target_type, ctx.tp.future_element().upcast())
+        let Some(instance_of_future) =
+            ctx.as_instance_of(target_type, ctx.tp.future_element().upcast())
         else {
             return;
         };

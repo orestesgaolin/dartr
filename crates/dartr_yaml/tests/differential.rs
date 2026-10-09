@@ -326,6 +326,24 @@ fn package_yaml_3_1_4_parity() {
         ("{9007199254740992: a, 9007199254740992.0: b}", false),
         ("{9007199254740993: a, 9007199254740992.0: b}", false),
         ("{9223372036854775807: a, 9223372036854775808: b}", false),
+        // `deepHashCode` of 2^63 is platform-dependent in the Dart VM (see
+        // `int_and_double_hashes_differ`), also inside collection keys.
+        (
+            "{[9223372036854775807]: a, [9223372036854775808]: b}",
+            false,
+        ),
+        (
+            "{{k: 9223372036854775807}: a, {k: 9223372036854775808}: b}",
+            false,
+        ),
+        (
+            "{{9223372036854775807: k}: a, {9223372036854775808: k}: b}",
+            false,
+        ),
+        (
+            "{-9223372036854775808: a, -9223372036854775808.0: b}",
+            false,
+        ),
         ("%YAML 1.0\n---\nx\n", false),
         ("%YAML 1.2\n%YAML 1.2\n---\nx\n", false),
         ("{one: 1 two: 2}", false),

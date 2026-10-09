@@ -182,7 +182,12 @@ pub fn dump_elements_all(inputs: &[String], interface: bool, with_const: bool) -
                         &ctx, p, library,
                     );
                 }
-                let sources = Sources { driver, with_const };
+                let consts = if with_const {
+                    Some(crate::elements_const::library_const_values(driver, *file))
+                } else {
+                    None
+                };
+                let sources = Sources { driver, consts };
                 library_json(&ctx, &sources, p, library)
             }
         })
@@ -192,8 +197,9 @@ pub fn dump_elements_all(inputs: &[String], interface: bool, with_const: bool) -
 /// `DumpSources` over the linked cycles of a driver.
 struct Sources<'a> {
     driver: &'a Driver,
-    /// `--with-const`.
-    with_const: bool,
+    /// `--with-const`: the JSON text of the `"const"` value of each const
+    /// variable of the library.
+    consts: Option<IndexMap<ElementId, String>>,
 }
 
 impl DumpSources for Sources<'_> {
@@ -206,11 +212,8 @@ impl DumpSources for Sources<'_> {
         String::new()
     }
 
-    fn const_value_json(&self, ctx: &Ctx<'_>, element: ElementId) -> Option<String> {
-        if !self.with_const {
-            return None;
-        }
-        crate::elements_const::const_value_json(ctx, element)
+    fn const_value_json(&self, _ctx: &Ctx<'_>, element: ElementId) -> Option<String> {
+        self.consts.as_ref()?.get(&element).cloned()
     }
 }
 

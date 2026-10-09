@@ -276,8 +276,14 @@ The diagnostic checks (`check_for_yield_of_invalid_type`,
 - `checkPatternNeverMatchesValueType` needs `TypeSystem.canBeSubtypeOf`
   (not ported in `dartr_typesystem`): `pattern_never_matches_value_type` is
   not reported yet.
-- The library-wide steps of the library analyzer (constants, verifiers,
-  imports, ignore comments) are wave D.
+- Constants (wave D, D1–D3, `src/constant/`): `library_analyzer` computes
+  the constants of the library (`_computeConstants`, results in
+  `ResolvedLibrary::constants`) and runs the constant verifier per unit,
+  with switch exhaustiveness. The evaluator reads resolved unit ASTs, not
+  the linker's `ConstExprs`: the units of other libraries come from an
+  `ExternalUnitCache` (resolved on demand); see `constant/mod.rs`. The
+  other library-wide steps (error verifier, imports, ignore comments) are
+  other wave D units.
 - The type algorithms (`isSubtypeOf`, `isNonNullable`, `UP`, ...) panic
   with `StackOverflowError` at a fixed recursion depth
   (`dartr_typesystem::recursion_guard`), where Dart overflows its stack

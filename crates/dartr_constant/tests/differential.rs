@@ -306,6 +306,7 @@ fn analyzer_column_matches_dart_object_impl() {
         }
         let actual = analyzer(&t, op, a, b).expect("an analyzer operation");
         checked += 1;
+        let expected = host_expected(expected, a, b);
         if actual != expected {
             failures.push(format!(
                 "{op} {a} {b}: expected {expected}, actual {actual}"
@@ -314,6 +315,39 @@ fn analyzer_column_matches_dart_object_impl() {
     }
     report("analyzer", checked, &failures);
     assert!(checked > 10_000);
+}
+
+/// The bits of the default NaN of the CPU that recorded the fixture
+/// (macOS arm64): positive quiet NaN.
+const ARM64_DEFAULT_NAN: &str = "d:7ff8000000000000";
+
+/// The `runtime` value that the Dart VM gives on this CPU.
+///
+/// The fixture is recorded on arm64. When an operation without a NaN
+/// operand makes a NaN (`inf + -inf`, `0 * inf`, `inf % 1`, ...), the CPU
+/// gives its default NaN: arm64 `0x7ff8000000000000`, x86 SSE
+/// `0xfff8000000000000` (sign bit set). The Dart VM uses the hardware
+/// result as it is, so Dart 3.13.3 on Linux x86-64 gives
+/// `(inf + -inf)` the bits `0xfff8000000000000` too, and `dart_num` does the
+/// same. A NaN operand is propagated with its bits on both CPUs, so only the
+/// generated NaN changes.
+///
+/// The analyzer behavior stays exact on each CPU: the analyzer runs on the
+/// same VM, `toString()` is `NaN` for every NaN, `==` is false for every
+/// NaN, and `identical` / `hashCode` compare the bits (on both CPUs
+/// `identical` of `0x7ff8...` and `0xfff8...` NaNs is false), so they only
+/// see values made on the same CPU, which agree.
+fn host_expected<'a>(expected: &'a str, a: &Value, b: &Value) -> &'a str {
+    let is_nan = |v: &Value| matches!(num(v), Some(Num::Double(d)) if d.is_nan());
+    if cfg!(any(target_arch = "x86_64", target_arch = "x86"))
+        && expected == ARM64_DEFAULT_NAN
+        && !is_nan(a)
+        && !is_nan(b)
+    {
+        "d:fff8000000000000"
+    } else {
+        expected
+    }
 }
 
 #[test]
@@ -333,6 +367,7 @@ fn runtime_column_matches_dart_num() {
             continue;
         };
         checked += 1;
+        let expected = host_expected(expected, a, b);
         if actual != expected {
             failures.push(format!(
                 "{op} {a} {b}: expected {expected}, actual {actual}"
