@@ -20,29 +20,27 @@ fn check(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         return;
     };
     let body = &context.ast[context.ast.cast::<PrimaryConstructorBody>(node).unwrap()];
-    let Some(class_node) = super::helpers::ancestors(context.ast, node)
-        .find(|n| context.ast.kind(*n) == NodeKind::ClassDeclaration)
-    else {
+    let Some(declaration) = super::helpers::ancestors(context.ast, node).find_map(|ancestor| {
+        let name_part = match context.ast.kind(ancestor) {
+            NodeKind::ClassDeclaration => {
+                context.ast[context.ast.cast::<ClassDeclaration>(ancestor)?].name_part
+            }
+            NodeKind::EnumDeclaration => {
+                context.ast[context.ast.cast::<EnumDeclaration>(ancestor)?].name_part
+            }
+            NodeKind::ExtensionTypeDeclaration => {
+                context.ast[context.ast.cast::<ExtensionTypeDeclaration>(ancestor)?].name_part
+            }
+            _ => return None,
+        };
+        context.ast.cast::<PrimaryConstructorDeclaration>(name_part)
+    }) else {
         return;
     };
-    let Some(class_element) = context
-        .declared_element(class_node)
-        .and_then(|e| e.cast::<dartr_element::ClassElement>())
-    else {
-        return;
-    };
-    let Some(constructor) = resolved
-        .ctx
-        .get(class_element)
-        .constructors
-        .iter()
-        .find(|&&ctor| {
-            resolved
-                .ctx
-                .fragment_data(resolved.ctx.get(ctor).first_fragment)
-                .is_some_and(|f| f.flags.has(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_PRIMARY))
-        })
-        .map(|ctor| ctor.raw())
+    let Some(constructor) = context
+        .declared_element(declaration)
+        .and_then(|element| element.cast::<dartr_element::ConstructorElement>())
+        .map(|element| element.raw())
     else {
         return;
     };
@@ -76,9 +74,10 @@ fn check(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         let mut pending = vec![initializer.expression.raw()];
         let mut references_parameter = false;
         while let Some(current) = pending.pop() {
-            if let Some(element) = context
-                .element(current)
-                .and_then(|e| super::helpers::base_element(context, e))
+            if context.ast.kind(current) == NodeKind::SimpleIdentifier
+                && let Some(element) = context
+                    .element(current)
+                    .and_then(|e| super::helpers::base_element(context, e))
                 && element.is::<FormalParameterElement>()
                 && member::enclosing_element(&resolved.ctx, dartr_element::ElemRef::Base(element))
                     == Some(constructor)
