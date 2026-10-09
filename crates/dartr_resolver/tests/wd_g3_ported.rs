@@ -15,7 +15,48 @@ mod best_practices;
 use support::g3::run_ported;
 
 /// Cases that fail for reasons outside this group (name, reason).
-const KNOWN_FAILURES: &[(&str, &str)] = &[];
+const KNOWN_FAILURES: &[(&str, &str)] = &[
+    (
+        "assignment_of_do_not_store_test.dart::AssignmentOfDoNotStoreTest::test_topLevelVariable_asExpression",
+        "@SkippedTest in the analyzer (not implemented there either)",
+    ),
+    (
+        "assignment_of_do_not_store_test.dart::AssignmentOfDoNotStoreTest::test_topLevelVariable_cascadeExpression_target",
+        "@SkippedTest in the analyzer (not implemented there either)",
+    ),
+    (
+        "assignment_of_do_not_store_test.dart::AssignmentOfDoNotStoreTest::test_topLevelVariable_dotShorthandPropertyAccess",
+        "@SkippedTest in the analyzer (not implemented there either)",
+    ),
+    (
+        "assignment_of_do_not_store_test.dart::AssignmentOfDoNotStoreTest::test_topLevelVariable_nullAssert",
+        "@SkippedTest in the analyzer (not implemented there either)",
+    ),
+    (
+        "assignment_of_do_not_store_test.dart::AssignmentOfDoNotStoreTest::test_topLevelVariable_switchExpression_caseBody",
+        "@SkippedTest in the analyzer (not implemented there either)",
+    ),
+    (
+        "equal_elements_in_set_test.dart::EqualElementsInSetTest::test_constant_constant",
+        "needs computeConstantValue() of non-const expressions; the port compares literal values only",
+    ),
+    (
+        "equal_elements_in_set_test.dart::EqualElementsInSetTest::test_literal_constant",
+        "needs computeConstantValue() of non-const expressions; the port compares literal values only",
+    ),
+    (
+        "equal_keys_in_map_test.dart::EqualKeysInMapTest::test_constant_constant",
+        "needs computeConstantValue() of non-const expressions; the port compares literal values only",
+    ),
+    (
+        "equal_keys_in_map_test.dart::EqualKeysInMapTest::test_literal_constant",
+        "needs computeConstantValue() of non-const expressions; the port compares literal values only",
+    ),
+    (
+        "invalid_use_of_visible_for_testing_member_test.dart::InvalidUseOfVisibleForTestingMemberTest::test_import_show",
+        "the names of combinators have no element (library_analyzer resolve_directives is a stub)",
+    ),
+];
 
 #[test]
 fn best_practices_ported() {

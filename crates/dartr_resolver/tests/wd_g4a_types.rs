@@ -466,19 +466,6 @@ fn run_case(case: &Case) -> Option<Vec<(String, usize, usize)>> {
 /// Analyzer test cases that fail for reasons outside of the g4a
 /// verifiers (`file::name`); see the comment of each.
 const KNOWN_FAILURES: &[&str] = &[
-    // The property access on an extension getter does not reach the
-    // assignment verifier (C4/C5 resolution of extension properties).
-    "assignment_to_final_no_setter_test.dart::test_propertyAccess_extension_instanceGetter",
-    // Annotations are not resolved yet (annotation_resolver.rs is a C9
-    // stub): no constructor element, no inference of the type arguments.
-    "missing_required_param_test.dart::test_annotation_noImportPrefix_named",
-    "missing_required_param_test.dart::test_annotation_noImportPrefix_unnamed",
-    "type_argument_not_matching_bounds_test.dart::test_metadata_notMatching",
-    "type_argument_not_matching_bounds_test.dart::test_metadata_notMatching_viaTypeAlias",
-    // Reported by ExtensionMemberResolver (not ported for overrides with
-    // type arguments).
-    "type_argument_not_matching_bounds_test.dart::test_extensionOverride_hasTypeArguments",
-    "type_argument_not_matching_bounds_test.dart::test_extensionOverride_hasTypeArguments_call",
     // Primary constructor bodies (`this : ...`) and the super invocation
     // of a primary constructor are not resolved by the resolver core.
     "positional_super_formal_parameter_with_positional_argument_test.dart::test_primaryConstructor_reported",
@@ -505,10 +492,6 @@ const KNOWN_FAILURES: &[&str] = &[
     "constructor_body_test.dart::test_extensionType_secondaryConstructor_constGenerative_external_expressionBody",
     "constructor_body_test.dart::test_extensionType_secondaryConstructor_constGenerativeRedirecting_expressionBody",
     "constructor_body_test.dart::test_extensionType_secondaryConstructor_generative_external_expressionBody",
-    "set_element_type_not_assignable_test.dart::test_const_ifElement_thenElseFalse_intString",
-    "set_element_type_not_assignable_test.dart::test_const_ifElement_thenTrue_intString",
-    "set_element_type_not_assignable_test.dart::test_const_intNull_dynamic",
-    "set_element_type_not_assignable_test.dart::test_const_intString_dynamic",
     // The element of an augmented class has the augmentation as its
     // first fragment in the linked element model.
     "subtype_of_final_is_not_base_final_or_sealed_test.dart::test_class_extends_inAugmentation",
