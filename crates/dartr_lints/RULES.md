@@ -7,7 +7,7 @@ The task's 263 directory entries therefore represent **266 registered rules**.
 All 266 are classified below.
 
 - **AST-only**: syntax, tokens, comments, decoded literal text, file path, source text, parsed feature state, or syntax across the library's ordered units. No resolved elements or static types. All 79 are ported.
-- **Needs resolution**: requires elements, static types, resolved targets, constant evaluation, type-system queries, or resolved helper behavior. 165 are deferred until resolution is available.
+- **Needs resolution**: requires elements, static types, resolved targets, constant evaluation, type-system queries, or resolved helper behavior. 83 batch-A rules are ported; 82 remain deferred until their assigned batches.
 - **Non-AST context**: requires pubspec/workspace data, filesystem existence, or the completed diagnostic stream. Eight are deferred; they are not AST visitor rules.
 - **Removed**: 14 upstream `RemovedAnalysisRule` instances remain in the registry as metadata and do not report diagnostics.
 

@@ -39,6 +39,7 @@ pub fn compute_lints(
                     ..global
                 },
                 tables: &resolved.tables,
+                potentially_mutated_in_scope: &resolved.rt.potentially_mutated_in_scope,
                 library: library.library,
             }),
         })

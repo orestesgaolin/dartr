@@ -4,7 +4,7 @@ use super::helpers::node_type;
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::{CatchClause, Id, NodeId, NodeKind};
 use dartr_diagnostics::{Diagnostic, diag};
-use dartr_element::{DisplayOptions, Nullability};
+use dartr_element::{DisplayOptions, Nullability, TypeKind};
 use dartr_typesystem::TypeExt;
 
 pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
@@ -19,6 +19,9 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(ty) = node_type(c, annotation) else {
         return;
     };
+    if matches!(r.ctx.ty(ty), TypeKind::Invalid | TypeKind::Unknown) {
+        return;
+    }
     let Some(error) = r.ctx.library_by_uri("dart:core").and_then(|library| {
         r.ctx
             .get(library)

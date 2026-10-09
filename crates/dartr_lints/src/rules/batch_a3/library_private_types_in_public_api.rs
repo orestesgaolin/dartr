@@ -13,6 +13,18 @@ fn private_token(ctx: &LinterContext<'_>, t: dartr_syntax::TokenId) -> bool {
     ctx.ast.tokens.lexeme(t).starts_with('_')
 }
 
+fn name_part_token(ctx: &LinterContext<'_>, name_part: Id<ClassNamePart>) -> dartr_syntax::TokenId {
+    match ctx.ast.kind(name_part) {
+        NodeKind::NameWithTypeParameters => {
+            ctx.ast[Id::<NameWithTypeParameters>::from_raw(name_part.raw())].type_name
+        }
+        NodeKind::PrimaryConstructorDeclaration => {
+            ctx.ast[Id::<PrimaryConstructorDeclaration>::from_raw(name_part.raw())].type_name
+        }
+        _ => ctx.ast.begin_token(name_part),
+    }
+}
+
 fn enclosing_type_declaration(ctx: &LinterContext<'_>, mut node: NodeId) -> Option<NodeId> {
     while let Some(parent) = ctx.ast.parent(node) {
         if matches!(
@@ -28,6 +40,26 @@ fn enclosing_type_declaration(ctx: &LinterContext<'_>, mut node: NodeId) -> Opti
     None
 }
 
+fn has_internal_annotation(ctx: &LinterContext<'_>, owner: NodeId) -> bool {
+    let Some(resolved) = ctx.resolved else {
+        return false;
+    };
+    let metadata = match ctx.ast.kind(owner) {
+        NodeKind::ClassDeclaration => ctx.ast[Id::<ClassDeclaration>::from_raw(owner)].metadata,
+        NodeKind::ExtensionTypeDeclaration => {
+            ctx.ast[Id::<ExtensionTypeDeclaration>::from_raw(owner)].metadata
+        }
+        _ => return false,
+    };
+    ctx.ast.list(metadata).iter().any(|&annotation| {
+        ctx.element(annotation).is_some_and(|element| {
+            let base = member::base_element(&resolved.ctx, element);
+            resolved.ctx.element_name(base) == Some("internal")
+                && resolved.ctx.element_library_uri(base) == Some("package:meta/meta.dart")
+        })
+    })
+}
+
 fn is_effectively_private_constructor(ctx: &LinterContext<'_>, node: NodeId) -> bool {
     let Some(owner) = enclosing_type_declaration(ctx, node) else {
         return false;
@@ -35,9 +67,10 @@ fn is_effectively_private_constructor(ctx: &LinterContext<'_>, node: NodeId) -> 
     if ctx.ast.kind(owner) == NodeKind::EnumDeclaration {
         return true;
     }
+    if has_internal_annotation(ctx, owner) {
+        return true;
+    }
     if ctx.ast.kind(owner) != NodeKind::ClassDeclaration {
-        // `@internal` also makes extension type constructors effectively
-        // private, but resolved metadata flags are not available yet.
         return false;
     }
 
@@ -162,7 +195,7 @@ fn public_api_position(ctx: &LinterContext<'_>, mut node: NodeId) -> bool {
             }
             NodeKind::ClassDeclaration => {
                 let declaration = &ctx.ast[Id::<ClassDeclaration>::from_raw(p)];
-                if private_token(ctx, ctx.ast.begin_token(declaration.name_part))
+                if private_token(ctx, name_part_token(ctx, declaration.name_part))
                     || (node != declaration.name_part.raw() && node != declaration.body.raw())
                 {
                     return false;
@@ -182,7 +215,7 @@ fn public_api_position(ctx: &LinterContext<'_>, mut node: NodeId) -> bool {
             }
             NodeKind::EnumDeclaration => {
                 let declaration = &ctx.ast[Id::<EnumDeclaration>::from_raw(p)];
-                if private_token(ctx, ctx.ast.begin_token(declaration.name_part))
+                if private_token(ctx, name_part_token(ctx, declaration.name_part))
                     || (node != declaration.name_part.raw() && node != declaration.body.raw())
                 {
                     return false;
@@ -191,7 +224,7 @@ fn public_api_position(ctx: &LinterContext<'_>, mut node: NodeId) -> bool {
             }
             NodeKind::ExtensionTypeDeclaration => {
                 let declaration = &ctx.ast[Id::<ExtensionTypeDeclaration>::from_raw(p)];
-                if private_token(ctx, ctx.ast.begin_token(declaration.name_part))
+                if private_token(ctx, name_part_token(ctx, declaration.name_part))
                     || (node != declaration.name_part.raw() && node != declaration.body.raw())
                 {
                     return false;

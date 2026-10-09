@@ -426,6 +426,9 @@ fn check_node(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) 
                 }
             }
         }
+        NodeKind::ForEachPartsWithDeclaration
+        | NodeKind::ForEachPartsWithIdentifier
+        | NodeKind::ForEachPartsWithPattern => check_for_each(ctx, node, out),
         NodeKind::ForStatement => {
             let parts = ctx.ast[Id::<ForStatement>::from_raw(node)]
                 .for_loop_parts

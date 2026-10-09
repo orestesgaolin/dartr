@@ -21,9 +21,6 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     if n.augment_keyword.is_some() || n.sealed_keyword.is_some() {
         return;
     }
-    if c.ast.kind(n.name_part) == NodeKind::PrimaryConstructorDeclaration {
-        return;
-    }
     let (Some(r), Some(class_element)) = (
         c.resolved,
         c.declared_element(node)
@@ -48,7 +45,7 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     if data
         .constructors
         .iter()
-        .any(|constructor| constructor_is_declared(c, constructor.raw()))
+        .any(|constructor| constructor_prevents_lint(c, constructor.raw()))
         || data
             .methods
             .iter()
@@ -71,7 +68,20 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     }
 }
 
-fn constructor_is_declared(c: &LinterContext<'_>, constructor: dartr_element::ElementId) -> bool {
+fn constructor_prevents_lint(c: &LinterContext<'_>, constructor: dartr_element::ElementId) -> bool {
+    let Some(r) = c.resolved else { return true };
+    let Some(constructor_id) = constructor.cast::<dartr_element::ConstructorElement>() else {
+        return true;
+    };
+    let constructor_data = r.ctx.get(constructor_id);
+    let is_default = r.ctx.element_name(constructor) == Some("new")
+        && constructor_data
+            .formal_params
+            .iter()
+            .all(|parameter| !r.ctx.get(*parameter).kind.is_required());
+    if is_default {
+        return false;
+    }
     c.resolved_units.iter().enumerate().any(|(index, _)| {
         let Some(unit) = c.resolved_unit(index) else {
             return false;

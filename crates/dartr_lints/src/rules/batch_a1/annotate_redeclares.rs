@@ -1,6 +1,6 @@
 // Dart source: pkg/linter/lib/src/rules/annotate_redeclares.dart
 
-use super::helpers::{element_name, has_resolved_annotation};
+use super::helpers::{KnownAnnotation, annotation_status, element_name};
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::{Id, MethodDeclaration, NodeId, NodeKind};
 use dartr_diagnostics::{Diagnostic, diag};
@@ -16,13 +16,7 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let n = &c.ast[Id::<MethodDeclaration>::from_raw(node)];
     if n.modifier_keyword
         .is_some_and(|k| c.ast.tokens.lexeme(k) == "static")
-        || has_resolved_annotation(c, node, "redeclare")
-    {
-        return;
-    }
-    if super::helpers::metadata(c.ast, node)
-        .into_iter()
-        .any(|annotation| c.element(annotation).is_none())
+        || annotation_status(c, node, KnownAnnotation::Redeclare) != Some(false)
     {
         return;
     }

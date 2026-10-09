@@ -32,7 +32,8 @@ fn is_debug_only(c: &LinterContext<'_>, node: NodeId) -> Option<bool> {
             {
                 let element = c.element(condition)?;
                 if element_name(c, element) == Some("kDebugMode")
-                    && element_library_uri(c, element) == Some("package:flutter/foundation.dart")
+                    && element_library_uri(c, element)
+                        == Some("package:flutter/src/foundation/constants.dart")
                 {
                     return Some(true);
                 }

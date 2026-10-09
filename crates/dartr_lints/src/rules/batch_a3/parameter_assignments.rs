@@ -40,6 +40,115 @@ fn parameter_element(ctx: &LinterContext<'_>, expression: NodeId) -> Option<Elem
     (element.kind() == ElementKind::Parameter).then_some(element)
 }
 
+fn parameter_list_declares(
+    ctx: &LinterContext<'_>,
+    list: Id<FormalParameterList>,
+    element: ElementId,
+) -> bool {
+    ctx.ast
+        .list(ctx.ast[list].parameters)
+        .iter()
+        .any(|parameter| ctx.declared_element(parameter.raw()) == Some(element))
+}
+
+fn is_descendant_of(ctx: &LinterContext<'_>, mut node: NodeId, ancestor: NodeId) -> bool {
+    loop {
+        if node == ancestor {
+            return true;
+        }
+        let Some(parent) = ctx.ast.parent(node) else {
+            return false;
+        };
+        node = parent;
+    }
+}
+
+fn parameter_body(ctx: &LinterContext<'_>, use_node: NodeId, element: ElementId) -> Option<NodeId> {
+    let mut node = use_node;
+    let mut primary_body = None;
+    while let Some(parent) = ctx.ast.parent(node) {
+        let declaration = match ctx.ast.kind(parent) {
+            NodeKind::ConstructorDeclaration => {
+                let declaration = &ctx.ast[Id::<ConstructorDeclaration>::from_raw(parent)];
+                Some((declaration.parameters, declaration.body.raw()))
+            }
+            NodeKind::MethodDeclaration => {
+                let declaration = &ctx.ast[Id::<MethodDeclaration>::from_raw(parent)];
+                declaration
+                    .parameters
+                    .map(|parameters| (parameters, declaration.body.raw()))
+            }
+            NodeKind::FunctionExpression => {
+                let declaration = &ctx.ast[Id::<FunctionExpression>::from_raw(parent)];
+                declaration
+                    .parameters
+                    .map(|parameters| (parameters, declaration.body.raw()))
+            }
+            _ => None,
+        };
+        if let Some((parameters, body)) = declaration
+            && parameter_list_declares(ctx, parameters, element)
+            && is_descendant_of(ctx, use_node, body)
+        {
+            return Some(body);
+        }
+        if ctx.ast.kind(parent) == NodeKind::PrimaryConstructorBody {
+            primary_body = Some(parent);
+        }
+        let primary = match ctx.ast.kind(parent) {
+            NodeKind::ClassDeclaration => Some(
+                ctx.ast[Id::<ClassDeclaration>::from_raw(parent)]
+                    .name_part
+                    .raw(),
+            ),
+            NodeKind::EnumDeclaration => Some(
+                ctx.ast[Id::<EnumDeclaration>::from_raw(parent)]
+                    .name_part
+                    .raw(),
+            ),
+            NodeKind::ExtensionTypeDeclaration => Some(
+                ctx.ast[Id::<ExtensionTypeDeclaration>::from_raw(parent)]
+                    .name_part
+                    .raw(),
+            ),
+            _ => None,
+        };
+        if let (Some(primary), Some(primary_body)) = (primary, primary_body)
+            && let Some(primary) = ctx.ast.cast::<PrimaryConstructorDeclaration>(primary)
+            && parameter_list_declares(ctx, ctx.ast[primary].formal_parameters, element)
+        {
+            return Some(
+                ctx.ast[Id::<PrimaryConstructorBody>::from_raw(primary_body)]
+                    .body
+                    .raw(),
+            );
+        }
+        node = parent;
+    }
+    None
+}
+
+fn is_in_parameter_body(ctx: &LinterContext<'_>, mut node: NodeId, element: ElementId) -> bool {
+    if !ctx
+        .resolved
+        .is_some_and(|resolved| resolved.potentially_mutated_in_scope.contains(&element))
+    {
+        return false;
+    }
+    let Some(body) = parameter_body(ctx, node, element) else {
+        return false;
+    };
+    loop {
+        if node == body {
+            return true;
+        }
+        let Some(parent) = ctx.ast.parent(node) else {
+            return false;
+        };
+        node = parent;
+    }
+}
+
 fn default_is_implicit_null(ctx: &LinterContext<'_>, element: ElementId) -> bool {
     for i in 0..ctx.ast.node_count() {
         let node = NodeId::from_index(i);
@@ -90,6 +199,7 @@ fn earlier_if_null_assignment(ctx: &LinterContext<'_>, node: NodeId, element: El
         let n = &ctx.ast[Id::<AssignmentExpression>::from_raw(other)];
         ctx.ast.tokens.lexeme(n.operator) == "??="
             && parameter_element(ctx, n.left_hand_side.raw()) == Some(element)
+            && is_in_parameter_body(ctx, other, element)
     })
 }
 
@@ -100,6 +210,9 @@ fn check(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(element) = parameter_element(ctx, expression) else {
         return;
     };
+    if !is_in_parameter_body(ctx, node, element) {
+        return;
+    }
     let implicit_null = default_is_implicit_null(ctx, element);
     let op = ctx.ast.tokens.lexeme(operator);
     if matches!(
@@ -138,7 +251,7 @@ fn report_assigned_pattern(
         return;
     };
     let element = member::base_element(&resolved.ctx, element);
-    if element.kind() != ElementKind::Parameter {
+    if element.kind() != ElementKind::Parameter || !is_in_parameter_body(ctx, root, element) {
         return;
     }
     let name = resolved.ctx.element_name(element).unwrap_or("");

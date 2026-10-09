@@ -37,10 +37,11 @@ fn approximate_context_type(context: &LinterContext<'_>, node: NodeId) -> Option
     }
     let parent = parent?;
     match context.ast.kind(parent) {
-        NodeKind::ArgumentList | NodeKind::NamedArgument => context
-            .corresponding_parameter(child)
-            .or_else(|| context.corresponding_parameter(parent))
-            .or_else(|| context.corresponding_parameter(node))
+        NodeKind::ArgumentList => context
+            .corresponding_parameter(node)
+            .map(|parameter| member::type_(&resolved.ctx, parameter)),
+        NodeKind::NamedArgument => context
+            .corresponding_parameter(parent)
             .map(|parameter| member::type_(&resolved.ctx, parameter)),
         NodeKind::VariableDeclaration => {
             let list = context

@@ -213,22 +213,24 @@ fn has_valid_use(
     while let Some(node) = pending.pop() {
         match context.ast.kind(node) {
             NodeKind::MethodInvocation => {
-                let n = &context.ast[context.ast.cast::<MethodInvocation>(node).unwrap()];
+                let invocation = context.ast.cast::<MethodInvocation>(node).unwrap();
+                let n = &context.ast[invocation];
+                let real_target = method_invocation_real_target(context.ast, invocation);
                 let method = context.ast.tokens.lexeme(context.ast[n.method_name].token);
                 if method == required_method
-                    && n.target
+                    && real_target
                         .is_some_and(|target| target_contains(context, target.raw(), variable))
                 {
                     return true;
                 }
                 if method == required_method
-                    && n.target.is_some()
+                    && real_target.is_some()
                     && std::iter::successors(Some(node), |node| context.ast.parent(*node))
                         .any(|ancestor| ancestor == variable_node)
                 {
                     return true;
                 }
-                if n.target.is_some_and(|target| {
+                if real_target.is_some_and(|target| {
                     context.ast.kind(target) == NodeKind::SimpleIdentifier
                         && identifier_matches(context, target.raw(), variable)
                 }) {
@@ -294,6 +296,20 @@ fn has_valid_use(
         pending.extend(context.ast.children(node));
     }
     false
+}
+
+fn method_invocation_real_target(ast: &Ast, node: Id<MethodInvocation>) -> Option<Id<Expression>> {
+    let invocation = &ast[node];
+    let is_cascaded = invocation
+        .operator
+        .is_some_and(|operator| matches!(ast.tokens.lexeme(operator), ".." | "?.."));
+    if !is_cascaded {
+        return invocation.target;
+    }
+    super::helpers::ancestors(ast, node.raw()).find_map(|ancestor| {
+        ast.cast::<CascadeExpression>(ancestor)
+            .map(|cascade| ast[cascade].target)
+    })
 }
 
 fn target_contains(context: &LinterContext<'_>, target: NodeId, variable: ElementId) -> bool {

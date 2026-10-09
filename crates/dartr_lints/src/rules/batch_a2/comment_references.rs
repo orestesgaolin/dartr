@@ -4,15 +4,13 @@ use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
 
-pub fn register(registry: &mut RuleVisitorRegistry, context: &LinterContext<'_>) {
+pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
     registry.add(NodeKind::Comment, "comment_references", check_comment);
-    if has_resolved_comment_reference(context) {
-        registry.add(
-            NodeKind::CommentReference,
-            "comment_references",
-            check_reference,
-        );
-    }
+    registry.add(
+        NodeKind::CommentReference,
+        "comment_references",
+        check_reference,
+    );
 }
 
 fn reference_element(
@@ -29,22 +27,6 @@ fn reference_element(
     }
 }
 
-fn has_resolved_comment_reference(context: &LinterContext<'_>) -> bool {
-    std::iter::once(*context)
-        .chain(
-            (0..context.resolved_units.len())
-                .filter(|&index| index != context.current_unit)
-                .filter_map(|index| context.resolved_unit(index)),
-        )
-        .any(|unit| {
-            (0..unit.ast.node_count())
-                .map(NodeId::from_index)
-                .filter_map(|node| unit.ast.cast::<CommentReference>(node))
-                .any(|reference| {
-                    reference_element(&unit, unit.ast[reference].expression.raw()).is_some()
-                })
-        })
-}
 fn check_comment(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let n = &context.ast[context.ast.cast::<Comment>(node).unwrap()];
     for &token in context.ast.token_list(n.tokens) {

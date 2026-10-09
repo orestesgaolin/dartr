@@ -33,6 +33,8 @@ pub struct RuleContextUnit<'a> {
 pub struct ResolvedLintContext<'a> {
     pub ctx: dartr_element::Ctx<'a>,
     pub tables: &'a dartr_element::ResolutionTables,
+    /// Resolver `LocalVariableInfo.potentiallyMutatedInScope` facts.
+    pub potentially_mutated_in_scope: &'a IndexSet<dartr_element::ElementId>,
     pub library: dartr_element::EId<dartr_element::LibraryElement>,
 }
 /// A resolved AST and its original parse metadata. Resolution can rewrite nodes.

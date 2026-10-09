@@ -1,6 +1,6 @@
 // Dart source: pkg/linter/lib/src/rules/annotate_overrides.dart
 
-use super::helpers::{element_name, has_resolved_annotation};
+use super::helpers::{KnownAnnotation, annotation_status, element_name};
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::{
     FieldDeclaration, Id, MethodDeclaration, NodeId, NodeKind, PrimaryConstructorDeclaration,
@@ -8,7 +8,10 @@ use dartr_ast::{
 };
 use dartr_diagnostics::{Diagnostic, diag};
 use dartr_element::{ElemRef, FormalParameterElement, InterfaceElement, Tag};
-use dartr_typesystem::inheritance_manager3::{InheritanceManager3, Name};
+use dartr_typesystem::{
+    inheritance_manager3::{InheritanceManager3, Name},
+    member,
+};
 
 pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
     registry.add(NodeKind::FieldDeclaration, "annotate_overrides", check);
@@ -28,18 +31,12 @@ fn check_member(
     out: &mut Vec<Diagnostic>,
 ) {
     let Some(r) = c.resolved else { return };
-    if has_resolved_annotation(c, owner, "override")
-        || has_resolved_annotation(c, declaration, "override")
-    {
+    let owner_override = annotation_status(c, owner, KnownAnnotation::Override);
+    let declaration_override = annotation_status(c, declaration, KnownAnnotation::Override);
+    if owner_override == Some(true) || declaration_override == Some(true) {
         return;
     }
-    // Metadata constants are not exposed by the resolver yet. If this
-    // declaration has unresolved metadata, it may be `@override`.
-    if super::helpers::metadata(c.ast, owner)
-        .into_iter()
-        .chain(super::helpers::metadata(c.ast, declaration))
-        .any(|annotation| c.element(annotation).is_none())
-    {
+    if owner_override.is_none() || declaration_override.is_none() {
         return;
     }
     let Some(mut element) = c.declared_element(declaration) else {
@@ -65,8 +62,13 @@ fn check_member(
     let Some(name) = element_name(c, ElemRef::Base(element)) else {
         return;
     };
-    let inherited = InheritanceManager3::new(r.ctx)
-        .get_overridden(enclosing, Name::for_library(&r.ctx, data.library, name));
+    let Some(lookup_name) = member::lookup_name(&r.ctx, ElemRef::Base(element)) else {
+        return;
+    };
+    let inherited = InheritanceManager3::new(r.ctx).get_overridden(
+        enclosing,
+        Name::for_library(&r.ctx, data.library, &lookup_name),
+    );
     if inherited.is_some_and(|members| !members.is_empty()) {
         c.report_token(out, &diag::ANNOTATE_OVERRIDES, token, &[name]);
     }

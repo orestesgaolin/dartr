@@ -112,10 +112,18 @@ fn check(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             let Some(field) = data.field.get().filter(|_| declaring) else {
                 continue;
             };
-            let Some(parameter) = context.ast.cast::<FieldFormalParameter>(parameter) else {
+            let name_token = if let Some(parameter) =
+                context.ast.cast::<RegularFormalParameter>(parameter)
+            {
+                let Some(name) = context.ast[parameter].name else {
+                    continue;
+                };
+                name
+            } else if let Some(parameter) = context.ast.cast::<FieldFormalParameter>(parameter) {
+                context.ast[parameter].name
+            } else {
                 continue;
             };
-            let name_token = context.ast[parameter].name;
             let name = context.ast.tokens.lexeme(name_token);
             if name.starts_with('_') || overrides(context, class_type, name) {
                 continue;

@@ -1,10 +1,14 @@
 // Dart source: pkg/linter/lib/src/rules/avoid_returning_this.dart
 
-use super::helpers::{ancestor, declared_type, has_resolved_annotation};
+use super::helpers::{KnownAnnotation, ancestor, annotation_status, declared_type};
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
-use dartr_element::TypeKind;
+use dartr_element::{ElemRef, InterfaceElement, TypeKind};
+use dartr_typesystem::{
+    inheritance_manager3::{InheritanceManager3, Name},
+    member,
+};
 
 pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
     registry.add(NodeKind::MethodDeclaration, "avoid_returning_this", check);
@@ -13,12 +17,29 @@ pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(r) = c.resolved else { return };
     let n = &c.ast[Id::<MethodDeclaration>::from_raw(node)];
-    if n.operator_keyword.is_some() || has_resolved_annotation(c, node, "override") {
+    if n.operator_keyword.is_some()
+        || annotation_status(c, node, KnownAnnotation::Override) != Some(false)
+    {
         return;
     }
-    if super::helpers::metadata(c.ast, node)
-        .into_iter()
-        .any(|annotation| c.element(annotation).is_none())
+    let Some(element) = c.declared_element(node) else {
+        return;
+    };
+    let Some(data) = r.ctx.element_data(element) else {
+        return;
+    };
+    let Some(enclosing) = data.enclosing.and_then(|e| e.cast::<InterfaceElement>()) else {
+        return;
+    };
+    let Some(lookup_name) = member::lookup_name(&r.ctx, ElemRef::Base(element)) else {
+        return;
+    };
+    if InheritanceManager3::new(r.ctx)
+        .get_overridden(
+            enclosing,
+            Name::for_library(&r.ctx, data.library, &lookup_name),
+        )
+        .is_some_and(|members| !members.is_empty())
     {
         return;
     }

@@ -1,7 +1,7 @@
 // Dart source: pkg/linter/lib/src/rules/always_specify_types.dart
 
 use super::helpers::{
-    declared_type, display_type, element_has_unresolved_metadata, lexeme, node_type,
+    KnownAnnotation, declared_type, display_type, element_annotation_status, lexeme, node_type,
 };
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::{Id, NodeId, NodeKind, RegularFormalParameter, VariableDeclarationList};
@@ -90,7 +90,8 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             if !matches!(
                 node_type(c, node).map(|ty| r.ctx.ty(ty)),
                 Some(TypeKind::Interface { .. })
-            ) || element_has_unresolved_metadata(c, element)
+            ) || element_annotation_status(c, element, KnownAnnotation::OptionalTypeArgs)
+                != Some(false)
             {
                 return;
             }

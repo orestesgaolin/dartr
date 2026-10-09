@@ -148,9 +148,15 @@ fn needs_instance(ctx: &LinterContext<'_>, root: NodeId, constructor: NodeId) ->
                         .map(|field| member::base_element(&r.ctx, field))
                 })
                 .filter(|field| field.kind() == dartr_element::ElementKind::Field);
-            if field.is_some_and(|field| matches_field_formal(ctx, constructor, field)) {
-                stack.extend(ctx.ast.children(n));
-                continue;
+            if let Some(field) = field
+                && member::enclosing_interface(&r.ctx, element)
+                    .is_some_and(|class| hierarchy.contains(&class))
+            {
+                if matches_field_formal(ctx, constructor, field) {
+                    stack.extend(ctx.ast.children(n));
+                    continue;
+                }
+                return true;
             }
             if matches!(
                 base.kind(),

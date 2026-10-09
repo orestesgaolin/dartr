@@ -106,6 +106,12 @@ fn static_interop_representation(
         return Knowledge::Unknown;
     };
     let Some((declaration_context, metadata)) = declaration_metadata(context, element.raw()) else {
+        // Core SDK classes such as Object and List carry VM pragmas. Those
+        // annotations do not make a class a dart:js_interop static interop
+        // class, and the platform library cannot import dart:js_interop.
+        if resolved.ctx.element_library_uri(element.raw()) == Some("dart:core") {
+            return Knowledge::Known(None);
+        }
         let has_metadata = resolved
             .ctx
             .fragment_data(resolved.ctx.get(element).first_fragment)
@@ -256,9 +262,9 @@ fn presence(context: &LinterContext<'_>, ty: TypeId, visited: &mut IndexSet<Type
     }
 }
 
-fn wasm_incompatible(context: &LinterContext<'_>, ty: TypeId) -> bool {
+fn wasm_incompatible(context: &LinterContext<'_>, ty: TypeId) -> Knowledge<bool> {
     let Some(resolved) = context.resolved else {
-        return false;
+        return Knowledge::Unknown;
     };
     if let TypeKind::TypeParameter { param, .. } = *resolved.ctx.ty(ty) {
         return resolved
@@ -266,12 +272,14 @@ fn wasm_incompatible(context: &LinterContext<'_>, ty: TypeId) -> bool {
             .get(param)
             .bound
             .get()
-            .is_some_and(|bound| wasm_incompatible(context, bound));
+            .map_or(Knowledge::Known(false), |bound| {
+                wasm_incompatible(context, bound)
+            });
     }
     let Some(element) = resolved.ctx.interface_element(ty) else {
-        return false;
+        return Knowledge::Known(false);
     };
-    matches!(
+    if matches!(
         resolved.ctx.element_library_uri(element.raw()),
         Some(
             "dart:html"
@@ -281,6 +289,40 @@ fn wasm_incompatible(context: &LinterContext<'_>, ty: TypeId) -> bool {
                 | "dart:web_gl"
                 | "dart:js"
         )
+    ) {
+        return Knowledge::Known(true);
+    }
+    let Some(class) = element.raw().cast::<ClassElement>() else {
+        return Knowledge::Known(false);
+    };
+    let Some((declaration_context, metadata)) = declaration_metadata(context, class.raw()) else {
+        if resolved.ctx.element_library_uri(class.raw()) == Some("dart:core") {
+            return Knowledge::Known(false);
+        }
+        let has_metadata = resolved
+            .ctx
+            .fragment_data(resolved.ctx.get(class).first_fragment)
+            .is_some_and(|fragment| !fragment.metadata.annotations.is_empty());
+        return if has_metadata {
+            Knowledge::Unknown
+        } else {
+            Knowledge::Known(false)
+        };
+    };
+    Knowledge::Known(
+        declaration_context
+            .ast
+            .list(metadata)
+            .iter()
+            .copied()
+            .any(|annotation| {
+                annotation_is(
+                    &declaration_context,
+                    annotation,
+                    "dart:_js_annotations",
+                    "JS",
+                )
+            }),
     )
 }
 
@@ -296,9 +338,19 @@ fn erased_type(context: &LinterContext<'_>, ty: TypeId, kind: Option<InteropKind
     match kind {
         Some(InteropKind::Dart) => ts.promote_to_non_null(ty),
         Some(InteropKind::StaticInterop(js_object)) => ts.promote_to_non_null(js_object),
-        Some(InteropKind::UserExtension) | None => {
-            ts.promote_to_non_null(ts.extension_type_erasure(ty))
-        }
+        Some(InteropKind::UserExtension) => context
+            .resolved
+            .and_then(|resolved| resolved.ctx.representation_type(ty))
+            .map(|representation| {
+                let representation_kind =
+                    match direct_interop_kind(context, representation, &mut IndexSet::new()) {
+                        Knowledge::Known(kind) => kind,
+                        Knowledge::Unknown => None,
+                    };
+                erased_type(context, representation, representation_kind)
+            })
+            .unwrap_or_else(|| ts.promote_to_non_null(ts.extension_type_erasure(ty))),
+        None => ts.promote_to_non_null(ts.extension_type_erasure(ty)),
     }
 }
 fn kept_user_type(context: &LinterContext<'_>, ty: TypeId, kind: Option<InteropKind>) -> TypeId {
@@ -329,8 +381,13 @@ fn invalid_leaf(context: &LinterContext<'_>, left: TypeId, right: TypeId, check:
     if left_kind.is_none() && right_kind.is_none() {
         return Search::Clean;
     }
-    if wasm_incompatible(context, left) || wasm_incompatible(context, right) {
-        return Search::Clean;
+    match (
+        wasm_incompatible(context, left),
+        wasm_incompatible(context, right),
+    ) {
+        (Knowledge::Known(true), _) | (_, Knowledge::Known(true)) => return Search::Clean,
+        (Knowledge::Unknown, _) | (_, Knowledge::Unknown) => return Search::Unknown,
+        _ => {}
     }
     let Some(resolved) = context.resolved else {
         return Search::Unknown;

@@ -233,6 +233,7 @@ fn resolution_facts(
             "elementName":element_name,"elementLibrary":library_uri,
             "declaredKind":declared.map(|e|format!("{:?}",e.kind())),
             "declaredType":declared_type.map(display),
+            "potentiallyMutatedInScope":element.or(declared).map(|e|unit.rt.potentially_mutated_in_scope.contains(&e)),
             "elementMetadataAnnotations":element_metadata.map(|m|m.annotations.len()),
             "elementMetadataFlags":element_metadata.and_then(|m|m.metadata_flags.try_get().copied()),
             "declaredMetadataAnnotations":declared_metadata.map(|m|m.annotations.len()),

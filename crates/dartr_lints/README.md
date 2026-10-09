@@ -29,12 +29,12 @@ nearest package configuration when it maps the file, or the file path otherwise.
 
 `ResolvedRuleContextUnit` accepts the rewritten AST plus original parse metadata.
 `lint_resolved_library` and its unfiltered variant run the same subscriptions with
-`ResolvedLintContext { ctx, tables, library }`. The `Ctx` must include the visited
+`ResolvedLintContext { ctx, tables, potentially_mutated_in_scope, library }`. The `Ctx` must include the visited
 unit's local arena. A failed resolver unit has no semantic context. The driver
 uses `Driver::analyze_library_with_lints` to resolve first and append enabled lint
 diagnostics. The existing `analyze_library` entrypoint remains resolution-only.
-The constant adapter supports primitive literals/operators and current-unit const
-variables/defaults. Constructor and collection evaluation still needs wave D.
+The constant adapter supports primitive literals/operators and const
+variables/defaults across resolved library units. Constructor and collection evaluation still needs wave D.
 
 Unsupported rules have metadata but no processors. Call
 `Registry::builtin().get_rule(name).is_implemented()` before using a rule when the
@@ -91,5 +91,6 @@ retained; `--reuse` only recomputes comparisons from those saved outputs.
 The context integration tests also compare explicit primary-constructor and
 augmentation experiments, and files without package configuration. The corpus
 tool accepts `--language-version`, repeatable `--enable-experiment`, and
-`--no-package-config` for these cases. The JSON runner accepts matching optional
-`languageVersion: [major, minor]` and `experiments: [name, ...]` fields.
+`--no-package-config` for these cases. The parsed JSON runner accepts matching optional
+`languageVersion: [major, minor]` and `experiments: [name, ...]` fields. The resolved
+runner uses the project package version and analysis options.

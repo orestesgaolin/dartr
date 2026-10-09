@@ -7,6 +7,7 @@ use dartr_ast::{
     VariableDeclaration,
 };
 use dartr_diagnostics::{Diagnostic, diag};
+use dartr_element::{EId, ElementId, FormalParameterElement, Tag};
 
 pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
     for kind in [
@@ -64,12 +65,62 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             else {
                 return;
             };
-            if c.default_value(dartr_element::ElemRef::Base(super_parameter.raw()))
-                .is_some_and(|value| !value.is_null())
-            {
+            if inherited_default_is_null(c, super_parameter.raw(), 0) != Some(true) {
                 return;
             }
         }
         c.report_node(out, &diag::AVOID_INIT_TO_NULL, node, &[]);
     }
+}
+
+/// Implements the upstream `defaultValueCode ?? 'null'` comparison from the
+/// source AST. An imported parameter without a resolved declaration remains
+/// unknown; a constant with a null value is not equivalent to the text
+/// `null` for this rule.
+fn inherited_default_is_null(
+    c: &LinterContext<'_>,
+    parameter: ElementId,
+    depth: usize,
+) -> Option<bool> {
+    if depth >= 64 {
+        return None;
+    }
+    for unit in std::iter::once(*c).chain(
+        (0..c.resolved_units.len())
+            .filter(|&index| index != c.current_unit)
+            .filter_map(|index| c.resolved_unit(index)),
+    ) {
+        let Some(node) = (0..unit.ast.node_count())
+            .map(NodeId::from_index)
+            .find(|&node| unit.declared_element(node) == Some(parameter))
+        else {
+            continue;
+        };
+        let clause = match unit.ast.kind(node) {
+            NodeKind::RegularFormalParameter => {
+                unit.ast[Id::<RegularFormalParameter>::from_raw(node)].default_clause
+            }
+            NodeKind::FieldFormalParameter => {
+                unit.ast[Id::<FieldFormalParameter>::from_raw(node)].default_clause
+            }
+            NodeKind::SuperFormalParameter => {
+                unit.ast[Id::<SuperFormalParameter>::from_raw(node)].default_clause
+            }
+            _ => return None,
+        };
+        if let Some(clause) = clause {
+            let value = unit.ast[clause].value;
+            let offset = unit.ast.offset(value) as usize;
+            let end = offset + unit.ast.length(value) as usize;
+            return unit.source.get(offset..end).map(|source| source == "null");
+        }
+        if parameter.tag() != Tag::SuperFormalParameter {
+            return Some(true);
+        }
+        let resolved = unit.resolved?;
+        let parameter = EId::<FormalParameterElement>::from_raw(parameter);
+        let inherited = dartr_link::outline::super_constructor_parameter(&resolved.ctx, parameter)?;
+        return inherited_default_is_null(&unit, inherited.raw(), depth + 1);
+    }
+    None
 }

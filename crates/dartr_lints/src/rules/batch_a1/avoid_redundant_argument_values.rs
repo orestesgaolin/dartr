@@ -22,6 +22,18 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let arguments = c
         .ast
         .list_raw(c.ast[Id::<ArgumentList>::from_raw(node)].arguments);
+    if c.ast.parent(node).is_none_or(|parent| {
+        !matches!(
+            c.ast.kind(parent),
+            NodeKind::Annotation
+                | NodeKind::EnumConstantArguments
+                | NodeKind::FunctionExpressionInvocation
+                | NodeKind::InstanceCreationExpression
+                | NodeKind::MethodInvocation
+        )
+    }) {
+        return;
+    }
     let redirected = match redirected_parameters(c, node) {
         Ok(parameters) => parameters,
         Err(()) => return,
@@ -65,7 +77,12 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         let Some(formal) = base.cast::<FormalParameterElement>() else {
             continue;
         };
-        if super::helpers::element_has_unresolved_metadata(c, formal.raw()) {
+        if super::helpers::element_annotation_status(
+            c,
+            formal.raw(),
+            super::helpers::KnownAnnotation::Required,
+        ) != Some(false)
+        {
             continue;
         }
         let kind = r

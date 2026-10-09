@@ -11,7 +11,7 @@ use dartr_element::{
 use dartr_typesystem::{TypeExt, member};
 use indexmap::IndexSet;
 
-use super::helpers::{descendants, has_resolved_annotation};
+use super::helpers::{KnownAnnotation, annotation_status, descendants, element_annotation_status};
 
 pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
     registry.add(NodeKind::CompilationUnit, "analyzer_public_api", check);
@@ -135,7 +135,7 @@ fn element_is_ok(c: &LinterContext<'_>, element: ElementId) -> bool {
     uri.starts_with("dart:")
         || is_analyzer_public_uri(uri)
         || publicly_imported(c, element)
-        || super::helpers::element_has_unresolved_metadata(c, element)
+        || element_annotation_status(c, element, KnownAnnotation::AnalyzerPublicApi) != Some(false)
 }
 
 fn type_problems(
@@ -302,7 +302,9 @@ fn check_fragment(
         return;
     };
     let name = c.ast.tokens.lexeme(token);
-    if name.starts_with('_') && !has_resolved_annotation(c, node, "AnalyzerPublicApi") {
+    if name.starts_with('_')
+        && annotation_status(c, node, KnownAnnotation::AnalyzerPublicApi) != Some(true)
+    {
         return;
     }
     if name.ends_with("Impl") {

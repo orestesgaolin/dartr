@@ -94,19 +94,6 @@ fn check(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         NodeKind::MethodInvocation => {
             let n = &ctx.ast[Id::<MethodInvocation>::from_raw(node)];
             let method = ctx.ast.tokens.lexeme(ctx.ast[n.method_name].token);
-            if n.target.is_none()
-                && method == "scheduleMicrotask"
-                && let (Some(resolved), Some(element)) =
-                    (ctx.resolved, ctx.element(n.method_name.raw()))
-                && resolved.ctx.is_element(
-                    member::base_element(&resolved.ctx, element),
-                    "dart.async",
-                    "scheduleMicrotask",
-                )
-            {
-                report_args(ctx, n.argument_list, &[0], &[], out);
-                return;
-            }
             let specs: &[(&str, &str, &[usize], &[&str])] = match method {
                 "any" | "every" | "expand" | "map" | "reduce" | "skipWhile" | "takeWhile"
                 | "where" => &[("dart.core", "Iterable", &[0], &[])],
