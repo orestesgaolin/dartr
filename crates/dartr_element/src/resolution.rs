@@ -30,6 +30,10 @@ pub struct PatternInfo {
 pub struct NodeFlags(pub u32);
 
 impl NodeFlags {
+    /// `FunctionExpressionImpl.wasFunctionTypeSupplied` (set by the
+    /// function expression resolver).
+    pub const FUNCTION_TYPE_SUPPLIED: NodeFlags = NodeFlags(1 << 16);
+
     pub fn contains(self, flag: NodeFlags) -> bool {
         self.0 & flag.0 == flag.0
     }
