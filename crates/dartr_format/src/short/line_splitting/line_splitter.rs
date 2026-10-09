@@ -28,6 +28,14 @@ pub struct SplitterInfo<'c> {
     /// The position of each rule in [rules].
     positions: FxHashMap<RuleId, usize>,
 
+    /// The position in [rules] of the rule of each chunk.
+    pub chunk_rule_positions: Vec<usize>,
+
+    /// For each rule in [rules], the positions in [rules] of its constrained
+    /// rules (in the order of [Rule::constrained_rule_at]), or `None` for a
+    /// rule that is not in [rules].
+    pub constrained_positions: Vec<Vec<Option<usize>>>,
+
     /// The number of characters of additional indentation to apply to each line.
     ///
     /// This is used when formatting blocks to get the output into the right
@@ -163,11 +171,28 @@ impl<'c> LineSplitter<'c> {
             ctx.arena.forget_unused_rules(rule);
         }
 
+        let chunk_rule_positions = chunks
+            .iter()
+            .map(|&chunk| positions[&ctx.arena.chunk(chunk).rule])
+            .collect();
+        let constrained_positions = rules
+            .iter()
+            .map(|&rule| {
+                ctx.arena
+                    .rule(rule)
+                    .constrained_rules()
+                    .map(|other| positions.get(&other).copied())
+                    .collect()
+            })
+            .collect();
+
         LineSplitter {
             info: SplitterInfo {
                 chunks,
                 rules,
                 positions,
+                chunk_rule_positions,
+                constrained_positions,
                 block_indentation,
             },
             queue: SolveStateQueue::default(),

@@ -27,10 +27,10 @@ pub struct SolveStateQueue {
     /// in a separate list so that [try_overlap] scans compact memory.
     scores: Vec<(i32, i32)>,
 
-    /// The number of states in [queue] with each score. [try_overlap] can
-    /// only find an overlapping state with the same score, so it skips the
-    /// heap traversal when there is none.
-    score_counts: FxHashMap<(i32, i32), u32>,
+    /// The positions in [queue] of the states with each score.
+    /// [try_overlap] can only find an overlapping state with the same score,
+    /// so it only looks at these.
+    positions_by_score: FxHashMap<(i32, i32), Vec<usize>>,
 }
 
 #[inline(always)]
@@ -39,6 +39,21 @@ fn score_of(state: &SolveState) -> (i32, i32) {
 }
 
 impl SolveStateQueue {
+    /// Stores [state] at [index] (which must exist) and updates the score
+    /// tables.
+    #[inline]
+    fn write(&mut self, index: usize, state: Rc<SolveState>, score: (i32, i32)) {
+        let old_score = self.scores[index];
+        if old_score != score {
+            let old = self.positions_by_score.get_mut(&old_score).unwrap();
+            let i = old.iter().position(|&p| p == index).unwrap();
+            old.swap_remove(i);
+            self.positions_by_score.entry(score).or_default().push(index);
+            self.scores[index] = score;
+        }
+        self.queue[index] = state;
+    }
+
     pub fn is_not_empty(&self) -> bool {
         !self.queue.is_empty()
     }
@@ -55,7 +70,7 @@ impl SolveStateQueue {
         self.queue.push(state.clone());
         let score = score_of(&state);
         self.scores.push(score);
-        *self.score_counts.entry(score).or_insert(0) += 1;
+        self.positions_by_score.entry(score).or_default().push(index);
         self.bubble_up(state, index, info, arena);
     }
 
@@ -63,10 +78,11 @@ impl SolveStateQueue {
         debug_assert!(!self.queue.is_empty());
 
         // Remove the highest priority state.
-        let first_score = self.scores[0];
-        if let Some(count) = self.score_counts.get_mut(&first_score) {
-            *count -= 1;
-        }
+        let last_index = self.queue.len() - 1;
+        let last_score = self.scores[last_index];
+        let positions = self.positions_by_score.get_mut(&last_score).unwrap();
+        let i = positions.iter().position(|&p| p == last_index).unwrap();
+        positions.swap_remove(i);
         let last = self.queue.pop().unwrap();
         self.scores.pop();
         if self.queue.is_empty() {
@@ -150,16 +166,12 @@ impl SolveStateQueue {
         // same score, in pre-order, skipping the subtrees of the nodes it would
         // not descend into. This avoids visiting all of the cheaper nodes.
         let state_score = score_of(state);
-        if self.score_counts.get(&state_score).is_none_or(|&count| count == 0) {
-            return false;
-        }
-
-        let mut candidates: Vec<usize> = Vec::new();
-        for (index, &score) in self.scores.iter().enumerate() {
-            if score == state_score {
-                candidates.push(index + 1);
+        let mut candidates: Vec<usize> = match self.positions_by_score.get(&state_score) {
+            Some(positions) if !positions.is_empty() => {
+                positions.iter().map(|&index| index + 1).collect()
             }
-        }
+            _ => return false,
+        };
 
         // Sort the positions in pre-order: align each position to the depth of
         // the deepest level, ancestors first.
@@ -188,8 +200,7 @@ impl SolveStateQueue {
                 return true;
             } else if overlap == Ordering::Greater {
                 // The new state is better than the enqueued one, so replace it.
-                self.queue[index] = state.clone();
-                self.scores[index] = state_score;
+                self.write(index, state.clone(), state_score);
                 return true;
             }
 
@@ -215,13 +226,13 @@ impl SolveStateQueue {
                 break;
             }
 
-            self.queue[index] = parent.clone();
-            self.scores[index] = self.scores[parent_index];
+            let parent = parent.clone();
+            self.write(index, parent, self.scores[parent_index]);
             index = parent_index;
         }
 
-        self.scores[index] = score_of(&element);
-        self.queue[index] = element;
+        let score = score_of(&element);
+        self.write(index, element, score);
     }
 
     /// Place [element] in heap at [index] or above.
@@ -247,13 +258,12 @@ impl SolveStateQueue {
             let comparison = Self::compare(&element, &min_child, info, arena);
 
             if comparison != Ordering::Greater {
-                self.scores[index] = score_of(&element);
-                self.queue[index] = element;
+                let score = score_of(&element);
+                self.write(index, element, score);
                 return;
             }
 
-            self.queue[index] = min_child;
-            self.scores[index] = self.scores[min_child_index];
+            self.write(index, min_child, self.scores[min_child_index]);
             index = min_child_index;
             right_child_index = index * 2 + 2;
         }
@@ -264,13 +274,13 @@ impl SolveStateQueue {
             let comparison = Self::compare(&element, child, info, arena);
 
             if comparison == Ordering::Greater {
-                self.queue[index] = child.clone();
-                self.scores[index] = self.scores[left_child_index];
+                let child = child.clone();
+                self.write(index, child, self.scores[left_child_index]);
                 index = left_child_index;
             }
         }
 
-        self.scores[index] = score_of(&element);
-        self.queue[index] = element;
+        let score = score_of(&element);
+        self.write(index, element, score);
     }
 }

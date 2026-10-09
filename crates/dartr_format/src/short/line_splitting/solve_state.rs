@@ -312,8 +312,9 @@ impl SolveState {
 
     fn overlap_data(&self, info: &SplitterInfo, arena: &Arena) -> &OverlapData {
         self.overlap.get_or_init(|| {
-            let bound_rules_in_unbound_lines = self.init_bound_rules_in_unbound_lines(info, arena);
-            let (constraints, bound) = self.init_constraints(info, arena);
+            let bound = self.init_bound_rules(info, arena);
+            let bound_rules_in_unbound_lines = self.init_bound_rules_in_unbound_lines(info, &bound);
+            let constraints = self.init_constraints(info, arena, &bound);
             let unbound_constraints = self.init_unbound_constraints(info, arena, &bound);
             OverlapData {
                 bound_rules_in_unbound_lines,
@@ -554,7 +555,7 @@ impl SolveState {
     ///
     /// We do this lazily because the calculation is a bit slow, and is only
     /// needed when we have two states with the same score.
-    fn init_bound_rules_in_unbound_lines(&self, info: &SplitterInfo, arena: &Arena) -> Vec<bool> {
+    fn init_bound_rules_in_unbound_lines(&self, info: &SplitterInfo, bound: &[bool]) -> Vec<bool> {
         let mut rules = vec![false; info.rules.len()];
         let mut bound_in_line: Vec<usize> = Vec::new();
         let mut has_unbound = false;
@@ -571,9 +572,9 @@ impl SolveState {
                 has_unbound = false;
             }
 
-            let rule = arena.chunk(info.chunks[i]).rule;
-            if self.rule_values.contains(arena, rule) {
-                bound_in_line.push(info.position_of(rule));
+            let position = info.chunk_rule_positions[i];
+            if bound[position] {
+                bound_in_line.push(position);
             } else {
                 has_unbound = true;
             }
@@ -587,42 +588,44 @@ impl SolveState {
         rules
     }
 
+    /// Dart `_boundRules` (by position: `true` if bound).
+    fn init_bound_rules(&self, info: &SplitterInfo, arena: &Arena) -> Vec<bool> {
+        info.rules
+            .iter()
+            .map(|&rule| self.rule_values.contains(arena, rule))
+            .collect()
+    }
+
     /// Used to lazy initializes the [_constraints], which is needed to compare
     /// two states for overlap.
     ///
     /// We do this lazily because the calculation is a bit slow, and is only
     /// needed when we have two states with the same score.
-    ///
-    /// Also returns Dart `_boundRules` (by position: `true` if bound).
-    fn init_constraints(&self, info: &SplitterInfo, arena: &Arena) -> (Vec<Option<i32>>, Vec<bool>) {
-        let bound: Vec<bool> = info
-            .rules
-            .iter()
-            .map(|&rule| self.rule_values.contains(arena, rule))
-            .collect();
-
+    fn init_constraints(&self, info: &SplitterInfo, arena: &Arena, bound: &[bool]) -> Vec<Option<i32>> {
         let mut constraints = vec![None; info.rules.len()];
 
         for (position, &bound_rule) in info.rules.iter().enumerate() {
             if !bound[position] {
                 continue;
             }
-            for unbound in arena.rule(bound_rule).constrained_rules() {
-                let Some(unbound_position) = info.try_position_of(unbound) else {
+            let rule = arena.rule(bound_rule);
+            let value = self.rule_values.get_value(arena, bound_rule);
+            for (i, unbound_position) in info.constrained_positions[position].iter().enumerate() {
+                let Some(unbound_position) = *unbound_position else {
                     continue;
                 };
                 if bound[unbound_position] {
                     continue;
                 }
 
-                let value = self.rule_values.get_value(arena, bound_rule);
-                if let Some(constraint) = arena.constrain(bound_rule, value, unbound) {
+                let (unbound, list) = rule.constrained_rule_at(i);
+                if let Some(constraint) = arena.apply_constraints(list, value, unbound) {
                     constraints[unbound_position] = Some(constraint);
                 }
             }
         }
 
-        (constraints, bound)
+        constraints
     }
 
     /// Used to lazy initialize the [_unboundConstraints], which is needed to
@@ -643,18 +646,19 @@ impl SolveState {
             }
 
             let unbound_rule = arena.rule(unbound);
-            for bound_rule in unbound_rule.constrained_rules() {
-                let Some(bound_position) = info.try_position_of(bound_rule) else {
+            for (i, bound_position) in info.constrained_positions[position].iter().enumerate() {
+                let Some(bound_position) = *bound_position else {
                     continue;
                 };
                 if !bound[bound_position] {
                     continue;
                 }
 
+                let (bound_rule, list) = unbound_rule.constrained_rule_at(i);
                 let bound_value = self.rule_values.get_value(arena, bound_rule);
 
                 for value in 0..unbound_rule.num_values() {
-                    let constraint = arena.constrain(unbound, value, bound_rule);
+                    let constraint = arena.apply_constraints(list, value, bound_rule);
 
                     // If the unbound rule doesn't place any constraint on this bound
                     // rule, we're fine.
