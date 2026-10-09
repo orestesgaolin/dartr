@@ -1455,9 +1455,9 @@ impl<'a> Computer<'a> {
                 let field_type = if is_getter {
                     member::return_type(&ctx, ElemRef::Base(accessor))
                 } else {
-                    let parameter = ctx
-                        .executable(accessor.cast::<ExecutableElement>().unwrap())
-                        .formal_params[0];
+                    let executable = accessor.cast::<ExecutableElement>().unwrap();
+                    dartr_element::type_inference::ensure_accessor_return_type(&ctx, executable);
+                    let parameter = ctx.executable(executable).formal_params[0];
                     ctx.get(parameter).type_.get().unwrap_or(TypeId::INVALID)
                 };
                 let field = s.synthesize_field(&fragment_name, Some(field_type));
@@ -1601,6 +1601,7 @@ impl ParameterSpec {
     /// `parameter.baseElement` (its declared type, kind and covariance).
     fn of_base_element(ctx: &Ctx<'_>, parameter: ElemRef) -> Self {
         let base = EId::<FormalParameterElement>::from_raw(member::base_element(ctx, parameter));
+        dartr_element::type_inference::ensure_formal_parameter_type(ctx, base);
         let data = ctx.get(base);
         ParameterSpec {
             name: data.name,

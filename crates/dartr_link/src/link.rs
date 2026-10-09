@@ -49,6 +49,70 @@ pub trait LinkedLibraries: Sync {
     fn const_exprs(&self, store: StoreId) -> Option<Arc<ConstExprs>>;
 }
 
+/// The resolver that linking calls (Dart: the linker creates an
+/// `AstResolver`, summary2/ast_resolver.dart, unit C10).
+///
+/// `dartr_resolver` (body resolution) is a separate crate that does not
+/// depend on `dartr_link`, and `dartr_link` does not depend on it: the
+/// driver, which depends on both, passes an implementation into
+/// [`link_cycle`] (`dartr_driver::link_resolver`, over
+/// `dartr_resolver::ast_resolver`). [`NoLinkResolver`] resolves nothing
+/// (the variables whose type comes from an initializer stay without a
+/// type).
+pub trait LinkResolver: Sync {
+    /// A session for one cycle: the state that the resolutions of the
+    /// cycle share (library scopes, unit copies). Used on one thread.
+    fn session(&self) -> Box<dyn LinkResolverSession + '_>;
+}
+
+/// The resolutions of one linked cycle (see [`LinkResolver`]).
+pub trait LinkResolverSession {
+    /// Dart `AstResolver(...).resolveExpression(...)` followed by
+    /// `node.typeOrThrow`: the static type of the expression of
+    /// [request]. The type has no local elements. `None` when it could not
+    /// be resolved.
+    fn resolve_expression(&self, ctx: &Ctx<'_>, request: &ExpressionRequest<'_>) -> Option<TypeId>;
+}
+
+/// An expression to resolve while linking (Dart `AstResolver(linker,
+/// libraryFragment, scope, analysisOptions, enclosingClassElement:)` and
+/// the arguments of `resolveExpression`).
+pub struct ExpressionRequest<'r> {
+    pub library: EId<LibraryElement>,
+    /// The library fragment of the unit (Dart `libraryFragment`).
+    pub fragment: FId<LibraryFragment>,
+    pub parsed: &'r Arc<ParsedUnit>,
+    /// Dart `node.declaredFragment` of the declarations of the unit.
+    pub declared_fragments: &'r IndexMap<NodeId, FragmentId>,
+    /// The node that has the expression: a `VariableDeclaration` (its
+    /// initializer) or a formal parameter (its default value).
+    pub owner: NodeId,
+    /// The instance element that encloses the declaration (the scopes of
+    /// Dart `initializerScope`).
+    pub enclosing_instance: Option<EId<InstanceElement>>,
+    /// Dart `enclosingClassElement`.
+    pub enclosing_class: Option<EId<InterfaceElement>>,
+    /// Dart `contextType` (`UnknownInferredType` by default).
+    pub context_type: TypeId,
+    /// Dart `inScopePrimaryConstructorParameters`.
+    pub in_scope_primary_constructor_parameters: Option<&'r [EId<FormalParameterElement>]>,
+}
+
+/// A [`LinkResolver`] that resolves nothing.
+pub struct NoLinkResolver;
+
+impl LinkResolver for NoLinkResolver {
+    fn session(&self) -> Box<dyn LinkResolverSession + '_> {
+        Box::new(NoLinkResolver)
+    }
+}
+
+impl LinkResolverSession for NoLinkResolver {
+    fn resolve_expression(&self, _ctx: &Ctx<'_>, _request: &ExpressionRequest<'_>) -> Option<TypeId> {
+        None
+    }
+}
+
 /// The expressions of a cycle that linking copies from the units
 /// (design §2.2): detached subtrees in one [`Ast`].
 #[derive(Debug)]
@@ -145,6 +209,7 @@ impl Linker<'_> {
 pub fn link_cycle(
     world: &WorldSnapshot,
     deps: &dyn LinkedLibraries,
+    resolver: &dyn LinkResolver,
     inputs: &[LinkLibraryInput],
 ) -> LinkedCycle {
     let generation = &*world.generation;
@@ -186,7 +251,7 @@ pub fn link_cycle(
     clear_interface_caches(&mut linker.core.store, true);
 
     // _computeHasNonFinalField ... buildExtensionTypes
-    crate::outline::build_outlines(&mut linker, &type_provider);
+    crate::outline::build_outlines(&mut linker, &type_provider, resolver);
     for index in 0..linker.builders.len() {
         LibraryBuilder::collect_mixin_super_invoked_names(&mut linker, index);
     }

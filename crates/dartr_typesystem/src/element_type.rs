@@ -14,6 +14,7 @@ use crate::type_ext::TypeExt;
 
 /// The function type parameter for a formal parameter element.
 pub fn formal_parameter_as_fn_param(ctx: &Ctx<'_>, param: EId<FormalParameterElement>) -> FnParam {
+    dartr_element::type_inference::ensure_formal_parameter_type(ctx, param);
     let data = ctx.get(param);
     FnParam {
         name: data.name,
@@ -29,6 +30,12 @@ pub fn formal_parameter_as_fn_param(ctx: &Ctx<'_>, param: EId<FormalParameterEle
 /// `ExecutableElementImpl.type`.
 pub fn executable_type(ctx: &Ctx<'_>, element: EId<ExecutableElement>) -> TypeId {
     let data = ctx.executable(element);
+    if let Some(t) = data.type_.get() {
+        return t;
+    }
+    // Dart reads `returnType`, which infers the type of the variable of a
+    // getter or setter while linking.
+    dartr_element::type_inference::ensure_accessor_return_type(ctx, element);
     if let Some(t) = data.type_.get() {
         return t;
     }
