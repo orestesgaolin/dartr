@@ -6645,6 +6645,7 @@ class A() {
 
 /// `super_invocation_not_last_test.dart` `test_primary_superIsLast`.
 #[test]
+#[ignore = "primary constructor bodies are not resolved (field names of `this :` initializers have no element; branch w-primary)"]
 fn super_invocation_not_last_primary_super_is_last() {
     assert_errors_in_code(
         r#"

@@ -1447,7 +1447,8 @@ fn referenced_element(rv: &ResolverVisitor<'_>, expression: Id<Expression>) -> O
     if let Some(e) = ast.cast::<ParenthesizedExpression>(expression) {
         referenced_element(rv, ast[e].expression)
     } else if let Some(e) = ast.cast::<PrefixedIdentifier>(expression) {
-        rv.element(e)
+        // Dart `PrefixedIdentifier.element` is `identifier.element`.
+        rv.element(ast[e].identifier)
     } else if let Some(e) = ast.cast::<PropertyAccess>(expression) {
         rv.element(ast[e].property_name)
     } else if let Some(e) = ast.cast::<SimpleIdentifier>(expression) {

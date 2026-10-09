@@ -474,24 +474,6 @@ const KNOWN_FAILURES: &[&str] = &[
     "variable_not_initialized_test.dart::test_class_instanceField1_notFinal_typeInt_noInitializer_primaryConstructor_constructorInitializer3",
     "variable_not_initialized_test.dart::test_class_instanceField2_notFinal_typeInt_noInitializer_primaryConstructor_constructorInitializer2",
     "invalid_reference_to_this_test.dart::test_extensionType_primaryConstructor_fieldInitializer",
-    // Reported by the error verifier itself (ErrorVerifier
-    // `returnInGenerativeConstructor` at an expression body,
-    // `checkForRecordLiteralOnePositional...` of arguments and variables),
-    // or by the constant verifier (const sets).
-    "record_literal_one_positional_no_trailing_comma_test.dart::test_argument_parenthesized",
-    "record_literal_one_positional_no_trailing_comma_test.dart::test_declaration",
-    "return_in_generative_constructor_test.dart::test_expressionFunctionBody",
-    "constructor_body_test.dart::test_class_secondaryConstructor_constGenerative_expressionBody",
-    "constructor_body_test.dart::test_class_secondaryConstructor_constGenerative_external_expressionBody",
-    "constructor_body_test.dart::test_class_secondaryConstructor_constGenerativeRedirecting_expressionBody",
-    "constructor_body_test.dart::test_class_secondaryConstructor_generative_external_expressionBody",
-    "constructor_body_test.dart::test_enum_secondaryConstructor_constGenerative_expressionBody",
-    "constructor_body_test.dart::test_enum_secondaryConstructor_constGenerative_external_expressionBody",
-    "constructor_body_test.dart::test_enum_secondaryConstructor_constGenerativeRedirecting_expressionBody",
-    "constructor_body_test.dart::test_extensionType_secondaryConstructor_constGenerative_expressionBody",
-    "constructor_body_test.dart::test_extensionType_secondaryConstructor_constGenerative_external_expressionBody",
-    "constructor_body_test.dart::test_extensionType_secondaryConstructor_constGenerativeRedirecting_expressionBody",
-    "constructor_body_test.dart::test_extensionType_secondaryConstructor_generative_external_expressionBody",
     // The element of an augmented class has the augmentation as its
     // first fragment in the linked element model.
     "subtype_of_final_is_not_base_final_or_sealed_test.dart::test_class_extends_inAugmentation",

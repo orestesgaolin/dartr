@@ -349,7 +349,9 @@ impl DuplicateDefinitionVerifier {
                         );
                     }
                     // `declaredElement.definesSetter`.
-                    if let Some(setter) = data.setter {
+                    if defines_setter(&ctx, element.raw())
+                        && let Some(setter) = data.setter
+                    {
                         let setter = ctx.get(setter).first_fragment().raw();
                         self.check_duplicate_fragment_identifier(
                             host,
@@ -588,4 +590,39 @@ pub(crate) fn class_name_part_type_name(ast: &dartr_ast::Ast, name_part: NodeId)
         .cast::<dartr_ast::PrimaryConstructorDeclaration>(name_part)
         .expect("a class name part");
     ast[n].type_name
+}
+
+/// Dart `PropertyInducingElementExtension.definesSetter`
+/// (utilities/extensions/element.dart): a const variable defines no setter,
+/// a final variable defines one only when it is late and has no initializer.
+fn defines_setter(ctx: &dartr_element::Ctx<'_>, element: ElementId) -> bool {
+    use crate::element_ext::{is_const, is_final, is_late};
+    if is_const(ctx, element) {
+        return false;
+    }
+    if is_final(ctx, element) {
+        is_late(ctx, element) && !has_initializer(ctx, element)
+    } else {
+        true
+    }
+}
+
+/// Dart `PropertyInducingElement.hasInitializer`: a fragment of the
+/// variable has an initializer.
+fn has_initializer(ctx: &dartr_element::Ctx<'_>, element: ElementId) -> bool {
+    let mut fragment = ctx.element_data(element).map(|d| d.first_fragment);
+    while let Some(f) = fragment {
+        let Some(data) = ctx.fragment_data(f) else {
+            break;
+        };
+        if data
+            .flags
+            .get()
+            .contains(dartr_element::FragmentFlags::NON_PARAMETER_VARIABLE_FRAGMENT_HAS_INITIALIZER)
+        {
+            return true;
+        }
+        fragment = data.next_fragment;
+    }
+    false
 }
