@@ -211,26 +211,3 @@ pub fn enum_constants(
         .filter(|&f| is_enum_constant(ctx, f))
         .collect()
 }
-
-/// Dart `Element.metadata.hasOptionalTypeArgs`: any fragment of [e] has
-/// `@optionalTypeArgs`.
-pub fn has_optional_type_args(ctx: &Ctx<'_>, e: ElementId) -> bool {
-    let Some(data) = ctx.element_data(e) else {
-        return false;
-    };
-    let mut next = Some(data.first_fragment);
-    while let Some(id) = next {
-        let Some(f) = ctx.fragment_data(id) else {
-            return false;
-        };
-        if f.metadata
-            .metadata_flags
-            .try_get()
-            .is_some_and(|flags| flags & dartr_element::METADATA_HAS_OPTIONAL_TYPE_ARGS != 0)
-        {
-            return true;
-        }
-        next = f.next_fragment;
-    }
-    false
-}

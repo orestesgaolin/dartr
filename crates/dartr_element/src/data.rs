@@ -83,32 +83,6 @@ pub struct Metadata {
     pub metadata_flags: OnceSlot<u32>,
 }
 
-/// The bit of `@optionalTypeArgs` in [`Metadata::metadata_flags`]
-/// (Dart `_MetadataFlags.hasOptionalTypeArgs`).
-pub const METADATA_HAS_OPTIONAL_TYPE_ARGS: u32 = 1 << 0;
-
-/// The `has*` bits of [annotations]. The annotations are not resolved
-/// when linking builds the metadata, so this checks the name: `package:meta`
-/// declares `const optionalTypeArgs = OptionalTypeArgs();`, and an
-/// annotation `@optionalTypeArgs` or `@prefix.optionalTypeArgs` is that
-/// getter.
-/// Dart: MetadataImpl._metadataFlags2
-pub fn compute_metadata_flags(ast: &dartr_ast::Ast, annotations: &[NodeId]) -> u32 {
-    use dartr_ast::{Annotation, Id};
-    let mut flags = 0;
-    for &n in annotations {
-        let a = &ast[Id::<Annotation>::from_raw(n)];
-        if a.arguments.is_some() || a.constructor_name.is_some() {
-            continue;
-        }
-        let name = ast.simple_name(a.name);
-        if ast.tokens.lexeme(ast[name].token) == "optionalTypeArgs" {
-            flags |= METADATA_HAS_OPTIONAL_TYPE_ARGS;
-        }
-    }
-    flags
-}
-
 impl Metadata {
     pub fn is_empty(&self) -> bool {
         self.annotations.is_empty()
