@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 class Value {
   @override
   bool operator ==(Object other) => other is Value;
@@ -20,6 +23,25 @@ Future<void> examples(List<int> values, int? nullable) async {
   nullable as int?;
   await future();
   values.contains(1);
+}
+
+Future<void> closedSink() async {
+  final controller = StreamController<int>();
+  controller.add(1);
+  await controller.close();
+}
+
+Future<void> destroyedSocket() async {
+  final socket = await Socket.connect('localhost', 0);
+  socket.destroy();
+}
+
+class CascadedFieldSink {
+  final controller = StreamController<int>();
+
+  void dispose() {
+    this..controller.close();
+  }
 }
 
 void localLabeledControlFlow() {

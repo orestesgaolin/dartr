@@ -5,8 +5,7 @@ use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, DiagnosticCode};
 use dartr_element::{
     ElemRef, ElementId, ExtensionTypeElement, FieldElement, FieldFormalParameterElement,
-    FormalParameterElement, FragmentFlags, GetterElement, LocalVariableElement, SetterElement,
-    TopLevelVariableElement,
+    FragmentFlags, GetterElement, SetterElement, VariableElement,
 };
 use dartr_typesystem::{TypeExt, member};
 
@@ -110,9 +109,10 @@ fn check_variable(
     kinds: &[LeakKind],
 ) {
     let declaration = &context.ast[context.ast.cast::<VariableDeclaration>(variable).unwrap()];
-    if declaration
-        .initializer
-        .is_some_and(|e| context.ast.kind(e) == NodeKind::SimpleIdentifier)
+    if declaration.equals.is_some()
+        && declaration
+            .initializer
+            .is_some_and(|e| context.ast.kind(e) == NodeKind::SimpleIdentifier)
     {
         return;
     }
@@ -137,13 +137,22 @@ fn check_element(
         return;
     };
     let ty = member::type_(&resolved.ctx, ElemRef::Base(element));
-    let Some(kind) = kinds
+    let required_methods: Vec<_> = kinds
         .iter()
-        .find(|kind| super::helpers::implements(context, ty, kind.library, kind.interface))
-    else {
+        .filter(|kind| super::helpers::implements(context, ty, kind.library, kind.interface))
+        .map(|kind| kind.method)
+        .collect();
+    if required_methods.is_empty() {
         return;
-    };
-    if has_valid_use(context, root, report_node, element, local, kind.method) {
+    }
+    if has_valid_use(
+        context,
+        root,
+        report_node,
+        element,
+        local,
+        &required_methods,
+    ) {
         return;
     }
     context.report_node(out, code, report_node, &[]);
@@ -156,38 +165,50 @@ fn identifier_matches(context: &LinterContext<'_>, node: NodeId, variable: Eleme
             .is_some_and(|element| element_matches(context, element, variable))
 }
 
+fn identifier_is_equal(context: &LinterContext<'_>, node: NodeId, variable: ElementId) -> bool {
+    context.ast.kind(node) == NodeKind::SimpleIdentifier
+        && context
+            .element(node)
+            .is_some_and(|element| element_is_equal(context, element, variable))
+}
+
+fn identifier_is_exact(context: &LinterContext<'_>, node: NodeId, variable: ElementId) -> bool {
+    context.ast.kind(node) == NodeKind::SimpleIdentifier
+        && context.element(node) == Some(ElemRef::Base(variable))
+}
+
+fn element_is_equal(context: &LinterContext<'_>, element: ElemRef, variable: ElementId) -> bool {
+    element == ElemRef::Base(variable) || element_matches(context, element, variable)
+}
+
 fn element_matches(context: &LinterContext<'_>, element: ElemRef, variable: ElementId) -> bool {
     let Some(resolved) = context.resolved else {
         return false;
     };
     let base = member::base_element(&resolved.ctx, element);
-    let candidate = if let Some(getter) = base.cast::<GetterElement>() {
-        resolved.ctx.get(getter).variable.get().map(|id| id.raw())
+    let matches_base = if let Some(getter) = base.cast::<GetterElement>() {
+        resolved.ctx.get(getter).variable.get().map(|id| id.raw()) == Some(variable)
     } else if let Some(setter) = base.cast::<SetterElement>() {
-        resolved.ctx.get(setter).variable.get().map(|id| id.raw())
+        resolved.ctx.get(setter).variable.get().map(|id| id.raw()) == Some(variable)
+    } else if base.is::<FieldElement>() {
+        base == variable
     } else {
-        Some(base)
+        false
     };
-    let Some(candidate) = candidate else {
-        return false;
-    };
-    if candidate == variable {
+    if matches_base {
         return true;
     }
-    representation_variable(context, candidate) == Some(variable)
-        || representation_variable(context, variable) == Some(candidate)
+    representation_variable(context, element) == Some(variable)
+        || representation_variable(context, ElemRef::Base(variable))
+            .is_some_and(|representation| ElemRef::Base(representation) == element)
 }
 
-fn representation_variable(context: &LinterContext<'_>, variable: ElementId) -> Option<ElementId> {
-    if !variable.is::<FieldElement>()
-        && !variable.is::<TopLevelVariableElement>()
-        && !variable.is::<LocalVariableElement>()
-        && !variable.is::<FormalParameterElement>()
-    {
+fn representation_variable(context: &LinterContext<'_>, variable: ElemRef) -> Option<ElementId> {
+    let resolved = context.resolved?;
+    if !member::base_element(&resolved.ctx, variable).is::<VariableElement>() {
         return None;
     }
-    let resolved = context.resolved?;
-    let ty = member::type_(&resolved.ctx, ElemRef::Base(variable));
+    let ty = member::type_(&resolved.ctx, variable);
     let extension = resolved
         .ctx
         .interface_element(ty)?
@@ -207,7 +228,7 @@ fn has_valid_use(
     variable_node: NodeId,
     variable: ElementId,
     local: bool,
-    required_method: &str,
+    required_methods: &[&str],
 ) -> bool {
     let mut pending = vec![root];
     while let Some(node) = pending.pop() {
@@ -217,13 +238,13 @@ fn has_valid_use(
                 let n = &context.ast[invocation];
                 let real_target = method_invocation_real_target(context.ast, invocation);
                 let method = context.ast.tokens.lexeme(context.ast[n.method_name].token);
-                if method == required_method
+                if required_methods.contains(&method)
                     && real_target
                         .is_some_and(|target| target_contains(context, target.raw(), variable))
                 {
                     return true;
                 }
-                if method == required_method
+                if required_methods.contains(&method)
                     && real_target.is_some()
                     && std::iter::successors(Some(node), |node| context.ast.parent(*node))
                         .any(|ancestor| ancestor == variable_node)
@@ -237,15 +258,16 @@ fn has_valid_use(
                     return true;
                 }
                 for &argument in context.ast.list(context.ast[n.argument_list].arguments) {
-                    if identifier_matches(context, argument.raw(), variable) {
+                    if identifier_is_exact(context, argument.raw(), variable) {
                         return true;
                     }
                 }
             }
             NodeKind::PrefixedIdentifier => {
                 let n = &context.ast[context.ast.cast::<PrefixedIdentifier>(node).unwrap()];
-                if identifier_matches(context, n.prefix.raw(), variable)
-                    && context.ast.tokens.lexeme(context.ast[n.identifier].token) == required_method
+                if identifier_is_exact(context, n.prefix.raw(), variable)
+                    && required_methods
+                        .contains(&context.ast.tokens.lexeme(context.ast[n.identifier].token))
                 {
                     return true;
                 }
@@ -253,7 +275,7 @@ fn has_valid_use(
             NodeKind::ReturnStatement if local => {
                 let n = &context.ast[context.ast.cast::<ReturnStatement>(node).unwrap()];
                 if n.expression
-                    .is_some_and(|e| identifier_matches(context, e.raw(), variable))
+                    .is_some_and(|e| identifier_is_equal(context, e.raw(), variable))
                 {
                     return true;
                 }
@@ -261,13 +283,15 @@ fn has_valid_use(
             NodeKind::AssignmentExpression => {
                 let n = &context.ast[context.ast.cast::<AssignmentExpression>(node).unwrap()];
                 let right = n.right_hand_side.raw();
+                let write_element = context
+                    .resolved
+                    .and_then(|resolved| resolved.tables.write_element.get(node).copied());
                 if context.ast.kind(right) == NodeKind::SimpleIdentifier
-                    && (canonical_assignment_target(context, n.left_hand_side.raw())
-                        == Some(variable)
+                    && (write_element
+                        .is_some_and(|element| element_is_equal(context, element, variable))
                         || assignment_property_has_name(context, n.left_hand_side.raw(), variable)
-                        || (identifier_matches(context, right, variable)
-                            && canonical_assignment_target(context, n.left_hand_side.raw())
-                                .is_none()))
+                        || (identifier_is_equal(context, right, variable)
+                            && write_element.is_none()))
                 {
                     return true;
                 }
@@ -277,7 +301,7 @@ fn has_valid_use(
                     .ast
                     .cast::<ConstructorFieldInitializer>(node)
                     .unwrap()];
-                if canonical_assignment_target(context, n.field_name.raw()) == Some(variable) {
+                if identifier_is_exact(context, n.field_name.raw(), variable) {
                     return true;
                 }
             }
@@ -306,54 +330,40 @@ fn method_invocation_real_target(ast: &Ast, node: Id<MethodInvocation>) -> Optio
     if !is_cascaded {
         return invocation.target;
     }
-    super::helpers::ancestors(ast, node.raw()).find_map(|ancestor| {
+    ancestor_cascade_target(ast, node.raw())
+}
+
+fn property_access_real_target(ast: &Ast, node: Id<PropertyAccess>) -> Option<Id<Expression>> {
+    let access = &ast[node];
+    if !matches!(ast.tokens.lexeme(access.operator), ".." | "?..") {
+        return access.target;
+    }
+    ancestor_cascade_target(ast, node.raw())
+}
+
+fn ancestor_cascade_target(ast: &Ast, node: NodeId) -> Option<Id<Expression>> {
+    super::helpers::ancestors(ast, node).find_map(|ancestor| {
         ast.cast::<CascadeExpression>(ancestor)
             .map(|cascade| ast[cascade].target)
     })
 }
 
 fn target_contains(context: &LinterContext<'_>, target: NodeId, variable: ElementId) -> bool {
-    if identifier_matches(context, target, variable) {
+    if identifier_is_equal(context, target, variable) {
         return true;
     }
-    if let Some(p) = context.ast.cast::<PropertyAccess>(target) {
-        let p = &context.ast[p];
-        return p
-            .target
+    if let Some(property) = context.ast.cast::<PropertyAccess>(target) {
+        let p = &context.ast[property];
+        return property_access_real_target(context.ast, property)
             .is_some_and(|target| context.ast.kind(target) == NodeKind::ThisExpression)
             && context
                 .element(p.property_name)
-                .and_then(|e| super::helpers::base_element(context, e))
-                == Some(variable);
-    }
-    if let Some(p) = context.ast.cast::<PrefixedIdentifier>(target) {
-        return identifier_matches(context, context.ast[p].prefix.raw(), variable);
+                .is_some_and(|element| element_is_equal(context, element, variable));
     }
     if let Some(p) = context.ast.cast::<PostfixExpression>(target) {
-        return identifier_matches(context, context.ast[p].operand.raw(), variable);
+        return identifier_is_equal(context, context.ast[p].operand.raw(), variable);
     }
     false
-}
-
-fn canonical_assignment_target(context: &LinterContext<'_>, node: NodeId) -> Option<ElementId> {
-    let element = context
-        .element(node)
-        .and_then(|element| super::helpers::base_element(context, element))
-        .or_else(|| {
-            context
-                .ast
-                .cast::<PropertyAccess>(node)
-                .and_then(|property| context.element(context.ast[property].property_name))
-                .and_then(|element| super::helpers::base_element(context, element))
-        })?;
-    let resolved = context.resolved?;
-    if let Some(getter) = element.cast::<GetterElement>() {
-        return resolved.ctx.get(getter).variable.get().map(|id| id.raw());
-    }
-    if let Some(setter) = element.cast::<SetterElement>() {
-        return resolved.ctx.get(setter).variable.get().map(|id| id.raw());
-    }
-    Some(element)
 }
 
 fn assignment_property_has_name(

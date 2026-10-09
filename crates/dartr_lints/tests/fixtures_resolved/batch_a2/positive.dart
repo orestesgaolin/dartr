@@ -1,3 +1,5 @@
+import 'dart:async';
+
 /// [missingName]
 class EqualityOnly {
   @override
@@ -28,6 +30,11 @@ void examples(List<int> values, int? nullable) {
   } finally {
     return;
   }
+}
+
+void addOnlySink() {
+  final controller = StreamController<int>();
+  controller.add(1);
 }
 
 const environment = String.fromEnvironment('NAME');
