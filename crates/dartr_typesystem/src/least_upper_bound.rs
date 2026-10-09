@@ -495,6 +495,7 @@ impl<'a> LeastUpperBoundHelper<'a> {
     /// See `resources/type-system/upper-lower-bounds.md`
     #[allow(non_snake_case)]
     pub fn get_least_upper_bound(&self, T1: TypeId, T2: TypeId) -> TypeId {
+        let _guard = crate::recursion_guard::enter("UP");
         let ts = self.type_system;
         let ctx = self.ctx();
 

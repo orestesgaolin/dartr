@@ -59,6 +59,11 @@ pub struct Options {
     pub kinds: Vec<String>,
     /// Remove the `"diagnostics"` lists before the comparison.
     pub no_diagnostics: bool,
+    /// The time limit per input file, in seconds: a batch is killed after
+    /// `60 + files * timeout_per_file` seconds, so a hang in one input can
+    /// not block the run. Its missing lines count as differences. `0`: no
+    /// limit.
+    pub timeout_per_file: u64,
 }
 
 impl Options {
@@ -469,7 +474,12 @@ struct BatchOutput {
     time: Duration,
 }
 
-fn run_batch(program: &[String], mode: &str, files: &[String]) -> Result<BatchOutput> {
+fn run_batch(
+    program: &[String],
+    mode: &str,
+    files: &[String],
+    timeout_per_file: u64,
+) -> Result<BatchOutput> {
     let start = Instant::now();
     let mut child = Command::new(&program[0])
         .args(&program[1..])
@@ -484,7 +494,26 @@ fn run_batch(program: &[String], mode: &str, files: &[String]) -> Result<BatchOu
     let writer = std::thread::spawn(move || {
         let _ = stdin.write_all(input.as_bytes());
     });
-    let output = child.wait_with_output()?;
+    let pid = child.id();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let waiter = std::thread::spawn(move || {
+        let _ = tx.send(child.wait_with_output());
+    });
+    let limit = (timeout_per_file > 0)
+        .then(|| std::time::Duration::from_secs(60 + files.len() as u64 * timeout_per_file));
+    let mut timed_out = false;
+    let output = match limit {
+        None => rx.recv().expect("batch waiter")?,
+        Some(limit) => match rx.recv_timeout(limit) {
+            Ok(output) => output?,
+            Err(_) => {
+                timed_out = true;
+                let _ = Command::new("kill").arg("-9").arg(pid.to_string()).status();
+                rx.recv().expect("batch waiter")?
+            }
+        },
+    };
+    let _ = waiter.join();
     let _ = writer.join();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut lines = HashMap::new();
@@ -497,9 +526,17 @@ fn run_batch(program: &[String], mode: &str, files: &[String]) -> Result<BatchOu
             lines.insert(path, line.to_string());
         }
     }
+    let mut stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    if timed_out {
+        stderr.push_str(&format!(
+            "\ntimeout: `{} {mode}` killed after the time limit of the batch ({} files)\n",
+            program.join(" "),
+            files.len()
+        ));
+    }
     Ok(BatchOutput {
         lines,
-        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        stderr,
         time: start.elapsed(),
     })
 }
@@ -707,8 +744,8 @@ pub fn run(options: &Options) -> Result<Report> {
                     let batch = batches[index];
                     let result = (|| -> Result<BatchResult> {
                         let (o, d) = std::thread::scope(|s| {
-                            let o = s.spawn(|| run_batch(&oracle, &options.mode, batch));
-                            let d = s.spawn(|| run_batch(&dartr, &options.mode, batch));
+                            let o = s.spawn(|| run_batch(&oracle, &options.mode, batch, options.timeout_per_file));
+                            let d = s.spawn(|| run_batch(&dartr, &options.mode, batch, options.timeout_per_file));
                             (o.join().unwrap(), d.join().unwrap())
                         });
                         let (o, d) = (o?, d?);

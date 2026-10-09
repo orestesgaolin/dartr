@@ -48,6 +48,10 @@ struct Cli {
     /// Remove the diagnostics before the comparison.
     #[arg(long)]
     no_diagnostics: bool,
+    /// Time limit per input file in seconds (a batch gets 60 s plus this
+    /// per file; 0 = no limit).
+    #[arg(long, default_value_t = 10)]
+    timeout_per_file: u64,
     /// Number of differing files to report.
     #[arg(long, default_value_t = 20)]
     max_report: usize,
@@ -80,6 +84,7 @@ fn main() -> anyhow::Result<ExitCode> {
         mask_inferred: cli.mask_inferred,
         kinds: cli.kinds,
         no_diagnostics: cli.no_diagnostics,
+        timeout_per_file: cli.timeout_per_file,
     };
     let report = run(&options)?;
     print!("{}", report.difference_report(cli.max_report));

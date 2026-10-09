@@ -31,7 +31,18 @@ impl<'a> SubtypeHelper<'a> {
     }
 
     /// `isSubtypeOf(T0, T1)`.
+    ///
+    /// Recursive bounds such as `X extends FutureOr<X>` make the Dart
+    /// implementation recurse without end; the analyzer then fails with a
+    /// `StackOverflowError` for that library. This port panics at a fixed
+    /// recursion depth (the library analyzer catches it per unit), so that
+    /// the deep native recursion can not run for hours or abort the process.
     pub fn is_subtype_of(&self, t0: TypeId, t1: TypeId) -> bool {
+        let _guard = crate::recursion_guard::enter("isSubtypeOf");
+        self.is_subtype_of_impl(t0, t1)
+    }
+
+    fn is_subtype_of_impl(&self, t0: TypeId, t1: TypeId) -> bool {
         let ctx = self.type_system.ctx;
         // Reflexivity: if `T0` and `T1` are the same type then `T0 <: T1`.
         // Dart: identical(T0, T1)
