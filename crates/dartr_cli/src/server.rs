@@ -110,16 +110,13 @@ impl LineInfoCache {
     }
 }
 
-/// Dart `mapEngineErrors` + `newAnalysisError_fromEngine` for the
-/// diagnostics of one file.
-pub fn analysis_errors(
+/// The diagnostics of a Dart file with the `errors:` processors of its
+/// analysis options applied (Dart `mapEngineErrors`): the severity is the
+/// processed one, and diagnostics with the severity `ignore` are removed.
+pub fn processed_diagnostics<'a>(
     collection: &AnalysisContextCollection,
-    file: &FileDiagnostics,
-    line_infos: &mut LineInfoCache,
-) -> Vec<AnalysisError> {
-    if FileKind::of(&file.path) != FileKind::Dart {
-        return non_dart_analysis_errors(file);
-    }
+    file: &'a FileDiagnostics,
+) -> Vec<(&'a Diagnostic, DiagnosticSeverity)> {
     let options = collection
         .context_for(&file.path)
         .map(|context| collection.options_for(context, &file.path).clone());
@@ -138,9 +135,25 @@ pub fn analysis_errors(
             },
             None => diagnostic.code.severity(),
         };
-        result.push(new_analysis_error(file, diagnostic, severity, line_infos));
+        result.push((diagnostic, severity));
     }
     result
+}
+
+/// Dart `mapEngineErrors` + `newAnalysisError_fromEngine` for the
+/// diagnostics of one file.
+pub fn analysis_errors(
+    collection: &AnalysisContextCollection,
+    file: &FileDiagnostics,
+    line_infos: &mut LineInfoCache,
+) -> Vec<AnalysisError> {
+    if FileKind::of(&file.path) != FileKind::Dart {
+        return non_dart_analysis_errors(file);
+    }
+    processed_diagnostics(collection, file)
+        .into_iter()
+        .map(|(diagnostic, severity)| new_analysis_error(file, diagnostic, severity, line_infos))
+        .collect()
 }
 
 /// Dart `AnalyzerConverter.convertAnalysisErrors` for non-Dart files

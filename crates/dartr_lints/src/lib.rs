@@ -244,6 +244,29 @@ pub fn lint(parsed: &ParsedUnit, source: &str, path: &str, enabled: &[&str]) -> 
 /// Register once per library, visit each unit in source order, then run callbacks.
 /// The first unit is the defining unit. All units must exist and be parsed.
 pub fn lint_library(units: &[RuleContextUnit<'_>], enabled: &[&str]) -> Vec<Vec<Diagnostic>> {
+    let mut out = lint_library_unfiltered(units, enabled);
+    for (index, diagnostics) in out.iter_mut().enumerate() {
+        let ctx = LinterContext {
+            parsed: units[index].parsed,
+            ast: &units[index].parsed.ast,
+            source: units[index].source,
+            path: units[index].path,
+            all_units: units,
+            current_unit: index,
+        };
+        let ignores = IgnoreInfo::for_dart(&ctx);
+        diagnostics.retain(|diagnostic| !ignores.ignored(&ctx, diagnostic));
+    }
+    out
+}
+
+/// Like [lint_library], without the ignore-comment filtering. The analyzer
+/// filters all diagnostics of a unit together, with the `cannot-ignore`
+/// codes of the analysis options: callers that do that use this function.
+pub fn lint_library_unfiltered(
+    units: &[RuleContextUnit<'_>],
+    enabled: &[&str],
+) -> Vec<Vec<Diagnostic>> {
     let Some(_) = units.first() else {
         return vec![];
     };
@@ -276,11 +299,6 @@ pub fn lint_library(units: &[RuleContextUnit<'_>], enabled: &[&str]) -> Vec<Vec<
     }
     let last_index = units.len() - 1;
     visitor.after_library(&context(last_index), &mut out[last_index]);
-    for (index, diagnostics) in out.iter_mut().enumerate() {
-        let ctx = context(index);
-        let ignores = IgnoreInfo::for_dart(&ctx);
-        diagnostics.retain(|diagnostic| !ignores.ignored(&ctx, diagnostic));
-    }
     out
 }
 

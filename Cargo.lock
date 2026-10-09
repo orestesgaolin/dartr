@@ -270,6 +270,7 @@ dependencies = [
  "dartr_ast",
  "dartr_ast_builder",
  "dartr_diagnostics",
+ "dartr_lints",
  "dartr_parser",
  "dartr_project",
  "dartr_syntax",
@@ -408,6 +409,7 @@ version = "0.1.0"
 dependencies = [
  "dartr_ast",
  "dartr_ast_builder",
+ "dartr_cli",
  "dartr_diagnostics",
  "dartr_parser",
  "dartr_project",
