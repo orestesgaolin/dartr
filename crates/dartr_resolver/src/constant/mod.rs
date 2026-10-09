@@ -25,5 +25,6 @@
 
 pub mod compute;
 pub mod evaluation;
+pub mod exhaustiveness;
 pub mod potentially_constant;
 pub mod utilities;
