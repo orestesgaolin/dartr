@@ -413,6 +413,14 @@ impl<'a> ConstantEvaluationEngine<'a> {
                 for &i in ast.list(ast[node].initializers) {
                     result.push(decl.with(i));
                 }
+            } else if ast.kind(decl.node) == NodeKind::PrimaryConstructorDeclaration
+                && let Some(body) = primary_constructor_body(ast, decl.node)
+            {
+                // Dart: the initializers of a primary constructor are in
+                // the `this : ...;` body of the declaration.
+                for &i in ast.list(ast[body].initializers) {
+                    result.push(decl.with(i));
+                }
             }
         }
         result
@@ -1192,6 +1200,38 @@ impl ConstantEvaluationEngine<'_> {
 /// `annotation.element`).
 fn annotation_element(unit: &ResolvedUnit, annotation: Id<Annotation>) -> Option<ElemRef> {
     unit.tables.element.get(annotation).copied()
+}
+
+/// The `PrimaryConstructorBody` of the type declaration of the primary
+/// constructor [declaration].
+fn primary_constructor_body(
+    ast: &Ast,
+    declaration: NodeId,
+) -> Option<Id<dartr_ast::PrimaryConstructorBody>> {
+    let mut current = ast.parent(declaration);
+    while let Some(c) = current {
+        if matches!(
+            ast.kind(c),
+            NodeKind::ClassDeclaration
+                | NodeKind::EnumDeclaration
+                | NodeKind::ExtensionTypeDeclaration
+        ) {
+            fn find(ast: &Ast, n: NodeId, depth: u32) -> Option<NodeId> {
+                if ast.kind(n) == NodeKind::PrimaryConstructorBody {
+                    return Some(n);
+                }
+                if depth == 0 {
+                    return None;
+                }
+                ast.children(n)
+                    .into_iter()
+                    .find_map(|c| find(ast, c, depth - 1))
+            }
+            return find(ast, c, 3).map(Id::from_raw);
+        }
+        current = ast.parent(c);
+    }
+    None
 }
 
 /// The value of the default clause of a formal parameter node.
