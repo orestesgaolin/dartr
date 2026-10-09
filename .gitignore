@@ -4,3 +4,4 @@
 /bench/results/*.json
 /bench/results/*.log
 /bench/corpus/
+/target.noindex/
