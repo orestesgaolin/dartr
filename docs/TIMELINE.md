@@ -66,6 +66,7 @@ at each merge; the final process report is written from it.
 | 10-09 12:10 | 51f6003 | wave C8 instance creation, references, dot shorthands | Opus | flutter_tools: resolved 99.70%, elements unmasked 100% |
 | 10-09 12:30 | 32826b0 | x86: follow the Dart VM for NaN bits and YAML 2^63 keys | Opus | tested on x86-64 Linux (OrbStack); CI found it |
 | 10-09 13:40 | b98027a | wave C6+C9 extensions, annotations, comment refs, exit detector | Codex | **resolver at parity:** flutter_tools types 100%, elements 99.84%; analyzer-9.0.0 types 100%, elements 99.81% (both unseen) |
+| 10-09 17:35 | eb3c0b8 | wave D1–D3 constant evaluation, constant verifier, exhaustiveness | Opus | constant values and constant diagnostics 100% on flutter_tools and analyzer-9.0.0 (unseen); 515/535 evaluator tests as fixtures |
 
 ## Incidents and lessons
 
