@@ -113,6 +113,7 @@ pub mod yield_statement_resolver;
 
 pub use library_analyzer::{
     LibraryAnalysisInput, ResolvedLibrary, ResolvedUnit, UnitInput, analyze_library,
+    analyze_library_with_unignorable,
 };
 pub use resolver::ResolverVisitor;
 pub use tables::ResolverTables;

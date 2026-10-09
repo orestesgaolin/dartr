@@ -98,8 +98,23 @@ pub struct ResolvedLibrary {
     pub constants: ConstantValues,
 }
 
-/// Dart `LibraryAnalyzer.analyze()`.
+/// Dart `LibraryAnalyzer.analyze()` without unignorable codes: every
+/// diagnostic that an ignore comment names is removed. Callers that have
+/// analysis options use [`analyze_library_with_unignorable`].
 pub fn analyze_library(input: &LibraryAnalysisInput<'_>) -> ResolvedLibrary {
+    analyze_library_with_unignorable(input, &[])
+}
+
+/// Dart `LibraryAnalyzer.analyze()`. [unignorable_names] is Dart
+/// `_analysisOptions.unignorableDiagnosticCodeNames` (the lower-case code
+/// names of `analyzer: cannot-ignore`, as
+/// `dartr_project::AnalysisOptions::unignorable_code_names` gives them):
+/// `_filterIgnoredDiagnostics` keeps these diagnostics. The result is
+/// filtered: a caller must not filter it again with other names.
+pub fn analyze_library_with_unignorable(
+    input: &LibraryAnalysisInput<'_>,
+    unignorable_names: &[String],
+) -> ResolvedLibrary {
     let sink = NoopSink;
     let library_features = {
         let ctx = global_ctx(input, &sink);
@@ -136,15 +151,20 @@ pub fn analyze_library(input: &LibraryAnalysisInput<'_>) -> ResolvedLibrary {
         // to one already recorded (from any pass) is dropped.
         let diagnostics = std::mem::take(&mut unit.diagnostics);
         append_unique(&mut unit.diagnostics, diagnostics);
-        filter_ignored_diagnostics(unit, &unit_input.parsed);
+        filter_ignored_diagnostics(unit, &unit_input.parsed, unignorable_names);
     }
     library
 }
 
 /// Dart `_filterIgnoredDiagnostics`: removes the diagnostics that an
-/// `// ignore:` or `// ignore_for_file:` comment of the unit ignores. The
-/// options have no unignorable codes yet (`analyzer: cannot-ignore`).
-fn filter_ignored_diagnostics(unit: &mut ResolvedUnit, parsed: &ParsedUnit) {
+/// `// ignore:` or `// ignore_for_file:` comment of the unit ignores, except
+/// the diagnostics with an unignorable code ([unignorable_names], Dart
+/// `unignorableDiagnosticCodeNames`).
+fn filter_ignored_diagnostics(
+    unit: &mut ResolvedUnit,
+    parsed: &ParsedUnit,
+    unignorable_names: &[String],
+) {
     if unit.diagnostics.is_empty() {
         return;
     }
@@ -159,8 +179,12 @@ fn filter_ignored_diagnostics(unit: &mut ResolvedUnit, parsed: &ParsedUnit) {
     if !ignore_info.has_ignores() {
         return;
     }
-    unit.diagnostics
-        .retain(|d| !ignore_info.ignored(d, &parsed.line_info));
+    unit.diagnostics.retain(|d| {
+        unignorable_names
+            .iter()
+            .any(|n| n == d.code.lower_case_name())
+            || !ignore_info.ignored(d, &parsed.line_info)
+    });
 }
 
 /// Dart `_resolveDirectives` (directive elements, URI diagnostics of
