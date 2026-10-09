@@ -330,6 +330,25 @@ pub fn visit_enum_constant_declaration(
     let element_to_infer = enum_element
         .and_then(|e| constructor_element_to_infer(rv, Some(e.raw()), constructor_name.as_deref()));
     let constructor_element = element_to_infer.as_ref().map(|e| e.element);
+    // Dart reads the constructor from the constant initializer of the
+    // linked fragment (`constructorName.element`), a member substituted
+    // with the inferred type arguments of the constant: substitute the
+    // constructor with the type arguments of the constant's type.
+    let constructor_element = constructor_element.map(|c| {
+        let constant_type = rv
+            .declared_element(node)
+            .map(|e| crate::element_ext::variable_type(&ctx, e));
+        match constant_type {
+            Some(t)
+                if matches!(ctx.ty(t), dartr_element::TypeKind::Interface { args, .. } if !ctx.list(*args).is_empty()) =>
+            {
+                let substitution =
+                    dartr_typesystem::type_algebra::MapSubstitution::from_interface_type(&ctx, t);
+                member::substitute(&ctx, c, &substitution)
+            }
+            _ => c,
+        }
+    });
 
     match constructor_element {
         Some(constructor_element) => {
