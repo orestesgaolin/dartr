@@ -56,6 +56,10 @@ at each merge; the final process report is written from it.
 | 10-09 09:20 | 7ea3b13 | fix_data.yaml validation, plugin research | Sonnet | 154/154 vs `dart analyze`; full workspace tests: only the known LSP failure |
 | 10-09 09:40 | 0af4509 | legacy protocol foundation (9/59 requests) | Codex | dartdev + IntelliJ-like sessions vs `dart language-server --protocol=analyzer` |
 | 10-09 10:10 | e08c69d | wave C resolver core (C1, C2, C11 skeleton) | Opus | flutter_tools (unseen): NamedType 100%, SimpleIdentifier 54% (C3–C8 stubbed) |
+| 10-09 10:45 | 3e521a9 | CI (GitHub Actions) + tolerant LSP step for a Dart server defect | Sonnet | full tests 3,033/3,033; agent's 106-file `cargo fmt --all` commit dropped |
+| 10-09 10:50 | 162b1c1 | CI fix: setup-dart in the job | coordinator | run 2: macOS tests, clippy, determinism green |
+| 10-09 11:00 | 497d142 | wave C7 literals, record literals, for loops | Opus | flutter_tools (unseen): ListLiteral 97.3%, SetOrMapLiteral 97.2% |
+| 10-09 11:10 | 31e9720 | dart_style formatter, `dartr format`, LSP formatting | Opus | byte-exact: 8,702 dart_style tests; flutter_tools 366/366 and analyzer-9.0.0 456/456 (unseen) |
 
 ## Incidents and lessons
 
@@ -87,3 +91,13 @@ at each merge; the final process report is written from it.
   some runs because `dart language-server` 3.13.3 sometimes ignores a `didChange` of an
   `analysis_options.yaml` overlay (no re-analysis, stale diagnostics). The fault is on the oracle
   side, not in dartr. Open decision: copy Dart's behaviour, or make the test tolerate that step.
+- **Workspace-wide formatting by a worker (10-09 10:40):** the CI agent ran `cargo fmt --all`
+  (106 files) while six agents edited those files. The commit was dropped before merge. Rule: no
+  workspace-wide formatting while branches are open; one format commit later, with no open branches.
+- **CI-only failure (10-09 10:47):** `setup-dart` inside a composite action cannot find its problem
+  matcher file. Local checks (actionlint, local runs) cannot catch this kind of failure; only a real
+  CI run can.
+- **Spotlight (10-09 11:20):** with the operator's approval, build output now lives in
+  `target.noindex` (symlinked as `target`), and `.metadata_never_index` markers are in `~/worktrees`,
+  `third_party` and `bench/corpus`. A probe could not prove which method this macOS honours,
+  because Spotlight was too backlogged to index even the control file in 3 minutes.

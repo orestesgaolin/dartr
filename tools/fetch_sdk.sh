@@ -9,6 +9,11 @@ tag="${DART_SDK_TAG:-3.13.3}"
 dst="$root/third_party/dart-sdk"
 style="$root/third_party/dart_style"
 # In a worktree, link the checkouts of the primary worktree instead of cloning.
+# Keep Spotlight away from build output: macOS does not index folders named *.noindex.
+# `target` stays a valid path (symlink), so scripts that use target/... still work.
+if [[ ! -e "$root/target" ]]; then
+  mkdir -p "$root/target.noindex" && ln -s target.noindex "$root/target"
+fi
 primary="$(git -C "$root" worktree list --porcelain | awk '/^worktree /{print $2; exit}')"
 if [[ "$primary" != "$root" && -d "$primary/third_party/dart-sdk" ]]; then
   mkdir -p "$root/third_party" && ln -sfn "$primary/third_party/dart-sdk" "$dst"
