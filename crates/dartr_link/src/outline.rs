@@ -59,7 +59,7 @@ fn class_flag(ctx: &Ctx<'_>, e: EId<InterfaceElement>, flag: ElementFlags) -> bo
 }
 
 /// The phases after `_resolveTypes`, in the order of `_buildOutlines`.
-pub fn build_outlines(lk: &mut Linker<'_>, tp: &TypeProvider) {
+pub fn build_outlines(lk: &mut Linker<'_>, tp: &TypeProvider, resolver: &dyn crate::link::LinkResolver) {
     let features = FeatureSet::default();
     {
         let lk_ref: &Linker<'_> = lk;
@@ -89,10 +89,15 @@ pub fn build_outlines(lk: &mut Linker<'_>, tp: &TypeProvider) {
         }
     }
     complete_classes(lk, tp);
+    // The elements built since `_computeLibraryScopes` (synthetic and mixin
+    // application constructors) get their `enclosingElement` and `library`:
+    // top-level inference resolves initializers that read them (Dart
+    // computes both from the fragments on demand).
+    crate::link::set_library_and_enclosing(&mut lk.core.store);
     let lk_ref: &Linker<'_> = lk;
     let ctx = link_ctx(lk_ref, tp, &features);
-    // _performTopLevelInference (override inference; initializers: C10)
-    crate::instance_member_inferrer::perform(lk_ref, &ctx);
+    // _performTopLevelInference
+    crate::top_level_inference::infer(lk_ref, &ctx, resolver);
     build_extension_types(lk_ref, &ctx);
     // _resolveConstructors
     resolve_redirected_constructors(lk_ref, &ctx);
