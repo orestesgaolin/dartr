@@ -235,6 +235,14 @@ fn compute_diagnostics(input: &LibraryAnalysisInput<'_>, library: &mut ResolvedL
     }
     let used = unused_local_elements_verifier::UsedLocalElements::merge(used_parts);
     let prevents_import_warnings = imports_verifier::has_diagnostic_reported_that_prevents_import_warnings(&verifiers);
+    // Dart `fileAnalysis.importsTracking` (recorded during resolution in
+    // Dart; replayed from the resolved units here).
+    let imports_tracking = if prevents_import_warnings {
+        imports_verifier::ImportsTracking::default()
+    } else {
+        catch_unwind(AssertUnwindSafe(|| imports_verifier::compute_imports_tracking(&verifiers)))
+            .unwrap_or_default()
+    };
     // Dart `_computeWarnings`, the steps of one unit in Dart order.
     unit_step("_computeWarnings", &mut verifiers, &mut panics, &mut |v| {
         unicode_text_verifier::verify(v);
@@ -245,7 +253,7 @@ fn compute_diagnostics(input: &LibraryAnalysisInput<'_>, library: &mut ResolvedL
         todo_finder::find_in(v);
         language_version_override_verifier::verify(v);
         if !prevents_import_warnings {
-            imports_verifier::verify(v);
+            imports_verifier::verify(v, &imports_tracking);
         }
         unused_local_elements_verifier::verify(v, &used);
     });
