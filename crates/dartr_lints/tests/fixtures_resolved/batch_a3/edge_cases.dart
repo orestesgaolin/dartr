@@ -46,3 +46,17 @@ void hashCollectionContext() {
   LinkedHashSet<int> values = LinkedHashSet<int>();
   print(values);
 }
+
+void nestedParameterMutation(List<int> target, int index) {
+  target[index++] = 1;
+}
+
+void selfParameterMutation(int index) {
+  index = index++;
+}
+
+void optionalParameterMutation([int? index]) {
+  List<int> target = <int>[0];
+  target[index ??= 0] = 1;
+  index ??= 1;
+}

@@ -128,27 +128,6 @@ fn parameter_body(ctx: &LinterContext<'_>, use_node: NodeId, element: ElementId)
     None
 }
 
-fn is_in_parameter_body(ctx: &LinterContext<'_>, mut node: NodeId, element: ElementId) -> bool {
-    if !ctx
-        .resolved
-        .is_some_and(|resolved| resolved.potentially_mutated_in_scope.contains(&element))
-    {
-        return false;
-    }
-    let Some(body) = parameter_body(ctx, node, element) else {
-        return false;
-    };
-    loop {
-        if node == body {
-            return true;
-        }
-        let Some(parent) = ctx.ast.parent(node) else {
-            return false;
-        };
-        node = parent;
-    }
-}
-
 fn default_is_implicit_null(ctx: &LinterContext<'_>, element: ElementId) -> bool {
     for i in 0..ctx.ast.node_count() {
         let node = NodeId::from_index(i);
@@ -188,6 +167,38 @@ fn default_is_implicit_null(ctx: &LinterContext<'_>, element: ElementId) -> bool
     false
 }
 
+fn visible_to_parameter_visitor(
+    ctx: &LinterContext<'_>,
+    mut node: NodeId,
+    element: ElementId,
+    implicit_null: bool,
+) -> bool {
+    if !ctx
+        .resolved
+        .is_some_and(|resolved| resolved.potentially_mutated_in_scope.contains(&element))
+    {
+        return false;
+    }
+    let Some(body) = parameter_body(ctx, node, element) else {
+        return false;
+    };
+    while let Some(parent) = ctx.ast.parent(node) {
+        if parent == body {
+            return true;
+        }
+        if let Some(assignment) = ctx.ast.cast::<AssignmentExpression>(parent) {
+            let assignment = &ctx.ast[assignment];
+            if parameter_element(ctx, assignment.left_hand_side.raw()) != Some(element)
+                || !implicit_null
+            {
+                return false;
+            }
+        }
+        node = parent;
+    }
+    false
+}
+
 fn earlier_if_null_assignment(ctx: &LinterContext<'_>, node: NodeId, element: ElementId) -> bool {
     (0..ctx.ast.node_count()).any(|i| {
         let other = NodeId::from_index(i);
@@ -199,7 +210,7 @@ fn earlier_if_null_assignment(ctx: &LinterContext<'_>, node: NodeId, element: El
         let n = &ctx.ast[Id::<AssignmentExpression>::from_raw(other)];
         ctx.ast.tokens.lexeme(n.operator) == "??="
             && parameter_element(ctx, n.left_hand_side.raw()) == Some(element)
-            && is_in_parameter_body(ctx, other, element)
+            && visible_to_parameter_visitor(ctx, other, element, true)
     })
 }
 
@@ -210,10 +221,10 @@ fn check(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(element) = parameter_element(ctx, expression) else {
         return;
     };
-    if !is_in_parameter_body(ctx, node, element) {
+    let implicit_null = default_is_implicit_null(ctx, element);
+    if !visible_to_parameter_visitor(ctx, node, element, implicit_null) {
         return;
     }
-    let implicit_null = default_is_implicit_null(ctx, element);
     let op = ctx.ast.tokens.lexeme(operator);
     if matches!(
         ctx.ast.kind(node),
@@ -251,7 +262,9 @@ fn report_assigned_pattern(
         return;
     };
     let element = member::base_element(&resolved.ctx, element);
-    if element.kind() != ElementKind::Parameter || !is_in_parameter_body(ctx, root, element) {
+    if element.kind() != ElementKind::Parameter
+        || !visible_to_parameter_visitor(ctx, root, element, default_is_implicit_null(ctx, element))
+    {
         return;
     }
     let name = resolved.ctx.element_name(element).unwrap_or("");
