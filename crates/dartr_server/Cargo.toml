@@ -14,6 +14,7 @@ dartr_ast_builder.workspace = true
 dartr_parser.workspace = true
 dartr_diagnostics.workspace = true
 dartr_project.workspace = true
+dartr_cli.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true

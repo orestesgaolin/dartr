@@ -38,16 +38,17 @@ use std::sync::mpsc;
 use std::thread;
 
 use dartr_ast_builder::{ParsedUnit, parse_file};
+use dartr_cli::provider::{AnalyzedFile, diagnostics_with_reader};
+use dartr_cli::server::processed_diagnostics;
 use dartr_parser::ExperimentalFlag;
 use dartr_project::{AnalysisContextCollection, CollectionOptions, FileKind, non_dart};
 use dartr_syntax::LineInfo;
-use rayon::prelude::*;
 use serde_json::{Value, json};
 
 use crate::args::ServerOptions;
 use crate::capabilities::{self, ClientCapabilities, DynamicRegistration};
 use crate::features;
-use crate::mapping::{self, ErrorOr, ResponseError, codes};
+use crate::mapping::{self, DiagnosticOptions, ErrorOr, ResponseError, codes};
 use crate::source_edits::apply_changes;
 use crate::transport::{Channel, read_message};
 use crate::uri::{UriError, normalize, path_to_uri, uri_to_path};
@@ -1021,6 +1022,64 @@ impl Server {
         out
     }
 
+    /// The diagnostics of Dart files, as LSP diagnostics: parse diagnostics,
+    /// AST-only lints, ignore-comment handling and the `errors:` processors
+    /// of the analysis options (the same pipeline as `dartr analyze`, with
+    /// the content of open documents). Files without content get an empty
+    /// list.
+    fn dart_diagnostics(
+        &self,
+        paths: &[String],
+        options: &DiagnosticOptions,
+    ) -> Vec<(String, Vec<Value>)> {
+        let Some(collection) = &self.collection else {
+            return Vec::new();
+        };
+        let files: Vec<AnalyzedFile> = paths
+            .iter()
+            .filter(|p| p.ends_with(".dart"))
+            .map(|p| AnalyzedFile {
+                path: p.clone(),
+                // Like Dart, a file outside of all contexts uses the first
+                // context.
+                context: collection
+                    .context_for(p)
+                    .and_then(|c| collection.contexts.iter().position(|x| std::ptr::eq(x, c)))
+                    .unwrap_or(0),
+            })
+            .filter(|f| f.context < collection.contexts.len())
+            .collect();
+        // The server holds `Rc`s: the reader owns a snapshot of the overlays.
+        let overlays: HashMap<&str, &str> = self
+            .overlays
+            .iter()
+            .map(|(p, d)| (p.as_str(), d.content.as_str()))
+            .collect();
+        let reader = |path: &str| match overlays.get(path) {
+            Some(content) => Some(content.to_string()),
+            None => read_file(path),
+        };
+        let results = diagnostics_with_reader(collection, &files, &reader);
+        let mut by_path: HashMap<String, Vec<Value>> = HashMap::new();
+        for file in &results {
+            let values = processed_diagnostics(collection, file)
+                .into_iter()
+                .map(|(d, severity)| {
+                    let mut d = d.clone();
+                    d.severity = severity;
+                    mapping::to_diagnostic(&file.line_info, &file.path, &d, options, &|f| {
+                        read_file(f).map(|c| LineInfo::from_content(&c))
+                    })
+                })
+                .collect();
+            by_path.insert(file.path.clone(), values);
+        }
+        paths
+            .iter()
+            .map(|p| (p.clone(), by_path.remove(p).unwrap_or_default()))
+            .collect()
+    }
+
     /// Analyzes the dirty files: parse diagnostics, then closing labels and
     /// outlines of open files.
     pub fn run_analysis(&mut self) {
@@ -1035,36 +1094,8 @@ impl Server {
         }
         self.begin_progress();
         let dirty: Vec<String> = std::mem::take(&mut self.dirty).into_iter().collect();
-        let contents: Vec<(String, Option<String>, ParseSettings)> = dirty
-            .iter()
-            .map(|p| {
-                (
-                    p.clone(),
-                    self.overlays.get(p).map(|d| d.content.clone()),
-                    self.parse_settings(p),
-                )
-            })
-            .collect();
         let options = self.client.diagnostic_options();
-        let results: Vec<(String, Vec<Value>)> = contents
-            .into_par_iter()
-            .map(|(path, overlay, settings)| {
-                let content = overlay
-                    .or_else(|| read_file(&path))
-                    .unwrap_or_default();
-                let unit = parse_file(&content, &path, settings.version, &settings.experiments);
-                let diagnostics = unit
-                    .diagnostics
-                    .iter()
-                    .map(|d| {
-                        mapping::to_diagnostic(&unit.line_info, &path, d, &options, &|f| {
-                            read_file(f).map(|c| LineInfo::from_content(&c))
-                        })
-                    })
-                    .collect();
-                (path, diagnostics)
-            })
-            .collect();
+        let results: Vec<(String, Vec<Value>)> = self.dart_diagnostics(&dirty, &options);
         for (path, diagnostics) in results {
             // Dart `handleFileResult`: diagnostics only for analyzed files.
             if self.analyzed.contains(&path) {
