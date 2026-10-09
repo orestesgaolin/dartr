@@ -114,7 +114,10 @@ impl InvocationTarget {
             InvocationTarget::ConstructorElement { element, .. } => {
                 // The type parameters are declared by the enclosing class.
                 let base = member::base_element(&ctx, element);
-                let enclosing = ctx.element_data(base).and_then(|d| d.enclosing).unwrap_or(base);
+                let enclosing = ctx
+                    .element_data(base)
+                    .and_then(|d| d.enclosing)
+                    .unwrap_or(base);
                 diag::wrong_number_of_type_arguments_element(
                     enclosing.kind().display_name(),
                     ctx.element_name(enclosing).unwrap_or(""),
@@ -236,7 +239,12 @@ fn compute_explicitly_typed_parameter_set(
     for &p in rv.ast.list(rv.ast[list].parameters) {
         let parts = ast_ext::formal_parameter_parts(rv.ast, p.raw());
         let key = if parts.kind.is_named() {
-            ParamKey::Named(parts.name.map(|t| rv.lexeme(t).to_string()).unwrap_or_default())
+            ParamKey::Named(
+                parts
+                    .name
+                    .map(|t| rv.lexeme(t).to_string())
+                    .unwrap_or_default(),
+            )
         } else {
             let k = ParamKey::Positional(unnamed_parameter_index);
             unnamed_parameter_index += 1;
@@ -309,7 +317,13 @@ pub fn type_argument_types(rv: &ResolverVisitor<'_>, list: Id<TypeArgumentList>)
     rv.ast
         .list(rv.ast[list].arguments)
         .iter()
-        .map(|&t| rv.tables.annotation_type.get(t).copied().unwrap_or(TypeId::DYNAMIC))
+        .map(|&t| {
+            rv.tables
+                .annotation_type
+                .get(t)
+                .copied()
+                .unwrap_or(TypeId::DYNAMIC)
+        })
         .collect()
 }
 
@@ -433,7 +447,11 @@ impl InvocationInferrer {
     }
 
     /// Dart `_computeContextForArgument(parameterType)`.
-    fn compute_context_for_argument(&self, rv: &ResolverVisitor<'_>, parameter_type: TypeId) -> TypeId {
+    fn compute_context_for_argument(
+        &self,
+        rv: &ResolverVisitor<'_>,
+        parameter_type: TypeId,
+    ) -> TypeId {
         let InferrerKind::MethodInvocation(n) = self.kind else {
             return parameter_type;
         };
@@ -484,13 +502,15 @@ impl InvocationInferrer {
         match self.kind {
             // Error reporting for instance creations and dot shorthand
             // constructor invocations is done elsewhere.
-            InferrerKind::InstanceCreation(_) | InferrerKind::DotShorthandConstructorInvocation(_) => {}
+            InferrerKind::InstanceCreation(_)
+            | InferrerKind::DotShorthandConstructorInvocation(_) => {}
             _ => {
                 let Some(target) = self.target else {
                     return;
                 };
                 let count = rv.ast.list(rv.ast[type_argument_list].arguments).len();
-                let d = target.wrong_number_of_type_arguments_error(rv, type_parameter_count, count);
+                let d =
+                    target.wrong_number_of_type_arguments_error(rv, type_parameter_count, count);
                 let d = rv.at(d, type_argument_list);
                 rv.report(d);
             }
@@ -521,43 +541,59 @@ impl InvocationInferrer {
                         rv.tables.type_arg_types.remove(node);
                     }
                 }
-                rv.tables.invoke_type.insert(node, invoke_type.unwrap_or(TypeId::DYNAMIC));
+                rv.tables
+                    .invoke_type
+                    .insert(node, invoke_type.unwrap_or(TypeId::DYNAMIC));
                 invoke_type.map(|t| function_type_parameters(rv, Some(t)))
             }
             InferrerKind::InstanceCreation(n) => {
                 let invoke_type = invoke_type?;
-                let constructed_type = InvocationInferrer::compute_invoke_return_type(rv, Some(invoke_type));
+                let constructed_type =
+                    InvocationInferrer::compute_invoke_return_type(rv, Some(invoke_type));
                 let constructor_name = rv.ast[n].constructor_name;
                 let named_type = rv.ast[constructor_name].type_;
-                rv.tables.annotation_type.insert(named_type, constructed_type);
+                rv.tables
+                    .annotation_type
+                    .insert(named_type, constructed_type);
                 let base = member::base_element(&ctx, rv.element(constructor_name)?);
                 let constructor_element = member::constructor_from2(&ctx, base, constructed_type);
                 rv.set_element(constructor_name, Some(constructor_element));
-                Some(function_type_parameters(rv, Some(member::type_(&ctx, constructor_element))))
+                Some(function_type_parameters(
+                    rv,
+                    Some(member::type_(&ctx, constructor_element)),
+                ))
             }
             InferrerKind::DotShorthandConstructorInvocation(n) => {
                 let invoke_type = invoke_type?;
-                let constructed_type = InvocationInferrer::compute_invoke_return_type(rv, Some(invoke_type));
+                let constructed_type =
+                    InvocationInferrer::compute_invoke_return_type(rv, Some(invoke_type));
                 let constructor_name = rv.ast[n].constructor_name;
                 let element = rv.element(n).or_else(|| rv.element(constructor_name))?;
                 let base = member::base_element(&ctx, element);
                 let constructor_element = member::constructor_from2(&ctx, base, constructed_type);
                 rv.set_element(constructor_name, Some(constructor_element));
-                Some(function_type_parameters(rv, Some(member::type_(&ctx, constructor_element))))
+                Some(function_type_parameters(
+                    rv,
+                    Some(member::type_(&ctx, constructor_element)),
+                ))
             }
             InferrerKind::Annotation {
                 node,
                 constructor_name,
             } => {
                 let invoke_type = invoke_type?;
-                let constructed_type = InvocationInferrer::compute_invoke_return_type(rv, Some(invoke_type));
+                let constructed_type =
+                    InvocationInferrer::compute_invoke_return_type(rv, Some(invoke_type));
                 let base = member::base_element(&ctx, rv.element(node)?);
                 let constructor_element = member::constructor_from2(&ctx, base, constructed_type);
                 if let Some(c) = constructor_name {
                     rv.set_element(c, Some(constructor_element));
                 }
                 rv.set_element(node, Some(constructor_element));
-                Some(function_type_parameters(rv, Some(member::type_(&ctx, constructor_element))))
+                Some(function_type_parameters(
+                    rv,
+                    Some(member::type_(&ctx, constructor_element)),
+                ))
             }
             InferrerKind::Base(_) => invoke_type.map(|t| function_type_parameters(rv, Some(t))),
         }
@@ -643,7 +679,9 @@ impl InvocationInferrer {
         let mut inferrer: Option<GenericInferrer<'_, '_, '_>> = None;
         let mut substitution: Option<MapSubstitution> = None;
         if self.is_generic_inference_disabled(rv) {
-            let type_parameters = raw_type.map(|t| function_type_type_parameters(rv, t)).unwrap_or_default();
+            let type_parameters = raw_type
+                .map(|t| function_type_type_parameters(rv, t))
+                .unwrap_or_default();
             if !type_parameters.is_empty() {
                 let types = vec![TypeId::DYNAMIC; type_parameters.len()];
                 substitution = Some(MapSubstitution::from_pairs(&type_parameters, &types));
@@ -656,7 +694,11 @@ impl InvocationInferrer {
             let type_parameters = raw_type.map(|t| function_type_type_parameters(rv, t));
             let types = match &type_parameters {
                 Some(type_parameters) if arguments.len() != type_parameters.len() => {
-                    self.report_wrong_number_of_type_arguments(rv, type_argument_list, type_parameters.len());
+                    self.report_wrong_number_of_type_arguments(
+                        rv,
+                        type_argument_list,
+                        type_parameters.len(),
+                    );
                     vec![TypeId::DYNAMIC; type_parameters.len()]
                 }
                 _ => {
@@ -664,7 +706,8 @@ impl InvocationInferrer {
                         && self.needs_type_argument_bounds_check()
                     {
                         let substitution = MapSubstitution::from_pairs(type_parameters, &arguments);
-                        let argument_nodes = rv.ast.list(rv.ast[type_argument_list].arguments).to_vec();
+                        let argument_nodes =
+                            rv.ast.list(rv.ast[type_argument_list].arguments).to_vec();
                         for (i, &type_parameter) in type_parameters.iter().enumerate() {
                             let Some(bound) = ctx.type_parameter_bound(type_parameter) else {
                                 continue;
@@ -672,7 +715,10 @@ impl InvocationInferrer {
                             let bound = substitution.substitute_type(&ctx, bound);
                             let type_argument = arguments[i];
                             if !rv.type_system.is_subtype_of(type_argument, bound) {
-                                let name = ctx.element_name(type_parameter.raw()).unwrap_or("").to_string();
+                                let name = ctx
+                                    .element_name(type_parameter.raw())
+                                    .unwrap_or("")
+                                    .to_string();
                                 let d = diag::type_argument_not_matching_bounds(
                                     type_arg(&ctx, type_argument),
                                     &name,
@@ -721,7 +767,10 @@ impl InvocationInferrer {
                 Some(self.node()),
             );
             let preliminary = i.choose_preliminary_types();
-            substitution = Some(MapSubstitution::from_pairs(&fresh_type_parameters, &preliminary));
+            substitution = Some(MapSubstitution::from_pairs(
+                &fresh_type_parameters,
+                &preliminary,
+            ));
             inferrer = Some(i);
             flush_inferrer_diagnostics(rv, &buffer);
         }
@@ -739,8 +788,9 @@ impl InvocationInferrer {
             &buffer,
         );
         if let Some(deferred_function_literals) = deferred_function_literals {
-            let type_variables =
-                raw_type.map(|t| function_type_type_parameters(rv, t)).unwrap_or_default();
+            let type_variables = raw_type
+                .map(|t| function_type_type_parameters(rv, t))
+                .unwrap_or_default();
             let undeferred = compute_undeferred_param_info(
                 raw_type.is_some(),
                 &parameter_map,
@@ -762,8 +812,10 @@ impl InvocationInferrer {
                     flush_inferrer_diagnostics(rv, &buffer);
                     substitution = Some(MapSubstitution::from_pairs(&type_variables, &preliminary));
                 }
-                let stage: Vec<DeferredParamInfo> =
-                    stage.into_iter().map(|i| deferred_function_literals[i].clone()).collect();
+                let stage: Vec<DeferredParamInfo> = stage
+                    .into_iter()
+                    .map(|i| deferred_function_literals[i].clone())
+                    .collect();
                 resolve_deferred_function_literals(
                     rv,
                     self,
@@ -796,7 +848,8 @@ impl InvocationInferrer {
 
         let parameters = self.store_result(rv, type_argument_types.as_deref(), invoke_type);
         if let Some(parameters) = parameters {
-            let corresponding = resolve_arguments_to_parameters(rv, self.argument_list, &parameters, true);
+            let corresponding =
+                resolve_arguments_to_parameters(rv, self.argument_list, &parameters, true);
             record_corresponding_parameters(rv, self.argument_list, &corresponding);
         }
         let return_type = InvocationInferrer::compute_invoke_return_type(rv, invoke_type);
@@ -834,8 +887,10 @@ fn compute_undeferred_param_info(
     if !has_raw_type {
         return Vec::new();
     }
-    let covered: IndexSet<&ParamKey> =
-        deferred_function_literals.iter().map(|d| &d.parameter_key).collect();
+    let covered: IndexSet<&ParamKey> = deferred_function_literals
+        .iter()
+        .map(|d| &d.parameter_key)
+        .collect();
     parameter_map
         .iter()
         .filter(|(k, _)| !covered.contains(k))
@@ -893,12 +948,14 @@ fn visit_arguments<'a>(
         let value = ast_ext::un_parenthesized(rv.ast, expression);
         let parameter = parameter_map.get(&parameter_key).copied();
         if inference_update_1 && let Some(function) = rv.ast.cast::<FunctionExpression>(value) {
-            deferred_function_literals.get_or_insert_with(Vec::new).push(DeferredParamInfo {
-                parameter,
-                value: function,
-                index: i,
-                parameter_key,
-            });
+            deferred_function_literals
+                .get_or_insert_with(Vec::new)
+                .push(DeferredParamInfo {
+                    parameter,
+                    value: function,
+                    index: i,
+                    parameter_key,
+                });
             if let Some(info) = identical_argument_info.as_deref_mut() {
                 info.push(None);
             }
@@ -970,7 +1027,8 @@ fn record_identical_argument_info<'a>(
     let Some(info) = identical_argument_info else {
         return;
     };
-    let (Some(Some(left)), Some(Some(right))) = (info.first().cloned(), info.get(1).cloned()) else {
+    let (Some(Some(left)), Some(Some(right))) = (info.first().cloned(), info.get(1).cloned())
+    else {
         return;
     };
     let Some(parent) = rv.ast.parent(argument_list) else {
@@ -985,7 +1043,8 @@ fn record_identical_argument_info<'a>(
             false,
         )
     });
-    rv.flow_analysis.store_expression_info(Id::from_raw(parent), result);
+    rv.flow_analysis
+        .store_expression_info(Id::from_raw(parent), result);
 }
 
 /// Dart `InvocationInferrer.resolveInvocation()` (the base class, used
@@ -1064,8 +1123,14 @@ pub fn resolve_arguments_to_parameters(
             unnamed_parameters.push(parameter);
             unnamed_parameter_count += 1;
         } else {
-            let name = parameter.name.map(|n| ctx.name_str(n)).unwrap_or("").to_string();
-            named_parameters.get_or_insert_with(IndexMap::new).insert(name, parameter);
+            let name = parameter
+                .name
+                .map(|n| ctx.name_str(n))
+                .unwrap_or("")
+                .to_string();
+            named_parameters
+                .get_or_insert_with(IndexMap::new)
+                .insert(name, parameter);
         }
     }
     let mut unnamed_index = 0;
@@ -1108,7 +1173,9 @@ pub fn resolve_arguments_to_parameters(
         let mut element = named_parameters.as_ref().and_then(|m| m.get(name).copied());
         if element.is_none() {
             element = if name.starts_with('_') && name.len() > 1 {
-                named_parameters.as_ref().and_then(|m| m.get(&name[1..]).copied())
+                named_parameters
+                    .as_ref()
+                    .and_then(|m| m.get(&name[1..]).copied())
             } else {
                 None
             };
@@ -1124,7 +1191,11 @@ pub fn resolve_arguments_to_parameters(
         } else {
             resolved_parameters[i] = element;
         }
-        if !used_names.get_or_insert_with(IndexSet::new).insert(name.clone()) && report {
+        if !used_names
+            .get_or_insert_with(IndexSet::new)
+            .insert(name.clone())
+            && report
+        {
             let d = rv.at_token(diag::duplicate_named_argument(name), name_token);
             rv.report(d);
         }
@@ -1256,7 +1327,9 @@ fn enum_constant_type_display(
     let fragment = *rv.tables.declared_fragment.get(node)?;
     let element = *ctx.fragment_data(fragment)?.element.try_get()?;
     let ty = crate::element_ext::variable_type(&ctx, element);
-    Some(dartr_element::diagnostics::type_display_string(&ctx, ty, true))
+    Some(dartr_element::diagnostics::type_display_string(
+        &ctx, ty, true,
+    ))
 }
 
 // ------------------------------------------------------------------ function literal dependencies
@@ -1309,10 +1382,16 @@ impl FunctionLiteralDependencies {
             let node = nodes.len();
             nodes.push(DepNode::new(Some(deferred_param_index)));
             for v in type_vars_free_in_param_params(rv, param, type_variables) {
-                params_depending_on_type_var.entry(v).or_default().insert(node);
+                params_depending_on_type_var
+                    .entry(v)
+                    .or_default()
+                    .insert(node);
             }
             for v in type_vars_free_in_param_returns(rv, param.parameter.as_ref(), type_variables) {
-                params_constraining_type_var.entry(v).or_default().insert(node);
+                params_constraining_type_var
+                    .entry(v)
+                    .or_default()
+                    .insert(node);
             }
         }
         for param in undeferred_params {
@@ -1321,7 +1400,10 @@ impl FunctionLiteralDependencies {
             // For un-deferred parameters only the free type variables of the
             // returns matter: they are already analyzed.
             for v in type_vars_free_in_param_returns(rv, param.as_ref(), type_variables) {
-                params_constraining_type_var.entry(v).or_default().insert(node);
+                params_constraining_type_var
+                    .entry(v)
+                    .or_default()
+                    .insert(node);
             }
         }
         for type_variable in type_variables {
@@ -1333,7 +1415,9 @@ impl FunctionLiteralDependencies {
                 .map(|s| s.iter().copied().collect())
                 .unwrap_or_default();
             for &node in depending {
-                nodes[node].dependencies.extend(constraining.iter().copied());
+                nodes[node]
+                    .dependencies
+                    .extend(constraining.iter().copied());
             }
         }
         FunctionLiteralDependencies { nodes }
@@ -1452,7 +1536,10 @@ fn type_vars_free_in_param_params(
         if explicitly_typed_parameters.contains(key) {
             continue;
         }
-        if let Some(free) = rv.type_system.get_free_parameters(p.ty, Some(type_variables)) {
+        if let Some(free) = rv
+            .type_system
+            .get_free_parameters(p.ty, Some(type_variables))
+        {
             result.extend(free);
         }
     }

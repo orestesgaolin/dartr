@@ -6,9 +6,7 @@
 //! (`f()` where `f` is a local variable or a getter, `(e)()`, `e.call`
 //! implicitly, `E(o)()` with an extension override).
 
-use dartr_ast::{
-    ExtensionOverride, FunctionExpressionInvocation, Id, MethodInvocation, NodeId,
-};
+use dartr_ast::{ExtensionOverride, FunctionExpressionInvocation, Id, MethodInvocation, NodeId};
 use dartr_diagnostics::diag;
 use dartr_element::{EId, ElemRef, ExtensionElement, InstanceElement, Tag, TypeId, TypeKind};
 use dartr_flow::shared_type::SharedTypeSchemaView;
@@ -16,7 +14,9 @@ use dartr_flow::type_analyzer::TypeAnalyzer;
 use dartr_typesystem::type_algebra::MapSubstitution;
 use dartr_typesystem::{lookup, member};
 
-use crate::invocation_inferrer::{InferrerKind, InvocationInferrer, InvocationTarget, type_argument_types};
+use crate::invocation_inferrer::{
+    InferrerKind, InvocationInferrer, InvocationTarget, type_argument_types,
+};
 use crate::resolver::ResolverVisitor;
 use crate::type_property_resolver::{self, PropertyQuery};
 
@@ -57,7 +57,11 @@ pub fn visit_function_expression_invocation(
 
 /// Dart `FunctionExpressionInvocationResolver.resolve(node,
 /// whyNotPromotedArguments, contextType:)`.
-pub fn resolve(rv: &mut ResolverVisitor<'_>, node: Id<FunctionExpressionInvocation>, context_type: TypeId) {
+pub fn resolve(
+    rv: &mut ResolverVisitor<'_>,
+    node: Id<FunctionExpressionInvocation>,
+    context_type: TypeId,
+) {
     let function = rv.ast[node].function;
 
     if let Some(extension_override) = rv.ast.cast::<ExtensionOverride>(function) {
@@ -73,7 +77,11 @@ pub fn resolve(rv: &mut ResolverVisitor<'_>, node: Id<FunctionExpressionInvocati
 
     let receiver_type = rv.type_system.resolve_to_bound(receiver_type);
     if let TypeKind::Function(_) = rv.ctx.ty(receiver_type) {
-        rv.nullable_dereference_expression(diag::unchecked_invocation_of_nullable_value(), function, None);
+        rv.nullable_dereference_expression(
+            diag::unchecked_invocation_of_nullable_value(),
+            function,
+            None,
+        );
         resolve_with_target(
             rv,
             node,
@@ -143,7 +151,11 @@ pub fn resolve(rv: &mut ResolverVisitor<'_>, node: Id<FunctionExpressionInvocati
 }
 
 /// Dart `_checkForUseOfVoidResult(expression, type)`.
-fn check_for_use_of_void_result(rv: &mut ResolverVisitor<'_>, expression: NodeId, ty: TypeId) -> bool {
+fn check_for_use_of_void_result(
+    rv: &mut ResolverVisitor<'_>,
+    expression: NodeId,
+    ty: TypeId,
+) -> bool {
     if !matches!(rv.ctx.ty(ty), TypeKind::Void) {
         return false;
     }
@@ -194,7 +206,10 @@ fn resolve_receiver_extension_override(
 
     if member::is_static(&rv.ctx, call_element) {
         let argument_list = rv.ast[node].argument_list;
-        let d = rv.at(diag::extension_override_access_to_static_member(), argument_list);
+        let d = rv.at(
+            diag::extension_override_access_to_static_member(),
+            argument_list,
+        );
         rv.report(d);
     }
 
@@ -227,7 +242,10 @@ fn unresolved(
 
 /// Dart `_setExplicitTypeArgumentTypes(node)`: inference cannot be done,
 /// but the type argument types are still filled.
-fn set_explicit_type_argument_types(rv: &mut ResolverVisitor<'_>, node: Id<FunctionExpressionInvocation>) {
+fn set_explicit_type_argument_types(
+    rv: &mut ResolverVisitor<'_>,
+    node: Id<FunctionExpressionInvocation>,
+) {
     let types = match rv.ast[node].type_arguments {
         Some(list) => type_argument_types(rv, list),
         None => Vec::new(),
@@ -247,7 +265,10 @@ pub(crate) fn get_override_member(
     name: &str,
 ) -> (Option<ElemRef>, Option<ElemRef>) {
     let ctx = rv.ctx;
-    let Some(element) = rv.base_element(node).and_then(|e| e.cast::<ExtensionElement>()) else {
+    let Some(element) = rv
+        .base_element(node)
+        .and_then(|e| e.cast::<ExtensionElement>())
+    else {
         return (None, None);
     };
     let instance: EId<InstanceElement> = EId::from_raw(element.raw());
@@ -280,6 +301,7 @@ pub(crate) fn get_override_member(
     } else {
         MapSubstitution::empty()
     };
-    let substitute = |e: dartr_element::ElementId| member::substitute(&ctx, ElemRef::Base(e), &substitution);
+    let substitute =
+        |e: dartr_element::ElementId| member::substitute(&ctx, ElemRef::Base(e), &substitution);
     (getter.map(substitute), setter.map(substitute))
 }

@@ -6,8 +6,8 @@
 
 use dartr_ast::{DotShorthandInvocation, Expression, Id, MethodInvocation, SimpleIdentifier};
 use dartr_element::{
-    EId, ElemRef, ElementId, InterfaceElement, LibraryElement, Nullability, TypeAliasElement, TypeId,
-    TypeKind, TypeParameterElement,
+    EId, ElemRef, ElementId, InterfaceElement, LibraryElement, Nullability, TypeAliasElement,
+    TypeId, TypeKind, TypeParameterElement,
 };
 use dartr_typesystem::{TypeExt, lookup, member};
 
@@ -43,7 +43,13 @@ impl ConstructorElementToInfer {
         }
         let parameters = function_type_parameters(rv, Some(ty));
         let return_type = member::return_type(&ctx, self.element);
-        ctx.function_type(&self.type_parameters, &parameters, return_type, Nullability::None, None)
+        ctx.function_type(
+            &self.type_parameters,
+            &parameters,
+            return_type,
+            Nullability::None,
+            None,
+        )
     }
 }
 
@@ -63,7 +69,8 @@ pub fn constructor_element_to_infer(
     if let Some(interface) = type_element.cast::<InterfaceElement>() {
         type_parameters = ctx.interface_type_parameters(interface).to_vec();
         raw_element = match constructor_name {
-            None => lookup::get_named_constructor(&ctx, interface, "new").map(|c| ElemRef::Base(c.raw())),
+            None => lookup::get_named_constructor(&ctx, interface, "new")
+                .map(|c| ElemRef::Base(c.raw())),
             Some(name) => lookup::get_named_constructor(&ctx, interface, name)
                 .map(|c| ElemRef::Base(c.raw()))
                 .filter(|&c| member::is_accessible_in(&ctx, c, defining_library)),
@@ -108,7 +115,9 @@ pub fn infer_tear_off(
         let list = rv.ctx.intern_list(&type_arguments);
         rv.tables.type_arg_types.insert(identifier, list);
         if !type_arguments.is_empty() {
-            return rv.ctx.instantiate_function_type(tear_off_type, &type_arguments);
+            return rv
+                .ctx
+                .instantiate_function_type(tear_off_type, &type_arguments);
         }
     }
     tear_off_type

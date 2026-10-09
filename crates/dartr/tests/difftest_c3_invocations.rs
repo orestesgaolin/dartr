@@ -17,7 +17,11 @@ use dartr_difftest::{Options, run};
 #[test]
 fn invocations_match_the_analyzer_on_ported_resolution_tests() {
     let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/resolved_c3");
-    let kinds = ["MethodInvocation", "FunctionExpressionInvocation", "SimpleIdentifier"];
+    let kinds = [
+        "MethodInvocation",
+        "FunctionExpressionInvocation",
+        "SimpleIdentifier",
+    ];
     let options = Options {
         mode: "resolved".to_string(),
         inputs: vec![fixtures],

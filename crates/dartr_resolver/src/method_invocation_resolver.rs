@@ -16,15 +16,17 @@
 
 use dartr_ast::{
     Annotation, AnonymousMethodBody, AnonymousMethodInvocation, ClassDeclaration, CompilationUnit,
-    ConstructorDeclaration, ConstructorInitializer, EnumDeclaration, Expression, ExtensionDeclaration,
-    ExtensionOverride, ExtensionTypeDeclaration, FieldDeclaration, FunctionExpressionInvocation, Id,
-    Identifier, MethodDeclaration, MethodInvocation, MixinDeclaration, NodeId, PrefixedIdentifier,
-    PropertyAccess, SimpleIdentifier, SuperExpression, TypeLiteral,
+    ConstructorDeclaration, ConstructorInitializer, EnumDeclaration, Expression,
+    ExtensionDeclaration, ExtensionOverride, ExtensionTypeDeclaration, FieldDeclaration,
+    FunctionExpressionInvocation, Id, Identifier, MethodDeclaration, MethodInvocation,
+    MixinDeclaration, NodeId, PrefixedIdentifier, PropertyAccess, SimpleIdentifier,
+    SuperExpression, TypeLiteral,
 };
 use dartr_diagnostics::diag;
 use dartr_element::{
     AnyElement, EId, ElemRef, ElementId, ExecutableElement, ExtensionElement, InstanceElement,
-    InterfaceElement, PrefixElement, PropertyAccessorElement, Tag, TypeId, TypeKind, VariableElement,
+    InterfaceElement, PrefixElement, PropertyAccessorElement, Tag, TypeId, TypeKind,
+    VariableElement,
 };
 use dartr_flow::flow_analysis::{FlowAnalysis, PropertyTarget};
 use dartr_flow::null_shorting::TypeAnalysisNullShortingInterface;
@@ -37,12 +39,18 @@ use dartr_typesystem::{TypeExt, lookup, member};
 use crate::ast_ext;
 use crate::function_expression_invocation_resolver;
 use crate::invocation_inference_helper;
-use crate::invocation_inferrer::{InferrerKind, InvocationInferrer, InvocationTarget, type_argument_types};
+use crate::invocation_inferrer::{
+    InferrerKind, InvocationInferrer, InvocationTarget, type_argument_types,
+};
 use crate::resolver::ResolverVisitor;
 use crate::type_property_resolver::{self, PropertyQuery};
 
 /// Dart `ResolverVisitor.visitMethodInvocation(node, contextType:)`.
-pub fn visit_method_invocation(rv: &mut ResolverVisitor<'_>, node: Id<MethodInvocation>, context_type: TypeId) {
+pub fn visit_method_invocation(
+    rv: &mut ResolverVisitor<'_>,
+    node: Id<MethodInvocation>,
+    context_type: TypeId,
+) {
     // If the node is a dot shorthand, cache the context type for resolution.
     let is_dot_shorthand = rv.rt.is_dot_shorthand(node.raw());
     if is_dot_shorthand {
@@ -52,7 +60,14 @@ pub fn visit_method_invocation(rv: &mut ResolverVisitor<'_>, node: Id<MethodInvo
     rv.check_unreachable_node(node);
     let mut target = rv.ast[node].target;
     if let Some(t) = target {
-        TypeAnalyzer::analyze_expression(rv, t, SharedTypeSchemaView::new(TypeId::UNKNOWN), true, false, false);
+        TypeAnalyzer::analyze_expression(
+            rv,
+            t,
+            SharedTypeSchemaView::new(TypeId::UNKNOWN),
+            true,
+            false,
+            false,
+        );
         target = rv.pop_rewrite();
     }
 
@@ -78,7 +93,10 @@ pub fn visit_method_invocation(rv: &mut ResolverVisitor<'_>, node: Id<MethodInvo
 }
 
 /// Dart `MethodInvocationImpl.isNullAware`.
-pub fn method_invocation_is_null_aware(rv: &ResolverVisitor<'_>, node: Id<MethodInvocation>) -> bool {
+pub fn method_invocation_is_null_aware(
+    rv: &ResolverVisitor<'_>,
+    node: Id<MethodInvocation>,
+) -> bool {
     let ast = &*rv.ast;
     if ast_ext::method_invocation_is_cascaded(ast, node) {
         // Dart `_ancestorCascade.isNullAware`: the first section starts with
@@ -103,7 +121,10 @@ pub fn method_invocation_is_null_aware(rv: &ResolverVisitor<'_>, node: Id<Method
 }
 
 /// Dart `ResolverVisitor._startNullAwareAccess(target)`.
-pub(crate) fn start_null_aware_access(rv: &mut ResolverVisitor<'_>, target: Option<Id<Expression>>) {
+pub(crate) fn start_null_aware_access(
+    rv: &mut ResolverVisitor<'_>,
+    target: Option<Id<Expression>>,
+) {
     if rv.flow_analysis.flow.is_none() {
         return;
     }
@@ -114,7 +135,9 @@ pub(crate) fn start_null_aware_access(rv: &mut ResolverVisitor<'_>, target: Opti
     };
     // `?.` to access static methods is equivalent to `.`.
     if let Some(s) = rv.ast.cast::<SimpleIdentifier>(target)
-        && rv.base_element(s).is_some_and(|e| e.is::<InterfaceElement>())
+        && rv
+            .base_element(s)
+            .is_some_and(|e| e.is::<InterfaceElement>())
     {
         return;
     }
@@ -238,7 +261,10 @@ impl Resolver<'_> {
                 // function type literal (which can only be a type
                 // instantiation of a type alias of a function type).
                 let alias_name = rv.ast.qualified_name(named_type);
-                let d = rv.at(diag::undefined_method_on_function_type(self.name, &alias_name), self.name_node);
+                let d = rv.at(
+                    diag::undefined_method_on_function_type(self.name, &alias_name),
+                    self.name_node,
+                );
                 rv.report(d);
                 self.set_invalid_type_resolution(rv, true);
                 return;
@@ -252,7 +278,12 @@ impl Resolver<'_> {
 
     /// Dart `_reportInstanceAccessToStaticMember(nameNode, element,
     /// nullReceiver)`.
-    fn report_instance_access_to_static_member(&self, rv: &mut ResolverVisitor<'_>, element: ElemRef, null_receiver: bool) {
+    fn report_instance_access_to_static_member(
+        &self,
+        rv: &mut ResolverVisitor<'_>,
+        element: ElemRef,
+        null_receiver: bool,
+    ) {
         let ctx = rv.ctx;
         let base = member::base_element(&ctx, element);
         let Some(enclosing) = ctx.element_data(base).and_then(|d| d.enclosing) else {
@@ -266,7 +297,10 @@ impl Resolver<'_> {
                 diag::unqualified_reference_to_non_local_static_member(&name)
             }
         } else if enclosing.tag() == Tag::Extension && ctx.element_name(enclosing).is_none() {
-            diag::instance_access_to_static_member_of_unnamed_extension(self.name, base.kind().display_name())
+            diag::instance_access_to_static_member_of_unnamed_extension(
+                self.name,
+                base.kind().display_name(),
+            )
         } else {
             let enclosing_kind = if enclosing.tag() == Tag::Mixin {
                 "mixin"
@@ -291,9 +325,16 @@ impl Resolver<'_> {
     }
 
     /// Dart `_reportStaticAccessToInstanceMember(element, nameNode)`.
-    fn report_static_access_to_instance_member(&self, rv: &mut ResolverVisitor<'_>, element: ElemRef) {
+    fn report_static_access_to_instance_member(
+        &self,
+        rv: &mut ResolverVisitor<'_>,
+        element: ElemRef,
+    ) {
         if !member::is_static(&rv.ctx, element) {
-            let d = rv.at(diag::static_access_to_instance_member(self.name), self.name_node);
+            let d = rv.at(
+                diag::static_access_to_instance_member(self.name),
+                self.name_node,
+            );
             rv.report(d);
         }
     }
@@ -309,17 +350,31 @@ impl Resolver<'_> {
     }
 
     /// Dart `_reportUndefinedMethodOrNew(receiver, methodName)`.
-    fn report_undefined_method_or_new(&self, rv: &mut ResolverVisitor<'_>, receiver: EId<InterfaceElement>) {
-        let receiver_name = rv.ctx.element_name(receiver.raw()).unwrap_or("").to_string();
+    fn report_undefined_method_or_new(
+        &self,
+        rv: &mut ResolverVisitor<'_>,
+        receiver: EId<InterfaceElement>,
+    ) {
+        let receiver_name = rv
+            .ctx
+            .element_name(receiver.raw())
+            .unwrap_or("")
+            .to_string();
         if self.name == "new" {
             // Attempting to invoke the unnamed constructor via `C.new(`.
             if rv.is_constructor_tearoffs_enabled() {
-                let d = rv.at(diag::new_with_undefined_constructor_default(&receiver_name), self.name_node);
+                let d = rv.at(
+                    diag::new_with_undefined_constructor_default(&receiver_name),
+                    self.name_node,
+                );
                 rv.report(d);
             }
             // Otherwise the parser reports `experimentNotEnabled`.
         } else {
-            let d = rv.at(diag::undefined_method(self.name, &receiver_name), self.name_node);
+            let d = rv.at(
+                diag::undefined_method(self.name, &receiver_name),
+                self.name_node,
+            );
             rv.report(d);
         }
     }
@@ -328,7 +383,11 @@ impl Resolver<'_> {
 
     /// Dart `_resolveExtensionMember(...)`: an invocation of a static member
     /// of a named extension (`E.foo()`).
-    fn resolve_extension_member(&self, rv: &mut ResolverVisitor<'_>, extension: EId<ExtensionElement>) {
+    fn resolve_extension_member(
+        &self,
+        rv: &mut ResolverVisitor<'_>,
+        extension: EId<ExtensionElement>,
+    ) {
         let ctx = rv.ctx;
         let instance: EId<InstanceElement> = EId::from_raw(extension.raw());
         if let Some(getter) = lookup::get_getter(&ctx, instance, self.name) {
@@ -352,14 +411,23 @@ impl Resolver<'_> {
         self.set_invalid_type_resolution(rv, true);
         // Only called for named extensions.
         let extension_name = ctx.element_name(extension.raw()).unwrap_or("").to_string();
-        let d = rv.at(diag::undefined_extension_method(self.name, &extension_name), self.name_node);
+        let d = rv.at(
+            diag::undefined_extension_method(self.name, &extension_name),
+            self.name_node,
+        );
         rv.report(d);
     }
 
     /// Dart `_resolveExtensionOverride(...)`.
-    fn resolve_extension_override(&self, rv: &mut ResolverVisitor<'_>, override_: Id<ExtensionOverride>) {
+    fn resolve_extension_override(
+        &self,
+        rv: &mut ResolverVisitor<'_>,
+        override_: Id<ExtensionOverride>,
+    ) {
         let ctx = rv.ctx;
-        let member = function_expression_invocation_resolver::get_override_member(rv, override_, self.name).0;
+        let member =
+            function_expression_invocation_resolver::get_override_member(rv, override_, self.name)
+                .0;
 
         let Some(member) = member else {
             self.set_invalid_type_resolution(rv, true);
@@ -369,20 +437,29 @@ impl Resolver<'_> {
                 .and_then(|e| ctx.element_name(e))
                 .unwrap_or("")
                 .to_string();
-            let d = rv.at(diag::undefined_extension_method(self.name, &extension_name), self.name_node);
+            let d = rv.at(
+                diag::undefined_extension_method(self.name, &extension_name),
+                self.name_node,
+            );
             rv.report(d);
             return;
         };
 
         if member::is_static(&ctx, member) {
-            let d = rv.at(diag::extension_override_access_to_static_member(), self.name_node);
+            let d = rv.at(
+                diag::extension_override_access_to_static_member(),
+                self.name_node,
+            );
             rv.report(d);
         }
 
         if ast_ext::method_invocation_is_cascaded(rv.ast, self.node) {
             // Report this error and recover by treating it like a
             // non-cascade.
-            let d = rv.at_token(diag::extension_override_with_cascade(), rv.ast[override_].name);
+            let d = rv.at_token(
+                diag::extension_override_with_cascade(),
+                rv.ast[override_].name,
+            );
             rv.report(d);
         }
 
@@ -399,13 +476,18 @@ impl Resolver<'_> {
     }
 
     /// Dart `_resolveReceiverDynamicBounded(node, receiverType, ...)`.
-    fn resolve_receiver_dynamic_bounded(&self, rv: &mut ResolverVisitor<'_>, receiver_type: TypeId) {
+    fn resolve_receiver_dynamic_bounded(
+        &self,
+        rv: &mut ResolverVisitor<'_>,
+        receiver_type: TypeId,
+    ) {
         let ctx = rv.ctx;
         let node = self.node;
         let name_node = self.name_node;
 
         let object_element: EId<InstanceElement> = EId::from_raw(ctx.tp.object_element().raw());
-        let target_element = lookup::get_method(&ctx, object_element, self.name).map(|m| base(m.raw()));
+        let target_element =
+            lookup::get_method(&ctx, object_element, self.name).map(|m| base(m.raw()));
 
         let mut target = None;
         if let TypeKind::Invalid = ctx.ty(receiver_type) {
@@ -443,15 +525,24 @@ impl Resolver<'_> {
 
     /// Dart `_hasMatchingObjectMethod(target, arguments)`.
     fn has_matching_object_method(&self, rv: &ResolverVisitor<'_>, target: ElemRef) -> bool {
-        let arguments = rv.ast.list(rv.ast[rv.ast[self.node].argument_list].arguments);
+        let arguments = rv
+            .ast
+            .list(rv.ast[rv.ast[self.node].argument_list].arguments);
         let parameter_count = member::formal_parameters(&rv.ctx, target).len();
         arguments.len() == parameter_count
-            && !arguments.iter().any(|&a| rv.ast.is::<dartr_ast::NamedArgument>(a))
+            && !arguments
+                .iter()
+                .any(|&a| rv.ast.is::<dartr_ast::NamedArgument>(a))
     }
 
     /// Dart `_resolveReceiverNever(...)`: an instance invocation on an
     /// expression of type `Never` or `Never?`.
-    fn resolve_receiver_never(&self, rv: &mut ResolverVisitor<'_>, receiver: Id<Expression>, receiver_type: TypeId) {
+    fn resolve_receiver_never(
+        &self,
+        rv: &mut ResolverVisitor<'_>,
+        receiver: Id<Expression>,
+        receiver_type: TypeId,
+    ) {
         let ctx = rv.ctx;
         self.set_explicit_type_argument_types(rv);
 
@@ -462,7 +553,11 @@ impl Resolver<'_> {
                 let object_member = base(object_member.raw());
                 rv.set_element(self.name_node, Some(object_member));
                 let ty = member::type_(&ctx, object_member);
-                self.set_resolution(rv, ty, Some(InvocationTarget::ExecutableElement(object_member)));
+                self.set_resolution(
+                    rv,
+                    ty,
+                    Some(InvocationTarget::ExecutableElement(object_member)),
+                );
             } else if method_invocation_is_null_aware(rv, self.node) {
                 let never_nullable = ctx.never_type(dartr_element::Nullability::Question);
                 self.resolve_unreachable_invocation(rv, receiver, never_nullable, false);
@@ -509,7 +604,12 @@ impl Resolver<'_> {
     fn resolve_receiver_null(&self, rv: &mut ResolverVisitor<'_>) {
         let ctx = rv.ctx;
         let name_node = self.name_node;
-        let scope_lookup_result = rv.rt.scope_lookup_result.get(name_node).copied().unwrap_or_default();
+        let scope_lookup_result = rv
+            .rt
+            .scope_lookup_result
+            .get(name_node)
+            .copied()
+            .unwrap_or_default();
         // Dart `reportDeprecatedExportUseGetter(...)` (wave D).
 
         if let Some(mut element) = scope_lookup_result.getter {
@@ -529,20 +629,27 @@ impl Resolver<'_> {
             }
             if element.is::<ExecutableElement>() {
                 let ty = member::type_(&ctx, base(element));
-                self.set_resolution(rv, ty, Some(InvocationTarget::ExecutableElement(base(element))));
+                self.set_resolution(
+                    rv,
+                    ty,
+                    Some(InvocationTarget::ExecutableElement(base(element))),
+                );
                 return;
             }
             if element.is::<VariableElement>() {
                 rv.check_read_of_not_assigned_local_variable(name_node, Some(base(element)));
-                let target_type = rv
-                    .flow_analysis
-                    .local_variable_type(&ctx, name_node.upcast(), element, true);
+                let target_type =
+                    rv.flow_analysis
+                        .local_variable_type(&ctx, name_node.upcast(), element, true);
                 self.rewrite_as_function_expression_invocation(rv, target_type, false);
                 return;
             }
             if element.tag() == Tag::Prefix {
                 self.set_invalid_type_resolution(rv, true);
-                let d = rv.at(diag::prefix_identifier_not_followed_by_dot(self.name), name_node);
+                let d = rv.at(
+                    diag::prefix_identifier_not_followed_by_dot(self.name),
+                    name_node,
+                );
                 rv.report(d);
                 return;
             }
@@ -563,17 +670,23 @@ impl Resolver<'_> {
             // in an extension, or static is the accessed property
             // (erroneously).
             let enclosing = ctx.element_data(element).and_then(|d| d.enclosing);
-            let no_getter_is_possible = enclosing.is_some_and(|e| e.tag() == Tag::Library || e.tag() == Tag::Extension)
+            let no_getter_is_possible = enclosing
+                .is_some_and(|e| e.tag() == Tag::Library || e.tag() == Tag::Extension)
                 || (element.is::<ExecutableElement>() && member::is_static(&ctx, base(element)));
             if no_getter_is_possible {
                 rv.set_element(name_node, Some(base(element)));
                 self.set_invalid_type_resolution(rv, false);
                 let receiver_type_name = match *ctx.ty(receiver_type) {
-                    TypeKind::Interface { element, .. } => ctx.element_name(element.raw()).unwrap_or("").to_string(),
+                    TypeKind::Interface { element, .. } => {
+                        ctx.element_name(element.raw()).unwrap_or("").to_string()
+                    }
                     TypeKind::Function(_) => "Function".to_string(),
                     _ => "<unknown>".to_string(),
                 };
-                let d = rv.at(diag::undefined_method(self.name, &receiver_type_name), name_node);
+                let d = rv.at(
+                    diag::undefined_method(self.name, &receiver_type_name),
+                    name_node,
+                );
                 rv.report(d);
                 return;
             }
@@ -663,21 +776,35 @@ impl Resolver<'_> {
             let ty = member::type_(&ctx, target);
             self.set_resolution(rv, ty, Some(InvocationTarget::ExecutableElement(target)));
             let kind = member::base_element(&ctx, target).kind().display_name();
-            let d = rv.at(diag::abstract_super_member_reference(kind, self.name), self.name_node);
+            let d = rv.at(
+                diag::abstract_super_member_reference(kind, self.name),
+                self.name_node,
+            );
             rv.report(d);
             return;
         }
 
         // Nothing helps, there is no target at all.
         self.set_invalid_type_resolution(rv, true);
-        let class_name = ctx.element_name(enclosing_class.raw()).unwrap_or("").to_string();
-        let d = rv.at(diag::undefined_super_method(self.name, &class_name), self.name_node);
+        let class_name = ctx
+            .element_name(enclosing_class.raw())
+            .unwrap_or("")
+            .to_string();
+        let d = rv.at(
+            diag::undefined_super_method(self.name, &class_name),
+            self.name_node,
+        );
         rv.report(d);
     }
 
     /// Dart `_resolveReceiverType(...)`: an instance invocation on a
     /// receiver of [receiver_type] (`None` [receiver]: implicit `this`).
-    fn resolve_receiver_type(&self, rv: &mut ResolverVisitor<'_>, receiver: Option<Id<Expression>>, receiver_type: TypeId) {
+    fn resolve_receiver_type(
+        &self,
+        rv: &mut ResolverVisitor<'_>,
+        receiver: Option<Id<Expression>>,
+        receiver_type: TypeId,
+    ) {
         let ctx = rv.ctx;
         let name_node = self.name_node;
         let result = type_property_resolver::resolve(
@@ -698,7 +825,9 @@ impl Resolver<'_> {
             self.set_resolution(
                 rv,
                 call_function_type,
-                Some(InvocationTarget::FunctionTypedExpression(call_function_type)),
+                Some(InvocationTarget::FunctionTypedExpression(
+                    call_function_type,
+                )),
             );
             // Erase the resolution that `_setResolution()` sets.
             rv.set_element(name_node, None);
@@ -753,7 +882,10 @@ impl Resolver<'_> {
         };
 
         if !ast_ext::token_is_synthetic(rv.ast, rv.ast[name_node].token) {
-            let d = rv.at(diag::undefined_method(self.name, &receiver_class_name), name_node);
+            let d = rv.at(
+                diag::undefined_method(self.name, &receiver_class_name),
+                name_node,
+            );
             rv.report(d);
         }
     }
@@ -761,7 +893,11 @@ impl Resolver<'_> {
     /// Dart `_resolveReceiverTypeLiteral(...)`: an invocation with a type
     /// literal target (a static method, or a method of `Type` in a
     /// cascade).
-    fn resolve_receiver_type_literal(&self, rv: &mut ResolverVisitor<'_>, mut receiver: EId<InterfaceElement>) {
+    fn resolve_receiver_type_literal(
+        &self,
+        rv: &mut ResolverVisitor<'_>,
+        mut receiver: EId<InterfaceElement>,
+    ) {
         let ctx = rv.ctx;
         if ast_ext::method_invocation_is_cascaded(rv.ast, self.node)
             && let Some(type_element) = ctx.interface_element(ctx.tp.type_type())
@@ -793,7 +929,11 @@ impl Resolver<'_> {
 
     /// Dart `_resolveElement(classElement, propertyName)`: the getter (the
     /// setter in a setter context) or method [name] of [class_element].
-    fn resolve_element(&self, rv: &ResolverVisitor<'_>, class_element: EId<InterfaceElement>) -> Option<ElementId> {
+    fn resolve_element(
+        &self,
+        rv: &ResolverVisitor<'_>,
+        class_element: EId<InterfaceElement>,
+    ) -> Option<ElementId> {
         let ctx = rv.ctx;
         let instance: EId<InstanceElement> = EId::from_raw(class_element.raw());
         let mut element = None;
@@ -865,7 +1005,8 @@ impl Resolver<'_> {
                         element,
                         SharedTypeView::new(getter_return_type),
                     );
-                    rv.flow_analysis.store_expression_info(function_expression, expression_info);
+                    rv.flow_analysis
+                        .store_expression_info(function_expression, expression_info);
                     if let Some(t) = wrapped_promoted_type {
                         target_type = t.unwrap_type_view();
                     }
@@ -898,7 +1039,9 @@ impl Resolver<'_> {
                     let property_target = if rv.ast.is::<SuperExpression>(target) {
                         PropertyTarget::Super
                     } else {
-                        PropertyTarget::Expression(rv.flow_analysis.get_expression_info(Some(target)))
+                        PropertyTarget::Expression(
+                            rv.flow_analysis.get_expression_info(Some(target)),
+                        )
                     };
                     let element = rv.element(method_name);
                     let flow = rv.flow_analysis.flow.as_mut().expect("flow");
@@ -908,7 +1051,8 @@ impl Resolver<'_> {
                         element,
                         SharedTypeView::new(getter_return_type),
                     );
-                    rv.flow_analysis.store_expression_info(function_expression, expression_info);
+                    rv.flow_analysis
+                        .store_expression_info(function_expression, expression_info);
                     if let Some(t) = wrapped_promoted_type {
                         target_type = t.unwrap_type_view();
                     }
@@ -921,7 +1065,8 @@ impl Resolver<'_> {
             rv.set_static_type(function_expression, target_type);
         }
 
-        let (type_arguments, argument_list) = (rv.ast[node].type_arguments, rv.ast[node].argument_list);
+        let (type_arguments, argument_list) =
+            (rv.ast[node].type_arguments, rv.ast[node].argument_list);
         let invocation = rv.ast.add(FunctionExpressionInvocation {
             function: function_expression,
             type_arguments,
@@ -935,7 +1080,11 @@ impl Resolver<'_> {
     // ------------------------------------------------------------ results
 
     /// Dart `_setDynamicTypeResolution(node, setNameTypeToDynamic:, ...)`.
-    fn set_dynamic_type_resolution(&self, rv: &mut ResolverVisitor<'_>, set_name_type_to_dynamic: bool) {
+    fn set_dynamic_type_resolution(
+        &self,
+        rv: &mut ResolverVisitor<'_>,
+        set_name_type_to_dynamic: bool,
+    ) {
         if set_name_type_to_dynamic {
             rv.set_static_type(self.name_node, TypeId::DYNAMIC);
         }
@@ -969,7 +1118,11 @@ impl Resolver<'_> {
     }
 
     /// Dart `_setInvalidTypeResolution(node, setNameTypeToDynamic:, ...)`.
-    fn set_invalid_type_resolution(&self, rv: &mut ResolverVisitor<'_>, set_name_type_to_dynamic: bool) {
+    fn set_invalid_type_resolution(
+        &self,
+        rv: &mut ResolverVisitor<'_>,
+        set_name_type_to_dynamic: bool,
+    ) {
         if set_name_type_to_dynamic {
             rv.set_static_type(self.name_node, TypeId::INVALID);
         }
@@ -981,7 +1134,12 @@ impl Resolver<'_> {
 
     /// Dart `_setResolution(node, type, whyNotPromotedArguments,
     /// contextType:, target:)`.
-    fn set_resolution(&self, rv: &mut ResolverVisitor<'_>, ty: TypeId, target: Option<InvocationTarget>) {
+    fn set_resolution(
+        &self,
+        rv: &mut ResolverVisitor<'_>,
+        ty: TypeId,
+        target: Option<InvocationTarget>,
+    ) {
         // Dart: "We need this for StaticTypeAnalyzer to run inference."
         rv.set_static_type(self.name_node, ty);
 
@@ -992,7 +1150,12 @@ impl Resolver<'_> {
 
         match rv.ctx.ty(ty) {
             TypeKind::Function(_) => {
-                invocation_inference_helper::resolve_method_invocation(rv, self.node, self.context_type, target);
+                invocation_inference_helper::resolve_method_invocation(
+                    rv,
+                    self.node,
+                    self.context_type,
+                    target,
+                );
             }
             TypeKind::Void => {
                 self.set_invalid_type_resolution(rv, true);
@@ -1013,7 +1176,9 @@ fn identifier_element(rv: &ResolverVisitor<'_>, expression: Id<Expression>) -> O
         return None;
     }
     if let Some(p) = rv.ast.cast::<PrefixedIdentifier>(expression) {
-        return rv.base_element(p).or_else(|| rv.base_element(rv.ast[p].identifier));
+        return rv
+            .base_element(p)
+            .or_else(|| rv.base_element(rv.ast[p].identifier));
     }
     rv.base_element(expression)
 }
@@ -1047,7 +1212,10 @@ pub(crate) enum SuperContext {
 }
 
 /// Dart `SuperContext.of(expression)`.
-pub(crate) fn super_context_of(rv: &ResolverVisitor<'_>, expression: Id<SuperExpression>) -> SuperContext {
+pub(crate) fn super_context_of(
+    rv: &ResolverVisitor<'_>,
+    expression: Id<SuperExpression>,
+) -> SuperContext {
     let ast = &*rv.ast;
     let mut current: Option<NodeId> = Some(expression.raw());
     while let Some(node) = current {
