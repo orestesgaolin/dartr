@@ -319,6 +319,7 @@ dependencies = [
  "dartr_ast_builder",
  "dartr_element",
  "dartr_link",
+ "dartr_lints",
  "dartr_parser",
  "dartr_project",
  "dartr_resolver",
@@ -327,6 +328,7 @@ dependencies = [
  "indexmap",
  "md-5",
  "rayon",
+ "serde_json",
 ]
 
 [[package]]
@@ -402,9 +404,13 @@ version = "0.1.0"
 dependencies = [
  "dartr_ast",
  "dartr_ast_builder",
+ "dartr_constant",
  "dartr_diagnostics",
+ "dartr_element",
+ "dartr_link",
  "dartr_parser",
  "dartr_syntax",
+ "dartr_typesystem",
  "indexmap",
  "serde_json",
 ]

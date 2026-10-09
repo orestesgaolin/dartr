@@ -10,6 +10,7 @@ use dartr_syntax::TokenId;
 use indexmap::{IndexMap, IndexSet};
 
 mod analysis_rule_timers;
+pub mod constants;
 mod ignore_info;
 pub mod rules;
 pub use analysis_rule_timers::{AnalysisRuleTimers, RuleTimer};
@@ -20,11 +21,29 @@ mod subscriptions;
 pub use dartr_parser::experimental_flags::ExperimentalFlag;
 pub use registry::*;
 pub use rule_metadata::ALL_RULES;
+pub type LintDiagnostic = Diagnostic;
 #[derive(Clone, Copy)]
 pub struct RuleContextUnit<'a> {
     pub parsed: &'a ParsedUnit,
     pub source: &'a str,
     pub path: &'a str,
+}
+/// Semantic results of the visited unit. Its local arena must remain alive.
+#[derive(Clone, Copy)]
+pub struct ResolvedLintContext<'a> {
+    pub ctx: dartr_element::Ctx<'a>,
+    pub tables: &'a dartr_element::ResolutionTables,
+    pub library: dartr_element::EId<dartr_element::LibraryElement>,
+}
+/// A resolved AST and its original parse metadata. Resolution can rewrite nodes.
+#[derive(Clone, Copy)]
+pub struct ResolvedRuleContextUnit<'a> {
+    pub parsed: &'a ParsedUnit,
+    pub ast: &'a Ast,
+    pub unit: NodeId,
+    pub source: &'a str,
+    pub path: &'a str,
+    pub resolved: Option<ResolvedLintContext<'a>>,
 }
 pub struct LinterContext<'a> {
     pub parsed: &'a ParsedUnit,
@@ -33,9 +52,44 @@ pub struct LinterContext<'a> {
     pub path: &'a str,
     pub all_units: &'a [RuleContextUnit<'a>],
     pub current_unit: usize,
+    pub resolved: Option<ResolvedLintContext<'a>>,
 }
 pub type RuleContext<'a> = LinterContext<'a>;
 impl<'a> LinterContext<'a> {
+    pub fn constant_value(
+        &self,
+        node: impl Into<NodeId>,
+    ) -> Option<dartr_constant::DartObjectImpl> {
+        constants::constant_value(self, node.into())
+    }
+    pub fn default_value(
+        &self,
+        parameter: dartr_element::ElemRef,
+    ) -> Option<dartr_constant::DartObjectImpl> {
+        constants::default_value(self, parameter)
+    }
+    pub fn constant_type_system(&self) -> Option<constants::ConstantTypeSystem<'a>> {
+        Some(constants::ConstantTypeSystem(self.resolved?.ctx))
+    }
+    pub fn static_type(&self, node: impl Into<NodeId>) -> Option<dartr_element::TypeId> {
+        self.resolved?.tables.static_type.get(node.into()).copied()
+    }
+    pub fn element(&self, node: impl Into<NodeId>) -> Option<dartr_element::ElemRef> {
+        self.resolved?.tables.element.get(node.into()).copied()
+    }
+    pub fn declared_element(&self, node: impl Into<NodeId>) -> Option<dartr_element::ElementId> {
+        let resolved = self.resolved?;
+        let fragment = *resolved.tables.declared_fragment.get(node.into())?;
+        resolved
+            .ctx
+            .fragment_data(fragment)?
+            .element
+            .try_get()
+            .copied()
+    }
+    pub fn type_system(&self) -> Option<dartr_typesystem::TypeSystem<'a>> {
+        Some(dartr_typesystem::TypeSystem::new(self.resolved?.ctx))
+    }
     /// The library's defining unit, including when a processor visits a part.
     pub fn defining_unit(&self) -> &RuleContextUnit<'a> {
         &self.all_units[0]
@@ -253,6 +307,7 @@ pub fn lint_library(units: &[RuleContextUnit<'_>], enabled: &[&str]) -> Vec<Vec<
             path: units[index].path,
             all_units: units,
             current_unit: index,
+            resolved: None,
         };
         let ignores = IgnoreInfo::for_dart(&ctx);
         diagnostics.retain(|diagnostic| !ignores.ignored(&ctx, diagnostic));
@@ -279,6 +334,7 @@ pub fn lint_library_unfiltered(
             path: unit.path,
             all_units: units,
             current_unit: index,
+            resolved: None,
         }
     };
     let mut registry = RuleVisitorRegistry::default();
@@ -299,6 +355,83 @@ pub fn lint_library_unfiltered(
     }
     let last_index = units.len() - 1;
     visitor.after_library(&context(last_index), &mut out[last_index]);
+    out
+}
+
+/// Run rules after body resolution; retain defining-unit metadata for parts.
+/// Callers can defer ignore filtering until all analyzer diagnostics are available.
+pub fn lint_resolved_library_unfiltered(
+    units: &[ResolvedRuleContextUnit<'_>],
+    enabled: &[&str],
+) -> Vec<Vec<Diagnostic>> {
+    if units.is_empty() {
+        return vec![];
+    }
+    let parsed_units: Vec<_> = units
+        .iter()
+        .map(|unit| RuleContextUnit {
+            parsed: unit.parsed,
+            source: unit.source,
+            path: unit.path,
+        })
+        .collect();
+    let context = |index: usize| {
+        let unit = &units[index];
+        LinterContext {
+            parsed: unit.parsed,
+            ast: unit.ast,
+            source: unit.source,
+            path: unit.path,
+            all_units: &parsed_units,
+            current_unit: index,
+            resolved: unit.resolved,
+        }
+    };
+    let mut registry = RuleVisitorRegistry::default();
+    let enabled: IndexSet<_> = enabled.iter().map(|s| s.to_ascii_lowercase()).collect();
+    for rule in ALL_RULES {
+        if enabled.contains(rule.name) {
+            rules::register(rule.name, &mut registry, &context(0));
+        }
+    }
+    let visitor = AnalysisRuleVisitor::new(&registry);
+    let mut out = vec![vec![]; units.len()];
+    for (index, unit) in units.iter().enumerate() {
+        visitor.visit(&context(index), unit.unit, &mut out[index]);
+    }
+    let last = units.len() - 1;
+    visitor.after_library(&context(last), &mut out[last]);
+    out
+}
+
+/// Resolved counterpart of [lint_library], including ignore comments.
+pub fn lint_resolved_library(
+    units: &[ResolvedRuleContextUnit<'_>],
+    enabled: &[&str],
+) -> Vec<Vec<Diagnostic>> {
+    let mut out = lint_resolved_library_unfiltered(units, enabled);
+    let parsed_units: Vec<_> = units
+        .iter()
+        .map(|unit| RuleContextUnit {
+            parsed: unit.parsed,
+            source: unit.source,
+            path: unit.path,
+        })
+        .collect();
+    for (index, diagnostics) in out.iter_mut().enumerate() {
+        let unit = &units[index];
+        let ctx = LinterContext {
+            parsed: unit.parsed,
+            ast: unit.ast,
+            source: unit.source,
+            path: unit.path,
+            all_units: &parsed_units,
+            current_unit: index,
+            resolved: unit.resolved,
+        };
+        let ignores = IgnoreInfo::for_dart(&ctx);
+        diagnostics.retain(|diagnostic| !ignores.ignored(&ctx, diagnostic));
+    }
     out
 }
 

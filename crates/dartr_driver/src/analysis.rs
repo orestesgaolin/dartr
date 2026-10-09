@@ -27,6 +27,16 @@ impl Driver {
         file: FileId,
         options: AnalysisOptions,
     ) -> Option<ResolvedLibrary> {
+        self.analyze_library_with_lints(file, options, &[])
+    }
+
+    /// Resolves first, then runs enabled lint rules on the resolved units.
+    pub fn analyze_library_with_lints(
+        &self,
+        file: FileId,
+        options: AnalysisOptions,
+        enabled: &[&str],
+    ) -> Option<ResolvedLibrary> {
         let world = &self.state.world;
         let (library, units) = self.library_units(file)?;
         let tp = dartr_link::types_builder::world_type_provider(world);
@@ -37,7 +47,12 @@ impl Driver {
             units,
             options,
         };
-        Some(analyze_library(&input))
+        let mut library = analyze_library(&input);
+        let diagnostics = crate::lints::compute_lints(&input, &library, enabled);
+        for (unit, lints) in library.units.iter_mut().zip(diagnostics) {
+            unit.diagnostics.extend(lints);
+        }
+        Some(library)
     }
 
     /// The library element of [file] (the defining unit) and the inputs of
