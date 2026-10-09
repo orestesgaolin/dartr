@@ -1,0 +1,18 @@
+# Determinism rules of the semantic crates (docs/design/semantics.md §2.5):
+# output may never depend on hash iteration order. Copy this file into every
+# semantic crate (clippy reads clippy.toml from the crate directory first).
+#
+# - Every Dart Map/Set that is iterated: indexmap::IndexMap / IndexSet.
+# - Pure lookups: dartr_element::LookupMap / LookupSet (no iteration API).
+disallowed-types = [
+    { path = "std::collections::HashMap", reason = "iteration order is random: use indexmap::IndexMap, or dartr_element::LookupMap for lookups only" },
+    { path = "std::collections::HashSet", reason = "iteration order is random: use indexmap::IndexSet, or dartr_element::LookupSet for lookups only" },
+    { path = "hashbrown::HashMap", reason = "iteration order is random: use indexmap::IndexMap, or dartr_element::LookupMap for lookups only" },
+    { path = "hashbrown::HashSet", reason = "iteration order is random: use indexmap::IndexSet, or dartr_element::LookupSet for lookups only" },
+]
+disallowed-methods = [
+    { path = "imbl::hashmap::GenericHashMap::iter", reason = "iteration order is random: imbl::HashMap is for lookups only" },
+    { path = "imbl::hashmap::GenericHashMap::keys", reason = "iteration order is random: imbl::HashMap is for lookups only" },
+    { path = "imbl::hashmap::GenericHashMap::values", reason = "iteration order is random: imbl::HashMap is for lookups only" },
+    { path = "imbl::hashmap::GenericHashMap::iter_mut", reason = "iteration order is random: imbl::HashMap is for lookups only" },
+]

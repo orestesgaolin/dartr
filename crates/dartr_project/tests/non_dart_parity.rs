@@ -10,6 +10,11 @@ fn dart() -> String {
     std::env::var("DARTR_DART").unwrap_or_else(|_| "dart".into())
 }
 
+/// `file_paths.isFixDataYaml`.
+fn is_fix_data(file: &str) -> bool {
+    file.ends_with("/fix_data.yaml") || (file.contains("/fix_data/") && file.ends_with(".yaml"))
+}
+
 fn oracle(path: &Path) -> Vec<Value> {
     let version = Command::new(dart())
         .arg("--version")
@@ -47,10 +52,11 @@ fn oracle(path: &Path) -> Vec<Value> {
         .expect("diagnostics array")
         .iter()
         .filter(|d| {
+            let file = d["location"]["file"].as_str().unwrap();
             matches!(
-                FileKind::of(d["location"]["file"].as_str().unwrap()),
+                FileKind::of(file),
                 FileKind::AnalysisOptions | FileKind::Pubspec | FileKind::AndroidManifest
-            )
+            ) || is_fix_data(file)
         })
         .map(|d| {
             let start = d["location"]["range"]["start"]["offset"].as_u64().unwrap();
@@ -166,6 +172,41 @@ fn broken_fixture_projects_match_dart_analyze() {
     );
     eprintln!(
         "fixture parity: {} projects, {} files, {} diagnostics, 100.00%",
+        directories.len(),
+        total.0,
+        total.1
+    );
+}
+
+/// `fix_data.yaml` files (`TransformSetParser`): reported also when the
+/// folder is excluded; unlike options and pubspec errors they are not hidden
+/// by the CLI.
+#[test]
+fn fix_data_fixture_projects_match_dart_analyze() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fix_data");
+    let mut directories: Vec<_> = std::fs::read_dir(root)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.is_dir())
+        .collect();
+    directories.sort();
+    let mut total = (0, 0);
+    let mut differences = Vec::new();
+    for directory in &directories {
+        let counts = compare(directory);
+        differences.extend(counts.2);
+        total.0 += counts.0;
+        total.1 += counts.1;
+    }
+    assert!(
+        differences.is_empty(),
+        "{} differing files:\n{}",
+        differences.len(),
+        differences.join("\n")
+    );
+    assert!(total.1 > 100, "the fixtures must produce diagnostics");
+    eprintln!(
+        "fix_data parity: {} projects, {} files, {} diagnostics, 100.00%",
         directories.len(),
         total.0,
         total.1

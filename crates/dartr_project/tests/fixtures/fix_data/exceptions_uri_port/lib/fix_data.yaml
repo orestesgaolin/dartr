@@ -1,0 +1,7 @@
+version: 1
+bogus: 1
+transforms:
+  - title: x
+    date: 2020-01-01
+    library: 'http://host:port/x'
+    changes: []

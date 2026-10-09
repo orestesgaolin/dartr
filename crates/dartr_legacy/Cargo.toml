@@ -1,0 +1,18 @@
+[package]
+name = "dartr_legacy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Dart analysis server legacy JSON-lines protocol"
+
+[dependencies]
+dartr_ast_builder.workspace = true
+dartr_cli.workspace = true
+dartr_diagnostics.workspace = true
+dartr_parser.workspace = true
+dartr_project.workspace = true
+dartr_server.workspace = true
+dartr_syntax.workspace = true
+indexmap = { workspace = true, features = ["serde"] }
+serde.workspace = true
+serde_json = { workspace = true, features = ["preserve_order"] }

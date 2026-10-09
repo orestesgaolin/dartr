@@ -1076,12 +1076,14 @@ impl Server {
                             analyzed.insert(file);
                         }
                         FileKind::Other => {}
-                        // TODO: `fix_data.yaml` (no validator in dartr_project).
                         _ => {
                             non_dart_analyzed.insert(file);
                         }
                     }
                 }
+                // `ContextManagerImpl._analyzeFixDataYaml`: the data files of
+                // each context root, also when they are excluded.
+                non_dart_analyzed.extend(context.fix_data_files());
             }
         }
         // Dart `flushResults` for files that are no longer analyzed.
@@ -1117,7 +1119,7 @@ impl Server {
             let diagnostics = match self
                 .collection
                 .as_ref()
-                .and_then(|c| c.context_for(path))
+                .and_then(|c| non_dart::context_for_file(c, path))
             {
                 Some(context) => non_dart::diagnostics_for_file(context, path),
                 None => Vec::new(),

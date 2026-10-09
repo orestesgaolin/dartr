@@ -14,9 +14,10 @@
 //! - [output]: the `default`, `json` and `machine` formats;
 //! - [analyze]: the command (targets, progress, sorting, exit codes).
 //!
-//! Not done yet (later phases): diagnostics of `analysis_options.yaml`,
-//! `pubspec.yaml`, `AndroidManifest.xml` and `fix_data.yaml` files; the
-//! `unnecessary_ignore` lint; plugin diagnostics; `server.error` (exit code 4).
+//! Not done yet (later phases): the `unnecessary_ignore` lint; plugin
+//! diagnostics; `server.error` (exit code 4). Diagnostics of
+//! `analysis_options.yaml`, `pubspec.yaml`, `AndroidManifest.xml` and
+//! `fix_data.yaml` files come from `dartr_project::non_dart`.
 
 pub mod analyze;
 pub mod args;

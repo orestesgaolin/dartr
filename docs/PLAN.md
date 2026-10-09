@@ -40,7 +40,8 @@ writes JSON Lines. `dartr dump <mode>` writes the same format.
 | `tokens`   | scanner only (no parser): token stream (kind, offset, length, lexeme, synthetic, comments), scanner diagnostics |
 | `events`   | parser events: every listener call of the shared parser, recoverable errors, token stream after parsing (`tools/oracle/bin/events.dart`) |
 | `ast`      | unresolved AST as ordered child entities (`childEntities`), parse diagnostics |
-| `resolved` | diagnostics of the resolved unit, static type of each expression  |
+| `resolved` | per resolved library and unit: diagnostics, static type of each expression with its node kind, `staticInvokeType` and `typeArgumentTypes` of invocations (`tools/oracle/bin/resolved_el.dart`, design §5.4) |
+| `resolved-el` | per resolved library and unit: the element of each `SimpleIdentifier`, `NamedType` and `ConstructorName`, with a reference format for local elements (`tools/oracle/bin/resolved_el.dart`, design §5.4) |
 | `elements` | element model of each library (`tools/oracle/bin/elements.dart`, design §5.1) |
 | `interface`| `InheritanceManager3` interfaces of the classes of each library (`tools/oracle/bin/interface.dart`, design §5.2) |
 
@@ -55,6 +56,30 @@ The test corpus:
 both in parallel batches and reports the first difference of each differing
 file and a parity percentage (`--jobs`, `--write-failures <dir>`). The oracle
 is compiled to `target/oracle/oracle` on first use.
+
+For `resolved` and `resolved-el` the report also has a parity table per node
+kind (oracle entries, entries that dartr has with the same value, dartr
+entries) and the number of resolver panics (a panic is written as a
+`"panic"` key of the unit or line, it does not stop the dump). Options:
+`--kinds K1,K2` compares only the entries of these node kinds,
+`--no-diagnostics` removes the diagnostics before the comparison:
+
+```sh
+target/release/difftest resolved-el third_party/dart-sdk/tests/language dart:core --no-diagnostics
+target/release/difftest resolved third_party/dart-sdk/tests/language --no-diagnostics --kinds IntegerLiteral,SimpleStringLiteral
+```
+
+Determinism: `dartr dump` uses one rayon pool; `RAYON_NUM_THREADS` sets its
+size. The output must not depend on it:
+
+```sh
+ls third_party/dart-sdk/tests/language/closure/*.dart > /tmp/inputs.txt; echo dart:core >> /tmp/inputs.txt
+for n in 1 16; do RAYON_NUM_THREADS=$n target/release/dartr dump resolved-el < /tmp/inputs.txt > /tmp/out.$n.jsonl; done
+cmp /tmp/out.1.jsonl /tmp/out.16.jsonl
+```
+
+`cargo test --release -p dartr --test difftest_resolved` runs this check for
+both modes on the fixtures and `dart:core`.
 
 ## Architecture
 
@@ -107,3 +132,5 @@ Data model rules:
 `styles_ordering`, `prefer_html_components`, `sort_children_last`). dartr does not run plugins yet.
 Options: run Dart plugins out of process like the analysis server does (plugin isolates need a
 Dart VM), or port popular plugins. Decide after phase 10b.
+Research and recommendation (run plugins out of process, dartr implements the server side of the
+plugin protocol): `docs/research/analyzer-plugins.md`.

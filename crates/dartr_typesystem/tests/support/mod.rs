@@ -235,6 +235,15 @@ impl SourceTest {
         }
     }
 
+    /// The mock type system test of a [`SourceTest::new`] test (panics for
+    /// a linked test).
+    pub fn mock(&self) -> &TypeSystemTest {
+        match &self.backend {
+            Backend::Mock(t) => t,
+            Backend::Linked(_) => panic!("not a mock SourceTest"),
+        }
+    }
+
     pub fn ctx(&self) -> Ctx<'_> {
         match &self.backend {
             Backend::Mock(t) => t.ctx(),

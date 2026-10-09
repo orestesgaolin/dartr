@@ -1,0 +1,13 @@
+version: 1
+bogus: 1
+transforms:
+  - title: x
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      function: f
+    variables:
+      a:
+        kind: fragment
+        value: 'arguments[99999999999999999999]'
+    changes: []

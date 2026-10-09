@@ -1,0 +1,82 @@
+# Valid data file with all change kinds.
+version: 1
+transforms:
+  - title: 'Rename a method'
+    date: 2020-01-01
+    bulkApply: false
+    element:
+      uris: ['a.dart', 'package:other/b.dart']
+      method: 'f'
+      inClass: 'C'
+    changes:
+      - kind: 'rename'
+        newName: 'g'
+      - kind: 'addParameter'
+        index: 0
+        name: 'p'
+        style: 'optional_named'
+        argumentValue:
+          expression: '{% v %}'
+          requiredIf: "v == 'x'"
+          variables:
+            v:
+              kind: 'fragment'
+              value: 'arguments[0]'
+      - kind: 'removeParameter'
+        name: 'q'
+      - kind: 'changeParameterType'
+        index: 1
+        nullability: 'non_null'
+        argumentValue:
+          expression: 'x'
+      - kind: 'renameParameter'
+        oldName: 'a'
+        newName: 'b'
+      - kind: 'addTypeParameter'
+        index: 0
+        name: 'T'
+        extends:
+          expression: 'Object'
+        argumentValue:
+          expression: 'int'
+  - title: 'Replace a function'
+    date: 2021-02-03T04:05:06Z
+    element:
+      uris: ['a.dart']
+      function: 'f'
+    variables:
+      imp:
+        kind: import
+        uris: ['dart:core']
+        name: 'int'
+    oneOf:
+      - if: "imp == 'a' && imp != 'b'"
+        changes:
+          - kind: replacedBy
+            newElement:
+              uris: ['b.dart']
+              method: 'g'
+              inClass: 'D'
+              static: true
+            replaceTarget: true
+            arguments:
+              - expression: '{% imp %}'
+  - title: 'Library'
+    date: 2022-05-05
+    library: 'a.dart'
+    changes:
+      - kind: replacedBy
+        newLibrary: 'b.dart'
+  - title: 'Constant'
+    date: 2022-05-05
+    element:
+      uris: ['a.dart']
+      constant: 'A'
+      inEnum: 'E'
+    changes:
+      - kind: replacedBy
+        newElement:
+          uris: ['a.dart']
+          field: 'f'
+          inClass: 'C'
+          static: true

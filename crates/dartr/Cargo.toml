@@ -13,11 +13,13 @@ dartr_ast.workspace = true
 dartr_ast_builder.workspace = true
 rayon.workspace = true
 dartr_server.workspace = true
+dartr_legacy = { path = "../dartr_legacy" }
 dartr_driver.workspace = true
 dartr_element.workspace = true
 dartr_link.workspace = true
 dartr_typesystem.workspace = true
 dartr_project.workspace = true
+dartr_resolver.workspace = true
 dartr_cli.workspace = true
 dartr_format.workspace = true
 indexmap.workspace = true

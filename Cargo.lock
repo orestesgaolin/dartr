@@ -227,9 +227,11 @@ dependencies = [
  "dartr_driver",
  "dartr_element",
  "dartr_format",
+ "dartr_legacy",
  "dartr_link",
  "dartr_parser",
  "dartr_project",
+ "dartr_resolver",
  "dartr_server",
  "dartr_syntax",
  "dartr_typesystem",
@@ -319,6 +321,7 @@ dependencies = [
  "dartr_link",
  "dartr_parser",
  "dartr_project",
+ "dartr_resolver",
  "dartr_syntax",
  "imbl",
  "indexmap",
@@ -361,6 +364,22 @@ dependencies = [
  "dartr_syntax",
  "rayon",
  "rustc-hash",
+]
+
+[[package]]
+name = "dartr_legacy"
+version = "0.1.0"
+dependencies = [
+ "dartr_ast_builder",
+ "dartr_cli",
+ "dartr_diagnostics",
+ "dartr_parser",
+ "dartr_project",
+ "dartr_server",
+ "dartr_syntax",
+ "indexmap",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -416,6 +435,27 @@ dependencies = [
  "fancy-regex",
  "pretty_assertions",
  "serde_json",
+]
+
+[[package]]
+name = "dartr_resolver"
+version = "0.1.0"
+dependencies = [
+ "dartr_ast",
+ "dartr_ast_builder",
+ "dartr_diagnostics",
+ "dartr_driver",
+ "dartr_element",
+ "dartr_flow",
+ "dartr_link",
+ "dartr_parser",
+ "dartr_project",
+ "dartr_syntax",
+ "dartr_type_analyzer",
+ "dartr_typesystem",
+ "indexmap",
+ "pretty_assertions",
+ "rayon",
 ]
 
 [[package]]
@@ -577,6 +617,8 @@ checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
 dependencies = [
  "equivalent",
  "hashbrown",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]

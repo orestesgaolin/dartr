@@ -31,8 +31,12 @@ pub fn options_for_file(context: &AnalysisContext, path: &str) -> AnalysisOption
 
 /// Validate an analyzed non-Dart file and apply configured error severities.
 /// Manifests are analyzed in every context; Chrome OS checks are opt-in.
-/// Excluded and hidden files follow `ContextRoot.isAnalyzed`.
+/// Excluded and hidden files follow `ContextRoot.isAnalyzed`, except the
+/// `fix_data.yaml` files (see [`fix_data_diagnostics`]).
 pub fn diagnostics_for_file(context: &AnalysisContext, path: &str) -> Vec<Diagnostic> {
+    if FileKind::of(path) == FileKind::Other && context.fix_data_files().iter().any(|f| f == path) {
+        return fix_data_diagnostics(context, path);
+    }
     if !context.root.is_analyzed(path) {
         return Vec::new();
     }
@@ -54,6 +58,20 @@ pub fn diagnostics_for_file(context: &AnalysisContext, path: &str) -> Vec<Diagno
         options_for_file(context, path)
     };
     apply_error_processors(&options, diagnostics)
+}
+
+/// `ContextManagerImpl._analyzeFixDataYaml`: the data files of
+/// `lib/fix_data.yaml` and `lib/fix_data/**.yaml` are checked for every
+/// context root, also when the files are excluded from analysis. The package
+/// name is the short name of the root folder. An unreadable file has no
+/// diagnostics.
+pub fn fix_data_diagnostics(context: &AnalysisContext, path: &str) -> Vec<Diagnostic> {
+    let Some(text) = crate::fs::read_string_strict(path) else {
+        return Vec::new();
+    };
+    let package_name = paths::basename(&context.root.root);
+    let diagnostics = crate::fix_data_validator::validate_fix_data(&text, package_name);
+    apply_error_processors(&options_for_file(context, path), diagnostics)
 }
 
 pub fn apply_error_processors(
@@ -86,7 +104,8 @@ pub fn diagnostic_json(path: &str, diagnostic: &Diagnostic) -> Value {
         "correction":diagnostic.correction})
 }
 
-/// Non-Dart files selected by the server's context-root traversal.
+/// Non-Dart files selected by the server's context-root traversal, and the
+/// `fix_data.yaml` files of every context root.
 pub fn analyzed_files(collection: &AnalysisContextCollection) -> Vec<String> {
     let mut files: Vec<_> = collection
         .contexts
@@ -99,9 +118,39 @@ pub fn analyzed_files(collection: &AnalysisContextCollection) -> Vec<String> {
             )
         })
         .collect();
+    files.extend(
+        collection
+            .contexts
+            .iter()
+            .flat_map(|context| context.fix_data_files()),
+    );
     files.sort();
     files.dedup();
     files
+}
+
+/// `file_paths.isFixDataYaml`.
+pub fn is_fix_data_path(path: &str) -> bool {
+    paths::basename(path) == "fix_data.yaml"
+        || (path.split('/').any(|part| part == "fix_data") && path.ends_with(".yaml"))
+}
+
+/// The context of an analyzed non-Dart file. A `fix_data.yaml` file belongs
+/// to the context root whose `lib` folder holds it, also when the file is
+/// excluded from analysis.
+pub fn context_for_file<'a>(
+    collection: &'a AnalysisContextCollection,
+    path: &str,
+) -> Option<&'a AnalysisContext> {
+    if is_fix_data_path(path)
+        && let Some(context) = collection
+            .contexts
+            .iter()
+            .find(|context| context.fix_data_files().iter().any(|f| f == path))
+    {
+        return Some(context);
+    }
+    collection.context_for(path)
 }
 
 pub fn collection_diagnostics_json(collection: &AnalysisContextCollection) -> Value {
@@ -117,7 +166,7 @@ pub fn collection_cli_diagnostics_json(collection: &AnalysisContextCollection) -
 fn collection_json(collection: &AnalysisContextCollection, for_cli: bool) -> Value {
     let mut diagnostics = Vec::new();
     for path in analyzed_files(collection) {
-        if let Some(context) = collection.context_for(&path) {
+        if let Some(context) = context_for_file(collection, &path) {
             diagnostics.extend(
                 diagnostics_for_file(context, &path)
                     .iter()

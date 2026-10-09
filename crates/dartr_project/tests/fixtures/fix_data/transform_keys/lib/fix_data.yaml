@@ -1,0 +1,43 @@
+version: 1
+transforms:
+  - title: 1
+    date: 2020-01-01
+  - title: only title
+  - title: bad date
+    date: yesterday
+    library: 'a.dart'
+  - title: date type
+    date: 20200101
+    library: 'a.dart'
+    changes: []
+  - title: both
+    date: 2020-01-01
+    element: {}
+    library: 'a.dart'
+  - title: neither
+    date: 2020-01-01
+  - title: unknown
+    date: 2020-01-01
+    bogus: 1
+    bulkApply: maybe
+    library: 'a.dart'
+    changes: []
+  - title: no selector
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      class: C
+  - title: both selectors
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      class: C
+    changes: []
+    oneOf: []
+  - title: variables not a map
+    date: 2020-01-01
+    variables: [a]
+    element:
+      uris: ['a.dart']
+      class: C
+    changes: []

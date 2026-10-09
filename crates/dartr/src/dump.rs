@@ -23,8 +23,13 @@ pub enum DumpMode {
     Events,
     /// Unresolved AST (child entities) and parse diagnostics.
     Ast,
-    /// Resolved diagnostics and expression types (not implemented yet).
+    /// Diagnostics and static types of expressions of each resolved
+    /// library (docs/design/semantics.md §5.4,
+    /// `tools/oracle/bin/resolved_el.dart`).
     Resolved,
+    /// The elements of the identifiers, named types and constructor names of
+    /// each resolved library (docs/design/semantics.md §5.4).
+    ResolvedEl,
     /// Element model of each library (docs/design/semantics.md §5.1).
     Elements,
     /// Interfaces of the classes of each library (docs/design/semantics.md
@@ -74,7 +79,9 @@ pub fn run(mode: DumpMode, files: Vec<PathBuf>) -> anyhow::Result<()> {
             let pool = rayon::ThreadPoolBuilder::new()
                 .stack_size(256 << 20)
                 .build()?;
-            let lines = pool.install(|| crate::elements::dump_elements_all(&paths, mode == DumpMode::Interface));
+            let lines = pool.install(|| {
+                crate::elements::dump_elements_all(&paths, mode == DumpMode::Interface)
+            });
             let stdout = io::stdout();
             let mut out = io::BufWriter::new(stdout.lock());
             for line in lines {
@@ -85,8 +92,24 @@ pub fn run(mode: DumpMode, files: Vec<PathBuf>) -> anyhow::Result<()> {
             return Ok(());
         }
         DumpMode::Ast => dump_ast,
-        DumpMode::Resolved => {
-            anyhow::bail!("dump mode {mode:?} is not implemented yet")
+        DumpMode::Resolved | DumpMode::ResolvedEl => {
+            let pool = rayon::ThreadPoolBuilder::new()
+                .stack_size(256 << 20)
+                .build()?;
+            let resolved_mode = if mode == DumpMode::Resolved {
+                crate::resolved::ResolvedMode::Types
+            } else {
+                crate::resolved::ResolvedMode::Elements
+            };
+            let lines = pool.install(|| crate::resolved::dump_resolved_all(&paths, resolved_mode));
+            let stdout = io::stdout();
+            let mut out = io::BufWriter::new(stdout.lock());
+            for line in lines {
+                out.write_all(line.as_bytes())?;
+                out.write_all(b"\n")?;
+            }
+            out.flush()?;
+            return Ok(());
         }
     };
 

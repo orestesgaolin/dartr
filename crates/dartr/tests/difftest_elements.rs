@@ -17,6 +17,7 @@ fn options(inputs: Vec<PathBuf>) -> Options {
         dartr: PathBuf::from(env!("CARGO_BIN_EXE_dartr")),
         oracle: Vec::new(),
         mask_inferred: true,
+        ..Default::default()
     }
 }
 

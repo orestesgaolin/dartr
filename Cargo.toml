@@ -25,6 +25,7 @@ dartr_driver = { path = "crates/dartr_driver" }
 dartr_cli = { path = "crates/dartr_cli" }
 dartr_constant = { path = "crates/dartr_constant" }
 dartr_typesystem = { path = "crates/dartr_typesystem" }
+dartr_resolver = { path = "crates/dartr_resolver" }
 dartr_server = { path = "crates/dartr_server" }
 dartr_format = { path = "crates/dartr_format" }
 serde = { version = "1.0.229", features = ["derive"] }

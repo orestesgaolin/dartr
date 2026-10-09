@@ -872,6 +872,7 @@ impl<'a> TypeSystem<'a> {
 
     /// `isNonNullable(type)`.
     pub fn is_non_nullable(&self, t: TypeId) -> bool {
+        let _guard = crate::recursion_guard::enter("isNonNullable");
         let ctx = self.ctx;
         match *ctx.ty(t) {
             TypeKind::Dynamic | TypeKind::Invalid | TypeKind::Unknown | TypeKind::Void => false,
@@ -915,6 +916,7 @@ impl<'a> TypeSystem<'a> {
 
     /// `isNullable(type)`.
     pub fn is_nullable(&self, t: TypeId) -> bool {
+        let _guard = crate::recursion_guard::enter("isNullable");
         let ctx = self.ctx;
         match *ctx.ty(t) {
             TypeKind::Dynamic | TypeKind::Invalid | TypeKind::Unknown | TypeKind::Void => true,
@@ -933,6 +935,7 @@ impl<'a> TypeSystem<'a> {
 
     /// `isObject(type)`: in the equivalence class of `Object`.
     pub fn is_object(&self, t: TypeId) -> bool {
+        let _guard = crate::recursion_guard::enter("isObject");
         let ctx = self.ctx;
         if ctx.nullability_suffix(t) != Nullability::None {
             return false;
@@ -950,16 +953,19 @@ impl<'a> TypeSystem<'a> {
 
     /// `isPotentiallyNonNullable(type)`.
     pub fn is_potentially_non_nullable(&self, t: TypeId) -> bool {
+        let _guard = crate::recursion_guard::enter("isPotentiallyNonNullable");
         !self.is_nullable(t)
     }
 
     /// `isPotentiallyNullable(type)`.
     pub fn is_potentially_nullable(&self, t: TypeId) -> bool {
+        let _guard = crate::recursion_guard::enter("isPotentiallyNullable");
         !self.is_non_nullable(t)
     }
 
     /// `isStrictlyNonNullable(type)`.
     pub fn is_strictly_non_nullable(&self, t: TypeId) -> bool {
+        let _guard = crate::recursion_guard::enter("isStrictlyNonNullable");
         let ctx = self.ctx;
         match *ctx.ty(t) {
             TypeKind::Dynamic | TypeKind::Invalid | TypeKind::Unknown | TypeKind::Void => false,

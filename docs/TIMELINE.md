@@ -50,7 +50,12 @@ at each merge; the final process report is written from it.
 | 10-09 01:15 | dda1c2b | lint framework + 79 AST-only rules | Codex | 2 bugs found on unseen corpora, fixed; then exact on 6 corpora |
 | 10-09 01:49 | 168d891 | non-Dart diagnostics in CLI and LSP | Sonnet | 120/120 CLI cases, 7/7 LSP steps |
 | 10-09 01:49 | 2bade7d | `package:yaml` 3.1.4 port | Codex | 3,704/3,704 comparisons |
-| 10-09 02:23 | ecdba76 | lints in CLI and LSP | Sonnet | 14 CLI cases, 6/6 LSP steps; lint corpora still exact |
+| 10-09 02:23 | ecdba76 | lints in CLI and LSP | Sonnet | 14 CLI cases, 6/6 LSP steps; lint corpora still exact (full workspace tests NOT run: see incidents) |
+| 10-09 08:39 | 4d2ec87 | idle-machine baseline | coordinator | load 2.75 before the run |
+| 10-09 08:45 | — | private repo `orestesgaolin/dartr`, main pushed | Sonnet | `ls-remote` = local main |
+| 10-09 09:20 | 7ea3b13 | fix_data.yaml validation, plugin research | Sonnet | 154/154 vs `dart analyze`; full workspace tests: only the known LSP failure |
+| 10-09 09:40 | 0af4509 | legacy protocol foundation (9/59 requests) | Codex | dartdev + IntelliJ-like sessions vs `dart language-server --protocol=analyzer` |
+| 10-09 10:10 | e08c69d | wave C resolver core (C1, C2, C11 skeleton) | Opus | flutter_tools (unseen): NamedType 100%, SimpleIdentifier 54% (C3–C8 stubbed) |
 
 ## Incidents and lessons
 
@@ -70,3 +75,15 @@ at each merge; the final process report is written from it.
   strings), and only the coordinator's runs on other corpora found them.
 - **Analyzer plugins (10-09):** visible-app loads the `jaspr_lints` plugin. Plugin diagnostics
   are not covered by the plan yet; see the open item in `PLAN.md`.
+- **Skipped full test run (10-09 02:23):** after merging the lint wiring, the coordinator ran only
+  the branch tests and the lint differentials. One LSP parity test had broken
+  (`lsp_non_dart_files_and_package_language_version`); the CI agent found it hours later.
+  Rule restored: the full workspace tests run after every merge, with no exceptions.
+- **Hung corpus run (10-09):** the resolver agent waited 7 hours on a `dump resolved-el` run that
+  was in an infinite loop. Rule: every background corpus run has a time limit per file.
+- **Machine load (10-09 09:00):** load average 158, mostly Spotlight indexing the worktree
+  `target/` folders. Timing tests and benchmarks are not valid under such load.
+- **Flaky LSP parity test (10-09):** `lsp_non_dart_files_and_package_language_version` fails in
+  some runs because `dart language-server` 3.13.3 sometimes ignores a `didChange` of an
+  `analysis_options.yaml` overlay (no re-analysis, stale diagnostics). The fault is on the oracle
+  side, not in dartr. Open decision: copy Dart's behaviour, or make the test tolerate that step.
