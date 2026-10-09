@@ -261,9 +261,79 @@ fn compute_diagnostics(input: &LibraryAnalysisInput<'_>, library: &mut ResolvedL
     }
 }
 
-/// Dart `_checkForInconsistentLanguageVersionOverride`. STUB (wd-errors).
+/// Dart `_checkForInconsistentLanguageVersionOverride`: reports a `part`
+/// directive whose part has a language version override that is different
+/// from the one of the library (or has one when the library has none, or
+/// the reverse).
 fn check_for_inconsistent_language_version_override(verifiers: &mut [crate::error::UnitVerifier<'_>]) {
-    let _ = verifiers;
+    use crate::error::VerifierHost;
+    use crate::error::language_version_override_verifier::language_version_token;
+    use dartr_element::DirectiveUri;
+
+    let Some(library_analysis) = verifiers.first() else {
+        return;
+    };
+    let library_override = language_version_token(library_analysis.ast, library_analysis.unit)
+        .map(|(_, major, minor)| (major, minor));
+
+    // Dart `visitPartDirectives(container)`; [visited] guards against
+    // cycles, which Dart does not have.
+    fn visit_part_directives(
+        verifiers: &mut [crate::error::UnitVerifier<'_>],
+        container: usize,
+        library_override: Option<(u64, u64)>,
+        visited: &mut Vec<usize>,
+    ) {
+        if visited.contains(&container) {
+            return;
+        }
+        visited.push(container);
+        let v = &verifiers[container];
+        let ast = v.ast;
+        let parts = &v.ctx.fragment(v.fragment).parts;
+        let mut reports = Vec::new();
+        let mut nested = Vec::new();
+        let mut part_index = 0;
+        for &directive in ast.list_raw(ast[v.unit].directives) {
+            let Some(directive) = ast.cast::<dartr_ast::PartDirective>(directive) else {
+                continue;
+            };
+            let index = part_index;
+            part_index += 1;
+            let Some(DirectiveUri::Unit { library_fragment, .. }) = parts.get(index).map(|p| &p.directive.uri) else {
+                continue;
+            };
+            let Some(part) = verifiers.iter().position(|p| p.fragment == *library_fragment) else {
+                continue;
+            };
+            let part_override =
+                language_version_token(verifiers[part].ast, verifiers[part].unit).map(|(_, major, minor)| (major, minor));
+            let should_report = match (library_override, part_override) {
+                (Some(library), Some(part)) => library != part,
+                (Some(_), None) | (None, Some(_)) => true,
+                (None, None) => false,
+            };
+            if should_report {
+                let uri = ast[directive].uri;
+                reports.push(dartr_diagnostics::diag::inconsistent_language_version_override().at_offset(
+                    ast.offset(uri) as usize,
+                    ast.length(uri) as usize,
+                ));
+            } else {
+                nested.push(part);
+            }
+        }
+        // Each unit is visited once, so reporting before the recursion
+        // keeps the Dart order of the diagnostics of each unit.
+        for d in reports {
+            verifiers[container].report(d);
+        }
+        for part in nested {
+            visit_part_directives(verifiers, part, library_override, visited);
+        }
+    }
+
+    visit_part_directives(verifiers, 0, library_override, &mut Vec::new());
 }
 
 /// Runs [step] on each unit that resolved without a panic; a panic of the

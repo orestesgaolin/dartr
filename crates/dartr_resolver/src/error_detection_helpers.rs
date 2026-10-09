@@ -17,13 +17,17 @@ impl<'a> ResolverVisitor<'a> {
     /// Dart `boolExpressionVerifier.checkForNonBoolCondition(condition,
     /// whyNotPromoted: ...)`.
     pub fn check_for_non_bool_condition(&mut self, condition: Id<Expression>) {
-        let _ = condition;
+        crate::error::bool_expression_verifier::check_for_non_bool_condition(self, condition);
     }
 
     /// Dart `boolExpressionVerifier.checkForNonBoolExpression(expression,
     /// locatableDiagnostic: diag.nonBoolExpression, whyNotPromoted: ...)`.
     pub fn check_for_non_bool_expression(&mut self, expression: Id<Expression>) {
-        let _ = expression;
+        crate::error::bool_expression_verifier::check_for_non_bool_expression(
+            self,
+            expression,
+            dartr_diagnostics::diag::non_bool_expression(),
+        );
     }
 
     /// Dart `checkForBodyMayCompleteNormally(body:, errorNode:)`.
@@ -41,17 +45,12 @@ impl<'a> ResolverVisitor<'a> {
         error_entity: dartr_ast::NodeId,
         receiver_type: dartr_element::TypeId,
     ) {
-        // Dart: `receiverType == typeProvider.nullType` (Dart `==`).
-        let locatable = if dartr_typesystem::TypeSystem::new(self.ctx)
-            .dart_eq(receiver_type, self.ctx.tp.null_type())
-        {
-            dartr_diagnostics::diag::invalid_use_of_null_value()
-        } else {
-            locatable
-        };
-        let offset = self.ast.offset(error_entity) as usize;
-        let length = self.ast.length(error_entity) as usize;
-        self.report(locatable.at_offset(offset, length));
+        crate::error::nullable_dereference_verifier::report(
+            self,
+            locatable,
+            error_entity,
+            receiver_type,
+        );
     }
 
     /// Dart `nullableDereferenceVerifier.expression(locatableDiagnostic,
@@ -64,16 +63,7 @@ impl<'a> ResolverVisitor<'a> {
         expression: Id<Expression>,
         ty: Option<dartr_element::TypeId>,
     ) -> bool {
-        let receiver_type = ty.unwrap_or_else(|| self.type_or_throw(expression));
-        if matches!(
-            self.ctx.ty(receiver_type),
-            dartr_element::TypeKind::Dynamic | dartr_element::TypeKind::Invalid
-        ) || !self.type_system.is_potentially_nullable(receiver_type)
-        {
-            return false;
-        }
-        self.report_nullable_dereference(locatable, expression.raw(), receiver_type);
-        true
+        crate::error::nullable_dereference_verifier::expression(self, locatable, expression, ty)
     }
 
     /// Dart `checkForUseOfVoidResult(expression)`: whether the expression has
