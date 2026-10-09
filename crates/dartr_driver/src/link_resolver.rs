@@ -11,7 +11,7 @@
 //! are used. They only change diagnostics, which linking drops.
 
 use dartr_element::{Ctx, TypeId};
-use dartr_link::link::{ExpressionRequest, LinkResolver, LinkResolverSession};
+use dartr_link::link::{ExpressionRequest, ExpressionSource, LinkResolver, LinkResolverSession};
 use dartr_resolver::ast_resolver::{self, LinkResolution};
 use dartr_resolver::options::AnalysisOptions;
 
@@ -33,10 +33,27 @@ impl LinkResolverSession for Session {
             &ast_resolver::ExpressionRequest {
                 library: request.library,
                 fragment: request.fragment,
-                parsed: request.parsed,
-                declared_fragments: request.declared_fragments,
+                source: match &request.source {
+                    ExpressionSource::Unit {
+                        parsed,
+                        declared_fragments,
+                        owner,
+                    } => ast_resolver::ExpressionSource::Unit {
+                        parsed,
+                        declared_fragments,
+                        owner: *owner,
+                    },
+                    ExpressionSource::Synthetic {
+                        ast,
+                        expression,
+                        features,
+                    } => ast_resolver::ExpressionSource::Synthetic {
+                        ast,
+                        expression: *expression,
+                        features: *features,
+                    },
+                },
                 options: AnalysisOptions::default(),
-                owner: request.owner,
                 enclosing_instance: request.enclosing_instance,
                 enclosing_class: request.enclosing_class,
                 context_type: request.context_type,

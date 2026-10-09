@@ -81,12 +81,7 @@ pub struct ExpressionRequest<'r> {
     pub library: EId<LibraryElement>,
     /// The library fragment of the unit (Dart `libraryFragment`).
     pub fragment: FId<LibraryFragment>,
-    pub parsed: &'r Arc<ParsedUnit>,
-    /// Dart `node.declaredFragment` of the declarations of the unit.
-    pub declared_fragments: &'r IndexMap<NodeId, FragmentId>,
-    /// The node that has the expression: a `VariableDeclaration` (its
-    /// initializer) or a formal parameter (its default value).
-    pub owner: NodeId,
+    pub source: ExpressionSource<'r>,
     /// The instance element that encloses the declaration (the scopes of
     /// Dart `initializerScope`).
     pub enclosing_instance: Option<EId<InstanceElement>>,
@@ -96,6 +91,28 @@ pub struct ExpressionRequest<'r> {
     pub context_type: TypeId,
     /// Dart `inScopePrimaryConstructorParameters`.
     pub in_scope_primary_constructor_parameters: Option<&'r [EId<FormalParameterElement>]>,
+}
+
+/// Where the expression of an [`ExpressionRequest`] is.
+pub enum ExpressionSource<'r> {
+    /// An expression of a unit.
+    Unit {
+        parsed: &'r Arc<ParsedUnit>,
+        /// Dart `node.declaredFragment` of the declarations of the unit.
+        declared_fragments: &'r IndexMap<NodeId, FragmentId>,
+        /// The node that has the expression: a `VariableDeclaration` (its
+        /// initializer) or a formal parameter (its default value).
+        owner: NodeId,
+    },
+    /// A synthetic expression in the [`ConstExprs`] of the cycle (Dart: the
+    /// initializer of the synthetic `VariableDeclaration` of an enum
+    /// constant).
+    Synthetic {
+        ast: &'r Ast,
+        expression: NodeId,
+        /// The features of the unit of the declaration.
+        features: dartr_parser::experimental_features::ExperimentalFeatures,
+    },
 }
 
 /// A [`LinkResolver`] that resolves nothing.

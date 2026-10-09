@@ -34,7 +34,8 @@
 use std::cell::RefCell;
 
 use dartr_ast::{
-    FieldFormalParameter, RegularFormalParameter, SuperFormalParameter, VariableDeclaration,
+    EnumConstantDeclaration, FieldFormalParameter, RegularFormalParameter, SuperFormalParameter,
+    VariableDeclaration,
 };
 use dartr_element::type_inference::{
     PropertyTypeInference, ensure_property_type, with_property_type_inference,
@@ -44,7 +45,7 @@ use dartr_typesystem::{TypeExt, TypeSystem};
 use indexmap::IndexMap;
 
 use crate::dump::{fragments, has_implicit_type, is_origin_getter_setter, is_static};
-use crate::link::{ExpressionRequest, LinkResolver, LinkResolverSession, Linker};
+use crate::link::{ExpressionRequest, ExpressionSource, LinkResolver, LinkResolverSession, Linker};
 use crate::types::unit_ast;
 use crate::types_builder::set_variable_type;
 
@@ -118,7 +119,15 @@ impl PropertyTypeInference for TopLevelInference<'_, '_, '_> {
 struct Initializer {
     lib: usize,
     unit: usize,
-    owner: dartr_ast::NodeId,
+    /// The node with the expression, or the synthetic initializer of an
+    /// enum constant.
+    owner: InitializerNode,
+}
+
+#[derive(Clone, Copy)]
+enum InitializerNode {
+    Node(dartr_ast::NodeId),
+    Synthetic(ConstExprId),
 }
 
 impl TopLevelInference<'_, '_, '_> {
@@ -196,12 +205,23 @@ impl TopLevelInference<'_, '_, '_> {
             };
             has_node = true;
             let ast = unit_ast(lk, lib as u32, unit as u32);
-            if let Some(v) = ast.cast::<VariableDeclaration>(node) {
+            if ast.is::<EnumConstantDeclaration>(node) {
+                // Dart: the synthetic `VariableDeclaration` of the enum
+                // constant, with an `InstanceCreationExpression`.
+                let field = FId::<FieldFragment>::from_raw(fragment);
+                if let Some(expression) = ctx.fragment(field).constant_initializer {
+                    initializer = Some(Initializer {
+                        lib,
+                        unit,
+                        owner: InitializerNode::Synthetic(expression),
+                    });
+                }
+            } else if let Some(v) = ast.cast::<VariableDeclaration>(node) {
                 if ast.get(v).initializer.is_some() {
                     initializer = Some(Initializer {
                         lib,
                         unit,
-                        owner: node,
+                        owner: InitializerNode::Node(node),
                     });
                     if element.raw().tag() == Tag::Field
                         && !is_static(ctx, element.raw())
@@ -218,7 +238,7 @@ impl TopLevelInference<'_, '_, '_> {
                     initializer = Some(Initializer {
                         lib,
                         unit,
-                        owner: node,
+                        owner: InitializerNode::Node(node),
                     });
                 } else if p.function_typed_suffix.is_none() {
                     self.set_status(element, InferenceStatus::Inferred);
@@ -229,7 +249,7 @@ impl TopLevelInference<'_, '_, '_> {
                     initializer = Some(Initializer {
                         lib,
                         unit,
-                        owner: node,
+                        owner: InitializerNode::Node(node),
                     });
                 }
             } else if let Some(p) = ast.cast::<SuperFormalParameter>(node)
@@ -238,7 +258,7 @@ impl TopLevelInference<'_, '_, '_> {
                 initializer = Some(Initializer {
                     lib,
                     unit,
-                    owner: node,
+                    owner: InitializerNode::Node(node),
                 });
             }
         }
@@ -297,9 +317,18 @@ impl TopLevelInference<'_, '_, '_> {
         let request = ExpressionRequest {
             library: builder.element,
             fragment: unit.fragment,
-            parsed: &unit.parsed,
-            declared_fragments: &unit.declared_fragments,
-            owner: initializer.owner,
+            source: match initializer.owner {
+                InitializerNode::Node(owner) => ExpressionSource::Unit {
+                    parsed: &unit.parsed,
+                    declared_fragments: &unit.declared_fragments,
+                    owner,
+                },
+                InitializerNode::Synthetic(expression) => ExpressionSource::Synthetic {
+                    ast: &lk.core.const_exprs.ast,
+                    expression: expression.0,
+                    features: unit.parsed.feature_set,
+                },
+            },
             enclosing_instance: enclosing,
             enclosing_class,
             context_type: TypeId::UNKNOWN,

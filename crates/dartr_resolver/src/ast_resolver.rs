@@ -53,6 +53,7 @@ use dartr_element::{
     InstanceElement, InterfaceElement, LibraryElement, LibraryFragment, LocalArena, NamedType,
     ResolutionTables, Tag, TypeId, TypeKind, TypeParameterElement,
 };
+use dartr_parser::experimental_features::ExperimentalFeatures;
 use indexmap::IndexMap;
 
 use crate::options::AnalysisOptions;
@@ -76,14 +77,8 @@ pub struct ExpressionRequest<'r> {
     pub library: EId<LibraryElement>,
     /// The library fragment of the unit (Dart `libraryFragment`).
     pub fragment: FId<LibraryFragment>,
-    pub parsed: &'r Arc<ParsedUnit>,
-    /// The fragments of the declarations of the unit (the linker's
-    /// `declaredFragment` of the nodes).
-    pub declared_fragments: &'r IndexMap<NodeId, FragmentId>,
+    pub source: ExpressionSource<'r>,
     pub options: AnalysisOptions,
-    /// The node that has the expression: a `VariableDeclaration` (its
-    /// initializer) or a formal parameter (its default value).
-    pub owner: NodeId,
     /// The instance element that encloses the declaration (its scopes).
     pub enclosing_instance: Option<EId<InstanceElement>>,
     /// Dart `enclosingClassElement`.
@@ -94,12 +89,36 @@ pub struct ExpressionRequest<'r> {
     pub in_scope_primary_constructor_parameters: Option<&'r [EId<FormalParameterElement>]>,
 }
 
+/// Where the expression to resolve is.
+pub enum ExpressionSource<'r> {
+    /// An expression of a unit.
+    Unit {
+        parsed: &'r Arc<ParsedUnit>,
+        /// The fragments of the declarations of the unit (the linker's
+        /// `declaredFragment` of the nodes).
+        declared_fragments: &'r IndexMap<NodeId, FragmentId>,
+        /// The node that has the expression: a `VariableDeclaration` (its
+        /// initializer) or a formal parameter (its default value).
+        owner: NodeId,
+    },
+    /// A synthetic expression of the linker (Dart: the initializer of the
+    /// synthetic `VariableDeclaration` of an enum constant): [expression]
+    /// in [ast], the const expressions of the cycle.
+    Synthetic {
+        ast: &'r Ast,
+        expression: NodeId,
+        /// The features of the unit of the declaration.
+        features: ExperimentalFeatures,
+    },
+}
+
 /// The `AstResolver`s of one linked cycle: the library scopes and the unit
 /// copies (see the module documentation).
 #[derive(Default)]
 pub struct LinkResolution {
     scopes: RefCell<IndexMap<EId<LibraryElement>, Rc<LibraryScopes>>>,
-    pool: RefCell<IndexMap<FId<LibraryFragment>, Vec<UnitCopy>>>,
+    /// The free copies of each unit; `None`: of the synthetic expressions.
+    pool: RefCell<IndexMap<Option<FId<LibraryFragment>>, Vec<UnitCopy>>>,
 }
 
 /// The expression of [owner]: the initializer of a variable declaration,
@@ -127,34 +146,40 @@ impl LinkResolution {
     }
 
     fn take_copy(&self, ctx: &Ctx<'_>, request: &ExpressionRequest<'_>) -> UnitCopy {
-        if let Some(copy) = self
-            .pool
-            .borrow_mut()
-            .get_mut(&request.fragment)
-            .and_then(|v| v.pop())
-        {
+        let key = pool_key(request);
+        if let Some(copy) = self.pool.borrow_mut().get_mut(&key).and_then(|v| v.pop()) {
             return copy;
         }
         let mut tables = ResolutionTables::new();
-        for (&node, &fragment) in request.declared_fragments {
-            tables.declared_fragment.insert(node, fragment);
-        }
-        tables
-            .declared_fragment
-            .insert(request.parsed.unit, request.fragment.raw());
         let mut rt = ResolverTables::new();
-        for &node in &request.parsed.dot_shorthands {
-            rt.dot_shorthand.insert(node, ());
-        }
+        let ast = match &request.source {
+            ExpressionSource::Unit {
+                parsed,
+                declared_fragments,
+                ..
+            } => {
+                for (&node, &fragment) in *declared_fragments {
+                    tables.declared_fragment.insert(node, fragment);
+                }
+                tables
+                    .declared_fragment
+                    .insert(parsed.unit, request.fragment.raw());
+                for &node in &parsed.dot_shorthands {
+                    rt.dot_shorthand.insert(node, ());
+                }
+                parsed.ast.clone()
+            }
+            ExpressionSource::Synthetic { ast, .. } => (*ast).clone(),
+        };
         UnitCopy {
-            ast: request.parsed.ast.clone(),
+            ast,
             tables,
             rt,
             local: ctx.world.generation.new_local_arena(),
         }
     }
 
-    fn put_copy(&self, fragment: FId<LibraryFragment>, copy: UnitCopy) {
+    fn put_copy(&self, fragment: Option<FId<LibraryFragment>>, copy: UnitCopy) {
         self.pool
             .borrow_mut()
             .entry(fragment)
@@ -179,11 +204,49 @@ impl LinkResolution {
         }));
         match result {
             Ok(t) => {
-                self.put_copy(request.fragment, copy);
+                self.put_copy(pool_key(request), copy);
                 t
             }
             // The copy may be inconsistent after a panic: drop it.
             Err(_) => None,
+        }
+    }
+}
+
+fn pool_key(request: &ExpressionRequest<'_>) -> Option<FId<LibraryFragment>> {
+    match request.source {
+        ExpressionSource::Unit { .. } => Some(request.fragment),
+        ExpressionSource::Synthetic { .. } => None,
+    }
+}
+
+/// The node that has the expression in [ast] (a copy of the source of
+/// [request]). A synthetic expression gets a synthetic
+/// `VariableDeclaration` parent (Dart `ElementBuilder` creates one for each
+/// enum constant).
+fn owner_in_copy(ast: &mut Ast, request: &ExpressionRequest<'_>) -> NodeId {
+    match request.source {
+        ExpressionSource::Unit { owner, .. } => owner,
+        ExpressionSource::Synthetic { expression, .. } => {
+            if let Some(parent) = ast.parent(expression) {
+                return parent;
+            }
+            let name = ast.tokens.push_synthetic_string(
+                dartr_syntax::TokenType::IDENTIFIER,
+                "",
+                0,
+                0,
+                Some(0),
+            );
+            let metadata = ast.new_list(std::iter::empty());
+            ast.add(VariableDeclaration {
+                documentation_comment: None,
+                metadata,
+                name,
+                equals: None,
+                initializer: Some(Id::from_raw(expression)),
+            })
+            .raw()
         }
     }
 }
@@ -200,7 +263,12 @@ fn resolve_in_copy(
         rt,
         local,
     } = copy;
-    let expression = owner_expression(ast, request.owner)?;
+    let owner = owner_in_copy(ast, request);
+    let expression = owner_expression(ast, owner)?;
+    let unit_features = match &request.source {
+        ExpressionSource::Unit { parsed, .. } => parsed.feature_set,
+        ExpressionSource::Synthetic { features, .. } => *features,
+    };
     let library_features = link_ctx.get(request.library).feature_set.clone();
     let ctx = Ctx {
         local: Some(&*local),
@@ -212,7 +280,7 @@ fn resolve_in_copy(
         fragment: request.fragment,
         scopes,
         options: request.options,
-        features: request.parsed.feature_set,
+        features: unit_features,
     };
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
 
@@ -230,12 +298,12 @@ fn resolve_in_copy(
     // node.accept(_resolutionVisitor), in the initializer scope.
     {
         let mut visitor = ResolutionVisitor::new(ctx, unit_ctx, tables, rt, &mut diagnostics);
-        visitor.enter_initializer_scope(ast, request);
+        visitor.enter_initializer_scope(ast, owner, request);
         visitor.visit(ast, expression);
     }
 
     // Node may have been rewritten so get it again.
-    let expression = owner_expression(ast, request.owner)?;
+    let expression = owner_expression(ast, owner)?;
     let parent = ast.parent(expression)?;
     let result = {
         let mut resolver = ResolverVisitor::new(ctx, ast, tables, rt, &mut diagnostics, unit_ctx);
@@ -264,7 +332,12 @@ fn resolve_in_copy(
 impl ResolutionVisitor<'_, '_> {
     /// Pushes the scopes of Dart `node.initializerScope` for the
     /// expression of [request] (see the module documentation).
-    fn enter_initializer_scope(&mut self, ast: &Ast, request: &ExpressionRequest<'_>) {
+    fn enter_initializer_scope(
+        &mut self,
+        ast: &Ast,
+        owner: NodeId,
+        request: &ExpressionRequest<'_>,
+    ) {
         let Some(instance) = request.enclosing_instance else {
             return;
         };
@@ -281,7 +354,7 @@ impl ResolutionVisitor<'_, '_> {
         }
         // ScopeContext.visitFieldDeclaration, visitVariableDeclarationList
         let list = ast
-            .parent(request.owner)
+            .parent(owner)
             .and_then(|p| ast.cast::<VariableDeclarationList>(p));
         let field_declaration = list
             .and_then(|l| ast.parent(l))
