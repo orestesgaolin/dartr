@@ -69,6 +69,9 @@ pub mod return_type_verifier;
 pub mod super_formal_parameters_verifier;
 pub mod type_arguments_verifier;
 
+// Ported with C4/C5; moved here from assignment_expression_resolver.rs.
+pub mod assignment_verifier;
+
 // D12: the remaining verifiers.
 pub mod async_return_visitor;
 pub mod bool_expression_verifier;

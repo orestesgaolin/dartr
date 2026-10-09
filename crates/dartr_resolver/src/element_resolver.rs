@@ -284,11 +284,16 @@ pub fn resolve_arguments_to_parameters(
 
     let mut used_names: Option<indexmap::IndexSet<String>> = None;
     if let Some(list) = enclosing_constructor_formal_parameter_list {
-        let (positional, named) =
-            verify_super_formal_parameters(rv, list, positional_argument_count != 0, report);
-        positional_argument_count += positional;
-        if !named.is_empty() {
-            used_names = Some(named.into_iter().collect());
+        let result =
+            crate::error::super_formal_parameters_verifier::verify_super_formal_parameters(
+                rv,
+                list,
+                report,
+                positional_argument_count != 0,
+            );
+        positional_argument_count += result.positional_argument_count;
+        if !result.named_argument_names.is_empty() {
+            used_names = Some(result.named_argument_names.into_iter().collect());
         }
     }
 
@@ -480,41 +485,4 @@ fn enum_constant_type_name(rv: &ResolverVisitor<'_>, node: NodeId) -> Option<Str
     Some(dartr_element::diagnostics::type_display_string(
         &rv.ctx, ty, true,
     ))
-}
-
-/// Dart `verifySuperFormalParameters(formalParameterList:,
-/// diagnosticReporter:, hasExplicitPositionalArguments:)`: the count of
-/// positional super parameters and the names of the named super
-/// parameters of [formal_parameter_list].
-pub fn verify_super_formal_parameters(
-    rv: &mut ResolverVisitor<'_>,
-    formal_parameter_list: Id<dartr_ast::FormalParameterList>,
-    has_explicit_positional_arguments: bool,
-    report: bool,
-) -> (usize, Vec<String>) {
-    let mut positional_argument_count = 0;
-    let mut named_argument_names = Vec::new();
-    let parameters = rv
-        .ast
-        .list(rv.ast[formal_parameter_list].parameters)
-        .to_vec();
-    for parameter in parameters {
-        let Some(parameter) = rv.ast.cast::<dartr_ast::SuperFormalParameter>(parameter) else {
-            continue;
-        };
-        let name_token = rv.ast[parameter].name;
-        if rv.ast[parameter].kind.is_named() {
-            named_argument_names.push(rv.lexeme(name_token).to_string());
-        } else {
-            positional_argument_count += 1;
-            if has_explicit_positional_arguments && report {
-                let d = rv.at_token(
-                    diag::positional_super_formal_parameter_with_positional_argument(),
-                    name_token,
-                );
-                rv.report(d);
-            }
-        }
-    }
-    (positional_argument_count, named_argument_names)
 }
