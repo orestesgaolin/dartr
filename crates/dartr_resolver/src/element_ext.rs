@@ -62,6 +62,9 @@ pub fn is_promotable_element(e: ElementId) -> bool {
 /// formal parameter, field, top-level variable); `InvalidType` when not
 /// set yet.
 pub fn variable_type(ctx: &Ctx<'_>, e: ElementId) -> TypeId {
+    // Dart `PropertyInducingElementImpl.type` infers on demand while
+    // linking (summary2 `AstResolver`).
+    dartr_element::type_inference::ensure_variable_type(ctx, e);
     let t = match ctx.any(e) {
         AnyElement::LocalVariable(v) => v.type_.get(),
         AnyElement::FormalParameter(p) => p.type_.get(),
