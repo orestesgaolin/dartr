@@ -21,93 +21,43 @@ use dartr_ast::{
     InstanceCreationExpression, RedirectingConstructorInvocation, SuperConstructorInvocation,
 };
 use dartr_diagnostics::diag;
-use dartr_element::{
-    EId, ElemRef, ElementId, EnumElement, InterfaceElement, Nullability, Tag, TypeAliasElement,
-    TypeId, TypeKind, TypeParameterElement,
-};
+use dartr_element::{ElemRef, ElementId, EnumElement, Tag, TypeId};
 use dartr_flow::type_analyzer::TypeAnalyzer;
-use dartr_typesystem::generic_inferrer::{InferenceErrorEntity, InferenceErrorEntityKind};
 use dartr_typesystem::{TypeExt, lookup, member};
 
-use crate::ast_ext::instance_creation_is_const;
-use crate::constructor_invocation_inferrer::{
-    FullInvocation, report_not_enough_positional_arguments, resolve_full_invocation,
-    resolve_invocation,
-};
 use crate::element_resolver;
+use crate::element_resolver::report_not_enough_positional_arguments;
+use crate::invocation_inferrer::{
+    InferrerKind, InvocationInferrer, InvocationTarget, resolve_invocation_base,
+};
 use crate::resolver::ResolverVisitor;
 
-/// Dart `ConstructorElementToInfer`: the constructor to instantiate and the
-/// type parameters to infer.
-#[derive(Clone, Debug)]
-pub struct ConstructorElementToInfer {
-    /// Dart `typeParameters`: the type parameters of the class, or of the
-    /// type alias.
-    pub type_parameters: Vec<EId<TypeParameterElement>>,
-    /// Dart `element`: a raw constructor of the class, or a substituted
-    /// constructor of the aliased class.
-    pub element: ElemRef,
-}
-
-impl ConstructorElementToInfer {
-    /// Dart `asType`: the generic function type that forwards to the
-    /// constructor (`<T>(T) -> C<T>` for `class C<T> { C(T arg); }`), or the
-    /// constructor type for a non-generic type.
-    pub fn as_type(&self, rv: &ResolverVisitor<'_>) -> TypeId {
-        let ctx = rv.ctx;
-        let ty = member::type_(&ctx, self.element);
-        if self.type_parameters.is_empty() {
-            return ty;
-        }
-        let TypeKind::Function(f) = *ctx.ty(ty) else {
-            return ty;
-        };
-        ctx.function_type(
-            &self.type_parameters,
-            ctx.list(f.params),
-            f.ret,
-            Nullability::None,
-            None,
-        )
-    }
-}
+pub use crate::invocation_inference_helper::ConstructorElementToInfer;
 
 /// Dart `InvocationInferenceHelper.constructorElementToInfer(typeElement:,
-/// constructorName:, definingLibrary:)`.
+/// constructorName:, definingLibrary: _resolver.definingLibrary)`.
 pub fn constructor_element_to_infer(
     rv: &ResolverVisitor<'_>,
     type_element: Option<ElementId>,
     constructor_name: Option<&str>,
 ) -> Option<ConstructorElementToInfer> {
-    let ctx = rv.ctx;
-    let library = rv.unit.library;
-    let type_element = type_element?;
-    let type_parameters;
-    let raw_element;
-    if let Some(interface) = type_element.cast::<InterfaceElement>() {
-        type_parameters = ctx.interface_type_parameters(interface).to_vec();
-        raw_element = match constructor_name {
-            None => lookup::get_named_constructor(&ctx, interface, "new")
-                .map(|c| ElemRef::Base(c.raw())),
-            Some(name) => lookup::get_named_constructor(&ctx, interface, name)
-                .map(|c| ElemRef::Base(c.raw()))
-                .filter(|&c| member::is_accessible_in(&ctx, c, library)),
-        };
-    } else {
-        let alias = type_element.cast::<TypeAliasElement>()?;
-        let data = ctx.get(alias);
-        type_parameters = data.type_params.clone();
-        let aliased_type = data.aliased_type.get().unwrap_or(TypeId::INVALID);
-        raw_element = match ctx.ty(aliased_type) {
-            TypeKind::Interface { .. } => {
-                lookup::type_look_up_constructor(&ctx, aliased_type, constructor_name, library)
-            }
-            _ => None,
-        };
-    }
-    Some(ConstructorElementToInfer {
-        type_parameters,
-        element: raw_element?,
+    crate::invocation_inference_helper::constructor_element_to_infer(
+        rv,
+        type_element,
+        constructor_name,
+        rv.unit.library,
+    )
+}
+
+/// Dart `InvocationTargetConstructorElement(elementToInfer.element,
+/// elementToInfer.asType)`.
+fn constructor_target(
+    rv: &ResolverVisitor<'_>,
+    element_to_infer: Option<&ConstructorElementToInfer>,
+) -> Option<InvocationTarget> {
+    element_to_infer.map(|e| InvocationTarget::ConstructorElement {
+        element: e.element,
+        raw_type: e.as_type(rv),
     })
 }
 
@@ -146,41 +96,6 @@ fn named_type_element(
     rv.base_element(named_type)
 }
 
-/// The inference error entity of a constructor name (Dart
-/// `_errorEntity => node.constructorName`).
-fn constructor_name_error_entity(
-    rv: &ResolverVisitor<'_>,
-    constructor_name: Id<ConstructorName>,
-) -> InferenceErrorEntity {
-    let named_type = rv.ast[constructor_name].type_;
-    let name = match rv.ast[constructor_name].name {
-        None => {
-            let mut qualified = String::new();
-            if let Some(prefix) = rv.ast[named_type].import_prefix {
-                qualified.push_str(rv.lexeme(rv.ast[prefix].name));
-                qualified.push('.');
-            }
-            qualified.push_str(rv.lexeme(rv.ast[named_type].name));
-            qualified
-        }
-        Some(name) => format!(
-            "{}.{}",
-            dartr_ast::to_source::to_source(rv.ast, named_type),
-            rv.lexeme(rv.ast[name].token)
-        ),
-    };
-    InferenceErrorEntity {
-        offset: rv.ast.offset(constructor_name) as usize,
-        length: rv.ast.length(constructor_name) as usize,
-        is_invocation_in_as_expression: false,
-        kind: InferenceErrorEntityKind::ConstructorName {
-            // `metadata.hasOptionalTypeArgs` (package:meta): not tracked.
-            type_element_has_optional_type_args: false,
-            constructor_name: name,
-        },
-    }
-}
-
 /// Dart `_resolveInstanceCreationExpression`.
 fn resolve_instance_creation_expression(
     rv: &mut ResolverVisitor<'_>,
@@ -200,33 +115,15 @@ fn resolve_instance_creation_expression(
         named_type_element(rv, constructor_name),
         name.as_deref(),
     );
-    let raw_type = element_to_infer.as_ref().map(|e| e.as_type(rv));
     let named_type = rv.ast[constructor_name].type_;
-    let inv = FullInvocation {
-        node: node.raw(),
+    let target = constructor_target(rv, element_to_infer.as_ref());
+    InvocationInferrer {
+        kind: InferrerKind::InstanceCreation(node),
         argument_list: rv.ast[node].argument_list,
         context_type,
-        raw_type,
-        // For an instance creation expression the type arguments are on
-        // the constructor name.
-        type_arguments: rv.ast[named_type].type_arguments,
-        error_entity: constructor_name_error_entity(rv, constructor_name),
-        is_const: instance_creation_is_const(rv.ast, node),
-        is_generic_inference_disabled: false,
-        needs_type_argument_bounds_check: true,
-        // Error reporting for instance creations is done elsewhere.
-        wrong_number_of_type_arguments: None,
-    };
-    resolve_full_invocation(rv, inv, &mut |rv, _type_argument_types, invoke_type| {
-        let constructed_type = invoke_return_type(rv, invoke_type?)?;
-        rv.tables
-            .annotation_type
-            .insert(named_type, constructed_type);
-        let base = member::base_element(&rv.ctx, rv.element(constructor_name)?);
-        let constructor_element = constructed_element(rv, base, constructed_type);
-        rv.set_element(constructor_name, Some(constructor_element));
-        Some(member::formal_parameters(&rv.ctx, constructor_element))
-    });
+        target,
+    }
+    .resolve_invocation(rv);
     let ty = rv
         .tables
         .annotation_type
@@ -235,27 +132,6 @@ fn resolve_instance_creation_expression(
         .unwrap_or(TypeId::DYNAMIC);
     rv.record_static_type(node, ty);
     // Dart `checkForArgumentTypesNotAssignableInList` (wave D).
-}
-
-/// The return type of the function type [invoke_type].
-fn invoke_return_type(rv: &ResolverVisitor<'_>, invoke_type: TypeId) -> Option<TypeId> {
-    match *rv.ctx.ty(invoke_type) {
-        TypeKind::Function(f) => Some(f.ret),
-        _ => None,
-    }
-}
-
-/// Dart `SubstitutedConstructorElementImpl.from2(baseElement,
-/// constructedType as InterfaceType)`.
-fn constructed_element(
-    rv: &ResolverVisitor<'_>,
-    base: ElementId,
-    constructed_type: TypeId,
-) -> ElemRef {
-    match rv.ctx.ty(constructed_type) {
-        TypeKind::Interface { .. } => member::constructor_from2(&rv.ctx, base, constructed_type),
-        _ => ElemRef::Base(base),
-    }
 }
 
 /// Dart `ResolverVisitor.visitDotShorthandConstructorInvocation(node,
@@ -377,41 +253,14 @@ fn resolve_dot_shorthand_constructor_invocation(
     let constructor_name = rv.lexeme(rv.ast[constructor_name_node].token).to_string();
     let type_element = rv.ctx.type_element(dot_shorthand_context_type);
     let element_to_infer = constructor_element_to_infer(rv, type_element, Some(&constructor_name));
-    let raw_type = element_to_infer.as_ref().map(|e| e.as_type(rv));
-    let is_const = rv.ast[node]
-        .const_keyword
-        .is_some_and(|k| rv.lexeme(k) == "const")
-        || crate::ast_ext::in_constant_context(rv.ast, node.raw());
-    let inv = FullInvocation {
-        node: node.raw(),
+    let target = constructor_target(rv, element_to_infer.as_ref());
+    let return_type = InvocationInferrer {
+        kind: InferrerKind::DotShorthandConstructorInvocation(node),
         argument_list: rv.ast[node].argument_list,
         context_type,
-        raw_type,
-        type_arguments: rv.ast[node].type_arguments,
-        error_entity: InferenceErrorEntity {
-            offset: rv.ast.offset(constructor_name_node) as usize,
-            length: rv.ast.length(constructor_name_node) as usize,
-            is_invocation_in_as_expression: false,
-            kind: InferenceErrorEntityKind::SimpleIdentifier {
-                name: constructor_name.clone(),
-                element: None,
-            },
-        },
-        is_const,
-        is_generic_inference_disabled: false,
-        needs_type_argument_bounds_check: true,
-        // Error reporting for dot shorthand constructor invocations is done
-        // within the [InstanceCreationExpressionResolver].
-        wrong_number_of_type_arguments: None,
-    };
-    let return_type =
-        resolve_full_invocation(rv, inv, &mut |rv, _type_argument_types, invoke_type| {
-            let constructed_type = invoke_return_type(rv, invoke_type?)?;
-            let base = member::base_element(&rv.ctx, rv.element(node)?);
-            let constructor_element = constructed_element(rv, base, constructed_type);
-            rv.set_element(constructor_name_node, Some(constructor_element));
-            Some(member::formal_parameters(&rv.ctx, constructor_element))
-        });
+        target,
+    }
+    .resolve_invocation(rv);
     rv.record_static_type(node, return_type);
     // Dart `checkForArgumentTypesNotAssignableInList` (wave D).
 }
@@ -425,9 +274,14 @@ pub fn visit_super_constructor_invocation(
     // because it needs to be visited in the context of the constructor
     // invocation.
     element_resolver::visit_super_constructor_invocation(rv, node);
-    let raw_type = rv.element(node).map(|e| member::type_(&rv.ctx, e));
+    let target = rv
+        .element(node)
+        .map(|e| InvocationTarget::ConstructorElement {
+            element: e,
+            raw_type: member::type_(&rv.ctx, e),
+        });
     let argument_list = rv.ast[node].argument_list;
-    resolve_invocation(rv, node.raw(), argument_list, raw_type);
+    resolve_invocation_base(rv, node.raw(), argument_list, target);
     // Dart `checkForArgumentTypesNotAssignableInList` (wave D).
 }
 
@@ -440,9 +294,14 @@ pub fn visit_redirecting_constructor_invocation(
     // because it needs to be visited in the context of the constructor
     // invocation.
     element_resolver::visit_redirecting_constructor_invocation(rv, node);
-    let raw_type = rv.element(node).map(|e| member::type_(&rv.ctx, e));
+    let target = rv
+        .element(node)
+        .map(|e| InvocationTarget::ConstructorElement {
+            element: e,
+            raw_type: member::type_(&rv.ctx, e),
+        });
     let argument_list = rv.ast[node].argument_list;
-    resolve_invocation(rv, node.raw(), argument_list, raw_type);
+    resolve_invocation_base(rv, node.raw(), argument_list, target);
     // Dart `checkForArgumentTypesNotAssignableInList` (wave D).
 }
 
@@ -506,30 +365,24 @@ pub fn visit_enum_constant_declaration(
         Some(arguments) => {
             let argument_list = rv.ast[arguments].argument_list;
             let type_arguments = rv.ast[arguments].type_arguments;
-            rv.with_flow_analysis(node.raw(), |rv| {
-                let raw_type = element_to_infer.as_ref().map(|e| e.as_type(rv));
-                let inv = FullInvocation {
-                    node: node.raw(),
+            if let Some(constructor_element) = constructor_element {
+                let parameters = member::formal_parameters(&ctx, constructor_element);
+                element_resolver::resolve_arguments_to_parameters(
+                    rv,
                     argument_list,
-                    context_type: TypeId::UNKNOWN,
-                    raw_type,
-                    type_arguments,
-                    error_entity: InferenceErrorEntity::other(
-                        rv.ast.offset(node) as usize,
-                        rv.ast.length(node) as usize,
-                    ),
-                    is_const: true,
-                    is_generic_inference_disabled: false,
-                    needs_type_argument_bounds_check: false,
-                    wrong_number_of_type_arguments: None,
-                };
-                resolve_full_invocation(rv, inv, &mut |rv, _type_argument_types, invoke_type| {
-                    let constructed_type = invoke_return_type(rv, invoke_type?)?;
-                    let base = member::base_element(&rv.ctx, rv.element(node)?);
-                    let constructor_element = constructed_element(rv, base, constructed_type);
-                    rv.set_element(node, Some(constructor_element));
-                    Some(member::formal_parameters(&rv.ctx, constructor_element))
+                    &parameters,
+                    true,
+                    None,
+                );
+            }
+            rv.with_flow_analysis(node.raw(), |rv| {
+                // Dart: each argument with the type of its corresponding
+                // parameter as context.
+                let target = constructor_element.map(|e| InvocationTarget::ConstructorElement {
+                    element: e,
+                    raw_type: member::type_(&rv.ctx, e),
                 });
+                resolve_invocation_base(rv, node.raw(), argument_list, target);
             });
             rv.visit_opt(type_arguments);
             // Dart `checkForArgumentTypesNotAssignableInList` (wave D).

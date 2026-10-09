@@ -81,7 +81,6 @@ pub mod applicable_extensions;
 pub mod assignment_expression_resolver;
 pub mod binary_expression_resolver;
 pub mod comment_reference_resolver;
-pub mod constructor_invocation_inferrer;
 pub mod constructor_reference_resolver;
 pub mod dot_shorthand_resolver;
 pub mod exit_detector;

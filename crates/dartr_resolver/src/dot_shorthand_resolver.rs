@@ -14,12 +14,11 @@ use dartr_ast::{
 use dartr_diagnostics::diag;
 use dartr_element::{ElemRef, InstanceElement, InterfaceElement, Tag, TypeId, TypeKind};
 use dartr_flow::type_analyzer::TypeAnalyzer;
-use dartr_typesystem::generic_inferrer::{InferenceErrorEntity, InferenceErrorEntityKind};
 use dartr_typesystem::{TypeExt, lookup, member};
 
-use crate::constructor_invocation_inferrer::{FullInvocation, resolve_full_invocation};
 use crate::instance_creation_expression_resolver::constructor_element_to_infer;
 use crate::invocation_inference_helper::infer_tear_off;
+use crate::invocation_inferrer::{InferrerKind, InvocationInferrer, InvocationTarget};
 use crate::resolver::{ResolverVisitor, SchemaOf};
 
 /// Dart `ResolverVisitor.visitDotShorthandConstructorInvocation(node,
@@ -385,63 +384,13 @@ fn resolve_arguments_finish_dot_shorthand_inference(
     context_type: TypeId,
     target: Option<(ElemRef, TypeId)>,
 ) {
-    let member_name = rv.ast[node].member_name;
-    let name = rv.lexeme(rv.ast[member_name].token).to_string();
-    let target_element = target.map(|(e, _)| e);
-    let inv = FullInvocation {
-        node: node.raw(),
+    let return_type = InvocationInferrer {
+        kind: InferrerKind::DotShorthandInvocation(node),
         argument_list: rv.ast[node].argument_list,
         context_type,
-        raw_type: target.map(|(_, t)| t),
-        type_arguments: rv.ast[node].type_arguments,
-        // Dart `_errorEntity => node.function` (the member name).
-        error_entity: InferenceErrorEntity {
-            offset: rv.ast.offset(member_name) as usize,
-            length: rv.ast.length(member_name) as usize,
-            is_invocation_in_as_expression: false,
-            kind: InferenceErrorEntityKind::SimpleIdentifier {
-                name: name.clone(),
-                element: None,
-            },
-        },
-        is_const: false,
-        is_generic_inference_disabled: false,
-        needs_type_argument_bounds_check: false,
-        wrong_number_of_type_arguments: target_element.map(|e| {
-            let ctx = rv.ctx;
-            let base = member::base_element(&ctx, e);
-            let kind = base.tag().element_kind().display_name();
-            let element_name = ctx.element_name(base).unwrap_or("").to_string();
-            Box::new(move |p: usize, a: usize| {
-                diag::wrong_number_of_type_arguments_element(
-                    kind,
-                    &element_name,
-                    p as i64,
-                    a as i64,
-                )
-            }) as Box<dyn Fn(usize, usize) -> dartr_diagnostics::LocatableDiagnostic>
-        }),
-    };
-    let return_type =
-        resolve_full_invocation(rv, inv, &mut |rv, type_argument_types, invoke_type| {
-            // Dart `InvocationExpressionInferrer._storeResult`.
-            let list = rv.ctx.intern_list(type_argument_types.unwrap_or(&[]));
-            rv.tables.type_arg_types.insert(node, list);
-            rv.tables
-                .invoke_type
-                .insert(node, invoke_type.unwrap_or(TypeId::DYNAMIC));
-            let invoke_type = invoke_type?;
-            match *rv.ctx.ty(invoke_type) {
-                TypeKind::Function(f) => Some(
-                    rv.ctx
-                        .list(f.params)
-                        .iter()
-                        .filter_map(|p| p.element)
-                        .collect(),
-                ),
-                _ => None,
-            }
-        });
+        target: target.map(|(e, _)| InvocationTarget::ExecutableElement(e)),
+    }
+    .resolve_invocation(rv);
     rv.record_static_type(node, return_type);
 }
 
