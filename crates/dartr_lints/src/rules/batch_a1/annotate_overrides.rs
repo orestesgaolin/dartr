@@ -1,17 +1,14 @@
 // Dart source: pkg/linter/lib/src/rules/annotate_overrides.dart
 
-use super::helpers::{KnownAnnotation, annotation_status, element_name};
+use super::helpers::element_name;
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::{
     FieldDeclaration, Id, MethodDeclaration, NodeId, NodeKind, PrimaryConstructorDeclaration,
     RegularFormalParameter,
 };
 use dartr_diagnostics::{Diagnostic, diag};
-use dartr_element::{ElemRef, FormalParameterElement, InterfaceElement, Tag};
-use dartr_typesystem::{
-    inheritance_manager3::{InheritanceManager3, Name},
-    member,
-};
+use dartr_element::{AnyElement, ElemRef, FormalParameterElement, InterfaceElement, Tag};
+use dartr_typesystem::inheritance_manager3::{InheritanceManager3, Name};
 
 pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
     registry.add(NodeKind::FieldDeclaration, "annotate_overrides", check);
@@ -23,53 +20,55 @@ pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
     );
 }
 
+/// Dart `_Visitor.check`.
 fn check_member(
     c: &LinterContext<'_>,
-    owner: NodeId,
     declaration: NodeId,
     token: dartr_syntax::TokenId,
     out: &mut Vec<Diagnostic>,
 ) {
     let Some(r) = c.resolved else { return };
-    let owner_override = annotation_status(c, owner, KnownAnnotation::Override);
-    let declaration_override = annotation_status(c, declaration, KnownAnnotation::Override);
-    if owner_override == Some(true) || declaration_override == Some(true) {
-        return;
-    }
-    if owner_override.is_none() || declaration_override.is_none() {
-        return;
-    }
-    let Some(mut element) = c.declared_element(declaration) else {
+    let Some(element) = c.declared_element(declaration) else {
         return;
     };
+    if c.has_top_getter_annotation(element, "dart.core", "override") {
+        return;
+    }
+    let mut member_element = element;
     if element.tag() == Tag::FieldFormalParameter {
         let parameter = r
             .ctx
             .get(dartr_element::EId::<FormalParameterElement>::from_raw(
                 element,
             ));
-        let Some(field) = parameter.field.get() else {
-            return;
-        };
-        element = field.raw();
+        if let Some(field) = parameter.field.get() {
+            member_element = field.raw();
+        }
     }
-    let Some(data) = r.ctx.element_data(element) else {
+    // Dart `ElementExtension.overriddenMember`.
+    let member = match r.ctx.any(member_element) {
+        AnyElement::Field(field) => field.getter.map(|g| g.raw()),
+        AnyElement::Method(_) | AnyElement::Getter(_) | AnyElement::Setter(_) => {
+            Some(member_element)
+        }
+        _ => None,
+    };
+    let Some(member) = member else {
         return;
     };
-    let Some(enclosing) = data.enclosing.and_then(|e| e.cast::<InterfaceElement>()) else {
+    let Some(enclosing) = r
+        .ctx
+        .element_data(member)
+        .and_then(|d| d.enclosing)
+        .and_then(|e| e.cast::<InterfaceElement>())
+    else {
         return;
     };
-    let Some(name) = element_name(c, ElemRef::Base(element)) else {
+    let Some(name) = Name::for_element(&r.ctx, ElemRef::Base(member)) else {
         return;
     };
-    let Some(lookup_name) = member::lookup_name(&r.ctx, ElemRef::Base(element)) else {
-        return;
-    };
-    let inherited = InheritanceManager3::new(r.ctx).get_overridden(
-        enclosing,
-        Name::for_library(&r.ctx, data.library, &lookup_name),
-    );
-    if inherited.is_some_and(|members| !members.is_empty()) {
+    if let Some(inherited) = InheritanceManager3::new(r.ctx).get_inherited(enclosing, name) {
+        let name = element_name(c, inherited).unwrap_or("");
         c.report_token(out, &diag::ANNOTATE_OVERRIDES, token, &[name]);
     }
 }
@@ -84,7 +83,7 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                 && super::helpers::ancestor(c.ast, node, NodeKind::ExtensionTypeDeclaration)
                     .is_none()
             {
-                check_member(c, node, node, n.name, out);
+                check_member(c, node, n.name, out);
             }
         }
         NodeKind::FieldDeclaration => {
@@ -97,7 +96,7 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                 return;
             }
             for variable in c.ast.list(c.ast[n.fields].variables) {
-                check_member(c, node, variable.raw(), c.ast[*variable].name, out);
+                check_member(c, variable.raw(), c.ast[*variable].name, out);
             }
         }
         NodeKind::PrimaryConstructorDeclaration => {
@@ -127,7 +126,7 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                     continue;
                 };
                 if matches!(c.ast.tokens.lexeme(keyword), "final" | "var") {
-                    check_member(c, node, parameter.raw(), data.name.unwrap_or(keyword), out);
+                    check_member(c, parameter.raw(), data.name.unwrap_or(keyword), out);
                 }
             }
         }

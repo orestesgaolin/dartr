@@ -3,7 +3,6 @@
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
-use dartr_typesystem::member;
 
 pub fn register(registry: &mut RuleVisitorRegistry) {
     registry.add_block("join_return_with_assignment", check);
@@ -45,13 +44,22 @@ fn return_expression(ctx: &LinterContext<'_>, statement: NodeId) -> Option<NodeI
         .and_then(|r| ctx.ast[r].expression.map(Id::raw))
 }
 
+/// Dart `canonicalElementsAreEqual` operand: `writeOrReadElement?.canonicalElement2`.
 fn canonical_element(
     ctx: &LinterContext<'_>,
     expression: NodeId,
 ) -> Option<dartr_element::ElementId> {
-    let resolved = ctx.resolved?;
+    ctx.write_or_read_element(expression)
+        .and_then(|e| ctx.canonical_element2(e))
+}
+
+/// `.element?.canonicalElement2` (the prefix of a prefixed identifier).
+fn canonical_element_of_element(
+    ctx: &LinterContext<'_>,
+    expression: NodeId,
+) -> Option<dartr_element::ElementId> {
     ctx.element(expression)
-        .map(|e| member::base_element(&resolved.ctx, e))
+        .and_then(|e| ctx.canonical_element2(e))
 }
 
 fn same_target(ctx: &LinterContext<'_>, a: Option<NodeId>, b: Option<NodeId>) -> bool {
@@ -67,7 +75,8 @@ fn same_target(ctx: &LinterContext<'_>, a: Option<NodeId>, b: Option<NodeId>) ->
         (NodeKind::PrefixedIdentifier, NodeKind::PrefixedIdentifier) => {
             let a = &ctx.ast[Id::<PrefixedIdentifier>::from_raw(a)];
             let b = &ctx.ast[Id::<PrefixedIdentifier>::from_raw(b)];
-            canonical_element(ctx, a.prefix.raw()) == canonical_element(ctx, b.prefix.raw())
+            canonical_element_of_element(ctx, a.prefix.raw())
+                == canonical_element_of_element(ctx, b.prefix.raw())
                 && canonical_element(ctx, a.identifier.raw())
                     == canonical_element(ctx, b.identifier.raw())
         }

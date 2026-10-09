@@ -37,12 +37,17 @@ fn approximate_context_type(context: &LinterContext<'_>, node: NodeId) -> Option
     }
     let parent = parent?;
     match context.ast.kind(parent) {
-        NodeKind::ArgumentList => context
-            .corresponding_parameter(node)
-            .map(|parameter| member::type_(&resolved.ctx, parameter)),
-        NodeKind::NamedArgument => context
-            .corresponding_parameter(parent)
-            .map(|parameter| member::type_(&resolved.ctx, parameter)),
+        // Dart `correspondingParameter?.type ?? InvalidTypeImpl.instance`.
+        NodeKind::ArgumentList => Some(
+            context
+                .corresponding_parameter_type(node)
+                .unwrap_or(TypeId::INVALID),
+        ),
+        NodeKind::NamedArgument => Some(
+            context
+                .corresponding_parameter_type(parent)
+                .unwrap_or(TypeId::INVALID),
+        ),
         NodeKind::VariableDeclaration => {
             let list = context
                 .ast

@@ -1,6 +1,6 @@
 // Dart source: pkg/linter/lib/src/rules/avoid_equals_and_hash_code_on_mutable_classes.dart
 
-use super::helpers::{KnownAnnotation, ancestor, annotation_status, lexeme};
+use super::helpers::{ancestor, lexeme};
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::{Id, MethodDeclaration, NodeId, NodeKind};
 use dartr_diagnostics::{Diagnostic, diag};
@@ -30,37 +30,16 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     else {
         return;
     };
-    let this_type = r.ctx.interface_this_type(class_element.upcast());
-    let mut immutable = annotation_status(c, class, KnownAnnotation::Immutable);
-    for supertype in r.ctx.all_supertypes(this_type) {
-        let Some(element) = r.ctx.interface_element(supertype) else {
-            continue;
-        };
-        match super::helpers::element_annotation_status(
-            c,
-            element.raw(),
-            KnownAnnotation::Immutable,
-        ) {
-            Some(true) => {
-                immutable = Some(true);
-                break;
-            }
-            None => {
-                // A `dart:` library cannot use the package:meta `immutable`
-                // annotation. Its unrelated VM metadata does not make this
-                // predicate unknown.
-                if !r
-                    .ctx
-                    .element_library_uri(element.raw())
-                    .is_some_and(|uri| uri.starts_with("dart:"))
-                {
-                    immutable = None;
-                }
-            }
-            Some(false) => {}
-        }
-    }
-    if immutable != Some(false) {
+    // Dart `InterfaceElementExtension.hasImmutableAnnotation`.
+    let immutable = r
+        .ctx
+        .element_all_supertypes(class_element.upcast())
+        .iter()
+        .filter_map(|&t| r.ctx.interface_element(t))
+        .map(|e| e.raw())
+        .chain(std::iter::once(class_element.raw()))
+        .any(|e| c.has_immutable(e));
+    if immutable {
         return;
     }
     let name = lexeme(c, n.name);

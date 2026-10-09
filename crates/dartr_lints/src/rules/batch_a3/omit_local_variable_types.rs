@@ -118,13 +118,23 @@ fn check(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                 let Some(iterable) = ctx.static_type(parts.iterable) else {
                     return;
                 };
+                if !matches!(resolved.ctx.ty(iterable), TypeKind::Interface { .. }) {
+                    return;
+                }
                 let Some(iterable) = resolved
                     .ctx
                     .as_instance_of(iterable, resolved.ctx.tp.iterable_element().upcast())
                 else {
                     return;
                 };
-                if resolved.ctx.type_arguments(iterable).first() == Some(&declared) {
+                if resolved
+                    .ctx
+                    .type_arguments(iterable)
+                    .first()
+                    .is_some_and(|&first| {
+                        dartr_typesystem::equality::dart_eq(&resolved.ctx, first, declared)
+                    })
+                {
                     ctx.report_node(out, &diag::OMIT_LOCAL_VARIABLE_TYPES, annotation, &[]);
                 }
             }

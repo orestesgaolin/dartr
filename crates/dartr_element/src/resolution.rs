@@ -71,6 +71,10 @@ pub struct ResolutionTables {
     /// Argument expression → corresponding parameter
     /// (`ArgumentList.correspondingStaticParameters`).
     pub param_element: NodeMap<ElemRef>,
+    /// Argument expression → the type of the corresponding parameter (Dart
+    /// `correspondingParameter.type`: the parameter of the invoked, possibly
+    /// substituted, function type).
+    pub param_type: NodeMap<TypeId>,
     /// `TypeAnnotation.type` (`NamedType`, `GenericFunctionType`,
     /// `RecordTypeAnnotation`) and `FormalParameter.explicitFragmentType`.
     pub annotation_type: NodeMap<TypeId>,

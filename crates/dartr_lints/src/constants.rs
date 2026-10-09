@@ -71,6 +71,10 @@ impl ConstTypeSystem for ConstantTypeSystem<'_> {
 }
 
 pub fn constant_value(c: &LinterContext<'_>, node: NodeId) -> Option<DartObjectImpl> {
+    // Dart `Expression.computeConstantValue()` with the analyzer's engine.
+    if let Some(metadata) = c.resolved.and_then(|r| r.metadata) {
+        return metadata.expression_constant_value(c.current_unit as u32, node);
+    }
     evaluate(c, node, 0)
 }
 fn evaluate(c: &LinterContext<'_>, node: NodeId, depth: usize) -> Option<DartObjectImpl> {
@@ -250,6 +254,12 @@ fn evaluate(c: &LinterContext<'_>, node: NodeId, depth: usize) -> Option<DartObj
 }
 
 pub fn default_value(c: &LinterContext<'_>, parameter: ElemRef) -> Option<DartObjectImpl> {
+    // Dart `FormalParameterElement.computeConstantValue()`.
+    if let Some(r) = c.resolved
+        && let Some(metadata) = r.metadata
+    {
+        return metadata.element_constant_value(member::base_element(&r.ctx, parameter));
+    }
     default_value_with_depth(c, parameter, 0)
 }
 fn default_value_with_depth(

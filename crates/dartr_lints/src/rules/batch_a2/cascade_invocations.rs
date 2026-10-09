@@ -5,7 +5,7 @@ use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
 use dartr_element::{
     ElementId, FieldElement, FormalParameterElement, FragmentFlags, GetterElement,
-    LocalVariableElement, MethodElement, SetterElement, TopLevelVariableElement,
+    LocalVariableElement, MethodElement, SetterElement, Tag, TopLevelVariableElement,
 };
 
 pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
@@ -27,10 +27,23 @@ struct Cascadable {
     can_receive: bool,
     can_be_cascaded: bool,
 }
+/// Dart `AstNodeNullableExtension.canonicalElement` (linter `extensions.dart`).
 fn canonical(context: &LinterContext<'_>, node: NodeId) -> Option<ElementId> {
-    context
-        .element(node)
-        .and_then(|e| super::helpers::base_element(context, e))
+    if !Expression::test(context.ast.kind(node)) {
+        return None;
+    }
+    let mut node = node;
+    while let Some(p) = context.ast.cast::<ParenthesizedExpression>(node) {
+        node = context.ast[p].expression.raw();
+    }
+    let element = if Identifier::test(context.ast.kind(node)) {
+        context.element(node)
+    } else if let Some(access) = context.ast.cast::<PropertyAccess>(node) {
+        context.element(context.ast[access].property_name)
+    } else {
+        None
+    };
+    element.and_then(|e| super::helpers::base_element(context, e))
 }
 
 fn property_variable(context: &LinterContext<'_>, element: ElementId) -> Option<ElementId> {
@@ -218,45 +231,45 @@ fn box_for(context: &LinterContext<'_>, statement: NodeId) -> Cascadable {
         _ => Cascadable::default(),
     }
 }
+/// Dart `_CriticalDependencyVisitor.isOrHasCriticalNode`.
 fn references(context: &LinterContext<'_>, root: NodeId, target: ElementId) -> bool {
+    let Some(resolved) = context.resolved else {
+        return false;
+    };
+    let ctx = &resolved.ctx;
+    // Dart `targetElement.variable` / the `PropertyInducingElement` itself.
+    let target_variable = property_variable(context, target);
+    let variable = target_variable.or_else(|| {
+        (target.is::<FieldElement>() || target.is::<TopLevelVariableElement>()).then_some(target)
+    });
     let mut pending = vec![root];
     while let Some(node) = pending.pop() {
         let node_element = canonical(context, node);
-        if node_element == Some(target)
-            || node_element.and_then(|element| property_variable(context, element)) == Some(target)
-            || property_variable(context, target)
-                .is_some_and(|target_variable| node_element == Some(target_variable))
-        {
+        if node_element == Some(target) {
             return true;
         }
-        if context.ast.kind(node) == NodeKind::FunctionExpression
-            && property_variable(context, target).is_some_and(|target| {
-                target.is::<FieldElement>() || target.is::<TopLevelVariableElement>()
-            })
-        {
+        if target_variable.is_some() && node_element == target_variable {
             return true;
         }
-        if let Some(element) = context
-            .element(node)
-            .and_then(|element| super::helpers::base_element(context, element))
-            && element.is::<MethodElement>()
-            && property_variable(context, target).is_some_and(|target| {
-                target.is::<FieldElement>() || target.is::<TopLevelVariableElement>()
-            })
-            && context.resolved.is_some_and(|resolved| {
-                let executable_enclosing = resolved
-                    .ctx
-                    .element_data(element)
-                    .and_then(|data| data.enclosing);
-                let target = property_variable(context, target).unwrap_or(target);
-                let target_enclosing = resolved
-                    .ctx
-                    .element_data(target)
-                    .and_then(|data| data.enclosing);
-                executable_enclosing.is_some() && executable_enclosing == target_enclosing
-            })
-        {
-            return true;
+        if let Some(variable) = variable {
+            if context.ast.kind(node) == NodeKind::FunctionExpression {
+                return true;
+            }
+            if let Some(element) = node_element
+                && matches!(
+                    element.tag(),
+                    Tag::Method
+                        | Tag::Getter
+                        | Tag::Setter
+                        | Tag::TopLevelFunction
+                        | Tag::LocalFunction
+                        | Tag::Constructor
+                )
+                && ctx.element_data(element).and_then(|d| d.enclosing)
+                    == ctx.element_data(variable).and_then(|d| d.enclosing)
+            {
+                return true;
+            }
         }
         pending.extend(context.ast.children(node));
     }

@@ -40,13 +40,20 @@ pub(super) fn is_obvious(ctx: &LinterContext<'_>, node: NodeId) -> bool {
                             .get(ctx.ast[n.constructor_name].type_.raw())
                             .copied()
                     })
-                    .and_then(|t| ctx.resolved.unwrap().ctx.interface_element(t))
-                    .is_some_and(|e| {
+                    // A raw generic interface type is not trivial; any other
+                    // type (also an invalid one) is.
+                    .is_none_or(|t| {
                         ctx.resolved
                             .unwrap()
                             .ctx
-                            .interface_type_parameters(e)
-                            .is_empty()
+                            .interface_element(t)
+                            .is_none_or(|e| {
+                                ctx.resolved
+                                    .unwrap()
+                                    .ctx
+                                    .interface_type_parameters(e)
+                                    .is_empty()
+                            })
                     })
         }
         NodeKind::ListLiteral => {

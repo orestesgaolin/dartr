@@ -575,6 +575,29 @@ impl<'a> ConstantEvaluationEngine<'a> {
         }
     }
 
+    /// Dart `Expression.computeConstantValue()` (`AttemptedConstantEvaluationResult.value`):
+    /// computes the constants that [node] references, then evaluates [node];
+    /// `None` when an `INVALID_CONSTANT` is reported or the result is not a value.
+    pub fn compute_expression_constant_value(&self, node: NodeRef) -> Option<DartObjectImpl> {
+        let mut dependencies = Vec::new();
+        crate::constant::utilities::find_references(self, node, &mut |t| dependencies.push(t));
+        crate::constant::compute::compute_constants(self, &dependencies);
+        let diagnostics = RefCell::new(Vec::new());
+        let visitor = ConstantVisitor::new(self, self.unit_library(node.unit), Some(&diagnostics));
+        let constant = visitor.evaluate_and_report_invalid_constant(node);
+        if diagnostics
+            .borrow()
+            .iter()
+            .any(|d| d.code.unique_name == diag::INVALID_CONSTANT.unique_name)
+        {
+            return None;
+        }
+        match constant {
+            Constant::Value(v) => Some(v),
+            _ => None,
+        }
+    }
+
     /// Dart `computeConstantValue()` of a variable: computes the constants
     /// that [e] depends on and [e], then returns its value.
     pub fn compute_constant_value_of(&self, e: ElementId) -> Option<DartObjectImpl> {

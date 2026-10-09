@@ -40,6 +40,30 @@ impl ElementMetadata for EngineMetadata<'_> {
         .ok()
         .flatten()
     }
+
+    fn element_constant_value(
+        &self,
+        element: dartr_element::ElementId,
+    ) -> Option<dartr_constant::DartObjectImpl> {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.0.compute_constant_value_of(element)
+        }))
+        .ok()
+        .flatten()
+    }
+
+    fn expression_constant_value(
+        &self,
+        unit: u32,
+        node: dartr_ast::NodeId,
+    ) -> Option<dartr_constant::DartObjectImpl> {
+        let node = NodeRef::new(unit, node);
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.0.compute_expression_constant_value(node)
+        }))
+        .ok()
+        .flatten()
+    }
 }
 
 /// Defining unit first, followed by parts. Each unit reads its own local arena.

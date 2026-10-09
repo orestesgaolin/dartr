@@ -60,6 +60,19 @@ pub trait ElementMetadata {
     /// Dart `ElementAnnotation.computeConstantValue()`.
     fn annotation_value(&self, annotation: AnnotationRef)
     -> Option<dartr_constant::DartObjectImpl>;
+    /// Dart `VariableElement.computeConstantValue()` (also the default value
+    /// of a formal parameter).
+    fn element_constant_value(
+        &self,
+        element: dartr_element::ElementId,
+    ) -> Option<dartr_constant::DartObjectImpl>;
+    /// Dart `Expression.computeConstantValue()?.value` of [node] in the unit
+    /// with the index [unit] of the analyzed library.
+    fn expression_constant_value(
+        &self,
+        unit: u32,
+        node: NodeId,
+    ) -> Option<dartr_constant::DartObjectImpl>;
 }
 /// A resolved AST and its original parse metadata. Resolution can rewrite nodes.
 #[derive(Clone, Copy)]
@@ -134,10 +147,134 @@ impl<'a> LinterContext<'a> {
     pub fn type_argument_text(&self, ty: dartr_element::TypeId) -> String {
         self.type_argument_texts(&[ty]).pop().unwrap_or_default()
     }
+    /// Dart `writeOrReadElement` of an identifier (`_writeElement(node) ??
+    /// element`, analyzer `ast/extensions.dart`).
+    pub fn write_or_read_element(&self, node: impl Into<NodeId>) -> Option<dartr_element::ElemRef> {
+        fn write_element(c: &LinterContext<'_>, node: NodeId) -> Option<dartr_element::ElemRef> {
+            use dartr_ast::*;
+            let parent = c.ast.parent(node)?;
+            let tables = c.resolved?.tables;
+            let is = |child: NodeId| child == node;
+            match c.ast.kind(parent) {
+                NodeKind::AssignmentExpression
+                    if is(c.ast[Id::<AssignmentExpression>::from_raw(parent)]
+                        .left_hand_side
+                        .raw()) =>
+                {
+                    tables.write_element.get(parent).copied()
+                }
+                NodeKind::PostfixExpression
+                    if is(c.ast[Id::<PostfixExpression>::from_raw(parent)]
+                        .operand
+                        .raw()) =>
+                {
+                    tables.write_element.get(parent).copied()
+                }
+                NodeKind::PrefixExpression
+                    if is(c.ast[Id::<PrefixExpression>::from_raw(parent)]
+                        .operand
+                        .raw()) =>
+                {
+                    tables.write_element.get(parent).copied()
+                }
+                NodeKind::PrefixedIdentifier
+                    if is(c.ast[Id::<PrefixedIdentifier>::from_raw(parent)]
+                        .identifier
+                        .raw()) =>
+                {
+                    write_element(c, parent)
+                }
+                NodeKind::PropertyAccess
+                    if is(c.ast[Id::<PropertyAccess>::from_raw(parent)]
+                        .property_name
+                        .raw()) =>
+                {
+                    write_element(c, parent)
+                }
+                _ => None,
+            }
+        }
+        let node = node.into();
+        write_element(self, node).or_else(|| self.element(node))
+    }
+    /// Dart `ElementExtension.canonicalElement2` of the base element:
+    /// a property accessor is replaced with its variable.
+    pub fn canonical_element2(
+        &self,
+        element: dartr_element::ElemRef,
+    ) -> Option<dartr_element::ElementId> {
+        let resolved = self.resolved?;
+        let base = dartr_typesystem::member::base_element(&resolved.ctx, element);
+        Some(match base.tag() {
+            dartr_element::Tag::Getter | dartr_element::Tag::Setter => resolved
+                .ctx
+                .property_accessor(dartr_element::EId::from_raw(base))
+                .variable
+                .get()
+                .map(|v| v.raw())
+                .unwrap_or(base),
+            _ => base,
+        })
+    }
+    /// Whether an annotation of [element] (its `ElementAnnotation.element`,
+    /// a base element) satisfies [predicate].
+    pub fn has_annotation_where(
+        &self,
+        element: dartr_element::ElementId,
+        mut predicate: impl FnMut(&dartr_element::Ctx<'a>, dartr_element::ElementId) -> bool,
+    ) -> bool {
+        let Some(resolved) = self.resolved else {
+            return false;
+        };
+        let Some(metadata) = resolved.metadata else {
+            return false;
+        };
+        metadata.annotations(element).into_iter().any(|annotation| {
+            metadata
+                .annotation_element(annotation)
+                .is_some_and(|a| predicate(&resolved.ctx, a))
+        })
+    }
+    /// Dart `ElementAnnotationImpl._isConstructor(libraryName:, className:)`
+    /// for an annotation of [element].
+    pub fn has_constructor_annotation(
+        &self,
+        element: dartr_element::ElementId,
+        library_name: &str,
+        class_name: &str,
+    ) -> bool {
+        use dartr_typesystem::TypeExt;
+        self.has_annotation_where(element, |ctx, a| {
+            a.tag() == dartr_element::Tag::Constructor
+                && ctx
+                    .element_data(a)
+                    .and_then(|d| d.enclosing)
+                    .and_then(|e| ctx.element_name(e))
+                    == Some(class_name)
+                && dartr_typesystem::member::library(ctx, dartr_element::ElemRef::Base(a))
+                    .is_some_and(|library| ctx.element_name(library.raw()) == Some(library_name))
+        })
+    }
+    /// Dart `Metadata.hasImmutable` (`isImmutable`: the `immutable` getter or
+    /// the `Immutable` constructor of package:meta).
+    pub fn has_immutable(&self, element: dartr_element::ElementId) -> bool {
+        self.has_package_meta_getter(element, "immutable")
+            || self.has_constructor_annotation(element, "meta", "Immutable")
+    }
     /// Dart `element.metadata.annotations.any((a) => a._isPackageMetaGetter(name))`
-    /// (`hasAwaitNotRequired`, `hasOptionalTypeArgs`, ...): an annotation
-    /// that is the top-level getter [name] of the library named `meta`.
+    /// (`hasAwaitNotRequired`, `hasOptionalTypeArgs`, ...).
     pub fn has_package_meta_getter(&self, element: dartr_element::ElementId, name: &str) -> bool {
+        self.has_top_getter_annotation(element, "meta", name)
+    }
+    /// Dart `ElementAnnotationImpl._isTopGetter(libraryName:, name:)` for an
+    /// annotation of [element]: the top-level getter [name] of the library
+    /// named [library_name] (`hasOverride`: `dart.core`, `override`).
+    pub fn has_top_getter_annotation(
+        &self,
+        element: dartr_element::ElementId,
+        library_name: &str,
+        name: &str,
+    ) -> bool {
         use dartr_typesystem::TypeExt;
         let Some(resolved) = self.resolved else {
             return false;
@@ -151,7 +288,9 @@ impl<'a> LinterContext<'a> {
                 a.tag() == dartr_element::Tag::Getter
                     && ctx.element_name(a) == Some(name)
                     && dartr_typesystem::member::library(ctx, dartr_element::ElemRef::Base(a))
-                        .is_some_and(|library| ctx.element_name(library.raw()) == Some("meta"))
+                        .is_some_and(|library| {
+                            ctx.element_name(library.raw()) == Some(library_name)
+                        })
             })
         })
     }
@@ -171,6 +310,22 @@ impl<'a> LinterContext<'a> {
             let named = self.ast.cast::<dartr_ast::NamedArgument>(node)?;
             tables
                 .param_element
+                .get(self.ast[named].argument_expression.raw())
+                .copied()
+        })
+    }
+    /// Dart `correspondingParameter?.type` of an argument (the expression,
+    /// or a `NamedArgument`).
+    pub fn corresponding_parameter_type(
+        &self,
+        node: impl Into<NodeId>,
+    ) -> Option<dartr_element::TypeId> {
+        let node = node.into();
+        let tables = self.resolved?.tables;
+        tables.param_type.get(node).copied().or_else(|| {
+            let named = self.ast.cast::<dartr_ast::NamedArgument>(node)?;
+            tables
+                .param_type
                 .get(self.ast[named].argument_expression.raw())
                 .copied()
         })

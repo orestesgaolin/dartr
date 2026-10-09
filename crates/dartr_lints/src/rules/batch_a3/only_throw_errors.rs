@@ -9,36 +9,60 @@ pub fn register(registry: &mut RuleVisitorRegistry) {
     registry.add_throw_expression("only_throw_errors", check);
 }
 
-fn throwable(ctx: &LinterContext<'_>, ty: dartr_element::TypeId) -> bool {
-    let Some(resolved) = ctx.resolved else {
+/// Dart `DartTypeExtension.typeForInterfaceCheck` (linter `extensions.dart`).
+fn type_for_interface_check(
+    ctx: &LinterContext<'_>,
+    ty: dartr_element::TypeId,
+) -> dartr_element::TypeId {
+    let resolved = ctx.resolved.expect("resolved context");
+    match *resolved.ctx.ty(ty) {
+        TypeKind::TypeParameter {
+            param,
+            promoted_bound,
+            ..
+        } => match promoted_bound {
+            Some(promoted) => type_for_interface_check(ctx, promoted),
+            None => type_for_interface_check(
+                ctx,
+                resolved
+                    .ctx
+                    .get(param)
+                    .bound
+                    .get()
+                    .unwrap_or(resolved.ctx.tp.object_question_type()),
+            ),
+        },
+        _ => ctx.type_system().unwrap().extension_type_erasure(ty),
+    }
+}
+
+/// Dart `_isThrowable`.
+fn throwable(ctx: &LinterContext<'_>, ty: Option<dartr_element::TypeId>) -> bool {
+    let (Some(resolved), Some(ty)) = (ctx.resolved, ty) else {
         return true;
     };
-    let mut ty = ty;
-    loop {
-        ty = ctx.type_system().unwrap().extension_type_erasure(ty);
-        ty = match *resolved.ctx.ty(ty) {
-            TypeKind::Dynamic | TypeKind::Never(_) => return true,
-            TypeKind::TypeParameter {
-                param,
-                promoted_bound,
-                ..
-            } => promoted_bound
-                .or_else(|| resolved.ctx.get(param).bound.get())
-                .unwrap_or(resolved.ctx.tp.object_question_type()),
-            TypeKind::Interface { .. } => break,
-            _ => return true,
-        };
+    let check = type_for_interface_check(ctx, ty);
+    if matches!(*resolved.ctx.ty(check), TypeKind::Dynamic)
+        || matches!(*resolved.ctx.ty(ty), TypeKind::Never(_))
+    {
+        return true;
     }
-    std::iter::once(ty)
-        .chain(resolved.ctx.all_supertypes(ty))
-        .any(|t| {
-            resolved.ctx.interface_element(t).is_some_and(|e| {
-                matches!(
-                    resolved.ctx.element_name(e.raw()),
-                    Some("Exception" | "Error")
-                ) && resolved.ctx.element_library_name(e.raw()) == Some("dart.core")
-            })
+    // Dart `implementsAnyInterface`.
+    let Some(element) = resolved.ctx.interface_element(check) else {
+        return false;
+    };
+    let is_any_interface = |t: dartr_element::TypeId| {
+        resolved.ctx.interface_element(t).is_some_and(|e| {
+            matches!(
+                resolved.ctx.element_name(e.raw()),
+                Some("Exception" | "Error")
+            ) && resolved.ctx.element_library_name(e.raw()) == Some("dart.core")
         })
+    };
+    is_any_interface(check)
+        || dartr_typesystem::class_hierarchy::implemented_interfaces(&resolved.ctx, element)
+            .iter()
+            .any(|&t| is_any_interface(t))
 }
 
 fn check(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
@@ -57,11 +81,7 @@ fn check(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             | NodeKind::SetOrMapLiteral
             | NodeKind::RecordLiteral
     );
-    if literal
-        || ctx
-            .static_type(expression)
-            .is_some_and(|t| !throwable(ctx, t))
-    {
+    if literal || !throwable(ctx, ctx.static_type(expression)) {
         ctx.report_node(out, &diag::ONLY_THROW_ERRORS, expression, &[]);
     }
 }

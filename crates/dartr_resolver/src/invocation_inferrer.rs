@@ -1092,6 +1092,16 @@ pub fn record_corresponding_parameters(
                 rv.tables.param_element.remove(argument.expression);
             }
         }
+        // Dart `correspondingParameter` is also set for the parameters of a
+        // synthesized function type, which have no declaring element here.
+        match parameter {
+            Some(p) => {
+                rv.tables.param_type.insert(argument.expression, p.ty);
+            }
+            None => {
+                rv.tables.param_type.remove(argument.expression);
+            }
+        }
     }
 }
 

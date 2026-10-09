@@ -287,18 +287,11 @@ fn check_node(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) 
                     .ast
                     .cast::<NamedArgument>(*argument)
                     .map_or(argument.raw(), |n| ctx.ast[n].argument_expression.raw());
-                let Some(parameter) = ctx
-                    .resolved
-                    .and_then(|r| r.tables.param_element.get(expression).copied())
-                else {
+                // Dart `argument.correspondingParameter?.type`.
+                let Some(parameter_type) = ctx.corresponding_parameter_type(expression) else {
                     continue;
                 };
-                check(
-                    ctx,
-                    expression,
-                    member::type_(&ctx.resolved.unwrap().ctx, parameter),
-                    out,
-                );
+                check(ctx, expression, parameter_type, out);
             }
         }
         NodeKind::AssignmentExpression => {
