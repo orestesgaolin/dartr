@@ -237,6 +237,21 @@ impl LspClient {
         }
     }
 
+    /// Like `settle(true)`, but waits at most [grace] for the end of an
+    /// analysis. Returns whether an analysis ended. Then waits until the
+    /// server is quiet and no progress is open.
+    #[track_caller]
+    pub fn settle_with_grace(&mut self, grace: Duration) -> bool {
+        let ends_before = self.progress_ends;
+        let grace_deadline = Instant::now() + grace;
+        while self.progress_ends == ends_before && Instant::now() < grace_deadline {
+            self.next_message(Instant::now() + QUIET);
+        }
+        let analyzed = self.progress_ends > ends_before;
+        self.settle(false);
+        analyzed
+    }
+
     /// The next message (handled), or `None` at [deadline].
     fn next_message(&mut self, deadline: Instant) -> Option<Value> {
         let timeout = deadline.saturating_duration_since(Instant::now());
