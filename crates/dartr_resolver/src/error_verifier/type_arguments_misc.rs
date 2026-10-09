@@ -489,11 +489,10 @@ impl ErrorVerifier<'_> {
         }
 
         if let Some(element) = element {
-            let enclosing_is_library = self
-                .ctx
-                .element_data(element)
-                .and_then(|d| d.enclosing)
-                .is_none_or(|e| e.tag() == Tag::Library);
+            // Dart `element.enclosingElement is! LibraryElement`. The
+            // element data of a local function has no enclosing element, so
+            // test the kind: only a top-level function is in the library.
+            let enclosing_is_library = element.tag() == Tag::TopLevelFunction;
             if !enclosing_is_library && let Some(hidden) = self.hidden_elements.as_mut() {
                 hidden.declare(element);
             }
