@@ -1150,7 +1150,12 @@ pub fn get_const_redirected_constructor(ctx: &Ctx<'_>, constructor: ElemRef) -> 
     let redirected = match constructor {
         ElemRef::Base(_) => redirected,
         ElemRef::Member(_) => {
-            member::substitute(ctx, redirected, &member::substitution(ctx, constructor))
+            // `from2(redirected.baseElement,
+            // substitution.mapInterfaceType(redirected.returnType))`.
+            let return_type = member::return_type(ctx, redirected);
+            let return_type =
+                member::substitution(ctx, constructor).substitute_type(ctx, return_type);
+            member::constructor_from2(ctx, member::base_element(ctx, redirected), return_type)
         }
     };
     if !is_const_constructor(ctx, member::base_element(ctx, redirected)) {
@@ -2012,9 +2017,25 @@ impl<'e, 'a> ConstantVisitor<'e, 'a> {
         let ast = &u.ast;
         let ctx = self.engine.ctx(&u);
         let node = Id::<EnumConstantDeclaration>::from_raw(n.node);
-        let Some(constructor) = u.tables.element.get(n.node).copied() else {
+        let Some(mut constructor) = u.tables.element.get(n.node).copied() else {
             return invalid_at_node(ast, n.node, diag::invalid_constant());
         };
+        // Dart: the synthetic `InstanceCreationExpression` is resolved with
+        // the type of the constant (`E<double>` for `v1<double>`); the
+        // constructor is substituted with it.
+        if let Some(&fragment) = u.tables.declared_fragment.get(n.node)
+            && let Some(&field) = ctx
+                .fragment_data(fragment)
+                .and_then(|d| d.element.try_get())
+        {
+            let field_type = variable_type(&ctx, field);
+            let base = member::base_element(&ctx, constructor);
+            if ctx.interface_element(field_type).is_some()
+                && !ctx.type_arguments(field_type).is_empty()
+            {
+                constructor = member::constructor_from2(&ctx, base, field_type);
+            }
+        }
         let type_arguments = ctx
             .type_arguments(member::return_type(&ctx, constructor))
             .to_vec();
