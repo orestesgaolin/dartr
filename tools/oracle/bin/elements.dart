@@ -36,6 +36,12 @@
 // signature, and `"opEqParamFromObject":true` when
 // `isOperatorEqualWithParameterTypeFromObject`; the keys are missing
 // otherwise.
+//
+// With `--with-const` (`dumpElements(withConst: true)`), a top-level
+// variable or field (enum constants included) with `isConst` gets the key
+// `"const"` after its other keys: `computeConstantValue()` written with
+// `DartObjectImpl.toString()`, or null when there is no value (an invalid
+// constant). Without the flag the key is missing.
 import 'dart:convert';
 import 'dart:io';
 
@@ -195,7 +201,11 @@ List<String> flagsOf(Element e) => [
     if (_flagValue(e, getter)) name,
 ]..sort();
 
-Future<void> dumpElements(List<String> inputs) async {
+/// Set by [dumpElements]: add `"const"` to const variables.
+bool _withConst = false;
+
+Future<void> dumpElements(List<String> inputs, {bool withConst = false}) async {
+  _withConst = withConst;
   var sdkPath = oracleSdkPath();
   // `AnalysisContextCollection` throws for a path that is not absolute and
   // normalized (for example `/a//b.dart`), which would end the whole run.
@@ -456,6 +466,9 @@ Map<String, Object?> elementJson(Element e, {int? unit}) {
         TopLevelInferenceErrorNoCombinedSuperSignature() =>
           TopLevelInferenceErrorKind.overrideNoCombinedSuperSignature.name,
       };
+      if (_withConst && e.isConst) {
+        json['const'] = e.computeConstantValue()?.toString();
+      }
     case PropertyAccessorElement():
       json['type'] = typeStr(e.type);
       // A synthetic accessor of a variable has the type of the variable.

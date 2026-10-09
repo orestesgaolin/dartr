@@ -14,7 +14,7 @@ use std::sync::Arc;
 use dartr_driver::driver::Driver;
 use dartr_driver::file_state::{FileConfig, FileId, FileSystemState, SourceFactory};
 use dartr_driver::uri::Uri;
-use dartr_element::{ConstExprId, Ctx, FeatureSet, Generation, NoopSink, StoreId};
+use dartr_element::{ConstExprId, Ctx, ElementId, FeatureSet, Generation, NoopSink, StoreId};
 use dartr_link::dump::{DumpSources, error_json, library_json};
 use dartr_parser::experimental_flags::ExperimentalFlag;
 use dartr_project::{
@@ -148,8 +148,9 @@ pub(crate) fn link_inputs(inputs: &[String]) -> LinkedInputs {
     }
 }
 
-/// One line per input path, in input order.
-pub fn dump_elements_all(inputs: &[String], interface: bool) -> Vec<String> {
+/// One line per input path, in input order. [with_const]: add the
+/// `"const"` key to const variables (`dump elements --with-const`).
+pub fn dump_elements_all(inputs: &[String], interface: bool, with_const: bool) -> Vec<String> {
     let linked = link_inputs(inputs);
     let drivers = &linked.drivers;
     let resolved = &linked.inputs;
@@ -181,7 +182,7 @@ pub fn dump_elements_all(inputs: &[String], interface: bool) -> Vec<String> {
                         &ctx, p, library,
                     );
                 }
-                let sources = Sources { driver };
+                let sources = Sources { driver, with_const };
                 library_json(&ctx, &sources, p, library)
             }
         })
@@ -191,6 +192,8 @@ pub fn dump_elements_all(inputs: &[String], interface: bool) -> Vec<String> {
 /// `DumpSources` over the linked cycles of a driver.
 struct Sources<'a> {
     driver: &'a Driver,
+    /// `--with-const`.
+    with_const: bool,
 }
 
 impl DumpSources for Sources<'_> {
@@ -201,6 +204,13 @@ impl DumpSources for Sources<'_> {
             }
         }
         String::new()
+    }
+
+    fn const_value_json(&self, ctx: &Ctx<'_>, element: ElementId) -> Option<String> {
+        if !self.with_const {
+            return None;
+        }
+        crate::elements_const::const_value_json(ctx, element)
     }
 }
 

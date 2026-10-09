@@ -402,7 +402,14 @@ enclosing elements joined by `.`, with `new` for unnamed constructors and `=` ap
 
 - `"inf": true` marks types that were inferred (`hasImplicitType`/`hasImplicitReturnType`). For C5a, difftest gets
   `--mask-inferred` to compare everything except inferred types, before top-level inference exists.
-- `"const"` (a `DartObject.toString()`-style value) is added in phase 7 (C7a). Before that it is omitted.
+- `"const"` (a `DartObject.toString()`-style value) is written only with `--with-const` (`difftest elements
+  --with-const` passes it to both tools), for const top-level variables and fields (enum constants and the
+  enum `values` field included): `computeConstantValue()?.toString()`, `null` for an invalid constant. dartr
+  writes it from `crates/dartr/src/elements_const.rs` (D1). Note: `toString()` expands shared values, so a
+  constant DAG (tests/language/const/constant_dag_test.dart) gives an exponential string and the oracle does
+  not finish on it.
+- `difftest --codes a,b` / `--codes-file tools/difftest/constant_codes.txt` keeps only the diagnostics with
+  these codes on both sides and prints a table per code (oracle, matched by code/offset/length, dartr-only).
 - `f` = sorted flag names taken from public getters (`isAbstract`, `isSynthetic`, `isStatic`, `isLate`,
   `isCovariant`, `isPromotable`, `hasImplicitType`, `isExternal`, `isAugmentation`…). Use one fixed list in both tools.
 
