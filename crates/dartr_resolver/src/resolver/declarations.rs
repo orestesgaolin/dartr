@@ -206,9 +206,11 @@ impl<'a> ResolverVisitor<'a> {
     /// constructor invocation of the constant is not resolved; the
     /// arguments are resolved in the fallback way.
     pub fn visit_enum_constant_declaration(&mut self, node: Id<EnumConstantDeclaration>) {
-        self.check_unreachable_node(node);
+        let documentation_comment = self.ast[node].documentation_comment;
+        self.visit_opt(documentation_comment);
         let metadata = self.ast[node].metadata;
         self.visit_list(metadata);
+        self.check_unreachable_node(node);
         if let Some(arguments) = self.ast[node].arguments {
             self.with_flow_analysis(node.raw(), |rv| {
                 rv.fallback_visit_expressions_below(arguments.raw());
