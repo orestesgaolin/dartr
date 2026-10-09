@@ -1,0 +1,24 @@
+name: Set up Dart SDK and sources
+description: Install Dart 3.13.3, fetch third_party/dart-sdk, run dart pub get in tools/oracle.
+runs:
+  using: composite
+  steps:
+    - uses: dart-lang/setup-dart@v1.8.1
+      with:
+        sdk: 3.13.3
+    - name: Install zsh (tools/fetch_sdk.sh needs it)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh
+    - name: Cache third_party/dart-sdk
+      uses: actions/cache@v6.1.0
+      with:
+        path: third_party/dart-sdk
+        key: dart-sdk-3.13.3-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/fetch_sdk.sh') }}
+    - name: Fetch SDK sources
+      shell: bash
+      run: tools/fetch_sdk.sh
+    - name: dart pub get (tools/oracle)
+      shell: bash
+      working-directory: tools/oracle
+      run: dart pub get
