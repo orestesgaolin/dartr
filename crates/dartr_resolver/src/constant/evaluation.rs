@@ -2168,6 +2168,17 @@ impl<'e, 'a> ConstantVisitor<'e, 'a> {
         let Some(mut constructor) = u.tables.element.get(n.node).copied() else {
             return invalid_at_node(ast, n.node, diag::invalid_constant());
         };
+        // Dart resolves the name of the enum in the synthetic initializer
+        // `E.name(...)` with a scope lookup: when the name finds another
+        // element (a member or type parameter of the enum with the same
+        // name, an earlier declaration in the library), the initializer is
+        // invalid.
+        let enum_element = member::enclosing_element(&ctx, constructor);
+        if let Some(enum_element) = enum_element
+            && !enum_name_finds_enum(&ctx, enum_element)
+        {
+            return invalid_at_node(ast, n.node, diag::invalid_constant());
+        }
         // Dart: the synthetic `InstanceCreationExpression` is resolved with
         // the type of the constant (`E<double>` for `v1<double>`); the
         // constructor is substituted with it.
@@ -4718,6 +4729,63 @@ fn follow_constant_redirection_chain(
         argument_value_map: result_argument_value_map,
         argument_node_map: result_argument_node_map,
     }
+}
+
+/// Whether the name of [enum_element], looked up in the scope of the
+/// enum body (type parameters, members) and then in the library scope,
+/// finds the enum (see `evaluate_enum_constant`).
+fn enum_name_finds_enum(ctx: &Ctx<'_>, enum_element: ElementId) -> bool {
+    let Some(data) = ctx.element_data(enum_element) else {
+        return false;
+    };
+    let Some(name) = data.name else {
+        return false;
+    };
+    let Some(instance) = enum_element.cast::<dartr_element::InstanceElement>() else {
+        return true;
+    };
+    let i = ctx.instance(instance);
+    let same = |e: ElementId| ctx.element_data(e).and_then(|d| d.name) == Some(name);
+    if i.type_params.iter().any(|p| same(p.raw()))
+        || i.fields.iter().any(|f| same(f.raw()))
+        || i.getters.iter().any(|g| same(g.raw()))
+        || i.methods.iter().any(|m| same(m.raw()))
+    {
+        return false;
+    }
+    // A top-level variable with the same name.
+    let Some(library) = data.library else {
+        return true;
+    };
+    let mut units = vec![ctx.get(library).first_fragment()];
+    let mut index = 0;
+    while index < units.len() {
+        for part in &ctx.fragment(units[index]).parts {
+            if let dartr_element::DirectiveUri::Unit {
+                library_fragment, ..
+            } = &part.directive.uri
+            {
+                units.push(*library_fragment);
+            }
+        }
+        index += 1;
+    }
+    for unit in units {
+        let f = ctx.fragment(unit);
+        // Observed with the analyzer: an earlier top-level variable of
+        // the same name hides the enum; an earlier class or function does
+        // not.
+        let candidates: Vec<FragmentId> = f.variables.iter().map(|x| x.raw()).collect();
+        let first = candidates
+            .into_iter()
+            .filter_map(|c| ctx.fragment_data(c).map(|d| (c, d)))
+            .filter(|(_, d)| d.name == Some(name))
+            .min_by_key(|(_, d)| d.name_offset.unwrap_or(u32::MAX));
+        if first.is_some() {
+            return false;
+        }
+    }
+    true
 }
 
 /// Dart `InterfaceElement.primaryConstructor != null`.
