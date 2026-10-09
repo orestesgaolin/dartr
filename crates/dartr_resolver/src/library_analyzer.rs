@@ -33,6 +33,7 @@ use rayon::prelude::*;
 use dartr_constant::DeclaredVariables;
 
 use crate::constant::evaluation::{ConstantEvaluationEngine, ConstantValues, ExternalUnits};
+use crate::constant::exhaustiveness::ExhaustivenessCache;
 use crate::options::AnalysisOptions;
 use crate::resolver::{ResolverVisitor, UnitContext};
 use crate::scope::LibraryScopes;
@@ -140,7 +141,9 @@ fn resolve_directives(_input: &LibraryAnalysisInput<'_>, _unit: &UnitInput) {}
 
 /// Dart `_computeConstants`: evaluates the constants of all units
 /// (`computeConstants` over `_findConstants`), then
-/// `_computeConstantErrors` (the constant verifier) of each unit.
+/// `_computeConstantErrors` (the constant verifier) of each unit; the
+/// diagnostics of the verifier are appended to the unit diagnostics (Dart
+/// runs the verifier first in `_computeVerifyErrors`, after resolution).
 fn compute_constants(input: &LibraryAnalysisInput<'_>, library: &mut ResolvedLibrary) {
     static DECLARED_VARIABLES: std::sync::LazyLock<DeclaredVariables> =
         std::sync::LazyLock::new(DeclaredVariables::new);
@@ -164,17 +167,41 @@ fn compute_constants(input: &LibraryAnalysisInput<'_>, library: &mut ResolvedLib
             constants.extend(crate::constant::utilities::find_dependencies(&engine, index as u32));
         }
         crate::constant::compute::compute_constants(&engine, &constants);
-        engine.values.into_inner()
+        // Dart `_computeConstantErrors` of each unit (in
+        // `_computeVerifyErrors`), with the evaluation results of
+        // `_computeConstants`.
+        let mut cache = ExhaustivenessCache::default();
+        let mut verifier_diagnostics = Vec::with_capacity(units.len());
+        for (index, unit) in units.iter().enumerate() {
+            if unit.panic.is_some() {
+                verifier_diagnostics.push(Ok(Vec::new()));
+                continue;
+            }
+            let diagnostics = catch_unwind(AssertUnwindSafe(|| {
+                crate::constant::constant_verifier::verify_unit(&engine, &mut cache, index as u32)
+            }))
+            .map_err(|e| panic_message(&*e));
+            verifier_diagnostics.push(diagnostics);
+        }
+        (engine.values.into_inner(), verifier_diagnostics)
     }));
     library.units = units;
     match result {
-        Ok(values) => library.constants = values,
+        Ok((values, verifier_diagnostics)) => {
+            library.constants = values;
+            for (unit, diagnostics) in library.units.iter_mut().zip(verifier_diagnostics) {
+                match diagnostics {
+                    Ok(diagnostics) => append_unique(&mut unit.diagnostics, diagnostics),
+                    Err(message) => {
+                        if unit.panic.is_none() {
+                            unit.panic = Some(format!("constant verifier: {message}"));
+                        }
+                    }
+                }
+            }
+        }
         Err(e) => {
-            let message = e
-                .downcast_ref::<String>()
-                .cloned()
-                .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
-                .unwrap_or_else(|| "panic".to_string());
+            let message = panic_message(&*e);
             if let Some(unit) = library.units.first_mut()
                 && unit.panic.is_none()
             {
@@ -182,6 +209,38 @@ fn compute_constants(input: &LibraryAnalysisInput<'_>, library: &mut ResolvedLib
             }
         }
     }
+}
+
+/// Appends [diagnostics] to [target] like Dart's
+/// `RecordingDiagnosticListener` (a `Set<Diagnostic>`): a diagnostic equal
+/// to one already recorded (same code, offset, length and message) is
+/// dropped.
+fn append_unique(target: &mut Vec<Diagnostic>, diagnostics: Vec<Diagnostic>) {
+    if diagnostics.is_empty() {
+        return;
+    }
+    let key = |d: &Diagnostic| {
+        (
+            d.code as *const dartr_diagnostics::DiagnosticCode as usize,
+            d.offset,
+            d.length,
+            d.message.clone(),
+        )
+    };
+    let mut seen: indexmap::IndexSet<_> = target.iter().map(key).collect();
+    for d in diagnostics {
+        if seen.insert(key(&d)) {
+            target.push(d);
+        }
+    }
+}
+
+/// The message of a caught panic.
+fn panic_message(e: &(dyn std::any::Any + Send)) -> String {
+    e.downcast_ref::<String>()
+        .cloned()
+        .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+        .unwrap_or_else(|| "panic".to_string())
 }
 
 /// Dart `_computeDiagnostics`: `InheritanceOverrideVerifier`,

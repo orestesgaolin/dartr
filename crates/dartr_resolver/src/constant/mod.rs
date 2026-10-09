@@ -24,6 +24,7 @@
 //! elements), kept in [`crate::library_analyzer::ResolvedLibrary`].
 
 pub mod compute;
+pub mod constant_verifier;
 pub mod evaluation;
 pub mod exhaustiveness;
 pub mod potentially_constant;

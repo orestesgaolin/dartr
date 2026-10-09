@@ -225,6 +225,19 @@ impl<'a> ConstantEvaluationEngine<'a> {
         }
     }
 
+    /// A lookup context with the local arena of the unit with the index
+    /// [unit] (the local elements and types of that unit can be read).
+    pub fn unit_ctx(&self, unit: u32) -> Ctx<'_> {
+        let handle = self.unit(unit);
+        let resolved: *const ResolvedUnit = &*handle;
+        // SAFETY: a unit of the registry is never removed while the engine
+        // lives: a borrowed unit lives for `'a`, a shared unit is kept alive
+        // by the `Arc` in the registry, and the `ResolvedUnit` behind it does
+        // not move when the registry grows.
+        let resolved: &ResolvedUnit = unsafe { &*resolved };
+        self.ctx(resolved)
+    }
+
     /// A lookup context without local arena.
     pub fn global_ctx(&self) -> Ctx<'_> {
         Ctx {
@@ -441,6 +454,20 @@ impl<'a> ConstantEvaluationEngine<'a> {
 
     fn set_evaluation_result(&self, e: ElementId, value: Constant) {
         self.values.borrow_mut().elements.insert(e, value);
+    }
+
+    /// Dart `element.evaluationResult = result` of the constant verifier
+    /// (`_validateDefaultValues`); `None` is Dart `null`.
+    pub fn replace_evaluation_result(&self, e: ElementId, result: Option<Constant>) {
+        let mut values = self.values.borrow_mut();
+        match result {
+            Some(value) => {
+                values.elements.insert(e, value);
+            }
+            None => {
+                values.elements.shift_remove(&e);
+            }
+        }
     }
 
     /// Dart `ConstantEvaluationTarget.isConstantEvaluated`.
@@ -867,7 +894,12 @@ impl<'a> ConstantEvaluationEngine<'a> {
             // No explicit superconstructor invocation found, so we need to
             // manually insert a reference to the implicit superconstructor.
             let return_type = member::return_type(&ctx, ElemRef::Base(constant));
-            if let Some(superclass) = ctx.superclass(return_type)
+            // Dart `returnType` is always an interface type. Without the
+            // `ConstructorElementImpl.returnType` fallback of unit C8 the
+            // return type of a constructor is `InvalidType` here, and
+            // `superclass` panics on a type that is not an interface type.
+            if ctx.interface_element(return_type).is_some()
+                && let Some(superclass) = ctx.superclass(return_type)
                 && !ctx.is_dart_core_object(superclass)
                 && let Some(element) = ctx.interface_element(superclass)
                 && let Some(unnamed) = lookup::get_named_constructor(&ctx, element, "new")
@@ -1144,7 +1176,18 @@ impl ConstantEvaluationEngine<'_> {
     /// redirects to another const constructor, the const constructor it
     /// redirects to.
     pub fn get_const_redirected_constructor(&self, constructor: ElemRef) -> Option<ElemRef> {
-        let ctx = self.global_ctx();
+        self.get_const_redirected_constructor_in(&self.global_ctx(), constructor)
+    }
+
+    /// [Self::get_const_redirected_constructor] with the context [ctx] (the
+    /// context of the unit of the invocation when [constructor] is a member
+    /// with local types).
+    pub fn get_const_redirected_constructor_in(
+        &self,
+        ctx: &Ctx<'_>,
+        constructor: ElemRef,
+    ) -> Option<ElemRef> {
+        let ctx = *ctx;
         let base = member::base_element(&ctx, constructor);
         if !is_factory_constructor(&ctx, base) {
             return None;
@@ -1241,7 +1284,7 @@ fn primary_constructor_body(
 }
 
 /// The value of the default clause of a formal parameter node.
-fn formal_parameter_default_value(ast: &Ast, node: NodeId) -> Option<NodeId> {
+pub fn formal_parameter_default_value(ast: &Ast, node: NodeId) -> Option<NodeId> {
     let clause = match ast.kind(node) {
         NodeKind::RegularFormalParameter => {
             ast[Id::<RegularFormalParameter>::from_raw(node)].default_clause
@@ -3498,8 +3541,11 @@ struct RedirectionResult {
 const DEFAULT_VALUE_PARAM: &str = "defaultValue";
 
 impl<'e, 'a> InstanceCreationEvaluator<'e, 'a> {
+    /// The context of the unit of the invocation: the constructor can be a
+    /// member with local types of that unit (`const A<T>()` in a generic
+    /// local function).
     fn ctx(&self) -> Ctx<'e> {
-        self.engine.global_ctx()
+        self.engine.unit_ctx(self.error_node.unit)
     }
 
     /// Dart `definingType` (`_constructor.returnType`).
@@ -4396,7 +4442,7 @@ impl<'e, 'a> InstanceCreationEvaluator<'e, 'a> {
         invocation: Option<Arc<ConstructorInvocationImpl>>,
         implicit_argument_values: &IndexMap<ElementId, DartObjectImpl>,
     ) -> Constant {
-        let ctx = engine.global_ctx();
+        let ctx = engine.unit_ctx(node.unit);
         let base = member::base_element(&ctx, constructor);
         if !is_const_constructor(&ctx, base) {
             let u = engine.unit(node.unit);
@@ -4584,7 +4630,9 @@ fn follow_constant_redirection_chain(
 ) -> RedirectionResult {
     let mut constructor = original_constructor;
     let mut constructors_visited = IndexSet::new();
-    while let Some(redirected_constructor) = engine.get_const_redirected_constructor(constructor) {
+    while let Some(redirected_constructor) =
+        engine.get_const_redirected_constructor_in(ctx, constructor)
+    {
         constructors_visited.insert(member::base_element(ctx, constructor));
         if constructors_visited.contains(&member::base_element(ctx, redirected_constructor)) {
             // Cycle in redirecting factory constructors--this is not allowed
@@ -4636,7 +4684,7 @@ fn follow_constant_redirection_chain(
 }
 
 /// Dart `InterfaceElement.primaryConstructor != null`.
-fn has_primary_constructor(ctx: &Ctx<'_>, interface: ElementId) -> bool {
+pub fn has_primary_constructor(ctx: &Ctx<'_>, interface: ElementId) -> bool {
     let Some(element) = interface.cast::<InterfaceElement>() else {
         return false;
     };
