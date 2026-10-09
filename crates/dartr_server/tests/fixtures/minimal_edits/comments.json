@@ -1,0 +1,72 @@
+{
+ "edits": [
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 10,
+     "line": 0
+    },
+    "start": {
+     "character": 7,
+     "line": 0
+    }
+   }
+  },
+  {
+   "newText": "\n  // trailing",
+   "range": {
+    "end": {
+     "character": 26,
+     "line": 1
+    },
+    "start": {
+     "character": 9,
+     "line": 1
+    }
+   }
+  },
+  {
+   "newText": "\n ",
+   "range": {
+    "end": {
+     "character": 13,
+     "line": 2
+    },
+    "start": {
+     "character": 13,
+     "line": 2
+    }
+   }
+  },
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 23,
+     "line": 2
+    },
+    "start": {
+     "character": 20,
+     "line": 2
+    }
+   }
+  },
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 11,
+     "line": 3
+    },
+    "start": {
+     "character": 10,
+     "line": 3
+    }
+   }
+  }
+ ],
+ "file": "lib/comments.dart",
+ "formatted": "/// Doc\nclass B {\n  // trailing\n  /* block */\n  int y;\n  B(this.y);\n}\n",
+ "unformatted": "/// Doc   \nclass B {   // trailing   \n  /* block */ int y;   \n  B(this.y,);\n}\n"
+}

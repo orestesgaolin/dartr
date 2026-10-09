@@ -8,6 +8,8 @@
 // Dart source: pkg/analysis_server/lib/src/lsp/handlers/handler_shutdown.dart, handler_exit.dart
 // Dart source: pkg/analysis_server/lib/src/lsp/handlers/handler_cancel_request.dart
 // Dart source: pkg/analysis_server/lib/src/lsp/progress.dart
+// Dart source: pkg/analysis_server/lib/src/lsp/server_capabilities_computer.dart (performDynamicRegistration, _applyRegistrations)
+// Dart source: pkg/analysis_server/lib/src/lsp/handlers/handler_formatting.dart, handler_format_range.dart, handler_format_on_type.dart (handle, formatFile, formatRange)
 // Dart source: pkg/analysis_server/lib/src/scheduler/message_scheduler.dart (queue, cancellation)
 
 //! The LSP server: the main loop, the server states, the document overlays,
@@ -47,7 +49,9 @@ use serde_json::{Value, json};
 
 use crate::args::ServerOptions;
 use crate::capabilities::{self, ClientCapabilities, DynamicRegistration};
+use crate::client_configuration::LspClientConfiguration;
 use crate::features;
+use crate::formatting::{self, FormatterOptions};
 use crate::mapping::{self, DiagnosticOptions, ErrorOr, ResponseError, codes};
 use crate::source_edits::apply_changes;
 use crate::transport::{Channel, read_message};
@@ -122,6 +126,7 @@ enum Pending {
     Configuration { folders: Vec<String> },
     ProgressCreate,
     Registration,
+    Unregistration,
 }
 
 /// Dart `_ServerCreatedProgressReporter` for the analysis token.
@@ -141,8 +146,8 @@ pub struct Server {
     client: ClientCapabilities,
     init: InitializationOptions,
     workspace_folders: Vec<String>,
-    /// The global `dart` settings (`workspace/configuration`).
-    config: Value,
+    /// The `dart` settings (`workspace/configuration`).
+    client_configuration: LspClientConfiguration,
     overlays: HashMap<String, Document>,
     /// Open files (Dart priority files), in open order.
     priority: Vec<String>,
@@ -162,7 +167,9 @@ pub struct Server {
     pending: HashMap<i64, Pending>,
     progress: Option<ProgressReporter>,
     cancelled: HashSet<String>,
-    registrations: Vec<DynamicRegistration>,
+    /// Dart `ServerCapabilitiesComputer.currentRegistrations`: the id and
+    /// the registration.
+    registrations: Vec<(String, DynamicRegistration)>,
     last_registration_id: u64,
     shutdown_called: bool,
 }
@@ -241,7 +248,7 @@ impl Server {
             client: ClientCapabilities::default(),
             init: InitializationOptions::default(),
             workspace_folders: Vec::new(),
-            config: json!({}),
+            client_configuration: LspClientConfiguration::default(),
             overlays: HashMap::new(),
             priority: Vec::new(),
             collection: None,
@@ -419,6 +426,34 @@ impl Server {
                     .ok_or_else(|| invalid_params(method))?;
                 features::selection_ranges(&file, positions)
             }
+            "textDocument/formatting" => self.format_request(&params, FormatKind::Document),
+            "textDocument/rangeFormatting" => {
+                let range = params.get("range").cloned().ok_or_else(|| invalid_params(method))?;
+                self.format_request(&params, FormatKind::Range(range))
+            }
+            "textDocument/onTypeFormatting" => {
+                let position = params
+                    .get("position")
+                    .cloned()
+                    .ok_or_else(|| invalid_params(method))?;
+                let ch = params
+                    .get("ch")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| invalid_params(method))?
+                    .to_string();
+                match self.format_request(&params, FormatKind::OnType(position, ch)) {
+                    Err(e) if e.code == codes::UNHANDLED_ERROR => {
+                        // Dart `logException` of the `ArgumentError`.
+                        self.log_error(&format!(
+                            "{}: Invalid argument(s): {}",
+                            e.message,
+                            e.data.clone().unwrap_or_default()
+                        ));
+                        Err(ResponseError::new(e.code, e.message))
+                    }
+                    result => result,
+                }
+            }
             // Not in the 3.13.3 server: newer Flutter tools call it to wait
             // for the end of analysis. Messages are handled after the
             // analysis of earlier changes, so analysis is complete here.
@@ -504,15 +539,19 @@ impl Server {
                 let result = message.get("result");
                 if let Some(list) = result.and_then(Value::as_array) {
                     if list.len() == folders.len() + 1 {
+                        let workspace_folder_config: Vec<(String, Value)> = folders
+                            .iter()
+                            .cloned()
+                            .zip(list.iter().cloned())
+                            .collect();
                         let new_global = list.last().cloned().unwrap_or(Value::Null);
-                        let new_global = if new_global.is_object() {
-                            new_global
-                        } else {
-                            json!({})
-                        };
-                        let old_excluded = excluded_folders(&self.config);
-                        self.config = new_global;
-                        if excluded_folders(&self.config) != old_excluded {
+                        let old_excluded =
+                            excluded_folders(&self.client_configuration.global_value());
+                        self.client_configuration
+                            .replace(&new_global, &workspace_folder_config);
+                        if excluded_folders(&self.client_configuration.global_value())
+                            != old_excluded
+                        {
                             self.roots_dirty = true;
                         }
                     }
@@ -541,6 +580,7 @@ impl Server {
                     }
                 }
             }
+            Pending::Unregistration => {}
             Pending::Registration => {
                 if let Some(e) = error {
                     let code = e.get("code").cloned().unwrap_or(Value::Null);
@@ -598,7 +638,7 @@ impl Server {
         self.workspace_folders = workspace_paths;
         self.state = State::Initializing;
         Ok(json!({
-            "capabilities": capabilities::server_capabilities(&self.client),
+            "capabilities": capabilities::server_capabilities(&self.client, &self.client_configuration),
             "serverInfo": {"name": "dartr LSP Analysis Server", "version": "3.13.3"},
         }))
     }
@@ -654,34 +694,69 @@ impl Server {
     }
 
     /// Dart `ServerCapabilitiesComputer.performDynamicRegistration` and
-    /// `_applyRegistrations`.
+    /// `_applyRegistrations`: registers the new registrations and
+    /// unregisters the ones that are not wanted any more (for example the
+    /// formatter after `dart.enableSdkFormatter` changed to `false`). Like
+    /// Dart, every computed registration takes a new id.
     fn perform_dynamic_registration(&mut self) {
-        let wanted = capabilities::dynamic_registrations(&self.client);
-        let to_add: Vec<DynamicRegistration> = wanted
+        let wanted: Vec<(String, DynamicRegistration)> =
+            capabilities::dynamic_registrations(&self.client, &self.client_configuration)
+                .into_iter()
+                .map(|r| {
+                    let id = self.last_registration_id.to_string();
+                    self.last_registration_id += 1;
+                    (id, r)
+                })
+                .collect();
+        let current: Vec<&DynamicRegistration> =
+            self.registrations.iter().map(|(_, r)| r).collect();
+        let to_add: Vec<(String, DynamicRegistration)> = wanted
             .iter()
-            .filter(|r| !self.registrations.contains(r))
+            .filter(|(_, r)| !current.contains(&r))
             .cloned()
             .collect();
-        if to_add.is_empty() {
-            return;
+        let to_remove: Vec<(String, DynamicRegistration)> = self
+            .registrations
+            .iter()
+            .filter(|(_, r)| !wanted.iter().any(|(_, w)| w == r))
+            .cloned()
+            .collect();
+        self.registrations.retain(|r| !to_remove.contains(r));
+        self.registrations.extend(to_add.iter().cloned());
+
+        if !to_remove.is_empty() {
+            let unregistrations: Vec<Value> = to_remove
+                .iter()
+                .map(|(id, r)| json!({"id": id, "method": r.method}))
+                .collect();
+            // The Dart field name has this spelling.
+            self.send_request(
+                "client/unregisterCapability",
+                json!({"unregisterations": unregistrations}),
+                Pending::Unregistration,
+            );
         }
-        let mut registrations = Vec::new();
-        for r in &to_add {
-            let mut reg = serde_json::Map::new();
-            reg.insert("id".into(), json!(self.last_registration_id.to_string()));
-            reg.insert("method".into(), json!(r.method));
-            if let Some(o) = &r.options {
-                reg.insert("registerOptions".into(), o.clone());
-            }
-            self.last_registration_id += 1;
-            registrations.push(Value::Object(reg));
+        // Only send the registration request if there is at least one
+        // (otherwise it is not known that the client supports it).
+        if !to_add.is_empty() {
+            let registrations: Vec<Value> = to_add
+                .iter()
+                .map(|(id, r)| {
+                    let mut reg = serde_json::Map::new();
+                    reg.insert("id".into(), json!(id));
+                    reg.insert("method".into(), json!(r.method));
+                    if let Some(o) = &r.options {
+                        reg.insert("registerOptions".into(), o.clone());
+                    }
+                    Value::Object(reg)
+                })
+                .collect();
+            self.send_request(
+                "client/registerCapability",
+                json!({"registrations": registrations}),
+                Pending::Registration,
+            );
         }
-        self.registrations.extend(to_add);
-        self.send_request(
-            "client/registerCapability",
-            json!({"registrations": registrations}),
-            Pending::Registration,
-        );
     }
 
     // ---------------------------------------------------------------------
@@ -866,6 +941,75 @@ impl Server {
         }
     }
 
+    /// The formatter options of the analysis options of [path] (Dart
+    /// `result.analysisOptions.formatterOptions`).
+    fn formatter_options(&self, path: &str) -> FormatterOptions {
+        let Some(collection) = &self.collection else {
+            return FormatterOptions::default();
+        };
+        let Some(context) = collection
+            .context_for(path)
+            .or_else(|| collection.contexts.first())
+        else {
+            return FormatterOptions::default();
+        };
+        let options = collection.options_for(context, path);
+        FormatterOptions {
+            page_width: options.formatter_page_width,
+            trailing_commas: options.formatter_trailing_commas,
+        }
+    }
+
+    /// Dart `FormattingHandler.handle` / `formatFile`,
+    /// `FormatRangeHandler.handle` / `formatRange` and
+    /// `FormatOnTypeHandler.handle` / `formatFile`.
+    fn format_request(&mut self, params: &Value, kind: FormatKind) -> ErrorOr<Value> {
+        if !is_dart_document(params) {
+            return Ok(Value::Null);
+        }
+        let path = self.path_of_doc(params)?;
+        let config = self.client_configuration.for_resource(&path);
+        if !config.enable_sdk_formatter() {
+            // Formatting can be disabled for some workspace folders: do
+            // nothing for those.
+            return Ok(Value::Null);
+        }
+        let line_length = config.line_length();
+        if self.content(&path).is_none() {
+            return Err(ResponseError::with_data(
+                codes::INVALID_FILE_PATH,
+                "File does not exist",
+                path,
+            ));
+        }
+        let Some(file) = self.parsed_unit(&path) else {
+            return Ok(Value::Null);
+        };
+        if !file.unit.diagnostics.is_empty() {
+            return Ok(Value::Null);
+        }
+        let options = self.formatter_options(&path);
+        match kind {
+            FormatKind::Document => formatting::format_file(&file, &options, line_length, None),
+            FormatKind::Range(range) => {
+                formatting::format_file(&file, &options, line_length, Some(&range))
+            }
+            FormatKind::OnType(position, ch) => {
+                // The client sends a request for every trigger character,
+                // also in comments and strings.
+                match formatting::should_trigger_formatting(&file, &position, &ch) {
+                    Ok(true) => formatting::format_file(&file, &options, line_length, None),
+                    Ok(false) => Ok(Value::Null),
+                    Err(message) => Err(ResponseError::with_data(
+                        codes::UNHANDLED_ERROR,
+                        "An error occurred while handling textDocument/onTypeFormatting request",
+                        message,
+                    )),
+                }
+            }
+        }
+    }
+
     /// Dart `requireUnresolvedUnit` / `requireResolvedUnit`.
     fn require_parsed(&mut self, path: &str, resolved: bool) -> ErrorOr<Rc<ParsedFile>> {
         match self.parsed_unit(path) {
@@ -898,7 +1042,7 @@ impl Server {
         } else {
             self.roots_for_open_files()
         };
-        self.excluded = excluded_folders(&self.config)
+        self.excluded = excluded_folders(&self.client_configuration.global_value())
             .into_iter()
             .flat_map(|e| {
                 if e.starts_with('/') {
@@ -1197,6 +1341,16 @@ impl Server {
             Some(false) => self.progress = None,
         }
     }
+}
+
+/// The kind of a formatting request.
+enum FormatKind {
+    Document,
+    /// `textDocument/rangeFormatting` with its range.
+    Range(Value),
+    /// `textDocument/onTypeFormatting` with the position and the typed
+    /// character.
+    OnType(Value, String),
 }
 
 /// Reads a file like the analyzer's file system: UTF-8 (malformed bytes

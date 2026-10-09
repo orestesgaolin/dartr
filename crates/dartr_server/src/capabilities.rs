@@ -15,6 +15,8 @@
 
 use serde_json::{Map, Value, json};
 
+use crate::client_configuration::LspClientConfiguration;
+use crate::formatting::DART_TYPE_FORMATTING_CHARACTERS;
 use crate::mapping::{DEFAULT_SYMBOL_KINDS, DiagnosticOptions};
 
 /// The client capabilities of `initialize` (Dart `LspClientCapabilities`):
@@ -124,9 +126,9 @@ pub const DART_FEATURES: &[Feature] = &[
     feature("DocumentSymbolsRegistrations", Some("documentSymbolProvider"), true),
     feature("ExecuteCommandRegistrations", Some("executeCommandProvider"), false),
     feature("FoldingRegistrations", Some("foldingRangeProvider"), true),
-    feature("FormatOnTypeRegistrations", Some("documentOnTypeFormattingProvider"), false),
-    feature("FormatRangeRegistrations", Some("documentRangeFormattingProvider"), false),
-    feature("FormattingRegistrations", Some("documentFormattingProvider"), false),
+    feature("FormatOnTypeRegistrations", Some("documentOnTypeFormattingProvider"), true),
+    feature("FormatRangeRegistrations", Some("documentRangeFormattingProvider"), true),
+    feature("FormattingRegistrations", Some("documentFormattingProvider"), true),
     feature("HoverRegistrations", Some("hoverProvider"), false),
     feature("ImplementationRegistrations", Some("implementationProvider"), false),
     feature("InlayHintRegistrations", Some("inlayHintProvider"), false),
@@ -168,9 +170,20 @@ fn synchronised_types() -> Value {
     ])
 }
 
+/// The options of on-type formatting (Dart
+/// `DocumentOnTypeFormattingOptions` of `FormatOnTypeRegistrations`).
+fn on_type_formatting_options() -> Map<String, Value> {
+    let mut m = Map::new();
+    m.insert("firstTriggerCharacter".into(), json!(DART_TYPE_FORMATTING_CHARACTERS[0]));
+    m.insert("moreTriggerCharacter".into(), json!(DART_TYPE_FORMATTING_CHARACTERS[1..]));
+    m
+}
+
 /// Dart `ServerCapabilitiesComputer.computeServerCapabilities` for the
-/// implemented features.
-pub fn server_capabilities(client: &ClientCapabilities) -> Value {
+/// implemented features. The formatting features depend on the global
+/// `dart.enableSdkFormatter` setting of [config].
+pub fn server_capabilities(client: &ClientCapabilities, config: &LspClientConfiguration) -> Value {
+    let enable_formatter = config.global().enable_sdk_formatter();
     let mut c = Map::new();
     if !client.text_document_dynamic("synchronization") {
         c.insert(
@@ -183,6 +196,18 @@ pub fn server_capabilities(client: &ClientCapabilities) -> Value {
     }
     if !client.text_document_dynamic("foldingRange") {
         c.insert("foldingRangeProvider".into(), json!(true));
+    }
+    if enable_formatter && !client.text_document_dynamic("onTypeFormatting") {
+        c.insert(
+            "documentOnTypeFormattingProvider".into(),
+            Value::Object(on_type_formatting_options()),
+        );
+    }
+    if enable_formatter && !client.text_document_dynamic("rangeFormatting") {
+        c.insert("documentRangeFormattingProvider".into(), json!(true));
+    }
+    if enable_formatter && !client.text_document_dynamic("formatting") {
+        c.insert("documentFormattingProvider".into(), json!(true));
     }
     if !client.text_document_dynamic("selectionRange") {
         c.insert("selectionRangeProvider".into(), json!(true));
@@ -205,8 +230,13 @@ pub struct DynamicRegistration {
 
 /// Dart `ServerCapabilitiesComputer.performDynamicRegistration`: the
 /// registrations of the implemented features that the client registers
-/// dynamically, in Dart order.
-pub fn dynamic_registrations(client: &ClientCapabilities) -> Vec<DynamicRegistration> {
+/// dynamically, in Dart order. The formatting features depend on the
+/// global `dart.enableSdkFormatter` setting of [config].
+pub fn dynamic_registrations(
+    client: &ClientCapabilities,
+    config: &LspClientConfiguration,
+) -> Vec<DynamicRegistration> {
+    let enable_formatter = config.global().enable_sdk_formatter();
     let mut out = Vec::new();
     let reg = |method, options| DynamicRegistration {
         method,
@@ -217,6 +247,19 @@ pub fn dynamic_registrations(client: &ClientCapabilities) -> Vec<DynamicRegistra
     }
     if client.text_document_dynamic("foldingRange") {
         out.push(reg("textDocument/foldingRange", json!({"documentSelector": dart_files()})));
+    }
+    if enable_formatter && client.text_document_dynamic("onTypeFormatting") {
+        let mut options = on_type_formatting_options();
+        options.insert("documentSelector".into(), dart_files());
+        out.push(reg("textDocument/onTypeFormatting", Value::Object(options)));
+    }
+    if enable_formatter && client.text_document_dynamic("rangeFormatting") {
+        out.push(reg("textDocument/rangeFormatting", json!({"documentSelector": dart_files()})));
+    }
+    // Dart `fullySupportedTypes`: the Dart files and the types of plugins
+    // (dartr has no plugins).
+    if enable_formatter && client.text_document_dynamic("formatting") {
+        out.push(reg("textDocument/formatting", json!({"documentSelector": dart_files()})));
     }
     if client.text_document_dynamic("selectionRange") {
         out.push(reg("textDocument/selectionRange", json!({"documentSelector": dart_files()})));

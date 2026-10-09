@@ -1,0 +1,59 @@
+{
+ "edits": [
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 9,
+     "line": 0
+    },
+    "start": {
+     "character": 9,
+     "line": 0
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 11,
+     "line": 0
+    },
+    "start": {
+     "character": 11,
+     "line": 0
+    }
+   }
+  },
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 11,
+     "line": 2
+    },
+    "start": {
+     "character": 10,
+     "line": 2
+    }
+   }
+  },
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 16,
+     "line": 2
+    },
+    "start": {
+     "character": 15,
+     "line": 2
+    }
+   }
+  }
+ ],
+ "file": "lib/shifts.dart",
+ "formatted": "var a = 1 >> 2;\nvar b = <List<List<int>>>[];\nvar c = a >>> 1;\n",
+ "unformatted": "var a = 1>>2;\nvar b = <List<List<int>>>[];\nvar c = a  >>>  1;\n"
+}
