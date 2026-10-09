@@ -123,8 +123,10 @@ fn run() {
                         features: &features,
                         req: &sink,
                     };
-                    let facts = requests[index]["includeResolution"]
-                        .as_bool()
+                    let facts = paths
+                        .iter()
+                        .position(|path| path.as_str() == unit.path.as_ref())
+                        .and_then(|unit_index| requests[unit_index]["includeResolution"].as_bool())
                         .unwrap_or(false)
                         .then(|| resolution_facts(ctx, &unit));
                     let diagnostics: Vec<_> = unit
