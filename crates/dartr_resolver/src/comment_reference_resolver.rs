@@ -4,8 +4,7 @@
 
 use dartr_ast::{CommentReference, Id, PrefixedIdentifier, PropertyAccess, SimpleIdentifier};
 use dartr_element::{
-    EId, ElemRef, ElementId, ExtensionElement, InterfaceElement, PrefixElement, TypeAliasElement,
-    TypeKind,
+    EId, ElemRef, ExtensionElement, InterfaceElement, PrefixElement, TypeAliasElement, TypeKind,
 };
 use dartr_typesystem::TypeExt;
 use dartr_typesystem::inheritance_manager3::{InheritanceManager3, Name};
@@ -41,9 +40,11 @@ fn resolve(rv: &mut ResolverVisitor<'_>, node: Id<CommentReference>) {
 fn resolve_simple_identifier(
     rv: &mut ResolverVisitor<'_>,
     identifier: Id<SimpleIdentifier>,
-) -> Option<ElementId> {
+) -> Option<ElemRef> {
     let lookup = rv.rt.scope_lookup_result.get(identifier.raw()).copied();
-    let element = lookup.and_then(|result| result.getter.or(result.setter));
+    let element = lookup
+        .and_then(|result| result.getter.or(result.setter))
+        .map(ElemRef::Base);
     if element.is_some() {
         // Dart also calls `notifyPrefixUsedInCommentReference` for prefixes.
         // Import-usage tracking is not represented in the Rust resolver.
@@ -77,15 +78,13 @@ fn resolve_simple_identifier(
             parent_node: None,
         },
     );
-    result
-        .getter
-        .or(result.setter)
-        .map(|element| dartr_typesystem::member::base_element(&rv.ctx, element))
+    result.getter.or(result.setter)
 }
 
 /// When [element] is a type alias, returns the element of its aliased type.
-fn aliased_element(rv: &ResolverVisitor<'_>, element: ElementId) -> ElementId {
-    let Some(alias) = element.cast::<TypeAliasElement>() else {
+fn aliased_element(rv: &ResolverVisitor<'_>, element: ElemRef) -> ElemRef {
+    let base = dartr_typesystem::member::base_element(&rv.ctx, element);
+    let Some(alias) = base.cast::<TypeAliasElement>() else {
         return element;
     };
     rv.ctx
@@ -93,6 +92,7 @@ fn aliased_element(rv: &ResolverVisitor<'_>, element: ElementId) -> ElementId {
         .aliased_type
         .get()
         .and_then(|ty| rv.ctx.type_element(ty))
+        .map(ElemRef::Base)
         .unwrap_or(element)
 }
 
@@ -101,16 +101,43 @@ fn interface_member(
     rv: &ResolverVisitor<'_>,
     interface: EId<InterfaceElement>,
     name: &str,
-) -> Option<ElementId> {
+) -> Option<ElemRef> {
     let ctx = rv.ctx;
     let library = ctx.interface(interface).library;
     InheritanceManager3::new(ctx)
         .get_member(interface, Name::for_library(&ctx, library, name))
-        .map(|element| dartr_typesystem::member::base_element(&ctx, element))
-        .or_else(|| lookup::get_method(&ctx, interface.upcast(), name).map(|e| e.raw()))
-        .or_else(|| lookup::get_getter(&ctx, interface.upcast(), name).map(|e| e.raw()))
-        .or_else(|| lookup::get_setter(&ctx, interface.upcast(), name).map(|e| e.raw()))
-        .or_else(|| lookup::get_named_constructor(&ctx, interface, name).map(|e| e.raw()))
+        .or_else(|| {
+            lookup::get_method(&ctx, interface.upcast(), name).map(|e| ElemRef::Base(e.raw()))
+        })
+        .or_else(|| {
+            lookup::get_getter(&ctx, interface.upcast(), name).map(|e| ElemRef::Base(e.raw()))
+        })
+        .or_else(|| {
+            lookup::get_setter(&ctx, interface.upcast(), name).map(|e| ElemRef::Base(e.raw()))
+        })
+        .or_else(|| {
+            lookup::get_named_constructor(&ctx, interface, name).map(|e| ElemRef::Base(e.raw()))
+        })
+}
+
+/// Direct interface member lookup used by Dart's property-access branch.
+fn direct_interface_member(
+    rv: &ResolverVisitor<'_>,
+    interface: EId<InterfaceElement>,
+    name: &str,
+) -> Option<ElemRef> {
+    let ctx = rv.ctx;
+    lookup::get_method(&ctx, interface.upcast(), name)
+        .map(|e| ElemRef::Base(e.raw()))
+        .or_else(|| {
+            lookup::get_getter(&ctx, interface.upcast(), name).map(|e| ElemRef::Base(e.raw()))
+        })
+        .or_else(|| {
+            lookup::get_setter(&ctx, interface.upcast(), name).map(|e| ElemRef::Base(e.raw()))
+        })
+        .or_else(|| {
+            lookup::get_named_constructor(&ctx, interface, name).map(|e| ElemRef::Base(e.raw()))
+        })
 }
 
 /// The member selected by a documentation reference on an extension.
@@ -118,12 +145,16 @@ fn extension_member(
     rv: &ResolverVisitor<'_>,
     extension: EId<ExtensionElement>,
     name: &str,
-) -> Option<ElementId> {
+) -> Option<ElemRef> {
     let ctx = rv.ctx;
     lookup::get_method(&ctx, extension.upcast(), name)
-        .map(|e| e.raw())
-        .or_else(|| lookup::get_getter(&ctx, extension.upcast(), name).map(|e| e.raw()))
-        .or_else(|| lookup::get_setter(&ctx, extension.upcast(), name).map(|e| e.raw()))
+        .map(|e| ElemRef::Base(e.raw()))
+        .or_else(|| {
+            lookup::get_getter(&ctx, extension.upcast(), name).map(|e| ElemRef::Base(e.raw()))
+        })
+        .or_else(|| {
+            lookup::get_setter(&ctx, extension.upcast(), name).map(|e| ElemRef::Base(e.raw()))
+        })
 }
 
 /// Dart `_resolvePrefixedIdentifierReference`.
@@ -136,12 +167,13 @@ fn resolve_prefixed_identifier_reference(
     let Some(mut prefix_element) = resolve_simple_identifier(rv, prefix) else {
         return;
     };
-    rv.set_element(prefix, Some(ElemRef::Base(prefix_element)));
+    rv.set_element(prefix, Some(prefix_element));
     prefix_element = aliased_element(rv, prefix_element);
+    let prefix_base = dartr_typesystem::member::base_element(&rv.ctx, prefix_element);
 
     let identifier = rv.ast[expression].identifier;
     let name = identifier_name(rv.ast, identifier).to_string();
-    if let Some(prefix) = prefix_element.cast::<PrefixElement>() {
+    if let Some(prefix) = prefix_base.cast::<PrefixElement>() {
         let result = rv.unit.scopes.prefix_lookup(&rv.ctx, prefix, &name);
         rv.set_element(
             identifier,
@@ -151,19 +183,19 @@ fn resolve_prefixed_identifier_reference(
     }
 
     let element = if !has_new_keyword {
-        if let Some(interface) = prefix_element.cast::<InterfaceElement>() {
+        if let Some(interface) = prefix_base.cast::<InterfaceElement>() {
             interface_member(rv, interface, &name)
-        } else if let Some(extension) = prefix_element.cast::<ExtensionElement>() {
+        } else if let Some(extension) = prefix_base.cast::<ExtensionElement>() {
             extension_member(rv, extension, &name)
         } else {
             None
         }
-    } else if let Some(interface) = prefix_element.cast::<InterfaceElement>() {
-        lookup::get_named_constructor(&rv.ctx, interface, &name).map(|e| e.raw())
+    } else if let Some(interface) = prefix_base.cast::<InterfaceElement>() {
+        lookup::get_named_constructor(&rv.ctx, interface, &name).map(|e| ElemRef::Base(e.raw()))
     } else {
         None
     };
-    rv.set_element(identifier, element.map(ElemRef::Base));
+    rv.set_element(identifier, element);
 }
 
 /// Dart `_resolvePropertyAccessReference`.
@@ -183,31 +215,33 @@ fn resolve_property_access_reference(
     let Some(prefix_element) = resolve_simple_identifier(rv, prefix) else {
         return;
     };
-    rv.set_element(prefix, Some(ElemRef::Base(prefix_element)));
-    let Some(prefix_element) = prefix_element.cast::<PrefixElement>() else {
+    rv.set_element(prefix, Some(prefix_element));
+    let prefix_base = dartr_typesystem::member::base_element(&rv.ctx, prefix_element);
+    let Some(prefix_element) = prefix_base.cast::<PrefixElement>() else {
         return;
     };
 
     let identifier = rv.ast[target].identifier;
     let name = identifier_name(rv.ast, identifier).to_string();
     let result = rv.unit.scopes.prefix_lookup(&rv.ctx, prefix_element, &name);
-    let element = result.getter.or(result.setter);
-    rv.set_element(identifier, element.map(ElemRef::Base));
+    let element = result.getter.or(result.setter).map(ElemRef::Base);
+    rv.set_element(identifier, element);
 
     let Some(element) = element else {
         return;
     };
     let element = aliased_element(rv, element);
+    let element_base = dartr_typesystem::member::base_element(&rv.ctx, element);
     let property_name = rv.ast[expression].property_name;
     let name = identifier_name(rv.ast, property_name).to_string();
-    let property_element = if let Some(interface) = element.cast::<InterfaceElement>() {
-        interface_member(rv, interface, &name)
-    } else if let Some(extension) = element.cast::<ExtensionElement>() {
+    let property_element = if let Some(interface) = element_base.cast::<InterfaceElement>() {
+        direct_interface_member(rv, interface, &name)
+    } else if let Some(extension) = element_base.cast::<ExtensionElement>() {
         extension_member(rv, extension, &name)
     } else {
         None
     };
-    rv.set_element(property_name, property_element.map(ElemRef::Base));
+    rv.set_element(property_name, property_element);
 }
 
 /// Dart `_resolveSimpleIdentifierReference`.
@@ -216,17 +250,18 @@ fn resolve_simple_identifier_reference(
     expression: Id<SimpleIdentifier>,
     has_new_keyword: bool,
 ) {
-    let Some(mut element) = resolve_simple_identifier(rv, expression) else {
+    let Some(element) = resolve_simple_identifier(rv, expression) else {
         return;
     };
+    rv.set_element(expression, Some(element));
     if has_new_keyword {
-        let Some(interface) = element.cast::<InterfaceElement>() else {
+        let base = dartr_typesystem::member::base_element(&rv.ctx, element);
+        let Some(interface) = base.cast::<InterfaceElement>() else {
             return;
         };
         let Some(constructor) = lookup::get_named_constructor(&rv.ctx, interface, "new") else {
             return;
         };
-        element = constructor.raw();
+        rv.set_element(expression, Some(ElemRef::Base(constructor.raw())));
     }
-    rv.set_element(expression, Some(ElemRef::Base(element)));
 }

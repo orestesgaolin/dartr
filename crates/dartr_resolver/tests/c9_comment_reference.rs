@@ -3,7 +3,7 @@
 mod support;
 
 use dartr_ast::NodeKind;
-use dartr_element::Tag;
+use dartr_element::{ElemRef, Tag};
 
 use support::{Analyzed, analyze};
 
@@ -26,10 +26,23 @@ class C {
   void member() {}
 }
 
+class NoDefault {
+  NoDefault.named();
+}
+
+class Box<T> {
+  T get value => throw 0;
+}
+
+class StringBox extends Box<String> {}
+
 /// [top]
 /// [new C]
+/// [new top]
+/// [new NoDefault]
 /// [C.named]
 /// [C.member]
+/// [StringBox.value]
 void documented() {}
 "#;
     let Some(analyzed) = run(&[("main.dart", source)]) else {
@@ -50,6 +63,17 @@ void documented() {}
         Some(Tag::Constructor)
     );
 
+    let new_function = analyzed.node_at(NodeKind::SimpleIdentifier, "[new top]", 0, 5);
+    assert_eq!(
+        analyzed.element_name(analyzed.element_of(new_function).expect("top element")),
+        Some("top".to_string())
+    );
+    let no_default = analyzed.node_at(NodeKind::SimpleIdentifier, "[new NoDefault]", 0, 5);
+    assert_eq!(
+        analyzed.element_of(no_default).map(|element| element.tag()),
+        Some(Tag::Class)
+    );
+
     let named = analyzed.node_at(NodeKind::SimpleIdentifier, "[C.named]", 0, 3);
     assert_eq!(
         analyzed.element_of(named).map(|element| element.tag()),
@@ -65,6 +89,12 @@ void documented() {}
         analyzed.element_name(analyzed.element_of(member).expect("member element")),
         Some("member".to_string())
     );
+
+    let inherited = analyzed.node_at(NodeKind::SimpleIdentifier, "[StringBox.value]", 0, 11);
+    assert!(matches!(
+        analyzed.unit().tables.element.get(inherited),
+        Some(ElemRef::Member(_))
+    ));
 }
 
 #[test]
@@ -74,12 +104,14 @@ import 'remote.dart' as p;
 
 /// [p.Remote]
 /// [p.Remote.member]
+/// [p.Derived.member]
 void documented() {}
 "#;
     let remote = r#"
 class Remote {
   void member() {}
 }
+class Derived extends Remote {}
 "#;
     let Some(analyzed) = run(&[("main.dart", main), ("remote.dart", remote)]) else {
         return;
@@ -101,4 +133,8 @@ class Remote {
         analyzed.element_name(analyzed.element_of(property).expect("member element")),
         Some("member".to_string())
     );
+
+    let inherited_property =
+        analyzed.node_at(NodeKind::SimpleIdentifier, "[p.Derived.member]", 0, 11);
+    assert_eq!(analyzed.element_of(inherited_property), None);
 }
