@@ -1,11 +1,8 @@
 name: Set up Dart SDK and sources
-description: Install Dart 3.13.3, fetch third_party/dart-sdk, run dart pub get in tools/oracle.
+description: Fetch third_party/dart-sdk and run dart pub get in tools/oracle. Run dart-lang/setup-dart in the job first (inside a composite action it cannot find its problem matcher file).
 runs:
   using: composite
   steps:
-    - uses: dart-lang/setup-dart@v1.8.1
-      with:
-        sdk: 3.13.3
     - name: Install zsh (tools/fetch_sdk.sh needs it)
       if: runner.os == 'Linux'
       shell: bash
