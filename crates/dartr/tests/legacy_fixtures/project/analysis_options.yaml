@@ -1,0 +1,4 @@
+linter:
+  rules:
+    - avoid_empty_else
+    - camel_case_types

@@ -1,0 +1,3 @@
+name: legacy_parity_fixture
+environment:
+  sdk: ^3.13.0
