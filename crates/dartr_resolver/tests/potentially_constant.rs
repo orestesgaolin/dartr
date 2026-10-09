@@ -861,7 +861,6 @@ class B {}
     }
     /// Dart `test_dotShorthandConstructorInvocation_const`.
     #[test]
-    #[ignore = "needs C8: dot shorthand resolution (`.new()` is not rewritten to a DotShorthandConstructorInvocation)"]
     fn dot_shorthand_constructor_invocation_const() {
         check(
             &[],
@@ -878,7 +877,6 @@ const A x = .new();
     }
     /// Dart `test_dotShorthandConstructorInvocation_nonConst`.
     #[test]
-    #[ignore = "needs C8: dot shorthand resolution (`.new()` is not rewritten to a DotShorthandConstructorInvocation)"]
     fn dot_shorthand_constructor_invocation_non_const() {
         check(
             &[],
@@ -895,7 +893,6 @@ A x = .new();
     }
     /// Dart `test_dotShorthandPropertyAccess_const`.
     #[test]
-    #[ignore = "needs C8: dot shorthand resolution (no element for the property name)"]
     fn dot_shorthand_property_access_const() {
         check(
             &[],
@@ -1496,7 +1493,6 @@ var x = p.a + 1;
     }
     /// Dart `test_prefixedIdentifier_importPrefix_function`.
     #[test]
-    #[ignore = "needs C4: PrefixedIdentifierResolver (no element for `p.f`)"]
     fn prefixed_identifier_import_prefix_function() {
         check(
             &[(
@@ -1515,7 +1511,6 @@ var x = p.f;
     }
     /// Dart `test_prefixedIdentifier_importPrefix_topVar`.
     #[test]
-    #[ignore = "needs C4: PrefixedIdentifierResolver (no element for `p.a`)"]
     fn prefixed_identifier_import_prefix_top_var() {
         check(
             &[(
@@ -1579,7 +1574,6 @@ var x = a.m;
     }
     /// Dart `test_prefixedIdentifier_method_static`.
     #[test]
-    #[ignore = "needs C4: PrefixedIdentifierResolver (no element for `A.m`)"]
     fn prefixed_identifier_method_static() {
         check(
             &[],
@@ -1634,7 +1628,6 @@ var x = a.b + 1;
     }
     /// Dart `test_prefixedIdentifier_staticField_const`.
     #[test]
-    #[ignore = "needs C4: PrefixedIdentifierResolver (no element for `A.a`)"]
     fn prefixed_identifier_static_field_const() {
         check(
             &[],
@@ -1748,7 +1741,6 @@ var x = ~a;
     }
     /// Dart `test_propertyAccess_instanceMethod_withPrefix`.
     #[test]
-    #[ignore = "needs C4: PrefixedIdentifierResolver and property access resolution (no element for `p.A` and `.m`)"]
     fn property_access_instance_method_with_prefix() {
         check(
             &[(
@@ -1794,7 +1786,6 @@ var x = 'abc'.length;
     }
     /// Dart `test_propertyAccess_staticField_withPrefix_const`.
     #[test]
-    #[ignore = "needs C4: PrefixedIdentifierResolver and property access resolution (no element for `p.A` and `.a`)"]
     fn property_access_static_field_with_prefix_const() {
         check(
             &[(
@@ -1835,7 +1826,6 @@ var x = p.A.a + 1;
     }
     /// Dart `test_propertyAccess_staticField_withPrefix_final`.
     #[test]
-    #[ignore = "needs C4: PrefixedIdentifierResolver and property access resolution (no element for `p.A` and `.a`)"]
     fn property_access_static_field_with_prefix_final() {
         check(
             &[(
@@ -1856,7 +1846,6 @@ var x = p.A.a + 1;
     }
     /// Dart `test_propertyAccess_staticMethod_withPrefix`.
     #[test]
-    #[ignore = "needs C4: PrefixedIdentifierResolver and property access resolution (no element for `p.A` and `.m`)"]
     fn property_access_static_method_with_prefix() {
         check(
             &[(
@@ -2407,7 +2396,6 @@ var x = 'a';
     }
     /// Dart `test_typeLiteral`.
     #[test]
-    #[ignore = "needs C8: FunctionReferenceResolver (`List<int>` stays a FunctionReference, Dart rewrites it to a TypeLiteral)"]
     fn type_literal() {
         check(
             &[],
@@ -2423,7 +2411,6 @@ class A {
     }
     /// Dart `test_typeLiteral_nonConst`.
     #[test]
-    #[ignore = "needs C8: FunctionReferenceResolver (`List<self.A>` stays a FunctionReference, Dart rewrites it to a TypeLiteral)"]
     fn type_literal_non_const() {
         check(
             &[],
