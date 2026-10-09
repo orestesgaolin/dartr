@@ -2,7 +2,7 @@
 //! JSON-lines lint runner that links and resolves before running lint processors.
 use dartr_driver::{
     driver::Driver,
-    file_state::{FileConfig, FileSystemState, SourceFactory},
+    file_state::{FileConfig, FileId, FileSystemState, SourceFactory},
 };
 use dartr_element::Generation;
 use dartr_lints::{Registry, rules::implemented_rules};
@@ -92,16 +92,17 @@ fn run() {
             .map(|&i| driver.fs.get_file_for_path(&paths[i]))
             .collect();
         driver.fs.discover();
-        let libraries: Vec<_> = files
-            .iter()
-            .copied()
-            .filter(|&file| !driver.fs.file(file).kind().is_part())
-            .collect();
-        driver.link_libraries(&libraries);
+        // Dart `kind.library ?? kind.asLibrary`: each file is analyzed in its
+        // library; a part without a library is analyzed as a library.
+        let mut libraries: IndexMap<FileId, usize> = IndexMap::new();
         for (&index, &file) in selected.iter().zip(&files) {
-            if driver.fs.file(file).kind().is_part() {
-                continue;
-            }
+            let library = driver.fs.library_or_as_library(file);
+            libraries.entry(library).or_insert(index);
+        }
+        driver.fs.discover();
+        let library_files: Vec<_> = libraries.keys().copied().collect();
+        driver.link_libraries(&library_files);
+        for (&file, &index) in &libraries {
             let enabled: Vec<&str> = requests[index]["enabled"]
                 .as_array()
                 .expect("enabled rules")

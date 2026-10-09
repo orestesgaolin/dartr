@@ -30,7 +30,8 @@ def diagnostic_key(path, code, severity, offset, length, message, correction=Non
     return path, code, severity, offset, length, message, correction
 
 def run(binary, output, fixtures=False, corpus=None, input_dir=None,
-        language_version='3.13', experiments=(), package_config=True, rules_file=None, timeout=600, reuse=False):
+        language_version='3.13', experiments=(), package_config=True, rules_file=None, timeout=600, reuse=False,
+        rust_only=False):
     started = time.monotonic()
     output.mkdir(parents=True, exist_ok=True)
     metadata = json.loads(subprocess.check_output([str(binary), '--list'], text=True, timeout=30))
@@ -46,6 +47,20 @@ def run(binary, output, fixtures=False, corpus=None, input_dir=None,
     if not rules:
         raise RuntimeError('No lint rules implemented')
     project = output / 'project'
+    if rust_only:
+        # Rerun only the Rust runner against the saved project and oracle output.
+        saved = json.loads((output / 'enabled_rules.json').read_text())
+        if [rule['name'] for rule in saved] != rules:
+            raise RuntimeError('Saved metadata differs from the requested rules')
+        version = subprocess.check_output([dart_binary(), '--version'], text=True, stderr=subprocess.STDOUT, timeout=30).strip()
+        rust = subprocess.run([str(binary)], input=(output / 'request.jsonl').read_text(), text=True,
+                              capture_output=True, timeout=timeout)
+        (output / 'dartr.stdout.jsonl').write_text(rust.stdout)
+        (output / 'dartr.stderr.log').write_text(rust.stderr)
+        if rust.returncode:
+            raise RuntimeError(f'Rust runner failed: {rust.returncode}, {rust.stderr[-4000:]}')
+        return compare_outputs(output, saved, project, sorted((project / 'lib').rglob('*.dart')),
+                               json.loads((output / 'oracle.stdout.json').read_text()), rust.stdout, version, started)
     if reuse:
         saved = json.loads((output / 'enabled_rules.json').read_text())
         if saved != metadata:
@@ -207,7 +222,9 @@ if __name__ == '__main__':
     parser.add_argument('--rules-file', type=Path)
     parser.add_argument('--timeout', type=int, default=600)
     parser.add_argument('--reuse', action='store_true', help='Recompare saved complete outputs without rerunning either analyzer')
+    parser.add_argument('--rust-only', action='store_true', help='Rerun only the Rust runner against the saved project and oracle output')
     args = parser.parse_args()
     raise SystemExit(run(args.binary.resolve(), args.output.resolve(), args.fixtures, args.corpus,
                          args.input_dir, args.language_version, args.enable_experiment,
-                         not args.no_package_config, args.rules_file, args.timeout, args.reuse))
+                         not args.no_package_config, args.rules_file, args.timeout, args.reuse,
+                         args.rust_only))
