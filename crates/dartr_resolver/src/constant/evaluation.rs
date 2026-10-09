@@ -614,10 +614,16 @@ impl<'a> ConstantEvaluationEngine<'a> {
         let Some(enclosing) = ctx.element_data(e).and_then(|d| d.enclosing) else {
             return Constant::Value(null_object(&ts));
         };
-        let element_type = enclosing
-            .cast::<InterfaceElement>()
-            .map(|i| ctx.interface_this_type(i))
-            .unwrap_or(TypeId::DYNAMIC);
+        // Dart: the synthetic literal `const <E<...>>[...]` has the type of
+        // the `values` field (`List<E<dynamic>>` for a generic enum).
+        let values_type = variable_type(&ctx, e);
+        let element_type = match ctx.type_arguments(values_type).first() {
+            Some(&t) if ctx.interface_element(values_type).is_some() => t,
+            _ => enclosing
+                .cast::<InterfaceElement>()
+                .map(|i| ctx.interface_this_type(i))
+                .unwrap_or(TypeId::DYNAMIC),
+        };
         let mut elements = Vec::new();
         for c in crate::element_ext::enum_constants(&ctx, EId::from_raw(enclosing)) {
             match self.evaluation_result(c) {
