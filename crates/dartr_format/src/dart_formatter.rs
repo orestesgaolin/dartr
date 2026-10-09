@@ -4,7 +4,7 @@
 //! from the language version and runs the front end of that style.
 
 use dartr_ast::{Ast, BlockFunctionBody, FunctionDeclaration, NodeId};
-use dartr_ast_builder::parse::parse_file;
+use dartr_ast_builder::parse::parse_file_with_sdk_version;
 use dartr_diagnostics::DiagnosticType;
 use dartr_parser::experimental_flags::ExperimentalFlag;
 use dartr_syntax::{LineInfo, TokenType};
@@ -174,12 +174,10 @@ impl DartFormatter {
 
         // Parse it.
         let path = source.uri.clone().unwrap_or_default();
-        let parsed = parse_file(
-            &text,
-            &path,
-            (self.language_version.major, self.language_version.minor),
-            &experiments,
-        );
+        // Dart `FeatureSet.fromEnableFlags2(sdkLanguageVersion:
+        // languageVersion, flags: experimentFlags)`.
+        let version = (self.language_version.major, self.language_version.minor);
+        let parsed = parse_file_with_sdk_version(&text, &path, version, &experiments, version);
 
         // Infer the line ending if not given one. Do it here since now we know
         // where the lines start.
