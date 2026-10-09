@@ -206,11 +206,6 @@ pub fn register(
                 "unnecessary_final",
                 unnecessary_final,
             );
-            registry.add(
-                NodeKind::PatternVariableDeclaration,
-                "unnecessary_final",
-                unnecessary_final,
-            );
         }
         "unnecessary_late" => {
             registry.add(
@@ -1243,13 +1238,16 @@ fn unnecessary_final(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagno
         }
         NodeKind::DeclaredVariablePattern => {
             let n = &ctx.ast[Id::<DeclaredVariablePattern>::from_raw(node)];
-            if let Some(t) = n.keyword {
-                report_final(ctx, out, t, n.type_.is_some());
+            let keyword = n.keyword.or_else(|| {
+                ctx.ast
+                    .this_or_ancestor_of_type::<PatternVariableDeclaration>(node)
+                    .map(|d| ctx.ast[d].keyword)
+            });
+            // Dart uses `node.matchedValueType`, which the resolver always sets
+            // for a declared variable pattern, so the code is the "with type" one.
+            if let Some(t) = keyword {
+                report_final(ctx, out, t, true);
             }
-        }
-        NodeKind::PatternVariableDeclaration => {
-            let n = &ctx.ast[Id::<PatternVariableDeclaration>::from_raw(node)];
-            report_final(ctx, out, n.keyword, false);
         }
         _ => {}
     }
