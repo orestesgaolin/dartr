@@ -1,0 +1,13 @@
+Usage: dartr format [options...] <files or directories...>
+-h, --help                     Print this usage information.
+-v, --verbose                  Show all options and flags with --help.
+-o, --output                   Set where to write formatted output.
+
+          [write] (default)    Overwrite formatted files on disk.
+          [show]               Print code to terminal.
+          [json]               Print code and selection as JSON.
+          [none]               Discard output.
+
+    --set-exit-if-changed      Return exit code 1 if there are any formatting changes.
+
+Run "dartr help" to see global options.

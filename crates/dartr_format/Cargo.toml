@@ -12,9 +12,10 @@ dartr_ast_builder.workspace = true
 dartr_parser.workspace = true
 dartr_diagnostics.workspace = true
 rustc-hash.workspace = true
+dartr_project.workspace = true
+rayon.workspace = true
 
 [dev-dependencies]
-rayon.workspace = true
 
 [lib]
 # Doc comments are copied from Dart and contain indented Dart code samples.
