@@ -1,7 +1,9 @@
 // Dart source: pkg/linter/lib/src/rules/avoid_redundant_argument_values.dart
 
 use crate::{LinterContext, RuleVisitorRegistry};
-use dartr_ast::{ArgumentList, Id, InstanceCreationExpression, NamedArgument, NodeId, NodeKind};
+use dartr_ast::{
+    ArgumentList, Id, InstanceCreationExpression, MethodInvocation, NamedArgument, NodeId, NodeKind,
+};
 use dartr_diagnostics::{Diagnostic, diag};
 use dartr_element::{ConstructorElement, EId, ElemRef, FormalParameterElement};
 use dartr_typesystem::{TypeExt, member};
@@ -77,11 +79,9 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         let Some(formal) = base.cast::<FormalParameterElement>() else {
             continue;
         };
-        if super::helpers::element_annotation_status(
-            c,
-            formal.raw(),
-            super::helpers::KnownAnnotation::Required,
-        ) != Some(false)
+        // Dart `param.metadata.hasRequired`.
+        if c.has_package_meta_getter(formal.raw(), "required")
+            || c.has_constructor_annotation(formal.raw(), "meta", "Required")
         {
             continue;
         }
@@ -92,6 +92,42 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         if kind == dartr_ast::ParameterKind::NamedRequired
             || kind == dartr_ast::ParameterKind::Required
         {
+            continue;
+        }
+        // The parameters of a function type that substitution changed are
+        // synthetic copies (`FormalParameterElementMixinExtension.copyWith`)
+        // whose `computeConstantValue()` is `null`: a method invoked on a
+        // receiver (the member is substituted with the receiver type) whose
+        // declared type references a type parameter.
+        let synthetic = redirected.is_none()
+            && c.ast.parent(node).is_some_and(|parent| {
+                c.ast
+                    .cast::<MethodInvocation>(parent)
+                    .is_some_and(|invocation| {
+                        c.ast[invocation].target.is_some()
+                            || c.ast[invocation]
+                                .operator
+                                .is_some_and(|op| matches!(c.ast.tokens.lexeme(op), ".." | "?.."))
+                    })
+            })
+            && r.ctx
+                .element_data(base)
+                .and_then(|d| d.enclosing)
+                .is_some_and(|executable| {
+                    r.ctx
+                        .element_data(executable)
+                        .and_then(|d| d.enclosing)
+                        .and_then(|owner| owner.cast::<dartr_element::InterfaceElement>())
+                        .is_some_and(|owner| !r.ctx.interface_type_parameters(owner).is_empty())
+                        && dartr_constant::has_type_parameter_reference(
+                            &r.ctx,
+                            member::type_(&r.ctx, ElemRef::Base(executable)),
+                        )
+                });
+        if synthetic {
+            if kind == dartr_ast::ParameterKind::Positional {
+                break;
+            }
             continue;
         }
         if let (Some(default), Some(value)) =

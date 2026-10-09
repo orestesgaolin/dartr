@@ -8,6 +8,7 @@
 
 use std::sync::Arc;
 
+use dartr_lints::LintDiagnostic as Diagnostic;
 use indexmap::IndexMap;
 
 use dartr_ast_builder::ParsedUnit;
@@ -73,6 +74,23 @@ impl Driver {
         T: Send,
         F: Fn(FileId, &[UnitInput], Result<ResolvedLibrary, String>) -> T + Sync,
     {
+        let jobs: Vec<LintJob> = libraries
+            .iter()
+            .map(|&(file, options)| (file, options, Vec::new()))
+            .collect();
+        self.analyze_libraries_with_lints(&jobs, |file, units, result, _| f(file, units, result))
+    }
+
+    /// [`Driver::analyze_libraries`] that also runs the enabled lint rules
+    /// of each library on its resolved units (Dart `_computeLints`, after
+    /// resolution). [f] gets the lint diagnostics of each unit (filtered by
+    /// the `ignore` comments), in the order of the units.
+    pub fn analyze_libraries_with_lints<T, F>(&self, libraries: &[LintJob], f: F) -> Vec<T>
+    where
+        T: Send,
+        F: Fn(FileId, &[UnitInput], Result<ResolvedLibrary, String>, Vec<Vec<Diagnostic>>) -> T
+            + Sync,
+    {
         use rayon::prelude::*;
         use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -80,18 +98,31 @@ impl Driver {
         let tp = dartr_link::types_builder::world_type_provider(world);
         let external =
             ExternalUnitCache::new(world, &tp, AnalysisOptions::default(), self.unit_sources());
-        let jobs: Vec<(
-            FileId,
-            AnalysisOptions,
-            Option<(EId<LibraryElement>, Vec<UnitInput>)>,
-        )> = libraries
+        let jobs: Vec<_> = libraries
             .iter()
-            .map(|&(file, options)| (file, options, self.library_units(file)))
+            .map(|job| {
+                (
+                    job,
+                    self.library_units(job.0),
+                    self.doc_import_libraries(job.0),
+                )
+            })
             .collect();
+        let panic_message = |e: Box<dyn std::any::Any + Send>| {
+            e.downcast_ref::<String>()
+                .cloned()
+                .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+                .unwrap_or_else(|| "panic".to_string())
+        };
         jobs.par_iter()
-            .map(|(file, options, job)| {
+            .map(|((file, options, rules), job, doc_imports)| {
                 let Some((library, units)) = job else {
-                    return f(*file, &[], Err("library is not linked".to_string()));
+                    return f(
+                        *file,
+                        &[],
+                        Err("library is not linked".to_string()),
+                        Vec::new(),
+                    );
                 };
                 let input = LibraryAnalysisInput {
                     world,
@@ -100,16 +131,21 @@ impl Driver {
                     units: units.clone(),
                     options: *options,
                     external: Some(&external),
-                    doc_import_libraries: self.doc_import_libraries(*file),
+                    doc_import_libraries: doc_imports.clone(),
                 };
-                let result =
-                    catch_unwind(AssertUnwindSafe(|| analyze_library(&input))).map_err(|e| {
-                        e.downcast_ref::<String>()
-                            .cloned()
-                            .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
-                            .unwrap_or_else(|| "panic".to_string())
-                    });
-                f(*file, units, result)
+                let result = catch_unwind(AssertUnwindSafe(|| analyze_library(&input)))
+                    .map_err(panic_message);
+                let lints = match &result {
+                    Ok(resolved) if !rules.is_empty() => {
+                        let enabled: Vec<&str> = rules.iter().map(String::as_str).collect();
+                        catch_unwind(AssertUnwindSafe(|| {
+                            crate::lints::compute_lints(&input, resolved, &enabled)
+                        }))
+                        .unwrap_or_default()
+                    }
+                    _ => Vec::new(),
+                };
+                f(*file, units, result, lints)
             })
             .collect()
     }
@@ -165,7 +201,7 @@ impl Driver {
     /// its units, for [`analyze_library`]. Returns `None` when the library is
     /// not linked. Use it to analyze many libraries in parallel: the driver
     /// is not `Sync`, but the world snapshot and the unit inputs are.
-    pub fn library_units(&self, file: FileId) -> Option<(EId<LibraryElement>, Vec<UnitInput>)> {
+    pub fn library_units(&self, file: FileId) -> Option<LibraryUnits> {
         let world = &self.state.world;
         let uri = &self.fs.file(file).uri_str;
         let library = *world.libraries.get(uri)?;
@@ -197,6 +233,13 @@ impl Driver {
         Some((library, units))
     }
 }
+
+/// A library to analyze: the defining unit, its options and the enabled
+/// lint rules.
+pub type LintJob = (FileId, AnalysisOptions, Vec<String>);
+
+/// The library element and the unit inputs of a linked library.
+pub type LibraryUnits = (EId<LibraryElement>, Vec<UnitInput>);
 
 /// The fragments of [library]: the defining unit, then the parts, depth
 /// first in `part` directive order.

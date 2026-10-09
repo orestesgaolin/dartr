@@ -5,7 +5,7 @@ use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
 use dartr_element::{
     ElementId, FieldElement, FormalParameterElement, FragmentFlags, GetterElement,
-    LocalVariableElement, MethodElement, SetterElement, Tag, TopLevelVariableElement,
+    LocalVariableElement, SetterElement, Tag, TopLevelVariableElement,
 };
 
 pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
@@ -133,32 +133,34 @@ fn box_for(context: &LinterContext<'_>, statement: NodeId) -> Cascadable {
     let expression = unparenthesized(context, context.ast[s].expression.raw());
     match context.ast.kind(expression) {
         NodeKind::MethodInvocation => {
+            // Dart `_fromMethodInvocation`.
             let n = &context.ast[context.ast.cast::<MethodInvocation>(expression).unwrap()];
-            let Some(target) = n
+            let executable = n
+                .operator
+                .filter(|&t| context.ast.tokens.lexeme(t) == ".")
+                .and_then(|_| canonical(context, n.method_name.raw()))
+                .filter(|&e| {
+                    matches!(
+                        e.tag(),
+                        Tag::Method
+                            | Tag::Getter
+                            | Tag::Setter
+                            | Tag::TopLevelFunction
+                            | Tag::LocalFunction
+                            | Tag::Constructor
+                    )
+                });
+            if executable.is_none_or(|e| is_static(context, e)) {
+                return Cascadable::default();
+            }
+            let target_is_simple = n
                 .target
-                .filter(|t| context.ast.kind(*t) == NodeKind::SimpleIdentifier)
-            else {
-                return Cascadable::default();
-            };
-            if n.operator
-                .is_none_or(|t| context.ast.tokens.lexeme(t) != ".")
-            {
-                return Cascadable::default();
-            }
-            let Some(method) = context
-                .element(n.method_name)
-                .and_then(|element| super::helpers::base_element(context, element))
-            else {
-                return Cascadable::default();
-            };
-            if !method.is::<MethodElement>() || is_static(context, method) {
-                return Cascadable::default();
-            }
+                .is_some_and(|t| context.ast.kind(t) == NodeKind::SimpleIdentifier);
             Cascadable {
-                element: canonical(context, target.raw()),
+                element: n.target.and_then(|t| canonical(context, t.raw())),
                 critical: vec![n.method_name.raw(), n.argument_list.raw()],
-                can_join: true,
-                can_receive: true,
+                can_join: target_is_simple,
+                can_receive: target_is_simple,
                 can_be_cascaded: true,
             }
         }
@@ -173,21 +175,19 @@ fn box_for(context: &LinterContext<'_>, statement: NodeId) -> Cascadable {
             }
         }
         NodeKind::PropertyAccess => {
+            // Dart `_fromPropertyAccess` (only with the `.` operator).
             let n = &context.ast[context.ast.cast::<PropertyAccess>(expression).unwrap()];
-            let Some(target) = n
-                .target
-                .filter(|t| context.ast.kind(*t) == NodeKind::SimpleIdentifier)
-            else {
-                return Cascadable::default();
-            };
             if context.ast.tokens.lexeme(n.operator) != "." {
                 return Cascadable::default();
             }
+            let target_is_simple = n
+                .target
+                .is_some_and(|t| context.ast.kind(t) == NodeKind::SimpleIdentifier);
             Cascadable {
-                element: canonical(context, target.raw()),
+                element: n.target.and_then(|t| canonical(context, t.raw())),
                 critical: vec![n.property_name.raw()],
-                can_join: true,
-                can_receive: true,
+                can_join: target_is_simple,
+                can_receive: target_is_simple,
                 can_be_cascaded: true,
             }
         }
@@ -238,7 +238,9 @@ fn references(context: &LinterContext<'_>, root: NodeId, target: ElementId) -> b
     };
     let ctx = &resolved.ctx;
     // Dart `targetElement.variable` / the `PropertyInducingElement` itself.
-    let target_variable = property_variable(context, target);
+    let target_variable = (target.is::<GetterElement>() || target.is::<SetterElement>())
+        .then(|| property_variable(context, target))
+        .flatten();
     let variable = target_variable.or_else(|| {
         (target.is::<FieldElement>() || target.is::<TopLevelVariableElement>()).then_some(target)
     });

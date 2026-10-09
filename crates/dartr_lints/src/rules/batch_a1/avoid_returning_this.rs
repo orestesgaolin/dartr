@@ -1,14 +1,11 @@
 // Dart source: pkg/linter/lib/src/rules/avoid_returning_this.dart
 
-use super::helpers::{KnownAnnotation, ancestor, annotation_status, declared_type};
+use super::helpers::{ancestor, declared_type};
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
-use dartr_element::{ElemRef, InterfaceElement, TypeKind};
-use dartr_typesystem::{
-    inheritance_manager3::{InheritanceManager3, Name},
-    member,
-};
+use dartr_element::{InterfaceElement, TypeKind};
+use dartr_typesystem::TypeExt;
 
 pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
     registry.add(NodeKind::MethodDeclaration, "avoid_returning_this", check);
@@ -17,31 +14,44 @@ pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(r) = c.resolved else { return };
     let n = &c.ast[Id::<MethodDeclaration>::from_raw(node)];
-    if n.operator_keyword.is_some()
-        || annotation_status(c, node, KnownAnnotation::Override) != Some(false)
-    {
+    if n.operator_keyword.is_some() {
         return;
     }
     let Some(element) = c.declared_element(node) else {
         return;
     };
+    // Dart `MethodDeclarationExtension.isOverride`.
     let Some(data) = r.ctx.element_data(element) else {
         return;
     };
-    let Some(enclosing) = data.enclosing.and_then(|e| e.cast::<InterfaceElement>()) else {
+    let Some(name) = r.ctx.element_name(element) else {
         return;
     };
-    let Some(lookup_name) = member::lookup_name(&r.ctx, ElemRef::Base(element)) else {
-        return;
-    };
-    if InheritanceManager3::new(r.ctx)
-        .get_overridden(
-            enclosing,
-            Name::for_library(&r.ctx, data.library, &lookup_name),
-        )
-        .is_some_and(|members| !members.is_empty())
-    {
-        return;
+    if let Some(enclosing) = data.enclosing.and_then(|e| e.cast::<InterfaceElement>()) {
+        let library = data.library.expect("element library");
+        let property = n.property_keyword.map(|k| c.ast.tokens.lexeme(k));
+        let options = dartr_typesystem::lookup::LookUpOptions::default();
+        let is_override = r
+            .ctx
+            .element_all_supertypes(enclosing)
+            .iter()
+            .any(|&t| match property {
+                Some("get") => {
+                    dartr_typesystem::lookup::type_look_up_getter(&r.ctx, t, name, library, options)
+                        .is_some()
+                }
+                Some("set") => {
+                    dartr_typesystem::lookup::type_look_up_setter(&r.ctx, t, name, library, options)
+                        .is_some()
+                }
+                _ => {
+                    dartr_typesystem::lookup::type_look_up_method(&r.ctx, t, name, library, options)
+                        .is_some()
+                }
+            });
+        if is_override {
+            return;
+        }
     }
     let Some(owner) = [
         NodeKind::ClassDeclaration,

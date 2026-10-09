@@ -58,11 +58,6 @@ pub fn element_library_uri<'a>(c: &'a LinterContext<'_>, element: ElemRef) -> Op
 #[derive(Clone, Copy)]
 pub enum KnownAnnotation {
     AnalyzerPublicApi,
-    Immutable,
-    OptionalTypeArgs,
-    Override,
-    Redeclare,
-    Required,
 }
 
 fn resolved_annotation_matches(
@@ -73,8 +68,6 @@ fn resolved_annotation_matches(
     let resolved = c.resolved?;
     let element = c.element(annotation)?;
     let base = member::base_element(&resolved.ctx, element);
-    let name = resolved.ctx.element_name(base);
-    let library_uri = resolved.ctx.element_library_uri(base);
     let constructor_class = base
         .cast::<ConstructorElement>()
         .and_then(|_| resolved.ctx.element_data(base)?.enclosing)
@@ -93,35 +86,6 @@ fn resolved_annotation_matches(
                     }),
                     _ => false,
                 }
-        }
-        KnownAnnotation::Immutable => {
-            (matches!(resolved.ctx.any(base), AnyElement::Getter(_))
-                && name == Some("immutable")
-                && library_uri == Some("package:meta/meta.dart"))
-                || (constructor_class == Some("Immutable")
-                    && library_uri == Some("package:meta/meta.dart"))
-        }
-        KnownAnnotation::OptionalTypeArgs => {
-            matches!(resolved.ctx.any(base), AnyElement::Getter(_))
-                && name == Some("optionalTypeArgs")
-                && library_uri == Some("package:meta/meta.dart")
-        }
-        KnownAnnotation::Override => {
-            matches!(resolved.ctx.any(base), AnyElement::Getter(_))
-                && name == Some("override")
-                && library_uri == Some("dart:core")
-        }
-        KnownAnnotation::Redeclare => {
-            matches!(resolved.ctx.any(base), AnyElement::Getter(_))
-                && name == Some("redeclare")
-                && library_uri == Some("package:meta/meta.dart")
-        }
-        KnownAnnotation::Required => {
-            (matches!(resolved.ctx.any(base), AnyElement::Getter(_))
-                && name == Some("required")
-                && library_uri == Some("package:meta/meta.dart"))
-                || (constructor_class == Some("Required")
-                    && library_uri == Some("package:meta/meta.dart"))
         }
     })
 }

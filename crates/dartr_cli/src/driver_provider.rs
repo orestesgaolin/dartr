@@ -256,14 +256,35 @@ fn analyze_context(
     let library_ids: Vec<FileId> = libraries.keys().copied().collect();
     driver.link_libraries(&library_ids);
 
-    let jobs: Vec<(FileId, ResolverOptions)> = library_ids
+    // The rules that need resolution run on the resolved units (Dart
+    // `_computeLints`); the parse-only rules keep running on the parsed units.
+    let parsed_rules = dartr_lints::rules::parsed_rules();
+    let jobs: Vec<dartr_driver::analysis::LintJob> = library_ids
         .iter()
-        .map(|&l| (l, options.for_path(&driver.fs.file(l).path).1))
+        .map(|&l| {
+            let path = &driver.fs.file(l).path;
+            let resolved_rules = options
+                .for_path(path)
+                .0
+                .lint_rules
+                .iter()
+                .filter(|rule| !parsed_rules.contains(rule))
+                .map(|rule| rule.to_string())
+                .collect();
+            (l, options.for_path(path).1, resolved_rules)
+        })
         .collect();
     let requested = &requested;
     let libraries = &libraries;
-    let analyzed = driver.analyze_libraries(&jobs, |library, units, result| {
-        library_outcomes(options, &libraries[&library], requested, units, result)
+    let analyzed = driver.analyze_libraries_with_lints(&jobs, |library, units, result, lints| {
+        library_outcomes(
+            options,
+            &libraries[&library],
+            requested,
+            units,
+            result,
+            lints,
+        )
     });
     outcomes.extend(analyzed.into_iter().flatten());
     outcomes
@@ -276,6 +297,7 @@ fn library_outcomes(
     requested: &HashMap<FileId, &AnalyzedFile>,
     units: &[UnitInput],
     result: Result<ResolvedLibrary, String>,
+    resolved_lints: Vec<Vec<Diagnostic>>,
 ) -> Vec<Outcome> {
     let fallback = || {
         wanted
@@ -296,7 +318,14 @@ fn library_outcomes(
         }
     };
     let (library_settings, _) = options.for_path(&first.path);
-    let lints: Vec<Vec<Diagnostic>> = if library_settings.lint_rules.is_empty() {
+    let parsed_rules = dartr_lints::rules::parsed_rules();
+    let parsed_lint_rules: Vec<&str> = library_settings
+        .lint_rules
+        .iter()
+        .copied()
+        .filter(|rule| parsed_rules.contains(rule))
+        .collect();
+    let mut lints: Vec<Vec<Diagnostic>> = if parsed_lint_rules.is_empty() {
         vec![Vec::new(); units.len()]
     } else {
         let context_units: Vec<RuleContextUnit<'_>> = units
@@ -307,8 +336,11 @@ fn library_outcomes(
                 path: &u.path,
             })
             .collect();
-        lint_library_unfiltered(&context_units, &library_settings.lint_rules)
+        lint_library_unfiltered(&context_units, &parsed_lint_rules)
     };
+    for (unit_lints, resolved) in lints.iter_mut().zip(resolved_lints) {
+        unit_lints.extend(resolved);
+    }
     let mut outcomes = Vec::new();
     for &id in wanted {
         let file = requested[&id];
