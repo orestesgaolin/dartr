@@ -1,0 +1,956 @@
+# Generated from pkg/analyzer/test/src/diagnostics/*_test.dart (single-file cases).
+=== concrete_class_has_enum_superinterface::test_class_abstract
+---
+
+abstract class A implements Enum {}
+
+=== concrete_class_has_enum_superinterface::test_class_concrete
+--- concreteClassHasEnumSuperinterface 20 4
+---
+
+class A implements Enum {}
+
+=== concrete_class_has_enum_superinterface::test_class_concrete_indirect
+--- concreteClassHasEnumSuperinterface 43 1
+---
+
+abstract class A implements Enum {}
+class B implements A {}
+
+=== concrete_class_has_enum_superinterface::test_classTypeAlias_concrete
+--- concreteClassHasEnumSuperinterface 47 4
+---
+
+class M {}
+class A = Object with M implements Enum;
+
+=== concrete_class_has_enum_superinterface::test_classTypeAlias_concrete_indirect
+--- concreteClassHasEnumSuperinterface 54 1
+---
+
+mixin M {}
+abstract class A implements Enum {}
+class B = Object with M implements A;
+
+=== duplicate_definition::test_instance_primaryConstructor_requiredPositional_wildcard
+--- unusedFieldFromPrimaryConstructor 17 1
+---
+
+class A(var int _);
+
+=== duplicate_definition::test_instance_primaryConstructor_requiredPositional_wildcard_wildcard
+--- unusedFieldFromPrimaryConstructor 17 1
+--- duplicateDefinition 28 1
+--- unusedFieldFromPrimaryConstructor 28 1
+---
+
+class A(var int _, var int _);
+
+=== duplicate_definition::test_unitMembers_extension
+--- duplicateDefinition 42 1
+---
+
+class A {}
+extension E on A {}
+extension E on A {}
+
+=== duplicate_definition::test_unitMembers_extensionType
+--- duplicateDefinition 44 1
+---
+
+extension type E(int it) {}
+extension type E(int it) {}
+
+=== duplicate_definition::test_catch
+--- duplicateDefinition 29 1
+--- unusedCatchStack 29 1
+---
+
+main() {
+  try {} catch (e, e) {}
+}
+=== duplicate_definition::test_catch_wildcard
+--- unusedCatchStack 26 1
+---
+
+f() {
+  try {} catch (_, _) {}
+}
+=== duplicate_definition::test_catch_wildcard_preWildCards
+--- duplicateDefinition 70 1
+--- unusedCatchStack 70 1
+---
+
+// @dart = 3.4
+// (pre wildcard-variables)
+
+f() {
+  try {} catch (_, _) {}
+}
+=== duplicate_definition::test_emptyName
+--- unusedElement 5 10
+---
+
+Map _globalMap = {
+  'a' : () {},
+  'b' : () {}
+};
+
+=== duplicate_definition::test_getter_single
+---
+
+bool get a => true;
+
+=== duplicate_definition::test_parameters_functionTypeAlias
+--- duplicateDefinition 30 1
+---
+
+typedef void F(int a, double a);
+
+=== duplicate_definition::test_parameters_functionTypeAlias_wildcard
+---
+
+typedef void F(int _, double _);
+
+=== duplicate_definition::test_parameters_functionTypeAlias_wildcard_preWildcards
+--- duplicateDefinition 74 1
+---
+
+// @dart = 3.4
+// (pre wildcard-variables)
+
+typedef void F(int _, double _);
+
+=== duplicate_definition::test_parameters_genericFunction
+--- duplicateDefinition 41 1
+---
+
+typedef F = void Function(int a, double a);
+
+=== duplicate_definition::test_parameters_genericFunction_wildcard
+---
+
+typedef F = void Function(int _, double _);
+
+=== duplicate_definition::test_parameters_genericFunction_wildcard_preWildcards
+--- duplicateDefinition 85 1
+---
+
+// @dart = 3.4
+// (pre wildcard-variables)
+
+typedef F = void Function(int _, double _);
+
+=== duplicate_definition::test_parameters_primaryConstructor_simple_simple
+--- duplicateDefinition 20 1
+---
+
+class A(int a, int a) {}
+
+=== duplicate_definition::test_parameters_topLevelFunction
+--- duplicateDefinition 17 1
+---
+
+f(int a, double a) {}
+
+=== duplicate_definition::test_parameters_topLevelFunction_synthetic
+--- missingIdentifier 3 1
+--- missingIdentifier 5 1
+---
+
+f(,[]) {}
+
+=== duplicate_definition::test_parameters_topLevelFunction_wildcard
+---
+
+f(int _, double _) {}
+
+=== duplicate_definition::test_parameters_topLevelFunction_wildcard_preWildcards
+--- duplicateDefinition 61 1
+---
+
+// @dart = 3.4
+// (pre wildcard-variables)
+
+f(int _, double _) {}
+
+=== duplicate_definition::test_topLevel_field_field
+--- duplicateDefinition 16 1
+---
+
+var f = 1;
+var f = 2;
+
+=== duplicate_definition::test_topLevel_field_getter
+--- duplicateDefinition 20 1
+---
+
+int f = 1;
+int get f => 7;
+
+=== duplicate_definition::test_topLevel_field_setter
+--- duplicateDefinition 16 1
+---
+
+int f = 1;
+set f(int value) {}
+
+=== duplicate_definition::test_topLevel_fieldConst_setter
+---
+
+const f = 0;
+set f(_) {}
+
+=== duplicate_definition::test_topLevel_fieldFinal_setter
+---
+
+final f = 1;
+set f(int value) {}
+
+=== duplicate_definition::test_topLevel_fieldLateFinalInitializer_setter
+---
+
+late final f = 1;
+set f(int value) {}
+
+=== duplicate_definition::test_topLevel_fieldLateFinalNoInitializer_setter
+--- duplicateDefinition 19 1
+---
+
+late final f;
+set f(int value) {}
+
+=== duplicate_definition::test_topLevel_setter_setter
+--- duplicateDefinition 25 1
+---
+
+set f(int value) {}
+set f(int value) {}
+
+=== duplicate_definition::test_typeParameters_class
+--- duplicateDefinition 12 1
+---
+
+class A<T, T> {}
+
+=== duplicate_definition::test_typeParameters_class_wildcard
+---
+
+class A<_, _> {}
+
+=== duplicate_definition::test_typeParameters_class_wildcard_preWildcards
+--- duplicateDefinition 56 1
+---
+
+// @dart = 3.4
+// (pre wildcard-variables)
+
+class A<_, _> {}
+
+=== duplicate_definition::test_typeParameters_functionTypeAlias
+--- duplicateDefinition 19 1
+---
+
+typedef void F<T, T>();
+
+=== duplicate_definition::test_typeParameters_functionTypeAlias_wildcard
+---
+
+typedef void F<_, _>();
+
+=== duplicate_definition::test_typeParameters_functionTypeAlias_wildcard_preWildcards
+--- duplicateDefinition 63 1
+---
+
+// @dart = 3.4
+// (pre wildcard-variables)
+
+typedef void F<_, _>();
+
+=== duplicate_definition::test_typeParameters_genericFunction
+--- duplicateDefinition 30 1
+---
+
+typedef F = void Function<T, T>();
+
+=== duplicate_definition::test_typeParameters_genericFunction_wildcard
+---
+
+typedef F = void Function<_, _>();
+
+=== duplicate_definition::test_typeParameters_genericFunction_wildcard_preWildcards
+--- duplicateDefinition 74 1
+---
+
+// @dart = 3.4
+// (pre wildcard-variables)
+
+typedef F = void Function<_, _>();
+
+=== duplicate_definition::test_typeParameters_genericTypedef_functionType
+--- duplicateDefinition 14 1
+---
+
+typedef F<T, T> = void Function();
+
+=== duplicate_definition::test_typeParameters_genericTypedef_functionType_wildcard
+---
+
+typedef F<_, _> = void Function();
+
+=== duplicate_definition::test_typeParameters_genericTypedef_functionType_wildcard_preWildcards
+--- duplicateDefinition 58 1
+---
+
+// @dart = 3.4
+// (pre wildcard-variables)
+
+typedef F<_, _> = void Function();
+
+=== duplicate_definition::test_typeParameters_genericTypedef_interfaceType
+--- duplicateDefinition 14 1
+---
+
+typedef F<T, T> = Map;
+
+=== duplicate_definition::test_typeParameters_genericTypedef_interfaceType_wildcard
+---
+
+typedef F<_, _> = Map;
+
+=== duplicate_definition::test_typeParameters_genericTypedef_interfaceType_wildcard_preWildcards
+--- duplicateDefinition 58 1
+---
+
+// @dart = 3.4
+// (pre wildcard-variables)
+
+typedef F<_, _> = Map;
+
+=== duplicate_definition::test_typeParameters_topLevelFunction
+--- duplicateDefinition 11 1
+---
+
+void f<T, T>() {}
+
+=== duplicate_definition::test_typeParameters_topLevelFunction_wildcard
+---
+
+void f<_, _>() {}
+
+=== duplicate_definition::test_typeParameters_topLevelFunction_wildcard_preWildcards
+--- duplicateDefinition 55 1
+---
+
+// @dart = 3.4
+// (pre wildcard-variables)
+
+void f<_, _>() {}
+
+=== duplicate_definition::test_class
+--- duplicateDefinition 29 1
+---
+
+class A {}
+class B {}
+class A {}
+
+=== duplicate_definition::test_extension
+--- duplicateDefinition 55 1
+---
+
+extension A on int {}
+extension B on int {}
+extension A on int {}
+
+=== duplicate_definition::test_extensionType
+--- duplicateDefinition 72 1
+---
+
+extension type A(int it) {}
+extension type B(int it) {}
+extension type A(int it) {}
+
+=== duplicate_definition::test_mixin
+--- duplicateDefinition 29 1
+---
+
+mixin A {}
+mixin B {}
+mixin A {}
+
+=== duplicate_definition::test_topLevelVariable
+--- duplicateDefinition 18 3
+---
+
+int foo = 0;
+int foo = 42;
+
+=== duplicate_definition::test_typedef_interfaceType
+--- duplicateDefinition 32 1
+---
+
+typedef A = List<int>;
+typedef A = List<int>;
+
+=== extends_disallowed_class::test_class_bool
+--- extendsDisallowedClass 17 4
+---
+
+class A extends bool {}
+
+=== extends_disallowed_class::test_class_double
+--- extendsDisallowedClass 17 6
+---
+
+class A extends double {}
+
+=== extends_disallowed_class::test_class_FutureOr
+--- extendsDisallowedClass 38 8
+---
+
+import 'dart:async';
+class A extends FutureOr {}
+
+=== extends_disallowed_class::test_class_FutureOr_typeArgument
+--- extendsDisallowedClass 38 13
+---
+
+import 'dart:async';
+class A extends FutureOr<int> {}
+
+=== extends_disallowed_class::test_class_FutureOr_typedef
+--- extendsDisallowedClass 66 1
+---
+
+import 'dart:async';
+typedef F = FutureOr<void>;
+class A extends F {}
+
+=== extends_disallowed_class::test_class_FutureOr_typeVariable
+--- extendsDisallowedClass 41 11
+---
+
+import 'dart:async';
+class A<T> extends FutureOr<T> {}
+
+=== extends_disallowed_class::test_class_int
+--- extendsDisallowedClass 17 3
+---
+
+class A extends int {}
+
+=== extends_disallowed_class::test_class_Null
+--- extendsDisallowedClass 17 4
+---
+
+class A extends Null {}
+
+=== extends_disallowed_class::test_class_num
+--- extendsDisallowedClass 17 3
+---
+
+class A extends num {}
+
+=== extends_disallowed_class::test_class_Record
+--- extendsDisallowedClass 17 6
+---
+
+class A extends Record {}
+
+=== extends_disallowed_class::test_class_String
+--- extendsDisallowedClass 17 6
+---
+
+class A extends String {}
+
+=== extends_disallowed_class::test_classTypeAlias_bool
+--- extendsDisallowedClass 22 4
+---
+
+class M {}
+class C = bool with M;
+
+=== extends_disallowed_class::test_classTypeAlias_double
+--- extendsDisallowedClass 22 6
+---
+
+class M {}
+class C = double with M;
+
+=== extends_disallowed_class::test_classTypeAlias_FutureOr
+--- extendsDisallowedClass 43 8
+---
+
+import 'dart:async';
+class M {}
+class C = FutureOr with M;
+
+=== extends_disallowed_class::test_classTypeAlias_int
+--- extendsDisallowedClass 22 3
+---
+
+class M {}
+class C = int with M;
+
+=== extends_disallowed_class::test_classTypeAlias_Null
+--- extendsDisallowedClass 22 4
+---
+
+class M {}
+class C = Null with M;
+
+=== extends_disallowed_class::test_classTypeAlias_num
+--- extendsDisallowedClass 22 3
+---
+
+class M {}
+class C = num with M;
+
+=== extends_disallowed_class::test_classTypeAlias_String
+--- extendsDisallowedClass 22 6
+---
+
+class M {}
+class C = String with M;
+
+=== getter_not_subtype_setter_types::test_topLevel
+---
+
+int get foo => 0;
+set foo(String v) {}
+
+=== getter_not_subtype_setter_types::test_topLevel_dynamicGetter
+---
+
+get foo => 0;
+set foo(int v) {}
+
+=== getter_not_subtype_setter_types::test_topLevel_dynamicSetter
+---
+
+int get foo => 0;
+set foo(v) {}
+
+=== getter_not_subtype_setter_types::test_topLevel_sameTypes
+---
+
+int get foo => 0;
+set foo(int v) {}
+
+=== getter_not_subtype_setter_types::test_topLevel_variable
+---
+
+final int foo = 0;
+set foo(String v) {}
+
+=== implements_disallowed_class::test_class_bool
+--- implementsDisallowedClass 20 4
+---
+
+class A implements bool {}
+
+=== implements_disallowed_class::test_class_dartCoreEnum_abstract
+---
+
+abstract class A implements Enum {}
+
+=== implements_disallowed_class::test_class_dartCoreEnum_language216_abstract
+--- implementsDisallowedClass 45 4
+---
+
+// @dart = 2.16
+abstract class A implements Enum {}
+
+=== implements_disallowed_class::test_class_dartCoreEnum_language216_concrete
+--- implementsDisallowedClass 36 4
+---
+
+// @dart = 2.16
+class A implements Enum {}
+
+=== implements_disallowed_class::test_class_double
+--- implementsDisallowedClass 20 6
+---
+
+class A implements double {}
+
+=== implements_disallowed_class::test_class_FutureOr
+--- implementsDisallowedClass 41 8
+---
+
+import 'dart:async';
+class A implements FutureOr {}
+
+=== implements_disallowed_class::test_class_FutureOr_typeArgument
+--- implementsDisallowedClass 41 13
+---
+
+import 'dart:async';
+class A implements FutureOr<int> {}
+
+=== implements_disallowed_class::test_class_FutureOr_typedef
+--- implementsDisallowedClass 69 1
+---
+
+import 'dart:async';
+typedef F = FutureOr<void>;
+class A implements F {}
+
+=== implements_disallowed_class::test_class_FutureOr_typeVariable
+--- implementsDisallowedClass 44 11
+---
+
+import 'dart:async';
+class A<T> implements FutureOr<T> {}
+
+=== implements_disallowed_class::test_class_int
+--- implementsDisallowedClass 20 3
+---
+
+class A implements int {}
+
+=== implements_disallowed_class::test_class_Null
+--- implementsDisallowedClass 20 4
+---
+
+class A implements Null {}
+
+=== implements_disallowed_class::test_class_num
+--- implementsDisallowedClass 20 3
+---
+
+class A implements num {}
+
+=== implements_disallowed_class::test_class_Record
+--- implementsDisallowedClass 20 6
+---
+
+class A implements Record {}
+
+=== implements_disallowed_class::test_class_String
+--- implementsDisallowedClass 20 6
+---
+
+class A implements String {}
+
+=== implements_disallowed_class::test_class_String_num
+--- implementsDisallowedClass 20 6
+--- implementsDisallowedClass 28 3
+---
+
+class A implements String, num {}
+
+=== implements_disallowed_class::test_classTypeAlias_bool
+--- implementsDisallowedClass 53 4
+---
+
+class A {}
+class M {}
+class C = A with M implements bool;
+
+=== implements_disallowed_class::test_classTypeAlias_dartCoreEnum_abstract
+---
+
+class M {}
+abstract class A = Object with M implements Enum;
+
+=== implements_disallowed_class::test_classTypeAlias_dartCoreEnum_language216_abstract
+--- implementsDisallowedClass 72 4
+---
+
+// @dart = 2.16
+mixin M {}
+abstract class A = Object with M implements Enum;
+
+=== implements_disallowed_class::test_classTypeAlias_dartCoreEnum_language216_concrete
+--- implementsDisallowedClass 63 4
+---
+
+// @dart = 2.16
+mixin M {}
+class A = Object with M implements Enum;
+
+=== implements_disallowed_class::test_classTypeAlias_double
+--- implementsDisallowedClass 53 6
+---
+
+class A {}
+class M {}
+class C = A with M implements double;
+
+=== implements_disallowed_class::test_classTypeAlias_FutureOr
+--- implementsDisallowedClass 74 8
+---
+
+import 'dart:async';
+class A {}
+class M {}
+class C = A with M implements FutureOr;
+
+=== implements_disallowed_class::test_classTypeAlias_int
+--- implementsDisallowedClass 53 3
+---
+
+class A {}
+class M {}
+class C = A with M implements int;
+
+=== implements_disallowed_class::test_classTypeAlias_Null
+--- implementsDisallowedClass 53 4
+---
+
+class A {}
+class M {}
+class C = A with M implements Null;
+
+=== implements_disallowed_class::test_classTypeAlias_num
+--- implementsDisallowedClass 53 3
+---
+
+class A {}
+class M {}
+class C = A with M implements num;
+
+=== implements_disallowed_class::test_classTypeAlias_String
+--- implementsDisallowedClass 53 6
+---
+
+class A {}
+class M {}
+class C = A with M implements String;
+
+=== implements_disallowed_class::test_classTypeAlias_String_num
+--- implementsDisallowedClass 53 6
+--- implementsDisallowedClass 61 3
+---
+
+class A {}
+class M {}
+class C = A with M implements String, num;
+
+=== implements_disallowed_class::test_mixin_dartCoreEnum
+---
+
+mixin M implements Enum {}
+
+=== implements_disallowed_class::test_mixin_dartCoreEnum_language216
+--- implementsDisallowedClass 36 4
+---
+
+// @dart = 2.16
+mixin M implements Enum {}
+
+=== implements_disallowed_class::test_mixin_int
+--- implementsDisallowedClass 20 3
+---
+
+mixin M implements int {}
+
+=== inconsistent_inheritance::test_class_covariantInSuper_withTwoUnrelated
+--- inconsistentInheritance 172 1
+---
+
+class D1 {}
+class D2 {}
+class D implements D1, D2 {}
+
+class A { void m(covariant D d) {} }
+abstract class B1 { void m(D1 d1); }
+abstract class B2 { void m(D2 d2); }
+class C extends A implements B1, B2 {}
+
+=== invalid_override::test_class_declaringFormalParameter_var_implements_setter_inheritsCovariant_valid
+---
+
+class A {}
+class B extends A {}
+
+class C(covariant var A foo);
+class D(var B foo) implements C;
+
+=== non_abstract_class_inherits_abstract_member::test_one_mixinInherits_getter
+--- nonAbstractClassInheritsAbstractMemberOne 104 1
+---
+
+//@dart=2.19
+abstract class A { get g1; get g2; }
+abstract class B implements A { get g1 => 1; }
+class C extends Object with B {}
+
+=== non_abstract_class_inherits_abstract_member::test_one_mixinInherits_method
+--- nonAbstractClassInheritsAbstractMemberOne 98 1
+---
+
+//@dart=2.19
+abstract class A { m1(); m2(); }
+abstract class B implements A { m1() => 1; }
+class C extends Object with B {}
+
+=== non_abstract_class_inherits_abstract_member::test_one_mixinInherits_setter
+--- nonAbstractClassInheritsAbstractMemberOne 110 1
+---
+
+//@dart=2.19
+abstract class A { set s1(v); set s2(v); }
+abstract class B implements A { set s1(v) {} }
+class C extends Object with B {}
+
+=== override_on_non_overriding_field::test_class_implements_primaryConstructor
+---
+
+class A(final int foo);
+class B(@override final int foo) implements A;
+
+=== override_on_non_overriding_field::test_class_primaryConstructor
+--- overrideOnNonOverridingField 29 3
+---
+
+class A(@override final int foo);
+
+=== override_on_non_overriding_getter::test_topLevel
+--- overrideOnNonOverridingGetter 19 3
+---
+
+@override
+int get foo => 1;
+
+=== override_on_non_overriding_setter::test_topLevel
+--- overrideOnNonOverridingSetter 15 3
+---
+
+@override
+set foo(int _) {}
+
+=== recursive_interface_inheritance_extends::test_class
+--- recursiveInterfaceInheritanceExtends 17 1
+---
+
+class A extends A {}
+
+=== recursive_interface_inheritance_implements::test_class
+--- recursiveInterfaceInheritanceImplements 20 1
+---
+
+class A implements A {}
+
+=== recursive_interface_inheritance_implements::test_class_tail
+--- recursiveInterfaceInheritanceImplements 29 1
+---
+
+abstract class A implements A {}
+class B implements A {}
+
+=== recursive_interface_inheritance_implements::test_classTypeAlias
+--- recursiveInterfaceInheritanceImplements 53 1
+---
+
+class A {}
+mixin M {}
+class B = A with M implements B;
+
+=== recursive_interface_inheritance_implements::test_mixin
+--- recursiveInterfaceInheritance 7 1
+--- recursiveInterfaceInheritance 31 1
+---
+
+mixin A implements B {}
+mixin B implements A {}
+
+=== recursive_interface_inheritance_on::test_1
+--- recursiveInterfaceInheritanceOn 12 1
+---
+
+mixin A on A {}
+
+=== recursive_interface_inheritance_on::test_2
+--- recursiveInterfaceInheritance 7 1
+--- recursiveInterfaceInheritance 23 1
+---
+
+mixin A on B {}
+mixin B on A {}
+
+=== recursive_interface_inheritance::test_class_extends
+--- recursiveInterfaceInheritance 7 1
+--- recursiveInterfaceInheritance 28 1
+---
+
+class A extends B {}
+class B extends A {}
+
+=== recursive_interface_inheritance::test_class_extends_implements
+--- recursiveInterfaceInheritance 7 1
+--- recursiveInterfaceInheritance 28 1
+---
+
+class A extends B {}
+class B implements A {}
+
+=== recursive_interface_inheritance::test_class_implements
+--- recursiveInterfaceInheritance 7 1
+--- recursiveInterfaceInheritance 31 1
+---
+
+class A implements B {}
+class B implements A {}
+
+=== recursive_interface_inheritance::test_class_implements_generic
+--- recursiveInterfaceInheritance 7 1
+--- recursiveInterfaceInheritance 37 1
+---
+
+class A<T> implements B<T> {}
+class B<T> implements A<T> {}
+
+=== recursive_interface_inheritance::test_class_implements_generic_typeArgument
+--- recursiveInterfaceInheritance 7 1
+--- recursiveInterfaceInheritance 43 1
+---
+
+class A<T> implements B<List<T>> {}
+class B<T> implements A<List<T>> {}
+
+=== recursive_interface_inheritance::test_class_implements_tail2
+--- recursiveInterfaceInheritance 16 1
+--- recursiveInterfaceInheritance 49 1
+---
+
+abstract class A implements B {}
+abstract class B implements A {}
+class C implements A {}
+
+=== recursive_interface_inheritance::test_class_implements_tail3
+--- recursiveInterfaceInheritance 16 1
+--- recursiveInterfaceInheritance 49 1
+--- recursiveInterfaceInheritance 82 1
+---
+
+abstract class A implements B {}
+abstract class B implements C {}
+abstract class C implements A {}
+class D implements A {}
+
+=== recursive_interface_inheritance::test_classTypeAlias_mixin
+--- recursiveInterfaceInheritance 13 2
+--- recursiveInterfaceInheritance 46 2
+---
+
+mixin class M1 = Object with M2;
+mixin class M2 = Object with M1;
+
+=== recursive_interface_inheritance::test_classTypeAlias_mixin_superclass
+--- recursiveInterfaceInheritance 7 1
+--- recursiveInterfaceInheritance 27 1
+---
+
+class C = D with M;
+class D = C with M;
+mixin M {}
+
+=== recursive_interface_inheritance_with::test_classTypeAlias
+--- recursiveInterfaceInheritanceWith 29 1
+---
+
+mixin class M = Object with M;
+
