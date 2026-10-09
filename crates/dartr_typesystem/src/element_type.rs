@@ -34,14 +34,13 @@ pub fn executable_return_type(ctx: &Ctx<'_>, element: EId<ExecutableElement>) ->
     if let Some(t) = ctx.executable(element).return_type.get() {
         return t;
     }
-    if element.raw().tag() == dartr_element::Tag::Constructor {
-        if let Some(interface) = ctx
+    if element.raw().tag() == dartr_element::Tag::Constructor
+        && let Some(interface) = ctx
             .element_data(element.raw())
             .and_then(|d| d.enclosing)
             .and_then(|e| e.cast::<dartr_element::InterfaceElement>())
-        {
-            return ctx.interface_this_type(interface);
-        }
+    {
+        return ctx.interface_this_type(interface);
     }
     TypeId::INVALID
 }

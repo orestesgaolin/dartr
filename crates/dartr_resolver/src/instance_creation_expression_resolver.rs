@@ -93,7 +93,8 @@ pub fn constructor_element_to_infer(
                 .map(|c| ElemRef::Base(c.raw()))
                 .filter(|&c| member::is_accessible_in(&ctx, c, library)),
         };
-    } else if let Some(alias) = type_element.cast::<TypeAliasElement>() {
+    } else {
+        let alias = type_element.cast::<TypeAliasElement>()?;
         let data = ctx.get(alias);
         type_parameters = data.type_params.clone();
         let aliased_type = data.aliased_type.get().unwrap_or(TypeId::INVALID);
@@ -103,8 +104,6 @@ pub fn constructor_element_to_infer(
             }
             _ => None,
         };
-    } else {
-        return None;
     }
     Some(ConstructorElementToInfer {
         type_parameters,

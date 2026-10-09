@@ -255,7 +255,6 @@ pub fn resolve_full_invocation(
         type_argument_types = Some(inferrer.choose_final_types());
     }
     drop(inferrer);
-    drop(reporter);
     rv.flush_type_analyzer_errors();
     if rv.lock_level == 0 {
         rv.diagnostics.extend(reported);
