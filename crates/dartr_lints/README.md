@@ -29,12 +29,15 @@ nearest package configuration when it maps the file, or the file path otherwise.
 
 `ResolvedRuleContextUnit` accepts the rewritten AST plus original parse metadata.
 `lint_resolved_library` and its unfiltered variant run the same subscriptions with
-`ResolvedLintContext { ctx, tables, potentially_mutated_in_scope, library }`. The `Ctx` must include the visited
+`ResolvedLintContext { ctx, tables, potentially_mutated_in_scope, library, metadata }`. The `Ctx` must include the visited
 unit's local arena. A failed resolver unit has no semantic context. The driver
 uses `Driver::analyze_library_with_lints` to resolve first and append enabled lint
 diagnostics. The existing `analyze_library` entrypoint remains resolution-only.
-The constant adapter supports primitive literals/operators and const
-variables/defaults across resolved library units. Constructor and collection evaluation still needs wave D.
+`ResolvedLintContext::metadata` gives element metadata of any library
+(`ElementMetadata`: annotations, their elements and values) and the constant
+values of elements and expressions (Dart `computeConstantValue()`), backed by
+the resolver's `ConstantEvaluationEngine`. Without it, a reduced constant
+adapter evaluates primitive literals and operators.
 
 Unsupported rules have metadata but no processors. Call
 `Registry::builtin().get_rule(name).is_implemented()` before using a rule when the

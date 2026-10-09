@@ -13,7 +13,7 @@ All 266 are classified below.
 
 `package_prefixed_library_names` is active upstream but its visitor intentionally returns without reporting; the port preserves that behavior.
 
-Batch-A measurements cover 74 rules with positive oracle diagnostics: 22 are exact on the measured inputs, 52 have documented shared semantic dependencies, and nine have no positive coverage. A zero-count rule is not treated as proof of parity. Full tuples, per-rule counts, and representative blocker evidence are retained in `target/lints/result/`.
+Batch-A measurements (`tools/lints_differential.py` with the resolved runner) cover the resolved fixtures, `sdk/lib`, `flutter/lib` and the Visible app `lib`: 74 rules have positive oracle diagnostics and all of them match exactly (path, code, offset, length, message, correction), except 34 `comment_references` diagnostics in the copy of `sdk/lib/core/core.dart` (the analyzer leaves the library doc-comment references unresolved there; dartr resolves them). Nine rules have no positive coverage; a zero count is not proof of parity. Element metadata (`@override`, `@Deprecated`, `@awaitNotRequired`, ...) and constant values come from the resolver's constant evaluation engine through `ElementMetadata`.
 
 The pinned framework uses `AnalysisRule` and `RuleState`; it has no legacy lint category API.
 The metadata preserves the states, descriptions, diagnostic code sets, and incompatible rule lists.
@@ -30,78 +30,78 @@ reads, not semantic resolution of declarations or expressions.
 | always_put_control_body_on_new_line | AST-only | Control statement bodies, tokens, and parsed line information only | implemented |
 | always_put_required_named_parameters_first | needs resolution | Reads the declared parameter element to distinguish required named parameters | implemented (resolution; measured exact) |
 | always_require_non_null_named_parameters | removed | Upstream RemovedAnalysisRule since Dart 3.3 | removed upstream |
-| always_specify_types | needs resolution | Reads declared elements and static types to infer omitted annotations | implemented (resolution; semantic dependencies) |
+| always_specify_types | needs resolution | Reads declared elements and static types to infer omitted annotations | implemented (resolution; measured exact) |
 | always_use_package_imports | AST-only | Checks relative import URI syntax when the rule context places the defining unit under its package lib directory | implemented |
 | analyzer_element_model_tracking | needs resolution | Internal analyzer rule reads declared elements and annotations | implemented (resolution; positive path untested) |
 | analyzer_public_api | needs resolution | Internal analyzer rule traverses public elements and exported libraries | implemented (resolution; positive path untested) |
-| annotate_overrides | needs resolution | Requires inherited-member and overridden-element lookup | implemented (resolution; semantic dependencies) |
+| annotate_overrides | needs resolution | Requires inherited-member and overridden-element lookup | implemented (resolution; measured exact) |
 | annotate_redeclares | needs resolution | Requires extension-type redeclaration element data | implemented (resolution; measured exact) |
-| async_return_with_no_await | needs resolution | Uses AsyncReturnVisitor with type provider and type system | implemented (resolution; semantic dependencies) |
+| async_return_with_no_await | needs resolution | Uses AsyncReturnVisitor with type provider and type system | implemented (resolution; measured exact) |
 | avoid_annotating_with_dynamic | AST-only | Explicit dynamic type annotation and augmentation syntax only | implemented |
 | avoid_as | removed | Upstream RemovedAnalysisRule since Dart 2.12 | removed upstream |
 | avoid_bool_literals_in_conditional_expressions | needs resolution | Uses conditional-expression static type and bool from the type provider | implemented (resolution; measured exact) |
-| avoid_catches_without_on_clauses | needs resolution | Uses resolved exception parameter type and subtype information | implemented (resolution; semantic dependencies) |
-| avoid_catching_errors | needs resolution | Checks whether the resolved exception type implements dart.core Error | implemented (resolution; semantic dependencies) |
-| avoid_classes_with_only_static_members | needs resolution | Reads constructors, methods, fields, and superclass elements | implemented (resolution; semantic dependencies) |
+| avoid_catches_without_on_clauses | needs resolution | Uses resolved exception parameter type and subtype information | implemented (resolution; measured exact) |
+| avoid_catching_errors | needs resolution | Checks whether the resolved exception type implements dart.core Error | implemented (resolution; measured exact) |
+| avoid_classes_with_only_static_members | needs resolution | Reads constructors, methods, fields, and superclass elements | implemented (resolution; measured exact) |
 | avoid_double_and_int_checks | needs resolution | Uses identifier elements and core int/double types | implemented (resolution; measured exact) |
-| avoid_dynamic_calls | needs resolution | Depends on expression static/read/write types | implemented (resolution; semantic dependencies) |
+| avoid_dynamic_calls | needs resolution | Depends on expression static/read/write types | implemented (resolution; measured exact) |
 | avoid_empty_else | AST-only | Checks an IfStatement else child for a real EmptyStatement | implemented |
-| avoid_equals_and_hash_code_on_mutable_classes | needs resolution | Requires class annotations and declared method elements | implemented (resolution; semantic dependencies) |
+| avoid_equals_and_hash_code_on_mutable_classes | needs resolution | Requires class annotations and declared method elements | implemented (resolution; measured exact) |
 | avoid_escaping_inner_quotes | AST-only | Uses string-literal syntax and decoded interpolation text only | implemented |
 | avoid_field_initializers_in_const_classes | needs resolution | Requires enclosing class and constructor elements | implemented (resolution; measured exact) |
 | avoid_final_parameters | AST-only | Checks formal-parameter syntax with the defining library primary-constructor feature | implemented |
-| avoid_function_literals_in_foreach_calls | needs resolution | Uses receiver static type to identify Iterable.forEach | implemented (resolution; semantic dependencies) |
+| avoid_function_literals_in_foreach_calls | needs resolution | Uses receiver static type to identify Iterable.forEach | implemented (resolution; measured exact) |
 | avoid_futureor_void | needs resolution | Variance checker consumes resolved DartType objects | implemented (resolution; measured exact) |
-| avoid_implementing_value_types | needs resolution | Inspects implemented interface elements and annotations | implemented (resolution; semantic dependencies) |
-| avoid_init_to_null | needs resolution | Uses declared variable/parameter types and nullability type system | implemented (resolution; semantic dependencies) |
+| avoid_implementing_value_types | needs resolution | Inspects implemented interface elements and annotations | implemented (resolution; measured exact) |
+| avoid_init_to_null | needs resolution | Uses declared variable/parameter types and nullability type system | implemented (resolution; measured exact) |
 | avoid_js_rounded_ints | AST-only | Checks parsed integer-literal value only | implemented |
 | avoid_multiple_declarations_per_line | AST-only | Checks VariableDeclarationList shape and parent syntax | implemented |
 | avoid_null_checks_in_equality_operators | needs resolution | Deprecated active rule identifies operator elements and equality contracts | implemented (resolution; measured exact) |
-| avoid_positional_boolean_parameters | needs resolution | Needs resolved bool parameter types and override/inheritance data | implemented (resolution; semantic dependencies) |
-| avoid_print | needs resolution | Identifies dart.core print through resolved elements and Flutter context | implemented (resolution; semantic dependencies) |
+| avoid_positional_boolean_parameters | needs resolution | Needs resolved bool parameter types and override/inheritance data | implemented (resolution; measured exact) |
+| avoid_print | needs resolution | Identifies dart.core print through resolved elements and Flutter context | implemented (resolution; measured exact) |
 | avoid_private_typedef_functions | AST-only | Counts NamedType syntax references across ordered library units | implemented |
-| avoid_redundant_argument_values | needs resolution | Compares arguments with resolved executable default values | implemented (resolution; semantic dependencies) |
+| avoid_redundant_argument_values | needs resolution | Compares arguments with resolved executable default values | implemented (resolution; measured exact) |
 | avoid_relative_lib_imports | AST-only | Checks import URI syntax only | implemented |
-| avoid_renaming_method_parameters | needs resolution | Compares resolved method parameters with inherited parameters | implemented (resolution; semantic dependencies) |
+| avoid_renaming_method_parameters | needs resolution | Compares resolved method parameters with inherited parameters | implemented (resolution; measured exact) |
 | avoid_return_types_on_setters | AST-only | Checks setter and explicit return-type syntax only | implemented |
 | avoid_returning_null | removed | Upstream RemovedAnalysisRule since Dart 3.3 | removed upstream |
 | avoid_returning_null_for_future | removed | Upstream RemovedAnalysisRule since Dart 3.3 | removed upstream |
-| avoid_returning_null_for_void | needs resolution | Uses enclosing executable element return type | implemented (resolution; semantic dependencies) |
-| avoid_returning_this | needs resolution | Uses method element and return-type/override information | implemented (resolution; semantic dependencies) |
-| avoid_setters_without_getters | needs resolution | Matches getter and setter elements across containers | implemented (resolution; semantic dependencies) |
+| avoid_returning_null_for_void | needs resolution | Uses enclosing executable element return type | implemented (resolution; measured exact) |
+| avoid_returning_this | needs resolution | Uses method element and return-type/override information | implemented (resolution; measured exact) |
+| avoid_setters_without_getters | needs resolution | Matches getter and setter elements across containers | implemented (resolution; measured exact) |
 | avoid_shadowing_type_parameters | AST-only | Compares lexical type-parameter names using the defining library wildcard feature | implemented |
 | avoid_single_cascade_in_expression_statements | AST-only | Checks cascade section count, operator token, and AST parent | implemented |
 | avoid_slow_async_io | needs resolution | Identifies dart.io members through resolved method elements | implemented (resolution; measured exact) |
 | avoid_type_to_string | needs resolution | Uses expression static types, elements, and type system | implemented (resolution; positive path untested) |
 | avoid_types_as_parameter_names | needs resolution | Builds element scopes and inspects declared elements | implemented (resolution; measured exact) |
-| avoid_types_on_closure_parameters | needs resolution | Requires approximate contextual FunctionType | implemented (resolution; semantic dependencies) |
+| avoid_types_on_closure_parameters | needs resolution | Requires approximate contextual FunctionType | implemented (resolution; measured exact) |
 | avoid_unnecessary_containers | needs resolution | Requires Flutter Widget static types and constructor arguments | implemented (resolution; positive path untested) |
 | avoid_unstable_final_fields | removed | Upstream RemovedAnalysisRule | removed upstream |
-| avoid_unused_constructor_parameters | needs resolution | Uses constructor/field elements and parameter references | implemented (resolution; semantic dependencies) |
-| avoid_void_async | needs resolution | Uses executable fragments, async state, and resolved return type | implemented (resolution; semantic dependencies) |
+| avoid_unused_constructor_parameters | needs resolution | Uses constructor/field elements and parameter references | implemented (resolution; measured exact) |
+| avoid_void_async | needs resolution | Uses executable fragments, async state, and resolved return type | implemented (resolution; measured exact) |
 | avoid_web_libraries_in_flutter | non-AST context | Reads package root and pubspec Flutter plugin configuration | deferred |
 | await_only_futures | needs resolution | Uses awaited expression static type and type system | implemented (resolution; measured exact) |
 | camel_case_extensions | AST-only | Checks extension declaration name token only | implemented |
 | camel_case_types | AST-only | Checks declaration name tokens only | implemented |
-| cancel_subscriptions | needs resolution | Leak detector follows resolved StreamSubscription types and references | implemented (resolution; semantic dependencies) |
-| cascade_invocations | needs resolution | Tracks resolved variable and target elements across statements | implemented (resolution; semantic dependencies) |
-| cast_nullable_to_non_nullable | needs resolution | Compares expression and cast types with nullability type system | implemented (resolution; semantic dependencies) |
-| close_sinks | needs resolution | Leak detector follows resolved Sink types and references | implemented (resolution; semantic dependencies) |
+| cancel_subscriptions | needs resolution | Leak detector follows resolved StreamSubscription types and references | implemented (resolution; measured exact) |
+| cascade_invocations | needs resolution | Tracks resolved variable and target elements across statements | implemented (resolution; measured exact) |
+| cast_nullable_to_non_nullable | needs resolution | Compares expression and cast types with nullability type system | implemented (resolution; measured exact) |
+| close_sinks | needs resolution | Leak detector follows resolved Sink types and references | implemented (resolution; measured exact) |
 | collection_methods_unrelated_type | needs resolution | Uses receiver/argument static types, method elements, and type system | implemented (resolution; measured exact) |
 | combinators_ordering | AST-only | Sort-checks show/hide identifier tokens | implemented |
-| comment_references | needs resolution | Checks resolved doc-comment reference elements | implemented (resolution; semantic dependencies) |
+| comment_references | needs resolution | Checks resolved doc-comment reference elements | implemented (resolution; measured exact except a copy of `dart:core`, see below) |
 | conditional_uri_does_not_exist | non-AST context | Requires URI resolution and source/filesystem existence | deferred |
 | constant_identifier_names | AST-only | Checks const declaration syntax and identifier tokens | implemented |
 | control_flow_in_finally | needs resolution | Break/continue target links are populated by resolution | implemented (resolution; measured exact) |
 | curly_braces_in_flow_control_structures | AST-only | Checks statement shape and parsed line information only | implemented |
 | dangling_library_doc_comments | AST-only | Uses declaration/doc-comment attachment and token line positions | implemented |
 | depend_on_referenced_packages | non-AST context | Requires pub package/pubspec dependencies and defining-unit directory context. | deferred |
-| deprecated_consistency | needs resolution | Compares @deprecated annotations on constructor and parameter elements | implemented (resolution; semantic dependencies) |
-| deprecated_member_use_from_same_package | needs resolution | Uses emitted diagnostics, element packages, and workspace data | implemented (resolution; semantic dependencies) |
+| deprecated_consistency | needs resolution | Compares @deprecated annotations on constructor and parameter elements | implemented (resolution; measured exact) |
+| deprecated_member_use_from_same_package | needs resolution | Uses emitted diagnostics, element packages, and workspace data | implemented (resolution; measured exact) |
 | diagnostic_describe_all_properties | needs resolution | Uses Flutter class hierarchy and declared method elements | implemented (resolution; measured exact) |
 | directives_ordering | AST-only | Orders parsed import/export/doc-import URI syntax | implemented |
-| discarded_futures | needs resolution | Uses expression static types and Future type provider | implemented (resolution; semantic dependencies) |
-| do_not_use_environment | needs resolution | Identifies core environment constructors through resolved elements | implemented (resolution; semantic dependencies) |
+| discarded_futures | needs resolution | Uses expression static types and Future type provider | implemented (resolution; measured exact) |
+| do_not_use_environment | needs resolution | Identifies core environment constructors through resolved elements | implemented (resolution; measured exact) |
 | document_ignores | AST-only | Parses ignore comment tokens and adjacent source lines | implemented |
 | empty_catches | AST-only | Checks catch body, parameter spelling, and comment tokens | implemented |
 | empty_constructor_bodies | AST-only | Checks constructor body shape and trailing comments | implemented |
@@ -110,62 +110,62 @@ reads, not semantic resolution of declarations or expressions.
 | enable_null_safety | removed | Upstream RemovedAnalysisRule since Dart 3 | removed upstream |
 | eol_at_end_of_file | AST-only | Checks current source text at CompilationUnit | implemented |
 | erase_dart_type_extension_types | needs resolution | Internal rule requires resolved extension-type erasure information | implemented (resolution; positive path untested) |
-| exhaustive_cases | needs resolution | Uses switch expression type and enum/class elements | implemented (resolution; semantic dependencies) |
+| exhaustive_cases | needs resolution | Uses switch expression type and enum/class elements | implemented (resolution; measured exact) |
 | file_names | AST-only | Validates the defining library unit basename even when visiting a part | implemented |
 | flutter_style_todos | AST-only | Scans parser token comments only | implemented |
-| hash_and_equals | needs resolution | Inspects declared class elements and overridden equality/hash members. | implemented (resolution; semantic dependencies) |
+| hash_and_equals | needs resolution | Inspects declared class elements and overridden equality/hash members. | implemented (resolution; measured exact) |
 | implementation_imports | needs resolution | Uses resolved imported library elements and source URIs. | implemented (resolution; measured exact) |
 | implicit_call_tearoffs | needs resolution | Visits ImplicitCallReference nodes synthesized by resolution. | implemented (resolution; measured exact) |
-| implicit_reopen | needs resolution | Compares resolved declaration and library elements. | implemented (resolution; semantic dependencies) |
-| initialize_in_field_declaration | needs resolution | Uses constructor and enclosing field elements. | implemented (resolution; semantic dependencies) |
+| implicit_reopen | needs resolution | Compares resolved declaration and library elements. | implemented (resolution; measured exact) |
+| initialize_in_field_declaration | needs resolution | Uses constructor and enclosing field elements. | implemented (resolution; measured exact) |
 | invalid_case_patterns | needs resolution | Uses resolved pattern variable elements across case branches. | implemented (resolution; positive path untested) |
 | invalid_runtime_check_with_js_interop_types | needs resolution | Requires static types, extension-type elements, and the type system. | implemented (resolution; measured exact) |
 | invariant_booleans | removed | Upstream is RemovedAnalysisRule. | n/a |
 | iterable_contains_unrelated_type | removed | Upstream is RemovedAnalysisRule. | n/a |
-| join_return_with_assignment | needs resolution | Compares canonical elements of assignment and return targets. | implemented (resolution; semantic dependencies) |
+| join_return_with_assignment | needs resolution | Compares canonical elements of assignment and return targets. | implemented (resolution; measured exact) |
 | leading_newlines_in_multiline_strings | AST-only | Uses parsed string syntax, source offsets, and line information without resolution. | implemented |
 | library_annotations | needs resolution | Uses annotation and enclosing library elements. | implemented (resolution; measured exact) |
 | library_names | AST-only | Checks the syntactic dotted library name. | implemented |
 | library_prefixes | AST-only | Checks the syntactic import prefix and defining library wildcard feature. | implemented |
-| library_private_types_in_public_api | needs resolution | Traverses public elements and resolved API types. | implemented (resolution; semantic dependencies) |
+| library_private_types_in_public_api | needs resolution | Traverses public elements and resolved API types. | implemented (resolution; measured exact) |
 | lines_longer_than_80_chars | AST-only | Scans source lines and comments; string URI/path exemptions use decoded AST values and multiline source ranges. | implemented |
 | list_remove_unrelated_type | removed | Upstream is RemovedAnalysisRule. | n/a |
 | literal_only_boolean_expressions | needs resolution | Computes string constants and resolves type-parameter annotations. | implemented (resolution; measured exact) |
-| matching_super_parameters | needs resolution | Matches parameters against resolved super constructors. | implemented (resolution; semantic dependencies) |
+| matching_super_parameters | needs resolution | Matches parameters against resolved super constructors. | implemented (resolution; measured exact) |
 | migrate_design_widgets | AST-only | Checks import URI string literals. | implemented |
 | missing_code_block_language_in_doc_comment | AST-only | Uses parsed Markdown code-block data on Comment nodes. | implemented |
-| missing_whitespace_between_adjacent_strings | needs resolution | Its RegExp exemption identifies the resolved constructor element. | implemented (resolution; semantic dependencies) |
+| missing_whitespace_between_adjacent_strings | needs resolution | Its RegExp exemption identifies the resolved constructor element. | implemented (resolution; measured exact) |
 | no_adjacent_strings_in_list | AST-only | Checks collection elements and list-pattern constants syntactically. | implemented |
-| no_default_cases | needs resolution | Uses the switch expression static type for enum exemptions. | implemented (resolution; semantic dependencies) |
+| no_default_cases | needs resolution | Uses the switch expression static type for enum exemptions. | implemented (resolution; measured exact) |
 | no_duplicate_case_values | needs resolution | Computes and compares constant values. | implemented (resolution; positive path untested) |
-| no_dynamic_casts | needs resolution | Requires static types, read elements, and the type system. | implemented (resolution; semantic dependencies) |
+| no_dynamic_casts | needs resolution | Requires static types, read elements, and the type system. | implemented (resolution; measured exact) |
 | no_leading_underscores_for_library_prefixes | AST-only | Checks the syntactic import prefix and defining library wildcard feature. | implemented |
-| no_leading_underscores_for_local_identifiers | needs resolution | Uses declared parameter elements to exempt field-declaring parameters. | implemented (resolution; semantic dependencies) |
-| no_literal_bool_comparisons | needs resolution | Uses static types and the type system. | implemented (resolution; semantic dependencies) |
+| no_leading_underscores_for_local_identifiers | needs resolution | Uses declared parameter elements to exempt field-declaring parameters. | implemented (resolution; measured exact) |
+| no_literal_bool_comparisons | needs resolution | Uses static types and the type system. | implemented (resolution; measured exact) |
 | no_logic_in_create_state | needs resolution | Identifies resolved Flutter State/createState elements. | implemented (resolution; positive path untested) |
-| no_raw_types | needs resolution | Requires resolved generic type elements and type arguments. | implemented (resolution; semantic dependencies) |
+| no_raw_types | needs resolution | Requires resolved generic type elements and type arguments. | implemented (resolution; measured exact) |
 | no_runtimeType_toString | needs resolution | Identifies resolved Object.runtimeType members. | implemented (resolution; measured exact) |
 | no_self_assignments | AST-only | Compares identifier syntax on simple assignments. | implemented |
 | no_wildcard_variable_uses | needs resolution | Uses resolved wildcard variable elements and library feature state. | implemented (resolution; positive path untested) |
 | non_constant_identifier_names | AST-only | Checks declaration tokens and syntactic context, including augmentation exclusions. | implemented |
 | noop_primitive_operations | needs resolution | Uses operand static types and resolved operator elements. | implemented (resolution; measured exact) |
-| null_check_on_nullable_type_parameter | needs resolution | Uses static type-parameter types and the type system. | implemented (resolution; semantic dependencies) |
+| null_check_on_nullable_type_parameter | needs resolution | Uses static type-parameter types and the type system. | implemented (resolution; measured exact) |
 | null_closures | needs resolution | Requires contextual/static function types. | implemented (resolution; measured exact) |
-| omit_local_variable_types | needs resolution | Compares declared annotations with inferred static types. | implemented (resolution; semantic dependencies) |
-| omit_obvious_local_variable_types | needs resolution | Uses inferred initializer types and type-provider data. | implemented (resolution; semantic dependencies) |
-| omit_obvious_property_types | needs resolution | Uses inferred property/initializer types. | implemented (resolution; semantic dependencies) |
-| one_member_abstracts | needs resolution | Counts resolved public interface members. | implemented (resolution; semantic dependencies) |
-| only_throw_errors | needs resolution | Checks the thrown expression static type. | implemented (resolution; semantic dependencies) |
+| omit_local_variable_types | needs resolution | Compares declared annotations with inferred static types. | implemented (resolution; measured exact) |
+| omit_obvious_local_variable_types | needs resolution | Uses inferred initializer types and type-provider data. | implemented (resolution; measured exact) |
+| omit_obvious_property_types | needs resolution | Uses inferred property/initializer types. | implemented (resolution; measured exact) |
+| one_member_abstracts | needs resolution | Counts resolved public interface members. | implemented (resolution; measured exact) |
+| only_throw_errors | needs resolution | Checks the thrown expression static type. | implemented (resolution; measured exact) |
 | overridden_fields | needs resolution | Finds inherited fields through resolved elements. | implemented (resolution; measured exact) |
 | package_api_docs | removed | Upstream is RemovedAnalysisRule. | n/a |
 | package_names | non-AST context | Runs on the parsed pubspec rather than a Dart AST. | deferred |
 | package_prefixed_library_names | AST-only | Active upstream rule whose visitor intentionally returns without reporting until project information is restored. | implemented no-op |
-| parameter_assignments | needs resolution | Uses declared parameter elements and write references. | implemented (resolution; semantic dependencies) |
+| parameter_assignments | needs resolution | Uses declared parameter elements and write references. | implemented (resolution; measured exact) |
 | prefer_adjacent_string_concatenation | AST-only | Checks binary operator and string-literal node kinds. | implemented |
-| prefer_asserts_in_initializer_lists | needs resolution | Uses constructor elements and enclosing constructor state. | implemented (resolution; semantic dependencies) |
+| prefer_asserts_in_initializer_lists | needs resolution | Uses constructor elements and enclosing constructor state. | implemented (resolution; measured exact) |
 | prefer_asserts_with_message | AST-only | Checks assert message syntax. | implemented |
 | prefer_bool_in_asserts | removed | Upstream is RemovedAnalysisRule. | n/a |
-| prefer_collection_literals | needs resolution | Identifies core collection constructors through elements and types. | implemented (resolution; semantic dependencies) |
+| prefer_collection_literals | needs resolution | Identifies core collection constructors through elements and types. | implemented (resolution; measured exact) |
 | prefer_conditional_assignment | needs resolution | Compares canonical resolved elements of null-check and assignment targets. | deferred |
 | prefer_const_constructors | needs resolution | Uses resolved constructors and constant-context analysis. | deferred |
 | prefer_const_constructors_in_immutables | needs resolution | Uses class/constructor elements and immutability metadata. | deferred |
