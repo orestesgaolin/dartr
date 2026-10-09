@@ -1,3 +1,5 @@
+include: included_options.yaml
+
 linter:
   rules:
     - avoid_empty_else

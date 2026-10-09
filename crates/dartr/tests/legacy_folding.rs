@@ -1,3 +1,5 @@
+// Dart source: pkg/analysis_server/lib/src/computer/computer_folding.dart
+
 //! Differential coverage for legacy `analysis.folding` notifications.
 
 use std::collections::BTreeMap;

@@ -1,3 +1,6 @@
+// Dart source: pkg/analysis_server/lib/src/server/driver.dart
+// Dart source: pkg/analysis_server/lib/src/legacy_analysis_server.dart
+
 //! Differential test of the legacy analysis-server protocol.
 //!
 //! One dartdev-style session and one IntelliJ-style overlay session run
@@ -13,8 +16,8 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use dartr_diagnostics::{DiagnosticType, codes_by_name};
-use serde_json::{Map, Value, json};
+use dartr_diagnostics::{codes_by_name, DiagnosticType};
+use serde_json::{json, Map, Value};
 
 const QUIET: Duration = Duration::from_millis(400);
 const STEP_TIMEOUT: Duration = Duration::from_secs(60);
@@ -248,6 +251,12 @@ impl Drop for LegacyClient {
 }
 
 fn keep_diagnostic(diagnostic: &Value) -> bool {
+    if diagnostic["location"]["file"]
+        .as_str()
+        .is_some_and(|file| file.ends_with(".yaml") || file.ends_with(".xml"))
+    {
+        return true;
+    }
     if diagnostic["type"] == "SYNTACTIC_ERROR" {
         return true;
     }
@@ -521,22 +530,18 @@ fn dartdev_and_intellij_legacy_sessions_match_dart_3_13_3() {
             .collect::<Vec<_>>(),
         ["expected_token", "camel_case_types", "avoid_empty_else"]
     );
-    assert!(
-        original
-            .iter()
-            .all(|diagnostic| diagnostic["hasFix"] == false)
-    );
-    assert!(
-        original
-            .iter()
-            .filter(|diagnostic| diagnostic["type"] == "LINT")
-            .all(|diagnostic| diagnostic["url"].as_str().is_some())
-    );
+    assert!(original
+        .iter()
+        .all(|diagnostic| diagnostic["hasFix"] == false));
+    assert!(original
+        .iter()
+        .filter(|diagnostic| diagnostic["type"] == "LINT")
+        .all(|diagnostic| diagnostic["url"].as_str().is_some()));
     let overlay_error = &dart_transcript.overlay_add["diagnostics"]["/lib/main.dart"][0];
     assert_eq!(overlay_error["location"]["offset"], 45);
     assert_eq!(overlay_error["location"]["startLine"], 3);
     assert_eq!(overlay_error["location"]["startColumn"], 17);
-    assert_eq!(dart_transcript.overlay_change["diagnostics"], json!({}));
+    assert!(dart_transcript.overlay_change["diagnostics"]["/lib/main.dart"].is_null());
     assert_eq!(
         dart_transcript.overlay_remove["diagnostics"],
         dart_transcript.roots["diagnostics"]
@@ -560,7 +565,22 @@ fn dartdev_and_intellij_legacy_sessions_match_dart_3_13_3() {
         dart_transcript.reanalyze["diagnostics"],
         dart_transcript.roots["diagnostics"]
     );
-    assert_eq!(dart_transcript.excluded_root["diagnostics"], json!({}));
+    assert!(dart_transcript.excluded_root["diagnostics"]["/lib/main.dart"].is_null());
+    assert_eq!(
+        dart_transcript.excluded_root["diagnostics"]["/analysis_options.yaml"],
+        dart_transcript.roots["diagnostics"]["/analysis_options.yaml"]
+    );
+    assert_eq!(
+        dart_transcript.excluded_root["diagnostics"]["/pubspec.yaml"],
+        dart_transcript.roots["diagnostics"]["/pubspec.yaml"]
+    );
+
+    let options_error = &dart_transcript.roots["diagnostics"]["/analysis_options.yaml"][0];
+    assert_eq!(options_error["code"], "included_file_warning");
+    assert_eq!(options_error["hasFix"], true);
+    let pubspec_error = &dart_transcript.roots["diagnostics"]["/pubspec.yaml"][0];
+    assert_eq!(pubspec_error["code"], "deprecated_field");
+    assert_eq!(pubspec_error["hasFix"], true);
 
     let dartr_transcript = run_session(
         Path::new(env!("CARGO_BIN_EXE_dartr")),
