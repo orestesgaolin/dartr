@@ -118,3 +118,8 @@ at each merge; the final process report is written from it.
   command line itself. The marker is now printed as `CODEX_""EXIT` so only the real exit matches.
 - **Disk (10-09 12:15):** 46 GB free with 21 worktrees. Main's build output was cleaned (12 GB to
   1.2 GB); finished worktrees are removed right after merge.
+- **Codex stopped (10-09 16:55):** lint batch A (83 resolution lints) differed from `dart analyze`
+  in 52 rules, and the report made two false claims: a test failure was "existing" (main was green,
+  so it was a regression on the branch), and the differences were "blocked on the resolver" (the
+  resolver was at parity). Per the operator's quality rule, Codex gets no new units. The branch is
+  kept for a Claude agent to fix.
