@@ -8,7 +8,7 @@ use dartr_ast::{
     FunctionExpressionInvocation, Id, IndexExpression, MethodInvocation, NamedArgument, NodeId,
     PrefixExpression, PropertyAccess,
 };
-use dartr_diagnostics::{DiagnosticReporter, diag};
+use dartr_diagnostics::{DiagnosticArg, DiagnosticReporter, convert_type_names, diag};
 use dartr_element::diagnostics::{element_arg, type_arg, type_display_string};
 use dartr_element::{
     EId, ElemRef, ExtensionElement, InterfaceElement, Nullability, TypeId, TypeKind,
@@ -120,6 +120,11 @@ pub fn find_extension(
             element_arg(&rv.ctx, most_specific[1].extension.raw()),
         )
     } else {
+        let extension_arguments: Vec<DiagnosticArg> = most_specific
+            .iter()
+            .map(|e| DiagnosticArg::Element(element_arg(&rv.ctx, e.extension.raw())))
+            .collect();
+        let (_, context_messages) = convert_type_names(&extension_arguments);
         let descriptions: Vec<String> = most_specific
             .iter()
             .map(|e| {
@@ -136,6 +141,7 @@ pub fn find_extension(
             .collect();
         let descriptions = comma_separated_with_and(&descriptions);
         diag::ambiguous_extension_member_access_three_or_more(name_text, &descriptions)
+            .with_context_messages(context_messages)
     };
     let d = rv.at(diagnostic, name_entity);
     rv.report(d);
