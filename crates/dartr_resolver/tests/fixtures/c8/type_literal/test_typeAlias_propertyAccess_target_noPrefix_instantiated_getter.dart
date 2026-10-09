@@ -1,0 +1,13 @@
+// Ported from pkg/analyzer/test/src/dart/resolution/type_literal_test.dart (TypeLiteralResolutionTest.test_typeAlias_propertyAccess_target_noPrefix_instantiated_getter).
+
+typedef Fn<T> = void Function(T);
+
+void bar() {
+  Fn<int>.foo;
+//        ^^^
+// [diag.undefinedGetterOnFunctionType] The getter 'foo' isn't defined for the 'Fn' function type.
+}
+
+extension E on Type {
+  int get foo => 1;
+}
