@@ -6,10 +6,9 @@
 //! nothing are not ported; their call sites in the resolver are comments.
 //!
 //! Partly STUB (unit C2): `visitConstructorName`,
-//! `visitSuperConstructorInvocation`, `visitRedirectingConstructorInvocation`,
-//! `visitImportDirective`, `visitExportDirective` (combinators) and
-//! `visitCommentReference` are ported with the units that own those nodes
-//! (C8 constructors, C9 comment references).
+//! `visitSuperConstructorInvocation`, `visitRedirectingConstructorInvocation`
+//! and `visitCommentReference` are ported with the units that own those
+//! nodes (C8 constructors, C9 comment references).
 
 use dartr_ast::{Argument, ArgumentList, Expression, NamedArgument, NodeId};
 use dartr_ast::{
@@ -527,4 +526,97 @@ pub fn verify_super_formal_parameters(
         }
     }
     (positional_argument_count, named_argument_names)
+}
+
+/// Dart `ElementResolver.visitExportDirective`.
+pub fn visit_export_directive(rv: &mut ResolverVisitor<'_>, node: Id<dartr_ast::ExportDirective>) {
+    let keyword = rv.ast[node].export_keyword;
+    let offset = rv.ast.tokens.get(keyword).offset as i32;
+    let library = rv
+        .ctx
+        .fragment(rv.unit.fragment)
+        .library_exports
+        .iter()
+        .find(|e| e.export_keyword_offset == offset)
+        .and_then(|e| match &e.directive.uri {
+            dartr_element::DirectiveUri::Library { library, .. } => Some(*library),
+            _ => None,
+        });
+    let combinators = rv.ast[node].combinators;
+    resolve_combinators(rv, library, combinators);
+}
+
+/// Dart `ElementResolver.visitImportDirective`.
+pub fn visit_import_directive(rv: &mut ResolverVisitor<'_>, node: Id<dartr_ast::ImportDirective>) {
+    if let Some(prefix_node) = rv.ast[node].prefix {
+        let prefix_name = rv.ast.tokens.lexeme(rv.ast[prefix_node].token).to_string();
+        let fragment = rv.ctx.fragment(rv.unit.fragment);
+        let prefix = fragment
+            .library_import_prefixes
+            .iter()
+            .copied()
+            .find(|&p| rv.ctx.element_name(p.raw()) == Some(prefix_name.as_str()));
+        if let Some(prefix) = prefix {
+            rv.set_element(prefix_node, Some(ElemRef::Base(prefix.raw())));
+        }
+    }
+    let keyword = rv.ast[node].import_keyword;
+    let offset = rv.ast.tokens.get(keyword).offset as i32;
+    let library = rv
+        .ctx
+        .fragment(rv.unit.fragment)
+        .library_imports
+        .iter()
+        .find(|i| !i.is_synthetic && i.import_keyword_offset == offset)
+        .and_then(|i| match &i.directive.uri {
+            dartr_element::DirectiveUri::Library { library, .. } => Some(*library),
+            _ => None,
+        });
+    if library.is_some() {
+        let combinators = rv.ast[node].combinators;
+        resolve_combinators(rv, library, combinators);
+    }
+}
+
+/// Dart `ElementResolver._resolveCombinators`.
+fn resolve_combinators(
+    rv: &mut ResolverVisitor<'_>,
+    library: Option<dartr_element::EId<dartr_element::LibraryElement>>,
+    combinators: dartr_ast::NodeList<dartr_ast::Combinator>,
+) {
+    let Some(library) = library else {
+        return;
+    };
+    let Some(namespace) = rv.ctx.get(library).export_namespace.try_get().cloned() else {
+        return;
+    };
+    let mut names: Vec<Id<dartr_ast::SimpleIdentifier>> = Vec::new();
+    for &combinator in rv.ast.list_raw(combinators) {
+        if let Some(hide) = rv.ast.cast::<dartr_ast::HideCombinator>(combinator) {
+            names.extend(rv.ast.list(rv.ast[hide].hidden_names));
+        } else if let Some(show) = rv.ast.cast::<dartr_ast::ShowCombinator>(combinator) {
+            names.extend(rv.ast.list(rv.ast[show].shown_names));
+        }
+    }
+    for name in names {
+        let name_str = rv.ast.tokens.lexeme(rv.ast[name].token).to_string();
+        let get = |text: &str| {
+            let name = rv.ctx.name(text);
+            namespace.defined_names.get(&name).copied()
+        };
+        let element = get(&name_str).or_else(|| get(&format!("{name_str}=")));
+        if let Some(element) = element {
+            // Ensure that the name always resolves to a top-level variable
+            // rather than a getter or setter.
+            let element = if matches!(
+                element.tag(),
+                dartr_element::Tag::Getter | dartr_element::Tag::Setter
+            ) {
+                member::variable(&rv.ctx, ElemRef::Base(element)).unwrap_or(ElemRef::Base(element))
+            } else {
+                ElemRef::Base(element)
+            };
+            rv.set_element(name, Some(element));
+        }
+    }
 }

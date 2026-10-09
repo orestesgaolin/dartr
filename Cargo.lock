@@ -322,6 +322,7 @@ version = "0.1.0"
 dependencies = [
  "dartr_ast",
  "dartr_ast_builder",
+ "dartr_constant",
  "dartr_element",
  "dartr_link",
  "dartr_lints",
@@ -329,6 +330,7 @@ dependencies = [
  "dartr_project",
  "dartr_resolver",
  "dartr_syntax",
+ "dartr_typesystem",
  "imbl",
  "indexmap",
  "md-5",

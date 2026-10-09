@@ -36,6 +36,30 @@ pub struct ResolvedLintContext<'a> {
     /// Resolver `LocalVariableInfo.potentiallyMutatedInScope` facts.
     pub potentially_mutated_in_scope: &'a IndexSet<dartr_element::ElementId>,
     pub library: dartr_element::EId<dartr_element::LibraryElement>,
+    /// Dart `Element.metadata` of elements of any library, with the
+    /// annotation values (`None`: no metadata access).
+    pub metadata: Option<&'a dyn ElementMetadata>,
+}
+
+/// An `Annotation` node of a resolved unit of the analyzed library or of
+/// another library (an opaque reference for [`ElementMetadata`]).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct AnnotationRef {
+    pub unit: u32,
+    pub node: NodeId,
+}
+
+/// Dart `Element.metadata`: the annotations of an element, their elements
+/// (`ElementAnnotation.element`) and values
+/// (`ElementAnnotation.computeConstantValue()`).
+pub trait ElementMetadata {
+    /// Dart `element.metadata.annotations`.
+    fn annotations(&self, element: dartr_element::ElementId) -> Vec<AnnotationRef>;
+    /// Dart `ElementAnnotation.element`, as a base element.
+    fn annotation_element(&self, annotation: AnnotationRef) -> Option<dartr_element::ElementId>;
+    /// Dart `ElementAnnotation.computeConstantValue()`.
+    fn annotation_value(&self, annotation: AnnotationRef)
+    -> Option<dartr_constant::DartObjectImpl>;
 }
 /// A resolved AST and its original parse metadata. Resolution can rewrite nodes.
 #[derive(Clone, Copy)]

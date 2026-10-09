@@ -534,6 +534,47 @@ impl<'a> ConstantEvaluationEngine<'a> {
             .flatten()
     }
 
+    /// Dart `element.metadata.annotations`: the `Annotation` nodes of the
+    /// declarations of [e] (all fragments, first fragment first), read from
+    /// the resolved unit that declares each fragment (see the module
+    /// documentation). The metadata of a declaration is where Dart
+    /// `ElementBuilder` reads it: the field or top-level variable
+    /// declaration of a variable, the body of a primary constructor, the
+    /// library directive (or the first directive) of a library.
+    pub fn metadata_annotations(&self, e: ElementId) -> Vec<NodeRef> {
+        let mut result = Vec::new();
+        for decl in self.declarations(e) {
+            let handle = self.unit(decl.unit);
+            let ast = &handle.ast;
+            if let Some(list) = declaration_metadata(ast, decl.node) {
+                result.extend(ast.list(list).iter().map(|&a| decl.with(a)));
+            }
+        }
+        result
+    }
+
+    /// Dart `ElementAnnotation.element` of the annotation [annotation].
+    pub fn annotation_element_of(&self, annotation: NodeRef) -> Option<ElemRef> {
+        let handle = self.unit(annotation.unit);
+        annotation_element(&handle, Id::<Annotation>::from_raw(annotation.node))
+    }
+
+    /// Dart `ElementAnnotation.computeConstantValue()`: the value, or `None`
+    /// for an invalid constant (Dart `null`).
+    pub fn compute_annotation_constant_value(&self, annotation: NodeRef) -> Option<DartObjectImpl> {
+        let key = (annotation.unit, annotation.node);
+        if !self.values.borrow().annotations.contains_key(&key) {
+            crate::constant::compute::compute_constants(
+                self,
+                &[ConstantTarget::Annotation(annotation)],
+            );
+        }
+        match self.annotation_result(annotation) {
+            Some(Constant::Value(v)) => Some(v),
+            _ => None,
+        }
+    }
+
     /// Dart `computeConstantValue()` of a variable: computes the constants
     /// that [e] depends on and [e], then returns its value.
     pub fn compute_constant_value_of(&self, e: ElementId) -> Option<DartObjectImpl> {
@@ -1286,6 +1327,92 @@ impl ConstantEvaluationEngine<'_> {
 /// `annotation.element`).
 fn annotation_element(unit: &ResolvedUnit, annotation: Id<Annotation>) -> Option<ElemRef> {
     unit.tables.element.get(annotation).copied()
+}
+
+/// The metadata that Dart `ElementBuilder` gives the fragment declared by
+/// [node] (see [`ConstantEvaluationEngine::metadata_annotations`]).
+fn declaration_metadata(ast: &Ast, node: NodeId) -> Option<dartr_ast::NodeList<Annotation>> {
+    macro_rules! own {
+        ($($t:ident),*) => {
+            match ast.kind(node) {
+                $(NodeKind::$t => return Some(ast[Id::<dartr_ast::$t>::from_raw(node)].metadata),)*
+                _ => {}
+            }
+        };
+    }
+    match ast.kind(node) {
+        NodeKind::VariableDeclaration => {
+            let list = ast.parent(node)?;
+            let declaration = ast.parent(list)?;
+            return match ast.kind(declaration) {
+                NodeKind::FieldDeclaration => {
+                    Some(ast[Id::<dartr_ast::FieldDeclaration>::from_raw(declaration)].metadata)
+                }
+                NodeKind::TopLevelVariableDeclaration => Some(
+                    ast[Id::<dartr_ast::TopLevelVariableDeclaration>::from_raw(declaration)]
+                        .metadata,
+                ),
+                _ => ast
+                    .cast::<dartr_ast::VariableDeclarationList>(list)
+                    .map(|l| ast[l].metadata),
+            };
+        }
+        NodeKind::PrimaryConstructorDeclaration => {
+            return primary_constructor_body(ast, node).map(|body| ast[body].metadata);
+        }
+        NodeKind::FunctionExpression => {
+            // The function expression of a function declaration has the
+            // fragment of the declaration.
+            let parent = ast.parent(node)?;
+            return ast
+                .cast::<dartr_ast::FunctionDeclaration>(parent)
+                .map(|d| ast[d].metadata);
+        }
+        NodeKind::CompilationUnit => {
+            let unit = Id::<CompilationUnit>::from_raw(node);
+            let directives = ast.list_raw(ast[unit].directives);
+            if let Some(&library) = directives
+                .iter()
+                .find(|&&d| ast.kind(d) == NodeKind::LibraryDirective)
+            {
+                return Some(ast[Id::<dartr_ast::LibraryDirective>::from_raw(library)].metadata);
+            }
+            let first = *directives.first()?;
+            return match ast.kind(first) {
+                NodeKind::ImportDirective => {
+                    Some(ast[Id::<dartr_ast::ImportDirective>::from_raw(first)].metadata)
+                }
+                NodeKind::ExportDirective => {
+                    Some(ast[Id::<dartr_ast::ExportDirective>::from_raw(first)].metadata)
+                }
+                NodeKind::PartDirective => {
+                    Some(ast[Id::<dartr_ast::PartDirective>::from_raw(first)].metadata)
+                }
+                _ => None,
+            };
+        }
+        _ => {}
+    }
+    own!(
+        ClassDeclaration,
+        ClassTypeAlias,
+        ConstructorDeclaration,
+        DeclaredIdentifier,
+        EnumConstantDeclaration,
+        EnumDeclaration,
+        ExtensionDeclaration,
+        ExtensionTypeDeclaration,
+        FieldFormalParameter,
+        FunctionDeclaration,
+        FunctionTypeAlias,
+        GenericTypeAlias,
+        MethodDeclaration,
+        MixinDeclaration,
+        RegularFormalParameter,
+        SuperFormalParameter,
+        TypeParameter
+    );
+    None
 }
 
 /// The `PrimaryConstructorBody` of the type declaration of the primary

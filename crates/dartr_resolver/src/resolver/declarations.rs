@@ -62,13 +62,13 @@ impl<'a> ResolverVisitor<'a> {
     pub fn visit_import_directive(&mut self, node: Id<ImportDirective>) {
         self.check_unreachable_node(node);
         self.visit_children(node);
-        // Dart `elementResolver.visitImportDirective`: combinators (C9).
+        crate::element_resolver::visit_import_directive(self, node);
     }
 
     pub fn visit_export_directive(&mut self, node: Id<ExportDirective>) {
         self.check_unreachable_node(node);
         self.visit_children(node);
-        // Dart `elementResolver.visitExportDirective`: combinators (C9).
+        crate::element_resolver::visit_export_directive(self, node);
     }
 
     pub fn visit_part_directive(&mut self, node: Id<PartDirective>) {
