@@ -117,9 +117,8 @@ pub fn visit_index_expression(
     rv.set_element(node, element);
 
     let index = rv.ast[node].index;
-    rv.resolve_expression(index, result.index_context_type.unwrap_or(TypeId::UNKNOWN));
-    // Dart `checkIndexExpressionIndex(node.index, readElement:,
-    // writeElement: null, whyNotPromoted:)` (wave D).
+    let index = rv.resolve_expression(index, result.index_context_type.unwrap_or(TypeId::UNKNOWN));
+    rv.check_index_expression_index(index, result.read_element(), None);
 
     let ctx = rv.ctx;
     let ty = if target_type == Some(TypeId::NEVER) {

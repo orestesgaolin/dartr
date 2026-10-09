@@ -290,7 +290,7 @@ fn panic_message(e: &(dyn std::any::Any + Send)) -> String {
 /// caught and recorded as the unit's panic (the analyzer reports an
 /// exception for the library).
 ///
-/// Not here: the error verifier and the FFI verifier (D4–D7), lints
+/// Not here: the FFI verifier, lints
 /// (`dartr_lints`), the SDK constraint verifier, `IgnoreValidator` and the
 /// ignore filtering (`dartr_cli`). Dart runs the warnings only when
 /// `analysisOptions.warning` is set (the default).
@@ -313,6 +313,25 @@ fn compute_diagnostics(input: &LibraryAnalysisInput<'_>, library: &mut ResolvedL
         };
         LibraryScopes::build(&ctx, input.library)
     };
+    // Dart `_computeVerifyErrors` (per unit): the error verifier (D4–D7).
+    let mut library_context = crate::error_verifier::LibraryVerificationContext::default();
+    for (index, unit) in library.units.iter_mut().enumerate() {
+        if unit.panic.is_some() {
+            continue;
+        }
+        library_context.unit_index = index;
+        if let Err(e) = catch_unwind(AssertUnwindSafe(|| {
+            crate::error_verifier::compute_verify_errors(
+                input,
+                &scopes,
+                &library_features,
+                unit,
+                &mut library_context,
+            )
+        })) {
+            unit.panic = Some(format!("ErrorVerifier: {}", panic_message(&*e)));
+        }
+    }
     let mut panics: Vec<Option<String>> = library.units.iter().map(|u| u.panic.clone()).collect();
     let mut verifiers: Vec<UnitVerifier<'_>> = Vec::new();
     for (index, (unit, unit_input)) in library.units.iter_mut().zip(&input.units).enumerate() {
@@ -372,8 +391,8 @@ fn compute_diagnostics(input: &LibraryAnalysisInput<'_>, library: &mut ResolvedL
         &mut |vs| member_duplicate_definition_verifier::check_library(vs),
     );
     // Dart `_libraryVerificationContext.constructorFieldsVerifier.report()`.
-    // The error verifier adds the constructors (D4–D7).
-    let mut constructor_fields = constructor_fields_verifier::ConstructorFieldsVerifier::default();
+    // The error verifier adds the constructors.
+    let mut constructor_fields = std::mem::take(&mut library_context.constructor_fields_verifier);
     library_step(
         "ConstructorFieldsVerifier",
         &mut verifiers,

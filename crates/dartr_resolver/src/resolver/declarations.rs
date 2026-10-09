@@ -334,8 +334,20 @@ impl<'a> ResolverVisitor<'a> {
             .map(|f| crate::element_ext::variable_type(&self.ctx, f.raw()))
             .unwrap_or(TypeId::UNKNOWN);
         let expression = self.ast[node].expression;
-        self.resolve_expression(expression, field_type);
-        // Dart `checkForFieldInitializerNotAssignable` (wave D).
+        let expression = self.resolve_expression(expression, field_type);
+        if let Some(field) = field
+            && let Some(enclosing_function) = self.enclosing_function
+        {
+            let is_const_constructor =
+                crate::element_ext::first_fragment_flags(&self.ctx, enclosing_function.raw())
+                    .contains(dartr_element::FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_CONST);
+            let _ = field;
+            self.check_for_field_initializer_not_assignable(
+                expression,
+                field_type,
+                is_const_constructor,
+            );
+        }
     }
 
     pub fn visit_constructor_name(&mut self, node: Id<ConstructorName>) {

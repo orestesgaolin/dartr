@@ -34,6 +34,14 @@ pub struct Analyzed {
 /// Analyzes the library `main.dart` of [files] (name, content). Returns
 /// `None` when no SDK is found.
 pub fn analyze(files: &[(&str, &str)]) -> Option<Analyzed> {
+    analyze_with_experiments(files, Vec::new())
+}
+
+/// Like [analyze], with these experiments enabled for all files.
+pub fn analyze_with_experiments(
+    files: &[(&str, &str)],
+    experiments: Vec<dartr_parser::experimental_flags::ExperimentalFlag>,
+) -> Option<Analyzed> {
     let sdk_path = dartr_project::sdk::find_sdk_path()?;
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
     let dir = format!(
@@ -60,7 +68,7 @@ pub fn analyze(files: &[(&str, &str)]) -> Option<Analyzed> {
     };
     let config_for = Box::new(move |_: &str, _: &str| FileConfig {
         package_language_version: version,
-        experiments: Vec::new(),
+        experiments: experiments.clone(),
     });
     let generation = Arc::new(Generation::new(0));
     let mut driver = Driver::new(FileSystemState::new(source_factory, config_for), generation);

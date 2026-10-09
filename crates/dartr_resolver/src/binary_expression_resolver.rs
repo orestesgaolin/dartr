@@ -91,11 +91,7 @@ fn type_of(rv: &ResolverVisitor<'_>, e: Id<Expression>) -> TypeId {
 /// `boolExpressionVerifier.checkForNonBoolExpression(operand,
 /// locatableDiagnostic: diag.nonBoolOperand, ...)` (wave D hook).
 fn check_non_bool_operand(rv: &mut ResolverVisitor<'_>, operand: Id<Expression>, operator: &str) {
-    crate::error::bool_expression_verifier::check_for_non_bool_expression(
-        rv,
-        operand,
-        dartr_diagnostics::diag::non_bool_operand(operator),
-    );
+    rv.check_for_non_bool_expression(operand, diag::non_bool_operand(operator));
 }
 
 /// Dart `_resolveEqual(node, notEqual:)`.
@@ -137,8 +133,8 @@ fn resolve_equal(rv: &mut ResolverVisitor<'_>, node: Id<BinaryExpression>, not_e
 
     resolve_user_definable_element(rv, node, "==", true);
     resolve_user_definable_type(rv, node);
-    // Dart `checkForArgumentTypeNotAssignableForArgument(node.rightOperand,
-    // promoteParameterToNullable: true, whyNotPromoted:)` (wave D).
+    let right = rv.ast[node].right_operand;
+    rv.check_for_argument_type_not_assignable_for_argument(right.raw(), true);
 
     let operator = rv.ast[node].operator;
     let report_null_comparison = |rv: &mut ResolverVisitor<'_>, start: usize, end: usize| {
@@ -243,7 +239,8 @@ fn resolve_if_null(rv: &mut ResolverVisitor<'_>, node: Id<BinaryExpression>, con
     };
 
     rv.record_static_type(node, static_type);
-    // Dart `checkForArgumentTypeNotAssignableForArgument(right)` (wave D).
+    let right = rv.ast[node].right_operand;
+    rv.check_for_argument_type_not_assignable_for_argument(right.raw(), false);
 }
 
 /// Dart `_resolveLogicalAnd(node)` ([is_and]) and `_resolveLogicalOr(node)`.
@@ -277,9 +274,9 @@ fn resolve_logical_binary(rv: &mut ResolverVisitor<'_>, node: Id<BinaryExpressio
     };
     rv.flow_analysis.store_expression_info(node.upcast(), info);
 
-    let operator = if is_and { "&&" } else { "||" };
-    check_non_bool_operand(rv, left, operator);
-    check_non_bool_operand(rv, right, operator);
+    let operator = rv.lexeme(rv.ast[node].operator).to_string();
+    check_non_bool_operand(rv, left, &operator);
+    check_non_bool_operand(rv, right, &operator);
 
     rv.record_static_type(node, bool_type);
 }
@@ -317,12 +314,11 @@ fn resolve_right_operand(
     };
 
     let right = rv.ast[node].right_operand;
-    rv.resolve_expression(right, right_context_type);
+    let right = rv.resolve_expression(right, right_context_type);
     // Dart `flow?.whyNotPromoted(...)`: not ported yet.
 
     resolve_user_definable_type(rv, node);
-    // Dart `checkForArgumentTypeNotAssignableForArgument(right,
-    // whyNotPromoted:)` (wave D).
+    rv.check_for_argument_type_not_assignable_for_argument(right.raw(), false);
 }
 
 /// Dart `_resolveUnsupportedOperator(node)`.

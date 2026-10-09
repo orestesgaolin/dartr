@@ -32,7 +32,10 @@ impl<'a> ResolverVisitor<'a> {
         }
         let bool_type = self.ctx.tp.bool_type();
         let condition = self.resolve_expression(condition, bool_type);
-        self.check_for_non_bool_expression(condition);
+        self.check_for_non_bool_expression(
+            condition,
+            dartr_diagnostics::diag::non_bool_expression(),
+        );
         let info = self.flow_analysis.get_expression_info(Some(condition));
         if let Some(flow) = self.flow_analysis.flow.as_mut() {
             flow.assert_after_condition(info);
@@ -315,6 +318,9 @@ impl<'a> ResolverVisitor<'a> {
         self.check_unreachable_node(node);
         self.visit_children(node);
         let result = self.finish_function_body_inference();
+        if let Some(body_context) = self.body_context.clone() {
+            self.rt.body_context.insert(node, body_context);
+        }
         self.body_context = old_body_context;
         result
     }
@@ -343,6 +349,9 @@ impl<'a> ResolverVisitor<'a> {
             .unwrap()
             .add_return_expression(&ts, Some(expression_type));
         let result = self.finish_function_body_inference();
+        if let Some(body_context) = self.body_context.clone() {
+            self.rt.body_context.insert(node, body_context);
+        }
         self.body_context = old_body_context;
         result
     }

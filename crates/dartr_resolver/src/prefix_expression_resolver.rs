@@ -291,9 +291,8 @@ fn resolve_negation(rv: &mut ResolverVisitor<'_>, node: Id<PrefixExpression>) {
     let bool_type = rv.ctx.tp.bool_type();
     let operand = rv.ast[node].operand;
     let operand = rv.resolve_expression(operand, bool_type);
-    // Dart `boolExpressionVerifier.checkForNonBoolNegationExpression(operand,
-    // whyNotPromoted:)` (the why-not-promoted messages are not ported).
-    crate::error::bool_expression_verifier::check_for_non_bool_negation_expression(rv, operand);
+    // Dart `flow?.whyNotPromoted(...)`: not ported.
+    rv.check_for_non_bool_negation_expression(operand);
 
     rv.record_static_type(node, bool_type);
 
