@@ -7,8 +7,8 @@
 
 use dartr_ast::{Id, VariableDeclaration, VariableDeclarationList};
 use dartr_element::{
-    EId, ElementFlags, ElementId, FieldElement, LocalVariableElement, PromotableElement,
-    PropertyInducingElement, TypeId,
+    EId, ElementFlags, ElementId, FieldElement, FormalParameterElement, InstanceElement,
+    LocalVariableElement, PromotableElement, PropertyInducingElement, TypeId,
 };
 use dartr_flow::flow_analysis::FlowAnalysis;
 use dartr_typesystem::TypeExt;
@@ -79,12 +79,34 @@ pub fn resolve(rv: &mut ResolverVisitor<'_>, node: Id<VariableDeclaration>) {
         element.is::<FieldElement>() || element.tag() == dartr_element::Tag::TopLevelVariable;
     let is_late = element_ext::is_late(&rv.ctx, element);
 
-    // Dart `inScopePrimaryConstructorParameters` (primary constructors, an
-    // experiment): not ported.
+    // Dart `inScopePrimaryConstructorParameters`.
+    let mut in_scope_primary_constructor_parameters: Option<Vec<EId<FormalParameterElement>>> =
+        None;
+    if element.is::<FieldElement>()
+        && !dartr_typesystem::member::is_static(&rv.ctx, element.into())
+        && !is_late
+    {
+        in_scope_primary_constructor_parameters = rv
+            .ctx
+            .element_data(element)
+            .and_then(|d| d.enclosing)
+            .and_then(|e| e.cast::<InstanceElement>())
+            .and_then(|e| crate::scope_context::primary_constructor_of(&rv.ctx, e))
+            .map(|c| rv.ctx.get(c).formal_params.clone());
+    }
     if is_top_level {
         let ast = &*rv.ast;
-        rv.flow_analysis
-            .body_or_initializer_enter(ast, rv.tables, node.raw(), None, None);
+        rv.flow_analysis.body_or_initializer_enter(
+            ast,
+            rv.tables,
+            node.raw(),
+            in_scope_primary_constructor_parameters.as_deref(),
+            None,
+        );
+        if let Some(parameters) = &in_scope_primary_constructor_parameters {
+            rv.flow_analysis
+                .declare_primary_constructor_parameters(parameters);
+        }
     } else if is_late {
         if let Some(flow) = rv.flow_analysis.flow.as_mut() {
             flow.late_initializer_begin(node.raw());

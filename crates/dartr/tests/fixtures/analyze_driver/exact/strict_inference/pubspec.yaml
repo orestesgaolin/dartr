@@ -1,0 +1,6 @@
+name: p
+environment:
+  sdk: ^3.13.0
+dependencies:
+  meta:
+    path: meta
