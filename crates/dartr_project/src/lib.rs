@@ -27,6 +27,7 @@ pub mod context_locator;
 pub mod context_root;
 pub mod dump;
 pub mod experiments;
+pub mod fix_data_validator;
 pub mod fs;
 pub mod glob;
 pub mod lint_rules;

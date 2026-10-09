@@ -1,0 +1,178 @@
+version: 1
+transforms:
+  - title: change shapes
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      function: f
+    changes:
+      - 1
+      - {}
+      - kind: 3
+      - kind: unknown
+      - kind: rename
+      - kind: rename
+        newName: [a]
+        extra: 1
+      - kind: renameParameter
+        oldName: a
+      - kind: renameParameter
+        newName: a
+      - kind: addParameter
+      - kind: addParameter
+        index: x
+      - kind: addParameter
+        index: 0
+      - kind: addParameter
+        index: 0
+        name: n
+      - kind: addParameter
+        index: 0
+        name: n
+        style: bad
+      - kind: addParameter
+        index: 0
+        name: n
+        style: required_named
+      - kind: addParameter
+        index: 0
+        name: n
+        style: optional_positional
+        argumentValue:
+          expression: x
+          requiredIf: "y"
+      - kind: addParameter
+        index: 0
+        name: n
+        style: optional_named
+        argumentValue:
+          expression: x
+          requiredIf: "y"
+      - kind: addParameter
+        index: 0
+        name: n
+        style: optional_named
+        argumentValue:
+          expression: x
+          unknown: 1
+      - kind: addTypeParameter
+      - kind: addTypeParameter
+        index: a
+        name: 1
+        extends: x
+        argumentValue: []
+      - kind: removeParameter
+      - kind: removeParameter
+        index: 0
+        name: n
+      - kind: removeParameter
+        index: s
+      - kind: removeParameter
+        name: 1
+      - kind: changeParameterType
+      - kind: changeParameterType
+        index: 0
+      - kind: changeParameterType
+        index: 0
+        nullability: nullable
+      - kind: changeParameterType
+        name: n
+        nullability: non_null
+        argumentValue:
+          expression: x
+      - kind: replacedBy
+      - kind: replacedBy
+        newElement: x
+      - kind: replacedBy
+        newElement:
+          uris: ['a.dart']
+          class: C
+      - kind: replacedBy
+        newElement:
+          uris: ['a.dart']
+          method: m
+          inClass: C
+        replaceTarget: 3
+        arguments: x
+      - kind: replacedBy
+        newElement:
+          uris: ['a.dart']
+          method: m
+          inClass: C
+        arguments:
+          - 1
+          - expression: '{% undefined %}'
+  - title: replaced class
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      class: C
+    changes:
+      - kind: replacedBy
+        newElement:
+          uris: ['a.dart']
+          function: f
+      - kind: replacedBy
+        newElement:
+          uris: ['a.dart']
+          mixin: M
+  - title: replaced extension
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      extension: E
+    changes:
+      - kind: replacedBy
+        newElement:
+          uris: ['a.dart']
+          extension: F
+  - title: library
+    date: 2020-01-01
+    library: 1
+    changes: []
+  - title: library 2
+    date: 2020-01-01
+    library: [a]
+    changes: []
+  - title: library 3
+    date: 2020-01-01
+    library: 'a.dart'
+  - title: library 4
+    date: 2020-01-01
+    library: 'a.dart'
+    changes:
+      - kind: rename
+        newName: x
+      - 1
+      - kind: replacedBy
+        newLibrary: 'b.dart'
+      - kind: replacedBy
+        newLibrary: 'c.dart'
+  - title: library 5
+    date: 2020-01-01
+    library: 'a.dart'
+    changes:
+      - kind: replacedBy
+        newLibrary: 1
+        extra: 2
+      - kind: replacedBy
+      - kind: 1
+  - title: oneOf
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      function: f
+    oneOf: x
+  - title: oneOf 2
+    date: 2020-01-01
+    element:
+      uris: ['a.dart']
+      function: f
+    oneOf:
+      - 1
+      - if: 1
+        changes: x
+      - changes: []
+        extra: 1
+      - if: "undefined"
+        changes: []
