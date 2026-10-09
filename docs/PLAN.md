@@ -99,3 +99,11 @@ Data model rules:
 | 9 | `dartr analyze` CLI | output and exit code parity  (CLI, formats, exit codes, ignore comments, `errors:` done in `dartr_cli` with the parse-only `DiagnosticsProvider`; parity: `crates/dartr/tests/analyze_parity.rs`, `tools/analyze_parity.py`) |
 | 10 | LSP server, then legacy subset (`dart analyze`/`dart fix`), then full legacy (IntelliJ) | Dart-Code works through the shim; `flutter analyze` works; LSP request parity |
 | 11 | performance | benchmark report vs baseline |
+
+## Open: analyzer plugins
+
+`dart analyze` loads analyzer plugins (`analysis_options.yaml` `plugins:`; new-style
+`analysis_server_plugin` and legacy `analyzer_plugin`). visible-app uses one (Jaspr lints:
+`styles_ordering`, `prefer_html_components`, `sort_children_last`). dartr does not run plugins yet.
+Options: run Dart plugins out of process like the analysis server does (plugin isolates need a
+Dart VM), or port popular plugins. Decide after phase 10b.
