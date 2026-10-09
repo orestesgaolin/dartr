@@ -466,14 +466,6 @@ fn run_case(case: &Case) -> Option<Vec<(String, usize, usize)>> {
 /// Analyzer test cases that fail for reasons outside of the g4a
 /// verifiers (`file::name`); see the comment of each.
 const KNOWN_FAILURES: &[&str] = &[
-    // Primary constructor bodies (`this : ...`) and the super invocation
-    // of a primary constructor are not resolved by the resolver core.
-    "positional_super_formal_parameter_with_positional_argument_test.dart::test_primaryConstructor_reported",
-    "variable_not_initialized_test.dart::test_class_instanceField1_notFinal_typeInt_hasInitializer_primaryConstructor_fieldFormalParameter_constructorInitializer",
-    "variable_not_initialized_test.dart::test_class_instanceField1_notFinal_typeInt_noInitializer_primaryConstructor_constructorInitializer2",
-    "variable_not_initialized_test.dart::test_class_instanceField1_notFinal_typeInt_noInitializer_primaryConstructor_constructorInitializer3",
-    "variable_not_initialized_test.dart::test_class_instanceField2_notFinal_typeInt_noInitializer_primaryConstructor_constructorInitializer2",
-    "invalid_reference_to_this_test.dart::test_extensionType_primaryConstructor_fieldInitializer",
     // The element of an augmented class has the augmentation as its
     // first fragment in the linked element model.
     "subtype_of_final_is_not_base_final_or_sealed_test.dart::test_class_extends_inAugmentation",
