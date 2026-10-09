@@ -1605,8 +1605,7 @@ pub struct AnalysisGetImportedElementsResult {
 pub struct AnalysisGetLibraryDependenciesResult {
     pub libraries: Vec<FilePath>,
     #[serde(rename = "packageMap")]
-    pub package_map:
-        std::collections::BTreeMap<String, std::collections::BTreeMap<String, Vec<FilePath>>>,
+    pub package_map: indexmap::IndexMap<String, indexmap::IndexMap<String, Vec<FilePath>>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1630,7 +1629,7 @@ pub struct AnalysisGetReachableSourcesParams {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AnalysisGetReachableSourcesResult {
-    pub sources: std::collections::BTreeMap<String, Vec<String>>,
+    pub sources: indexmap::IndexMap<String, Vec<String>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1652,7 +1651,7 @@ pub struct AnalysisSetAnalysisRootsParams {
     pub included: Vec<FilePath>,
     pub excluded: Vec<FilePath>,
     #[serde(rename = "packageRoots", skip_serializing_if = "Option::is_none")]
-    pub package_roots: Option<std::collections::BTreeMap<FilePath, FilePath>>,
+    pub package_roots: Option<indexmap::IndexMap<FilePath, FilePath>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1667,12 +1666,12 @@ pub struct AnalysisSetPriorityFilesParams {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AnalysisSetSubscriptionsParams {
-    pub subscriptions: std::collections::BTreeMap<AnalysisService, Vec<FilePath>>,
+    pub subscriptions: indexmap::IndexMap<AnalysisService, Vec<FilePath>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AnalysisUpdateContentParams {
-    pub files: std::collections::BTreeMap<FilePath, AnalysisUpdateContentParamsFilesValue>,
+    pub files: indexmap::IndexMap<FilePath, AnalysisUpdateContentParamsFilesValue>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -2212,7 +2211,7 @@ pub struct FlutterSetWidgetPropertyValueResult {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FlutterSetSubscriptionsParams {
-    pub subscriptions: std::collections::BTreeMap<FlutterService, Vec<FilePath>>,
+    pub subscriptions: indexmap::IndexMap<FlutterService, Vec<FilePath>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
