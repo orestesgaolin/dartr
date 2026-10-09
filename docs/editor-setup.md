@@ -96,8 +96,10 @@ language-servers = ["dartr"]
 `flutter analyze` and IntelliJ start `<sdk>/bin/dart language-server …` from the
 Flutter/Dart SDK and have no setting for another server; they need an SDK whose
 `bin/dart` forwards `language-server` to dartr. That is not part of phase 10a.
-IntelliJ also uses the legacy protocol (`--protocol=analyzer`), which dartr
-does not implement yet (dartr exits with code 64).
+IntelliJ also uses the legacy protocol (`--protocol=analyzer`). dartr now
+implements its initial analysis subset; full IntelliJ editing services still
+need resolution. See [legacy protocol support](legacy-protocol.md) for the
+implemented requests and limitations.
 
 ## What works (phase 10a)
 
