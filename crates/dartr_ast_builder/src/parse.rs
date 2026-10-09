@@ -10,7 +10,7 @@ use dartr_diagnostics::Diagnostic;
 use dartr_parser::Parser;
 use dartr_parser::analyzer::features_for_file;
 use dartr_parser::experimental_features::ExperimentalFeatures;
-use dartr_parser::experimental_flags::ExperimentalFlag;
+use dartr_parser::experimental_flags::{DEFAULT_LANGUAGE_VERSION, ExperimentalFlag};
 use dartr_syntax::analyzer_scanner::{
     AnalyzerScanResult, CURRENT_LANGUAGE_VERSION, scan_for_analyzer,
     scan_for_analyzer_with_configuration,
@@ -81,13 +81,31 @@ pub fn parse_file(
     package_version: (u32, u32),
     experiments: &[ExperimentalFlag],
 ) -> ParsedUnit {
-    parse_impl(content, path, Some((package_version, experiments)))
+    parse_impl(
+        content,
+        path,
+        Some((package_version, experiments, DEFAULT_LANGUAGE_VERSION)),
+    )
+}
+
+/// Like [parse_file], but explicitly enabled experiments are on at
+/// [sdk_version] and later (Dart `FeatureSet.fromEnableFlags2(
+/// sdkLanguageVersion: sdk_version, flags: experiments)`, which the formatter
+/// uses with its language version) instead of at the current SDK version.
+pub fn parse_file_with_sdk_version(
+    content: &str,
+    path: &str,
+    package_version: (u32, u32),
+    experiments: &[ExperimentalFlag],
+    sdk_version: (u32, u32),
+) -> ParsedUnit {
+    parse_impl(content, path, Some((package_version, experiments, sdk_version)))
 }
 
 fn parse_impl(
     content: &str,
     path: &str,
-    package: Option<((u32, u32), &[ExperimentalFlag])>,
+    package: Option<((u32, u32), &[ExperimentalFlag], (u32, u32))>,
 ) -> ParsedUnit {
     let AnalyzerScanResult {
         scan,
@@ -98,12 +116,12 @@ fn parse_impl(
         ..
     } = match package {
         None => scan_for_analyzer(content),
-        Some((version, experiments)) => scan_for_analyzer_with_configuration(
+        Some((version, experiments, sdk)) => scan_for_analyzer_with_configuration(
             content,
-            ExperimentalFeatures::for_language_version(version.0, version.1, experiments)
+            ExperimentalFeatures::for_language_version_with_sdk(version.0, version.1, experiments, sdk)
                 .build_scanner_configuration(),
             |(major, minor)| {
-                ExperimentalFeatures::for_language_version(major as u32, minor as u32, experiments)
+                ExperimentalFeatures::for_language_version_with_sdk(major as u32, minor as u32, experiments, sdk)
                     .build_scanner_configuration()
             },
         ),
@@ -130,7 +148,7 @@ fn parse_impl(
             },
             features_for_file(feature_version),
         ),
-        Some((package_version, experiments)) => {
+        Some((package_version, experiments, sdk)) => {
             let (major, minor) = match feature_version {
                 Some((major, minor)) => (major as u32, minor as u32),
                 None => package_version,
@@ -140,7 +158,7 @@ fn parse_impl(
                     package: package_version,
                     override_,
                 },
-                ExperimentalFeatures::for_language_version(major, minor, experiments),
+                ExperimentalFeatures::for_language_version_with_sdk(major, minor, experiments, sdk),
             )
         }
     };

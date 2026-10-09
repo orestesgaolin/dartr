@@ -1,0 +1,30 @@
+{
+ "edits": [
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 6,
+     "line": 2
+    },
+    "start": {
+     "character": 2,
+     "line": 2
+    }
+   }
+  }
+ ],
+ "file": "lib/range_split.dart",
+ "formatted": "void main() {\n  print(1);\n  print(2);\n  print(3);\n}\n",
+ "range": {
+  "end": {
+   "character": 15,
+   "line": 2
+  },
+  "start": {
+   "character": 0,
+   "line": 2
+  }
+ },
+ "unformatted": "void main() {\nprint(1);\n      print(2);\n    print(3);\n}\n"
+}

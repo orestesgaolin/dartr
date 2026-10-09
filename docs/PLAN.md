@@ -97,6 +97,7 @@ both modes on the fixtures and `dart:core`.
 | `dartr_link`        | `analyzer/lib/src/summary2`: element builder, scopes, type builders, defaults, outlines (`dartr dump elements`) |
 | `dartr_driver`      | analysis driver: file state, caches, library cycles, parallel analysis, incremental updates |
 | `dartr_server`      | LSP server and legacy analysis server protocol                 |
+| `dartr_format`      | `package:dart_style` at the SDK's `dart_style_rev` (`third_party/dart_style`): tall style (`front_end`, `piece`, `back_end`, language >= 3.7), short style (`short`, language <= 3.6), `dart format` CLI (`dartr format`) |
 | `dartr`             | binary: `analyze`, `language-server`, `dump`                   |
 
 Data model rules:
@@ -124,6 +125,14 @@ Data model rules:
 | 9 | `dartr analyze` CLI | output and exit code parity  (CLI, formats, exit codes, ignore comments, `errors:` done in `dartr_cli` with the parse-only `DiagnosticsProvider`; parity: `crates/dartr/tests/analyze_parity.rs`, `tools/analyze_parity.py`) |
 | 10 | LSP server, then legacy subset (`dart analyze`/`dart fix`), then full legacy (IntelliJ) | Dart-Code works through the shim; `flutter analyze` works; LSP request parity |
 | 11 | performance | benchmark report vs baseline |
+
+## Formatter
+
+`dartr format` and LSP `textDocument/formatting`, `rangeFormatting`, `onTypeFormatting`
+use `dartr_format`. Parity: `cargo test -p dartr_format --test format_test_data`
+(dart_style `test/tall/**`, `test/short/**`), `cargo test -p dartr --test format_parity`
+(CLI against `dart format`), the formatting steps of `crates/dartr/tests/lsp_parity.rs`,
+and `tools/format_parity.py` on corpora (copies the corpus, compares `-o json` output).
 
 ## Open: analyzer plugins
 
