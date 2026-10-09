@@ -192,6 +192,25 @@ fn analyzed_member_return_type(analyzed: &Analyzed, element: ElemRef) -> String 
     )
 }
 
+fn analyzed_member_name(analyzed: &Analyzed, element: ElemRef) -> Option<String> {
+    let ctx = analyzed.ctx(analyzed.unit());
+    analyzed.element_name(member::base_element(&ctx, element))
+}
+
+fn analyzed_member_parameter_types(analyzed: &Analyzed, element: ElemRef) -> Vec<String> {
+    let ctx = analyzed.ctx(analyzed.unit());
+    member::formal_parameters(&ctx, element)
+        .into_iter()
+        .map(|parameter| {
+            dartr_element::type_display_string_with(
+                &ctx,
+                member::type_(&ctx, parameter),
+                Default::default(),
+            )
+        })
+        .collect()
+}
+
 #[test]
 fn generic_extension_substitutes_accessors_and_operators() {
     let source = r#"
@@ -495,4 +514,128 @@ void f(A a) {
     assert!(analyzed.unit().diagnostics.iter().any(|diagnostic| {
         diagnostic.code.name == "ambiguous_extension_member_access" && diagnostic.offset == offset
     }));
+}
+
+#[test]
+fn driver_resolves_generic_extension_properties_and_index_operators() {
+    let source = r#"
+class Box<T> {}
+extension E<T> on Box<T> {
+  T get value => throw 0;
+  set value(T value) {}
+  T operator [](int index) => throw 0;
+  void operator []=(int index, T value) {}
+}
+
+void f(Box<int> box) {
+  int readValue = box.value;
+  box.value = 1;
+  int indexedValue = box[0];
+  box[0] = 2;
+}
+"#;
+    let Some(analyzed) = run(source) else {
+        return;
+    };
+    let tables = &analyzed.unit().tables;
+
+    let getter_access = analyzed.node_at(NodeKind::PrefixedIdentifier, "box.value;", 0, 0);
+    let getter_name = analyzed.node_at(NodeKind::SimpleIdentifier, "box.value;", 0, 4);
+    let getter = resolved_member(&analyzed, getter_name);
+    assert_eq!(
+        analyzed_member_name(&analyzed, getter),
+        Some("value".to_string())
+    );
+    assert_eq!(analyzed_member_return_type(&analyzed, getter), "int");
+    assert_eq!(
+        analyzed.type_str(*tables.static_type.get(getter_access).expect("getter type")),
+        "int"
+    );
+
+    let setter_assignment = analyzed.node_at(NodeKind::AssignmentExpression, "box.value = 1", 0, 0);
+    let setter = *tables
+        .write_element
+        .get(setter_assignment)
+        .expect("setter element");
+    assert!(matches!(setter, ElemRef::Member(_)));
+    assert_eq!(
+        analyzed_member_name(&analyzed, setter),
+        Some("value".to_string())
+    );
+    assert_eq!(
+        analyzed_member_parameter_types(&analyzed, setter),
+        vec!["int"]
+    );
+    assert_eq!(
+        analyzed.type_str(
+            *tables
+                .write_type
+                .get(setter_assignment)
+                .expect("setter write type")
+        ),
+        "int"
+    );
+    assert_eq!(
+        analyzed.type_str(
+            *tables
+                .static_type
+                .get(setter_assignment)
+                .expect("setter assignment type")
+        ),
+        "int"
+    );
+
+    let index_read = analyzed.node_at(NodeKind::IndexExpression, "box[0];", 0, 0);
+    let index_getter = resolved_member(&analyzed, index_read);
+    assert_eq!(
+        analyzed_member_name(&analyzed, index_getter),
+        Some("[]".to_string())
+    );
+    assert_eq!(analyzed_member_return_type(&analyzed, index_getter), "int");
+    assert_eq!(
+        analyzed_member_parameter_types(&analyzed, index_getter),
+        vec!["int"]
+    );
+    assert_eq!(
+        analyzed.type_str(*tables.static_type.get(index_read).expect("index read type")),
+        "int"
+    );
+
+    let index_assignment = analyzed.node_at(NodeKind::AssignmentExpression, "box[0] = 2", 0, 0);
+    let index_setter = *tables
+        .write_element
+        .get(index_assignment)
+        .expect("[]= element");
+    assert!(matches!(index_setter, ElemRef::Member(_)));
+    assert_eq!(
+        analyzed_member_name(&analyzed, index_setter),
+        Some("[]=".to_string())
+    );
+    assert_eq!(
+        analyzed_member_parameter_types(&analyzed, index_setter),
+        vec!["int", "int"]
+    );
+    assert_eq!(
+        analyzed.type_str(
+            *tables
+                .write_type
+                .get(index_assignment)
+                .expect("index write type")
+        ),
+        "int"
+    );
+    assert_eq!(
+        analyzed.type_str(
+            *tables
+                .static_type
+                .get(index_assignment)
+                .expect("index assignment type")
+        ),
+        "int"
+    );
+    assert!(
+        analyzed.diagnostic_names().is_empty(),
+        "{:?}",
+        analyzed.diagnostic_names()
+    );
 }
