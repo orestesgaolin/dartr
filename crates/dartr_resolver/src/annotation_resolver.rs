@@ -394,11 +394,23 @@ fn constructor_invocation(
         let instantiated =
             instantiate_constructor(rv, target, constructor_name, constructor, &type_arguments);
         let parameters = member::formal_parameters(&rv.ctx, instantiated);
-        resolve_arguments(rv, argument_list, &parameters);
+        resolve_arguments(rv, argument_list, &parameters, None);
         instantiated
     } else {
         let raw_parameters = member::formal_parameters(&rv.ctx, constructor);
-        let resolved_arguments = resolve_arguments(rv, argument_list, &raw_parameters);
+        // Dart `FullInvocationInferrer.resolveInvocation`: downward
+        // inference substitutes the preliminary solution into the raw
+        // parameter types before it visits arguments. An annotation has the
+        // unknown context type, so unconstrained type parameters have the
+        // preliminary type `UnknownInferredType`.
+        let unknowns = vec![TypeId::UNKNOWN; type_parameters.len()];
+        let downward_substitution = MapSubstitution::from_pairs(&type_parameters, &unknowns);
+        let resolved_arguments = resolve_arguments(
+            rv,
+            argument_list,
+            &raw_parameters,
+            Some(&downward_substitution),
+        );
         let type_arguments =
             infer_annotation_type_arguments(rv, node, &type_parameters, &resolved_arguments);
         instantiate_constructor(rv, target, constructor_name, constructor, &type_arguments)
@@ -590,6 +602,7 @@ fn resolve_arguments(
     rv: &mut ResolverVisitor<'_>,
     argument_list: Id<ArgumentList>,
     parameters: &[ElemRef],
+    downward_substitution: Option<&MapSubstitution>,
 ) -> Vec<(Id<Expression>, Option<ElemRef>)> {
     let matches = match_arguments(rv, argument_list, parameters);
     matches
@@ -597,6 +610,11 @@ fn resolve_arguments(
         .map(|(argument, parameter)| {
             let context = parameter
                 .map(|parameter| member::type_(&rv.ctx, parameter))
+                .map(|context| {
+                    downward_substitution
+                        .map(|substitution| substitution.substitute_type(&rv.ctx, context))
+                        .unwrap_or(context)
+                })
                 .unwrap_or(TypeId::UNKNOWN);
             (rv.resolve_expression(argument, context), parameter)
         })

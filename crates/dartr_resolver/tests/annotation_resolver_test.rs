@@ -221,6 +221,109 @@ void explicit() {}
 }
 
 #[test]
+fn explicit_generic_annotation_context_types_empty_list() {
+    let source = r#"
+class A<T> {
+  final List<T> values;
+  const A(this.values);
+}
+
+@A<int>([])
+void f() {}
+"#;
+    let Some(a) = run(&[("main.dart", source)]) else {
+        return;
+    };
+    let ctx = a.ctx(a.unit());
+    let list = a.node_at(NodeKind::ListLiteral, "[]", 0, 0);
+    let list_type = *a
+        .unit()
+        .tables
+        .static_type
+        .get(list)
+        .expect("list static type");
+    assert_eq!(a.type_str(list_type), "List<int>");
+
+    let parameter = *a
+        .unit()
+        .tables
+        .param_element
+        .get(list)
+        .expect("list corresponding parameter");
+    assert_eq!(a.type_str(member::type_(&ctx, parameter)), "List<int>");
+
+    let constructor = annotation_element(&a, "@A<int>");
+    let instantiated_parameter = member::formal_parameters(&ctx, constructor)[0];
+    assert_eq!(
+        a.type_str(member::type_(&ctx, instantiated_parameter)),
+        "List<int>"
+    );
+    assert!(
+        a.diagnostic_names().is_empty(),
+        "{:?}",
+        a.diagnostic_names()
+    );
+}
+
+#[test]
+fn inferred_generic_annotation_uses_list_element_type_for_class_and_alias() {
+    let source = r#"
+class A<T> {
+  final List<T> values;
+  const A(this.values);
+}
+
+typedef B<U> = A<U>;
+
+@A([1])
+void direct() {}
+
+@B([2])
+void alias() {}
+"#;
+    let Some(a) = run(&[("main.dart", source)]) else {
+        return;
+    };
+    let ctx = a.ctx(a.unit());
+
+    for (search, value) in [("@A([1])", "[1]"), ("@B([2])", "[2]")] {
+        let list = a.node_at(NodeKind::ListLiteral, value, 0, 0);
+        let list_type = *a
+            .unit()
+            .tables
+            .static_type
+            .get(list)
+            .expect("list static type");
+        assert_eq!(a.type_str(list_type), "List<int>", "{search}");
+
+        let parameter = *a
+            .unit()
+            .tables
+            .param_element
+            .get(list)
+            .expect("list corresponding parameter");
+        assert_eq!(
+            a.type_str(member::type_(&ctx, parameter)),
+            "List<int>",
+            "{search}"
+        );
+
+        let constructor = annotation_element(&a, search);
+        let instantiated_parameter = member::formal_parameters(&ctx, constructor)[0];
+        assert_eq!(
+            a.type_str(member::type_(&ctx, instantiated_parameter)),
+            "List<int>",
+            "{search}"
+        );
+    }
+    assert!(
+        a.diagnostic_names().is_empty(),
+        "{:?}",
+        a.diagnostic_names()
+    );
+}
+
+#[test]
 fn generic_type_alias_constructor_infers_alias_parameter() {
     let source = r#"
 class A<T> {
