@@ -288,6 +288,13 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
         let parsed = self.parsed.clone();
         let ast = &parsed.ast;
         let mut metadata = Metadata::default();
+        metadata.metadata_flags = OnceSlot::with(compute_metadata_flags(
+            ast,
+            &ast.list(list)
+                .iter()
+                .map(|&a| a.into())
+                .collect::<Vec<NodeId>>(),
+        ));
         for &annotation in ast.list(list) {
             metadata.annotations.push(ElementAnnotation {
                 library_fragment: self.library_fragment,
