@@ -61,6 +61,14 @@ impl RuleSet {
         Rule::UNSPLIT
     }
 
+    /// The value of the rule at [position] in the splitter's rules, or `None`
+    /// if it is unbound.
+    #[inline(always)]
+    pub fn value_at(&self, position: usize) -> Option<i32> {
+        let value = self.values[position];
+        if value == UNBOUND { None } else { Some(value) }
+    }
+
     /// Invokes [callback] for each rule in [rules] with the rule's value, which
     /// will be `null` if it is not bound.
     #[inline]

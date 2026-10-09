@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use rustc_hash::FxHashMap;
 
-use super::super::arena::{ChunkId, RuleId};
+use super::super::arena::{ChunkId, NestingId, RuleId};
 use super::super::line_writer::WriterContext;
 use super::rule_set::{RuleSet, SplitSet};
 use super::solve_state::SolveState;
@@ -16,6 +16,23 @@ use super::solve_state_queue::SolveStateQueue;
 /// If the optimal solution isn't found after this many tries, it just uses the
 /// best it found so far.
 const MAX_ATTEMPTS: i32 = 5000;
+
+/// The data of one chunk that the [SolveState]s read for every state,
+/// copied out of the arena so that the hot loops read compact memory.
+#[derive(Clone, Copy)]
+pub struct ChunkInfo {
+    /// The position of the chunk's rule in [SplitterInfo::rules].
+    pub rule_position: u32,
+    /// Whether the chunk's rule is hardened (hardened rules always split).
+    pub hardened: bool,
+    pub flush_left: bool,
+    pub is_block: bool,
+    pub space_when_unsplit: bool,
+    pub has_spans: bool,
+    pub indent: i32,
+    pub text_length: i32,
+    pub nesting: NestingId,
+}
 
 /// The fixed data of a [LineSplitter] that the [SolveState]s read.
 pub struct SplitterInfo<'c> {
@@ -30,6 +47,9 @@ pub struct SplitterInfo<'c> {
 
     /// The position in [rules] of the rule of each chunk.
     pub chunk_rule_positions: Vec<usize>,
+
+    /// The data of each chunk.
+    pub chunk_infos: Vec<ChunkInfo>,
 
     /// For each rule in [rules], the positions in [rules] of its constrained
     /// rules (in the order of [Rule::constrained_rule_at]), or `None` for a
@@ -175,6 +195,23 @@ impl<'c> LineSplitter<'c> {
             .iter()
             .map(|&chunk| positions[&ctx.arena.chunk(chunk).rule])
             .collect();
+        let chunk_infos = chunks
+            .iter()
+            .map(|&chunk| {
+                let c = ctx.arena.chunk(chunk);
+                ChunkInfo {
+                    rule_position: positions[&c.rule] as u32,
+                    hardened: ctx.arena.rule(c.rule).is_hardened(),
+                    flush_left: c.flush_left(),
+                    is_block: c.is_block(),
+                    space_when_unsplit: c.space_when_unsplit(),
+                    has_spans: !c.spans.is_empty(),
+                    indent: c.indent,
+                    text_length: c.text_length(),
+                    nesting: c.nesting,
+                }
+            })
+            .collect();
         let constrained_positions = rules
             .iter()
             .map(|&rule| {
@@ -192,6 +229,7 @@ impl<'c> LineSplitter<'c> {
                 rules,
                 positions,
                 chunk_rule_positions,
+                chunk_infos,
                 constrained_positions,
                 block_indentation,
             },

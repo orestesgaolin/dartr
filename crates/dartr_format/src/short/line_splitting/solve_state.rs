@@ -330,17 +330,24 @@ impl SolveState {
         let chunks = info.chunks;
 
         // Figure out which expression nesting levels got split and need to be
-        // assigned columns.
-        let mut is_split = Vec::with_capacity(chunks.len());
+        // assigned columns. The split chunks get column 0 for now.
+        let mut splits = SplitSet::new(chunks.len());
         let mut used_nesting_levels: Vec<NestingId> = Vec::new();
-        for &chunk in chunks {
-            let c = arena.chunk(chunk);
-            let split = arena
-                .rule(c.rule)
-                .is_split(self.rule_values.get_value(arena, c.rule), chunk);
-            is_split.push(split);
+        for (i, chunk_info) in info.chunk_infos.iter().enumerate() {
+            // Dart `chunk.rule.isSplit(getValue(chunk.rule), chunk)`: a hardened
+            // rule is bound to its fully split value and always splits, and every
+            // rule leaves its chunks unsplit at value zero.
+            let split = chunk_info.hardened
+                || match self.rule_values.value_at(chunk_info.rule_position as usize) {
+                    None | Some(Rule::UNSPLIT) => false,
+                    Some(value) => {
+                        let rule = info.rules[chunk_info.rule_position as usize];
+                        arena.rule(rule).is_split(value, chunks[i])
+                    }
+                };
             if split {
-                let nesting = c.nesting;
+                splits.add(i, 0);
+                let nesting = chunk_info.nesting;
                 if arena.mark_nesting(nesting) {
                     used_nesting_levels.push(nesting);
                     arena.clear_total_used_indent(nesting);
@@ -355,20 +362,18 @@ impl SolveState {
             arena.unmark_nesting(nesting);
         }
 
-        let mut splits = SplitSet::new(chunks.len());
-        for (i, &chunk) in chunks.iter().enumerate() {
-            if is_split[i] {
-                let c = arena.chunk(chunk);
+        for (i, chunk_info) in info.chunk_infos.iter().enumerate() {
+            if splits.should_split_at(i) {
                 let mut indent = 0;
-                if !c.flush_left() {
+                if !chunk_info.flush_left {
                     // Add in the chunk's indent.
-                    indent = info.block_indentation + c.indent;
+                    indent = info.block_indentation + chunk_info.indent;
 
                     // And any expression nesting.
-                    indent += arena.nesting(c.nesting).total_used_indent();
+                    indent += arena.nesting(chunk_info.nesting).total_used_indent();
 
-                    if c.is_block()
-                        && arena.indent_block(chunk, |rule| self.rule_values.get_value(arena, rule))
+                    if chunk_info.is_block
+                        && arena.indent_block(chunks[i], |rule| self.rule_values.get_value(arena, rule))
                     {
                         indent += Indent::EXPRESSION;
                     }
@@ -407,19 +412,22 @@ impl SolveState {
 
         for i in 0..chunks.len() {
             let chunk = chunks[i];
+            let chunk_info = &info.chunk_infos[i];
 
             if self.splits.should_split_at(i) {
                 self.end_line(info, ctx.arena, page_width, &mut length, &mut start, &mut found_overflow_rules, i);
 
                 let arena = &mut *ctx.arena;
-                for &span in &arena.chunks[chunk.index()].spans {
-                    let span = &mut arena.spans[span.index()];
-                    if !span.is_marked {
-                        span.is_marked = true;
-                        cost += span.cost;
+                if chunk_info.has_spans {
+                    for &span in &arena.chunks[chunk.index()].spans {
+                        let span = &mut arena.spans[span.index()];
+                        if !span.is_marked {
+                            span.is_marked = true;
+                            cost += span.cost;
+                        }
                     }
+                    split_spans.extend_from_slice(&arena.chunks[chunk.index()].spans);
                 }
-                split_spans.extend_from_slice(&arena.chunks[chunk.index()].spans);
 
                 // Do not allow sequential lines to have the same indentation but for
                 // different reasons. In other words, don't allow different expressions
@@ -438,7 +446,7 @@ impl SolveState {
                 // But there are a couple of squirrely cases where it's hard to prevent
                 // by construction. Instead, this outlaws it by penalizing it very
                 // heavily if it happens to get this far.
-                let nesting = arena.chunk(chunk).nesting;
+                let nesting = chunk_info.nesting;
                 let total_indent = arena.nesting(nesting).total_used_indent();
                 if let Some(previous) = previous_nesting {
                     if total_indent != 0
@@ -453,11 +461,11 @@ impl SolveState {
 
                 // Start the new line.
                 length = self.splits.get_column(i);
-            } else if ctx.arena.chunk(chunk).space_when_unsplit() {
+            } else if chunk_info.space_when_unsplit {
                 length += 1;
             }
 
-            if ctx.arena.chunk(chunk).is_block() {
+            if chunk_info.is_block {
                 if self.splits.should_split_at(i) {
                     // Include the cost of the nested block.
                     cost += ctx.format_block(chunk, self.splits.get_column(i)).cost;
@@ -467,7 +475,7 @@ impl SolveState {
                 }
             }
 
-            length += ctx.arena.chunk(chunk).text_length();
+            length += chunk_info.text_length;
         }
 
         // Add the costs for the rules that have any splits.
@@ -518,7 +526,7 @@ impl SolveState {
             // least one of them *will* be split.
             if !*found_overflow_rules {
                 for i in *start..end {
-                    let rule = arena.chunk(info.chunks[i]).rule;
+                    let rule = info.rules[info.chunk_infos[i].rule_position as usize];
                     if self.add_live_rules(arena, rule) {
                         *found_overflow_rules = true;
                     }
