@@ -612,8 +612,22 @@ impl InvocationInferrer {
                 || ast.is::<DotShorthandInvocation>(p))
                 && ast.parent(p).is_some_and(|pp| ast.is::<AsExpression>(pp))
         });
-        // The facts that need `@optionalTypeArgs` metadata are only read with
-        // the `strict-inference` option; the metadata is not checked yet.
+        // The facts that need `@optionalTypeArgs` metadata (Dart
+        // `metadata.hasOptionalTypeArgs`); the generic inferrer reads them
+        // only with the `strict-inference` option.
+        let ctx = rv.ctx;
+        let unit = Some(crate::element_metadata::UnitAst {
+            ast,
+            tables: &rv.tables,
+        });
+        let has_optional_type_args = |element: dartr_element::ElementId| {
+            crate::element_metadata::element_has(
+                &ctx,
+                element,
+                crate::element_metadata::flags::OPTIONAL_TYPE_ARGS,
+                unit,
+            )
+        };
         let kind = if let Some(c) = ast.cast::<ConstructorName>(entity) {
             let named_type = ast[c].type_;
             let type_name = ast.qualified_name(named_type);
@@ -621,8 +635,19 @@ impl InvocationInferrer {
                 None => type_name,
                 Some(name) => format!("{}.{}", type_name, rv.lexeme(ast[name].token)),
             };
+            // Dart `(errorEntity.type.type as InterfaceType).element`.
+            let type_ = rv
+                .tables
+                .annotation_type
+                .get(named_type)
+                .copied()
+                .or_else(|| rv.static_type(named_type));
+            let type_element_has_optional_type_args = type_.is_some_and(|t| {
+                matches!(ctx.ty(t), TypeKind::Interface { element, .. }
+                    if has_optional_type_args(element.raw()))
+            });
             InferenceErrorEntityKind::ConstructorName {
-                type_element_has_optional_type_args: false,
+                type_element_has_optional_type_args,
                 constructor_name,
             }
         } else if let Some(a) = ast.cast::<Annotation>(entity) {
@@ -633,15 +658,31 @@ impl InvocationInferrer {
                 Some(c) => format!("{}.{}", name, rv.lexeme(ast[c].token)),
             };
             InferenceErrorEntityKind::Annotation {
-                element_has_optional_type_args: rv.element(ast[a].name).map(|_| false),
+                element_has_optional_type_args: rv
+                    .element(ast[a].name)
+                    .map(|e| has_optional_type_args(member::base_element(&ctx, e))),
                 constructor_name,
             }
         } else if let Some(s) = ast.cast::<SimpleIdentifier>(entity) {
             InferenceErrorEntityKind::SimpleIdentifier {
                 name: rv.lexeme(ast[s].token).to_string(),
-                element: rv.element(s).map(|_| SimpleIdentifierElementFacts {
-                    variable_type_has_optional_type_args: false,
-                    has_optional_type_args: false,
+                element: rv.element(s).map(|element| {
+                    let e = member::base_element(&ctx, element);
+                    // Dart: for a variable, its type's element or alias.
+                    let variable_type_has_optional_type_args =
+                        e.is::<dartr_element::VariableElement>() && {
+                            let t = member::type_(&ctx, element);
+                            let interface = matches!(ctx.ty(t), TypeKind::Interface { element, .. }
+                                if has_optional_type_args(element.raw()));
+                            interface
+                                || ctx.type_alias(t).is_some_and(|a| {
+                                    has_optional_type_args(ctx.alias(a).element.raw())
+                                })
+                        };
+                    SimpleIdentifierElementFacts {
+                        variable_type_has_optional_type_args,
+                        has_optional_type_args: has_optional_type_args(e),
+                    }
                 }),
             }
         } else if ast.is::<Expression>(entity) {
