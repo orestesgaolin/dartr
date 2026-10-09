@@ -67,6 +67,9 @@ pub struct LibraryAnalysisInput<'a> {
     /// library reads from them (see [`crate::constant`]). `None`: the
     /// constants of other libraries have no value.
     pub external: Option<&'a dyn ExternalUnits>,
+    /// Dart `_library.docLibraryImports` as library elements (the
+    /// `@docImport` libraries of the defining unit, linked by the caller).
+    pub doc_import_libraries: Vec<EId<LibraryElement>>,
 }
 
 /// The resolution of one unit.
@@ -114,7 +117,9 @@ pub fn analyze_library(input: &LibraryAnalysisInput<'_>) -> ResolvedLibrary {
             features: &library_features,
             req: &sink,
         };
-        LibraryScopes::build(&ctx, input.library)
+        let mut scopes = LibraryScopes::build(&ctx, input.library);
+        scopes.set_doc_import_libraries(&ctx, &input.doc_import_libraries);
+        scopes
     };
 
     // Dart `_parseAndResolve`: the units in parallel.
@@ -423,6 +428,7 @@ impl<'w> ExternalUnitCache<'w> {
             units: Vec::new(),
             options: self.options,
             external: None,
+            doc_import_libraries: Vec::new(),
         }
     }
 

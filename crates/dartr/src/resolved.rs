@@ -55,6 +55,7 @@ enum Job {
         uri: String,
         units: Vec<UnitInput>,
         options: AnalysisOptions,
+        doc_import_libraries: Vec<dartr_element::EId<dartr_element::LibraryElement>>,
     },
 }
 
@@ -95,6 +96,7 @@ pub fn dump_resolved_all(inputs: &[String], mode: ResolvedMode) -> Vec<String> {
                 uri,
                 units,
                 options,
+                doc_import_libraries,
             } => {
                 let input = LibraryAnalysisInput {
                     world: worlds[*driver],
@@ -103,6 +105,7 @@ pub fn dump_resolved_all(inputs: &[String], mode: ResolvedMode) -> Vec<String> {
                     units: units.clone(),
                     options: *options,
                     external: Some(&caches[*driver]),
+                    doc_import_libraries: doc_import_libraries.clone(),
                 };
                 match catch_unwind(AssertUnwindSafe(|| analyze_library(&input))) {
                     Ok(result) => {
@@ -149,6 +152,7 @@ fn library_job(linked: &crate::elements::LinkedInputs, driver: usize, file: File
         uri: d.fs.file(file).uri_str.to_string(),
         units,
         options,
+        doc_import_libraries: d.doc_import_libraries(file),
     }
 }
 

@@ -47,8 +47,9 @@
 //!   the export namespace of a linked library does not keep the export
 //!   locations. A lookup never reports a deprecated export.
 //! - Doc imports (`DocumentationCommentScope` with `@docImport`
-//!   libraries): a library fragment has no doc imports yet, so the doc
-//!   comment scope only delegates to the enclosing scope.
+//!   libraries): the caller gives the doc import libraries
+//!   (`LibraryAnalysisInput::doc_import_libraries`); [`LibraryScopes`] keeps
+//!   their export entries.
 
 use std::sync::Mutex;
 
@@ -191,6 +192,10 @@ pub struct LibraryScopes {
     /// The multiply defined elements created so far, by the store they are
     /// in and the conflict.
     multiply_defined: Mutex<LookupMap<(StoreId, u32), ElementId>>,
+    /// The getters and setters of Dart `DocumentationCommentScope` from the
+    /// `@docImport` libraries ([`LibraryScopes::set_doc_import_libraries`]).
+    doc_import_getters: IndexMap<Box<str>, ElementId>,
+    doc_import_setters: IndexMap<Box<str>, ElementId>,
 }
 
 impl Default for LibraryScopes {
@@ -204,6 +209,8 @@ impl Default for LibraryScopes {
             fragment_scopes: IndexMap::new(),
             conflicts: Vec::new(),
             multiply_defined: Mutex::new(LookupMap::new()),
+            doc_import_getters: IndexMap::new(),
+            doc_import_setters: IndexMap::new(),
         }
     }
 }
@@ -287,6 +294,37 @@ impl LibraryScopes {
             scopes.build_fragment_scope(ctx, library, fragment, parent);
         }
         scopes
+    }
+
+    /// Dart `DocumentationCommentScope(innerScope, docImportLibraries)`, the
+    /// constructor: the export entries of each doc import library (Dart
+    /// ignores the combinators).
+    pub fn set_doc_import_libraries(&mut self, ctx: &Ctx<'_>, libraries: &[EId<LibraryElement>]) {
+        for &library in libraries {
+            let Some(namespace) = ctx.get(library).export_namespace.try_get() else {
+                continue;
+            };
+            for &element in namespace.defined_names.values() {
+                let Some(id) = lookup_name(ctx, element) else {
+                    continue;
+                };
+                let map = if element.tag() == Tag::Setter {
+                    &mut self.doc_import_setters
+                } else {
+                    &mut self.doc_import_getters
+                };
+                map.entry(id.into()).or_insert(element);
+            }
+        }
+    }
+
+    /// Dart `DocumentationCommentScope.lookup`, the part after the inner
+    /// scope.
+    pub fn doc_import_lookup(&self, id: &str) -> ScopeLookupResult {
+        ScopeLookupResult {
+            getter: self.doc_import_getters.get(id).copied(),
+            setter: self.doc_import_setters.get(id).copied(),
+        }
     }
 
     /// Dart `LibraryFragmentScope(fragment)`.

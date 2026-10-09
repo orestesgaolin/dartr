@@ -237,10 +237,7 @@ impl<'a> ScopeContext<'a> {
                 if result.getter.is_some() || result.setter.is_some() {
                     return result;
                 }
-                return match frame.lookup_here(ctx, id) {
-                    EnclosedLookup::Found(r) => r,
-                    EnclosedLookup::NotFound => ScopeLookupResult::default(),
-                };
+                return self.scopes.doc_import_lookup(id);
             }
             if let EnclosedLookup::Found(r) = frame.lookup_here(ctx, id) {
                 return r;

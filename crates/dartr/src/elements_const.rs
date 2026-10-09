@@ -36,6 +36,7 @@ pub(crate) fn library_const_values(driver: &Driver, file: FileId) -> IndexMap<El
         units,
         options,
         external: Some(&external),
+        doc_import_libraries: Vec::new(),
     };
     let analyzed =
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| analyze_library(&input)));

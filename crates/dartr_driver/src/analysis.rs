@@ -51,6 +51,7 @@ impl Driver {
             units,
             options,
             external: Some(&external),
+            doc_import_libraries: self.doc_import_libraries(file),
         };
         let mut library = analyze_library(&input);
         let diagnostics = crate::lints::compute_lints(&input, &library, enabled);
@@ -99,6 +100,7 @@ impl Driver {
                     units: units.clone(),
                     options: *options,
                     external: Some(&external),
+                    doc_import_libraries: self.doc_import_libraries(*file),
                 };
                 let result =
                     catch_unwind(AssertUnwindSafe(|| analyze_library(&input))).map_err(|e| {
@@ -108,6 +110,40 @@ impl Driver {
                             .unwrap_or_else(|| "panic".to_string())
                     });
                 f(*file, units, result)
+            })
+            .collect()
+    }
+
+    /// Dart `library.docLibraryImports` with a library file
+    /// (`LibraryImportWithFile.importedLibrary`): the files that
+    /// [`Driver::link_libraries`] links with [library].
+    pub fn doc_import_files(&self, library: FileId) -> Vec<FileId> {
+        self.fs
+            .file(library)
+            .c()
+            .doc_library_imports
+            .iter()
+            .filter_map(|import| match import.uris.selected {
+                crate::file_state::DirectiveUri::WithFile { file, .. } => Some(file),
+                _ => None,
+            })
+            .filter(|&file| {
+                self.fs.file(file).content.is_some() && self.fs.file(file).kind().is_library()
+            })
+            .collect()
+    }
+
+    /// The linked library elements of [`Driver::doc_import_files`] (Dart
+    /// `elementFactory.libraryOfUri2(import.importedFile.uri)`).
+    pub fn doc_import_libraries(&self, library: FileId) -> Vec<EId<LibraryElement>> {
+        self.doc_import_files(library)
+            .into_iter()
+            .filter_map(|file| {
+                self.state
+                    .world
+                    .libraries
+                    .get(&self.fs.file(file).uri_str)
+                    .copied()
             })
             .collect()
     }
