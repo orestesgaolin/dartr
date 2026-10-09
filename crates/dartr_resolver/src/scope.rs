@@ -250,7 +250,7 @@ fn library_fragments(
 }
 
 /// Dart `Combinator.matches` / `List<Combinator>.allows`.
-fn combinators_allow(ctx: &Ctx<'_>, combinators: &[NamespaceCombinator], name: &str) -> bool {
+pub(crate) fn combinators_allow(ctx: &Ctx<'_>, combinators: &[NamespaceCombinator], name: &str) -> bool {
     let name = name.strip_suffix('=').unwrap_or(name);
     let matches = |names: &[Name]| names.iter().any(|&n| ctx.name_str(n) == name);
     for c in combinators {

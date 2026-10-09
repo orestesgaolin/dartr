@@ -82,8 +82,8 @@ pub fn visit_method_invocation(
     resolve(rv, node, context_type);
 
     let replacement = rv.insert_generic_function_instantiation(node.upcast(), context_type);
-    // Dart `checkForArgumentTypesNotAssignableInList(node.argumentList,
-    // whyNotPromotedArguments)` (wave D).
+    let argument_list = rv.ast[node].argument_list;
+    rv.check_for_argument_types_not_assignable_in_list(argument_list);
     rv.insert_implicit_call_reference(replacement, context_type);
     // Dart `nullSafetyDeadCodeVerifier.verifyMethodInvocation(node)` (wave D).
 

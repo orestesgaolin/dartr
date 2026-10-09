@@ -117,6 +117,11 @@ pub fn resolve(rv: &mut ResolverVisitor<'_>, node: Id<VariableDeclaration>) {
     // initializer` for local constants: the constant evaluation of local
     // constants reads the initializer node from the tables (wave D).
 
-    // Dart `checkForAssignableExpressionAtType(initializer, initializerType,
-    // element.type, ...)`: wave D.
+    let element_type = element_ext::variable_type(&rv.ctx, element);
+    rv.check_for_assignable_expression_at_type(
+        initializer,
+        initializer_type,
+        element_type,
+        crate::error_detection_helpers::NonAssignabilityReporter::ForAssignment,
+    );
 }
