@@ -10,7 +10,9 @@
 use dartr_ast::{CollectionElement, DartPattern, Expression, Id, NodeId, NodeKind};
 use dartr_element::TypeId;
 
-use crate::resolver::{CollectionLiteralContext, PatternResultOf, ResolverVisitor, SchemaOf, SharedMatchContext};
+use crate::resolver::{
+    CollectionLiteralContext, PatternResultOf, ResolverVisitor, SchemaOf, SharedMatchContext,
+};
 
 /// The node kinds that are expressions (Dart `ExpressionImpl` subclasses).
 pub const EXPRESSION_KINDS: [NodeKind; 44] = [
@@ -85,26 +87,44 @@ impl<'a> ResolverVisitor<'a> {
     /// (`UnknownInferredType`).
     pub fn visit_node(&mut self, node: NodeId) {
         match self.ast.kind(node) {
-            NodeKind::AdjacentStrings => self.visit_adjacent_strings(Id::from_raw(node), TypeId::UNKNOWN),
+            NodeKind::AdjacentStrings => {
+                self.visit_adjacent_strings(Id::from_raw(node), TypeId::UNKNOWN)
+            }
             NodeKind::Annotation => self.visit_annotation(Id::from_raw(node)),
             NodeKind::AnonymousBlockBody => self.visit_anonymous_block_body(Id::from_raw(node)),
-            NodeKind::AnonymousExpressionBody => self.visit_anonymous_expression_body(Id::from_raw(node)),
-            NodeKind::AnonymousMethodInvocation => self.visit_anonymous_method_invocation(Id::from_raw(node), TypeId::UNKNOWN),
+            NodeKind::AnonymousExpressionBody => {
+                self.visit_anonymous_expression_body(Id::from_raw(node))
+            }
+            NodeKind::AnonymousMethodInvocation => {
+                self.visit_anonymous_method_invocation(Id::from_raw(node), TypeId::UNKNOWN)
+            }
             NodeKind::ArgumentList => self.visit_argument_list(Id::from_raw(node)),
             NodeKind::AsExpression => self.visit_as_expression(Id::from_raw(node), TypeId::UNKNOWN),
             NodeKind::AssertInitializer => self.visit_assert_initializer(Id::from_raw(node)),
             NodeKind::AssertStatement => self.visit_assert_statement(Id::from_raw(node)),
-            NodeKind::AssignedVariablePattern => self.visit_assigned_variable_pattern(Id::from_raw(node)),
-            NodeKind::AssignmentExpression => self.visit_assignment_expression(Id::from_raw(node), TypeId::UNKNOWN),
-            NodeKind::AwaitExpression => self.visit_await_expression(Id::from_raw(node), TypeId::UNKNOWN),
-            NodeKind::BinaryExpression => self.visit_binary_expression(Id::from_raw(node), TypeId::UNKNOWN),
+            NodeKind::AssignedVariablePattern => {
+                self.visit_assigned_variable_pattern(Id::from_raw(node))
+            }
+            NodeKind::AssignmentExpression => {
+                self.visit_assignment_expression(Id::from_raw(node), TypeId::UNKNOWN)
+            }
+            NodeKind::AwaitExpression => {
+                self.visit_await_expression(Id::from_raw(node), TypeId::UNKNOWN)
+            }
+            NodeKind::BinaryExpression => {
+                self.visit_binary_expression(Id::from_raw(node), TypeId::UNKNOWN)
+            }
             NodeKind::Block => self.visit_block(Id::from_raw(node)),
             NodeKind::BlockClassBody => self.visit_block_class_body(Id::from_raw(node)),
             NodeKind::BlockEnumBody => self.visit_block_enum_body(Id::from_raw(node)),
             NodeKind::BlockFunctionBody => self.visit_block_function_body(Id::from_raw(node)),
-            NodeKind::BooleanLiteral => self.visit_boolean_literal(Id::from_raw(node), TypeId::UNKNOWN),
+            NodeKind::BooleanLiteral => {
+                self.visit_boolean_literal(Id::from_raw(node), TypeId::UNKNOWN)
+            }
             NodeKind::BreakStatement => self.visit_break_statement(Id::from_raw(node)),
-            NodeKind::CascadeExpression => self.visit_cascade_expression(Id::from_raw(node), TypeId::UNKNOWN),
+            NodeKind::CascadeExpression => {
+                self.visit_cascade_expression(Id::from_raw(node), TypeId::UNKNOWN)
+            }
             NodeKind::CaseClause => self.visit_case_clause(Id::from_raw(node)),
             NodeKind::CastPattern => self.visit_cast_pattern(Id::from_raw(node)),
             NodeKind::CatchClause => self.visit_catch_clause(Id::from_raw(node)),
@@ -114,57 +134,107 @@ impl<'a> ResolverVisitor<'a> {
             NodeKind::Comment => self.visit_comment(Id::from_raw(node)),
             NodeKind::CommentReference => self.visit_comment_reference(Id::from_raw(node)),
             NodeKind::CompilationUnit => self.visit_compilation_unit(Id::from_raw(node)),
-            NodeKind::ConditionalExpression => self.visit_conditional_expression(Id::from_raw(node), TypeId::UNKNOWN),
+            NodeKind::ConditionalExpression => {
+                self.visit_conditional_expression(Id::from_raw(node), TypeId::UNKNOWN)
+            }
             NodeKind::Configuration => self.visit_configuration(Id::from_raw(node)),
             NodeKind::ConstantPattern => self.visit_constant_pattern(Id::from_raw(node)),
-            NodeKind::ConstructorDeclaration => self.visit_constructor_declaration(Id::from_raw(node)),
-            NodeKind::ConstructorFieldInitializer => self.visit_constructor_field_initializer(Id::from_raw(node)),
+            NodeKind::ConstructorDeclaration => {
+                self.visit_constructor_declaration(Id::from_raw(node))
+            }
+            NodeKind::ConstructorFieldInitializer => {
+                self.visit_constructor_field_initializer(Id::from_raw(node))
+            }
             NodeKind::ConstructorName => self.visit_constructor_name(Id::from_raw(node)),
-            NodeKind::ConstructorReference => self.visit_constructor_reference(Id::from_raw(node), TypeId::UNKNOWN),
+            NodeKind::ConstructorReference => {
+                self.visit_constructor_reference(Id::from_raw(node), TypeId::UNKNOWN)
+            }
             NodeKind::ConstructorSelector => self.visit_constructor_selector(Id::from_raw(node)),
             NodeKind::ContinueStatement => self.visit_continue_statement(Id::from_raw(node)),
             NodeKind::DeclaredIdentifier => self.visit_declared_identifier(Id::from_raw(node)),
-            NodeKind::DeclaredVariablePattern => self.visit_declared_variable_pattern(Id::from_raw(node)),
+            NodeKind::DeclaredVariablePattern => {
+                self.visit_declared_variable_pattern(Id::from_raw(node))
+            }
             NodeKind::DoStatement => self.visit_do_statement(Id::from_raw(node)),
-            NodeKind::DotShorthandConstructorInvocation => self.visit_dot_shorthand_constructor_invocation(Id::from_raw(node), TypeId::UNKNOWN),
-            NodeKind::DotShorthandInvocation => self.visit_dot_shorthand_invocation(Id::from_raw(node), TypeId::UNKNOWN),
-            NodeKind::DotShorthandPropertyAccess => self.visit_dot_shorthand_property_access(Id::from_raw(node), TypeId::UNKNOWN),
+            NodeKind::DotShorthandConstructorInvocation => {
+                self.visit_dot_shorthand_constructor_invocation(Id::from_raw(node), TypeId::UNKNOWN)
+            }
+            NodeKind::DotShorthandInvocation => {
+                self.visit_dot_shorthand_invocation(Id::from_raw(node), TypeId::UNKNOWN)
+            }
+            NodeKind::DotShorthandPropertyAccess => {
+                self.visit_dot_shorthand_property_access(Id::from_raw(node), TypeId::UNKNOWN)
+            }
             NodeKind::DottedName => self.visit_dotted_name(Id::from_raw(node)),
-            NodeKind::DoubleLiteral => self.visit_double_literal(Id::from_raw(node), TypeId::UNKNOWN),
+            NodeKind::DoubleLiteral => {
+                self.visit_double_literal(Id::from_raw(node), TypeId::UNKNOWN)
+            }
             NodeKind::EmptyClassBody => self.visit_empty_class_body(Id::from_raw(node)),
             NodeKind::EmptyEnumBody => self.visit_empty_enum_body(Id::from_raw(node)),
             NodeKind::EmptyFunctionBody => self.visit_empty_function_body(Id::from_raw(node)),
             NodeKind::EmptyStatement => self.visit_empty_statement(Id::from_raw(node)),
-            NodeKind::EnumConstantArguments => self.visit_enum_constant_arguments(Id::from_raw(node)),
-            NodeKind::EnumConstantDeclaration => self.visit_enum_constant_declaration(Id::from_raw(node)),
+            NodeKind::EnumConstantArguments => {
+                self.visit_enum_constant_arguments(Id::from_raw(node))
+            }
+            NodeKind::EnumConstantDeclaration => {
+                self.visit_enum_constant_declaration(Id::from_raw(node))
+            }
             NodeKind::EnumDeclaration => self.visit_enum_declaration(Id::from_raw(node)),
             NodeKind::ExportDirective => self.visit_export_directive(Id::from_raw(node)),
-            NodeKind::ExpressionFunctionBody => self.visit_expression_function_body(Id::from_raw(node)),
+            NodeKind::ExpressionFunctionBody => {
+                self.visit_expression_function_body(Id::from_raw(node))
+            }
             NodeKind::ExpressionStatement => self.visit_expression_statement(Id::from_raw(node)),
             NodeKind::ExtendsClause => self.visit_extends_clause(Id::from_raw(node)),
             NodeKind::ExtensionDeclaration => self.visit_extension_declaration(Id::from_raw(node)),
             NodeKind::ExtensionOnClause => self.visit_extension_on_clause(Id::from_raw(node)),
-            NodeKind::ExtensionOverride => self.visit_extension_override(Id::from_raw(node), TypeId::UNKNOWN),
-            NodeKind::ExtensionTypeDeclaration => self.visit_extension_type_declaration(Id::from_raw(node)),
+            NodeKind::ExtensionOverride => {
+                self.visit_extension_override(Id::from_raw(node), TypeId::UNKNOWN)
+            }
+            NodeKind::ExtensionTypeDeclaration => {
+                self.visit_extension_type_declaration(Id::from_raw(node))
+            }
             NodeKind::FieldDeclaration => self.visit_field_declaration(Id::from_raw(node)),
             NodeKind::FieldFormalParameter => self.visit_field_formal_parameter(Id::from_raw(node)),
-            NodeKind::ForEachPartsWithDeclaration => self.visit_for_each_parts_with_declaration(Id::from_raw(node)),
-            NodeKind::ForEachPartsWithIdentifier => self.visit_for_each_parts_with_identifier(Id::from_raw(node)),
-            NodeKind::ForEachPartsWithPattern => self.visit_for_each_parts_with_pattern(Id::from_raw(node)),
+            NodeKind::ForEachPartsWithDeclaration => {
+                self.visit_for_each_parts_with_declaration(Id::from_raw(node))
+            }
+            NodeKind::ForEachPartsWithIdentifier => {
+                self.visit_for_each_parts_with_identifier(Id::from_raw(node))
+            }
+            NodeKind::ForEachPartsWithPattern => {
+                self.visit_for_each_parts_with_pattern(Id::from_raw(node))
+            }
             NodeKind::ForElement => self.visit_for_element(Id::from_raw(node)),
-            NodeKind::ForPartsWithDeclarations => self.visit_for_parts_with_declarations(Id::from_raw(node)),
-            NodeKind::ForPartsWithExpression => self.visit_for_parts_with_expression(Id::from_raw(node)),
+            NodeKind::ForPartsWithDeclarations => {
+                self.visit_for_parts_with_declarations(Id::from_raw(node))
+            }
+            NodeKind::ForPartsWithExpression => {
+                self.visit_for_parts_with_expression(Id::from_raw(node))
+            }
             NodeKind::ForPartsWithPattern => self.visit_for_parts_with_pattern(Id::from_raw(node)),
             NodeKind::ForStatement => self.visit_for_statement(Id::from_raw(node)),
-            NodeKind::FormalParameterDefaultClause => self.visit_formal_parameter_default_clause(Id::from_raw(node)),
+            NodeKind::FormalParameterDefaultClause => {
+                self.visit_formal_parameter_default_clause(Id::from_raw(node))
+            }
             NodeKind::FormalParameterList => self.visit_formal_parameter_list(Id::from_raw(node)),
             NodeKind::FunctionDeclaration => self.visit_function_declaration(Id::from_raw(node)),
-            NodeKind::FunctionDeclarationStatement => self.visit_function_declaration_statement(Id::from_raw(node)),
-            NodeKind::FunctionExpression => self.visit_function_expression(Id::from_raw(node), TypeId::UNKNOWN),
-            NodeKind::FunctionExpressionInvocation => self.visit_function_expression_invocation(Id::from_raw(node), TypeId::UNKNOWN),
-            NodeKind::FunctionReference => self.visit_function_reference(Id::from_raw(node), TypeId::UNKNOWN),
+            NodeKind::FunctionDeclarationStatement => {
+                self.visit_function_declaration_statement(Id::from_raw(node))
+            }
+            NodeKind::FunctionExpression => {
+                self.visit_function_expression(Id::from_raw(node), TypeId::UNKNOWN)
+            }
+            NodeKind::FunctionExpressionInvocation => {
+                self.visit_function_expression_invocation(Id::from_raw(node), TypeId::UNKNOWN)
+            }
+            NodeKind::FunctionReference => {
+                self.visit_function_reference(Id::from_raw(node), TypeId::UNKNOWN)
+            }
             NodeKind::FunctionTypeAlias => self.visit_function_type_alias(Id::from_raw(node)),
-            NodeKind::FunctionTypedFormalParameterSuffix => self.visit_function_typed_formal_parameter_suffix(Id::from_raw(node)),
+            NodeKind::FunctionTypedFormalParameterSuffix => {
+                self.visit_function_typed_formal_parameter_suffix(Id::from_raw(node))
+            }
             NodeKind::GenericFunctionType => self.visit_generic_function_type(Id::from_raw(node)),
             NodeKind::GenericTypeAlias => self.visit_generic_type_alias(Id::from_raw(node)),
             NodeKind::GuardedPattern => self.visit_guarded_pattern(Id::from_raw(node)),
@@ -172,13 +242,25 @@ impl<'a> ResolverVisitor<'a> {
             NodeKind::IfElement => self.visit_if_element(Id::from_raw(node)),
             NodeKind::IfStatement => self.visit_if_statement(Id::from_raw(node)),
             NodeKind::ImplementsClause => self.visit_implements_clause(Id::from_raw(node)),
-            NodeKind::ImplicitCallReference => self.visit_implicit_call_reference(Id::from_raw(node), TypeId::UNKNOWN),
+            NodeKind::ImplicitCallReference => {
+                self.visit_implicit_call_reference(Id::from_raw(node), TypeId::UNKNOWN)
+            }
             NodeKind::ImportDirective => self.visit_import_directive(Id::from_raw(node)),
-            NodeKind::ImportPrefixReference => self.visit_import_prefix_reference(Id::from_raw(node)),
-            NodeKind::IndexExpression => self.visit_index_expression(Id::from_raw(node), TypeId::UNKNOWN),
-            NodeKind::InstanceCreationExpression => self.visit_instance_creation_expression(Id::from_raw(node), TypeId::UNKNOWN),
-            NodeKind::IntegerLiteral => self.visit_integer_literal(Id::from_raw(node), TypeId::UNKNOWN),
-            NodeKind::InterpolationExpression => self.visit_interpolation_expression(Id::from_raw(node)),
+            NodeKind::ImportPrefixReference => {
+                self.visit_import_prefix_reference(Id::from_raw(node))
+            }
+            NodeKind::IndexExpression => {
+                self.visit_index_expression(Id::from_raw(node), TypeId::UNKNOWN)
+            }
+            NodeKind::InstanceCreationExpression => {
+                self.visit_instance_creation_expression(Id::from_raw(node), TypeId::UNKNOWN)
+            }
+            NodeKind::IntegerLiteral => {
+                self.visit_integer_literal(Id::from_raw(node), TypeId::UNKNOWN)
+            }
+            NodeKind::InterpolationExpression => {
+                self.visit_interpolation_expression(Id::from_raw(node))
+            }
             NodeKind::InterpolationString => self.visit_interpolation_string(Id::from_raw(node)),
             NodeKind::IsExpression => self.visit_is_expression(Id::from_raw(node), TypeId::UNKNOWN),
             NodeKind::Label => self.visit_label(Id::from_raw(node)),
@@ -193,10 +275,14 @@ impl<'a> ResolverVisitor<'a> {
             NodeKind::MapPattern => self.visit_map_pattern(Id::from_raw(node)),
             NodeKind::MapPatternEntry => self.visit_map_pattern_entry(Id::from_raw(node)),
             NodeKind::MethodDeclaration => self.visit_method_declaration(Id::from_raw(node)),
-            NodeKind::MethodInvocation => self.visit_method_invocation(Id::from_raw(node), TypeId::UNKNOWN),
+            NodeKind::MethodInvocation => {
+                self.visit_method_invocation(Id::from_raw(node), TypeId::UNKNOWN)
+            }
             NodeKind::MixinDeclaration => self.visit_mixin_declaration(Id::from_raw(node)),
             NodeKind::MixinOnClause => self.visit_mixin_on_clause(Id::from_raw(node)),
-            NodeKind::NameWithTypeParameters => self.visit_name_with_type_parameters(Id::from_raw(node)),
+            NodeKind::NameWithTypeParameters => {
+                self.visit_name_with_type_parameters(Id::from_raw(node))
+            }
             NodeKind::NamedArgument => self.visit_named_argument(Id::from_raw(node)),
             NodeKind::NamedType => self.visit_named_type(Id::from_raw(node)),
             NodeKind::NativeClause => self.visit_native_clause(Id::from_raw(node)),
@@ -206,63 +292,127 @@ impl<'a> ResolverVisitor<'a> {
             NodeKind::NullCheckPattern => self.visit_null_check_pattern(Id::from_raw(node)),
             NodeKind::NullLiteral => self.visit_null_literal(Id::from_raw(node), TypeId::UNKNOWN),
             NodeKind::ObjectPattern => self.visit_object_pattern(Id::from_raw(node)),
-            NodeKind::ParenthesizedExpression => self.visit_parenthesized_expression(Id::from_raw(node), TypeId::UNKNOWN),
+            NodeKind::ParenthesizedExpression => {
+                self.visit_parenthesized_expression(Id::from_raw(node), TypeId::UNKNOWN)
+            }
             NodeKind::ParenthesizedPattern => self.visit_parenthesized_pattern(Id::from_raw(node)),
             NodeKind::PartDirective => self.visit_part_directive(Id::from_raw(node)),
             NodeKind::PartOfDirective => self.visit_part_of_directive(Id::from_raw(node)),
-            NodeKind::PatternAssignment => self.visit_pattern_assignment(Id::from_raw(node), TypeId::UNKNOWN),
+            NodeKind::PatternAssignment => {
+                self.visit_pattern_assignment(Id::from_raw(node), TypeId::UNKNOWN)
+            }
             NodeKind::PatternField => self.visit_pattern_field(Id::from_raw(node)),
             NodeKind::PatternFieldName => self.visit_pattern_field_name(Id::from_raw(node)),
-            NodeKind::PatternVariableDeclaration => self.visit_pattern_variable_declaration(Id::from_raw(node)),
-            NodeKind::PatternVariableDeclarationStatement => self.visit_pattern_variable_declaration_statement(Id::from_raw(node)),
-            NodeKind::PostfixExpression => self.visit_postfix_expression(Id::from_raw(node), TypeId::UNKNOWN),
-            NodeKind::PrefixExpression => self.visit_prefix_expression(Id::from_raw(node), TypeId::UNKNOWN),
-            NodeKind::PrefixedIdentifier => self.visit_prefixed_identifier(Id::from_raw(node), TypeId::UNKNOWN),
-            NodeKind::PrimaryConstructorBody => self.visit_primary_constructor_body(Id::from_raw(node)),
-            NodeKind::PrimaryConstructorDeclaration => self.visit_primary_constructor_declaration(Id::from_raw(node)),
-            NodeKind::PrimaryConstructorName => self.visit_primary_constructor_name(Id::from_raw(node)),
-            NodeKind::PropertyAccess => self.visit_property_access(Id::from_raw(node), TypeId::UNKNOWN),
-            NodeKind::RecordLiteral => self.visit_record_literal(Id::from_raw(node), TypeId::UNKNOWN),
-            NodeKind::RecordLiteralNamedField => self.visit_record_literal_named_field(Id::from_raw(node)),
+            NodeKind::PatternVariableDeclaration => {
+                self.visit_pattern_variable_declaration(Id::from_raw(node))
+            }
+            NodeKind::PatternVariableDeclarationStatement => {
+                self.visit_pattern_variable_declaration_statement(Id::from_raw(node))
+            }
+            NodeKind::PostfixExpression => {
+                self.visit_postfix_expression(Id::from_raw(node), TypeId::UNKNOWN)
+            }
+            NodeKind::PrefixExpression => {
+                self.visit_prefix_expression(Id::from_raw(node), TypeId::UNKNOWN)
+            }
+            NodeKind::PrefixedIdentifier => {
+                self.visit_prefixed_identifier(Id::from_raw(node), TypeId::UNKNOWN)
+            }
+            NodeKind::PrimaryConstructorBody => {
+                self.visit_primary_constructor_body(Id::from_raw(node))
+            }
+            NodeKind::PrimaryConstructorDeclaration => {
+                self.visit_primary_constructor_declaration(Id::from_raw(node))
+            }
+            NodeKind::PrimaryConstructorName => {
+                self.visit_primary_constructor_name(Id::from_raw(node))
+            }
+            NodeKind::PropertyAccess => {
+                self.visit_property_access(Id::from_raw(node), TypeId::UNKNOWN)
+            }
+            NodeKind::RecordLiteral => {
+                self.visit_record_literal(Id::from_raw(node), TypeId::UNKNOWN)
+            }
+            NodeKind::RecordLiteralNamedField => {
+                self.visit_record_literal_named_field(Id::from_raw(node))
+            }
             NodeKind::RecordPattern => self.visit_record_pattern(Id::from_raw(node)),
             NodeKind::RecordTypeAnnotation => self.visit_record_type_annotation(Id::from_raw(node)),
-            NodeKind::RecordTypeAnnotationNamedField => self.visit_record_type_annotation_named_field(Id::from_raw(node)),
-            NodeKind::RecordTypeAnnotationNamedFields => self.visit_record_type_annotation_named_fields(Id::from_raw(node)),
-            NodeKind::RecordTypeAnnotationPositionalField => self.visit_record_type_annotation_positional_field(Id::from_raw(node)),
-            NodeKind::RedirectingConstructorInvocation => self.visit_redirecting_constructor_invocation(Id::from_raw(node)),
-            NodeKind::RegularFormalParameter => self.visit_regular_formal_parameter(Id::from_raw(node)),
+            NodeKind::RecordTypeAnnotationNamedField => {
+                self.visit_record_type_annotation_named_field(Id::from_raw(node))
+            }
+            NodeKind::RecordTypeAnnotationNamedFields => {
+                self.visit_record_type_annotation_named_fields(Id::from_raw(node))
+            }
+            NodeKind::RecordTypeAnnotationPositionalField => {
+                self.visit_record_type_annotation_positional_field(Id::from_raw(node))
+            }
+            NodeKind::RedirectingConstructorInvocation => {
+                self.visit_redirecting_constructor_invocation(Id::from_raw(node))
+            }
+            NodeKind::RegularFormalParameter => {
+                self.visit_regular_formal_parameter(Id::from_raw(node))
+            }
             NodeKind::RelationalPattern => self.visit_relational_pattern(Id::from_raw(node)),
             NodeKind::RestPatternElement => self.visit_rest_pattern_element(Id::from_raw(node)),
-            NodeKind::RethrowExpression => self.visit_rethrow_expression(Id::from_raw(node), TypeId::UNKNOWN),
+            NodeKind::RethrowExpression => {
+                self.visit_rethrow_expression(Id::from_raw(node), TypeId::UNKNOWN)
+            }
             NodeKind::ReturnStatement => self.visit_return_statement(Id::from_raw(node)),
             NodeKind::ScriptTag => self.visit_script_tag(Id::from_raw(node)),
-            NodeKind::SetOrMapLiteral => self.visit_set_or_map_literal(Id::from_raw(node), TypeId::UNKNOWN),
+            NodeKind::SetOrMapLiteral => {
+                self.visit_set_or_map_literal(Id::from_raw(node), TypeId::UNKNOWN)
+            }
             NodeKind::ShowCombinator => self.visit_show_combinator(Id::from_raw(node)),
-            NodeKind::SimpleIdentifier => self.visit_simple_identifier(Id::from_raw(node), TypeId::UNKNOWN),
-            NodeKind::SimpleStringLiteral => self.visit_simple_string_literal(Id::from_raw(node), TypeId::UNKNOWN),
+            NodeKind::SimpleIdentifier => {
+                self.visit_simple_identifier(Id::from_raw(node), TypeId::UNKNOWN)
+            }
+            NodeKind::SimpleStringLiteral => {
+                self.visit_simple_string_literal(Id::from_raw(node), TypeId::UNKNOWN)
+            }
             NodeKind::SpreadElement => self.visit_spread_element(Id::from_raw(node)),
-            NodeKind::StringInterpolation => self.visit_string_interpolation(Id::from_raw(node), TypeId::UNKNOWN),
-            NodeKind::SuperConstructorInvocation => self.visit_super_constructor_invocation(Id::from_raw(node)),
-            NodeKind::SuperExpression => self.visit_super_expression(Id::from_raw(node), TypeId::UNKNOWN),
+            NodeKind::StringInterpolation => {
+                self.visit_string_interpolation(Id::from_raw(node), TypeId::UNKNOWN)
+            }
+            NodeKind::SuperConstructorInvocation => {
+                self.visit_super_constructor_invocation(Id::from_raw(node))
+            }
+            NodeKind::SuperExpression => {
+                self.visit_super_expression(Id::from_raw(node), TypeId::UNKNOWN)
+            }
             NodeKind::SuperFormalParameter => self.visit_super_formal_parameter(Id::from_raw(node)),
             NodeKind::SwitchCase => self.visit_switch_case(Id::from_raw(node)),
             NodeKind::SwitchDefault => self.visit_switch_default(Id::from_raw(node)),
-            NodeKind::SwitchExpression => self.visit_switch_expression(Id::from_raw(node), TypeId::UNKNOWN),
+            NodeKind::SwitchExpression => {
+                self.visit_switch_expression(Id::from_raw(node), TypeId::UNKNOWN)
+            }
             NodeKind::SwitchExpressionCase => self.visit_switch_expression_case(Id::from_raw(node)),
             NodeKind::SwitchPatternCase => self.visit_switch_pattern_case(Id::from_raw(node)),
             NodeKind::SwitchStatement => self.visit_switch_statement(Id::from_raw(node)),
-            NodeKind::SymbolLiteral => self.visit_symbol_literal(Id::from_raw(node), TypeId::UNKNOWN),
-            NodeKind::ThisExpression => self.visit_this_expression(Id::from_raw(node), TypeId::UNKNOWN),
-            NodeKind::ThrowExpression => self.visit_throw_expression(Id::from_raw(node), TypeId::UNKNOWN),
-            NodeKind::TopLevelVariableDeclaration => self.visit_top_level_variable_declaration(Id::from_raw(node)),
+            NodeKind::SymbolLiteral => {
+                self.visit_symbol_literal(Id::from_raw(node), TypeId::UNKNOWN)
+            }
+            NodeKind::ThisExpression => {
+                self.visit_this_expression(Id::from_raw(node), TypeId::UNKNOWN)
+            }
+            NodeKind::ThrowExpression => {
+                self.visit_throw_expression(Id::from_raw(node), TypeId::UNKNOWN)
+            }
+            NodeKind::TopLevelVariableDeclaration => {
+                self.visit_top_level_variable_declaration(Id::from_raw(node))
+            }
             NodeKind::TryStatement => self.visit_try_statement(Id::from_raw(node)),
             NodeKind::TypeArgumentList => self.visit_type_argument_list(Id::from_raw(node)),
             NodeKind::TypeLiteral => self.visit_type_literal(Id::from_raw(node), TypeId::UNKNOWN),
             NodeKind::TypeParameter => self.visit_type_parameter(Id::from_raw(node)),
             NodeKind::TypeParameterList => self.visit_type_parameter_list(Id::from_raw(node)),
             NodeKind::VariableDeclaration => self.visit_variable_declaration(Id::from_raw(node)),
-            NodeKind::VariableDeclarationList => self.visit_variable_declaration_list(Id::from_raw(node)),
-            NodeKind::VariableDeclarationStatement => self.visit_variable_declaration_statement(Id::from_raw(node)),
+            NodeKind::VariableDeclarationList => {
+                self.visit_variable_declaration_list(Id::from_raw(node))
+            }
+            NodeKind::VariableDeclarationStatement => {
+                self.visit_variable_declaration_statement(Id::from_raw(node))
+            }
             NodeKind::WhenClause => self.visit_when_clause(Id::from_raw(node)),
             NodeKind::WhileStatement => self.visit_while_statement(Id::from_raw(node)),
             NodeKind::WildcardPattern => self.visit_wildcard_pattern(Id::from_raw(node)),
@@ -276,43 +426,85 @@ impl<'a> ResolverVisitor<'a> {
         let raw = node.raw();
         match self.ast.kind(raw) {
             NodeKind::AdjacentStrings => self.visit_adjacent_strings(Id::from_raw(raw), context),
-            NodeKind::AnonymousMethodInvocation => self.visit_anonymous_method_invocation(Id::from_raw(raw), context),
+            NodeKind::AnonymousMethodInvocation => {
+                self.visit_anonymous_method_invocation(Id::from_raw(raw), context)
+            }
             NodeKind::AsExpression => self.visit_as_expression(Id::from_raw(raw), context),
-            NodeKind::AssignmentExpression => self.visit_assignment_expression(Id::from_raw(raw), context),
+            NodeKind::AssignmentExpression => {
+                self.visit_assignment_expression(Id::from_raw(raw), context)
+            }
             NodeKind::AwaitExpression => self.visit_await_expression(Id::from_raw(raw), context),
             NodeKind::BinaryExpression => self.visit_binary_expression(Id::from_raw(raw), context),
             NodeKind::BooleanLiteral => self.visit_boolean_literal(Id::from_raw(raw), context),
-            NodeKind::CascadeExpression => self.visit_cascade_expression(Id::from_raw(raw), context),
-            NodeKind::ConditionalExpression => self.visit_conditional_expression(Id::from_raw(raw), context),
-            NodeKind::ConstructorReference => self.visit_constructor_reference(Id::from_raw(raw), context),
-            NodeKind::DotShorthandConstructorInvocation => self.visit_dot_shorthand_constructor_invocation(Id::from_raw(raw), context),
-            NodeKind::DotShorthandInvocation => self.visit_dot_shorthand_invocation(Id::from_raw(raw), context),
-            NodeKind::DotShorthandPropertyAccess => self.visit_dot_shorthand_property_access(Id::from_raw(raw), context),
+            NodeKind::CascadeExpression => {
+                self.visit_cascade_expression(Id::from_raw(raw), context)
+            }
+            NodeKind::ConditionalExpression => {
+                self.visit_conditional_expression(Id::from_raw(raw), context)
+            }
+            NodeKind::ConstructorReference => {
+                self.visit_constructor_reference(Id::from_raw(raw), context)
+            }
+            NodeKind::DotShorthandConstructorInvocation => {
+                self.visit_dot_shorthand_constructor_invocation(Id::from_raw(raw), context)
+            }
+            NodeKind::DotShorthandInvocation => {
+                self.visit_dot_shorthand_invocation(Id::from_raw(raw), context)
+            }
+            NodeKind::DotShorthandPropertyAccess => {
+                self.visit_dot_shorthand_property_access(Id::from_raw(raw), context)
+            }
             NodeKind::DoubleLiteral => self.visit_double_literal(Id::from_raw(raw), context),
-            NodeKind::ExtensionOverride => self.visit_extension_override(Id::from_raw(raw), context),
-            NodeKind::FunctionExpression => self.visit_function_expression(Id::from_raw(raw), context),
-            NodeKind::FunctionExpressionInvocation => self.visit_function_expression_invocation(Id::from_raw(raw), context),
-            NodeKind::FunctionReference => self.visit_function_reference(Id::from_raw(raw), context),
-            NodeKind::ImplicitCallReference => self.visit_implicit_call_reference(Id::from_raw(raw), context),
+            NodeKind::ExtensionOverride => {
+                self.visit_extension_override(Id::from_raw(raw), context)
+            }
+            NodeKind::FunctionExpression => {
+                self.visit_function_expression(Id::from_raw(raw), context)
+            }
+            NodeKind::FunctionExpressionInvocation => {
+                self.visit_function_expression_invocation(Id::from_raw(raw), context)
+            }
+            NodeKind::FunctionReference => {
+                self.visit_function_reference(Id::from_raw(raw), context)
+            }
+            NodeKind::ImplicitCallReference => {
+                self.visit_implicit_call_reference(Id::from_raw(raw), context)
+            }
             NodeKind::IndexExpression => self.visit_index_expression(Id::from_raw(raw), context),
-            NodeKind::InstanceCreationExpression => self.visit_instance_creation_expression(Id::from_raw(raw), context),
+            NodeKind::InstanceCreationExpression => {
+                self.visit_instance_creation_expression(Id::from_raw(raw), context)
+            }
             NodeKind::IntegerLiteral => self.visit_integer_literal(Id::from_raw(raw), context),
             NodeKind::IsExpression => self.visit_is_expression(Id::from_raw(raw), context),
             NodeKind::ListLiteral => self.visit_list_literal(Id::from_raw(raw), context),
             NodeKind::MethodInvocation => self.visit_method_invocation(Id::from_raw(raw), context),
             NodeKind::NullLiteral => self.visit_null_literal(Id::from_raw(raw), context),
-            NodeKind::ParenthesizedExpression => self.visit_parenthesized_expression(Id::from_raw(raw), context),
-            NodeKind::PatternAssignment => self.visit_pattern_assignment(Id::from_raw(raw), context),
-            NodeKind::PostfixExpression => self.visit_postfix_expression(Id::from_raw(raw), context),
+            NodeKind::ParenthesizedExpression => {
+                self.visit_parenthesized_expression(Id::from_raw(raw), context)
+            }
+            NodeKind::PatternAssignment => {
+                self.visit_pattern_assignment(Id::from_raw(raw), context)
+            }
+            NodeKind::PostfixExpression => {
+                self.visit_postfix_expression(Id::from_raw(raw), context)
+            }
             NodeKind::PrefixExpression => self.visit_prefix_expression(Id::from_raw(raw), context),
-            NodeKind::PrefixedIdentifier => self.visit_prefixed_identifier(Id::from_raw(raw), context),
+            NodeKind::PrefixedIdentifier => {
+                self.visit_prefixed_identifier(Id::from_raw(raw), context)
+            }
             NodeKind::PropertyAccess => self.visit_property_access(Id::from_raw(raw), context),
             NodeKind::RecordLiteral => self.visit_record_literal(Id::from_raw(raw), context),
-            NodeKind::RethrowExpression => self.visit_rethrow_expression(Id::from_raw(raw), context),
+            NodeKind::RethrowExpression => {
+                self.visit_rethrow_expression(Id::from_raw(raw), context)
+            }
             NodeKind::SetOrMapLiteral => self.visit_set_or_map_literal(Id::from_raw(raw), context),
             NodeKind::SimpleIdentifier => self.visit_simple_identifier(Id::from_raw(raw), context),
-            NodeKind::SimpleStringLiteral => self.visit_simple_string_literal(Id::from_raw(raw), context),
-            NodeKind::StringInterpolation => self.visit_string_interpolation(Id::from_raw(raw), context),
+            NodeKind::SimpleStringLiteral => {
+                self.visit_simple_string_literal(Id::from_raw(raw), context)
+            }
+            NodeKind::StringInterpolation => {
+                self.visit_string_interpolation(Id::from_raw(raw), context)
+            }
             NodeKind::SuperExpression => self.visit_super_expression(Id::from_raw(raw), context),
             NodeKind::SwitchExpression => self.visit_switch_expression(Id::from_raw(raw), context),
             NodeKind::SymbolLiteral => self.visit_symbol_literal(Id::from_raw(raw), context),
@@ -333,9 +525,15 @@ impl<'a> ResolverVisitor<'a> {
         match self.ast.kind(raw) {
             NodeKind::ForElement => self.resolve_element_for_element(Id::from_raw(raw), context),
             NodeKind::IfElement => self.resolve_element_if_element(Id::from_raw(raw), context),
-            NodeKind::MapLiteralEntry => self.resolve_element_map_literal_entry(Id::from_raw(raw), context),
-            NodeKind::NullAwareElement => self.resolve_element_null_aware_element(Id::from_raw(raw), context),
-            NodeKind::SpreadElement => self.resolve_element_spread_element(Id::from_raw(raw), context),
+            NodeKind::MapLiteralEntry => {
+                self.resolve_element_map_literal_entry(Id::from_raw(raw), context)
+            }
+            NodeKind::NullAwareElement => {
+                self.resolve_element_null_aware_element(Id::from_raw(raw), context)
+            }
+            NodeKind::SpreadElement => {
+                self.resolve_element_spread_element(Id::from_raw(raw), context)
+            }
             _ => self.resolve_element_expression(Id::from_raw(raw), context),
         }
     }
@@ -348,21 +546,45 @@ impl<'a> ResolverVisitor<'a> {
     ) -> PatternResultOf {
         let raw = node.raw();
         match self.ast.kind(raw) {
-            NodeKind::AssignedVariablePattern => self.resolve_pattern_assigned_variable_pattern(Id::from_raw(raw), context),
+            NodeKind::AssignedVariablePattern => {
+                self.resolve_pattern_assigned_variable_pattern(Id::from_raw(raw), context)
+            }
             NodeKind::CastPattern => self.resolve_pattern_cast_pattern(Id::from_raw(raw), context),
-            NodeKind::ConstantPattern => self.resolve_pattern_constant_pattern(Id::from_raw(raw), context),
-            NodeKind::DeclaredVariablePattern => self.resolve_pattern_declared_variable_pattern(Id::from_raw(raw), context),
+            NodeKind::ConstantPattern => {
+                self.resolve_pattern_constant_pattern(Id::from_raw(raw), context)
+            }
+            NodeKind::DeclaredVariablePattern => {
+                self.resolve_pattern_declared_variable_pattern(Id::from_raw(raw), context)
+            }
             NodeKind::ListPattern => self.resolve_pattern_list_pattern(Id::from_raw(raw), context),
-            NodeKind::LogicalAndPattern => self.resolve_pattern_logical_and_pattern(Id::from_raw(raw), context),
-            NodeKind::LogicalOrPattern => self.resolve_pattern_logical_or_pattern(Id::from_raw(raw), context),
+            NodeKind::LogicalAndPattern => {
+                self.resolve_pattern_logical_and_pattern(Id::from_raw(raw), context)
+            }
+            NodeKind::LogicalOrPattern => {
+                self.resolve_pattern_logical_or_pattern(Id::from_raw(raw), context)
+            }
             NodeKind::MapPattern => self.resolve_pattern_map_pattern(Id::from_raw(raw), context),
-            NodeKind::NullAssertPattern => self.resolve_pattern_null_assert_pattern(Id::from_raw(raw), context),
-            NodeKind::NullCheckPattern => self.resolve_pattern_null_check_pattern(Id::from_raw(raw), context),
-            NodeKind::ObjectPattern => self.resolve_pattern_object_pattern(Id::from_raw(raw), context),
-            NodeKind::ParenthesizedPattern => self.resolve_pattern_parenthesized_pattern(Id::from_raw(raw), context),
-            NodeKind::RecordPattern => self.resolve_pattern_record_pattern(Id::from_raw(raw), context),
-            NodeKind::RelationalPattern => self.resolve_pattern_relational_pattern(Id::from_raw(raw), context),
-            NodeKind::WildcardPattern => self.resolve_pattern_wildcard_pattern(Id::from_raw(raw), context),
+            NodeKind::NullAssertPattern => {
+                self.resolve_pattern_null_assert_pattern(Id::from_raw(raw), context)
+            }
+            NodeKind::NullCheckPattern => {
+                self.resolve_pattern_null_check_pattern(Id::from_raw(raw), context)
+            }
+            NodeKind::ObjectPattern => {
+                self.resolve_pattern_object_pattern(Id::from_raw(raw), context)
+            }
+            NodeKind::ParenthesizedPattern => {
+                self.resolve_pattern_parenthesized_pattern(Id::from_raw(raw), context)
+            }
+            NodeKind::RecordPattern => {
+                self.resolve_pattern_record_pattern(Id::from_raw(raw), context)
+            }
+            NodeKind::RelationalPattern => {
+                self.resolve_pattern_relational_pattern(Id::from_raw(raw), context)
+            }
+            NodeKind::WildcardPattern => {
+                self.resolve_pattern_wildcard_pattern(Id::from_raw(raw), context)
+            }
             kind => unreachable!("not a pattern: {kind:?}"),
         }
     }
@@ -371,21 +593,45 @@ impl<'a> ResolverVisitor<'a> {
     pub(crate) fn compute_pattern_schema_dispatch(&mut self, node: Id<DartPattern>) -> SchemaOf {
         let raw = node.raw();
         match self.ast.kind(raw) {
-            NodeKind::AssignedVariablePattern => self.compute_pattern_schema_assigned_variable_pattern(Id::from_raw(raw)),
+            NodeKind::AssignedVariablePattern => {
+                self.compute_pattern_schema_assigned_variable_pattern(Id::from_raw(raw))
+            }
             NodeKind::CastPattern => self.compute_pattern_schema_cast_pattern(Id::from_raw(raw)),
-            NodeKind::ConstantPattern => self.compute_pattern_schema_constant_pattern(Id::from_raw(raw)),
-            NodeKind::DeclaredVariablePattern => self.compute_pattern_schema_declared_variable_pattern(Id::from_raw(raw)),
+            NodeKind::ConstantPattern => {
+                self.compute_pattern_schema_constant_pattern(Id::from_raw(raw))
+            }
+            NodeKind::DeclaredVariablePattern => {
+                self.compute_pattern_schema_declared_variable_pattern(Id::from_raw(raw))
+            }
             NodeKind::ListPattern => self.compute_pattern_schema_list_pattern(Id::from_raw(raw)),
-            NodeKind::LogicalAndPattern => self.compute_pattern_schema_logical_and_pattern(Id::from_raw(raw)),
-            NodeKind::LogicalOrPattern => self.compute_pattern_schema_logical_or_pattern(Id::from_raw(raw)),
+            NodeKind::LogicalAndPattern => {
+                self.compute_pattern_schema_logical_and_pattern(Id::from_raw(raw))
+            }
+            NodeKind::LogicalOrPattern => {
+                self.compute_pattern_schema_logical_or_pattern(Id::from_raw(raw))
+            }
             NodeKind::MapPattern => self.compute_pattern_schema_map_pattern(Id::from_raw(raw)),
-            NodeKind::NullAssertPattern => self.compute_pattern_schema_null_assert_pattern(Id::from_raw(raw)),
-            NodeKind::NullCheckPattern => self.compute_pattern_schema_null_check_pattern(Id::from_raw(raw)),
-            NodeKind::ObjectPattern => self.compute_pattern_schema_object_pattern(Id::from_raw(raw)),
-            NodeKind::ParenthesizedPattern => self.compute_pattern_schema_parenthesized_pattern(Id::from_raw(raw)),
-            NodeKind::RecordPattern => self.compute_pattern_schema_record_pattern(Id::from_raw(raw)),
-            NodeKind::RelationalPattern => self.compute_pattern_schema_relational_pattern(Id::from_raw(raw)),
-            NodeKind::WildcardPattern => self.compute_pattern_schema_wildcard_pattern(Id::from_raw(raw)),
+            NodeKind::NullAssertPattern => {
+                self.compute_pattern_schema_null_assert_pattern(Id::from_raw(raw))
+            }
+            NodeKind::NullCheckPattern => {
+                self.compute_pattern_schema_null_check_pattern(Id::from_raw(raw))
+            }
+            NodeKind::ObjectPattern => {
+                self.compute_pattern_schema_object_pattern(Id::from_raw(raw))
+            }
+            NodeKind::ParenthesizedPattern => {
+                self.compute_pattern_schema_parenthesized_pattern(Id::from_raw(raw))
+            }
+            NodeKind::RecordPattern => {
+                self.compute_pattern_schema_record_pattern(Id::from_raw(raw))
+            }
+            NodeKind::RelationalPattern => {
+                self.compute_pattern_schema_relational_pattern(Id::from_raw(raw))
+            }
+            NodeKind::WildcardPattern => {
+                self.compute_pattern_schema_wildcard_pattern(Id::from_raw(raw))
+            }
             kind => unreachable!("not a pattern: {kind:?}"),
         }
     }

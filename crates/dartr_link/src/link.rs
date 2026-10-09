@@ -129,7 +129,11 @@ impl LinkResolver for NoLinkResolver {
 }
 
 impl LinkResolverSession for NoLinkResolver {
-    fn resolve_expression(&self, _ctx: &Ctx<'_>, _request: &ExpressionRequest<'_>) -> Option<TypeId> {
+    fn resolve_expression(
+        &self,
+        _ctx: &Ctx<'_>,
+        _request: &ExpressionRequest<'_>,
+    ) -> Option<TypeId> {
         None
     }
 }
@@ -429,9 +433,10 @@ pub fn element_data_mut(store: &mut ElementStore, id: ElementId) -> &mut Element
         Tag::Prefix => co(e.prefixes.get_mut(i)),
         Tag::Library => co(e.libraries.get_mut(i)),
         Tag::GenericFunctionType => co(e.generic_function_types.get_mut(i)),
-        Tag::LocalVariable | Tag::PatternVariable | Tag::BindPatternVariable | Tag::JoinPatternVariable => {
-            co(e.locals.get_mut(i))
-        }
+        Tag::LocalVariable
+        | Tag::PatternVariable
+        | Tag::BindPatternVariable
+        | Tag::JoinPatternVariable => co(e.locals.get_mut(i)),
         Tag::LocalFunction => co(e.local_functions.get_mut(i)),
         Tag::Label => co(e.labels.get_mut(i)),
         Tag::MultiplyDefined => co(e.multiply_defined.get_mut(i)),

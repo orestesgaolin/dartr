@@ -1094,10 +1094,14 @@ pub fn record_corresponding_parameters(
         }
         match parameter {
             Some(p) => {
-                rv.rt.corresponding_parameter_type.insert(argument.expression, p.ty);
+                rv.rt
+                    .corresponding_parameter_type
+                    .insert(argument.expression, p.ty);
             }
             None => {
-                rv.rt.corresponding_parameter_type.remove(argument.expression);
+                rv.rt
+                    .corresponding_parameter_type
+                    .remove(argument.expression);
             }
         }
     }

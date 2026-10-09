@@ -458,7 +458,11 @@ pub fn resolve_for_write(
         let index = rv.ast[index_expression].index;
         let index =
             rv.resolve_expression(index, result.index_context_type.unwrap_or(TypeId::UNKNOWN));
-        let read_element = if has_read { result.read_element() } else { None };
+        let read_element = if has_read {
+            result.read_element()
+        } else {
+            None
+        };
         rv.check_index_expression_index(index, read_element, result.write_element());
         result
     } else if let Some(prefixed) = rv.ast.cast::<PrefixedIdentifier>(node) {

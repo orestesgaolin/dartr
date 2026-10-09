@@ -99,7 +99,11 @@ pub fn parse_file_with_sdk_version(
     experiments: &[ExperimentalFlag],
     sdk_version: (u32, u32),
 ) -> ParsedUnit {
-    parse_impl(content, path, Some((package_version, experiments, sdk_version)))
+    parse_impl(
+        content,
+        path,
+        Some((package_version, experiments, sdk_version)),
+    )
 }
 
 fn parse_impl(
@@ -118,11 +122,21 @@ fn parse_impl(
         None => scan_for_analyzer(content),
         Some((version, experiments, sdk)) => scan_for_analyzer_with_configuration(
             content,
-            ExperimentalFeatures::for_language_version_with_sdk(version.0, version.1, experiments, sdk)
-                .build_scanner_configuration(),
+            ExperimentalFeatures::for_language_version_with_sdk(
+                version.0,
+                version.1,
+                experiments,
+                sdk,
+            )
+            .build_scanner_configuration(),
             |(major, minor)| {
-                ExperimentalFeatures::for_language_version_with_sdk(major as u32, minor as u32, experiments, sdk)
-                    .build_scanner_configuration()
+                ExperimentalFeatures::for_language_version_with_sdk(
+                    major as u32,
+                    minor as u32,
+                    experiments,
+                    sdk,
+                )
+                .build_scanner_configuration()
             },
         ),
     };

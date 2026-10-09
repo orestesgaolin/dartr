@@ -306,8 +306,12 @@ impl<L: Listener> Parser<L> {
         if !self.is_a(self.next(name), TokenType::LT) {
             return NO_TYPE_PARAM_OR_ARG.parse_variables(name, self);
         }
-        let type_var =
-            compute_type_param_or_arg_mut(self.tokens_mut(), name, /* inDeclaration = */ true, false);
+        let type_var = compute_type_param_or_arg_mut(
+            self.tokens_mut(),
+            name,
+            /* inDeclaration = */ true,
+            false,
+        );
         let mut token = type_var.parse_variables(name, self);
         if self.is_a(self.next(token), TokenType::EQ) {
             // Recovery
@@ -1150,7 +1154,8 @@ impl<L: Listener> Parser<L> {
                 return token;
             }
         }
-        let mut type_info = compute_type_mut(self.tokens_mut(),
+        let mut type_info = compute_type_mut(
+            self.tokens_mut(),
             token,
             /* required = */ false,
             /* inDeclaration = */ true,
@@ -1246,7 +1251,8 @@ impl<L: Listener> Parser<L> {
                 // Fall through to continue parsing `factory` as an identifier.
             } else if value == Some("operator") {
                 let next2 = self.next(next);
-                let type_param = compute_type_param_or_arg_mut(self.tokens_mut(), next, false, false);
+                let type_param =
+                    compute_type_param_or_arg_mut(self.tokens_mut(), next, false, false);
                 // `operator` can be used as an identifier as in
                 // `int operator<T>()` or `int operator = 2`
                 if self.is_user_definable_operator(next2) && type_param == NO_TYPE_PARAM_OR_ARG {
@@ -1419,7 +1425,8 @@ impl<L: Listener> Parser<L> {
                 self.indicates_method_or_field(after)
             } {
                 // Recovery: Use the reserved keyword despite that not being legal.
-                type_info = compute_type_mut(self.tokens_mut(),
+                type_info = compute_type_mut(
+                    self.tokens_mut(),
                     token,
                     /* required = */ true,
                     /* inDeclaration = */ true,
@@ -2106,7 +2113,8 @@ impl<L: Listener> Parser<L> {
         // assert(token.isA(Keyword.OPERATOR));
         let mut next = self.next(token);
         if self.is_user_definable_operator(next) {
-            if compute_type_param_or_arg_mut(self.tokens_mut(), token, false, false) != NO_TYPE_PARAM_OR_ARG
+            if compute_type_param_or_arg_mut(self.tokens_mut(), token, false, false)
+                != NO_TYPE_PARAM_OR_ARG
             {
                 // `operator` is being used as an identifier.
                 // For example: `int operator<T>(foo) => 0;`

@@ -59,7 +59,11 @@ fn class_flag(ctx: &Ctx<'_>, e: EId<InterfaceElement>, flag: ElementFlags) -> bo
 }
 
 /// The phases after `_resolveTypes`, in the order of `_buildOutlines`.
-pub fn build_outlines(lk: &mut Linker<'_>, tp: &TypeProvider, resolver: &dyn crate::link::LinkResolver) {
+pub fn build_outlines(
+    lk: &mut Linker<'_>,
+    tp: &TypeProvider,
+    resolver: &dyn crate::link::LinkResolver,
+) {
     let features = FeatureSet::default();
     {
         let lk_ref: &Linker<'_> = lk;
@@ -75,7 +79,9 @@ pub fn build_outlines(lk: &mut Linker<'_>, tp: &TypeProvider, resolver: &dyn cra
         crate::library_builder::LibraryBuilder::build_enum_synthetic_constructors(lk, index);
     }
     for index in 0..lk.builders.len() {
-        crate::library_builder::LibraryBuilder::replace_const_fields_if_no_const_constructor(lk, index);
+        crate::library_builder::LibraryBuilder::replace_const_fields_if_no_const_constructor(
+            lk, index,
+        );
     }
     for index in 0..lk.builders.len() {
         crate::library_builder::LibraryBuilder::resolve_constructor_field_formals(lk, index);
@@ -109,14 +115,22 @@ fn copy_declaring_formal_parameters_explicit_types(lk: &Linker<'_>, ctx: &Ctx<'_
         let Some(&formal_element) = ctx.fragment(formal).element.try_get() else {
             continue;
         };
-        let has_implicit_type = first_has(ctx, formal_element, FragmentFlags::VARIABLE_FRAGMENT_HAS_IMPLICIT_TYPE);
+        let has_implicit_type = first_has(
+            ctx,
+            formal_element,
+            FragmentFlags::VARIABLE_FRAGMENT_HAS_IMPLICIT_TYPE,
+        );
         if has_implicit_type {
             continue;
         }
         let Some(&field_element) = ctx.fragment(field).element.try_get() else {
             continue;
         };
-        if let Some(t) = ctx.get(EId::<FormalParameterElement>::from_raw(formal_element)).type_.get() {
+        if let Some(t) = ctx
+            .get(EId::<FormalParameterElement>::from_raw(formal_element))
+            .type_
+            .get()
+        {
             set_variable_type(ctx, EId::from_raw(field_element), t);
         }
     }
@@ -157,9 +171,17 @@ fn compute_has_non_final_field(lk: &Linker<'_>, ctx: &Ctx<'_>) {
             if is_static {
                 continue;
             }
-            let origin_declaration = first_has(ctx, f.raw(), FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_DECLARATION);
+            let origin_declaration = first_has(
+                ctx,
+                f.raw(),
+                FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_DECLARATION,
+            );
             let is_abstract = first_has(ctx, f.raw(), FragmentFlags::VARIABLE_FRAGMENT_IS_ABSTRACT);
-            let declaring = first_has(ctx, f.raw(), FragmentFlags::FIELD_FRAGMENT_IS_ORIGIN_DECLARING_FORMAL_PARAMETER);
+            let declaring = first_has(
+                ctx,
+                f.raw(),
+                FragmentFlags::FIELD_FRAGMENT_IS_ORIGIN_DECLARING_FORMAL_PARAMETER,
+            );
             if (origin_declaration && !is_abstract) || declaring {
                 let is_final = first_has(ctx, f.raw(), FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL);
                 let is_const = first_has(ctx, f.raw(), FragmentFlags::VARIABLE_FRAGMENT_IS_CONST);
@@ -184,15 +206,23 @@ fn set_default_supertypes(lk: &Linker<'_>, ctx: &Ctx<'_>) {
     for b in &lk.builders {
         let l = ctx.get(b.element);
         for &c in &l.classes {
-            let is_object = &*b.uri == "dart:core" && ctx.get(c).name.map(|n| ctx.name_str(n)) == Some("Object");
+            let is_object = &*b.uri == "dart:core"
+                && ctx.get(c).name.map(|n| ctx.name_str(n)) == Some("Object");
             if !is_object && ctx.get(c).supertype.get().is_none() {
                 ctx.get(c).supertype.set(Some(object));
             }
         }
         for &m in &l.mixins {
             let mixin = ctx.get(m);
-            if mixin.superclass_constraints.get().unwrap_or(TypeList::EMPTY).is_empty() {
-                mixin.superclass_constraints.set(Some(ctx.intern_list(&[object])));
+            if mixin
+                .superclass_constraints
+                .get()
+                .unwrap_or(TypeList::EMPTY)
+                .is_empty()
+            {
+                mixin
+                    .superclass_constraints
+                    .set(Some(ctx.intern_list(&[object])));
             }
         }
     }
@@ -237,7 +267,10 @@ fn complete_class(
     let features = FeatureSet::default();
     let superclass = {
         let ctx = link_ctx(lk, tp, &features);
-        ctx.interface(class).supertype.get().and_then(|t| interface_element_of(&ctx, t))
+        ctx.interface(class)
+            .supertype
+            .get()
+            .and_then(|t| interface_element_of(&ctx, t))
     };
     if let Some(s) = superclass
         && let Some(&(i, _)) = classes.iter().find(|(_, x)| *x == s)
@@ -248,7 +281,13 @@ fn complete_class(
         && lk
             .core
             .store
-            .fragment_data(lk.core.store.element_data(class.raw()).unwrap().first_fragment)
+            .fragment_data(
+                lk.core
+                    .store
+                    .element_data(class.raw())
+                    .unwrap()
+                    .first_fragment,
+            )
             .unwrap()
             .flags
             .has(FragmentFlags::CLASS_FRAGMENT_IS_MIXIN_APPLICATION);
@@ -278,7 +317,9 @@ pub fn super_constructor_parameter_type(
     let ElemRef::Base(super_constructor) = ctx.get(constructor).super_constructor.get()? else {
         return None;
     };
-    let super_params = &ctx.get(EId::<ConstructorElement>::from_raw(super_constructor)).formal_params;
+    let super_params = &ctx
+        .get(EId::<ConstructorElement>::from_raw(super_constructor))
+        .formal_params;
     let pe = ctx.get(p);
     let found = if pe.kind.is_named() {
         super_params
@@ -334,7 +375,11 @@ fn build_mixin_app(lk: &mut Linker<'_>, tp: &TypeProvider, index: usize, class: 
             };
             ctx.interface(e).fields.iter().any(|&f| {
                 !first_has(&ctx, f.raw(), FragmentFlags::VARIABLE_FRAGMENT_IS_STATIC)
-                    && first_has(&ctx, f.raw(), FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_DECLARATION)
+                    && first_has(
+                        &ctx,
+                        f.raw(),
+                        FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_DECLARATION,
+                    )
             })
         };
         let any_instance_variables = mixins.iter().any(|&m| type_has_instance_variables(m));
@@ -348,10 +393,15 @@ fn build_mixin_app(lk: &mut Linker<'_>, tp: &TypeProvider, index: usize, class: 
             if !accessible {
                 continue;
             }
-            if first_has(&ctx, sc.raw(), FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_FACTORY) {
+            if first_has(
+                &ctx,
+                sc.raw(),
+                FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_FACTORY,
+            ) {
                 continue;
             }
-            let is_const = first_has(&ctx, sc.raw(), FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_CONST) && !any_instance_variables;
+            let is_const = first_has(&ctx, sc.raw(), FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_CONST)
+                && !any_instance_variables;
             let mut params = Vec::new();
             for &p in &s.formal_params {
                 let pe = ctx.get(p);
@@ -360,12 +410,15 @@ fn build_mixin_app(lk: &mut Linker<'_>, tp: &TypeProvider, index: usize, class: 
                 params.push(NewParam {
                     name: f.name,
                     kind: f.parameter_kind,
-                    ty: substitution.substitute_type(&ctx, pe.type_.get().unwrap_or(TypeId::INVALID)),
+                    ty: substitution
+                        .substitute_type(&ctx, pe.type_.get().unwrap_or(TypeId::INVALID)),
                     is_const: f.flags.has(FragmentFlags::VARIABLE_FRAGMENT_IS_CONST),
                     // Dart `isFinal` of the element: always `true` for
                     // field formal and super formal parameters.
-                    is_final: matches!(p.raw().tag(), Tag::FieldFormalParameter | Tag::SuperFormalParameter)
-                        || f.flags.has(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL),
+                    is_final: matches!(
+                        p.raw().tag(),
+                        Tag::FieldFormalParameter | Tag::SuperFormalParameter
+                    ) || f.flags.has(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL),
                     initializer: f.constant_initializer.map(|e| (first.store(), e)),
                 });
             }
@@ -384,12 +437,16 @@ fn build_mixin_app(lk: &mut Linker<'_>, tp: &TypeProvider, index: usize, class: 
     let mut fragments = Vec::new();
     for ctor in ctors {
         let name = ctor.name.unwrap_or(new);
-        let mut data = crate::element_builder::new_constructor_fragment(FragmentData::new(Some(name), None));
+        let mut data =
+            crate::element_builder::new_constructor_fragment(FragmentData::new(Some(name), None));
         data.type_name = class_name;
         data.fragment.enclosing_fragment = Some(first.raw());
+        data.flags.set(
+            FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_MIXIN_APPLICATION,
+            true,
+        );
         data.flags
-            .set(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_MIXIN_APPLICATION, true);
-        data.flags.set(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_CONST, ctor.is_const);
+            .set(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_CONST, ctor.is_const);
         let fragment = lk.core.store.add_fragment::<ConstructorFragment>(data);
         let element = crate::library_builder::new_constructor_element(&mut lk.core, fragment, name);
         lk.core.store.get(element).flags.set(
@@ -409,10 +466,14 @@ fn build_mixin_app(lk: &mut Linker<'_>, tp: &TypeProvider, index: usize, class: 
                 parameter_kind: p.kind,
                 private_name: None,
             };
-            data.constant_initializer = p.initializer.and_then(|(store, expr)| copy_const_expr(lk, store, expr));
+            data.constant_initializer = p
+                .initializer
+                .and_then(|(store, expr)| copy_const_expr(lk, store, expr));
             data.fragment.enclosing_fragment = Some(fragment.raw());
-            data.flags.set(FragmentFlags::VARIABLE_FRAGMENT_IS_CONST, p.is_const);
-            data.flags.set(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL, p.is_final);
+            data.flags
+                .set(FragmentFlags::VARIABLE_FRAGMENT_IS_CONST, p.is_const);
+            data.flags
+                .set(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL, p.is_final);
             data.flags.set(
                 FragmentFlags::FORMAL_PARAMETER_FRAGMENT_IS_ORIGIN_MIXIN_APPLICATION_CLASS_CONSTRUCTOR,
                 true,
@@ -464,7 +525,11 @@ fn build_enum_children(lk: &Linker<'_>, ctx: &Ctx<'_>) {
                 continue;
             };
             let e = EId::<EnumElement>::from_raw(e);
-            let supertype = ctx.tp.enum_type.try_get().copied().flatten().or(ctx.tp.object_type.try_get().copied());
+            let supertype = ctx.tp.enum_type.try_get().copied().flatten().or(ctx
+                .tp
+                .object_type
+                .try_get()
+                .copied());
             ctx.get(e).supertype.set(supertype);
             let Some(&list) = ctx.tp.list_element.try_get() else {
                 continue;
@@ -486,54 +551,85 @@ fn compute_field_promotability(lk: &Linker<'_>, ctx: &Ctx<'_>, index: usize) {
     let l = ctx.get(library);
     let mut fp = FieldPromotability::default();
     let mut potentially_promotable: Vec<EId<FieldElement>> = Vec::new();
-    let mut handle = |fp: &mut FieldPromotability, class: EId<InterfaceElement>, is_abstract: bool| {
-        let info = fp.add_class(class, is_abstract);
-        let i = ctx.interface(class);
-        for &field in &i.fields {
-            if first_has(ctx, field.raw(), FragmentFlags::VARIABLE_FRAGMENT_IS_STATIC)
-                || first_has(ctx, field.raw(), FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_GETTER_SETTER)
-            {
-                continue;
+    let mut handle =
+        |fp: &mut FieldPromotability, class: EId<InterfaceElement>, is_abstract: bool| {
+            let info = fp.add_class(class, is_abstract);
+            let i = ctx.interface(class);
+            for &field in &i.fields {
+                if first_has(ctx, field.raw(), FragmentFlags::VARIABLE_FRAGMENT_IS_STATIC)
+                    || first_has(
+                        ctx,
+                        field.raw(),
+                        FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_GETTER_SETTER,
+                    )
+                {
+                    continue;
+                }
+                let Some(name) = ctx.get(field).name else {
+                    continue;
+                };
+                let name = ctx.name_str(name);
+                let ok = fp.add_field(
+                    info,
+                    field,
+                    name,
+                    first_has(ctx, field.raw(), FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL),
+                    first_has(
+                        ctx,
+                        field.raw(),
+                        FragmentFlags::VARIABLE_FRAGMENT_IS_ABSTRACT,
+                    ),
+                    first_has(
+                        ctx,
+                        field.raw(),
+                        FragmentFlags::VARIABLE_FRAGMENT_IS_EXTERNAL,
+                    ),
+                );
+                if enabled && ok {
+                    potentially_promotable.push(field);
+                }
             }
-            let Some(name) = ctx.get(field).name else { continue };
-            let name = ctx.name_str(name);
-            let ok = fp.add_field(
-                info,
-                field,
-                name,
-                first_has(ctx, field.raw(), FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL),
-                first_has(ctx, field.raw(), FragmentFlags::VARIABLE_FRAGMENT_IS_ABSTRACT),
-                first_has(ctx, field.raw(), FragmentFlags::VARIABLE_FRAGMENT_IS_EXTERNAL),
-            );
-            if enabled && ok {
-                potentially_promotable.push(field);
+            for &getter in &i.getters {
+                if first_has(
+                    ctx,
+                    getter.raw(),
+                    FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC,
+                ) || first_has(
+                    ctx,
+                    getter.raw(),
+                    FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_VARIABLE,
+                ) {
+                    continue;
+                }
+                let Some(name) = ctx.get(getter).name else {
+                    continue;
+                };
+                let name = ctx.name_str(name);
+                let ok = fp.add_getter(
+                    info,
+                    getter,
+                    name,
+                    first_has(
+                        ctx,
+                        getter.raw(),
+                        FragmentFlags::EXECUTABLE_FRAGMENT_IS_ABSTRACT,
+                    ),
+                );
+                if enabled
+                    && ok
+                    && let Some(v) = ctx.get(getter).variable.get()
+                    && let Some(f) = v.raw().cast::<FieldElement>()
+                {
+                    potentially_promotable.push(f);
+                }
             }
-        }
-        for &getter in &i.getters {
-            if first_has(ctx, getter.raw(), FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC)
-                || first_has(ctx, getter.raw(), FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_VARIABLE)
-            {
-                continue;
-            }
-            let Some(name) = ctx.get(getter).name else { continue };
-            let name = ctx.name_str(name);
-            let ok = fp.add_getter(
-                info,
-                getter,
-                name,
-                first_has(ctx, getter.raw(), FragmentFlags::EXECUTABLE_FRAGMENT_IS_ABSTRACT),
-            );
-            if enabled
-                && ok
-                && let Some(v) = ctx.get(getter).variable.get()
-                && let Some(f) = v.raw().cast::<FieldElement>()
-            {
-                potentially_promotable.push(f);
-            }
-        }
-    };
+        };
     for &c in &l.classes {
-        let is_abstract = ctx.element_data(c.raw()).unwrap().flags.has(ElementFlags::CLASS_ELEMENT_IS_ABSTRACT);
+        let is_abstract = ctx
+            .element_data(c.raw())
+            .unwrap()
+            .flags
+            .has(ElementFlags::CLASS_ELEMENT_IS_ABSTRACT);
         handle(&mut fp, c.upcast(), is_abstract);
     }
     for &e in &l.enums {
@@ -555,7 +651,9 @@ fn compute_field_promotability(lk: &Linker<'_>, ctx: &Ctx<'_>, index: usize) {
     }
     let info = fp.compute_non_promotability_info(ctx);
     for field in potentially_promotable {
-        let Some(name) = ctx.get(field).name else { continue };
+        let Some(name) = ctx.get(field).name else {
+            continue;
+        };
         if !info.contains_key(ctx.name_str(name)) {
             ctx.fragment_data(ctx.get(field).first_fragment)
                 .unwrap()
@@ -563,10 +661,8 @@ fn compute_field_promotability(lk: &Linker<'_>, ctx: &Ctx<'_>, index: usize) {
                 .set(FragmentFlags::FIELD_FRAGMENT_IS_PROMOTABLE, true);
         }
     }
-    let map: IndexMap<Name, FieldNameNonPromotabilityInfo> = info
-        .into_iter()
-        .map(|(k, v)| (ctx.name(&k), v))
-        .collect();
+    let map: IndexMap<Name, FieldNameNonPromotabilityInfo> =
+        info.into_iter().map(|(k, v)| (ctx.name(&k), v)).collect();
     let slot = &ctx.get(library).field_name_non_promotability_info;
     if !slot.is_set() {
         slot.set_once(map);
@@ -583,7 +679,11 @@ struct FieldPromotability {
 }
 
 impl FieldPromotability {
-    fn add_class(&mut self, class: EId<InterfaceElement>, is_abstract: bool) -> EId<InterfaceElement> {
+    fn add_class(
+        &mut self,
+        class: EId<InterfaceElement>,
+        is_abstract: bool,
+    ) -> EId<InterfaceElement> {
         self.interface_names.entry(class).or_default();
         self.implemented_names.entry(class).or_default();
         if !is_abstract {
@@ -593,29 +693,59 @@ impl FieldPromotability {
     }
 
     /// Dart `addField`: whether there is no non-promotability reason.
-    fn add_field(&mut self, class: EId<InterfaceElement>, field: EId<FieldElement>, name: &str, is_final: bool, is_abstract: bool, is_external: bool) -> bool {
+    fn add_field(
+        &mut self,
+        class: EId<InterfaceElement>,
+        field: EId<FieldElement>,
+        name: &str,
+        is_final: bool,
+        is_abstract: bool,
+        is_external: bool,
+    ) -> bool {
         if !name.starts_with('_') {
             return false;
         }
-        self.interface_names.entry(class).or_default().insert(name.to_string());
+        self.interface_names
+            .entry(class)
+            .or_default()
+            .insert(name.to_string());
         if !is_abstract {
-            self.implemented_names.entry(class).or_default().insert(name.to_string());
+            self.implemented_names
+                .entry(class)
+                .or_default()
+                .insert(name.to_string());
         }
         if is_external || !is_final {
-            self.info.entry(name.to_string()).or_default().conflicting_fields.push(field);
+            self.info
+                .entry(name.to_string())
+                .or_default()
+                .conflicting_fields
+                .push(field);
             return false;
         }
         true
     }
 
     /// Dart `addGetter`.
-    fn add_getter(&mut self, class: EId<InterfaceElement>, getter: EId<GetterElement>, name: &str, is_abstract: bool) -> bool {
+    fn add_getter(
+        &mut self,
+        class: EId<InterfaceElement>,
+        getter: EId<GetterElement>,
+        name: &str,
+        is_abstract: bool,
+    ) -> bool {
         if !name.starts_with('_') {
             return false;
         }
-        self.interface_names.entry(class).or_default().insert(name.to_string());
+        self.interface_names
+            .entry(class)
+            .or_default()
+            .insert(name.to_string());
         if !is_abstract {
-            self.implemented_names.entry(class).or_default().insert(name.to_string());
+            self.implemented_names
+                .entry(class)
+                .or_default()
+                .insert(name.to_string());
             self.info
                 .entry(name.to_string())
                 .or_default()
@@ -628,7 +758,11 @@ impl FieldPromotability {
     }
 
     /// Dart `_FieldPromotability.getSuperclasses`.
-    fn superclasses(ctx: &Ctx<'_>, class: EId<InterfaceElement>, ignore_implements: bool) -> Vec<EId<InterfaceElement>> {
+    fn superclasses(
+        ctx: &Ctx<'_>,
+        class: EId<InterfaceElement>,
+        ignore_implements: bool,
+    ) -> Vec<EId<InterfaceElement>> {
         let i = ctx.interface(class);
         let mut types: Vec<TypeId> = Vec::new();
         types.extend(i.supertype.get());
@@ -636,15 +770,20 @@ impl FieldPromotability {
         if !ignore_implements {
             types.extend(ctx.list(i.interfaces.get().unwrap_or(TypeList::EMPTY)));
             if class.raw().tag() == Tag::Mixin {
-                types.extend(ctx.list(
-                    ctx.get(EId::<MixinElement>::from_raw(class.raw()))
-                        .superclass_constraints
-                        .get()
-                        .unwrap_or(TypeList::EMPTY),
-                ));
+                types.extend(
+                    ctx.list(
+                        ctx.get(EId::<MixinElement>::from_raw(class.raw()))
+                            .superclass_constraints
+                            .get()
+                            .unwrap_or(TypeList::EMPTY),
+                    ),
+                );
             }
         }
-        types.into_iter().filter_map(|t| interface_element_of(ctx, t)).collect()
+        types
+            .into_iter()
+            .filter_map(|t| interface_element_of(ctx, t))
+            .collect()
     }
 
     /// The transitive names of [class] (Dart `_ClassHierarchyWalker`; the
@@ -671,14 +810,22 @@ impl FieldPromotability {
     }
 
     /// Dart `computeNonPromotabilityInfo`.
-    fn compute_non_promotability_info(mut self, ctx: &Ctx<'_>) -> IndexMap<String, FieldNameNonPromotabilityInfo> {
+    fn compute_non_promotability_info(
+        mut self,
+        ctx: &Ctx<'_>,
+    ) -> IndexMap<String, FieldNameNonPromotabilityInfo> {
         let concrete = std::mem::take(&mut self.concrete);
         for class in concrete {
             let interface_names = Self::transitive_names(ctx, &self.interface_names, class, false);
-            let implemented_names = Self::transitive_names(ctx, &self.implemented_names, class, true);
+            let implemented_names =
+                Self::transitive_names(ctx, &self.implemented_names, class, true);
             for name in interface_names {
                 if !implemented_names.contains(&name) {
-                    self.info.entry(name).or_default().conflicting_nsm_classes.push(class);
+                    self.info
+                        .entry(name)
+                        .or_default()
+                        .conflicting_nsm_classes
+                        .push(class);
                 }
             }
         }
@@ -692,7 +839,11 @@ fn resolve_super_constructors_of(lk: &Linker<'_>, ctx: &Ctx<'_>, interface: EId<
     use dartr_ast::*;
     let i = ctx.interface(interface);
     for &constructor in &i.constructors {
-        if first_has(ctx, constructor.raw(), FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_FACTORY) {
+        if first_has(
+            ctx,
+            constructor.raw(),
+            FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_FACTORY,
+        ) {
             continue;
         }
         let named_constructor = |name: &str| -> Option<ElemRef> {
@@ -720,7 +871,9 @@ fn resolve_super_constructors_of(lk: &Linker<'_>, ctx: &Ctx<'_>, interface: EId<
                                 .constructor_name
                                 .map(|n| ast.tokens.lexeme(ast.get(n).token))
                                 .unwrap_or("new");
-                            ctx.get(constructor).super_constructor.set(named_constructor(name));
+                            ctx.get(constructor)
+                                .super_constructor
+                                .set(named_constructor(name));
                         }
                     }
                 }
@@ -728,7 +881,9 @@ fn resolve_super_constructors_of(lk: &Linker<'_>, ctx: &Ctx<'_>, interface: EId<
             fragment = ctx.fragment_data(f).unwrap().next_fragment;
         }
         if invokes_default {
-            ctx.get(constructor).super_constructor.set(named_constructor("new"));
+            ctx.get(constructor)
+                .super_constructor
+                .set(named_constructor("new"));
         }
     }
 }
@@ -771,7 +926,9 @@ pub fn set_induced_modifier(ctx: &Ctx<'_>, class: EId<InterfaceElement>) {
             return;
         }
         if is(s, F::CLASS_ELEMENT_IS_INTERFACE) {
-            if interfaces.iter().any(|&x| is(x, F::CLASS_ELEMENT_IS_BASE)) || mixins.iter().any(|&m| is(m, F::CLASS_ELEMENT_IS_BASE)) {
+            if interfaces.iter().any(|&x| is(x, F::CLASS_ELEMENT_IS_BASE))
+                || mixins.iter().any(|&m| is(m, F::CLASS_ELEMENT_IS_BASE))
+            {
                 flags.set(F::CLASS_ELEMENT_IS_FINAL, true);
                 return;
             }
@@ -779,7 +936,9 @@ pub fn set_induced_modifier(ctx: &Ctx<'_>, class: EId<InterfaceElement>) {
             return;
         }
     }
-    let base_or_final = |e: EId<InterfaceElement>| is(e, F::CLASS_ELEMENT_IS_BASE) || is(e, F::CLASS_ELEMENT_IS_FINAL);
+    let base_or_final = |e: EId<InterfaceElement>| {
+        is(e, F::CLASS_ELEMENT_IS_BASE) || is(e, F::CLASS_ELEMENT_IS_FINAL)
+    };
     if interfaces.iter().any(|&x| base_or_final(x)) || mixins.iter().any(|&m| base_or_final(m)) {
         flags.set(F::CLASS_ELEMENT_IS_BASE, true);
         return;
@@ -847,7 +1006,10 @@ impl ExtensionTypeWalker<'_, '_> {
         let t = crate::type_bounds::representation_type(ctx, e);
         let mut found = Vec::new();
         collect_extension_types(ctx, t, &mut found);
-        let deps: Vec<EId<ExtensionTypeElement>> = found.into_iter().filter(|d| d.store() == self.store).collect();
+        let deps: Vec<EId<ExtensionTypeElement>> = found
+            .into_iter()
+            .filter(|d| d.store() == self.store)
+            .collect();
         self.node(e).dependencies = Some(deps.clone());
         deps
     }
@@ -951,7 +1113,9 @@ fn collect_extension_types(ctx: &Ctx<'_>, t: TypeId, out: &mut Vec<EId<Extension
             }
             collect_extension_types(ctx, f.ret, out);
         }
-        TypeKind::Record { positional, named, .. } => {
+        TypeKind::Record {
+            positional, named, ..
+        } => {
             for &p in ctx.list(positional) {
                 collect_extension_types(ctx, p, out);
             }
@@ -959,7 +1123,10 @@ fn collect_extension_types(ctx: &Ctx<'_>, t: TypeId, out: &mut Vec<EId<Extension
                 collect_extension_types(ctx, n.ty, out);
             }
         }
-        TypeKind::TypeParameter { promoted_bound: Some(b), .. } => collect_extension_types(ctx, b, out),
+        TypeKind::TypeParameter {
+            promoted_bound: Some(b),
+            ..
+        } => collect_extension_types(ctx, b, out),
         _ => {}
     }
 }
@@ -983,25 +1150,36 @@ fn resolve_redirected_constructors(lk: &Linker<'_>, ctx: &Ctx<'_>) {
     for (lib, b) in lk.builders.iter().enumerate() {
         for interface in interfaces_of(ctx, b.element) {
             for &constructor in &ctx.interface(interface).constructors {
-                if !first_has(ctx, constructor.raw(), FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_DECLARATION) {
+                if !first_has(
+                    ctx,
+                    constructor.raw(),
+                    FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_DECLARATION,
+                ) {
                     continue;
                 }
                 let mut fragment = Some(ctx.get(constructor).first_fragment().raw());
                 while let Some(f) = fragment {
                     fragment = ctx.fragment_data(f).unwrap().next_fragment;
-                    let Some(&(l, unit, node)) = lk.core.fragment_nodes.get(&f) else { continue };
+                    let Some(&(l, unit, node)) = lk.core.fragment_nodes.get(&f) else {
+                        continue;
+                    };
                     let ast = crate::types::unit_ast(lk, l as u32, unit as u32);
-                    let Some(c) = ast.cast::<ConstructorDeclaration>(node) else { continue };
+                    let Some(c) = ast.cast::<ConstructorDeclaration>(node) else {
+                        continue;
+                    };
                     let c = ast.get(c);
                     if c.factory_keyword.is_some() {
-                        let Some(rc) = c.redirected_constructor else { continue };
+                        let Some(rc) = c.redirected_constructor else {
+                            continue;
+                        };
                         let rc = ast.get(rc);
                         let t = ast.get(rc.type_);
                         let unit_fragment = lk.builders[lib].units[unit].fragment;
                         let type_name = ast.tokens.lexeme(t.name);
                         // `C.name` is parsed as a prefixed type `C.name`; Dart
                         // rewrites it when `C` is not a prefix (AstRewriter).
-                        let mut constructor_name: Option<&str> = rc.name.map(|n| ast.tokens.lexeme(ast.get(n).token));
+                        let mut constructor_name: Option<&str> =
+                            rc.name.map(|n| ast.tokens.lexeme(ast.get(n).token));
                         let element = match t.import_prefix {
                             Some(p) => {
                                 let prefix = ast.tokens.lexeme(ast.get(p).name);
@@ -1031,17 +1209,23 @@ fn resolve_redirected_constructors(lk: &Linker<'_>, ctx: &Ctx<'_>) {
                         });
                         let name = constructor_name.unwrap_or("new");
                         let target = interface_element.and_then(|i| named(i, name));
-                        ctx.get(constructor).redirected_constructor.set(target.map(ElemRef::Base));
+                        ctx.get(constructor)
+                            .redirected_constructor
+                            .set(target.map(ElemRef::Base));
                     } else {
                         for &init in ast.list(c.initializers) {
-                            if let Some(r) = ast.cast::<RedirectingConstructorInvocation>(init.raw()) {
+                            if let Some(r) =
+                                ast.cast::<RedirectingConstructorInvocation>(init.raw())
+                            {
                                 let name = ast
                                     .get(r)
                                     .constructor_name
                                     .map(|n| ast.tokens.lexeme(ast.get(n).token))
                                     .unwrap_or("new");
                                 let target = named(interface, name);
-                                ctx.get(constructor).redirected_constructor.set(target.map(ElemRef::Base));
+                                ctx.get(constructor)
+                                    .redirected_constructor
+                                    .set(target.map(ElemRef::Base));
                             }
                         }
                     }
@@ -1053,12 +1237,20 @@ fn resolve_redirected_constructors(lk: &Linker<'_>, ctx: &Ctx<'_>) {
 
 /// Dart `SuperFormalParameterElementImpl.superConstructorParameter` (the
 /// base element).
-pub fn super_constructor_parameter(ctx: &Ctx<'_>, p: EId<FormalParameterElement>) -> Option<EId<FormalParameterElement>> {
-    let constructor = ctx.element_data(p.raw())?.enclosing?.cast::<ConstructorElement>()?;
+pub fn super_constructor_parameter(
+    ctx: &Ctx<'_>,
+    p: EId<FormalParameterElement>,
+) -> Option<EId<FormalParameterElement>> {
+    let constructor = ctx
+        .element_data(p.raw())?
+        .enclosing?
+        .cast::<ConstructorElement>()?;
     let ElemRef::Base(super_constructor) = ctx.get(constructor).super_constructor.get()? else {
         return None;
     };
-    let super_params = &ctx.get(EId::<ConstructorElement>::from_raw(super_constructor)).formal_params;
+    let super_params = &ctx
+        .get(EId::<ConstructorElement>::from_raw(super_constructor))
+        .formal_params;
     let pe = ctx.get(p);
     if pe.kind.is_named() {
         super_params
@@ -1071,7 +1263,9 @@ pub fn super_constructor_parameter(ctx: &Ctx<'_>, p: EId<FormalParameterElement>
             .formal_params
             .iter()
             .copied()
-            .filter(|x| x.raw().tag() == Tag::SuperFormalParameter && ctx.get(*x).kind.is_positional())
+            .filter(|x| {
+                x.raw().tag() == Tag::SuperFormalParameter && ctx.get(*x).kind.is_positional()
+            })
             .position(|x| x == p)?;
         super_params
             .iter()

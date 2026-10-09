@@ -502,7 +502,14 @@ impl<'a> AstNodeVisitor<'a> {
 
     fn visit_cast_pattern(&mut self, node: Id<CastPattern>) {
         let n = &self.ast[node];
-        self.write_infix(n.pattern.raw(), n.as_token, n.type_.raw(), false, None, Indent::Infix);
+        self.write_infix(
+            n.pattern.raw(),
+            n.as_token,
+            n.type_.raw(),
+            false,
+            None,
+            Indent::Infix,
+        );
     }
 
     fn visit_catch_clause_parameter(&mut self, node: Id<CatchClauseParameter>) {
@@ -607,7 +614,12 @@ impl<'a> AstNodeVisitor<'a> {
 
         let mut conditional = &ast[node];
         loop {
-            add_operand(self, &mut operands, conditional.question, conditional.then_expression);
+            add_operand(
+                self,
+                &mut operands,
+                conditional.question,
+                conditional.then_expression,
+            );
 
             let else_branch = conditional.else_expression;
             if let Some(else_if) = ast.cast::<ConditionalExpression>(else_branch) {
@@ -615,13 +627,20 @@ impl<'a> AstNodeVisitor<'a> {
                 add_operand(self, &mut operands, conditional.colon, else_if.condition);
                 conditional = else_if;
             } else {
-                add_operand(self, &mut operands, conditional.colon, conditional.else_expression);
+                add_operand(
+                    self,
+                    &mut operands,
+                    conditional.colon,
+                    conditional.else_expression,
+                );
                 break;
             }
         }
 
         let is_3_dot_7 = self.style.is_3_dot_7();
-        let piece = self.arena.add(InfixPiece::conditional(operands, is_3_dot_7));
+        let piece = self
+            .arena
+            .add(InfixPiece::conditional(operands, is_3_dot_7));
 
         // If conditional expressions are directly nested, force them all to
         // split, both parents and children.
@@ -653,8 +672,11 @@ impl<'a> AstNodeVisitor<'a> {
                 });
                 let right = v.node_piece(n.value.unwrap());
                 let is_3_dot_7 = v.style.is_3_dot_7();
-                v.arena
-                    .add(InfixPiece::new(vec![left, right], is_3_dot_7, Indent::Expression))
+                v.arena.add(InfixPiece::new(
+                    vec![left, right],
+                    is_3_dot_7,
+                    Indent::Expression,
+                ))
             });
         } else {
             self.visit(n.name);
@@ -734,7 +756,11 @@ impl<'a> AstNodeVisitor<'a> {
                 header,
                 parameters,
                 body,
-                can_split(ast, parameter_list.parameters, parameter_list.right_parenthesis),
+                can_split(
+                    ast,
+                    parameter_list.parameters,
+                    parameter_list.right_parenthesis,
+                ),
                 parameter_list.right_delimiter.is_some(),
                 redirect,
                 initializer_separator,
@@ -1175,7 +1201,17 @@ impl<'a> AstNodeVisitor<'a> {
 
     fn visit_function_expression(&mut self, node: Id<FunctionExpression>) {
         let n = &self.ast[node];
-        self.write_function(&[], &[], None, None, None, None, n.type_parameters, n.parameters, n.body);
+        self.write_function(
+            &[],
+            &[],
+            None,
+            None,
+            None,
+            None,
+            n.type_parameters,
+            n.parameters,
+            n.body,
+        );
     }
 
     fn visit_function_expression_invocation(&mut self, node: Id<FunctionExpressionInvocation>) {
@@ -1496,7 +1532,8 @@ impl<'a> AstNodeVisitor<'a> {
         while let Some(piece) = stack.pop() {
             self.arena.prevent_split(piece);
             children.clear();
-            self.arena.for_each_child(piece, &mut |child| children.push(child));
+            self.arena
+                .for_each_child(piece, &mut |child| children.push(child));
             stack.extend(children.iter().rev());
         }
 
@@ -1848,7 +1885,9 @@ impl<'a> AstNodeVisitor<'a> {
             builder.visit(self, field);
         }
         builder.right_bracket(self, n.right_parenthesis, None, None);
-        let force_split = self.style.preserve_trailing_comma_before(ast, n.right_parenthesis);
+        let force_split = self
+            .style
+            .preserve_trailing_comma_before(ast, n.right_parenthesis);
         let piece = builder.build_with(self, force_split, true);
         self.add(piece);
     }
@@ -1990,9 +2029,12 @@ impl<'a> AstNodeVisitor<'a> {
 
             let body = v.node_piece(n.body);
 
-            let piece = v
-                .arena
-                .add(ConstructorPiece::this_block(header, body, colon, initializers));
+            let piece = v.arena.add(ConstructorPiece::this_block(
+                header,
+                body,
+                colon,
+                initializers,
+            ));
             v.add(piece);
         });
     }
@@ -2108,9 +2150,10 @@ impl<'a> AstNodeVisitor<'a> {
 
         builder.right_bracket(self, n.right_parenthesis, right_delimiter, None);
         let force_split = !is_single_positional
-            && self
-                .style
-                .preserve_trailing_comma_before(ast, right_delimiter.unwrap_or(n.right_parenthesis));
+            && self.style.preserve_trailing_comma_before(
+                ast,
+                right_delimiter.unwrap_or(n.right_parenthesis),
+            );
         let piece = builder.build_with(self, force_split, true);
         self.add(piece);
         self.token(n.question);
@@ -2307,8 +2350,11 @@ impl<'a> AstNodeVisitor<'a> {
         let ast = self.ast;
         let n = &ast[node];
         let guarded_pattern = &ast[n.guarded_pattern];
-        let pattern_piece =
-            self.node_piece_with(guarded_pattern.pattern, false, NodeContext::SwitchExpressionCase);
+        let pattern_piece = self.node_piece_with(
+            guarded_pattern.pattern,
+            false,
+            NodeContext::SwitchExpressionCase,
+        );
 
         let guard_piece = self.optional_node_piece(guarded_pattern.when_clause);
         let arrow_piece = self.token_piece(n.arrow);
@@ -2451,9 +2497,10 @@ impl<'a> AstNodeVisitor<'a> {
                     v.visit(bound);
                 });
 
-                let piece = v
-                    .arena
-                    .add(TypeParameterBoundPiece::new(type_parameter_piece, bound_piece));
+                let piece = v.arena.add(TypeParameterBoundPiece::new(
+                    type_parameter_piece,
+                    bound_piece,
+                ));
                 v.add(piece);
             } else {
                 // No bound.
@@ -2465,7 +2512,11 @@ impl<'a> AstNodeVisitor<'a> {
     fn visit_type_parameter_list(&mut self, node: Id<TypeParameterList>) {
         let ast = self.ast;
         let n = &ast[node];
-        self.write_type_list(n.left_bracket, ast.list_raw(n.type_parameters), n.right_bracket);
+        self.write_type_list(
+            n.left_bracket,
+            ast.list_raw(n.type_parameters),
+            n.right_bracket,
+        );
     }
 
     fn visit_variable_declaration_list(&mut self, node: Id<VariableDeclarationList>) {
@@ -2488,8 +2539,7 @@ impl<'a> AstNodeVisitor<'a> {
             for &variable in ast.list(n.variables) {
                 let variable_node = variable.raw();
                 let variable = &ast[variable];
-                if let (Some(equals), Some(initializer)) = (variable.equals, variable.initializer)
-                {
+                if let (Some(equals), Some(initializer)) = (variable.equals, variable.initializer) {
                     if v.style.is_3_dot_7() {
                         let variable_piece = v.token_piece(variable.name);
 
@@ -2602,7 +2652,12 @@ fn switch_member_parts(
         return (case.labels, case.keyword, case.colon, case.statements);
     }
     let default = &ast[ast.cast::<SwitchDefault>(member).unwrap()];
-    (default.labels, default.keyword, default.colon, default.statements)
+    (
+        default.labels,
+        default.keyword,
+        default.colon,
+        default.statements,
+    )
 }
 
 /// Dart `StringLiteral.stringValue`.
@@ -2671,7 +2726,10 @@ impl DirectiveSection {
 
 #[allow(dead_code)]
 fn _unused(ast: &Ast, node: NodeId) -> (Option<TokenId>, bool) {
-    (comma_after_token(ast, node), node_can_block_split(ast, node))
+    (
+        comma_after_token(ast, node),
+        node_can_block_split(ast, node),
+    )
 }
 
 #[allow(dead_code)]

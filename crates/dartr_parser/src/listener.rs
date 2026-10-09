@@ -2,7 +2,6 @@
 //
 // GENERATED FILE. DO NOT EDIT. Run `python3 tools/codegen/gen_listener.py`.
 
-
 //! The parser event listener (Dart `Listener`).
 //!
 //! Every method has the arguments of the Dart method, in the same order
@@ -42,29 +41,70 @@ use crate::member_kind::MemberKind;
 pub trait Listener {
     fn begin_arguments(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn end_arguments(&mut self, tokens: &mut Tokens, count: i32, begin_token: TokenId, end_token: TokenId) {}
+    fn end_arguments(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     /// Called after the parser has consumed a sequence of patternFields that
     /// forms the arguments to an objectPattern
-    fn handle_object_pattern_fields(&mut self, tokens: &mut Tokens, count: i32, begin_token: TokenId, end_token: TokenId) {}
+    fn handle_object_pattern_fields(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     /// Handle async modifiers `async`, `async*`, `sync`.
-    fn handle_async_modifier(&mut self, tokens: &mut Tokens, async_token: Option<TokenId>, star_token: Option<TokenId>) {}
+    fn handle_async_modifier(
+        &mut self,
+        tokens: &mut Tokens,
+        async_token: Option<TokenId>,
+        star_token: Option<TokenId>,
+    ) {
+    }
 
     /// Ended by either `endAwaitExpression` or `endInvalidAwaitExpression`.
     fn begin_await_expression(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
     /// One of the two possible corresponding end events for
     /// `beginAwaitExpression`.
-    fn end_await_expression(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId) {}
+    fn end_await_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     /// One of the two possible corresponding end events for
     /// `beginAwaitExpression`.
-    fn end_invalid_await_expression(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId, error_code: &'static CfeCode) {}
+    fn end_invalid_await_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+        error_code: &'static CfeCode,
+    ) {
+    }
 
     fn begin_block(&mut self, tokens: &mut Tokens, token: TokenId, block_kind: BlockKind) {}
 
-    fn end_block(&mut self, tokens: &mut Tokens, count: i32, begin_token: TokenId, end_token: TokenId, block_kind: BlockKind) {}
+    fn end_block(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+        block_kind: BlockKind,
+    ) {
+    }
 
     /// Called to handle a block that has been parsed but is not associated
     /// with any top level function declaration. Substructures:
@@ -77,18 +117,39 @@ pub trait Listener {
 
     fn begin_case_expression(&mut self, tokens: &mut Tokens, case_keyword: TokenId) {}
 
-    fn end_case_expression(&mut self, tokens: &mut Tokens, case_keyword: TokenId, when: Option<TokenId>, colon: TokenId) {}
+    fn end_case_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        case_keyword: TokenId,
+        when: Option<TokenId>,
+        colon: TokenId,
+    ) {
+    }
 
     /// Handle the start of the body of a class, mixin or extension declaration
     /// beginning at `token`. The actual kind of declaration is indicated by
     /// `kind`.
-    fn begin_class_or_mixin_or_extension_body(&mut self, tokens: &mut Tokens, kind: DeclarationKind, token: TokenId) {}
+    fn begin_class_or_mixin_or_extension_body(
+        &mut self,
+        tokens: &mut Tokens,
+        kind: DeclarationKind,
+        token: TokenId,
+    ) {
+    }
 
     /// Handle the end of the body of a class, mixin or extension declaration.
     /// The only substructures are the class, mixin or extension members.
     ///
     /// The actual kind of declaration is indicated by `kind`.
-    fn end_class_or_mixin_or_extension_body(&mut self, tokens: &mut Tokens, kind: DeclarationKind, member_count: i32, begin_token: TokenId, end_token: TokenId) {}
+    fn end_class_or_mixin_or_extension_body(
+        &mut self,
+        tokens: &mut Tokens,
+        kind: DeclarationKind,
+        member_count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     /// Called before parsing a class declaration, mixin declaration, or named
     /// mixin application.
@@ -98,26 +159,56 @@ pub trait Listener {
     /// parameter declarations.
     ///
     /// Ended by `endTopLevelDeclaration`.
-    fn begin_class_or_mixin_or_named_mixin_application_prelude(&mut self, tokens: &mut Tokens, token: TokenId) {}
+    fn begin_class_or_mixin_or_named_mixin_application_prelude(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+    ) {
+    }
 
     /// Handle the beginning of a class declaration.
     /// `begin` may be the 'class' token, or may point to modifiers
     /// (or extraneous modifiers in the case of recovery) preceding `name`.
     ///
     /// At this point we have parsed the name and type parameter declarations.
-    fn begin_class_declaration(&mut self, tokens: &mut Tokens, begin: TokenId, abstract_token: Option<TokenId>, sealed_token: Option<TokenId>, base_token: Option<TokenId>, interface_token: Option<TokenId>, final_token: Option<TokenId>, augment_token: Option<TokenId>, mixin_token: Option<TokenId>, name: TokenId) {}
+    fn begin_class_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        begin: TokenId,
+        abstract_token: Option<TokenId>,
+        sealed_token: Option<TokenId>,
+        base_token: Option<TokenId>,
+        interface_token: Option<TokenId>,
+        final_token: Option<TokenId>,
+        augment_token: Option<TokenId>,
+        mixin_token: Option<TokenId>,
+        name: TokenId,
+    ) {
+    }
 
     /// Handle an extends clause in a class declaration. Substructures:
     /// - supertype (may be a mixin application)
     /// The typeCount is for error recovery: Invalid code might have more than one
     /// class specified in the extends clause. A parser error has already been
     /// issued.
-    fn handle_class_extends(&mut self, tokens: &mut Tokens, extends_keyword: Option<TokenId>, type_count: i32) {}
+    fn handle_class_extends(
+        &mut self,
+        tokens: &mut Tokens,
+        extends_keyword: Option<TokenId>,
+        type_count: i32,
+    ) {
+    }
 
     /// Handle an implements clause in a class, mixin or enum declaration.
     /// Substructures:
     /// - implemented types
-    fn handle_implements(&mut self, tokens: &mut Tokens, implements_keyword: Option<TokenId>, interfaces_count: i32) {}
+    fn handle_implements(
+        &mut self,
+        tokens: &mut Tokens,
+        implements_keyword: Option<TokenId>,
+        interfaces_count: i32,
+    ) {
+    }
 
     /// Handle the header of a class declaration.  Substructures:
     /// - metadata
@@ -128,7 +219,14 @@ pub trait Listener {
     /// - with clause
     /// - implemented types
     /// - native clause
-    fn handle_class_header(&mut self, tokens: &mut Tokens, begin: TokenId, class_keyword: TokenId, native_token: Option<TokenId>) {}
+    fn handle_class_header(
+        &mut self,
+        tokens: &mut Tokens,
+        begin: TokenId,
+        class_keyword: TokenId,
+        native_token: Option<TokenId>,
+    ) {
+    }
 
     /// Handle recovery associated with a class or extension type header.
     /// This may be called multiple times after `handleClassHeader`
@@ -138,12 +236,23 @@ pub trait Listener {
     /// - supertype
     /// - with clause
     /// - implemented types
-    fn handle_recover_declaration_header(&mut self, tokens: &mut Tokens, kind: DeclarationHeaderKind) {}
+    fn handle_recover_declaration_header(
+        &mut self,
+        tokens: &mut Tokens,
+        kind: DeclarationHeaderKind,
+    ) {
+    }
 
     /// Handle the end of a class declaration.  Substructures:
     /// - class header
     /// - class body
-    fn end_class_declaration(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId) {}
+    fn end_class_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     /// Handle `;` as a class body.
     fn handle_no_class_body(&mut self, tokens: &mut Tokens, semicolon_token: TokenId) {}
@@ -152,11 +261,26 @@ pub trait Listener {
     fn handle_no_extension_type_body(&mut self, tokens: &mut Tokens, semicolon_token: TokenId) {}
 
     /// Handle the beginning of a mixin declaration.
-    fn begin_mixin_declaration(&mut self, tokens: &mut Tokens, begin_token: TokenId, augment_token: Option<TokenId>, base_token: Option<TokenId>, mixin_keyword: TokenId, name: TokenId) {}
+    fn begin_mixin_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        augment_token: Option<TokenId>,
+        base_token: Option<TokenId>,
+        mixin_keyword: TokenId,
+        name: TokenId,
+    ) {
+    }
 
     /// Handle an on clause in a mixin declaration. Substructures:
     /// - implemented types
-    fn handle_mixin_on(&mut self, tokens: &mut Tokens, on_keyword: Option<TokenId>, type_count: i32) {}
+    fn handle_mixin_on(
+        &mut self,
+        tokens: &mut Tokens,
+        on_keyword: Option<TokenId>,
+        type_count: i32,
+    ) {
+    }
 
     /// Handle the header of a mixin declaration.  Substructures:
     /// - metadata
@@ -183,7 +307,13 @@ pub trait Listener {
     /// Handle the end of a mixin declaration.  Substructures:
     /// - mixin header
     /// - class or mixin body
-    fn end_mixin_declaration(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId) {}
+    fn end_mixin_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     /// Begins a not-further-categorized top-level declaration.
     ///
@@ -197,19 +327,39 @@ pub trait Listener {
     /// declaration is coming but not its name or type parameter declarations.
     ///
     /// Ended by `endTopLevelDeclaration`.
-    fn begin_extension_declaration_prelude(&mut self, tokens: &mut Tokens, extension_keyword: TokenId) {}
+    fn begin_extension_declaration_prelude(
+        &mut self,
+        tokens: &mut Tokens,
+        extension_keyword: TokenId,
+    ) {
+    }
 
     /// Handle the beginning of an extension methods declaration.  Substructures:
     /// - type variables
     ///
     /// At this point we have parsed the name and type parameter declarations.
-    fn begin_extension_declaration(&mut self, tokens: &mut Tokens, augment_token: Option<TokenId>, extension_keyword: TokenId, name: Option<TokenId>) {}
+    fn begin_extension_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        augment_token: Option<TokenId>,
+        extension_keyword: TokenId,
+        name: Option<TokenId>,
+    ) {
+    }
 
     /// Handle the end of an extension methods declaration.  Substructures:
     /// - substructures from `beginExtensionDeclaration`
     /// - on type
     /// - body
-    fn end_extension_declaration(&mut self, tokens: &mut Tokens, begin_token: TokenId, extension_keyword: TokenId, on_keyword: Option<TokenId>, end_token: TokenId) {}
+    fn end_extension_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        extension_keyword: TokenId,
+        on_keyword: Option<TokenId>,
+        end_token: TokenId,
+    ) {
+    }
 
     /// Handle `;` as an extension body.
     fn handle_no_extension_body(&mut self, tokens: &mut Tokens, semicolon_token: TokenId) {}
@@ -218,14 +368,30 @@ pub trait Listener {
     /// - type variables
     ///
     /// At this point we have parsed the name and type parameter declarations.
-    fn begin_extension_type_declaration(&mut self, tokens: &mut Tokens, augment_keyword: Option<TokenId>, extension_keyword: TokenId, name: TokenId) {}
+    fn begin_extension_type_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        augment_keyword: Option<TokenId>,
+        extension_keyword: TokenId,
+        name: TokenId,
+    ) {
+    }
 
     /// Handle the end of an extension methods declaration.  Substructures:
     /// - substructures from `beginExtensionTypeDeclaration`
     /// - primary constructor formals
     /// - implements clause
     /// - body
-    fn end_extension_type_declaration(&mut self, tokens: &mut Tokens, begin_token: TokenId, augment_token: Option<TokenId>, extension_keyword: TokenId, type_keyword: TokenId, end_token: TokenId) {}
+    fn end_extension_type_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        augment_token: Option<TokenId>,
+        extension_keyword: TokenId,
+        type_keyword: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     /// Handle the start of a primary constructor declaration.
     fn begin_primary_constructor(&mut self, tokens: &mut Tokens, begin_token: TokenId) {}
@@ -240,10 +406,26 @@ pub trait Listener {
     /// Substructures:
     /// - constructor name (if `hasConstructorName` is `true`)
     /// - formals
-    fn end_primary_constructor(&mut self, tokens: &mut Tokens, kind: DeclarationKind, begin_token: TokenId, end_token: TokenId, const_keyword: Option<TokenId>, has_constructor_name: bool) {}
+    fn end_primary_constructor(
+        &mut self,
+        tokens: &mut Tokens,
+        kind: DeclarationKind,
+        begin_token: TokenId,
+        end_token: TokenId,
+        const_keyword: Option<TokenId>,
+        has_constructor_name: bool,
+    ) {
+    }
 
     /// Handle the omission of a primary constructor declaration.
-    fn handle_no_primary_constructor(&mut self, tokens: &mut Tokens, kind: DeclarationKind, token: TokenId, const_keyword: Option<TokenId>) {}
+    fn handle_no_primary_constructor(
+        &mut self,
+        tokens: &mut Tokens,
+        kind: DeclarationKind,
+        token: TokenId,
+        const_keyword: Option<TokenId>,
+    ) {
+    }
 
     fn begin_primary_constructor_body(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
@@ -251,7 +433,14 @@ pub trait Listener {
     /// - initializers
     /// - async marker
     /// - body
-    fn end_primary_constructor_body(&mut self, tokens: &mut Tokens, begin_token: TokenId, begin_initializers: Option<TokenId>, end_token: TokenId) {}
+    fn end_primary_constructor_body(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        begin_initializers: Option<TokenId>,
+        end_token: TokenId,
+    ) {
+    }
 
     fn begin_combinators(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
@@ -275,11 +464,26 @@ pub trait Listener {
 
     fn begin_constructor_reference(&mut self, tokens: &mut Tokens, start: TokenId) {}
 
-    fn end_constructor_reference(&mut self, tokens: &mut Tokens, start: TokenId, period_before_name: Option<TokenId>, end_token: TokenId, constructor_reference_context: ConstructorReferenceContext) {}
+    fn end_constructor_reference(
+        &mut self,
+        tokens: &mut Tokens,
+        start: TokenId,
+        period_before_name: Option<TokenId>,
+        end_token: TokenId,
+        constructor_reference_context: ConstructorReferenceContext,
+    ) {
+    }
 
     fn begin_do_while_statement(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn end_do_while_statement(&mut self, tokens: &mut Tokens, do_keyword: TokenId, while_keyword: TokenId, end_token: TokenId) {}
+    fn end_do_while_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        do_keyword: TokenId,
+        while_keyword: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     fn begin_do_while_statement_body(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
@@ -303,17 +507,40 @@ pub trait Listener {
     /// (or extraneous modifiers in the case of recovery) preceding `name`.
     ///
     /// At this point we have parsed the name and type parameter declarations.
-    fn begin_enum_declaration(&mut self, tokens: &mut Tokens, begin_token: TokenId, augment_token: Option<TokenId>, enum_keyword: TokenId, name: TokenId) {}
+    fn begin_enum_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        augment_token: Option<TokenId>,
+        enum_keyword: TokenId,
+        name: TokenId,
+    ) {
+    }
 
     /// Handle the end of an enum declaration.  Substructures:
     /// - `memberCount` times:
     ///   - Enum member
-    fn end_enum_declaration(&mut self, tokens: &mut Tokens, begin_token: TokenId, enum_keyword: TokenId, left_brace: TokenId, member_count: i32, end_token: TokenId) {}
+    fn end_enum_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        enum_keyword: TokenId,
+        left_brace: TokenId,
+        member_count: i32,
+        end_token: TokenId,
+    ) {
+    }
 
     /// Handle the enum elements. Substructures:
     /// - `elementsCount` times:
     ///   - Enum element
-    fn handle_enum_elements(&mut self, tokens: &mut Tokens, elements_end_token: TokenId, elements_count: i32) {}
+    fn handle_enum_elements(
+        &mut self,
+        tokens: &mut Tokens,
+        elements_end_token: TokenId,
+        elements_count: i32,
+    ) {
+    }
 
     /// Handle the header of an enum declaration.  Substructures:
     /// - Metadata
@@ -321,7 +548,14 @@ pub trait Listener {
     /// - type variables
     /// - with clause
     /// - implemented types
-    fn handle_enum_header(&mut self, tokens: &mut Tokens, augment_token: Option<TokenId>, enum_keyword: TokenId, left_brace: TokenId) {}
+    fn handle_enum_header(
+        &mut self,
+        tokens: &mut Tokens,
+        augment_token: Option<TokenId>,
+        enum_keyword: TokenId,
+        left_brace: TokenId,
+    ) {
+    }
 
     /// Handle the start of an enum body.
     fn begin_enum_body(&mut self, tokens: &mut Tokens, token: TokenId) {}
@@ -335,7 +569,13 @@ pub trait Listener {
     /// Handle the enum element. Substructures:
     /// - Metadata
     /// - Enum value (identifier)
-    fn handle_enum_element(&mut self, tokens: &mut Tokens, begin_token: TokenId, augment_token: Option<TokenId>) {}
+    fn handle_enum_element(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        augment_token: Option<TokenId>,
+    ) {
+    }
 
     fn begin_export(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
@@ -349,23 +589,88 @@ pub trait Listener {
     /// Called by `Parser` after parsing an extraneous expression as error
     /// recovery. For a stack-based listener, the suggested action is to discard
     /// an expression from the stack.
-    fn handle_extraneous_expression(&mut self, tokens: &mut Tokens, token: TokenId, message: CfeMessage) {}
+    fn handle_extraneous_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        message: CfeMessage,
+    ) {
+    }
 
-    fn handle_expression_statement(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId) {}
+    fn handle_expression_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
-    fn begin_factory(&mut self, tokens: &mut Tokens, declaration_kind: DeclarationKind, last_consumed: TokenId, augment_token: Option<TokenId>, external_token: Option<TokenId>, const_token: Option<TokenId>) {}
+    fn begin_factory(
+        &mut self,
+        tokens: &mut Tokens,
+        declaration_kind: DeclarationKind,
+        last_consumed: TokenId,
+        augment_token: Option<TokenId>,
+        external_token: Option<TokenId>,
+        const_token: Option<TokenId>,
+    ) {
+    }
 
-    fn end_factory(&mut self, tokens: &mut Tokens, kind: DeclarationKind, begin_token: TokenId, factory_keyword: TokenId, end_token: TokenId) {}
+    fn end_factory(
+        &mut self,
+        tokens: &mut Tokens,
+        kind: DeclarationKind,
+        begin_token: TokenId,
+        factory_keyword: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
-    fn begin_formal_parameter(&mut self, tokens: &mut Tokens, token: TokenId, kind: MemberKind, required_token: Option<TokenId>, covariant_token: Option<TokenId>, var_final_or_const: Option<TokenId>) {}
+    fn begin_formal_parameter(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        kind: MemberKind,
+        required_token: Option<TokenId>,
+        covariant_token: Option<TokenId>,
+        var_final_or_const: Option<TokenId>,
+    ) {
+    }
 
-    fn end_formal_parameter(&mut self, tokens: &mut Tokens, var_or_final: Option<TokenId>, this_keyword: Option<TokenId>, super_keyword: Option<TokenId>, period_after_this_or_super: Option<TokenId>, name_token: TokenId, initializer_start: Option<TokenId>, initializer_end: Option<TokenId>, kind: FormalParameterKind, member_kind: MemberKind) {}
+    fn end_formal_parameter(
+        &mut self,
+        tokens: &mut Tokens,
+        var_or_final: Option<TokenId>,
+        this_keyword: Option<TokenId>,
+        super_keyword: Option<TokenId>,
+        period_after_this_or_super: Option<TokenId>,
+        name_token: TokenId,
+        initializer_start: Option<TokenId>,
+        initializer_end: Option<TokenId>,
+        kind: FormalParameterKind,
+        member_kind: MemberKind,
+    ) {
+    }
 
-    fn handle_no_formal_parameters(&mut self, tokens: &mut Tokens, token: TokenId, kind: MemberKind) {}
+    fn handle_no_formal_parameters(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        kind: MemberKind,
+    ) {
+    }
 
     fn begin_formal_parameters(&mut self, tokens: &mut Tokens, token: TokenId, kind: MemberKind) {}
 
-    fn end_formal_parameters(&mut self, tokens: &mut Tokens, count: i32, begin_token: TokenId, end_token: TokenId, kind: MemberKind) {}
+    fn end_formal_parameters(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+        kind: MemberKind,
+    ) {
+    }
 
     /// Handle the end of a class field declaration.  Substructures:
     /// - Metadata
@@ -374,7 +679,22 @@ pub trait Listener {
     /// - Variable declarations (count times)
     ///
     /// Started by `beginFields`.
-    fn end_fields(&mut self, tokens: &mut Tokens, kind: DeclarationKind, abstract_token: Option<TokenId>, augment_token: Option<TokenId>, external_token: Option<TokenId>, static_token: Option<TokenId>, covariant_token: Option<TokenId>, late_token: Option<TokenId>, var_final_or_const: Option<TokenId>, count: i32, begin_token: TokenId, end_token: TokenId) {}
+    fn end_fields(
+        &mut self,
+        tokens: &mut Tokens,
+        kind: DeclarationKind,
+        abstract_token: Option<TokenId>,
+        augment_token: Option<TokenId>,
+        external_token: Option<TokenId>,
+        static_token: Option<TokenId>,
+        covariant_token: Option<TokenId>,
+        late_token: Option<TokenId>,
+        var_final_or_const: Option<TokenId>,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     /// Marks that the grammar term `forInitializerStatement` has been parsed and
     /// it was an empty statement.
@@ -382,17 +702,35 @@ pub trait Listener {
 
     /// Marks that the grammar term `forInitializerStatement` has been parsed and
     /// it was an expression statement.
-    fn handle_for_initializer_expression_statement(&mut self, tokens: &mut Tokens, token: TokenId, for_in: bool) {}
+    fn handle_for_initializer_expression_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        for_in: bool,
+    ) {
+    }
 
     /// Marks that the grammar term `forInitializerStatement` has been parsed and
     /// it was a `localVariableDeclaration` of the form
     /// `metadata initializedVariableDeclaration ';'`.
-    fn handle_for_initializer_local_variable_declaration(&mut self, tokens: &mut Tokens, token: TokenId, for_in: bool) {}
+    fn handle_for_initializer_local_variable_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        for_in: bool,
+    ) {
+    }
 
     /// Marks that the grammar term `forInitializerStatement` has been parsed and
     /// it was a `localVariableDeclaration` of the form
     /// `metadata patternVariableDeclaration ';'`.
-    fn handle_for_initializer_pattern_variable_assignment(&mut self, tokens: &mut Tokens, keyword: TokenId, equals: TokenId) {}
+    fn handle_for_initializer_pattern_variable_assignment(
+        &mut self,
+        tokens: &mut Tokens,
+        keyword: TokenId,
+        equals: TokenId,
+    ) {
+    }
 
     /// Marks the start of a for statement which is ended by either
     /// `endForStatement` or `endForIn`.
@@ -401,7 +739,16 @@ pub trait Listener {
     /// Marks the end of parsing the control structure of a for statement
     /// or for control flow entry up to and including the closing parenthesis.
     /// `for` `(` initialization `;` condition `;` updaters `)`
-    fn handle_for_loop_parts(&mut self, tokens: &mut Tokens, for_keyword: TokenId, left_paren: TokenId, left_separator: TokenId, right_separator: TokenId, update_expression_count: i32) {}
+    fn handle_for_loop_parts(
+        &mut self,
+        tokens: &mut Tokens,
+        for_keyword: TokenId,
+        left_paren: TokenId,
+        left_separator: TokenId,
+        right_separator: TokenId,
+        update_expression_count: i32,
+    ) {
+    }
 
     fn end_for_statement(&mut self, tokens: &mut Tokens, end_token: TokenId) {}
 
@@ -416,7 +763,16 @@ pub trait Listener {
     /// If `patternKeyword` is not `null`, it is either a `var` or `final` token,
     /// and this takes the form:
     ///   `for` `(` patternKeyword pattern `in` iterator `)`
-    fn handle_for_in_loop_parts(&mut self, tokens: &mut Tokens, await_token: Option<TokenId>, for_token: TokenId, left_parenthesis: TokenId, pattern_keyword: Option<TokenId>, in_keyword: TokenId) {}
+    fn handle_for_in_loop_parts(
+        &mut self,
+        tokens: &mut Tokens,
+        await_token: Option<TokenId>,
+        for_token: TokenId,
+        left_parenthesis: TokenId,
+        pattern_keyword: Option<TokenId>,
+        in_keyword: TokenId,
+    ) {
+    }
 
     fn end_for_in(&mut self, tokens: &mut Tokens, end_token: TokenId) {}
 
@@ -484,7 +840,14 @@ pub trait Listener {
     /// and `handleExpressionFunctionBody`.  The `beginToken` is the '{' token,
     /// and the `endToken` is the '}' token of the block.  The number of
     /// statements is given as the `count` parameter.
-    fn end_block_function_body(&mut self, tokens: &mut Tokens, count: i32, begin_token: TokenId, end_token: TokenId) {}
+    fn end_block_function_body(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     fn handle_no_function_body(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
@@ -492,7 +855,14 @@ pub trait Listener {
     ///
     /// The boolean `isExpressionBody` indicates whether the function body that
     /// was skipped used "=>" syntax.
-    fn handle_function_body_skipped(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId, is_expression_body: bool) {}
+    fn handle_function_body_skipped(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+        is_expression_body: bool,
+    ) {
+    }
 
     fn begin_function_name(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
@@ -515,7 +885,14 @@ pub trait Listener {
     ///
     /// The boolean `isFunctionExpression` indicates that we are in the latter
     /// case.
-    fn end_function_name(&mut self, tokens: &mut Tokens, begin_token: TokenId, token: TokenId, is_function_expression: bool) {}
+    fn end_function_name(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        token: TokenId,
+        is_function_expression: bool,
+    ) {
+    }
 
     fn begin_typedef(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
@@ -533,7 +910,15 @@ pub trait Listener {
     /// - Name (identifier)
     /// - Alias type variables
     /// - Type (FunctionTypeAnnotation)
-    fn end_typedef(&mut self, tokens: &mut Tokens, augment_token: Option<TokenId>, typedef_keyword: TokenId, equals: Option<TokenId>, end_token: TokenId) {}
+    fn end_typedef(
+        &mut self,
+        tokens: &mut Tokens,
+        augment_token: Option<TokenId>,
+        typedef_keyword: TokenId,
+        equals: Option<TokenId>,
+        end_token: TokenId,
+    ) {
+    }
 
     /// Handle the end of a class with clause (e.g. "with B, C").
     /// Substructures:
@@ -567,13 +952,31 @@ pub trait Listener {
     /// (or extraneous modifiers in the case of recovery) preceding `name`.
     ///
     /// At this point we have parsed the name and type parameter declarations.
-    fn begin_named_mixin_application(&mut self, tokens: &mut Tokens, begin_token: TokenId, abstract_token: Option<TokenId>, sealed_token: Option<TokenId>, base_token: Option<TokenId>, interface_token: Option<TokenId>, final_token: Option<TokenId>, augment_token: Option<TokenId>, mixin_token: Option<TokenId>, name: TokenId) {}
+    fn begin_named_mixin_application(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        abstract_token: Option<TokenId>,
+        sealed_token: Option<TokenId>,
+        base_token: Option<TokenId>,
+        interface_token: Option<TokenId>,
+        final_token: Option<TokenId>,
+        augment_token: Option<TokenId>,
+        mixin_token: Option<TokenId>,
+        name: TokenId,
+    ) {
+    }
 
     /// Handle a named mixin application with clause (e.g. "A with B, C").
     /// Substructures:
     /// - supertype
     /// - mixin types (TypeList)
-    fn handle_named_mixin_application_with_clause(&mut self, tokens: &mut Tokens, with_keyword: TokenId) {}
+    fn handle_named_mixin_application_with_clause(
+        &mut self,
+        tokens: &mut Tokens,
+        with_keyword: TokenId,
+    ) {
+    }
 
     /// Handle the end of a named mixin declaration.  Substructures:
     /// - metadata
@@ -590,7 +993,16 @@ pub trait Listener {
     /// the number of implemented types is passed as a parameter.
     ///
     /// TODO(jensj): Rename `begin` to `beginToken` for consistency.
-    fn end_named_mixin_application(&mut self, tokens: &mut Tokens, begin: TokenId, class_keyword: TokenId, equals: TokenId, implements_keyword: Option<TokenId>, end_token: TokenId) {}
+    fn end_named_mixin_application(
+        &mut self,
+        tokens: &mut Tokens,
+        begin: TokenId,
+        class_keyword: TokenId,
+        equals: TokenId,
+        implements_keyword: Option<TokenId>,
+        end_token: TokenId,
+    ) {
+    }
 
     fn begin_hide(&mut self, tokens: &mut Tokens, hide_keyword: TokenId) {}
 
@@ -606,16 +1018,35 @@ pub trait Listener {
 
     fn begin_if_statement(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn end_if_statement(&mut self, tokens: &mut Tokens, if_token: TokenId, else_token: Option<TokenId>, end_token: TokenId) {}
+    fn end_if_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        if_token: TokenId,
+        else_token: Option<TokenId>,
+        end_token: TokenId,
+    ) {
+    }
 
     fn begin_then_statement(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn end_then_statement(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId) {}
+    fn end_then_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     fn begin_else_statement(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
     /// The `beginToken` is the `else` token.
-    fn end_else_statement(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId) {}
+    fn end_else_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     fn begin_import(&mut self, tokens: &mut Tokens, import_keyword: TokenId) {}
 
@@ -623,7 +1054,13 @@ pub trait Listener {
     /// depending upon whether `deferredKeyword` and `asKeyword`
     /// are not `null` respectively. Substructures:
     /// - prefix identifier (only if asKeyword != null)
-    fn handle_import_prefix(&mut self, tokens: &mut Tokens, deferred_keyword: Option<TokenId>, as_keyword: Option<TokenId>) {}
+    fn handle_import_prefix(
+        &mut self,
+        tokens: &mut Tokens,
+        deferred_keyword: Option<TokenId>,
+        as_keyword: Option<TokenId>,
+    ) {
+    }
 
     /// Handle the end of an import directive.  Substructures:
     /// - metadata
@@ -631,7 +1068,13 @@ pub trait Listener {
     /// - conditional uris
     /// - prefix identifier
     /// - combinators
-    fn end_import(&mut self, tokens: &mut Tokens, import_keyword: TokenId, semicolon: Option<TokenId>) {}
+    fn end_import(
+        &mut self,
+        tokens: &mut Tokens,
+        import_keyword: TokenId,
+        semicolon: Option<TokenId>,
+    ) {
+    }
 
     /// Handle recovery associated with an import directive.
     /// This may be called multiple times after `endImport`
@@ -652,13 +1095,26 @@ pub trait Listener {
     /// - Dotted name
     /// - Condition (literal string; only if `equalSign` != null)
     /// - URI (literal string)
-    fn end_conditional_uri(&mut self, tokens: &mut Tokens, if_keyword: TokenId, left_paren: TokenId, equal_sign: Option<TokenId>) {}
+    fn end_conditional_uri(
+        &mut self,
+        tokens: &mut Tokens,
+        if_keyword: TokenId,
+        left_paren: TokenId,
+        equal_sign: Option<TokenId>,
+    ) {
+    }
 
     fn handle_dotted_name(&mut self, tokens: &mut Tokens, count: i32, first_identifier: TokenId) {}
 
     fn begin_implicit_creation_expression(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn end_implicit_creation_expression(&mut self, tokens: &mut Tokens, token: TokenId, open_angle_bracket: TokenId) {}
+    fn end_implicit_creation_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        open_angle_bracket: TokenId,
+    ) {
+    }
 
     fn begin_initialized_identifier(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
@@ -668,7 +1124,13 @@ pub trait Listener {
 
     /// Handle the end of a field initializer.  Substructures:
     /// - Initializer expression
-    fn end_field_initializer(&mut self, tokens: &mut Tokens, assignment: TokenId, end_token: TokenId) {}
+    fn end_field_initializer(
+        &mut self,
+        tokens: &mut Tokens,
+        assignment: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     /// Handle the lack of a field initializer.
     fn handle_no_field_initializer(&mut self, tokens: &mut Tokens, token: TokenId) {}
@@ -688,7 +1150,14 @@ pub trait Listener {
 
     fn begin_initializers(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn end_initializers(&mut self, tokens: &mut Tokens, count: i32, begin_token: TokenId, end_token: TokenId) {}
+    fn end_initializers(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     fn handle_no_initializers(&mut self, tokens: &mut Tokens) {}
 
@@ -713,38 +1182,90 @@ pub trait Listener {
 
     fn end_labeled_statement(&mut self, tokens: &mut Tokens, label_count: i32) {}
 
-    fn begin_library_augmentation(&mut self, tokens: &mut Tokens, augment_keyword: TokenId, library_keyword: TokenId) {}
+    fn begin_library_augmentation(
+        &mut self,
+        tokens: &mut Tokens,
+        augment_keyword: TokenId,
+        library_keyword: TokenId,
+    ) {
+    }
 
     /// Handle the end of a library augmentation directive.  Substructures:
     /// - metadata
     /// - uri
-    fn end_library_augmentation(&mut self, tokens: &mut Tokens, augment_keyword: TokenId, library_keyword: TokenId, semicolon: TokenId) {}
+    fn end_library_augmentation(
+        &mut self,
+        tokens: &mut Tokens,
+        augment_keyword: TokenId,
+        library_keyword: TokenId,
+        semicolon: TokenId,
+    ) {
+    }
 
     fn begin_library_name(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
     /// Handle the end of a library directive.  Substructures:
     /// - Metadata
     /// - Library name (a qualified identifier)
-    fn end_library_name(&mut self, tokens: &mut Tokens, library_keyword: TokenId, semicolon: TokenId, has_name: bool) {}
+    fn end_library_name(
+        &mut self,
+        tokens: &mut Tokens,
+        library_keyword: TokenId,
+        semicolon: TokenId,
+        has_name: bool,
+    ) {
+    }
 
     /// Called after parsing a map entry. Either the key or the value or both can
     /// start with the null-aware token `?`. In that case, `nullAwareKeyToken` and
     /// `nullAwareValueToken` are set appropriately. Substructures:
     /// - expression
     /// - expression
-    fn handle_literal_map_entry(&mut self, tokens: &mut Tokens, colon: TokenId, end_token: TokenId, null_aware_key_token: Option<TokenId>, null_aware_value_token: Option<TokenId>) {}
+    fn handle_literal_map_entry(
+        &mut self,
+        tokens: &mut Tokens,
+        colon: TokenId,
+        end_token: TokenId,
+        null_aware_key_token: Option<TokenId>,
+        null_aware_value_token: Option<TokenId>,
+    ) {
+    }
 
     /// Called after the parser has consumed a mapPatternEntry, consisting of an
     /// expression, a colon, and a pattern.
-    fn handle_map_pattern_entry(&mut self, tokens: &mut Tokens, colon: TokenId, end_token: TokenId) {}
+    fn handle_map_pattern_entry(
+        &mut self,
+        tokens: &mut Tokens,
+        colon: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     fn begin_literal_string(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn handle_interpolation_expression(&mut self, tokens: &mut Tokens, left_bracket: TokenId, right_bracket: Option<TokenId>) {}
+    fn handle_interpolation_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        left_bracket: TokenId,
+        right_bracket: Option<TokenId>,
+    ) {
+    }
 
-    fn end_literal_string(&mut self, tokens: &mut Tokens, interpolation_count: i32, end_token: TokenId) {}
+    fn end_literal_string(
+        &mut self,
+        tokens: &mut Tokens,
+        interpolation_count: i32,
+        end_token: TokenId,
+    ) {
+    }
 
-    fn handle_adjacent_string_literals(&mut self, tokens: &mut Tokens, start_token: TokenId, literal_count: i32) {}
+    fn handle_adjacent_string_literals(
+        &mut self,
+        tokens: &mut Tokens,
+        start_token: TokenId,
+        literal_count: i32,
+    ) {
+    }
 
     /// Called for class-like members (class, mixin, extension), but each member
     /// should also have a more specific begin/end pair, e.g.
@@ -764,7 +1285,20 @@ pub trait Listener {
 
     /// Handle the beginning of a class-like method declaration.  Substructures:
     /// - metadata
-    fn begin_method(&mut self, tokens: &mut Tokens, declaration_kind: DeclarationKind, augment_token: Option<TokenId>, external_token: Option<TokenId>, static_token: Option<TokenId>, covariant_token: Option<TokenId>, var_final_or_const: Option<TokenId>, get_or_set: Option<TokenId>, name: TokenId, enclosing_declaration_name: Option<&str>) {}
+    fn begin_method(
+        &mut self,
+        tokens: &mut Tokens,
+        declaration_kind: DeclarationKind,
+        augment_token: Option<TokenId>,
+        external_token: Option<TokenId>,
+        static_token: Option<TokenId>,
+        covariant_token: Option<TokenId>,
+        var_final_or_const: Option<TokenId>,
+        get_or_set: Option<TokenId>,
+        name: TokenId,
+        enclosing_declaration_name: Option<&str>,
+    ) {
+    }
 
     /// Handle the end of a method declaration in a class, enum, mixin, extension
     /// or extension type.  Substructures:
@@ -776,11 +1310,35 @@ pub trait Listener {
     /// - initializers
     /// - async marker
     /// - body
-    fn end_method(&mut self, tokens: &mut Tokens, kind: DeclarationKind, get_or_set: Option<TokenId>, begin_token: TokenId, begin_param: TokenId, begin_initializers: Option<TokenId>, end_token: TokenId) {}
+    fn end_method(
+        &mut self,
+        tokens: &mut Tokens,
+        kind: DeclarationKind,
+        get_or_set: Option<TokenId>,
+        begin_token: TokenId,
+        begin_param: TokenId,
+        begin_initializers: Option<TokenId>,
+        end_token: TokenId,
+    ) {
+    }
 
     /// Handle the beginning of a constructor declaration.  Substructures:
     /// - metadata
-    fn begin_constructor(&mut self, tokens: &mut Tokens, declaration_kind: DeclarationKind, augment_token: Option<TokenId>, external_token: Option<TokenId>, static_token: Option<TokenId>, covariant_token: Option<TokenId>, var_final_or_const: Option<TokenId>, get_or_set: Option<TokenId>, new_token: Option<TokenId>, name: TokenId, enclosing_declaration_name: Option<&str>) {}
+    fn begin_constructor(
+        &mut self,
+        tokens: &mut Tokens,
+        declaration_kind: DeclarationKind,
+        augment_token: Option<TokenId>,
+        external_token: Option<TokenId>,
+        static_token: Option<TokenId>,
+        covariant_token: Option<TokenId>,
+        var_final_or_const: Option<TokenId>,
+        get_or_set: Option<TokenId>,
+        new_token: Option<TokenId>,
+        name: TokenId,
+        enclosing_declaration_name: Option<&str>,
+    ) {
+    }
 
     /// Handle the end of a constructor declaration.  Substructures:
     /// - metadata
@@ -791,7 +1349,17 @@ pub trait Listener {
     /// - initializers
     /// - async marker
     /// - body
-    fn end_constructor(&mut self, tokens: &mut Tokens, kind: DeclarationKind, begin_token: TokenId, new_token: Option<TokenId>, begin_param: TokenId, begin_initializers: Option<TokenId>, end_token: TokenId) {}
+    fn end_constructor(
+        &mut self,
+        tokens: &mut Tokens,
+        kind: DeclarationKind,
+        begin_token: TokenId,
+        new_token: Option<TokenId>,
+        begin_param: TokenId,
+        begin_initializers: Option<TokenId>,
+        end_token: TokenId,
+    ) {
+    }
 
     fn begin_metadata_star(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
@@ -804,11 +1372,26 @@ pub trait Listener {
     /// - Type arguments
     /// - Constructor name (only if `periodBeforeName` is not `null`)
     /// - Arguments
-    fn end_metadata(&mut self, tokens: &mut Tokens, begin_token: TokenId, period_before_name: Option<TokenId>, end_token: TokenId) {}
+    fn end_metadata(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        period_before_name: Option<TokenId>,
+        end_token: TokenId,
+    ) {
+    }
 
     fn begin_optional_formal_parameters(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn end_optional_formal_parameters(&mut self, tokens: &mut Tokens, count: i32, begin_token: TokenId, end_token: TokenId, kind: MemberKind) {}
+    fn end_optional_formal_parameters(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+        kind: MemberKind,
+    ) {
+    }
 
     fn begin_part(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
@@ -825,36 +1408,81 @@ pub trait Listener {
     ///
     /// If `hasName` is true, this part refers to its library by name, otherwise,
     /// by URI.
-    fn end_part_of(&mut self, tokens: &mut Tokens, part_keyword: TokenId, of_keyword: TokenId, semicolon: TokenId, has_name: bool) {}
+    fn end_part_of(
+        &mut self,
+        tokens: &mut Tokens,
+        part_keyword: TokenId,
+        of_keyword: TokenId,
+        semicolon: TokenId,
+        has_name: bool,
+    ) {
+    }
 
     fn begin_redirecting_factory_body(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn end_redirecting_factory_body(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId) {}
+    fn end_redirecting_factory_body(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     fn begin_return_statement(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
     /// Handle the end of a `native` function.
     /// The `handleNativeClause` event is sent prior to this event.
-    fn handle_native_function_body(&mut self, tokens: &mut Tokens, native_token: TokenId, semicolon: TokenId) {}
+    fn handle_native_function_body(
+        &mut self,
+        tokens: &mut Tokens,
+        native_token: TokenId,
+        semicolon: TokenId,
+    ) {
+    }
 
     /// Called after the `handleNativeClause` event when the parser determines
     /// that the native clause should be discarded / ignored.
     /// For example, this method is called a native clause is followed by
     /// a function body.
-    fn handle_native_function_body_ignored(&mut self, tokens: &mut Tokens, native_token: TokenId, semicolon: TokenId) {}
+    fn handle_native_function_body_ignored(
+        &mut self,
+        tokens: &mut Tokens,
+        native_token: TokenId,
+        semicolon: TokenId,
+    ) {
+    }
 
     /// Handle the end of a `native` function that was skipped by the parser.
     /// The `handleNativeClause` event is sent prior to this event.
-    fn handle_native_function_body_skipped(&mut self, tokens: &mut Tokens, native_token: TokenId, semicolon: TokenId) {}
+    fn handle_native_function_body_skipped(
+        &mut self,
+        tokens: &mut Tokens,
+        native_token: TokenId,
+        semicolon: TokenId,
+    ) {
+    }
 
     /// This method is invoked when a function has the empty body.
     fn handle_empty_function_body(&mut self, tokens: &mut Tokens, semicolon: TokenId) {}
 
     /// This method is invoked when parser finishes parsing the corresponding
     /// expression of the expression function body.
-    fn handle_expression_function_body(&mut self, tokens: &mut Tokens, arrow_token: TokenId, end_token: Option<TokenId>) {}
+    fn handle_expression_function_body(
+        &mut self,
+        tokens: &mut Tokens,
+        arrow_token: TokenId,
+        end_token: Option<TokenId>,
+    ) {
+    }
 
-    fn end_return_statement(&mut self, tokens: &mut Tokens, has_expression: bool, begin_token: TokenId, end_token: TokenId) {}
+    fn end_return_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        has_expression: bool,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     fn handle_send(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId) {}
 
@@ -866,29 +1494,73 @@ pub trait Listener {
 
     fn begin_switch_statement(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn end_switch_statement(&mut self, tokens: &mut Tokens, switch_keyword: TokenId, end_token: TokenId) {}
+    fn end_switch_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        switch_keyword: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     fn begin_switch_expression(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn end_switch_expression(&mut self, tokens: &mut Tokens, switch_keyword: TokenId, end_token: TokenId) {}
+    fn end_switch_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        switch_keyword: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     fn begin_switch_block(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn end_switch_block(&mut self, tokens: &mut Tokens, case_count: i32, begin_token: TokenId, end_token: TokenId) {}
+    fn end_switch_block(
+        &mut self,
+        tokens: &mut Tokens,
+        case_count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     fn begin_switch_expression_block(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn end_switch_expression_block(&mut self, tokens: &mut Tokens, case_count: i32, begin_token: TokenId, end_token: TokenId) {}
+    fn end_switch_expression_block(
+        &mut self,
+        tokens: &mut Tokens,
+        case_count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     fn begin_literal_symbol(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn end_literal_symbol(&mut self, tokens: &mut Tokens, hash_token: TokenId, identifier_count: i32) {}
+    fn end_literal_symbol(
+        &mut self,
+        tokens: &mut Tokens,
+        hash_token: TokenId,
+        identifier_count: i32,
+    ) {
+    }
 
-    fn handle_throw_expression(&mut self, tokens: &mut Tokens, throw_token: TokenId, end_token: TokenId) {}
+    fn handle_throw_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        throw_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     fn begin_rethrow_statement(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn end_rethrow_statement(&mut self, tokens: &mut Tokens, rethrow_token: TokenId, end_token: TokenId) {}
+    fn end_rethrow_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        rethrow_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     /// This event is added for convenience for the listener.
     /// All top-level declarations will actually be begin/end'ed by more specific
@@ -923,7 +1595,20 @@ pub trait Listener {
 
     /// Marks the beginning of a fields declaration.
     /// Note that this is ended with `endTopLevelFields` or `endFields`.
-    fn begin_fields(&mut self, tokens: &mut Tokens, declaration_kind: DeclarationKind, augment_token: Option<TokenId>, abstract_token: Option<TokenId>, external_token: Option<TokenId>, static_token: Option<TokenId>, covariant_token: Option<TokenId>, late_token: Option<TokenId>, var_final_or_const: Option<TokenId>, last_consumed: TokenId) {}
+    fn begin_fields(
+        &mut self,
+        tokens: &mut Tokens,
+        declaration_kind: DeclarationKind,
+        augment_token: Option<TokenId>,
+        abstract_token: Option<TokenId>,
+        external_token: Option<TokenId>,
+        static_token: Option<TokenId>,
+        covariant_token: Option<TokenId>,
+        late_token: Option<TokenId>,
+        var_final_or_const: Option<TokenId>,
+        last_consumed: TokenId,
+    ) {
+    }
 
     /// Handle the end of a top level variable declaration.  Substructures:
     /// - Metadata
@@ -933,9 +1618,30 @@ pub trait Listener {
     ///   - Field initializer
     ///
     /// Started by `beginFields`.
-    fn end_top_level_fields(&mut self, tokens: &mut Tokens, augment_token: Option<TokenId>, abstract_token: Option<TokenId>, external_token: Option<TokenId>, static_token: Option<TokenId>, covariant_token: Option<TokenId>, late_token: Option<TokenId>, var_final_or_const: Option<TokenId>, count: i32, begin_token: TokenId, end_token: TokenId) {}
+    fn end_top_level_fields(
+        &mut self,
+        tokens: &mut Tokens,
+        augment_token: Option<TokenId>,
+        abstract_token: Option<TokenId>,
+        external_token: Option<TokenId>,
+        static_token: Option<TokenId>,
+        covariant_token: Option<TokenId>,
+        late_token: Option<TokenId>,
+        var_final_or_const: Option<TokenId>,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
-    fn begin_top_level_method(&mut self, tokens: &mut Tokens, last_consumed: TokenId, augment_token: Option<TokenId>, external_token: Option<TokenId>) {}
+    fn begin_top_level_method(
+        &mut self,
+        tokens: &mut Tokens,
+        last_consumed: TokenId,
+        augment_token: Option<TokenId>,
+        external_token: Option<TokenId>,
+    ) {
+    }
 
     /// Handle the end of a top level method.  Substructures:
     /// - metadata
@@ -946,7 +1652,14 @@ pub trait Listener {
     /// - formal parameters
     /// - async marker
     /// - body
-    fn end_top_level_method(&mut self, tokens: &mut Tokens, begin_token: TokenId, get_or_set: Option<TokenId>, end_token: TokenId) {}
+    fn end_top_level_method(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        get_or_set: Option<TokenId>,
+        end_token: TokenId,
+    ) {
+    }
 
     fn begin_try_statement(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
@@ -954,13 +1667,34 @@ pub trait Listener {
 
     fn end_catch_clause(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn handle_catch_block(&mut self, tokens: &mut Tokens, on_keyword: Option<TokenId>, catch_keyword: Option<TokenId>, comma: Option<TokenId>) {}
+    fn handle_catch_block(
+        &mut self,
+        tokens: &mut Tokens,
+        on_keyword: Option<TokenId>,
+        catch_keyword: Option<TokenId>,
+        comma: Option<TokenId>,
+    ) {
+    }
 
     fn handle_finally_block(&mut self, tokens: &mut Tokens, finally_keyword: TokenId) {}
 
-    fn end_try_statement(&mut self, tokens: &mut Tokens, catch_count: i32, try_keyword: TokenId, finally_keyword: Option<TokenId>, end_token: TokenId) {}
+    fn end_try_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        catch_count: i32,
+        try_keyword: TokenId,
+        finally_keyword: Option<TokenId>,
+        end_token: TokenId,
+    ) {
+    }
 
-    fn handle_type(&mut self, tokens: &mut Tokens, begin_token: TokenId, question_mark: Option<TokenId>) {}
+    fn handle_type(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        question_mark: Option<TokenId>,
+    ) {
+    }
 
     /// Called when parser encounters a '!'
     /// used as a non-null postfix assertion in an expression.
@@ -991,12 +1725,25 @@ pub trait Listener {
     /// parser has recovered from an error (since declared variable patterns are
     /// not allowed inside a `patternAssignment`).  The error has already been
     /// reported.
-    fn handle_declared_variable_pattern(&mut self, tokens: &mut Tokens, keyword: Option<TokenId>, variable: TokenId, in_assignment_pattern: bool) {}
+    fn handle_declared_variable_pattern(
+        &mut self,
+        tokens: &mut Tokens,
+        keyword: Option<TokenId>,
+        variable: TokenId,
+        in_assignment_pattern: bool,
+    ) {
+    }
 
     /// Called after the parser has consumed a wildcard pattern, consisting of an
     /// optional `var` or `final` keyword, an optional type annotation, and the
     /// identifier `_`.
-    fn handle_wildcard_pattern(&mut self, tokens: &mut Tokens, keyword: Option<TokenId>, wildcard: TokenId) {}
+    fn handle_wildcard_pattern(
+        &mut self,
+        tokens: &mut Tokens,
+        keyword: Option<TokenId>,
+        wildcard: TokenId,
+    ) {
+    }
 
     fn handle_no_name(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
@@ -1011,7 +1758,15 @@ pub trait Listener {
     /// Notice that `count` is:
     /// - the number of RecordTypeEntries if `hasNamedFields` is `false`, or
     /// - the number of RecordTypeEntries + 1 if `hasNamedFields` is `true`.
-    fn end_record_type(&mut self, tokens: &mut Tokens, left_bracket: TokenId, question_mark: Option<TokenId>, count: i32, has_named_fields: bool) {}
+    fn end_record_type(
+        &mut self,
+        tokens: &mut Tokens,
+        left_bracket: TokenId,
+        question_mark: Option<TokenId>,
+        count: i32,
+        has_named_fields: bool,
+    ) {
+    }
 
     fn begin_record_type_entry(&mut self, tokens: &mut Tokens) {}
 
@@ -1029,7 +1784,13 @@ pub trait Listener {
     ///
     /// Substructures:
     /// - RecordTypeEntry*
-    fn end_record_type_named_fields(&mut self, tokens: &mut Tokens, count: i32, left_bracket: TokenId) {}
+    fn end_record_type_named_fields(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        left_bracket: TokenId,
+    ) {
+    }
 
     fn begin_function_type(&mut self, tokens: &mut Tokens, begin_token: TokenId) {}
 
@@ -1039,11 +1800,24 @@ pub trait Listener {
     /// - Type variables
     /// - Return type
     /// - Formal parameters
-    fn end_function_type(&mut self, tokens: &mut Tokens, function_token: TokenId, question_mark: Option<TokenId>) {}
+    fn end_function_type(
+        &mut self,
+        tokens: &mut Tokens,
+        function_token: TokenId,
+        question_mark: Option<TokenId>,
+    ) {
+    }
 
     fn begin_type_arguments(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn end_type_arguments(&mut self, tokens: &mut Tokens, count: i32, begin_token: TokenId, end_token: TokenId) {}
+    fn end_type_arguments(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     /// After endTypeArguments has been called,
     /// this event is called if those type arguments are invalid.
@@ -1070,15 +1844,38 @@ pub trait Listener {
     /// - Type bound
     ///
     /// See `beginTypeVariable` for additional substructures.
-    fn end_type_variable(&mut self, tokens: &mut Tokens, token: TokenId, index: i32, extends_or_super: Option<TokenId>, variance: Option<TokenId>) {}
+    fn end_type_variable(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        index: i32,
+        extends_or_super: Option<TokenId>,
+        variance: Option<TokenId>,
+    ) {
+    }
 
     fn begin_type_variables(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn end_type_variables(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId) {}
+    fn end_type_variables(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
-    fn report_variance_modifier_not_enabled(&mut self, tokens: &mut Tokens, variance: Option<TokenId>) {
+    fn report_variance_modifier_not_enabled(
+        &mut self,
+        tokens: &mut Tokens,
+        variance: Option<TokenId>,
+    ) {
         if let Some(variance) = variance {
-            self.handle_experiment_not_enabled(tokens, ExperimentalFlag::Variance, variance, variance);
+            self.handle_experiment_not_enabled(
+                tokens,
+                ExperimentalFlag::Variance,
+                variance,
+                variance,
+            );
         }
     }
 
@@ -1090,18 +1887,43 @@ pub trait Listener {
     /// - Formal parameters
     /// - Async marker
     /// - Body
-    fn end_function_expression(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId) {}
+    fn end_function_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     /// Handle the start of a variables declaration.  Substructures:
     /// - Metadata
     /// - Type
-    fn begin_variables_declaration(&mut self, tokens: &mut Tokens, token: TokenId, late_token: Option<TokenId>, var_final_or_const: Option<TokenId>) {}
+    fn begin_variables_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        late_token: Option<TokenId>,
+        var_final_or_const: Option<TokenId>,
+    ) {
+    }
 
-    fn end_variables_declaration(&mut self, tokens: &mut Tokens, count: i32, end_token: Option<TokenId>) {}
+    fn end_variables_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        end_token: Option<TokenId>,
+    ) {
+    }
 
     fn begin_while_statement(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn end_while_statement(&mut self, tokens: &mut Tokens, while_keyword: TokenId, end_token: TokenId) {}
+    fn end_while_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        while_keyword: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     fn begin_as_operator_type(&mut self, tokens: &mut Tokens, operator: TokenId) {}
 
@@ -1113,7 +1935,13 @@ pub trait Listener {
     /// pattern, `as` operator, and type annotation.
     fn handle_cast_pattern(&mut self, tokens: &mut Tokens, operator: TokenId) {}
 
-    fn handle_assignment_expression(&mut self, tokens: &mut Tokens, token: TokenId, end_token: TokenId) {}
+    fn handle_assignment_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     fn begin_anonymous_method_invocation(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
@@ -1123,7 +1951,15 @@ pub trait Listener {
     /// - A formal parameter list (can be implicit, see
     ///   `handleImplicitFormalParameters`).
     /// - The body of the anonymous method (either an expression or a block).
-    fn end_anonymous_method_invocation(&mut self, tokens: &mut Tokens, begin_token: TokenId, function_definition: Option<TokenId>, end_token: TokenId, is_expression: bool) {}
+    fn end_anonymous_method_invocation(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        function_definition: Option<TokenId>,
+        end_token: TokenId,
+        is_expression: bool,
+    ) {
+    }
 
     /// Called when an anonymous method invocation does not have
     /// an explicit formal parameter list.
@@ -1147,12 +1983,26 @@ pub trait Listener {
     /// Called for property access through `.` and `?.`.
     ///
     /// `isNullAware` is `true` if the access uses `?.`.
-    fn handle_dot_access(&mut self, tokens: &mut Tokens, token: TokenId, end_token: TokenId, is_null_aware: bool) {}
+    fn handle_dot_access(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        end_token: TokenId,
+        is_null_aware: bool,
+    ) {
+    }
 
     /// Called for cascade access through `..` and `?..`.
     ///
     /// `isNullAware` is `true` if the access uses `?..`.
-    fn handle_cascade_access(&mut self, tokens: &mut Tokens, token: TokenId, end_token: TokenId, is_null_aware: bool) {}
+    fn handle_cascade_access(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        end_token: TokenId,
+        is_null_aware: bool,
+    ) {
+    }
 
     /// Called when the parser encounters a `?` operator and begins parsing a
     /// conditional expression.
@@ -1163,7 +2013,14 @@ pub trait Listener {
     fn handle_conditional_expression_colon(&mut self, tokens: &mut Tokens) {}
 
     /// Called when the parser finishes processing a conditional expression.
-    fn end_conditional_expression(&mut self, tokens: &mut Tokens, question: TokenId, colon: TokenId, end_token: TokenId) {}
+    fn end_conditional_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        question: TokenId,
+        colon: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     fn begin_const_expression(&mut self, tokens: &mut Tokens, const_keyword: TokenId) {}
 
@@ -1173,7 +2030,13 @@ pub trait Listener {
 
     /// Called before parsing a "for" control flow list, set, or map entry.
     /// Ended by either `endForControlFlow` or `endForInControlFlow`.
-    fn begin_for_control_flow(&mut self, tokens: &mut Tokens, await_token: Option<TokenId>, for_token: TokenId) {}
+    fn begin_for_control_flow(
+        &mut self,
+        tokens: &mut Tokens,
+        await_token: Option<TokenId>,
+        for_token: TokenId,
+    ) {
+    }
 
     /// Called after parsing a "for" control flow list, set, or map entry.
     /// One of the two possible corresponding end events for
@@ -1237,32 +2100,80 @@ pub trait Listener {
     /// - type variables
     /// - return type
     /// - formal parameters
-    fn end_function_typed_formal_parameter(&mut self, tokens: &mut Tokens, name_token: TokenId, question: Option<TokenId>) {}
+    fn end_function_typed_formal_parameter(
+        &mut self,
+        tokens: &mut Tokens,
+        name_token: TokenId,
+        question: Option<TokenId>,
+    ) {
+    }
 
     /// Handle an identifier token.
     ///
     /// `context` indicates what kind of construct the identifier appears in.
-    fn handle_identifier(&mut self, tokens: &mut Tokens, token: TokenId, context: IdentifierContext) {}
+    fn handle_identifier(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        context: IdentifierContext,
+    ) {
+    }
 
-    fn handle_indexed_expression(&mut self, tokens: &mut Tokens, question: Option<TokenId>, open_square_bracket: TokenId, close_square_bracket: TokenId) {}
+    fn handle_indexed_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        question: Option<TokenId>,
+        open_square_bracket: TokenId,
+        close_square_bracket: TokenId,
+    ) {
+    }
 
     fn begin_is_operator_type(&mut self, tokens: &mut Tokens, operator: TokenId) {}
 
     fn end_is_operator_type(&mut self, tokens: &mut Tokens, operator: TokenId) {}
 
-    fn handle_is_operator(&mut self, tokens: &mut Tokens, is_operator: TokenId, not: Option<TokenId>) {}
+    fn handle_is_operator(
+        &mut self,
+        tokens: &mut Tokens,
+        is_operator: TokenId,
+        not: Option<TokenId>,
+    ) {
+    }
 
     fn handle_literal_bool(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn handle_break_statement(&mut self, tokens: &mut Tokens, has_target: bool, break_keyword: TokenId, end_token: TokenId) {}
+    fn handle_break_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        has_target: bool,
+        break_keyword: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
-    fn handle_continue_statement(&mut self, tokens: &mut Tokens, has_target: bool, continue_keyword: TokenId, end_token: TokenId) {}
+    fn handle_continue_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        has_target: bool,
+        continue_keyword: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     fn handle_empty_statement(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
     fn begin_assert(&mut self, tokens: &mut Tokens, assert_keyword: TokenId, kind: Assert) {}
 
-    fn end_assert(&mut self, tokens: &mut Tokens, assert_keyword: TokenId, kind: Assert, left_parenthesis: TokenId, comma_token: Option<TokenId>, end_token: TokenId) {}
+    fn end_assert(
+        &mut self,
+        tokens: &mut Tokens,
+        assert_keyword: TokenId,
+        kind: Assert,
+        left_parenthesis: TokenId,
+        comma_token: Option<TokenId>,
+        end_token: TokenId,
+    ) {
+    }
 
     /// Called with either the token containing a double literal, or an
     /// immediately preceding "unary minus" token.
@@ -1280,21 +2191,53 @@ pub trait Listener {
     /// separators, or an immediately preceding "unary minus" token.
     fn handle_literal_int_with_separators(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn handle_literal_list(&mut self, tokens: &mut Tokens, count: i32, left_bracket: TokenId, const_keyword: Option<TokenId>, right_bracket: TokenId) {}
+    fn handle_literal_list(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        left_bracket: TokenId,
+        const_keyword: Option<TokenId>,
+        right_bracket: TokenId,
+    ) {
+    }
 
     /// Called after the parser has consumed a list pattern, consisting of a `[`,
     /// a comma-separated sequence of patterns, and a `]`.
-    fn handle_list_pattern(&mut self, tokens: &mut Tokens, count: i32, left_bracket: TokenId, right_bracket: TokenId) {}
+    fn handle_list_pattern(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        left_bracket: TokenId,
+        right_bracket: TokenId,
+    ) {
+    }
 
-    fn handle_literal_set_or_map(&mut self, tokens: &mut Tokens, count: i32, left_brace: TokenId, const_keyword: Option<TokenId>, right_brace: TokenId, has_set_entry: bool) {}
+    fn handle_literal_set_or_map(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        left_brace: TokenId,
+        const_keyword: Option<TokenId>,
+        right_brace: TokenId,
+        has_set_entry: bool,
+    ) {
+    }
 
     /// Called after the parser has consumed a map pattern, consisting of a `{`,
     /// a comma-separated sequence of mapPatternEntry, and a `}`.
-    fn handle_map_pattern(&mut self, tokens: &mut Tokens, count: i32, left_brace: TokenId, right_brace: TokenId) {}
+    fn handle_map_pattern(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        left_brace: TokenId,
+        right_brace: TokenId,
+    ) {
+    }
 
     fn handle_literal_null(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn handle_native_clause(&mut self, tokens: &mut Tokens, native_token: TokenId, has_name: bool) {}
+    fn handle_native_clause(&mut self, tokens: &mut Tokens, native_token: TokenId, has_name: bool) {
+    }
 
     fn handle_named_argument(&mut self, tokens: &mut Tokens, colon: TokenId) {}
 
@@ -1314,11 +2257,27 @@ pub trait Listener {
 
     fn handle_no_arguments(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn handle_no_constructor_reference_continuation_after_type_arguments(&mut self, tokens: &mut Tokens, token: TokenId) {}
+    fn handle_no_constructor_reference_continuation_after_type_arguments(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+    ) {
+    }
 
-    fn handle_no_identifier(&mut self, tokens: &mut Tokens, token: TokenId, identifier_context: IdentifierContext) {}
+    fn handle_no_identifier(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        identifier_context: IdentifierContext,
+    ) {
+    }
 
-    fn handle_no_type_name_in_constructor_reference(&mut self, tokens: &mut Tokens, token: TokenId) {}
+    fn handle_no_type_name_in_constructor_reference(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+    ) {
+    }
 
     fn handle_no_type(&mut self, tokens: &mut Tokens, last_consumed: TokenId) {}
 
@@ -1334,18 +2293,37 @@ pub trait Listener {
     fn handle_symbol_void(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
     /// Handle the end of a construct of the form "operator <token>".
-    fn handle_operator_name(&mut self, tokens: &mut Tokens, operator_keyword: TokenId, token: TokenId) {}
+    fn handle_operator_name(
+        &mut self,
+        tokens: &mut Tokens,
+        operator_keyword: TokenId,
+        token: TokenId,
+    ) {
+    }
 
     /// Handle the end of a construct of the form "operator <token>"
     /// where <token> is not a valid operator token.
-    fn handle_invalid_operator_name(&mut self, tokens: &mut Tokens, operator_keyword: TokenId, token: TokenId) {}
+    fn handle_invalid_operator_name(
+        &mut self,
+        tokens: &mut Tokens,
+        operator_keyword: TokenId,
+        token: TokenId,
+    ) {
+    }
 
     /// Handle the condition in a control structure:
     /// - if statement
     /// - do while loop
     /// - switch statement
     /// - while loop
-    fn handle_parenthesized_condition(&mut self, tokens: &mut Tokens, token: TokenId, case_: Option<TokenId>, when: Option<TokenId>) {}
+    fn handle_parenthesized_condition(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        case_: Option<TokenId>,
+        when: Option<TokenId>,
+    ) {
+    }
 
     /// Starts a pattern
     fn begin_pattern(&mut self, tokens: &mut Tokens, token: TokenId) {}
@@ -1355,13 +2333,25 @@ pub trait Listener {
 
     /// Starts a parenthesized expression or a record literal. Will be ended with
     /// either `endParenthesizedExpression` or `endRecordLiteral`.
-    fn begin_parenthesized_expression_or_record_literal(&mut self, tokens: &mut Tokens, token: TokenId) {}
+    fn begin_parenthesized_expression_or_record_literal(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+    ) {
+    }
 
     /// Starts a guard expression in a switch case, after the 'when' keyword
     fn begin_switch_case_when_clause(&mut self, tokens: &mut Tokens, when: TokenId) {}
 
     /// Ends a record literal with `count` entries.
-    fn end_record_literal(&mut self, tokens: &mut Tokens, token: TokenId, count: i32, const_keyword: Option<TokenId>) {}
+    fn end_record_literal(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        count: i32,
+        const_keyword: Option<TokenId>,
+    ) {
+    }
 
     /// Called after the parser has consumed a record pattern, consisting of a
     /// `(`, a comma-separated sequence of patternFields, and a `)`.
@@ -1413,7 +2403,14 @@ pub trait Listener {
     /// an identifier, optional dot and second identifier, optional type
     /// arguments, and a parenthesized list of object pattern fields (see
     /// `handleObjectPatternFields`).
-    fn handle_object_pattern(&mut self, tokens: &mut Tokens, first_identifier: TokenId, dot: Option<TokenId>, second_identifier: Option<TokenId>) {}
+    fn handle_object_pattern(
+        &mut self,
+        tokens: &mut Tokens,
+        first_identifier: TokenId,
+        dot: Option<TokenId>,
+        second_identifier: Option<TokenId>,
+    ) {
+    }
 
     /// Handle a construct of the form "identifier.identifier" occurring in a part
     /// of the grammar where expressions in general are not allowed.
@@ -1424,17 +2421,55 @@ pub trait Listener {
 
     fn handle_string_part(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
-    fn handle_super_expression(&mut self, tokens: &mut Tokens, token: TokenId, context: IdentifierContext) {}
+    fn handle_super_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        context: IdentifierContext,
+    ) {
+    }
 
-    fn begin_switch_case(&mut self, tokens: &mut Tokens, label_count: i32, expression_count: i32, begin_token: TokenId) {}
+    fn begin_switch_case(
+        &mut self,
+        tokens: &mut Tokens,
+        label_count: i32,
+        expression_count: i32,
+        begin_token: TokenId,
+    ) {
+    }
 
-    fn end_switch_case(&mut self, tokens: &mut Tokens, label_count: i32, expression_count: i32, default_keyword: Option<TokenId>, colon_after_default: Option<TokenId>, statement_count: i32, begin_token: TokenId, end_token: TokenId) {}
+    fn end_switch_case(
+        &mut self,
+        tokens: &mut Tokens,
+        label_count: i32,
+        expression_count: i32,
+        default_keyword: Option<TokenId>,
+        colon_after_default: Option<TokenId>,
+        statement_count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     fn begin_switch_expression_case(&mut self, tokens: &mut Tokens) {}
 
-    fn end_switch_expression_case(&mut self, tokens: &mut Tokens, begin_token: TokenId, when: Option<TokenId>, arrow: TokenId, end_token: TokenId) {}
+    fn end_switch_expression_case(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        when: Option<TokenId>,
+        arrow: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
-    fn handle_this_expression(&mut self, tokens: &mut Tokens, token: TokenId, context: IdentifierContext) {}
+    fn handle_this_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        context: IdentifierContext,
+    ) {
+    }
 
     fn handle_unary_postfix_assignment_expression(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
@@ -1450,7 +2485,14 @@ pub trait Listener {
 
     fn end_formal_parameter_default_value_expression(&mut self, tokens: &mut Tokens) {}
 
-    fn handle_valued_formal_parameter(&mut self, tokens: &mut Tokens, equals: TokenId, token: TokenId, kind: FormalParameterKind) {}
+    fn handle_valued_formal_parameter(
+        &mut self,
+        tokens: &mut Tokens,
+        equals: TokenId,
+        token: TokenId,
+        kind: FormalParameterKind,
+    ) {
+    }
 
     fn handle_formal_parameter_without_value(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
@@ -1465,24 +2507,52 @@ pub trait Listener {
 
     /// One of the two possible corresponding end events for
     /// `beginYieldStatement`.
-    fn end_yield_statement(&mut self, tokens: &mut Tokens, yield_token: TokenId, star_token: Option<TokenId>, end_token: TokenId) {}
+    fn end_yield_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        yield_token: TokenId,
+        star_token: Option<TokenId>,
+        end_token: TokenId,
+    ) {
+    }
 
     /// One of the two possible corresponding end events for
     /// `beginYieldStatement`.
-    fn end_invalid_yield_statement(&mut self, tokens: &mut Tokens, begin_token: TokenId, star_token: Option<TokenId>, end_token: TokenId, error_code: &'static CfeCode) {}
+    fn end_invalid_yield_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        star_token: Option<TokenId>,
+        end_token: TokenId,
+        error_code: &'static CfeCode,
+    ) {
+    }
 
     /// The parser noticed a syntax error, but was able to recover from it. The
     /// error should be reported using the `message`, and the code between the
     /// beginning of the `startToken` and the end of the `endToken` should be
     /// highlighted. The `startToken` and `endToken` can be the same token.
-    fn handle_recoverable_error(&mut self, tokens: &mut Tokens, message: CfeMessage, start_token: TokenId, end_token: TokenId) {}
+    fn handle_recoverable_error(
+        &mut self,
+        tokens: &mut Tokens,
+        message: CfeMessage,
+        start_token: TokenId,
+        end_token: TokenId,
+    ) {
+    }
 
     /// The parser noticed a use of the experimental feature by the flag
     /// `experimentalFlag` that was not enabled, but was able to recover from it.
     /// The error should be reported and the code between the beginning of the
     /// `beginToken` and the end of the `endToken` should be highlighted. The
     /// `beginToken` and `endToken` can be the same token.
-    fn handle_experiment_not_enabled(&mut self, tokens: &mut Tokens, experimental_flag: ExperimentalFlag, begin_token: TokenId, end_token: TokenId) {
+    fn handle_experiment_not_enabled(
+        &mut self,
+        tokens: &mut Tokens,
+        experimental_flag: ExperimentalFlag,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.handle_recoverable_error(
             tokens,
             get_experiment_not_enabled_message(experimental_flag),
@@ -1500,7 +2570,14 @@ pub trait Listener {
         self.handle_recoverable_error(tokens, message, token, token);
     }
 
-    fn handle_unescape_error(&mut self, tokens: &mut Tokens, message: CfeMessage, location: TokenId, string_offset: i32, length: i32) {
+    fn handle_unescape_error(
+        &mut self,
+        tokens: &mut Tokens,
+        message: CfeMessage,
+        location: TokenId,
+        string_offset: i32,
+        length: i32,
+    ) {
         let _ = (string_offset, length);
         self.handle_recoverable_error(tokens, message, location, location);
     }
@@ -1509,7 +2586,12 @@ pub trait Listener {
     /// error (described by the given `message`). This method can also be called
     /// after `handleExpressionFunctionBody`, in which case it signals that the
     /// implicit return statement of the function contained a semantic error.
-    fn handle_invalid_statement(&mut self, tokens: &mut Tokens, token: TokenId, message: CfeMessage) {
+    fn handle_invalid_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        message: CfeMessage,
+    ) {
         self.handle_recoverable_error(tokens, message, token, token);
     }
 
@@ -1528,7 +2610,12 @@ pub trait Listener {
     /// erroneously applied to some other expression type (e.g.
     /// `var x = (f)<int>;`).  The client is responsible for reporting an error if
     /// this occurs.
-    fn handle_type_argument_application(&mut self, tokens: &mut Tokens, open_angle_bracket: TokenId) {}
+    fn handle_type_argument_application(
+        &mut self,
+        tokens: &mut Tokens,
+        open_angle_bracket: TokenId,
+    ) {
+    }
 
     /// A `new` token was found in a place where an identifier was expected, and
     /// the "constructor tearoffs" feature permits `new` to be used as an
@@ -1542,7 +2629,14 @@ pub trait Listener {
     /// KEYWORD is either `var` or `final`, and PATTERN may only be one of the
     /// patterns accepted by the `outerPattern` grammar rule defined in the
     /// patterns spec.
-    fn handle_pattern_variable_declaration_statement(&mut self, tokens: &mut Tokens, keyword: TokenId, equals: TokenId, semicolon: TokenId) {}
+    fn handle_pattern_variable_declaration_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        keyword: TokenId,
+        equals: TokenId,
+        semicolon: TokenId,
+    ) {
+    }
 
     /// Called after the parser has processed a pattern assignment consisting of
     /// `PATTERN EQUALS EXPRESSION`.
@@ -1558,5 +2652,4 @@ pub trait Listener {
     fn begin_const_dot_shorthand(&mut self, tokens: &mut Tokens, token: TokenId) {}
 
     fn end_const_dot_shorthand(&mut self, tokens: &mut Tokens, token: TokenId) {}
-
 }

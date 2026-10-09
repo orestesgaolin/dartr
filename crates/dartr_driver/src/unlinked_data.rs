@@ -10,9 +10,10 @@
 use dartr_ast::*;
 use dartr_ast_builder::ParsedUnit;
 use dartr_link::ast_util::{
-    constructor_is_complete, dotted_name, field_is_static, function_is_complete,
-    invokes_super_self, is_generator, is_synchronous, method_is_complete,
-    mixin_super_invoked_names, string_value, class_name_part_name, class_body_members, enum_body_members, variable_list_is_const, variable_list_is_final,
+    class_body_members, class_name_part_name, constructor_is_complete, dotted_name,
+    enum_body_members, field_is_static, function_is_complete, invokes_super_self, is_generator,
+    is_synchronous, method_is_complete, mixin_super_invoked_names, string_value,
+    variable_list_is_const, variable_list_is_final,
 };
 use dartr_parser::experimental_features::ExperimentalFeatures;
 use dartr_parser::experimental_flags::ExperimentalFlag;
@@ -41,7 +42,11 @@ pub struct UnlinkedConfiguration {
 impl UnlinkedConfiguration {
     /// Dart `valueOrTrue`.
     pub fn value_or_true(&self) -> &str {
-        if self.value.is_empty() { "true" } else { &self.value }
+        if self.value.is_empty() {
+            "true"
+        } else {
+            &self.value
+        }
     }
 }
 
@@ -161,7 +166,11 @@ pub struct UnlinkedUnit {
 }
 
 /// Dart `FileState.serializeAstUnlinked2`.
-pub fn serialize_ast_unlinked2(parsed: &ParsedUnit, exists: bool, is_dart_core: bool) -> UnlinkedUnit {
+pub fn serialize_ast_unlinked2(
+    parsed: &ParsedUnit,
+    exists: bool,
+    is_dart_core: bool,
+) -> UnlinkedUnit {
     let ast = &parsed.ast;
     let unit = ast.get(parsed.unit);
 
@@ -221,16 +230,17 @@ pub fn serialize_ast_unlinked2(parsed: &ParsedUnit, exists: bool, is_dart_core: 
                     });
                 }
             } else if let Some(uri) = p.uri
-                && part_of_uri_directive.is_none() {
-                    part_of_uri_directive = Some(UnlinkedPartOfUriDirective {
-                        doc_imports: build_doc_imports(p.documentation_comment),
-                        uri: string_value(ast, uri),
-                        uri_range: UnlinkedSourceRange {
-                            offset: ast.offset(uri),
-                            length: ast.length(uri),
-                        },
-                    });
-                }
+                && part_of_uri_directive.is_none()
+            {
+                part_of_uri_directive = Some(UnlinkedPartOfUriDirective {
+                    doc_imports: build_doc_imports(p.documentation_comment),
+                    uri: string_value(ast, uri),
+                    uri_range: UnlinkedSourceRange {
+                        offset: ast.offset(uri),
+                        length: ast.length(uri),
+                    },
+                });
+            }
         }
     }
 
@@ -309,14 +319,20 @@ fn serialize_combinators(ast: &Ast, combinators: NodeList<Combinator>) -> Vec<Un
 }
 
 /// Dart `FileState._serializeConfigurations`.
-fn serialize_configurations(ast: &Ast, configurations: NodeList<Configuration>) -> Vec<UnlinkedConfiguration> {
+fn serialize_configurations(
+    ast: &Ast,
+    configurations: NodeList<Configuration>,
+) -> Vec<UnlinkedConfiguration> {
     ast.list(configurations)
         .iter()
         .map(|&c| {
             let c = ast.get(c);
             UnlinkedConfiguration {
                 name: dotted_name(ast, c.name),
-                value: c.value.and_then(|v| string_value(ast, v)).unwrap_or_default(),
+                value: c
+                    .value
+                    .and_then(|v| string_value(ast, v))
+                    .unwrap_or_default(),
                 uri: string_value(ast, c.uri),
             }
         })
@@ -335,7 +351,11 @@ fn serialize_export(ast: &Ast, node: Id<ExportDirective>) -> UnlinkedLibraryExpo
 }
 
 /// Dart `FileState._serializeImport`.
-fn serialize_import(ast: &Ast, node: Id<ImportDirective>, is_doc_import: bool) -> UnlinkedLibraryImportDirective {
+fn serialize_import(
+    ast: &Ast,
+    node: Id<ImportDirective>,
+    is_doc_import: bool,
+) -> UnlinkedLibraryImportDirective {
     let n = ast.get(node);
     let prefix = n.prefix.map(|prefix| {
         let token = ast.get(prefix).token;
@@ -402,7 +422,8 @@ impl UnitApiSignatureComputer<'_> {
     fn compute(&mut self, parsed: &ParsedUnit) {
         let ast = self.ast;
         let features = parsed.feature_set;
-        self.signature.add_feature_set(|name| feature_enabled(features, name));
+        self.signature
+            .add_feature_set(|name| feature_enabled(features, name));
         let unit = ast.get(parsed.unit);
         let directives = ast.list(unit.directives);
         self.signature.add_int(directives.len() as u32);
@@ -452,7 +473,8 @@ impl UnitApiSignatureComputer<'_> {
                 self.add_tokens(ast.begin_token(d), ast.begin_token(body));
                 let members = class_body_members(ast, body);
                 self.add_class_members(&members, false);
-                self.signature.add_string_list(&mixin_super_invoked_names(ast, m));
+                self.signature
+                    .add_string_list(&mixin_super_invoked_names(ast, m));
             } else if let Some(v) = ast.cast::<TopLevelVariableDeclaration>(d) {
                 let v = ast.get(v);
                 self.add_token(v.abstract_keyword);
@@ -521,7 +543,8 @@ impl UnitApiSignatureComputer<'_> {
             let ast = self.ast;
             self.signature.add_bool(is_synchronous(ast, body));
             self.signature.add_bool(is_generator(ast, body));
-            self.signature.add_bool(ast.is::<NativeFunctionBody>(body.raw()));
+            self.signature
+                .add_bool(ast.is::<NativeFunctionBody>(body.raw()));
         }
     }
 
@@ -587,4 +610,3 @@ impl UnitApiSignatureComputer<'_> {
         }
     }
 }
-

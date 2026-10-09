@@ -42,7 +42,11 @@ fn elements_parity_on_fixtures() {
     let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
     let dirs = vec![fixtures.join("linking"), fixtures.join("elements")];
     let files = collect_dart_files(&dirs).unwrap();
-    assert!(files.len() >= 12, "fixtures not found in {}", fixtures.display());
+    assert!(
+        files.len() >= 12,
+        "fixtures not found in {}",
+        fixtures.display()
+    );
     assert_parity(dirs, files.len());
 }
 
@@ -86,7 +90,13 @@ fn elements_parity_on_top_level_inference_fixtures() {
     })
     .unwrap();
     assert_eq!(report.files, 1);
-    assert_eq!(report.different(), 0, "{}{}", report.difference_report(20), report.summary());
+    assert_eq!(
+        report.different(),
+        0,
+        "{}{}",
+        report.difference_report(20),
+        report.summary()
+    );
 }
 
 /// Enum constants: Dart infers their types from the synthetic instance
@@ -100,19 +110,35 @@ fn elements_parity_on_top_level_inference_enum_fixtures() {
     })
     .unwrap();
     assert_eq!(report.files, 1);
-    assert_eq!(report.different(), 0, "{}{}", report.difference_report(20), report.summary());
+    assert_eq!(
+        report.different(),
+        0,
+        "{}{}",
+        report.difference_report(20),
+        report.summary()
+    );
 }
 
 fn assert_unmasked_parity(dir: PathBuf, min_files: usize) {
     let files = collect_dart_files(std::slice::from_ref(&dir)).unwrap();
-    assert!(files.len() >= min_files, "fixtures not found in {}", dir.display());
+    assert!(
+        files.len() >= min_files,
+        "fixtures not found in {}",
+        dir.display()
+    );
     let report = run(&Options {
         mask_inferred: false,
         ..options(vec![dir])
     })
     .unwrap();
     assert_eq!(report.files, files.len());
-    assert_eq!(report.different(), 0, "{}{}", report.difference_report(20), report.summary());
+    assert_eq!(
+        report.different(),
+        0,
+        "{}{}",
+        report.difference_report(20),
+        report.summary()
+    );
 }
 
 /// The cases of the analyzer's `top_level_inference_test.dart` (unit C10,
@@ -120,7 +146,8 @@ fn assert_unmasked_parity(dir: PathBuf, min_files: usize) {
 /// initializers the resolver of this unit resolves, without masking.
 #[test]
 fn elements_parity_on_analyzer_top_level_inference_tests() {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/top_level_inference/analyzer");
+    let dir =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/top_level_inference/analyzer");
     assert_unmasked_parity(dir, 94);
 }
 
@@ -132,7 +159,8 @@ fn elements_parity_on_analyzer_top_level_inference_tests() {
 #[test]
 #[ignore = "needs the property and operator resolvers (units C4-C6)"]
 fn elements_parity_on_analyzer_top_level_inference_tests_wave_c() {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/top_level_inference/analyzer_wave_c");
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/top_level_inference/analyzer_wave_c");
     assert_unmasked_parity(dir, 50);
 }
 

@@ -20,7 +20,10 @@ type Entry = (String, usize, usize);
 
 /// The codes compared (`DiagnosticCode.lowerCaseName`).
 fn constant_codes() -> BTreeSet<String> {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tools/difftest/constant_codes.txt");
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tools/difftest/constant_codes.txt"
+    );
     std::fs::read_to_string(path)
         .expect("constant_codes.txt")
         .lines()
@@ -89,7 +92,9 @@ fn parse_markers(code: &str) -> (String, Vec<Entry>) {
             continue;
         }
         if is_expectation_line(text) {
-            let t = text.trim_start_matches([' ', '\t']).trim_start_matches("//");
+            let t = text
+                .trim_start_matches([' ', '\t'])
+                .trim_start_matches("//");
             let t = t.trim_start_matches([' ', '\t']);
             if let Some(after) = t.strip_prefix("[diag.") {
                 let end = after.find(']').unwrap();
@@ -163,7 +168,8 @@ mod const_initialized_with_non_constant_value {
 
     #[test]
     fn dynamic() {
-        check(r#"
+        check(
+            r#"
 f(p) {
   const c = p;
 //      ^
@@ -171,12 +177,14 @@ f(p) {
 //          ^
 // [diag.constInitializedWithNonConstantValue] Const variables must be initialized with a constant value.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn final_field() {
-        check(r#"
+        check(
+            r#"
 class Foo {
   final field = 0;
   foo([int x = field]) {}
@@ -184,57 +192,69 @@ class Foo {
 // [diag.nonConstantDefaultValue] The default value of an optional parameter must be constant.
 // [diag.implicitThisReferenceInInitializer] The instance member 'field' can't be accessed in an initializer.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn function_expression() {
-        check(r#"
+        check(
+            r#"
 const a = () {};
 //        ^^^^^
 // [diag.constInitializedWithNonConstantValue] Const variables must be initialized with a constant value.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn missing_const_in_list_literal() {
-        check(r#"
+        check(
+            r#"
 const List L = [0];
-"#);
+"#,
+        );
     }
 
     #[test]
     fn missing_const_in_map_literal() {
-        check(r#"
+        check(
+            r#"
 const Map M = {'a' : 0};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn new_instance_const_constructor() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
 }
 const a = new A();
 //        ^^^^^^^
 // [diag.constInitializedWithNonConstantValue] Const variables must be initialized with a constant value.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn new_instance_external_factory_const_constructor() {
-        check(r#"
+        check(
+            r#"
 class A {
   external const factory A();
 }
 const x = const A();
-"#);
+"#,
+        );
     }
 
     #[test]
     fn property_extraction_target_not_const() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
   int m() => 0;
@@ -243,22 +263,27 @@ final a = const A();
 const c = a.m;
 //        ^
 // [diag.constInitializedWithNonConstantValue] Const variables must be initialized with a constant value.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn type_literal_interface_type() {
-        check(r#"
+        check(
+            r#"
 const a = int;
-"#);
+"#,
+        );
     }
 
     #[test]
     fn type_literal_type_alias_interface_type() {
-        check(r#"
+        check(
+            r#"
 typedef A = int;
 const a = A;
-"#);
+"#,
+        );
     }
 }
 
@@ -268,7 +293,8 @@ mod const_map_key_not_primitive_equality {
 
     #[test]
     fn declares_eq_eq_abstract() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
   bool operator==(Object other);
@@ -277,12 +303,14 @@ class A {
 main() {
   const {const A(): 0};
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_eq_eq_direct() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
   operator ==(other) => false;
@@ -293,23 +321,27 @@ main() {
 //       ^^^^^^^^^
 // [diag.constMapKeyNotPrimitiveEquality] The type of a key in a constant map can't override the '==' operator, or 'hashCode', but the class 'A' does.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_eq_eq_double() {
-        check(r#"
+        check(
+            r#"
 main() {
   const {double.infinity: 0};
 //       ^^^^^^^^^^^^^^^
 // [diag.constMapKeyNotPrimitiveEquality] The type of a key in a constant map can't override the '==' operator, or 'hashCode', but the class 'double' does.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_eq_eq_dynamic() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
   operator ==(other) => false;
@@ -324,12 +356,14 @@ main() {
 //       ^^^
 // [diag.constMapKeyNotPrimitiveEquality] The type of a key in a constant map can't override the '==' operator, or 'hashCode', but the class 'A' does.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_eq_eq_factory() {
-        check(r#"
+        check(
+            r#"
 class A {
   const factory A() = B;
 }
@@ -344,12 +378,14 @@ main() {
 //       ^^^^^^^^^
 // [diag.constMapKeyNotPrimitiveEquality] The type of a key in a constant map can't override the '==' operator, or 'hashCode', but the class 'B' does.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_eq_eq_nested_in_instance_creation() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
 
@@ -365,12 +401,14 @@ main() {
 //         ^^^
 // [diag.constMapKeyNotPrimitiveEquality] The type of a key in a constant map can't override the '==' operator, or 'hashCode', but the class 'A' does.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_eq_eq_record_named() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
   operator ==(other) => false;
@@ -381,12 +419,14 @@ const x = {
 //^^^^^^^^^^^^^^^^^^^^
 // [diag.constMapKeyNotPrimitiveEquality] The type of a key in a constant map can't override the '==' operator, or 'hashCode', but the class '({int a, A b})' does.
 };
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_eq_eq_record_positional() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
   operator ==(other) => false;
@@ -397,12 +437,14 @@ const x = {
 //^^^^^^^^^^^^^^
 // [diag.constMapKeyNotPrimitiveEquality] The type of a key in a constant map can't override the '==' operator, or 'hashCode', but the class '(int, A)' does.
 };
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_eq_eq_super() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
   operator ==(other) => false;
@@ -417,12 +459,14 @@ main() {
 //       ^^^^^^^^^
 // [diag.constMapKeyNotPrimitiveEquality] The type of a key in a constant map can't override the '==' operator, or 'hashCode', but the class 'B' does.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_hash_code_direct() {
-        check(r#"
+        check(
+            r#"
 const v = {A(): 0};
 //         ^^^
 // [diag.constMapKeyNotPrimitiveEquality] The type of a key in a constant map can't override the '==' operator, or 'hashCode', but the class 'A' does.
@@ -431,12 +475,14 @@ class A {
   const A();
   int get hashCode => 0;
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_none_record_named() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
 }
@@ -444,12 +490,14 @@ class A {
 const x = {
   (a: 0, b: const A()): 0,
 };
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_none_record_positional() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
 }
@@ -457,7 +505,8 @@ class A {
 const x = {
   (0, const A()): 0,
 };
-"#);
+"#,
+        );
     }
 }
 
@@ -467,7 +516,8 @@ mod const_set_element_not_primitive_equality {
 
     #[test]
     fn implements_eq_eq_const_field() {
-        check(r#"
+        check(
+            r#"
 class A {
   static const a = const A();
   const A();
@@ -478,12 +528,14 @@ main() {
 //       ^^^
 // [diag.constSetElementNotPrimitiveEquality] An element in a constant set can't override the '==' operator, or 'hashCode', but the type 'A' does.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_eq_eq_direct() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
   operator ==(other) => false;
@@ -493,12 +545,14 @@ main() {
 //       ^^^^^^^^^
 // [diag.constSetElementNotPrimitiveEquality] An element in a constant set can't override the '==' operator, or 'hashCode', but the type 'A' does.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_eq_eq_dynamic() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
   operator ==(other) => false;
@@ -511,12 +565,14 @@ main() {
 //       ^^^
 // [diag.constSetElementNotPrimitiveEquality] An element in a constant set can't override the '==' operator, or 'hashCode', but the type 'A' does.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_eq_eq_factory() {
-        check(r#"
+        check(
+            r#"
 class A { const factory A() = B; }
 
 class B implements A {
@@ -531,12 +587,14 @@ main() {
 // [diag.constSetElementNotPrimitiveEquality] An element in a constant set can't override the '==' operator, or 'hashCode', but the type 'B' does.
   print(m);
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_eq_eq_nested_in_instance_creation() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
 
@@ -552,12 +610,14 @@ main() {
 //         ^^^
 // [diag.constSetElementNotPrimitiveEquality] An element in a constant set can't override the '==' operator, or 'hashCode', but the type 'A' does.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_eq_eq_record_named() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
   operator ==(other) => false;
@@ -568,12 +628,14 @@ const x = {
 //^^^^^^^^^^^^^^^^^^^^
 // [diag.constSetElementNotPrimitiveEquality] An element in a constant set can't override the '==' operator, or 'hashCode', but the type '({int a, A b})' does.
 };
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_eq_eq_record_positional() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
   operator ==(other) => false;
@@ -584,12 +646,14 @@ const x = {
 //^^^^^^^^^^^^^^
 // [diag.constSetElementNotPrimitiveEquality] An element in a constant set can't override the '==' operator, or 'hashCode', but the type '(int, A)' does.
 };
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_eq_eq_spread_into_list_set() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
   operator ==(other) => false;
@@ -600,12 +664,14 @@ main() {
 //           ^^^
 // [diag.constSetElementNotPrimitiveEquality] An element in a constant set can't override the '==' operator, or 'hashCode', but the type 'A' does.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_eq_eq_spread_into_set_list() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
   operator ==(other) => false;
@@ -616,12 +682,14 @@ main() {
 //       ^^^^^^^^
 // [diag.constSetElementNotPrimitiveEquality] An element in a constant set can't override the '==' operator, or 'hashCode', but the type 'List<A>' does.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_eq_eq_spread_into_set_set() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
   operator ==(other) => false;
@@ -632,12 +700,14 @@ main() {
 //           ^^^
 // [diag.constSetElementNotPrimitiveEquality] An element in a constant set can't override the '==' operator, or 'hashCode', but the type 'A' does.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_eq_eq_super() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
   operator ==(other) => false;
@@ -650,12 +720,14 @@ main() {
 //       ^^^^^^^^^
 // [diag.constSetElementNotPrimitiveEquality] An element in a constant set can't override the '==' operator, or 'hashCode', but the type 'B' does.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_hash_code_direct() {
-        check(r#"
+        check(
+            r#"
 const v = {A()};
 //         ^^^
 // [diag.constSetElementNotPrimitiveEquality] An element in a constant set can't override the '==' operator, or 'hashCode', but the type 'A' does.
@@ -664,12 +736,14 @@ class A {
   const A();
   int get hashCode => 0;
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_none_record_named() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
 }
@@ -677,12 +751,14 @@ class A {
 const x = {
   (a: 0, b: const A()): 0,
 };
-"#);
+"#,
+        );
     }
 
     #[test]
     fn implements_none_record_positional() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
 }
@@ -690,12 +766,14 @@ class A {
 const x = {
   (0, const A()): 0,
 };
-"#);
+"#,
+        );
     }
 
     #[test]
     fn list_literal_spread() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
   operator ==(other) => false;
@@ -704,7 +782,8 @@ class A {
 main() {
   const [...[A()]];
 }
-"#);
+"#,
+        );
     }
 }
 
@@ -714,80 +793,97 @@ mod equal_elements_in_const_set {
 
     #[test]
     fn const_entry() {
-        check(r#"
+        check(
+            r#"
 var c = const {1, 2, 1};
 //             ^
 // [context 1] The first element with this value.
 //                   ^
 // [diag.equalElementsInConstSet][context 1] Two elements in a constant set literal can't be equal.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_entry_extension_type_type_value() {
-        check(r#"
+        check(
+            r#"
 const x = {int, E};
 //         ^^^
 // [context 1] The first element with this value.
 //              ^
 // [diag.equalElementsInConstSet][context 1] Two elements in a constant set literal can't be equal.
 extension type E(int it) {}
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_if_element_then_else_false() {
-        check(r#"
+        check(
+            r#"
 var c = const {1, if (1 < 0) 2 else 1};
 //             ^
 // [context 1] The first element with this value.
 //                                  ^
 // [diag.equalElementsInConstSet][context 1] Two elements in a constant set literal can't be equal.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_if_element_then_else_false_only_else() {
-        check(r#"
+        check(
+            r#"
 var c = const {if (0 < 1) 1 else 1};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_if_element_then_else_true() {
-        check(r#"
+        check(
+            r#"
 var c = const {1, if (0 < 1) 2 else 1};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_if_element_then_else_true_only_then() {
-        check(r#"
+        check(
+            r#"
 var c = const {if (0 < 1) 1 else 1};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_if_element_then_false() {
-        check(r#"
+        check(
+            r#"
 var c = const {2, if (1 < 0) 2};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_if_element_then_true() {
-        check(r#"
+        check(
+            r#"
 var c = const {1, if (0 < 1) 1};
 //             ^
 // [context 1] The first element with this value.
 //                           ^
 // [diag.equalElementsInConstSet][context 1] Two elements in a constant set literal can't be equal.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_instance_creation_equal_type_args() {
-        check(r#"
+        check(
+            r#"
 class A<T> {
   const A();
 }
@@ -797,81 +893,98 @@ var c = const {const A<int>(), const A<int>()};
 // [context 1] The first element with this value.
 //                             ^^^^^^^^^^^^^^
 // [diag.equalElementsInConstSet][context 1] Two elements in a constant set literal can't be equal.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_instance_creation_not_equal_type_args() {
-        check(r#"
+        check(
+            r#"
 class A<T> {
   const A();
 }
 
 var c = const {const A<int>(), const A<num>()};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_list_has_equal() {
-        check(r#"
+        check(
+            r#"
 const x = {[0], [0]};
 //         ^^^
 // [context 1] The first element with this value.
 //              ^^^
 // [diag.equalElementsInConstSet][context 1] Two elements in a constant set literal can't be equal.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_list_no_equal() {
-        check(r#"
+        check(
+            r#"
 const x = {[0], [1]};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_record_has_equal() {
-        check(r#"
+        check(
+            r#"
 const x = {(0, 1), (0, 1)};
 //         ^^^^^^
 // [context 1] The first element with this value.
 //                 ^^^^^^
 // [diag.equalElementsInConstSet][context 1] Two elements in a constant set literal can't be equal.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_record_no_equal() {
-        check(r#"
+        check(
+            r#"
 const x = {(0, 1), (0, 2)};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_spread_no_duplicate() {
-        check(r#"
+        check(
+            r#"
 var c = const {1, ...{2}};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_spread_has_duplicate() {
-        check(r#"
+        check(
+            r#"
 var c = const {1, ...{1}};
 //             ^
 // [context 1] The first element with this value.
 //                   ^^^
 // [diag.equalElementsInConstSet][context 1] Two elements in a constant set literal can't be equal.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn non_const_entry() {
-        check(r#"
+        check(
+            r#"
 var c = {1, 2, 1};
 //             ^
 // [diag.equalElementsInSet] Two elements in a set literal shouldn't be equal.
-"#);
+"#,
+        );
     }
 }
 
@@ -881,80 +994,97 @@ mod equal_keys_in_const_map {
 
     #[test]
     fn const_entry() {
-        check(r#"
+        check(
+            r#"
 var c = const {1: null, 2: null, 1: null};
 //             ^
 // [context 1] The first key with this value.
 //                               ^
 // [diag.equalKeysInConstMap][context 1] Two keys in a constant map literal can't be equal.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_entry_extension_type_type_value() {
-        check(r#"
+        check(
+            r#"
 const x = {int: 0, E: 0};
 //         ^^^
 // [context 1] The first key with this value.
 //                 ^
 // [diag.equalKeysInConstMap][context 1] Two keys in a constant map literal can't be equal.
 extension type E(int it) {}
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_if_element_then_else_false() {
-        check(r#"
+        check(
+            r#"
 var c = const {1: null, if (1 < 0) 2: null else 1: null};
 //             ^
 // [context 1] The first key with this value.
 //                                              ^
 // [diag.equalKeysInConstMap][context 1] Two keys in a constant map literal can't be equal.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_if_element_then_else_false_only_else() {
-        check(r#"
+        check(
+            r#"
 var c = const {if (0 < 1) 1: null else 1: null};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_if_element_then_else_true() {
-        check(r#"
+        check(
+            r#"
 var c = const {1: null, if (0 < 1) 2: null else 1: null};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_if_element_then_else_true_only_then() {
-        check(r#"
+        check(
+            r#"
 var c = const {if (0 < 1) 1: null else 1: null};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_if_element_then_false() {
-        check(r#"
+        check(
+            r#"
 var c = const {2: null, if (1 < 0) 2: 2};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_if_element_then_true() {
-        check(r#"
+        check(
+            r#"
 var c = const {1: null, if (0 < 1) 1: null};
 //             ^
 // [context 1] The first key with this value.
 //                                 ^
 // [diag.equalKeysInConstMap][context 1] Two keys in a constant map literal can't be equal.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_instance_creation_equal_type_args() {
-        check(r#"
+        check(
+            r#"
 class A<T> {
   const A();
 }
@@ -964,81 +1094,98 @@ var c = const {const A<int>(): null, const A<int>(): null};
 // [context 1] The first key with this value.
 //                                   ^^^^^^^^^^^^^^
 // [diag.equalKeysInConstMap][context 1] Two keys in a constant map literal can't be equal.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_instance_creation_not_equal_type_args() {
-        check(r#"
+        check(
+            r#"
 class A<T> {
   const A();
 }
 
 var c = const {const A<int>(): null, const A<num>(): null};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_list_has_equal() {
-        check(r#"
+        check(
+            r#"
 const x = {[0]: null, [0]: null};
 //         ^^^
 // [context 1] The first key with this value.
 //                    ^^^
 // [diag.equalKeysInConstMap][context 1] Two keys in a constant map literal can't be equal.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_list_no_equal() {
-        check(r#"
+        check(
+            r#"
 const x = {[0]: null, [1]: null};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_record_has_equal() {
-        check(r#"
+        check(
+            r#"
 const x = {(0, 1): null, (0, 1): null};
 //         ^^^^^^
 // [context 1] The first key with this value.
 //                       ^^^^^^
 // [diag.equalKeysInConstMap][context 1] Two keys in a constant map literal can't be equal.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_record_no_equal() {
-        check(r#"
+        check(
+            r#"
 const x = {(0, 1): null, (0, 2): null};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_spread_no_duplicate() {
-        check(r#"
+        check(
+            r#"
 var c = const {1: null, ...{2: null}};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_spread_has_duplicate() {
-        check(r#"
+        check(
+            r#"
 var c = const {1: null, ...{1: null}};
 //             ^
 // [context 1] The first key with this value.
 //                         ^^^^^^^^^
 // [diag.equalKeysInConstMap][context 1] Two keys in a constant map literal can't be equal.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn non_const_entry() {
-        check(r#"
+        check(
+            r#"
 var c = {1: null, 2: null, 1: null};
 //                         ^
 // [diag.equalKeysInMap] Two keys in a map literal shouldn't be equal.
-"#);
+"#,
+        );
     }
 }
 
@@ -1048,7 +1195,8 @@ mod equal_keys_in_map_pattern {
 
     #[test]
     fn identical_double() {
-        check(r#"
+        check(
+            r#"
 void f(x) {
   if (x case {3.14: 1, 3.14: 2}) {}
 //            ^^^^
@@ -1056,12 +1204,14 @@ void f(x) {
 //                     ^^^^
 // [diag.equalKeysInMapPattern][context 1] Two keys in a map pattern can't be equal.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn identical_int() {
-        check(r#"
+        check(
+            r#"
 void f(x) {
   if (x case {0: 1, 0: 2}) {}
 //            ^
@@ -1069,12 +1219,14 @@ void f(x) {
 //                  ^
 // [diag.equalKeysInMapPattern][context 1] Two keys in a map pattern can't be equal.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn identical_int_via_identifier() {
-        check(r#"
+        check(
+            r#"
 const a = 0;
 const b = 0;
 
@@ -1085,12 +1237,14 @@ void f(x) {
 //                  ^
 // [diag.equalKeysInMapPattern][context 1] Two keys in a map pattern can't be equal.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn identical_type() {
-        check(r#"
+        check(
+            r#"
 void f(x) {
   if (x case {int: 0, int: 0}) {}
 //            ^^^
@@ -1098,12 +1252,14 @@ void f(x) {
 //                    ^^^
 // [diag.equalKeysInMapPattern][context 1] Two keys in a map pattern can't be equal.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn identical_type_extension_type() {
-        check(r#"
+        check(
+            r#"
 void f(x) {
   if (x case {int: 0, E: 0}) {}
 //            ^^^
@@ -1112,30 +1268,36 @@ void f(x) {
 // [diag.equalKeysInMapPattern][context 1] Two keys in a map pattern can't be equal.
 }
 extension type E(int it) {}
-"#);
+"#,
+        );
     }
 
     #[test]
     fn not_identical_double() {
-        check(r#"
+        check(
+            r#"
 void f(x) {
   if (x case {3.14: 1, 2.71: 2}) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn not_identical_int() {
-        check(r#"
+        check(
+            r#"
 void f(x) {
   if (x case {0: 1, 2: 3}) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn not_identical_user_class() {
-        check(r#"
+        check(
+            r#"
 void f(x) {
   if (x case {const A(0): 1, const A(2): 3}) {}
 }
@@ -1145,12 +1307,14 @@ class A {
   const A(this.field);
   bool operator ==(other) => false;
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn record_type_not_primitive_equal_named() {
-        check(r#"
+        check(
+            r#"
 void f(x) {
   if (x case {(a: const A()): 1, (a: const A()): 2}) {}
 }
@@ -1159,12 +1323,14 @@ class A {
   const A();
   bool operator ==(other) => true;
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn record_type_not_primitive_equal_positional() {
-        check(r#"
+        check(
+            r#"
 void f(x) {
   if (x case {(0, const A()): 1, (0, const A()): 2}) {}
 }
@@ -1173,21 +1339,25 @@ class A {
   const A();
   bool operator ==(other) => true;
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn record_type_primitive_equal_different_shape() {
-        check(r#"
+        check(
+            r#"
 void f(x) {
   if (x case {(0, 1): 2, (0,): 3}) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn record_type_primitive_equal_empty() {
-        check(r#"
+        check(
+            r#"
 void f(x) {
   if (x case {(): 1, (): 2}) {}
 //            ^^
@@ -1195,12 +1365,14 @@ void f(x) {
 //                   ^^
 // [diag.equalKeysInMapPattern][context 1] Two keys in a map pattern can't be equal.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn record_type_primitive_equal_named_equal() {
-        check(r#"
+        check(
+            r#"
 void f(x) {
   if (x case {(a: 0): 1, (a: 0): 2}) {}
 //            ^^^^^^
@@ -1208,21 +1380,25 @@ void f(x) {
 //                       ^^^^^^
 // [diag.equalKeysInMapPattern][context 1] Two keys in a map pattern can't be equal.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn record_type_primitive_equal_named_not_equal() {
-        check(r#"
+        check(
+            r#"
 void f(x) {
   if (x case {(a: 0): 1, (a: 2): 3}) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn record_type_primitive_equal_positional_equal() {
-        check(r#"
+        check(
+            r#"
 void f(x) {
   if (x case {(0,): 1, (0,): 2}) {}
 //            ^^^^
@@ -1230,16 +1406,19 @@ void f(x) {
 //                     ^^^^
 // [diag.equalKeysInMapPattern][context 1] Two keys in a map pattern can't be equal.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn record_type_primitive_equal_positional_not_equal() {
-        check(r#"
+        check(
+            r#"
 void f(x) {
   if (x case {(0,): 1, (2,): 3}) {}
 }
-"#);
+"#,
+        );
     }
 }
 
@@ -1249,12 +1428,14 @@ mod non_constant_list_element {
 
     #[test]
     fn const_top_var_nested() {
-        check(r#"
+        check(
+            r#"
 final dynamic a = 0;
 var v = const [a + 1];
 //             ^
 // [diag.nonConstantListElement] The values in a const list literal must be constants.
-"#);
+"#,
+        );
     }
 }
 
@@ -1264,22 +1445,26 @@ mod non_constant_set_element {
 
     #[test]
     fn const_parameter() {
-        check(r#"
+        check(
+            r#"
 f(a) {
   return const {a};
 //              ^
 // [diag.nonConstantSetElement] The values in a const set literal must be constants.
-}"#);
+}"#,
+        );
     }
 
     #[test]
     fn const_spread_final() {
-        check(r#"
+        check(
+            r#"
 final Set x = {};
 var v = const {...x};
 //                ^
 // [diag.nonConstantSetElement] The values in a const set literal must be constants.
-"#);
+"#,
+        );
     }
 }
 
@@ -1289,34 +1474,40 @@ mod non_constant_map_key {
 
     #[test]
     fn const_if_element_then_true_else_final() {
-        check(r#"
+        check(
+            r#"
 final dynamic a = 0;
 const cond = true;
 var v = const {if (cond) 0: 1 else a : 0};
 //                                 ^
 // [diag.nonConstantMapKey] The keys in a const map literal must be constant.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_if_element_then_true_then_final() {
-        check(r#"
+        check(
+            r#"
 final dynamic a = 0;
 const cond = true;
 var v = const {if (cond) a : 0};
 //                       ^
 // [diag.nonConstantMapKey] The keys in a const map literal must be constant.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_top_level() {
-        check(r#"
+        check(
+            r#"
 final dynamic a = 0;
 var v = const {a : 0};
 //             ^
 // [diag.nonConstantMapKey] The keys in a const map literal must be constant.
-"#);
+"#,
+        );
     }
 }
 
@@ -1326,34 +1517,40 @@ mod non_constant_map_value {
 
     #[test]
     fn const_if_true_else_final() {
-        check(r#"
+        check(
+            r#"
 final dynamic a = 0;
 const cond = true;
 var v = const {if (cond) 'a': 'b', 'c' : a};
 //                                       ^
 // [diag.nonConstantMapValue] The values in a const map literal must be constant.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_if_true_then_final() {
-        check(r#"
+        check(
+            r#"
 final dynamic a = 0;
 const cond = true;
 var v = const {if (cond) 'a' : a};
 //                             ^
 // [diag.nonConstantMapValue] The values in a const map literal must be constant.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_top_level() {
-        check(r#"
+        check(
+            r#"
 final dynamic a = 0;
 var v = const {'a' : a};
 //                   ^
 // [diag.nonConstantMapValue] The values in a const map literal must be constant.
-"#);
+"#,
+        );
     }
 }
 
@@ -1363,7 +1560,8 @@ mod non_constant_default_value {
 
     #[test]
     fn constructor_named() {
-        check(r#"
+        check(
+            r#"
 class A {
   int y = 0;
   A({x = y}) {}
@@ -1371,12 +1569,14 @@ class A {
 // [diag.nonConstantDefaultValue] The default value of an optional parameter must be constant.
 // [diag.implicitThisReferenceInInitializer] The instance member 'y' can't be accessed in an initializer.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn constructor_positional() {
-        check(r#"
+        check(
+            r#"
 class A {
   int y = 0;
   A([x = y]) {}
@@ -1384,12 +1584,14 @@ class A {
 // [diag.nonConstantDefaultValue] The default value of an optional parameter must be constant.
 // [diag.implicitThisReferenceInInitializer] The instance member 'y' can't be accessed in an initializer.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn dot_shorthand_issue60962() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
 }
@@ -1397,131 +1599,163 @@ class A {
 void f([A a = .new()]) {}
 //            ^^^^^^
 // [diag.nonConstantDefaultValue] The default value of an optional parameter must be constant.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn function_named() {
-        check(r#"
+        check(
+            r#"
 int y = 0;
 f({x = y}) {}
 //     ^
 // [diag.nonConstantDefaultValue] The default value of an optional parameter must be constant.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn function_named_const_list() {
-        check(r#"
+        check(
+            r#"
 void f({x = const [0, 1]}) {}
-"#);
+"#,
+        );
     }
 
     #[test]
     fn function_named_const_list_elements_list_literal() {
-        check(r#"
+        check(
+            r#"
 void f({x = const [0, [1]]}) {}
-"#);
+"#,
+        );
     }
 
     #[test]
     fn function_named_const_record() {
-        check(r#"
+        check(
+            r#"
 void f({x = const (0, 1)}) {}
-"#);
+"#,
+        );
     }
 
     #[test]
     fn function_named_const_record_named_fields_list_literal() {
-        check(r#"
+        check(
+            r#"
 void f({x = const (0, foo: [1])}) {}
-"#);
+"#,
+        );
     }
 
     #[test]
     fn function_named_const_record_positional_fields_list_literal() {
-        check(r#"
+        check(
+            r#"
 void f({x = const (0, [1])}) {}
-"#);
+"#,
+        );
     }
 
     #[test]
     fn function_named_record_named_fields_integer_literal() {
-        check(r#"
+        check(
+            r#"
 void f({x = (a: 0, b: 1)}) {}
-"#);
+"#,
+        );
     }
 
     #[test]
     fn function_named_record_named_fields_list_literal() {
-        check(r#"
+        check(
+            r#"
 void f({x = (a: 0, b: [1])}) {}
 //                    ^^^
 // [diag.nonConstantDefaultValue] The default value of an optional parameter must be constant.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn function_named_record_named_fields_list_literal_const() {
-        check(r#"
+        check(
+            r#"
 void f({x = (a: 0, b: const [1])}) {}
-"#);
+"#,
+        );
     }
 
     #[test]
     fn function_named_record_positional_fields_integer_literal() {
-        check(r#"
+        check(
+            r#"
 void f({x = (0, 1)}) {}
-"#);
+"#,
+        );
     }
 
     #[test]
     fn function_named_record_positional_fields_list_literal() {
-        check(r#"
+        check(
+            r#"
 void f({x = (0, [1])}) {}
 //              ^^^
 // [diag.nonConstantDefaultValue] The default value of an optional parameter must be constant.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn function_named_record_positional_fields_list_literal_const() {
-        check(r#"
+        check(
+            r#"
 void f({x = (0, const [1])}) {}
-"#);
+"#,
+        );
     }
 
     #[test]
     fn function_named_undefined_identifier() {
-        check(r#"
+        check(
+            r#"
 void f({int x = X}) {}
 //              ^
 // [diag.undefinedIdentifier] Undefined name 'X'.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn function_positional() {
-        check(r#"
+        check(
+            r#"
 int y = 0;
 f([x = y]) {}
 //     ^
 // [diag.nonConstantDefaultValue] The default value of an optional parameter must be constant.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn function_positional_undefined_identifier() {
-        check(r#"
+        check(
+            r#"
 void f([int x = X]) {}
 //              ^
 // [diag.undefinedIdentifier] Undefined name 'X'.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn method_named() {
-        check(r#"
+        check(
+            r#"
 class A {
   int y = 0;
   m({x = y}) {}
@@ -1529,12 +1763,14 @@ class A {
 // [diag.nonConstantDefaultValue] The default value of an optional parameter must be constant.
 // [diag.implicitThisReferenceInInitializer] The instance member 'y' can't be accessed in an initializer.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn method_positional() {
-        check(r#"
+        check(
+            r#"
 class A {
   int y = 0;
   m([x = y]) {}
@@ -1542,71 +1778,84 @@ class A {
 // [diag.nonConstantDefaultValue] The default value of an optional parameter must be constant.
 // [diag.implicitThisReferenceInInitializer] The instance member 'y' can't be accessed in an initializer.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn no_applied_type_parameters_default_constructor_value_dynamic() {
-        check(r#"
+        check(
+            r#"
 void f<T>(T t) => t;
 
 class C<T> {
   final dynamic p;
   const C({this.p = f});
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn no_applied_type_parameters_default_constructor_value_generic_fn() {
-        check(r#"
+        check(
+            r#"
 void f<T>(T t) => t;
 
 class C<T> {
   final void Function<T>(T) p;
   const C({this.p = f});
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn no_applied_type_parameters_default_function_value_generic_fn() {
-        check(r#"
+        check(
+            r#"
 void f<T>(T t) => t;
 
 void bar<T>([void Function<T>(T) p = f]) {}
-"#);
+"#,
+        );
     }
 
     #[test]
     fn no_applied_type_parameters_default_method_value_generic_fn() {
-        check(r#"
+        check(
+            r#"
 void f<T>(T t) => t;
 
 class C<T> {
   void foo([void Function<T>(T) p = f]) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn primary_constructor_optional_named() {
-        check(r#"
+        check(
+            r#"
 int y = 0;
 class A({int x = y});
 //               ^
 // [diag.nonConstantDefaultValue] The default value of an optional parameter must be constant.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn primary_constructor_optional_positional() {
-        check(r#"
+        check(
+            r#"
 int y = 0;
 class A([int x = y]);
 //               ^
 // [diag.nonConstantDefaultValue] The default value of an optional parameter must be constant.
-"#);
+"#,
+        );
     }
 }
 
@@ -1616,48 +1865,57 @@ mod non_constant_relational_pattern_expression {
 
     #[test]
     fn const_integer_literal() {
-        check(r#"
+        check(
+            r#"
 void f(x) {
   if (x case > 0) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_local_variable() {
-        check(r#"
+        check(
+            r#"
 void f(x) {
   const a = 0;
   if (x case > a) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_top_level_variable() {
-        check(r#"
+        check(
+            r#"
 const a = 0;
 
 void f(x) {
   if (x case > a) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn not_const_formal_parameter() {
-        check(r#"
+        check(
+            r#"
 void f(x, int a) {
   if (x case > a) {}
 //             ^
 // [diag.nonConstantRelationalPatternExpression] The relational pattern expression must be a constant.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn not_const_top_level_variable() {
-        check(r#"
+        check(
+            r#"
 final a = 0;
 
 void f(x) {
@@ -1665,7 +1923,8 @@ void f(x) {
 //             ^
 // [diag.nonConstantRelationalPatternExpression] The relational pattern expression must be a constant.
 }
-"#);
+"#,
+        );
     }
 }
 
@@ -1675,18 +1934,21 @@ mod non_constant_map_pattern_key {
 
     #[test]
     fn formal_parameter() {
-        check(r#"
+        check(
+            r#"
 void f(x, int a) {
   if (x case {a: 0}) {}
 //            ^
 // [diag.nonConstantMapPatternKey] Key expressions in map patterns must be constants.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn instance_creation_no_const() {
-        check(r#"
+        check(
+            r#"
 void f(x) {
   if (x case {A(): 0}) {}
 //            ^^^
@@ -1696,16 +1958,19 @@ void f(x) {
 class A {
   const A();
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn integer_literal() {
-        check(r#"
+        check(
+            r#"
 void f(x) {
   if (x case {0: 1}) {}
 }
-"#);
+"#,
+        );
     }
 }
 
@@ -1715,7 +1980,8 @@ mod invalid_constant {
 
     #[test]
     fn conditional_expression_unknown_condition() {
-        check(r#"
+        check(
+            r#"
 const bool kIsWeb = identical(0, 0.0);
 
 void f() {
@@ -1725,12 +1991,14 @@ void f() {
 class A {
   const A(int _);
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn conditional_expression_unknown_condition_error_in_branch() {
-        check(r#"
+        check(
+            r#"
 const bool kIsWeb = identical(0, 0.0);
 
 void f() {
@@ -1743,34 +2011,40 @@ void f() {
 class A {
   const A(int _);
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn in_initializer_assert_condition() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A(int i) : assert(i.isNegative);
 //                        ^^^^^^^^^^^^
 // [diag.invalidConstant] Invalid constant value.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn in_initializer_assert_message() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A(int i) : assert(i < 0, 'isNegative = ${i.isNegative}');
 //                                               ^^^^^^^^^^^^
 // [diag.invalidConstant] Invalid constant value.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn in_initializer_field() {
-        check(r#"
+        check(
+            r#"
 class A {
   static int C = 0;
   final int a;
@@ -1778,22 +2052,26 @@ class A {
 //                ^
 // [diag.invalidConstant] Invalid constant value.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn in_initializer_field_as() {
-        check(r#"
+        check(
+            r#"
 class C<T> {
   final l;
   const C.test(dynamic x) : l = x as List<T>;
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn in_initializer_instance_creation() {
-        check(r#"
+        check(
+            r#"
 class A {
   A();
 }
@@ -1807,12 +2085,14 @@ class B {
 var b = const B();
 //      ^^^^^^^^^
 // [diag.invalidConstant][context 1] Invalid constant value.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn in_initializer_redirecting() {
-        check(r#"
+        check(
+            r#"
 class A {
   static var C;
   const A.named(p);
@@ -1820,12 +2100,14 @@ class A {
 //                       ^
 // [diag.invalidConstant] Invalid constant value.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn in_initializer_super() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A(p);
 }
@@ -1835,12 +2117,14 @@ class B extends A {
 //                  ^
 // [diag.invalidConstant] Invalid constant value.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn issue49389() {
-        check(r#"
+        check(
+            r#"
 class Foo {
   const Foo({required this.bar});
   final Map<String, String> bar;
@@ -1852,7 +2136,8 @@ void main() {
 //               ^^^^
 // [diag.invalidConstant] Invalid constant value.
 }
-"#);
+"#,
+        );
     }
 }
 
@@ -1862,7 +2147,8 @@ mod const_constructor_with_field_initialized_by_non_const {
 
     #[test]
     fn class_factory_constructor() {
-        check(r#"
+        check(
+            r#"
 class A {
   final List<int> list = f();
   const factory A() = B;
@@ -1874,12 +2160,14 @@ class B implements A {
 List<int> f() {
   return [3];
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn class_instance_field() {
-        check(r#"
+        check(
+            r#"
 class A {
   final int i = f();
 //              ^^^
@@ -1891,12 +2179,14 @@ class A {
 int f() {
   return 3;
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn class_instance_field_as_expression() {
-        check(r#"
+        check(
+            r#"
 dynamic y = 2;
 class A {
   const A();
@@ -1904,12 +2194,14 @@ class A {
 // [diag.constConstructorWithFieldInitializedByNonConst] Can't define the 'const' constructor because the field 'x' is initialized with a non-constant value.
   final x = y as num;
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn class_static_field() {
-        check(r#"
+        check(
+            r#"
 class A {
   static final int i = f();
   const A();
@@ -1917,12 +2209,14 @@ class A {
 int f() {
   return 3;
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn enum_instance_field() {
-        check(r#"
+        check(
+            r#"
 enum E {
   v;
   final int i = f();
@@ -1933,24 +2227,28 @@ enum E {
 // [diag.constConstructorWithFieldInitializedByNonConst] Can't define the 'const' constructor because the field 'i' is initialized with a non-constant value.
 }
 int f() => 0;
-"#);
+"#,
+        );
     }
 
     #[test]
     fn enum_static_field() {
-        check(r#"
+        check(
+            r#"
 enum E {
   v;
   static final int i = f();
   const E();
 }
 int f() => 0;
-"#);
+"#,
+        );
     }
 
     #[test]
     fn mixin_class_factory() {
-        check(r#"
+        check(
+            r#"
 int e = 3;
 mixin class MixinClassFactory {
   final int foo = e;
@@ -1962,7 +2260,8 @@ mixin class A implements MixinClassFactory {
   final int foo = 0;
   const A();
 }
-"#);
+"#,
+        );
     }
 }
 
@@ -1972,7 +2271,8 @@ mod const_constructor_field_type_mismatch {
 
     #[test]
     fn generic_int_int() {
-        check(r#"
+        check(
+            r#"
 class C<T> {
   final T x = y;
 //            ^
@@ -1981,12 +2281,14 @@ class C<T> {
 }
 const int y = 1;
 var v = const C<int>();
-"#);
+"#,
+        );
     }
 
     #[test]
     fn not_generic_unresolved_int() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A(x) : y = x;
   final Unresolved y;
@@ -1994,12 +2296,14 @@ class A {
 // [diag.undefinedClass] Undefined class 'Unresolved'.
 }
 var v = const A(0);
-"#);
+"#,
+        );
     }
 
     #[test]
     fn not_generic_unresolved_null() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A(x) : y = x;
   final Unresolved y;
@@ -2007,7 +2311,8 @@ class A {
 // [diag.undefinedClass] Undefined class 'Unresolved'.
 }
 var v = const A(null);
-"#);
+"#,
+        );
     }
 }
 
@@ -2017,18 +2322,21 @@ mod const_constructor_param_type_mismatch {
 
     #[test]
     fn assignable_field_formal_omitted_type() {
-        check(r#"
+        check(
+            r#"
 class A {
   final x;
   const A(this.x);
 }
 var v = const A(5);
-"#);
+"#,
+        );
     }
 
     #[test]
     fn assignable_field_formal_subtype() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
 }
@@ -2040,12 +2348,14 @@ class C {
   const C(this.a);
 }
 var v = const C(const B());
-"#);
+"#,
+        );
     }
 
     #[test]
     fn assignable_field_formal_typedef() {
-        check(r#"
+        check(
+            r#"
 typedef String Int2String(int x);
 class A {
   final Int2String f;
@@ -2056,57 +2366,67 @@ var v = const A(foo);
 //              ^^^
 // [diag.argumentTypeNotAssignable] The argument type 'dynamic Function(dynamic)' can't be assigned to the parameter type 'Int2String'.
 // [diag.constConstructorParamTypeMismatch] A value of type 'dynamic Function(dynamic)' can't be assigned to a parameter of type 'String Function(int)' in a const constructor.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn assignable_field_formal_type_substitution() {
-        check(r#"
+        check(
+            r#"
 class A<T> {
   final T x;
   const A(this.x);
 }
 var v = const A<int>(3);
-"#);
+"#,
+        );
     }
 
     #[test]
     fn assignable_type_substitution() {
-        check(r#"
+        check(
+            r#"
 class A<T> {
   const A(T x);
 }
 var v = const A<int>(3);
-"#);
+"#,
+        );
     }
 
     #[test]
     fn assignable_undefined() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A(Unresolved x);
 //        ^^^^^^^^^^
 // [diag.undefinedClass] Undefined class 'Unresolved'.
 }
 var v = const A('foo');
-"#);
+"#,
+        );
     }
 
     #[test]
     fn assignable_undefined_null() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A(Unresolved x);
 //        ^^^^^^^^^^
 // [diag.undefinedClass] Undefined class 'Unresolved'.
 }
 var v = const A(null);
-"#);
+"#,
+        );
     }
 
     #[test]
     fn not_assignable_field_formal_optional() {
-        check(r#"
+        check(
+            r#"
 class A {
   final int x;
   const A([this.x = 'foo']);
@@ -2116,12 +2436,14 @@ class A {
 var v = const A();
 //      ^^^^^^^^^
 // [diag.constConstructorParamTypeMismatch] A value of type 'String' can't be assigned to a parameter of type 'int' in a const constructor.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn not_assignable_field_formal_supertype() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
 }
@@ -2137,12 +2459,14 @@ var v = const C(u);
 //              ^
 // [diag.argumentTypeNotAssignable] The argument type 'A' can't be assigned to the parameter type 'B'.
 // [diag.constConstructorParamTypeMismatch] A value of type 'A' can't be assigned to a parameter of type 'B' in a const constructor.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn not_assignable_field_formal_typedef() {
-        check(r#"
+        check(
+            r#"
 typedef String Int2String(int x);
 class A {
   final Int2String f;
@@ -2153,12 +2477,14 @@ var v = const A(foo);
 //              ^^^
 // [diag.argumentTypeNotAssignable] The argument type 'int Function(String)' can't be assigned to the parameter type 'Int2String'.
 // [diag.constConstructorParamTypeMismatch] A value of type 'int Function(String)' can't be assigned to a parameter of type 'String Function(int)' in a const constructor.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn not_assignable_field_formal_unrelated() {
-        check(r#"
+        check(
+            r#"
 class A {
   final int x;
   const A(this.x);
@@ -2167,12 +2493,14 @@ var v = const A('foo');
 //              ^^^^^
 // [diag.argumentTypeNotAssignable] The argument type 'String' can't be assigned to the parameter type 'int'.
 // [diag.constConstructorParamTypeMismatch] A value of type 'String' can't be assigned to a parameter of type 'int' in a const constructor.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn not_assignable_field_formal_unresolved() {
-        check(r#"
+        check(
+            r#"
 class A {
   final Unresolved x;
 //      ^^^^^^^^^^
@@ -2180,12 +2508,14 @@ class A {
   const A(String this.x);
 }
 var v = const A('foo');
-"#);
+"#,
+        );
     }
 
     #[test]
     fn not_assignable_type_substitution() {
-        check(r#"
+        check(
+            r#"
 class A<T> {
   const A(T x);
 }
@@ -2193,12 +2523,14 @@ var v = const A<int>('foo');
 //                   ^^^^^
 // [diag.argumentTypeNotAssignable] The argument type 'String' can't be assigned to the parameter type 'int'.
 // [diag.constConstructorParamTypeMismatch] A value of type 'String' can't be assigned to a parameter of type 'int' in a const constructor.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn not_assignable_unrelated() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A(int x);
 }
@@ -2206,12 +2538,14 @@ var v = const A('foo');
 //              ^^^^^
 // [diag.argumentTypeNotAssignable] The argument type 'String' can't be assigned to the parameter type 'int'.
 // [diag.constConstructorParamTypeMismatch] A value of type 'String' can't be assigned to a parameter of type 'int' in a const constructor.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn super_formal_parameter_explicit() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A({int a = 0});
 }
@@ -2221,12 +2555,14 @@ class B extends A {
 
   const B({super.a = 2});
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn super_formal_parameter_inherited() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A({int a = 0});
 }
@@ -2236,12 +2572,14 @@ class B extends A {
 }
 
 const b = const B();
-"#);
+"#,
+        );
     }
 
     #[test]
     fn super_formal_parameter_inherited_generic() {
-        check(r#"
+        check(
+            r#"
 class A<T> {
   const A({int a = 0});
 }
@@ -2251,7 +2589,8 @@ class B extends A<int> {
 }
 
 const b = const B();
-"#);
+"#,
+        );
     }
 }
 
@@ -2261,7 +2600,8 @@ mod const_with_non_constant_argument {
 
     #[test]
     fn annotation() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A(int p);
 }
@@ -2271,12 +2611,14 @@ var v = 42;
 // [diag.constWithNonConstantArgument] Arguments of a constant creation must be constant expressions.
 main() {
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn class_shadowed_by_setter() {
-        check(r#"
+        check(
+            r#"
 class Annotation {
   const Annotation(Object obj);
 }
@@ -2290,12 +2632,14 @@ class Foo {
 // [diag.constWithNonConstantArgument] Arguments of a constant creation must be constant expressions.
   set Bar(int value) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn enum_constant() {
-        check(r#"
+        check(
+            r#"
 var a = 42;
 
 enum E {
@@ -2304,34 +2648,40 @@ enum E {
 // [diag.constWithNonConstantArgument] Arguments of a constant creation must be constant expressions.
   const E(_);
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn enum_constant_constant_context() {
-        check(r#"
+        check(
+            r#"
 enum E {
   v([]);
   const E(_);
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn instance_creation() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A(a);
 }
 f(p) { return const A(p); }
 //                    ^
 // [diag.constWithNonConstantArgument] Arguments of a constant creation must be constant expressions.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn issue47603() {
-        check(r#"
+        check(
+            r#"
 class C {
   final void Function() c;
   const C(this.c);
@@ -2342,7 +2692,8 @@ void main() {
 //        ^^^^^
 // [diag.constWithNonConstantArgument] Arguments of a constant creation must be constant expressions.
 }
-"#);
+"#,
+        );
     }
 }
 
@@ -2352,136 +2703,166 @@ mod const_spread_expected_list_or_set {
 
     #[test]
     fn const_list_int() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = 5;
 var b = const <int>[...a];
 //                     ^
 // [diag.constSpreadExpectedListOrSet] A list or a set is expected in this spread.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_list_int_const_variable() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = 5;
 const x = <int>[...a];
 //                 ^
 // [diag.constSpreadExpectedListOrSet] A list or a set is expected in this spread.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_list_list() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = [5];
 var b = const <int>[...a];
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_list_map() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = <int, int>{0: 1};
 var b = const <int>[...a];
 //                     ^
 // [diag.constSpreadExpectedListOrSet] A list or a set is expected in this spread.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_list_null() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = null;
 var b = const <int>[...a];
 //                     ^
 // [diag.constSpreadExpectedListOrSet] A list or a set is expected in this spread.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_list_null_nullable() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = null;
 var b = const <int>[...?a];
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_list_set() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = <int>{5};
 var b = const <int>[...a];
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_set_int() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = 5;
 var b = const <int>{...a};
 //                     ^
 // [diag.constSpreadExpectedListOrSet] A list or a set is expected in this spread.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_set_list() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = <int>[5];
 var b = const <int>{...a};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_set_map() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = <int, int>{1: 2};
 var b = const <int>{...a};
 //                     ^
 // [diag.constSpreadExpectedListOrSet] A list or a set is expected in this spread.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_set_null() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = null;
 var b = const <int>{...a};
 //                     ^
 // [diag.constSpreadExpectedListOrSet] A list or a set is expected in this spread.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_set_null_nullable() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = null;
 var b = const <int>{...?a};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_set_set() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = <int>{5};
 var b = const <int>{...a};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn non_const_list_int() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = 5;
 var b = <int>[...a];
-"#);
+"#,
+        );
     }
 
     #[test]
     fn non_const_set_int() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = 5;
 var b = <int>{...a};
-"#);
+"#,
+        );
     }
 }
 
@@ -2491,74 +2872,90 @@ mod const_spread_expected_map {
 
     #[test]
     fn const_map_int() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = 5;
 var b = const <int, int>{...a};
 //                          ^
 // [diag.constSpreadExpectedMap] A map is expected in this spread.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_map_list() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = <int>[5];
 var b = const <int, int>{...a};
 //                          ^
 // [diag.constSpreadExpectedMap] A map is expected in this spread.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_map_map() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = <int, int>{1: 2};
 var b = <int, int>{...a};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_map_null() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = null;
 var b = const <int, int>{...a};
 //                          ^
 // [diag.constSpreadExpectedMap] A map is expected in this spread.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_map_null_nullable() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = null;
 var b = <int, int>{...?a};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_map_set() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = <int>{5};
 var b = const <int, int>{...a};
 //                          ^
 // [diag.constSpreadExpectedMap] A map is expected in this spread.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn non_const_map_int() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = 5;
 var b = <int, int>{...a};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn non_const_map_map() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = {1: 2};
 var b = <int, int>{...a};
-"#);
+"#,
+        );
     }
 }
 
@@ -2568,31 +2965,36 @@ mod recursive_compile_time_constant {
 
     #[test]
     fn cycle() {
-        check(r#"
+        check(
+            r#"
 const x = y + 1;
 //    ^
 // [diag.recursiveCompileTimeConstant] The compile-time constant expression depends on itself.
 const y = x + 1;
 //    ^
 // [diag.recursiveCompileTimeConstant] The compile-time constant expression depends on itself.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn enum_constant_values() {
-        check(r#"
+        check(
+            r#"
 enum E {
   v(values);
 //^
 // [diag.recursiveCompileTimeConstant] The compile-time constant expression depends on itself.
   const E(Object a);
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn enum_constants() {
-        check(r#"
+        check(
+            r#"
 enum E {
   v1(v2), v2(v1);
 //^^
@@ -2601,12 +3003,14 @@ enum E {
 // [diag.recursiveCompileTimeConstant] The compile-time constant expression depends on itself.
   const E(E other);
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn enum_fields() {
-        check(r#"
+        check(
+            r#"
 enum E {
   v;
   static const x = y + 1;
@@ -2616,21 +3020,25 @@ enum E {
 //             ^
 // [diag.recursiveCompileTimeConstant] The compile-time constant expression depends on itself.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn single_variable() {
-        check(r#"
+        check(
+            r#"
 const x = x;
 //    ^
 // [diag.recursiveCompileTimeConstant] The compile-time constant expression depends on itself.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn single_variable_from_const_list() {
-        check(r#"
+        check(
+            r#"
 const elems = const [
 //    ^^^^^
 // [diag.recursiveCompileTimeConstant] The compile-time constant expression depends on itself.
@@ -2638,7 +3046,8 @@ const elems = const [
     1, elems, 3,
   ],
 ];
-"#);
+"#,
+        );
     }
 }
 
@@ -2648,7 +3057,8 @@ mod recursive_constant_constructor {
 
     #[test]
     fn new_head_named_redirecting_constructor_invocation() {
-        check(r#"
+        check(
+            r#"
 class A {
   const new named() : this.named();
 //      ^^^^^^^^^
@@ -2656,12 +3066,14 @@ class A {
 //                    ^^^^^^^^^^^^
 // [diag.recursiveConstructorRedirect] Constructors can't redirect to themselves either directly or indirectly.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn new_head_unnamed_redirecting_constructor_invocation() {
-        check(r#"
+        check(
+            r#"
 class A {
   const new () : this();
 //      ^^^
@@ -2669,24 +3081,28 @@ class A {
 //               ^^^^^^
 // [diag.recursiveConstructorRedirect] Constructors can't redirect to themselves either directly or indirectly.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn type_name_field() {
-        check(r#"
+        check(
+            r#"
 class A {
   const A();
 //      ^
 // [diag.recursiveConstantConstructor] The constant constructor depends on itself.
   final m = const A();
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn type_name_initializer_after_toplevel_var() {
-        check(r#"
+        check(
+            r#"
 const y = const C();
 //    ^
 // [diag.recursiveCompileTimeConstant] The compile-time constant expression depends on itself.
@@ -2696,24 +3112,28 @@ class C {
 // [diag.recursiveConstantConstructor] The constant constructor depends on itself.
   final x;
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn type_name_initializer_field() {
-        check(r#"
+        check(
+            r#"
 class A {
   final A a;
   const A() : a = const A();
 //      ^
 // [diag.recursiveConstantConstructor] The constant constructor depends on itself.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn type_name_initializer_field_multiple_classes() {
-        check(r#"
+        check(
+            r#"
 class B {
   final A a;
   const B() : a = const A();
@@ -2726,7 +3146,8 @@ class A {
 //      ^
 // [diag.recursiveConstantConstructor] The constant constructor depends on itself.
 }
-"#);
+"#,
+        );
     }
 }
 
@@ -2737,63 +3158,73 @@ mod const_eval_for_element {
     #[test]
     #[ignore = "open: Dart reports const_initialized_with_non_constant_value at the literal (evaluation of the linked initializer)"]
     fn list_literal() {
-        check(r#"
+        check(
+            r#"
 const x = [for (int i = 0; i < 3; i++) i];
 //        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 // [diag.constInitializedWithNonConstantValue] Const variables must be initialized with a constant value.
 //         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 // [diag.constEvalForElement] Constant expressions don't support 'for' elements.
-"#);
+"#,
+        );
     }
 
     #[test]
     #[ignore = "open: Dart reports const_initialized_with_non_constant_value at the literal (evaluation of the linked initializer)"]
     fn list_literal_for_in() {
-        check(r#"
+        check(
+            r#"
 const Set set = {};
 const x = [for(final i in set) i];
 //        ^^^^^^^^^^^^^^^^^^^^^^^
 // [diag.constInitializedWithNonConstantValue] Const variables must be initialized with a constant value.
 //         ^^^^^^^^^^^^^^^^^^^^^
 // [diag.constEvalForElement] Constant expressions don't support 'for' elements.
-"#);
+"#,
+        );
     }
 
     #[test]
     #[ignore = "open: Dart reports const_initialized_with_non_constant_value at the literal (evaluation of the linked initializer)"]
     fn map_literal_for_in() {
-        check(r#"
+        check(
+            r#"
 const x = {for (final i in const []) i: null};
 //        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 // [diag.constInitializedWithNonConstantValue] Const variables must be initialized with a constant value.
 //         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 // [diag.constEvalForElement] Constant expressions don't support 'for' elements.
-"#);
+"#,
+        );
     }
 
     #[test]
     #[ignore = "open: Dart reports const_initialized_with_non_constant_value at the literal (evaluation of the linked initializer)"]
     fn map_literal_for_in_nested() {
-        check(r#"
+        check(
+            r#"
 const x = {if (true) for (final i in const []) i: null};
 //        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 // [diag.constInitializedWithNonConstantValue] Const variables must be initialized with a constant value.
 //                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 // [diag.constEvalForElement] Constant expressions don't support 'for' elements.
-"#);
+"#,
+        );
     }
 
     #[test]
     #[ignore = "open: Dart reports const_initialized_with_non_constant_value at the literal (evaluation of the linked initializer)"]
     fn set_literal_for_in() {
-        check(r#"
+        check(
+            r#"
 const Set set = {};
 const x = {for (final i in set) i};
 //        ^^^^^^^^^^^^^^^^^^^^^^^^
 // [diag.constInitializedWithNonConstantValue] Const variables must be initialized with a constant value.
 //         ^^^^^^^^^^^^^^^^^^^^^^
 // [diag.constEvalForElement] Constant expressions don't support 'for' elements.
-"#);
+"#,
+        );
     }
 }
 
@@ -2803,10 +3234,12 @@ mod list_element_type_not_assignable {
 
     #[test]
     fn const_int_int() {
-        check(r#"
+        check(
+            r#"
 var v1 = <int> [42];
 var v2 = const <int> [42];
-"#);
+"#,
+        );
     }
 }
 
@@ -2816,202 +3249,248 @@ mod set_element_type_not_assignable {
 
     #[test]
     fn const_if_element_then_else_false_int_int() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = 0;
 const dynamic b = 0;
 var v = const <int>{if (1 < 0) a else b};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_if_element_then_else_false_int_string() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = 0;
 const dynamic b = 'b';
 var v = const <int>{if (1 < 0) a else b};
 //                                    ^
 // [diag.setElementTypeNotAssignable] The element type 'String' can't be assigned to the set type 'int'.
-"#);
+"#,
+        );
     }
 
     #[test]
     #[ignore = "reported by the literal element verifier (unit D11)"]
     fn const_if_element_then_false_int_string() {
-        check(r#"
+        check(
+            r#"
 var v = const <int>{if (1 < 0) 'a'};
 //                             ^^^
 // [diag.setElementTypeNotAssignable] The element type 'String' can't be assigned to the set type 'int'.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_if_element_then_false_int_string_dynamic() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = 'a';
 var v = const <int>{if (1 < 0) a};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_if_element_then_true_int_int() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = 0;
 var v = const <int>{if (true) a};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_if_element_then_true_int_string() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = 'a';
 var v = const <int>{if (true) a};
 //                            ^
 // [diag.setElementTypeNotAssignable] The element type 'String' can't be assigned to the set type 'int'.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_int_int_dynamic() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = 42;
 var v = const <int>{a};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_int_int_value() {
-        check(r#"
+        check(
+            r#"
 var v = const <int>{42};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_int_null_dynamic() {
-        check(r#"
+        check(
+            r#"
 const a = null;
 var v = const <int>{a};
 //                  ^
 // [diag.setElementTypeNotAssignableNullability] The element type 'Null' can't be assigned to the set type 'int'.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_int_null_value() {
-        check(r#"
+        check(
+            r#"
 var v = const <int>{null};
 //                  ^^^^
 // [diag.setElementTypeNotAssignableNullability] The element type 'Null' can't be assigned to the set type 'int'.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_int_string_dynamic() {
-        check(r#"
+        check(
+            r#"
 const dynamic x = 'abc';
 var v = const <int>{x};
 //                  ^
 // [diag.setElementTypeNotAssignable] The element type 'String' can't be assigned to the set type 'int'.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_int_string_value() {
-        check(r#"
+        check(
+            r#"
 var v = const <int>{'abc'};
 //                  ^^^^^
 // [diag.setElementTypeNotAssignable] The element type 'String' can't be assigned to the set type 'int'.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_spread_int_int() {
-        check(r#"
+        check(
+            r#"
 var v = const <int>{...[0, 1]};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_string_question_null_dynamic() {
-        check(r#"
+        check(
+            r#"
 const a = null;
 var v = const <String?>{a};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn const_string_question_null_value() {
-        check(r#"
+        check(
+            r#"
 var v = const <String?>{null};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn non_const_if_element_then_else_false_int_dynamic() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = 'a';
 const dynamic b = 'b';
 var v = <int>{if (1 < 0) a else b};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn non_const_if_element_then_else_false_int_int() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = 0;
 const dynamic b = 0;
 var v = <int>{if (1 < 0) a else b};
-"#);
+"#,
+        );
     }
 
     #[test]
     #[ignore = "reported by the literal element verifier (unit D11)"]
     fn non_const_if_element_then_false_int_string() {
-        check(r#"
+        check(
+            r#"
 var v = <int>[if (1 < 0) 'a'];
 //                       ^^^
 // [diag.listElementTypeNotAssignable] The element type 'String' can't be assigned to the list type 'int'.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn non_const_if_element_then_true_int_dynamic() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = 'a';
 var v = <int>{if (true) a};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn non_const_if_element_then_true_int_int() {
-        check(r#"
+        check(
+            r#"
 const dynamic a = 0;
 var v = <int>{if (true) a};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn non_const_spread_int_int() {
-        check(r#"
+        check(
+            r#"
 var v = <int>{...[0, 1]};
-"#);
+"#,
+        );
     }
 
     #[test]
     fn not_const_int_string_dynamic() {
-        check(r#"
+        check(
+            r#"
 const dynamic x = 'abc';
 var v = <int>{x};
-"#);
+"#,
+        );
     }
 
     #[test]
     #[ignore = "reported by the literal element verifier (unit D11)"]
     fn not_const_int_string_value() {
-        check(r#"
+        check(
+            r#"
 var v = <int>{'abc'};
 //            ^^^^^
 // [diag.setElementTypeNotAssignable] The element type 'String' can't be assigned to the set type 'int'.
-"#);
+"#,
+        );
     }
 }
 
@@ -3021,78 +3500,93 @@ mod constant_pattern_never_matches_value_type {
 
     #[test]
     fn bool_bool() {
-        check(r#"
+        check(
+            r#"
 void f(bool x) {
   if (x case (true)) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn bool_int() {
-        check(r#"
+        check(
+            r#"
 void f(int x) {
   if (x case (true)) {}
 //            ^^^^
 // [diag.constantPatternNeverMatchesValueType] The matched value type 'int' can never be equal to this constant of type 'bool'.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn bool_list_of_bool() {
-        check(r#"
+        check(
+            r#"
 void f(List<bool> x) {
   if (x case (true)) {}
 //            ^^^^
 // [diag.constantPatternNeverMatchesValueType] The matched value type 'List<bool>' can never be equal to this constant of type 'bool'.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn bool_type_parameter_bound_bool() {
-        check(r#"
+        check(
+            r#"
 void f<T extends bool>(T x) {
   if (x case (true)) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn bool_type_parameter_bound_bool_nested() {
-        check(r#"
+        check(
+            r#"
 void f<T extends bool>(List<T> x) {
   if (x case [true]) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn bool_type_parameter_bound_num() {
-        check(r#"
+        check(
+            r#"
 void f<T extends num>(T x) {
   if (x case (true)) {}
 //            ^^^^
 // [diag.constantPatternNeverMatchesValueType] The matched value type 'T' can never be equal to this constant of type 'bool'.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn bool_type_parameter_bound_num_nested() {
-        check(r#"
+        check(
+            r#"
 void f<T extends num>(List<T> x) {
   if (x case [true]) {}
 //            ^^^^
 // [diag.constantPatternNeverMatchesValueType] The matched value type 'T' can never be equal to this constant of type 'bool'.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn custom_not_primitive_equality_constant_is_subtype_of_value() {
-        check(r#"
+        check(
+            r#"
 void f(A x) {
   if (x case const B()) {}
 }
@@ -3105,12 +3599,14 @@ class B extends A {
   const B();
   bool operator ==(other) => true;
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn custom_not_primitive_equality_constant_is_supertype_of_value() {
-        check(r#"
+        check(
+            r#"
 void f(B x) {
   if (x case const A()) {}
 }
@@ -3123,12 +3619,14 @@ class A {
 class B extends A {
   const B();
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn custom_primitive_equality_constant_is_same_type_as_value() {
-        check(r#"
+        check(
+            r#"
 void f(A x) {
   if (x case const A()) {}
 }
@@ -3136,12 +3634,14 @@ void f(A x) {
 class A {
   const A();
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn custom_primitive_equality_constant_is_subtype_of_value() {
-        check(r#"
+        check(
+            r#"
 void f(A x) {
   if (x case const B()) {}
 }
@@ -3153,12 +3653,14 @@ class A {
 class B extends A {
   const B();
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn custom_primitive_equality_constant_is_supertype_of_value() {
-        check(r#"
+        check(
+            r#"
 void f(B x) {
   if (x case const A()) {}
 //           ^^^^^^^^^
@@ -3172,12 +3674,14 @@ class A {
 class B extends A {
   const B();
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn custom_primitive_equality_generic_different_element_constant_is_subtype_of_value() {
-        check(r#"
+        check(
+            r#"
 void f(A<int> x) {
   if (x case const B()) {}
 }
@@ -3189,12 +3693,14 @@ class A<T> {
 class B extends A<int> {
   const B();
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn custom_primitive_equality_generic_different_element_constant_is_supertype_of_value() {
-        check(r#"
+        check(
+            r#"
 void f(B x) {
   if (x case const A<int>()) {}
 //           ^^^^^^^^^^^^^^
@@ -3208,12 +3714,14 @@ class A<T> {
 class B extends A<int> {
   const B();
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn custom_primitive_equality_generic_same_element_constant_is_same_type_as_value() {
-        check(r#"
+        check(
+            r#"
 void f(A<int> x) {
   if (x case const A<int>()) {}
 }
@@ -3221,12 +3729,14 @@ void f(A<int> x) {
 class A<T> {
   const A();
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn custom_primitive_equality_generic_same_element_constant_is_subtype_of_value() {
-        check(r#"
+        check(
+            r#"
 void f(A<num> x) {
   if (x case const A<int>()) {}
 }
@@ -3234,12 +3744,14 @@ void f(A<num> x) {
 class A<T> {
   const A();
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn custom_primitive_equality_generic_same_element_constant_is_supertype_of_value() {
-        check(r#"
+        check(
+            r#"
 void f(A<int> x) {
   if (x case const A<num>()) {}
 //           ^^^^^^^^^^^^^^
@@ -3249,12 +3761,14 @@ void f(A<int> x) {
 class A<T> {
   const A();
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn custom_primitive_equality_generic_same_element_type_parameter() {
-        check(r#"
+        check(
+            r#"
 void f<T>(A<T> x) {
   if (x case const A<int>()) {}
 }
@@ -3262,12 +3776,14 @@ void f<T>(A<T> x) {
 class A<T> {
   const A();
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn custom_primitive_equality_generic_same_element_type_parameter_contravariant() {
-        check(r#"
+        check(
+            r#"
 void f<T>(A<void Function(T)> x) {
   if (x case const A<void Function(int)>()) {}
 }
@@ -3275,34 +3791,40 @@ void f<T>(A<void Function(T)> x) {
 class A<T> {
   const A();
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn int_bool() {
-        check(r#"
+        check(
+            r#"
 void f(bool x) {
   if (x case (0)) {}
 //            ^
 // [diag.constantPatternNeverMatchesValueType] The matched value type 'bool' can never be equal to this constant of type 'int'.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn int_double() {
-        check(r#"
+        check(
+            r#"
 void f(double x) {
   if (x case (zero)) {}
 }
 
 const zero = 0;
-"#);
+"#,
+        );
     }
 
     #[test]
     fn int_extension_type_bool() {
-        check(r#"
+        check(
+            r#"
 extension type E(bool it) {}
 
 void f(E x) {
@@ -3310,23 +3832,27 @@ void f(E x) {
 //            ^
 // [diag.constantPatternNeverMatchesValueType] The matched value type 'bool' can never be equal to this constant of type 'int'.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn int_extension_type_int() {
-        check(r#"
+        check(
+            r#"
 extension type E(int it) {}
 
 void f(E x) {
   if (x case (0)) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn int_function_type() {
-        check(r#"
+        check(
+            r#"
 void f(void Function() x) {
   if (x case (0)) {}
 //            ^
@@ -3334,39 +3860,47 @@ void f(void Function() x) {
 }
 
 class A {}
-"#);
+"#,
+        );
     }
 
     #[test]
     fn int_int() {
-        check(r#"
+        check(
+            r#"
 void f(int x) {
   if (x case (0)) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn int_int_question() {
-        check(r#"
+        check(
+            r#"
 void f(int? x) {
   if (x case (0)) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn int_num() {
-        check(r#"
+        check(
+            r#"
 void f(num x) {
   if (x case (0)) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn int_other_class() {
-        check(r#"
+        check(
+            r#"
 void f(A x) {
   if (x case (0)) {}
 //            ^
@@ -3374,12 +3908,14 @@ void f(A x) {
 }
 
 class A {}
-"#);
+"#,
+        );
     }
 
     #[test]
     fn int_record_type() {
-        check(r#"
+        check(
+            r#"
 void f((int, int) x) {
   if (x case 0) {}
 //           ^
@@ -3387,23 +3923,27 @@ void f((int, int) x) {
 }
 
 class A {}
-"#);
+"#,
+        );
     }
 
     #[test]
     fn int_string() {
-        check(r#"
+        check(
+            r#"
 void f(String x) {
   if (x case (0)) {}
 //            ^
 // [diag.constantPatternNeverMatchesValueType] The matched value type 'String' can never be equal to this constant of type 'int'.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn null_function_type() {
-        check(r#"
+        check(
+            r#"
 void f(void Function() x) {
   if (x case null) {}
 //           ^^^^
@@ -3411,21 +3951,25 @@ void f(void Function() x) {
 //                 ^^
 // [diag.deadCode] Dead code.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn null_function_type_question() {
-        check(r#"
+        check(
+            r#"
 void f(void Function()? x) {
   if (x case null) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn null_int() {
-        check(r#"
+        check(
+            r#"
 void f(int x) {
   if (x case null) {}
 //           ^^^^
@@ -3433,21 +3977,25 @@ void f(int x) {
 //                 ^^
 // [diag.deadCode] Dead code.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn null_int_question() {
-        check(r#"
+        check(
+            r#"
 void f(int? x) {
   if (x case null) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn null_record_type() {
-        check(r#"
+        check(
+            r#"
 void f((int, int) x) {
   if (x case null) {}
 //           ^^^^
@@ -3455,21 +4003,25 @@ void f((int, int) x) {
 //                 ^^
 // [diag.deadCode] Dead code.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn null_record_type_question() {
-        check(r#"
+        check(
+            r#"
 void f((int, int)? x) {
   if (x case null) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn null_type_parameter_type_not_nullable_bound() {
-        check(r#"
+        check(
+            r#"
 void f<T extends Object>(T x) {
   if (x case null) {}
 //           ^^^^
@@ -3477,34 +4029,41 @@ void f<T extends Object>(T x) {
 //                 ^^
 // [diag.deadCode] Dead code.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn null_type_parameter_type_not_nullable_bound_question() {
-        check(r#"
+        check(
+            r#"
 void f<T extends Object>(T? x) {
   if (x case null) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn null_type_parameter_type_nullable_bound() {
-        check(r#"
+        check(
+            r#"
 void f<T>(T x) {
   if (x case null) {}
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn null_type_parameter_type_nullable_bound_question() {
-        check(r#"
+        check(
+            r#"
 void f<T>(T? x) {
   if (x case null) {}
 }
-"#);
+"#,
+        );
     }
 }
 
@@ -3514,65 +4073,76 @@ mod const_with_type_parameters {
 
     #[test]
     fn as_expression_function_type() {
-        check(r#"
+        check(
+            r#"
 void f<T>(T a) {}
 void g() {
   const [f as void Function<T>(T, [int])];
 //       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 // [diag.listElementTypeNotAssignable] The element type 'void Function<T>(T)' can't be assigned to the list type 'void Function<T>(T, [int])'.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn default_value() {
-        check(r#"
+        check(
+            r#"
 class A<T> {
   void m([fn = A<T>.new]) {}
 //               ^
 // [diag.constWithTypeParametersConstructorTearoff] A constant constructor tearoff can't use a type parameter as a type argument.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn default_value_field_formal_parameter() {
-        check(r#"
+        check(
+            r#"
 class A<T> {
   A<T> Function() fn;
   A([this.fn = A<T>.new]);
 //               ^
 // [diag.constWithTypeParametersConstructorTearoff] A constant constructor tearoff can't use a type parameter as a type argument.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn default_value_no_type_variable_inferred_from_parameter() {
-        check(r#"
+        check(
+            r#"
 class A<T> {
   void m([A<T> Function() fn = A.new]) {}
 //                             ^^^^^
 // [diag.invalidAssignment] A value of type 'A<dynamic> Function()' can't be assigned to a variable of type 'A<T> Function()'.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn field_value_const_class() {
-        check(r#"
+        check(
+            r#"
 class A<T> {
   const A();
   final x = A<T>.new;
 //            ^
 // [diag.constWithTypeParametersConstructorTearoff] A constant constructor tearoff can't use a type parameter as a type argument.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn applied_type_parameter_default_constructor_value() {
-        check(r#"
+        check(
+            r#"
 void f<T>(T t) => t;
 
 class C<T> {
@@ -3581,23 +4151,27 @@ class C<T> {
 //                  ^
 // [diag.constWithTypeParametersFunctionTearoff] A constant function tearoff can't use a type parameter as a type argument.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn applied_type_parameter_default_function_value() {
-        check(r#"
+        check(
+            r#"
 void f<T>(T t) => t;
 
 void bar<T>([void Function(T) p = f]) {}
 //                                ^
 // [diag.constWithTypeParametersFunctionTearoff] A constant function tearoff can't use a type parameter as a type argument.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn applied_type_parameter_default_method_value() {
-        check(r#"
+        check(
+            r#"
 void f<T>(T t) => t;
 
 class C<T> {
@@ -3605,46 +4179,54 @@ class C<T> {
 //                               ^
 // [diag.constWithTypeParametersFunctionTearoff] A constant function tearoff can't use a type parameter as a type argument.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn applied_type_parameter_nested() {
-        check(r#"
+        check(
+            r#"
 void f<T>(T t) => t;
 
 void bar<T>([void Function(List<T>) p = f]) {}
 //                                      ^
 // [diag.constWithTypeParametersFunctionTearoff] A constant function tearoff can't use a type parameter as a type argument.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn applied_type_parameter_nested_function() {
-        check(r#"
+        check(
+            r#"
 void f<T>(T t) => t;
 
 void bar<T>([void Function(T Function()) p = f]) {}
 //                                           ^
 // [diag.constWithTypeParametersFunctionTearoff] A constant function tearoff can't use a type parameter as a type argument.
-"#);
+"#,
+        );
     }
 
     #[test]
     fn default_value_2() {
-        check(r#"
+        check(
+            r#"
 void f<T>(T a) {}
 class A<U> {
   void m([void Function(U) fn = f<U>]) {}
 //                                ^
 // [diag.constWithTypeParametersFunctionTearoff] A constant function tearoff can't use a type parameter as a type argument.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn field_value_const_class_2() {
-        check(r#"
+        check(
+            r#"
 void f<T>(T a) {}
 class A<U> {
   const A();
@@ -3654,12 +4236,14 @@ class A<U> {
 //            ^
 // [diag.constWithTypeParametersFunctionTearoff] A constant function tearoff can't use a type parameter as a type argument.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn field_value_extension() {
-        check(r#"
+        check(
+            r#"
 void f<T>(T a) {}
 class A<U> {}
 extension<U> on A<U> {
@@ -3667,18 +4251,19 @@ extension<U> on A<U> {
 //      ^
 // [diag.extensionDeclaresInstanceField] Extensions can't declare instance fields.
 }
-"#);
+"#,
+        );
     }
 
     #[test]
     fn field_value_non_const_class() {
-        check(r#"
+        check(
+            r#"
 void f<T>(T a) {}
 class A<U> {
   final x = f<U>;
 }
-"#);
+"#,
+        );
     }
 }
-
-

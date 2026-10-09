@@ -150,7 +150,11 @@ impl BodyInferenceContext {
     }
 
     /// Dart `_computeActualReturnedType`.
-    fn compute_actual_returned_type(&self, ts: &TypeSystem<'_>, end_of_block_is_reachable: bool) -> TypeId {
+    fn compute_actual_returned_type(
+        &self,
+        ts: &TypeSystem<'_>,
+        end_of_block_is_reachable: bool,
+    ) -> TypeId {
         if self.is_generator {
             let Some(&first) = self.return_types.first() else {
                 return TypeId::DYNAMIC;
@@ -231,5 +235,8 @@ fn context_type_for_imposed(
     }
     // Otherwise the context type is `FutureOr<futureValueTypeSchema(S)>`,
     // where `S` is the imposed return type.
-    Some(ctx.tp.future_or_type(&ctx, ts.future_value_type(imposed_type)))
+    Some(
+        ctx.tp
+            .future_or_type(&ctx, ts.future_value_type(imposed_type)),
+    )
 }

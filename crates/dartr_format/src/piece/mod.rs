@@ -598,9 +598,7 @@ impl Pieces {
                         any_has_newline
                     }
                 };
-                piece
-                    .contains_hard_newline
-                    .set(if result { 2 } else { 1 });
+                piece.contains_hard_newline.set(if result { 2 } else { 1 });
                 result
             }
         }

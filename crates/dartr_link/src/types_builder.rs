@@ -41,7 +41,12 @@ pub fn create_type_provider(lk: &Linker<'_>) -> TypeProvider {
         }
         lk.core.world.libraries.get(uri).copied()
     };
-    type_provider_for(lk.core.world, Some(&lk.core.store), library("dart:core"), library("dart:async"))
+    type_provider_for(
+        lk.core.world,
+        Some(&lk.core.store),
+        library("dart:core"),
+        library("dart:async"),
+    )
 }
 
 /// A [`TypeProvider`] for the world (the libraries of linked cycles).
@@ -133,7 +138,12 @@ fn type_provider_for(
         ty!(future_dynamic_type, future_element, &[TypeId::DYNAMIC], N);
         ty!(int_type, int_element, &[], N);
         ty!(int_type_question, int_element, &[], Q);
-        ty!(iterable_dynamic_type, iterable_element, &[TypeId::DYNAMIC], N);
+        ty!(
+            iterable_dynamic_type,
+            iterable_element,
+            &[TypeId::DYNAMIC],
+            N
+        );
         ty!(null_type, null_element, &[], N);
         ty!(num_type, num_element, &[], N);
         ty!(num_type_question, num_element, &[], Q);
@@ -155,7 +165,8 @@ fn type_provider_for(
             tp.iterable_object_type.set_once(instantiate(i, &[o], N));
         }
         if let (Some(&m), Some(&o)) = (tp.map_element.try_get(), tp.object_type.try_get()) {
-            tp.map_object_object_type.set_once(instantiate(m, &[o, o], N));
+            tp.map_object_object_type
+                .set_once(instantiate(m, &[o, o], N));
         }
     }
     tp
@@ -171,7 +182,8 @@ pub fn resolve_types(lk: &mut Linker<'_>, tp: &TypeProvider) {
         let ctx = link_ctx(lk_ref, tp, &features);
         for (lib, builder) in lk_ref.builders.iter().enumerate() {
             for unit in 0..builder.units.len() {
-                ReferenceResolver::new(&mut tr, lk_ref, &ctx, &scopes, lib as u32, unit as u32).resolve_unit();
+                ReferenceResolver::new(&mut tr, lk_ref, &ctx, &scopes, lib as u32, unit as u32)
+                    .resolve_unit();
             }
         }
     }
@@ -254,7 +266,9 @@ fn to_interface_type_list(
 
 fn append_interfaces(ctx: &Ctx<'_>, element: EId<InterfaceElement>, more: Vec<TypeId>) {
     let i = ctx.interface(element);
-    let mut all: Vec<TypeId> = ctx.list(i.interfaces.get().unwrap_or(TypeList::EMPTY)).to_vec();
+    let mut all: Vec<TypeId> = ctx
+        .list(i.interfaces.get().unwrap_or(TypeList::EMPTY))
+        .to_vec();
     all.extend(more);
     i.interfaces.set(Some(ctx.intern_list(&all)));
 }
@@ -333,7 +347,9 @@ fn build_function_type(
                 name: p.name,
                 kind: p.kind,
                 ty: p.type_.get().unwrap_or(TypeId::INVALID),
-                covariant: p.flags.has(ElementFlags::FORMAL_PARAMETER_ELEMENT_IS_COVARIANT),
+                covariant: p
+                    .flags
+                    .has(ElementFlags::FORMAL_PARAMETER_ELEMENT_IS_COVARIANT),
                 element: Some(ElemRef::Base(e)),
             }
         })
@@ -364,10 +380,20 @@ fn declaration(
         {
             ctx.interface(i).supertype.set(Some(t));
         }
-        let more = to_interface_type_list(tr, lk, ctx, lib, unit, n.implements_clause.map(|c| ast.get(c).interfaces));
+        let more = to_interface_type_list(
+            tr,
+            lk,
+            ctx,
+            lib,
+            unit,
+            n.implements_clause.map(|c| ast.get(c).interfaces),
+        );
         append_interfaces(ctx, i, more);
         if let Some(w) = n.with_clause {
-            to_infer_mixins.entry(element).or_default().push((lib, unit, w.raw()));
+            to_infer_mixins
+                .entry(element)
+                .or_default()
+                .push((lib, unit, w.raw()));
         }
     } else if let Some(n) = ast.cast::<ClassTypeAlias>(node) {
         let n = ast.get(n);
@@ -378,19 +404,48 @@ fn declaration(
         {
             ctx.interface(i).supertype.set(Some(t));
         }
-        let mixins = to_interface_type_list(tr, lk, ctx, lib, unit, Some(ast.get(n.with_clause).mixin_types));
+        let mixins = to_interface_type_list(
+            tr,
+            lk,
+            ctx,
+            lib,
+            unit,
+            Some(ast.get(n.with_clause).mixin_types),
+        );
         ctx.interface(i).mixins.set(Some(ctx.intern_list(&mixins)));
-        let interfaces = to_interface_type_list(tr, lk, ctx, lib, unit, n.implements_clause.map(|c| ast.get(c).interfaces));
-        ctx.interface(i).interfaces.set(Some(ctx.intern_list(&interfaces)));
-        to_infer_mixins.entry(element).or_default().push((lib, unit, n.with_clause.raw()));
+        let interfaces = to_interface_type_list(
+            tr,
+            lk,
+            ctx,
+            lib,
+            unit,
+            n.implements_clause.map(|c| ast.get(c).interfaces),
+        );
+        ctx.interface(i)
+            .interfaces
+            .set(Some(ctx.intern_list(&interfaces)));
+        to_infer_mixins
+            .entry(element)
+            .or_default()
+            .push((lib, unit, n.with_clause.raw()));
     } else if let Some(n) = ast.cast::<EnumDeclaration>(node) {
         let n = ast.get(n);
         let Some(element) = element else { return };
         let i = EId::<InterfaceElement>::from_raw(element);
-        let more = to_interface_type_list(tr, lk, ctx, lib, unit, n.implements_clause.map(|c| ast.get(c).interfaces));
+        let more = to_interface_type_list(
+            tr,
+            lk,
+            ctx,
+            lib,
+            unit,
+            n.implements_clause.map(|c| ast.get(c).interfaces),
+        );
         append_interfaces(ctx, i, more);
         if let Some(w) = n.with_clause {
-            to_infer_mixins.entry(element).or_default().push((lib, unit, w.raw()));
+            to_infer_mixins
+                .entry(element)
+                .or_default()
+                .push((lib, unit, w.raw()));
         }
     } else if let Some(n) = ast.cast::<ExtensionDeclaration>(node) {
         if let Some(on) = ast.get(n).on_clause
@@ -398,8 +453,11 @@ fn declaration(
             && !first_fragment_previous(ctx, f)
             && let Some(element) = element
         {
-            let t = built(tr, lk, ctx, (lib, unit, ast.get(on).extended_type.raw())).unwrap_or(TypeId::INVALID);
-            ctx.get(EId::<ExtensionElement>::from_raw(element)).extended_type.set(Some(t));
+            let t = built(tr, lk, ctx, (lib, unit, ast.get(on).extended_type.raw()))
+                .unwrap_or(TypeId::INVALID);
+            ctx.get(EId::<ExtensionElement>::from_raw(element))
+                .extended_type
+                .set(Some(t));
         }
     } else if let Some(n) = ast.cast::<ExtensionTypeDeclaration>(node) {
         let Some(element) = element else { return };
@@ -414,7 +472,10 @@ fn declaration(
                 .collect();
             append_interfaces(ctx, EId::from_raw(element), interfaces);
         }
-    } else if ast.is::<FieldFormalParameter>(node) || ast.is::<SuperFormalParameter>(node) || ast.is::<RegularFormalParameter>(node) {
+    } else if ast.is::<FieldFormalParameter>(node)
+        || ast.is::<SuperFormalParameter>(node)
+        || ast.is::<RegularFormalParameter>(node)
+    {
         let Some(element) = element else { return };
         let p = EId::<FormalParameterElement>::from_raw(element);
         let fp = Id::<FormalParameter>::from_raw(node);
@@ -427,7 +488,17 @@ fn declaration(
             } else {
                 Nullability::None
             };
-            let t = build_function_type(tr, lk, ctx, lib, unit, s.type_parameters, type_node, s.formal_parameters, n);
+            let t = build_function_type(
+                tr,
+                lk,
+                ctx,
+                lib,
+                unit,
+                s.type_parameters,
+                type_node,
+                s.formal_parameters,
+                n,
+            );
             ctx.get(p).type_.set(Some(t));
             return;
         }
@@ -466,8 +537,20 @@ fn declaration(
     } else if let Some(n) = ast.cast::<FunctionTypeAlias>(node) {
         let Some(element) = element else { return };
         let n = ast.get(n);
-        let t = build_function_type(tr, lk, ctx, lib, unit, None, n.return_type, n.parameters, Nullability::None);
-        ctx.get(EId::<TypeAliasElement>::from_raw(element)).aliased_type.set(Some(t));
+        let t = build_function_type(
+            tr,
+            lk,
+            ctx,
+            lib,
+            unit,
+            None,
+            n.return_type,
+            n.parameters,
+            Nullability::None,
+        );
+        ctx.get(EId::<TypeAliasElement>::from_raw(element))
+            .aliased_type
+            .set(Some(t));
     } else if let Some(n) = ast.cast::<GenericFunctionType>(node) {
         let Some(element) = element else { return };
         let t = ast
@@ -475,7 +558,9 @@ fn declaration(
             .return_type
             .and_then(|r| built(tr, lk, ctx, (lib, unit, r.raw())))
             .unwrap_or(TypeId::DYNAMIC);
-        ctx.get(EId::<GenericFunctionTypeElement>::from_raw(element)).return_type.set(Some(t));
+        ctx.get(EId::<GenericFunctionTypeElement>::from_raw(element))
+            .return_type
+            .set(Some(t));
     } else if let Some(n) = ast.cast::<GenericTypeAlias>(node) {
         let Some(element) = element else { return };
         let type_node = ast.get(n).type_;
@@ -486,7 +571,9 @@ fn declaration(
         } else {
             ctx.function_type(&[], &[], TypeId::DYNAMIC, Nullability::None, None)
         };
-        ctx.get(EId::<TypeAliasElement>::from_raw(element)).aliased_type.set(Some(t));
+        ctx.get(EId::<TypeAliasElement>::from_raw(element))
+            .aliased_type
+            .set(Some(t));
     } else if let Some(n) = ast.cast::<MethodDeclaration>(node) {
         let Some(f) = fragment else { return };
         if first_fragment_previous(ctx, f) {
@@ -497,7 +584,9 @@ fn declaration(
         let return_type = match n2.return_type {
             Some(r) => built(tr, lk, ctx, (lib, unit, r.raw())).unwrap_or(TypeId::INVALID),
             None if method_is_setter(ast, n) => TypeId::VOID,
-            None if n2.operator_keyword.is_some() && ast.tokens.lexeme(n2.name) == "[]=" => TypeId::VOID,
+            None if n2.operator_keyword.is_some() && ast.tokens.lexeme(n2.name) == "[]=" => {
+                TypeId::VOID
+            }
             None => TypeId::DYNAMIC,
         };
         set_return_type(ctx, EId::from_raw(element), return_type);
@@ -506,10 +595,27 @@ fn declaration(
         let Some(element) = element else { return };
         let n = ast.get(n);
         let m = ctx.get(EId::<MixinElement>::from_raw(element));
-        let mut constraints: Vec<TypeId> = ctx.list(m.superclass_constraints.get().unwrap_or(TypeList::EMPTY)).to_vec();
-        constraints.extend(to_interface_type_list(tr, lk, ctx, lib, unit, n.on_clause.map(|c| ast.get(c).superclass_constraints)));
-        m.superclass_constraints.set(Some(ctx.intern_list(&constraints)));
-        let more = to_interface_type_list(tr, lk, ctx, lib, unit, n.implements_clause.map(|c| ast.get(c).interfaces));
+        let mut constraints: Vec<TypeId> = ctx
+            .list(m.superclass_constraints.get().unwrap_or(TypeList::EMPTY))
+            .to_vec();
+        constraints.extend(to_interface_type_list(
+            tr,
+            lk,
+            ctx,
+            lib,
+            unit,
+            n.on_clause.map(|c| ast.get(c).superclass_constraints),
+        ));
+        m.superclass_constraints
+            .set(Some(ctx.intern_list(&constraints)));
+        let more = to_interface_type_list(
+            tr,
+            lk,
+            ctx,
+            lib,
+            unit,
+            n.implements_clause.map(|c| ast.get(c).interfaces),
+        );
         append_interfaces(ctx, EId::from_raw(element), more);
     } else if let Some(n) = ast.cast::<TypeParameter>(node) {
         let Some(f) = fragment else { return };
@@ -518,19 +624,28 @@ fn declaration(
         }
         let Some(element) = element else { return };
         let p = EId::<TypeParameterElement>::from_raw(element);
-        let bound = ast.get(n).bound.and_then(|b| built(tr, lk, ctx, (lib, unit, b.raw())));
+        let bound = ast
+            .get(n)
+            .bound
+            .and_then(|b| built(tr, lk, ctx, (lib, unit, b.raw())));
         tr.pending_bounds.shift_remove(&p);
         ctx.get(p).bound.set(bound);
     } else if let Some(n) = ast.cast::<VariableDeclarationList>(node) {
         let n = ast.get(n);
         let Some(type_node) = n.type_ else { return };
-        let Some(t) = built(tr, lk, ctx, (lib, unit, type_node.raw())) else { return };
+        let Some(t) = built(tr, lk, ctx, (lib, unit, type_node.raw())) else {
+            return;
+        };
         for &v in ast.list(n.variables) {
-            let Some(f) = declared_fragment(lk, (lib, unit, v.raw())) else { continue };
+            let Some(f) = declared_fragment(lk, (lib, unit, v.raw())) else {
+                continue;
+            };
             if first_fragment_previous(ctx, f) {
                 continue;
             }
-            let Some(&e) = ctx.fragment_data(f).unwrap().element.try_get() else { continue };
+            let Some(&e) = ctx.fragment_data(f).unwrap().element.try_get() else {
+                continue;
+            };
             set_variable_type(ctx, EId::from_raw(e), t);
         }
     }
@@ -615,7 +730,9 @@ impl MixinsInference<'_, '_, '_, '_> {
     /// Infers the declarations that the class hierarchy of [t] reads (the
     /// Dart `_callbackWhenRecursion` of every `mixins` read).
     fn ensure(&mut self, t: TypeId, visited: &mut IndexSet<ElementId>) {
-        let Some(e) = self.ctx.interface_element(t) else { return };
+        let Some(e) = self.ctx.interface_element(t) else {
+            return;
+        };
         self.ensure_element(e, visited);
     }
 
@@ -633,7 +750,14 @@ impl MixinsInference<'_, '_, '_, '_> {
         types.extend(ctx.list(i.mixins.get().unwrap_or(TypeList::EMPTY)));
         types.extend(ctx.list(i.interfaces.get().unwrap_or(TypeList::EMPTY)));
         if let Some(m) = e.raw().cast::<MixinElement>() {
-            types.extend(ctx.list(ctx.get(m).superclass_constraints.get().unwrap_or(TypeList::EMPTY)));
+            types.extend(
+                ctx.list(
+                    ctx.get(m)
+                        .superclass_constraints
+                        .get()
+                        .unwrap_or(TypeList::EMPTY),
+                ),
+            );
         }
         for t in types {
             self.ensure(t, visited);
@@ -662,15 +786,20 @@ impl MixinsInference<'_, '_, '_, '_> {
         let withs = self.declarations[&element].clone();
         for (lib, unit, with) in withs {
             let ast = unit_ast(lk, lib, unit);
-            let Some(w) = ast.cast::<WithClause>(with) else { continue };
+            let Some(w) = ast.cast::<WithClause>(with) else {
+                continue;
+            };
             let builder = &lk.builders[lib as usize];
             let flags = dartr_typesystem::generic_inferrer::InferenceFlags {
                 generic_metadata_is_enabled: builder.is_enabled(ExperimentalFlag::GenericMetadata),
-                inference_using_bounds_is_enabled: builder.is_enabled(ExperimentalFlag::InferenceUsingBounds),
+                inference_using_bounds_is_enabled: builder
+                    .is_enabled(ExperimentalFlag::InferenceUsingBounds),
                 strict_inference: false,
             };
             for &m in ast.list(ast.get(w).mixin_types) {
-                let Some(t) = built(self.tr, lk, ctx, (lib, unit, m.raw())) else { continue };
+                let Some(t) = built(self.tr, lk, ctx, (lib, unit, m.raw())) else {
+                    continue;
+                };
                 // _interfaceType
                 if !is_interface_type_interface(ctx, t) {
                     continue;
@@ -750,7 +879,8 @@ fn infer_mixin(
     }
 
     // Casts aren't relevant for mixin inference.
-    let operations = dartr_typesystem::type_system_operations::TypeSystemOperations::new(type_system, false);
+    let operations =
+        dartr_typesystem::type_system_operations::TypeSystemOperations::new(type_system, false);
     let inferred_type_arguments = type_system.match_supertype_constraints(
         &type_parameters,
         &supertype_constraints,
@@ -762,7 +892,11 @@ fn infer_mixin(
     if let Some(i) = element.cast::<InterfaceElement>() {
         Some(ctx.interface_type(i, &inferred_type_arguments, nullability))
     } else {
-        Some(ctx.instantiate_type_alias(EId::from_raw(element), &inferred_type_arguments, nullability))
+        Some(ctx.instantiate_type_alias(
+            EId::from_raw(element),
+            &inferred_type_arguments,
+            nullability,
+        ))
     }
 }
 
@@ -771,7 +905,10 @@ fn break_interface_cycles(lk: &Linker<'_>, ctx: &Ctx<'_>, declarations: &[NodeKe
     let mut elements = Vec::new();
     for &key in declarations {
         if let Some(e) = declared_element(lk, key)
-            && matches!(e.tag(), Tag::Class | Tag::Enum | Tag::Mixin | Tag::ExtensionType)
+            && matches!(
+                e.tag(),
+                Tag::Class | Tag::Enum | Tag::Mixin | Tag::ExtensionType
+            )
         {
             elements.push(EId::<InterfaceElement>::from_raw(e));
         }
@@ -823,12 +960,14 @@ impl ImplementsWalker<'_, '_> {
         types.extend(ctx.list(i.mixins.get().unwrap_or(TypeList::EMPTY)));
         types.extend(ctx.list(i.interfaces.get().unwrap_or(TypeList::EMPTY)));
         if e.raw().tag() == Tag::Mixin {
-            types.extend(ctx.list(
-                ctx.get(EId::<MixinElement>::from_raw(e.raw()))
-                    .superclass_constraints
-                    .get()
-                    .unwrap_or(TypeList::EMPTY),
-            ));
+            types.extend(
+                ctx.list(
+                    ctx.get(EId::<MixinElement>::from_raw(e.raw()))
+                        .superclass_constraints
+                        .get()
+                        .unwrap_or(TypeList::EMPTY),
+                ),
+            );
         }
         let deps: Vec<EId<InterfaceElement>> = types
             .into_iter()
@@ -922,7 +1061,8 @@ impl ImplementsWalker<'_, '_> {
                     let et = ctx.get(EId::<ExtensionTypeElement>::from_raw(e.raw()));
                     et.has_implements_self_reference.set(true);
                     let ts = TypeSystem::new(*ctx);
-                    let representation = crate::type_bounds::representation_type(ctx, EId::from_raw(e.raw()));
+                    let representation =
+                        crate::type_bounds::representation_type(ctx, EId::from_raw(e.raw()));
                     let superinterface = if ts.is_non_nullable(representation) {
                         ts.object_none()
                     } else {
@@ -932,8 +1072,9 @@ impl ImplementsWalker<'_, '_> {
                 }
                 Tag::Mixin => {
                     let m = ctx.get(EId::<MixinElement>::from_raw(e.raw()));
-                    m.superclass_constraints
-                        .set(Some(ctx.intern_list(&object.into_iter().collect::<Vec<_>>())));
+                    m.superclass_constraints.set(Some(
+                        ctx.intern_list(&object.into_iter().collect::<Vec<_>>()),
+                    ));
                     i.interfaces.set(Some(TypeList::EMPTY));
                 }
                 _ => {}

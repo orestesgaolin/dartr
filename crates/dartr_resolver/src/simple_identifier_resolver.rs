@@ -27,7 +27,11 @@ use crate::resolver::ResolverVisitor;
 /// Dart `ResolverVisitor.visitSimpleIdentifier(node, contextType:)` (the
 /// part before `insertGenericFunctionInstantiation`) =
 /// `SimpleIdentifierResolver.resolve(node, contextType:)`.
-pub fn visit_simple_identifier(rv: &mut ResolverVisitor<'_>, node: Id<SimpleIdentifier>, context_type: TypeId) {
+pub fn visit_simple_identifier(
+    rv: &mut ResolverVisitor<'_>,
+    node: Id<SimpleIdentifier>,
+    context_type: TypeId,
+) {
     if in_declaration_context(rv, node) {
         return;
     }
@@ -104,7 +108,8 @@ fn resolve1(
         has_write = true;
     }
 
-    let result = property_element_resolver::resolve_simple_identifier(rv, node, has_read, has_write);
+    let result =
+        property_element_resolver::resolve_simple_identifier(rv, node, has_read, has_write);
 
     if let Some(call_function_type) = result.function_type_call_type {
         let static_type = crate::invocation_inference_helper::infer_tear_off(
@@ -139,7 +144,8 @@ fn resolve1(
     } else if is_constructor_return_type(rv, node) && element_base != enclosing_class {
         // This error is now reported by the parser.
         element = None;
-    } else if element_base.is_some_and(|e| e.tag() == Tag::Prefix) && !is_valid_as_prefix(rv, node) {
+    } else if element_base.is_some_and(|e| e.tag() == Tag::Prefix) && !is_valid_as_prefix(rv, node)
+    {
         let e = element_base.unwrap();
         if let Some(name) = rv.ctx.element_data(e).and_then(|d| d.name) {
             let name = rv.ctx.name_str(name).to_string();
@@ -236,7 +242,12 @@ fn resolve2(
 
 /// The end of Dart `_resolve2`: the tear-off inference of old language
 /// versions and `recordStaticType`.
-fn record(rv: &mut ResolverVisitor<'_>, node: Id<SimpleIdentifier>, mut static_type: TypeId, context_type: TypeId) {
+fn record(
+    rv: &mut ResolverVisitor<'_>,
+    node: Id<SimpleIdentifier>,
+    mut static_type: TypeId,
+    context_type: TypeId,
+) {
     if !rv.is_constructor_tearoffs_enabled() {
         // Only perform a generic function instantiation on a
         // `PrefixedIdentifier` in pre-constructor-tearoffs code. In
@@ -350,7 +361,10 @@ fn is_constructor_return_type(rv: &ResolverVisitor<'_>, node: Id<SimpleIdentifie
 }
 
 /// Dart `_isFactoryConstructorReturnType`.
-fn is_factory_constructor_return_type(rv: &ResolverVisitor<'_>, node: Id<SimpleIdentifier>) -> bool {
+fn is_factory_constructor_return_type(
+    rv: &ResolverVisitor<'_>,
+    node: Id<SimpleIdentifier>,
+) -> bool {
     rv.ast
         .parent(node)
         .and_then(|p| rv.ast.cast::<ConstructorDeclaration>(p))
@@ -443,13 +457,18 @@ impl<'a> ResolverVisitor<'a> {
         let length = self.ast.length(node) as usize;
         if element_ext::is_late(&self.ctx, element) {
             if unassigned {
-                self.report(diag::definitely_unassigned_late_local_variable(&name).at_offset(offset, length));
+                self.report(
+                    diag::definitely_unassigned_late_local_variable(&name)
+                        .at_offset(offset, length),
+                );
             }
             return;
         }
         if !assigned {
             if element_ext::is_final(&self.ctx, element) {
-                self.report(diag::read_potentially_unassigned_final(&name).at_offset(offset, length));
+                self.report(
+                    diag::read_potentially_unassigned_final(&name).at_offset(offset, length),
+                );
                 return;
             }
             let ty = element_ext::variable_type(&self.ctx, element);

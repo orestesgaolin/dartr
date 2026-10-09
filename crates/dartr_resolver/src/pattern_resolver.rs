@@ -290,7 +290,10 @@ fn to_pattern_variables(
 ) -> PatternVariables {
     variables
         .iter()
-        .filter_map(|(&name, &e)| e.cast::<dartr_element::PromotableElement>().map(|e| (name, e)))
+        .filter_map(|(&name, &e)| {
+            e.cast::<dartr_element::PromotableElement>()
+                .map(|e| (name, e))
+        })
         .collect()
 }
 

@@ -313,7 +313,10 @@ mod tests {
         let info = LineInfo::from_content("ab\ncd\n");
         assert_eq!(to_offset(&info, 1, 1, false), Ok(4));
         let err = to_offset(&info, 9, 0, false).unwrap_err();
-        assert_eq!(err.to_json(), json!({"code": -32004, "message": "Invalid line number", "data": "9"}));
+        assert_eq!(
+            err.to_json(),
+            json!({"code": -32004, "message": "Invalid line number", "data": "9"})
+        );
         assert_eq!(
             to_range(&info, 1, 3),
             json!({"start": {"line": 0, "character": 1}, "end": {"line": 1, "character": 1}})

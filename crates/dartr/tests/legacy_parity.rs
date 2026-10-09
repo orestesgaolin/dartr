@@ -16,8 +16,8 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use dartr_diagnostics::{codes_by_name, DiagnosticType};
-use serde_json::{json, Map, Value};
+use dartr_diagnostics::{DiagnosticType, codes_by_name};
+use serde_json::{Map, Value, json};
 
 const QUIET: Duration = Duration::from_millis(400);
 const STEP_TIMEOUT: Duration = Duration::from_secs(60);
@@ -530,13 +530,17 @@ fn dartdev_and_intellij_legacy_sessions_match_dart_3_13_3() {
             .collect::<Vec<_>>(),
         ["expected_token", "camel_case_types", "avoid_empty_else"]
     );
-    assert!(original
-        .iter()
-        .all(|diagnostic| diagnostic["hasFix"] == false));
-    assert!(original
-        .iter()
-        .filter(|diagnostic| diagnostic["type"] == "LINT")
-        .all(|diagnostic| diagnostic["url"].as_str().is_some()));
+    assert!(
+        original
+            .iter()
+            .all(|diagnostic| diagnostic["hasFix"] == false)
+    );
+    assert!(
+        original
+            .iter()
+            .filter(|diagnostic| diagnostic["type"] == "LINT")
+            .all(|diagnostic| diagnostic["url"].as_str().is_some())
+    );
     let overlay_error = &dart_transcript.overlay_add["diagnostics"]["/lib/main.dart"][0];
     assert_eq!(overlay_error["location"]["offset"], 45);
     assert_eq!(overlay_error["location"]["startLine"], 3);

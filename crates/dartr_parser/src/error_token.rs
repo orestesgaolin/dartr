@@ -16,11 +16,15 @@ pub fn error_token_assertion_message(tokens: &Tokens, token: TokenId) -> CfeMess
             let s = char_string(*character);
             diag::non_ascii_identifier(&s, *character as i64)
         }
-        ErrorKind::NonAsciiWhitespace { character } => diag::non_ascii_whitespace(*character as i64),
+        ErrorKind::NonAsciiWhitespace { character } => {
+            diag::non_ascii_whitespace(*character as i64)
+        }
         ErrorKind::AsciiControlCharacter { character } => {
             diag::ascii_control_character(*character as i64)
         }
-        ErrorKind::UnsupportedOperator { token } => diag::unsupported_operator(tokens.lexeme(*token)),
+        ErrorKind::UnsupportedOperator { token } => {
+            diag::unsupported_operator(tokens.lexeme(*token))
+        }
         ErrorKind::UnterminatedString { start, .. } => {
             diag::unterminated_string(start, close_quote_for(start))
         }

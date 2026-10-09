@@ -10,7 +10,10 @@ use crate::resolver::ResolverVisitor;
 use crate::type_property_resolver::{self, PropertyQuery};
 
 /// Dart `ThisLookup.lookupGetter`.
-pub fn lookup_getter(rv: &mut ResolverVisitor<'_>, node: Id<SimpleIdentifier>) -> Option<LexicalLookupResult> {
+pub fn lookup_getter(
+    rv: &mut ResolverVisitor<'_>,
+    node: Id<SimpleIdentifier>,
+) -> Option<LexicalLookupResult> {
     let id = rv.lexeme(rv.ast[node].token).to_string();
     let this_type = rv.effective_this_type()?;
     let property_result = type_property_resolver::resolve(
@@ -51,7 +54,10 @@ pub fn lookup_getter(rv: &mut ResolverVisitor<'_>, node: Id<SimpleIdentifier>) -
 }
 
 /// Dart `ThisLookup.lookupSetter`.
-pub fn lookup_setter(rv: &mut ResolverVisitor<'_>, node: Id<SimpleIdentifier>) -> Option<LexicalLookupResult> {
+pub fn lookup_setter(
+    rv: &mut ResolverVisitor<'_>,
+    node: Id<SimpleIdentifier>,
+) -> Option<LexicalLookupResult> {
     let id = rv.lexeme(rv.ast[node].token).to_string();
     let this_type = rv.effective_this_type()?;
     let property_result = type_property_resolver::resolve(

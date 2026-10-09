@@ -19,7 +19,9 @@ use std::path::{Path, PathBuf};
 use dartr_difftest::{Options, run};
 
 fn check(dir: &str) {
-    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(dir);
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures")
+        .join(dir);
     let options = Options {
         mode: "elements".to_string(),
         inputs: vec![fixtures],
@@ -31,7 +33,11 @@ fn check(dir: &str) {
     let report = run(&options).unwrap();
     println!("{}", report.summary());
     assert!(report.files > 0, "no fixtures in {dir}");
-    assert!(report.differences.is_empty(), "{}", report.difference_report(20));
+    assert!(
+        report.differences.is_empty(),
+        "{}",
+        report.difference_report(20)
+    );
 }
 
 #[test]

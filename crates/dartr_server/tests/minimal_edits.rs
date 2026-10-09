@@ -83,21 +83,32 @@ fn index_token_substitution() {
     let e = edits("var x = [ ];\n", "var x = [];\n", None);
     assert_eq!(
         e,
-        [json!({"range": {"start": {"line": 0, "character": 9}, "end": {"line": 0, "character": 10}}, "newText": ""})]
+        [
+            json!({"range": {"start": {"line": 0, "character": 9}, "end": {"line": 0, "character": 10}}, "newText": ""})
+        ]
     );
     // And the other way.
     let e = edits("var x = [];\n", "var x = [ ];\n", None);
     assert_eq!(
         e,
-        [json!({"range": {"start": {"line": 0, "character": 9}, "end": {"line": 0, "character": 9}}, "newText": " "})]
+        [
+            json!({"range": {"start": {"line": 0, "character": 9}, "end": {"line": 0, "character": 9}}, "newText": " "})
+        ]
     );
 }
 
 #[test]
 fn shift_token_substitution() {
     // `>>` split into `>` `>` (as in nested type arguments).
-    let e = edits("var x = <List<int>>[];\n", "var x = <List<int> >[];\n", None);
-    assert_eq!(apply("var x = <List<int>>[];\n", &e), "var x = <List<int> >[];\n");
+    let e = edits(
+        "var x = <List<int>>[];\n",
+        "var x = <List<int> >[];\n",
+        None,
+    );
+    assert_eq!(
+        apply("var x = <List<int>>[];\n", &e),
+        "var x = <List<int> >[];\n"
+    );
     assert_eq!(e.len(), 1, "{e:?}");
 }
 
@@ -107,11 +118,16 @@ fn unexpected_token_change_falls_back() {
     let e = edits("var a = 1;\n", "var b = 1;\n", None);
     assert_eq!(
         e,
-        [json!({"range": {"start": {"line": 0, "character": 0}, "end": {"line": 1, "character": 0}}, "newText": "var b = 1;\n"})]
+        [
+            json!({"range": {"start": {"line": 0, "character": 0}, "end": {"line": 1, "character": 0}}, "newText": "var b = 1;\n"})
+        ]
     );
     // A range format changes nothing.
     let range = json!({"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 10}});
-    assert_eq!(edits("var a = 1;\n", "var b = 1;\n", Some(&range)), Vec::<Value>::new());
+    assert_eq!(
+        edits("var a = 1;\n", "var b = 1;\n", Some(&range)),
+        Vec::<Value>::new()
+    );
     // An added token that is not a comma or semicolon at the end.
     let e = edits("f() {}\n", "f() {}\nvar x;\n", None);
     assert_eq!(e.len(), 1);

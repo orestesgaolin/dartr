@@ -368,7 +368,11 @@ impl<'a> ErrorVerifier<'a> {
     pub fn element(&self, node: impl Into<NodeId>) -> Option<dartr_element::ElemRef> {
         let node = node.into();
         if let Some(prefixed) = self.ast.cast::<dartr_ast::PrefixedIdentifier>(node) {
-            return self.tables.element.get(self.ast[prefixed].identifier).copied();
+            return self
+                .tables
+                .element
+                .get(self.ast[prefixed].identifier)
+                .copied();
         }
         self.tables.element.get(node).copied()
     }

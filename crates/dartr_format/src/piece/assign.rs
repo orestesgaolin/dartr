@@ -99,7 +99,11 @@ impl AssignPiece {
 
 impl PieceImpl for AssignPiece {
     fn additional_states(&self) -> States {
-        States::of(&[BLOCK_OR_HEADLINE_SPLIT_RIGHT, BLOCK_SPLIT_LEFT, State::SPLIT])
+        States::of(&[
+            BLOCK_OR_HEADLINE_SPLIT_RIGHT,
+            BLOCK_SPLIT_LEFT,
+            State::SPLIT,
+        ])
     }
 
     fn state_cost(&self, state: State) -> i32 {
