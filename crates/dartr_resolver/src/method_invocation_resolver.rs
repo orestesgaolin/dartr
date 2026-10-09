@@ -73,7 +73,8 @@ pub fn visit_method_invocation(
 
     if method_invocation_is_null_aware(rv, node) {
         start_null_aware_access(rv, target);
-        // Dart `nullSafetyDeadCodeVerifier.visitNode(node.methodName)` (wave D).
+        let method_name = rv.ast[node].method_name;
+        crate::error::dead_code_verifier::visit_node(rv, method_name);
     }
 
     let type_arguments = rv.ast[node].type_arguments;
@@ -85,7 +86,7 @@ pub fn visit_method_invocation(
     // Dart `checkForArgumentTypesNotAssignableInList(node.argumentList,
     // whyNotPromotedArguments)` (wave D).
     rv.insert_implicit_call_reference(replacement, context_type);
-    // Dart `nullSafetyDeadCodeVerifier.verifyMethodInvocation(node)` (wave D).
+    crate::error::dead_code_verifier::verify_method_invocation(rv, node);
 
     if is_dot_shorthand {
         rv.pop_dot_shorthand_context();

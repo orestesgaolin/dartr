@@ -100,6 +100,7 @@ pub fn resolve(
         if let Some(flow) = rv.flow_analysis.flow.as_mut() {
             flow.function_expression_end();
         }
+        crate::error::dead_code_verifier::flow_end(rv, node);
     }
 
     // Dart: `checkForTypeParameterBoundRecursion` and `DefaultTypesBuilder`
