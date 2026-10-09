@@ -191,6 +191,8 @@ pub fn link_cycle(
         LibraryBuilder::collect_mixin_super_invoked_names(&mut linker, index);
     }
     set_library_and_enclosing(&mut linker.core.store);
+    // EnclosingTypeParameterReferenceFlag(this).perform()
+    crate::enclosing_type_parameters_flag::perform(&linker, &type_provider);
     // Dart: the `InheritanceManager3` of the linker is dropped with it.
     clear_interface_caches(&mut linker.core.store, false);
     // _detachNodes
