@@ -42,6 +42,7 @@ pub mod least_upper_bound;
 pub mod lookup;
 pub mod member;
 pub mod normalize;
+pub mod recursion_guard;
 pub mod replace_top_bottom_visitor;
 pub mod replacement_visitor;
 pub mod runtime_type_equality;

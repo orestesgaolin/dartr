@@ -423,7 +423,9 @@ written by a script from type lists) and over the corpus.
 
 ### 5.4 `resolved-el` (C6a), `resolved` (C6b), diagnostics (C7)
 
-- `resolved-el`: for each `SimpleIdentifier`/`NamedType`/`ConstructorName`: `{"o":..,"e":..,"el":R(element),"member":"substitution display"}`.
+- `resolved-el`: for each `SimpleIdentifier`/`NamedType`/`ConstructorName`: `{"o":..,"e":..,"k":..,"el":R(element),"member":"substitution display"}`.
+  The exact format (one line per library with its units, local element references
+  `"local:<kind>:<name>@<offset>"`) is in the header of `tools/oracle/bin/resolved_el.dart`.
   It catches errors in scopes, imports and extensions before inference is right.
 - `resolved`: the existing format (static type per expression), plus `"inv"` (staticInvokeType) and `"targs"` for invocations.
 - Diagnostics: the existing `resolved` diagnostics list, with filters for code families so that errors can be brought up group by group

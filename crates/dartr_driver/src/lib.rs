@@ -9,3 +9,4 @@ pub mod uri;
 pub mod file_state;
 pub mod library_graph;
 pub mod driver;
+pub mod analysis;

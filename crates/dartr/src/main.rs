@@ -3,6 +3,7 @@
 mod dump;
 mod elements;
 mod json;
+mod resolved;
 
 use std::path::PathBuf;
 

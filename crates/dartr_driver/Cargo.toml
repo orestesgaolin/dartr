@@ -12,6 +12,7 @@ dartr_element.workspace = true
 dartr_link.workspace = true
 dartr_parser.workspace = true
 dartr_project.workspace = true
+dartr_resolver.workspace = true
 dartr_syntax.workspace = true
 imbl.workspace = true
 indexmap.workspace = true
