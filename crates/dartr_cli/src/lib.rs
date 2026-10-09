@@ -7,6 +7,9 @@
 //!   each file, and [provider::ParseOnlyProvider] (parse diagnostics and the
 //!   AST-only lint rules of `dartr_lints`, run per library with its parts;
 //!   enabled rules that need resolution are skipped);
+//! - [driver_provider]: [driver_provider::DriverProvider], the diagnostics of the
+//!   analysis driver (resolution, constants, verifiers) with the same lint and
+//!   ignore steps, and [driver_provider::DriverSession] for the language server;
 //! - [ignore_info], [ignore_validator]: `// ignore:` and `// ignore_for_file:`
 //!   comments (`IgnoreInfo`, `IgnoreValidator`, `_filterIgnoredDiagnostics`);
 //! - [server]: protocol `AnalysisError`s with the `errors:` processors of
@@ -21,6 +24,7 @@
 
 pub mod analyze;
 pub mod args;
+pub mod driver_provider;
 pub mod ignore_info;
 pub mod ignore_validator;
 pub mod output;
@@ -28,4 +32,5 @@ pub mod provider;
 pub mod server;
 
 pub use analyze::{Terminal, USAGE_EXIT_CODE, run};
+pub use driver_provider::{DriverProvider, DriverSession};
 pub use provider::{AnalyzedFile, DiagnosticsProvider, FileDiagnostics, ParseOnlyProvider};
