@@ -222,7 +222,7 @@ impl std::fmt::Debug for LibraryScopes {
 /// (Dart `LibraryFragmentImpl.enclosingFragment`): the defining unit, then
 /// the parts, depth first in `part` directive order (so that a fragment
 /// comes after the fragment that includes it).
-fn library_fragments(
+pub(crate) fn library_fragments(
     ctx: &Ctx<'_>,
     library: EId<LibraryElement>,
 ) -> Vec<(FId<LibraryFragment>, Option<FId<LibraryFragment>>)> {
