@@ -352,6 +352,51 @@ void f() {}
 }
 
 #[test]
+fn nested_generic_named_constructor_uses_annotation_and_expression_context() {
+    let source = r#"
+class C<T> {
+  final T value;
+  const C.named(this.value);
+}
+
+@C.named(C<int>.named(42))
+void f() {}
+"#;
+    let Some(a) = run(&[("main.dart", source)]) else {
+        return;
+    };
+    let ctx = a.ctx(a.unit());
+
+    let outer = annotation_element(&a, "@C.named");
+    let outer_parameter = member::formal_parameters(&ctx, outer)[0];
+    assert_eq!(a.type_str(member::type_(&ctx, outer_parameter)), "C<int>");
+
+    let inner_name = a.node_at(NodeKind::ConstructorName, "C<int>.named", 0, 0);
+    let inner = *a
+        .unit()
+        .tables
+        .element
+        .get(inner_name)
+        .expect("inner constructor element");
+    let inner_parameter = member::formal_parameters(&ctx, inner)[0];
+    assert_eq!(a.type_str(member::type_(&ctx, inner_parameter)), "int");
+
+    let inner_expression = a.node_at(NodeKind::InstanceCreationExpression, "C<int>.named", 0, 0);
+    let inner_type = *a
+        .unit()
+        .tables
+        .static_type
+        .get(inner_expression)
+        .expect("inner instance creation type");
+    assert_eq!(a.type_str(inner_type), "C<int>");
+    assert!(
+        a.diagnostic_names().is_empty(),
+        "{:?}",
+        a.diagnostic_names()
+    );
+}
+
+#[test]
 fn explicit_type_argument_must_match_bound() {
     let source = r#"
 class A<T extends num> {

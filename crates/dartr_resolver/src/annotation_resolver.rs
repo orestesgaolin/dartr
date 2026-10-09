@@ -5,7 +5,7 @@
 use dartr_ast::{Annotation, ArgumentList, Id, PrefixedIdentifier, SimpleIdentifier};
 use dartr_diagnostics::diag;
 use dartr_element::{
-    EId, ElemRef, ElementId, FragmentFlags, InterfaceElement, Nullability, PrefixElement,
+    EId, ElemRef, ElementId, FragmentFlags, InterfaceElement, PrefixElement,
     PropertyAccessorElement, Tag, TypeAliasElement, TypeId, TypeKind, TypeParameterElement,
     VariableElement,
 };
@@ -171,7 +171,6 @@ fn class_constructor_invocation(
         rv.ctx.interface_type_parameters(class_element).to_vec(),
         constructor,
         argument_list,
-        ConstructorTarget::Interface(class_element),
     );
 }
 
@@ -328,7 +327,6 @@ fn type_alias_constructor_invocation(
         rv.ctx.get(alias).type_params.clone(),
         constructor,
         argument_list,
-        ConstructorTarget::TypeAlias(alias),
     );
 }
 
@@ -361,37 +359,6 @@ fn type_alias_getter(
     visit_arguments(rv, node, rv.ast[node].arguments);
 }
 
-#[derive(Clone, Copy)]
-enum ConstructorTarget {
-    Interface(EId<InterfaceElement>),
-    TypeAlias(EId<TypeAliasElement>),
-}
-
-impl ConstructorTarget {
-    /// The result of Dart `_constructorInvocation.instantiateElement` with
-    /// the target's own type parameters.
-    fn raw_defining_type(
-        self,
-        rv: &ResolverVisitor<'_>,
-        type_parameters: &[EId<TypeParameterElement>],
-    ) -> TypeId {
-        let type_arguments: Vec<TypeId> = type_parameters
-            .iter()
-            .map(|&parameter| rv.ctx.type_parameter_type(parameter, Nullability::None))
-            .collect();
-        match self {
-            ConstructorTarget::Interface(element) => {
-                rv.ctx
-                    .instantiate_interface(element, &type_arguments, Nullability::None)
-            }
-            ConstructorTarget::TypeAlias(element) => {
-                rv.ctx
-                    .instantiate_type_alias(element, &type_arguments, Nullability::None)
-            }
-        }
-    }
-}
-
 /// Dart `_constructorInvocation`.
 fn constructor_invocation(
     rv: &mut ResolverVisitor<'_>,
@@ -400,7 +367,6 @@ fn constructor_invocation(
     type_parameters: Vec<EId<TypeParameterElement>>,
     constructor: Option<ElemRef>,
     argument_list: Id<ArgumentList>,
-    target: ConstructorTarget,
 ) {
     if let Some(name) = constructor_name {
         set_identifier_element(rv, name, constructor);
@@ -413,26 +379,11 @@ fn constructor_invocation(
         return;
     };
 
-    let raw_defining_type = target.raw_defining_type(rv, &type_parameters);
     let element_to_infer = ConstructorElementToInfer {
         type_parameters,
         element: constructor,
     };
     let constructor_raw_type = element_to_infer.as_type(rv);
-    // Dart constructor elements expose the enclosing interface as their
-    // implicit return type. Rust linked constructors keep that return slot
-    // empty, so restore the `_constructorInvocation.instantiateElement`
-    // result on the forwarding function type before shared inference.
-    let constructor_raw_type = match *rv.ctx.ty(constructor_raw_type) {
-        TypeKind::Function(function) => rv.ctx.function_type(
-            rv.ctx.list(function.type_params),
-            rv.ctx.list(function.params),
-            raw_defining_type,
-            function.nullability,
-            function.alias,
-        ),
-        _ => constructor_raw_type,
-    };
     resolve_annotation_invocation(
         rv,
         node,
