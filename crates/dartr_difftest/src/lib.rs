@@ -20,8 +20,16 @@
 //!   kind, the number of oracle entries and the number of them that dartr
 //!   has with the same value (same offsets, kind, type or element), summed
 //!   over all files.
+//!
+//! [`Options::codes`] (any mode with `"diagnostics"` lists) keeps only the
+//! diagnostics whose `"code"` is in the set, on both sides, before the
+//! comparison, and the report has a table per code ([`Report::codes`]): a
+//! diagnostic is matched by (code, offset, length) in the same unit.
+//!
+//! [`Options::extra_args`] are passed to both programs after the mode (for
+//! example `--with-const` for mode `elements`).
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -59,6 +67,12 @@ pub struct Options {
     pub kinds: Vec<String>,
     /// Remove the `"diagnostics"` lists before the comparison.
     pub no_diagnostics: bool,
+    /// When not empty: keep only the diagnostics with these codes (see
+    /// [`filter_diagnostics`]) and count them per code ([`count_codes`]).
+    pub codes: BTreeSet<String>,
+    /// Arguments passed to both the oracle and `dartr dump` after the mode,
+    /// for example `--with-const`.
+    pub extra_args: Vec<String>,
     /// The time limit per input file, in seconds: a batch is killed after
     /// `60 + files * timeout_per_file` seconds, so a hang in one input can
     /// not block the run. Its missing lines count as differences. `0`: no
@@ -69,7 +83,10 @@ pub struct Options {
 impl Options {
     /// Whether the lines are changed before the comparison.
     fn normalizes(&self) -> bool {
-        self.mask_inferred || !self.kinds.is_empty() || self.no_diagnostics
+        self.mask_inferred
+            || !self.kinds.is_empty()
+            || self.no_diagnostics
+            || !self.codes.is_empty()
     }
 
     /// [line] after [mask_inferred] and [filter_value], serialized again
@@ -91,6 +108,137 @@ impl Options {
         }
         if !self.kinds.is_empty() || self.no_diagnostics {
             filter_value(v, &self.kinds, self.no_diagnostics);
+        }
+        if !self.codes.is_empty() {
+            filter_diagnostics(v, &self.codes);
+        }
+    }
+}
+
+/// Reads a codes file: one diagnostic code per line (as the `"code"` of the
+/// diagnostics JSON, for example `const_eval_throws_exception`). Leading
+/// and trailing white space is removed; empty lines and lines that start
+/// with `#` are ignored.
+pub fn parse_codes(text: &str) -> BTreeSet<String> {
+    text.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .map(str::to_string)
+        .collect()
+}
+
+/// Removes, in every `"diagnostics"` list of [value], the diagnostics whose
+/// `"code"` is not in [codes].
+pub fn filter_diagnostics(value: &mut Value, codes: &BTreeSet<String>) {
+    match value {
+        Value::Object(map) => {
+            for (key, v) in map.iter_mut() {
+                if key == "diagnostics"
+                    && let Value::Array(items) = v
+                {
+                    items.retain(|d| {
+                        d.get("code")
+                            .and_then(Value::as_str)
+                            .is_some_and(|c| codes.contains(c))
+                    });
+                    continue;
+                }
+                filter_diagnostics(v, codes);
+            }
+        }
+        Value::Array(items) => items.iter_mut().for_each(|v| filter_diagnostics(v, codes)),
+        _ => {}
+    }
+}
+
+/// The counts of one diagnostic code (option `--codes`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CodeStats {
+    /// Diagnostics with this code in the oracle output.
+    pub oracle: usize,
+    /// Oracle diagnostics that dartr reports with the same code, offset and
+    /// length in the same unit.
+    pub matched: usize,
+    /// Dartr diagnostics with this code that the oracle does not report.
+    pub dartr_only: usize,
+}
+
+impl CodeStats {
+    fn add(&mut self, other: &CodeStats) {
+        self.oracle += other.oracle;
+        self.matched += other.matched;
+        self.dartr_only += other.dartr_only;
+    }
+}
+
+/// The units of a line with their diagnostics: the `"units"` list (modes
+/// `resolved`, `resolved-el`), or else the line itself (modes `tokens`,
+/// `ast`).
+fn diagnostic_units(line: &Value) -> Vec<&Value> {
+    match line.get("units").and_then(Value::as_array) {
+        Some(units) => units.iter().collect(),
+        None => vec![line],
+    }
+}
+
+/// Adds the per-code counts of one file to [stats]. The units of the two
+/// lines are paired by `"path"`; a diagnostic is matched when the paired
+/// unit has a diagnostic with the same `"code"`, `"o"` and `"l"` that is not
+/// matched yet.
+pub fn count_codes(oracle: &Value, dartr: Option<&Value>, stats: &mut BTreeMap<String, CodeStats>) {
+    type Key = (String, Option<i64>, Option<i64>);
+    fn keys(unit: &Value) -> Vec<Key> {
+        unit.get("diagnostics")
+            .and_then(Value::as_array)
+            .map(|ds| {
+                ds.iter()
+                    .map(|d| {
+                        (
+                            d.get("code")
+                                .and_then(Value::as_str)
+                                .unwrap_or("<no code>")
+                                .to_string(),
+                            d.get("o").and_then(Value::as_i64),
+                            d.get("l").and_then(Value::as_i64),
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+    let oracle_units = diagnostic_units(oracle);
+    let dartr_units = dartr.map(diagnostic_units).unwrap_or_default();
+    let mut paired = vec![false; dartr_units.len()];
+    for unit in &oracle_units {
+        let path = unit.get("path");
+        let other = dartr_units.iter().position(|u| u.get("path") == path);
+        let mut available: HashMap<Key, usize> = HashMap::new();
+        if let Some(i) = other {
+            paired[i] = true;
+            for k in keys(dartr_units[i]) {
+                *available.entry(k).or_default() += 1;
+            }
+        }
+        for k in keys(unit) {
+            let s = stats.entry(k.0.clone()).or_default();
+            s.oracle += 1;
+            if let Some(n) = available.get_mut(&k)
+                && *n > 0
+            {
+                *n -= 1;
+                s.matched += 1;
+            }
+        }
+        for ((code, _, _), n) in available {
+            stats.entry(code).or_default().dartr_only += n;
+        }
+    }
+    // Dartr units that the oracle does not have.
+    for (i, unit) in dartr_units.iter().enumerate() {
+        if !paired[i] {
+            for (code, _, _) in keys(unit) {
+                stats.entry(code).or_default().dartr_only += 1;
+            }
         }
     }
 }
@@ -237,6 +385,10 @@ pub struct Report {
     /// Lines and units with a `"panic"` key in the dartr output (modes
     /// `resolved`, `resolved-el`).
     pub panics: usize,
+    /// Per diagnostic code counts (option `--codes`), by code.
+    pub codes: BTreeMap<String, CodeStats>,
+    /// The number of codes in the `--codes` set (0: no `--codes`).
+    pub code_set: usize,
 }
 
 impl Report {
@@ -303,6 +455,44 @@ impl Report {
         s.push_str(&format!(
             "dartr panics (lines and units): {}\n",
             self.panics
+        ));
+        s
+    }
+
+    /// The per-code table (option `--codes`), sorted by the number of
+    /// oracle diagnostics; empty without `--codes`. Codes of the set that no
+    /// side reports are not listed, only counted.
+    pub fn code_report(&self) -> String {
+        if self.code_set == 0 {
+            return String::new();
+        }
+        let mut rows: Vec<(&String, &CodeStats)> = self.codes.iter().collect();
+        rows.sort_by(|a, b| {
+            b.1.oracle
+                .cmp(&a.1.oracle)
+                .then(b.1.dartr_only.cmp(&a.1.dartr_only))
+                .then(a.0.cmp(b.0))
+        });
+        let line = |code: &str, c: &CodeStats| {
+            format!(
+                "{:<56} {:>8} {:>8} {:>11}\n",
+                code, c.oracle, c.matched, c.dartr_only
+            )
+        };
+        let mut s = format!(
+            "{:<56} {:>8} {:>8} {:>11}\n",
+            "code", "oracle", "matched", "dartr-only"
+        );
+        let mut total = CodeStats::default();
+        for (code, c) in rows {
+            total.add(c);
+            s.push_str(&line(code, c));
+        }
+        s.push_str(&line("TOTAL", &total));
+        s.push_str(&format!(
+            "codes in the set: {}, reported by a side: {}\n",
+            self.code_set,
+            self.codes.len()
         ));
         s
     }
@@ -477,6 +667,7 @@ struct BatchOutput {
 fn run_batch(
     program: &[String],
     mode: &str,
+    extra_args: &[String],
     files: &[String],
     timeout_per_file: u64,
 ) -> Result<BatchOutput> {
@@ -484,6 +675,7 @@ fn run_batch(
     let mut child = Command::new(&program[0])
         .args(&program[1..])
         .arg(mode)
+        .args(extra_args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -724,8 +916,10 @@ pub fn run(options: &Options) -> Result<Report> {
         failures: Vec<(String, Option<String>, Option<String>)>,
         kinds: BTreeMap<String, KindStats>,
         panics: usize,
+        codes: BTreeMap<String, CodeStats>,
     }
     let per_kind = options.mode.starts_with("resolved");
+    let per_code = !options.codes.is_empty();
     let next = Mutex::new(0usize);
     let results: Mutex<Vec<Result<BatchResult>>> = Mutex::new(Vec::new());
     std::thread::scope(|scope| {
@@ -744,8 +938,24 @@ pub fn run(options: &Options) -> Result<Report> {
                     let batch = batches[index];
                     let result = (|| -> Result<BatchResult> {
                         let (o, d) = std::thread::scope(|s| {
-                            let o = s.spawn(|| run_batch(&oracle, &options.mode, batch, options.timeout_per_file));
-                            let d = s.spawn(|| run_batch(&dartr, &options.mode, batch, options.timeout_per_file));
+                            let o = s.spawn(|| {
+                                run_batch(
+                                    &oracle,
+                                    &options.mode,
+                                    &options.extra_args,
+                                    batch,
+                                    options.timeout_per_file,
+                                )
+                            });
+                            let d = s.spawn(|| {
+                                run_batch(
+                                    &dartr,
+                                    &options.mode,
+                                    &options.extra_args,
+                                    batch,
+                                    options.timeout_per_file,
+                                )
+                            });
                             (o.join().unwrap(), d.join().unwrap())
                         });
                         let (o, d) = (o?, d?);
@@ -754,9 +964,12 @@ pub fn run(options: &Options) -> Result<Report> {
                         let mut identical = 0;
                         let mut kinds = BTreeMap::new();
                         let mut panics = 0;
+                        let mut codes = BTreeMap::new();
                         for file in batch {
                             let (lo, ld) = (o.lines.get(file), d.lines.get(file));
-                            if per_kind && let Some(lo) = lo {
+                            if (per_kind || per_code)
+                                && let Some(lo) = lo
+                            {
                                 let parse = |l: &String| {
                                     parse_deep(l).ok().map(|mut v| {
                                         options.normalize_value(&mut v);
@@ -764,11 +977,17 @@ pub fn run(options: &Options) -> Result<Report> {
                                     })
                                 };
                                 let vd = ld.and_then(parse);
-                                if let Some(vd) = &vd {
-                                    panics += count_panics(vd);
+                                let vo = parse(lo);
+                                if per_kind {
+                                    if let Some(vd) = &vd {
+                                        panics += count_panics(vd);
+                                    }
+                                    if let Some(vo) = &vo {
+                                        count_kinds(vo, vd.as_ref(), &mut kinds);
+                                    }
                                 }
-                                if let Some(vo) = parse(lo) {
-                                    count_kinds(&vo, vd.as_ref(), &mut kinds);
+                                if per_code && let Some(vo) = &vo {
+                                    count_codes(vo, vd.as_ref(), &mut codes);
                                 }
                             }
                             match compare(file, lo, ld, options) {
@@ -799,6 +1018,7 @@ pub fn run(options: &Options) -> Result<Report> {
                             failures,
                             kinds,
                             panics,
+                            codes,
                         })
                     })();
                     results.lock().unwrap().push(result);
@@ -816,6 +1036,7 @@ pub fn run(options: &Options) -> Result<Report> {
     let mut report = Report {
         mode: options.mode.clone(),
         files: files.len(),
+        code_set: options.codes.len(),
         ..Default::default()
     };
     if let Some(dir) = &options.write_failures {
@@ -829,6 +1050,9 @@ pub fn run(options: &Options) -> Result<Report> {
         report.panics += r.panics;
         for (kind, k) in &r.kinds {
             report.kinds.entry(kind.clone()).or_default().add(k);
+        }
+        for (code, c) in &r.codes {
+            report.codes.entry(code.clone()).or_default().add(c);
         }
         if let Some(dir) = &options.write_failures {
             for (file, o, d) in r.failures {
@@ -848,7 +1072,10 @@ pub fn run(options: &Options) -> Result<Report> {
     if let Some(dir) = &options.write_failures {
         std::fs::write(
             dir.join("summary.txt"),
-            report.summary() + &report.kind_report() + &report.difference_report(usize::MAX),
+            report.summary()
+                + &report.kind_report()
+                + &report.code_report()
+                + &report.difference_report(usize::MAX),
         )?;
     }
     report.elapsed = start.elapsed();
@@ -1056,5 +1283,83 @@ mod tests {
         count_kinds(&o, None, &mut stats);
         assert_eq!(stats["SimpleIdentifier"].matched, 0);
         assert_eq!(stats["SimpleIdentifier"].oracle, 3);
+    }
+
+    #[test]
+    fn codes_filter_diagnostics_and_count_per_code() {
+        let codes = parse_codes(
+            "# constant codes\n\nconst_eval_throws_exception\n  invalid_constant  \n#not_a_code\n",
+        );
+        assert_eq!(
+            codes.iter().map(String::as_str).collect::<Vec<_>>(),
+            ["const_eval_throws_exception", "invalid_constant"]
+        );
+        let options = Options {
+            codes: codes.clone(),
+            ..Default::default()
+        };
+        // Unit a: the oracle has two constant diagnostics and one other;
+        // dartr has one of them at the same offset and length, one at
+        // another offset, and the other diagnostic is missing. Unit b is
+        // missing in the oracle output.
+        let o = r#"{"path":"a","units":[{"path":"a","diagnostics":[
+            {"code":"const_eval_throws_exception","o":10,"l":5},
+            {"code":"invalid_constant","o":20,"l":3},
+            {"code":"unused_local_variable","o":30,"l":1}],"types":[]}]}"#;
+        let d = r#"{"path":"a","units":[{"path":"a","diagnostics":[
+            {"code":"const_eval_throws_exception","o":10,"l":5},
+            {"code":"invalid_constant","o":21,"l":3}],"types":[]},
+            {"path":"b","diagnostics":[{"code":"invalid_constant","o":0,"l":1}]}]}"#;
+        let o = o.replace(['\n', ' '], "");
+        let d = d.replace(['\n', ' '], "");
+
+        // Only the codes of the set are kept, on both sides.
+        assert_eq!(
+            options.normalize_line(&o),
+            r#"{"path":"a","units":[{"path":"a","diagnostics":[{"code":"const_eval_throws_exception","o":10,"l":5},{"code":"invalid_constant","o":20,"l":3}],"types":[]}]}"#
+        );
+        let diff = compare("a", Some(&o), Some(&d), &options).unwrap();
+        assert_eq!(diff.json_path, "units[0].diagnostics[1].o");
+
+        let mut stats = BTreeMap::new();
+        let parse = |l: &str| {
+            let mut v: Value = serde_json::from_str(l).unwrap();
+            options.normalize_value(&mut v);
+            v
+        };
+        count_codes(&parse(&o), Some(&parse(&d)), &mut stats);
+        assert_eq!(
+            stats["const_eval_throws_exception"],
+            CodeStats {
+                oracle: 1,
+                matched: 1,
+                dartr_only: 0
+            }
+        );
+        // Offset 21 is not the oracle offset 20; unit b is dartr only.
+        assert_eq!(
+            stats["invalid_constant"],
+            CodeStats {
+                oracle: 1,
+                matched: 0,
+                dartr_only: 2
+            }
+        );
+        assert!(!stats.contains_key("unused_local_variable"));
+
+        let report = Report {
+            codes: stats,
+            code_set: codes.len(),
+            ..Default::default()
+        };
+        let table = report.code_report();
+        assert!(table.contains("TOTAL"), "{table}");
+        assert!(
+            table
+                .lines()
+                .any(|l| l.split_whitespace().collect::<Vec<_>>()
+                    == ["invalid_constant", "1", "0", "2"]),
+            "{table}"
+        );
     }
 }

@@ -2,6 +2,7 @@
 
 mod dump;
 mod elements;
+mod elements_const;
 mod json;
 mod resolved;
 
@@ -42,6 +43,10 @@ enum Command {
         /// Dart files. When there are none, paths are read from stdin, one
         /// per line.
         files: Vec<PathBuf>,
+        /// Mode `elements`: add the constant value `"const"` to const
+        /// top-level variables and fields (docs/design/semantics.md §5.1).
+        #[arg(long)]
+        with_const: bool,
     },
     /// Starts the language server (LSP over stdin and stdout). Accepts the
     /// options of `dart language-server`.
@@ -104,7 +109,11 @@ fn main() -> anyhow::Result<()> {
     }
     let cli = Cli::parse();
     match cli.command {
-        Command::Dump { mode, files } => dump::run(mode, files),
+        Command::Dump {
+            mode,
+            files,
+            with_const,
+        } => dump::run(mode, files, with_const),
         Command::Analyze { .. } | Command::Format { .. } => unreachable!("handled before clap"),
         Command::LanguageServer { args } => {
             std::process::exit(dartr_legacy::run_with_args(&args, true))
