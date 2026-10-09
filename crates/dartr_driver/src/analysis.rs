@@ -95,16 +95,15 @@ impl Driver {
                     options: *options,
                     external: Some(&external),
                 };
-                let result =
-                    catch_unwind(AssertUnwindSafe(|| {
-                        analyze_library_with_unignorable(&input, unignorable)
-                    }))
-                    .map_err(|e| {
-                        e.downcast_ref::<String>()
-                            .cloned()
-                            .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
-                            .unwrap_or_else(|| "panic".to_string())
-                    });
+                let result = catch_unwind(AssertUnwindSafe(|| {
+                    analyze_library_with_unignorable(&input, unignorable)
+                }))
+                .map_err(|e| {
+                    e.downcast_ref::<String>()
+                        .cloned()
+                        .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+                        .unwrap_or_else(|| "panic".to_string())
+                });
                 f(*file, units, result)
             })
             .collect()
