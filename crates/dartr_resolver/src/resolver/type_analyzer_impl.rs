@@ -95,6 +95,7 @@ impl<'a> TypeAnalysisNullShortingInterface for ResolverVisitor<'a> {
         let expression = self.peek_rewrite().expect("null-shorted expression");
         // Dart `recordNullShortedType`.
         self.record_static_type(expression, inferred_type.unwrap_type_view());
+        crate::error::dead_code_verifier::flow_end(self, expression);
     }
 }
 
@@ -289,6 +290,26 @@ impl<'a> TypeAnalyzer for ResolverVisitor<'a> {
         self.check_for_non_bool_condition(condition);
     }
 
+    /// Dart `handle_ifElement_elseEnd`.
+    fn handle_if_element_else_end(&mut self, _node: NodeId, if_false: NodeId) {
+        crate::error::dead_code_verifier::flow_end(self, if_false);
+    }
+
+    /// Dart `handle_ifElement_thenEnd`.
+    fn handle_if_element_then_end(&mut self, _node: NodeId, if_true: NodeId) {
+        crate::error::dead_code_verifier::flow_end(self, if_true);
+    }
+
+    /// Dart `handle_ifStatement_elseEnd`.
+    fn handle_if_statement_else_end(&mut self, _node: Id<Statement>, if_false: Id<Statement>) {
+        crate::error::dead_code_verifier::flow_end(self, if_false);
+    }
+
+    /// Dart `handle_ifStatement_thenEnd`.
+    fn handle_if_statement_then_end(&mut self, _node: Id<Statement>, if_true: Id<Statement>) {
+        crate::error::dead_code_verifier::flow_end(self, if_true);
+    }
+
     /// Dart `handle_logicalOrPattern_afterLhs`.
     fn handle_logical_or_pattern_after_lhs(&mut self, node: Id<DartPattern>) {
         if let Some(p) = self.ast.cast::<dartr_ast::LogicalOrPattern>(node) {
@@ -344,12 +365,20 @@ impl<'a> TypeAnalyzer for ResolverVisitor<'a> {
     ) {
     }
 
+    /// Dart `handleMergedStatementCase`.
     fn handle_merged_statement_case(
         &mut self,
-        _node: Id<Statement>,
-        _case_index: usize,
+        node: Id<Statement>,
+        case_index: usize,
         _is_terminating: bool,
     ) {
+        // Dart `nullSafetyDeadCodeVerifier.flowEnd(
+        // node.memberGroups[caseIndex].members.last)`.
+        if let Some(group) = crate::pattern_resolver::member_group(self.ast, node.raw(), case_index)
+            && let Some(&last) = group.members.last()
+        {
+            crate::error::dead_code_verifier::flow_end(self, last);
+        }
     }
 
     fn handle_no_collection_element(&mut self, _node: NodeId) {}

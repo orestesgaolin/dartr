@@ -114,6 +114,7 @@ pub fn resolve(rv: &mut ResolverVisitor<'_>, node: Id<VariableDeclaration>) {
 
     if is_top_level {
         rv.flow_analysis.body_or_initializer_exit();
+        crate::error::dead_code_verifier::flow_end(rv, node);
     } else if is_late {
         if let Some(flow) = rv.flow_analysis.flow.as_mut() {
             flow.late_initializer_end();

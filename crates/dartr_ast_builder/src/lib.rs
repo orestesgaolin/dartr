@@ -34,6 +34,7 @@
 pub mod ast_builder;
 pub mod doc_comment_builder;
 pub mod error_converter;
+pub mod ignore_info;
 pub mod parse;
 pub mod stack;
 

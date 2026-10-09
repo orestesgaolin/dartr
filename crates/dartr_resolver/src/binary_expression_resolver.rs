@@ -90,8 +90,12 @@ fn type_of(rv: &ResolverVisitor<'_>, e: Id<Expression>) -> TypeId {
 /// Dart `_checkNonBoolOperand(operand, operator, whyNotPromoted:)` =
 /// `boolExpressionVerifier.checkForNonBoolExpression(operand,
 /// locatableDiagnostic: diag.nonBoolOperand, ...)` (wave D hook).
-fn check_non_bool_operand(rv: &mut ResolverVisitor<'_>, operand: Id<Expression>) {
-    rv.check_for_non_bool_expression(operand);
+fn check_non_bool_operand(rv: &mut ResolverVisitor<'_>, operand: Id<Expression>, operator: &str) {
+    crate::error::bool_expression_verifier::check_for_non_bool_expression(
+        rv,
+        operand,
+        dartr_diagnostics::diag::non_bool_operand(operator),
+    );
 }
 
 /// Dart `_resolveEqual(node, notEqual:)`.
@@ -264,7 +268,7 @@ fn resolve_logical_binary(rv: &mut ResolverVisitor<'_>, node: Id<BinaryExpressio
 
     let right = rv.resolve_expression(right, bool_type);
 
-    // Dart `nullSafetyDeadCodeVerifier.flowEnd(right)` (wave D).
+    crate::error::dead_code_verifier::flow_end(rv, right);
     let info = if flow_active {
         let right_info = rv.flow_analysis.get_expression_info(Some(right));
         Some(rv.flow().logical_binary_op_end(right_info, is_and))
@@ -273,8 +277,9 @@ fn resolve_logical_binary(rv: &mut ResolverVisitor<'_>, node: Id<BinaryExpressio
     };
     rv.flow_analysis.store_expression_info(node.upcast(), info);
 
-    check_non_bool_operand(rv, left);
-    check_non_bool_operand(rv, right);
+    let operator = if is_and { "&&" } else { "||" };
+    check_non_bool_operand(rv, left, operator);
+    check_non_bool_operand(rv, right, operator);
 
     rv.record_static_type(node, bool_type);
 }

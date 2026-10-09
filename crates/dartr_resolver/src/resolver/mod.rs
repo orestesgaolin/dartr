@@ -149,6 +149,10 @@ pub struct ResolverVisitor<'a> {
     /// Dart `legacySwitchExhaustiveness`: the enum constants that the cases
     /// of the current switch cover (language versions without patterns).
     pub(crate) legacy_switch_exhaustiveness: Option<crate::pattern_resolver::SwitchExhaustiveness>,
+    /// Dart `nullSafetyDeadCodeVerifier` (the state; the methods are in
+    /// `error::dead_code_verifier`).
+    pub(crate) null_safety_dead_code_verifier:
+        crate::error::dead_code_verifier::NullSafetyDeadCodeVerifier,
 }
 
 impl<'a> ResolverVisitor<'a> {
@@ -186,6 +190,7 @@ impl<'a> ResolverVisitor<'a> {
             guards: Vec::new(),
             dot_shorthands: Vec::new(),
             legacy_switch_exhaustiveness: None,
+            null_safety_dead_code_verifier: Default::default(),
         }
     }
 
@@ -375,6 +380,7 @@ impl<'a> ResolverVisitor<'a> {
             Some(parent) => self.ast.replace_child(parent, old.raw(), new.raw()),
             None => self.ast.replace_with(old, new),
         }
+        crate::error::dead_code_verifier::maybe_rewrite_first_dead_node(self, old.raw(), new.raw());
     }
 
     /// The static type of [expression] (Dart `expression.staticType`).
@@ -434,7 +440,7 @@ impl<'a> ResolverVisitor<'a> {
 
     /// Dart `checkUnreachableNode(node)`.
     pub fn check_unreachable_node(&mut self, node: impl Into<NodeId>) {
-        self.flow_analysis.check_unreachable_node(node.into());
+        crate::error::dead_code_verifier::visit_node(self, node);
     }
 
     // ------------------------------------------------------------ enclosing

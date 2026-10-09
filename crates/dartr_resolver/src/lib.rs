@@ -47,6 +47,7 @@ pub mod generated {
 
 pub mod ast_ext;
 pub mod constant;
+pub mod error;
 pub mod library_analyzer;
 pub mod options;
 pub mod resolver;
@@ -85,6 +86,7 @@ pub mod binary_expression_resolver;
 pub mod comment_reference_resolver;
 pub mod constructor_reference_resolver;
 pub mod dot_shorthand_resolver;
+pub mod element_metadata;
 pub mod exit_detector;
 pub mod extension_member_resolver;
 pub mod for_resolver;

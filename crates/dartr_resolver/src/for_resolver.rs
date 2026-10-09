@@ -28,7 +28,9 @@ use crate::resolver::ResolverVisitor;
 /// `ForResolver.resolveStatement(node)`.
 pub fn visit_for_statement(rv: &mut ResolverVisitor<'_>, node: Id<ForStatement>) {
     resolve_statement(rv, node);
-    // Dart `nullSafetyDeadCodeVerifier.flowEnd(node.body)`: wave D.
+    // Dart `nullSafetyDeadCodeVerifier.flowEnd(node.body)`.
+    let body = rv.ast[node].body;
+    crate::error::dead_code_verifier::flow_end(rv, body);
 }
 
 /// Dart `ResolverVisitor.visitForElement(node, context: context)` =
@@ -377,7 +379,7 @@ fn for_parts(
         condition = Some(c);
     }
 
-    // Dart `nullSafetyDeadCodeVerifier.for_conditionEnd()`: wave D.
+    let dead_code_for_parts_state = crate::error::dead_code_verifier::for_condition_end(rv);
     {
         let ast = &*rv.ast;
         rv.flow_analysis.for_body_begin(ast, node, condition);
@@ -387,8 +389,8 @@ fn for_parts(
     if let Some(flow) = rv.flow_analysis.flow.as_mut() {
         flow.for_updater_begin();
     }
-    // Dart `nullSafetyDeadCodeVerifier.for_updaterBegin(...)`: wave D.
     let (_, updaters) = for_parts_condition_and_updaters(rv, for_parts.node);
+    crate::error::dead_code_verifier::for_updater_begin(rv, updaters, dead_code_for_parts_state);
     let updaters = rv.ast.list(updaters).to_vec();
     for updater in updaters {
         rv.analyze_expression_node(updater, TypeId::UNKNOWN);
