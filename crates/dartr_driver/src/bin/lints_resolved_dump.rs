@@ -111,20 +111,35 @@ fn run() {
             let result =
                 driver.analyze_library_with_lints(file, AnalysisOptions::default(), &enabled);
             if let Some(result) = result {
+                let tp = dartr_link::types_builder::world_type_provider(&driver.state.world);
+                let features = dartr_element::FeatureSet::default();
+                let sink = dartr_element::NoopSink;
                 for unit in result.units {
+                    let ctx = dartr_element::Ctx {
+                        world: &driver.state.world,
+                        current: None,
+                        local: Some(&unit.local),
+                        tp: &tp,
+                        features: &features,
+                        req: &sink,
+                    };
+                    let facts = requests[index]["includeResolution"]
+                        .as_bool()
+                        .unwrap_or(false)
+                        .then(|| resolution_facts(ctx, &unit));
                     let diagnostics: Vec<_> = unit
                         .diagnostics
                         .into_iter()
                         .filter(|d| d.code.diagnostic_type.name() == "LINT")
                         .map(|d| {
                             json!({"code":d.code.name,"severity":d.severity.name(),
-                            "offset":d.offset,"length":d.length,"message":d.message})
+                            "offset":d.offset,"length":d.length,"message":d.message,"correction":d.correction})
                         })
                         .collect();
                     if let Some(panic) = &unit.panic {
                         eprintln!("resolution panic: {}: {}", unit.path, panic);
                     }
-                    results.insert(unit.path.to_string(), json!({"path":unit.path.as_ref(),"diagnostics":diagnostics,"panic":unit.panic}));
+                    results.insert(unit.path.to_string(), json!({"path":unit.path.as_ref(),"diagnostics":diagnostics,"panic":unit.panic,"resolution":facts}));
                 }
             } else {
                 eprintln!("library not linked: {}", paths[index]);
@@ -142,7 +157,7 @@ fn run() {
                 let parsed = &driver.fs.file(file).c().parsed;
                 let ds =
                     dartr_lints::lint(parsed, &parsed.ast.tokens.source, &paths[index], &enabled);
-                let diagnostics: Vec<_> = ds.into_iter().map(|d|json!({"code":d.code.name,"severity":d.severity.name(),"offset":d.offset,"length":d.length,"message":d.message})).collect();
+                let diagnostics: Vec<_> = ds.into_iter().map(|d|json!({"code":d.code.name,"severity":d.severity.name(),"offset":d.offset,"length":d.length,"message":d.message,"correction":d.correction})).collect();
                 results.insert(
                     paths[index].clone(),
                     json!({"path":paths[index],"diagnostics":diagnostics,"unresolvedPart":true}),
@@ -158,6 +173,59 @@ fn run() {
             )
         );
     }
+}
+/// Explicit evidence for lint mismatches; no guessed types or source-derived elements.
+fn resolution_facts(
+    ctx: dartr_element::Ctx<'_>,
+    unit: &dartr_resolver::library_analyzer::ResolvedUnit,
+) -> Vec<Value> {
+    let display = |ty| dartr_element::type_display_string_with(&ctx, ty, Default::default());
+    let mut nodes = vec![unit.unit.raw()];
+    let mut out = vec![];
+    while let Some(node) = nodes.pop() {
+        let element = unit
+            .tables
+            .element
+            .get(node)
+            .copied()
+            .map(|element| match element {
+                dartr_element::ElemRef::Base(e) => e,
+                dartr_element::ElemRef::Member(m) => ctx.member(m).base,
+            });
+        let declared = unit
+            .tables
+            .declared_fragment
+            .get(node)
+            .and_then(|f| ctx.fragment_data(*f))
+            .and_then(|f| f.element.try_get())
+            .copied();
+        let element_name = element
+            .and_then(|e| ctx.element_data(e))
+            .and_then(|e| e.name)
+            .map(|n| ctx.name_str(n));
+        let library_uri = element
+            .and_then(|e| ctx.element_data(e))
+            .and_then(|e| e.library)
+            .map(|l| {
+                ctx.fragment(ctx.get(l).first_fragment())
+                    .source
+                    .uri
+                    .as_ref()
+            });
+        out.push(
+            json!({"kind":unit.ast.kind(node).name(), "offset":unit.ast.offset(node),
+            "length":unit.ast.length(node),
+            "staticType":unit.tables.static_type.get(node).copied().map(display),
+            "annotationType":unit.tables.annotation_type.get(node).copied().map(display),
+            "elementName":element_name,"elementLibrary":library_uri,
+            "declaredKind":declared.map(|e|format!("{:?}",e.kind())),
+            "hasParameter":unit.tables.param_element.get(node).is_some(),
+            "hasReadElement":unit.tables.read_element.get(node).is_some(),
+            "hasWriteElement":unit.tables.write_element.get(node).is_some()}),
+        );
+        nodes.extend(unit.ast.children(node).into_iter().rev());
+    }
+    out
 }
 fn main() {
     rayon::ThreadPoolBuilder::new()

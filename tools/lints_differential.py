@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Dart source: pkg/analyzer/lib/src/dart/analysis/library_analyzer.dart (_computeLints)
-"""Compare AST-only lints to dart analyze; retain exact diagnostics and per-rule counts.
+"""Compare parsed or resolved lints to dart analyze; retain exact diagnostics and per-rule counts.
 
 Fixtures: python3 tools/lints_differential.py --fixtures --output target/lints/fixtures
 Corpora:  python3 tools/lints_differential.py --corpus sdk --output target/lints/sdk
@@ -10,11 +10,11 @@ import argparse
 from collections import Counter
 from functools import cache
 import json
+import hashlib
 import os
 from pathlib import Path
 import shutil
 import subprocess
-import tempfile
 import time
 from urllib.parse import urljoin, urlparse, unquote
 
@@ -26,8 +26,8 @@ def dart_binary():
     direct = Path.home() / 'fvm/default/bin/cache/dart-sdk/bin/dart'
     return str(direct) if direct.exists() else shutil.which('dart')
 
-def diagnostic_key(path, code, severity, offset, length, message):
-    return path, code, severity, offset, length, message
+def diagnostic_key(path, code, severity, offset, length, message, correction=None):
+    return path, code, severity, offset, length, message, correction
 
 def run(binary, output, fixtures=False, corpus=None, input_dir=None,
         language_version='3.13', experiments=(), package_config=True, rules_file=None, timeout=600, reuse=False):
@@ -43,7 +43,6 @@ def run(binary, output, fixtures=False, corpus=None, input_dir=None,
     else:
         metadata = [rule for rule in metadata if rule.get('implemented', True)]
     rules = [rule['name'] for rule in metadata]
-    codes = {code for rule in metadata for code in rule['codes']}
     if not rules:
         raise RuntimeError('No lint rules implemented')
     project = output / 'project'
@@ -55,6 +54,7 @@ def run(binary, output, fixtures=False, corpus=None, input_dir=None,
         return compare_outputs(output, metadata, project, sorted((project / 'lib').rglob('*.dart')),
                                json.loads((output / 'oracle.stdout.json').read_text()),
                                (output / 'dartr.stdout.jsonl').read_text(), version, started)
+    (output / 'runner_manifest.json').write_text(json.dumps({'binary':str(binary), 'sha256':hashlib.sha256(binary.read_bytes()).hexdigest()}, indent=2) + '\n')
     (output / 'enabled_rules.json').write_text(json.dumps(metadata, indent=2) + '\n')
     if project.exists():
         shutil.rmtree(project)
@@ -97,7 +97,10 @@ def run(binary, output, fixtures=False, corpus=None, input_dir=None,
         if fixtures or 'fixtures_resolved' in str(source):
             oracle_config = ROOT / 'tools/oracle/.dart_tool/package_config.json'
             if not oracle_config.is_file():
-                oracle_config = Path('/Users/dominik/Projects/dartr/tools/oracle/.dart_tool/package_config.json')
+                common_dir = Path(subprocess.check_output(
+                    ['git', '-C', str(ROOT), 'rev-parse', '--path-format=absolute', '--git-common-dir'],
+                    text=True, timeout=30).strip())
+                oracle_config = common_dir.parent / 'tools/oracle/.dart_tool/package_config.json'
             if oracle_config.is_file():
                 existing = {p['name'] for p in packages}
                 for package in json.loads(oracle_config.read_text())['packages']:
@@ -144,14 +147,29 @@ def compare_outputs(output, metadata, project, files, raw, rust_stdout, version,
         location = d['location']
         span = location['range']
         key = diagnostic_key(relative(location['file']), d['code'], d['severity'], span['start']['offset'],
-                             span['end']['offset'] - span['start']['offset'], d['problemMessage'])
+                             span['end']['offset'] - span['start']['offset'], d['problemMessage'], d.get('correctionMessage'))
         expected[key] += 1
     actual = Counter()
+    panics, unresolved_parts, errors = [], [], []
+    records = set()
     for line in rust_stdout.splitlines():
         record = json.loads(line)
+        record_path = relative(record['path'])
+        if record_path in records:
+            raise RuntimeError(f'Duplicate Rust result for {record_path}')
+        records.add(record_path)
+        if record.get('panic'):
+            panics.append({'path':record_path,'panic':record['panic']})
+        if record.get('unresolvedPart'):
+            unresolved_parts.append(record_path)
+        if record.get('error'):
+            errors.append({'path':record_path,'error':record['error']})
         for d in record['diagnostics']:
-            key = diagnostic_key(relative(record['path']), d['code'], d['severity'], d['offset'], d['length'], d['message'])
+            key = diagnostic_key(relative(record['path']), d['code'], d['severity'], d['offset'], d['length'], d['message'], d.get('correction'))
             actual[key] += 1
+    wanted = {relative(path) for path in files}
+    if records != wanted:
+        raise RuntimeError(f'Incomplete Rust output; missing files: {sorted(wanted-records)}; extra files: {sorted(records-wanted)}')
     missing, extra = expected - actual, actual - expected
     affected_files = {key[0] for key in list(missing) + list(extra)}
     rows = []
@@ -164,7 +182,8 @@ def compare_outputs(output, metadata, project, files, raw, rust_stdout, version,
                'dartr':sum(actual.values()),'matched':sum((expected & actual).values()),
                'missing':sum(missing.values()),'extra':sum(extra.values()),
                'exact_files':sum(relative(path) not in affected_files for path in files),
-               'seconds':round(time.monotonic()-started, 2),'per_rule':rows}
+               'seconds':round(time.monotonic()-started, 2),
+               'resolver_panics':panics,'unresolved_parts':unresolved_parts,'analysis_errors':errors,'per_rule':rows}
     (output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
     (output / 'diffs.json').write_text(json.dumps({'missing':[{'diagnostic':key,'count':count} for key,count in missing.items()],
                                                 'extra':[{'diagnostic':key,'count':count} for key,count in extra.items()]}, indent=2) + '\n')
