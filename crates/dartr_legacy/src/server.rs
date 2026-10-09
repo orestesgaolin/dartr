@@ -19,7 +19,7 @@ use indexmap::{IndexMap, IndexSet};
 use serde_json::{Value, json};
 
 use crate::protocol;
-use crate::transport::Channel;
+use crate::transport::{Channel, LineReader};
 
 /// The supported subset of the pinned spec. Notifications are not requests.
 pub const IMPLEMENTED_REQUESTS: &[&str] = &[
@@ -145,7 +145,7 @@ struct Server<W: Write> {
 }
 
 /// Runs line-delimited JSON until shutdown or input closure.
-pub fn run<R: BufRead, W: Write>(options: ServerOptions, mut input: R, channel: Channel<W>) -> i32 {
+pub fn run<R: BufRead, W: Write>(options: ServerOptions, input: R, channel: Channel<W>) -> i32 {
     let mut server = Server {
         channel,
         options,
@@ -171,17 +171,16 @@ pub fn run<R: BufRead, W: Write>(options: ServerOptions, mut input: R, channel: 
     {
         return 1;
     }
-    let mut line = String::new();
+    let mut input = LineReader::new(input);
     loop {
-        line.clear();
-        match input.read_line(&mut line) {
-            Ok(0) => return 0,
+        let line = match input.next_line() {
+            Ok(None) => return 0,
             Err(error) => {
                 eprintln!("dartr: {error}");
                 return 1;
             }
-            Ok(_) => {}
-        }
+            Ok(Some(line)) => line,
+        };
         server.channel.log_incoming(&line);
         let message = serde_json::from_str::<Value>(&line);
         let message = match message {
@@ -774,10 +773,10 @@ impl OverlayChange {
                 value,
             )),
         }?;
-        if type_ != "remove" {
-            if let Some(version) = value.get("version") {
-                integer(version, &format!("{path}.version"))?;
-            }
+        if type_ != "remove"
+            && let Some(version) = value.get("version")
+        {
+            integer(version, &format!("{path}.version"))?;
         }
         Ok(change)
     }

@@ -101,3 +101,43 @@ fn legacy_aliases_recover_after_malformed_lines_and_keep_logs_off_stdout() {
         std::fs::remove_file(log).unwrap();
     }
 }
+
+#[test]
+fn line_splitter_accepts_lf_crlf_cr_and_unterminated_final_requests() {
+    for separator in ["\n", "\r\n", "\r"] {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_dartr"))
+            .arg("analysis-server")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut input = child.stdin.take().unwrap();
+        write!(
+            input,
+            "{}{}{}",
+            json!({"id":"version","method":"server.getVersion"}),
+            separator,
+            json!({"id":"shutdown","method":"server.shutdown"})
+        )
+        .unwrap();
+        drop(input);
+        let result = child.wait_with_output().unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let messages: Vec<Value> = String::from_utf8(result.stdout)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert_eq!(messages.len(), 3, "separator {separator:?}: {messages:?}");
+        assert_eq!(
+            messages[1],
+            json!({"id":"version","result":{"version":"1.40.1"}})
+        );
+        assert_eq!(messages[2], json!({"id":"shutdown"}));
+    }
+}
