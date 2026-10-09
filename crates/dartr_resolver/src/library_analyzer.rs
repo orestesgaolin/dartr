@@ -51,6 +51,10 @@ pub struct UnitInput {
     pub parsed: Arc<ParsedUnit>,
     /// The library fragment of the unit (linked).
     pub fragment: FId<LibraryFragment>,
+    /// The URI diagnostics of the directives of the unit (Dart
+    /// `_resolveDirectives`); the driver computes them from its file states
+    /// (`dartr_driver::directives`).
+    pub directive_diagnostics: Vec<Diagnostic>,
 }
 
 /// The inputs of [`analyze_library`].
@@ -187,9 +191,9 @@ fn filter_ignored_diagnostics(
     });
 }
 
-/// Dart `_resolveDirectives` (directive elements, URI diagnostics of
-/// imports, exports and parts). STUB (wave D): the directive elements are
-/// in the linked fragments; the URI diagnostics are not reported yet.
+/// Dart `_resolveDirectives`: the directive elements are in the linked
+/// fragments; the URI diagnostics come with the unit input
+/// ([`UnitInput::directive_diagnostics`]).
 fn resolve_directives(_input: &LibraryAnalysisInput<'_>, _unit: &UnitInput) {}
 
 /// Dart `_computeConstants`: evaluates the constants of all units
@@ -629,6 +633,8 @@ fn resolve_file(
     let mut tables = ResolutionTables::new();
     let mut rt = ResolverTables::new();
     let mut diagnostics: Vec<Diagnostic> = unit.parsed.diagnostics.clone();
+    // Dart `_resolveDirectives` runs before `_resolveFile`.
+    diagnostics.extend(unit.directive_diagnostics.iter().cloned());
     for &node in &unit.parsed.dot_shorthands {
         rt.dot_shorthand.insert(node, ());
     }
@@ -795,6 +801,8 @@ impl<'w> ExternalUnitCache<'w> {
             uri,
             parsed,
             fragment,
+            // Only the constants of this unit are read.
+            directive_diagnostics: Vec::new(),
         };
         let resolved = resolve_file(&input, &scopes, &features, &unit);
         if resolved.panic.is_some() {
