@@ -124,3 +124,22 @@ at each merge; the final process report is written from it.
   so it was a regression on the branch), and the differences were "blocked on the resolver" (the
   resolver was at parity). Per the operator's quality rule, Codex gets no new units. The branch is
   kept for a Claude agent to fix.
+
+## State at the end of 2026-10-09 (next session starts here)
+
+- **main** `eb3c0b8`+docs: resolver at parity (flutter_tools/analyzer-9.0.0: types 100%, elements
+  99.8%, element dump 100%); constants at parity on unseen corpora; 3,614 tests green; pushed.
+- **Not merged, ready for integration (first task next session):**
+  - `wd-errverifier` (D4–D7, 28 commits): all four ErrorVerifier sections and FfiVerifier;
+    tests/language ErrorVerifier codes 6,253/6,349 matched. It added `STUB (wd-errors)` files.
+  - `wd-errors` (D8–D12): all 41 `error/*` verifiers, `VerifierHost`, ignore filtering, TODO finder;
+    tests/language 64,335/67,152 matched, 36 dartr-only.
+  - Integration plan: merge `wd-errors` first, then `wd-errverifier`, replacing its stubs with the
+    real ports and implementing `VerifierHost` for `ErrorVerifier`; wire the verifier calls listed
+    in the D8–D12 report; re-measure flutter/visible-app (an unverified fix for a 376-diagnostic
+    false positive; 231 visible-app false positives from unresolved primary-constructor bodies);
+    full workspace tests before merge.
+- **Also open:** `dartr analyze` still uses the parse-only provider; the driver must implement
+  `DiagnosticsProvider` (milestone 2). `LibraryElement.load_library_function` is never set by the
+  linker. Primary-constructor bodies are not resolved. Lint batch A (`cx-lints-a`, Codex) needs a
+  Claude fix pass (52/83 rules differ); lint batch B not started.
