@@ -24,7 +24,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Analyzes Dart code like `dart analyze` (same options, output formats
-    /// and exit codes). Diagnostics: parse diagnostics only for now.
+    /// and exit codes), with the diagnostics of the analysis driver.
     Analyze {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
@@ -72,9 +72,22 @@ fn main() -> anyhow::Result<()> {
     if argv.first().map(String::as_str) == Some("analyze") {
         let stdout = std::io::stdout();
         let stderr = std::io::stderr();
+        // Hidden: `--dartr-parse-only` uses the parse-only provider (parse
+        // diagnostics, AST-only lints), for comparison with the driver.
+        let parse_only = argv.iter().any(|a| a == "--dartr-parse-only");
+        let args: Vec<String> = argv[1..]
+            .iter()
+            .filter(|a| *a != "--dartr-parse-only")
+            .cloned()
+            .collect();
+        let provider: &dyn dartr_cli::DiagnosticsProvider = if parse_only {
+            &dartr_cli::ParseOnlyProvider
+        } else {
+            &dartr_cli::DriverProvider
+        };
         let code = dartr_cli::run(
-            &argv[1..],
-            &dartr_cli::ParseOnlyProvider,
+            &args,
+            provider,
             dartr_cli::Terminal::detect(),
             &mut stdout.lock(),
             &mut stderr.lock(),

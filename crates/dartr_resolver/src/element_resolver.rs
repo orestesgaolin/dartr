@@ -167,11 +167,21 @@ pub fn visit_super_constructor_invocation(
     // not resolved to parameters. Not ported (it needs the ignored
     // undefined names of the library fragment).
     let argument_list = rv.ast[node].argument_list;
-    let enclosing_list = rv
-        .ast
-        .parent(node)
+    // Dart `node.parent.tryCast<ConstructorDeclarationImpl>()?.parameters ??
+    // node.parent.tryCast<PrimaryConstructorBodyImpl>()?.declaration
+    // ?.formalParameters`.
+    let parent = rv.ast.parent(node);
+    let enclosing_list = parent
         .and_then(|p| rv.ast.cast::<ConstructorDeclaration>(p))
-        .map(|c| rv.ast[c].parameters);
+        .map(|c| rv.ast[c].parameters)
+        .or_else(|| {
+            parent
+                .and_then(|p| rv.ast.cast::<dartr_ast::PrimaryConstructorBody>(p))
+                .and_then(|b| {
+                    crate::element_binding_visitor::primary_constructor_body_declaration(rv.ast, b)
+                })
+                .map(|d| rv.ast[d].formal_parameters)
+        });
     resolve_arguments_to_function(rv, argument_list, Some(element), enclosing_list);
 }
 

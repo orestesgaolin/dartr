@@ -16,8 +16,8 @@
 //!   referenced files in parallel waves (rayon). The set of files is the
 //!   same as in Dart after `discoverReferencedFiles`.
 //! - The parsed unit is kept (Dart parses the file again for linking).
-//! - There is no byte store and no incremental change support yet
-//!   (`changeFile`, `refresh` result).
+//! - There is no byte store. [`FileSystemState::change_file`] is Dart
+//!   `changeFile` + `refresh` for one file (design §4.2 v1).
 
 use std::sync::Arc;
 
@@ -70,7 +70,8 @@ pub struct FileConfig {
 }
 
 /// The language version and experiments of a file, by path and URI.
-pub type ConfigFor = Box<dyn Fn(&str, &str) -> FileConfig>;
+/// `Send + Sync`, so that a driver can move to the threads of a pool.
+pub type ConfigFor = Box<dyn Fn(&str, &str) -> FileConfig + Send + Sync>;
 
 /// A file to read and parse: id, path, whether it is `dart:core`, config,
 /// salt.
@@ -367,6 +368,55 @@ impl FileSystemState {
                 self.apply_refresh(id, data);
             }
         }
+    }
+
+    /// Dart `changeFile` + `FileState.refresh` for a known file: reads and
+    /// parses [file] again and updates its kind and directive states (new
+    /// referenced files are discovered). Returns whether the API of the file
+    /// changed (Dart: `apiSignature` differs, or the file was created or
+    /// deleted); `false` means only function bodies changed.
+    pub fn change_file(&mut self, file: FileId) -> bool {
+        if self.file(file).content.is_none() {
+            // Not read yet (pending): read it now.
+            self.discover();
+            return true;
+        }
+        let f = self.file(file);
+        let is_dart_core = &*f.uri_str == "dart:core";
+        let data = refresh_data(&f.path, is_dart_core, &f.config, &self.salt_for_unlinked);
+        let old = self.files[file.0 as usize]
+            .content
+            .take()
+            .expect("checked above");
+        let api_changed =
+            old.exists != data.exists || old.unlinked.api_signature != data.unlinked.api_signature;
+        // Undo the registrations of the old content (`_updateKind`,
+        // `referencingFiles`).
+        if let FileKind::Library { name: Some(name) } = &old.kind
+            && let Some(files) = self.library_name_to_files.get_mut(name)
+        {
+            files.retain(|&f| f != file);
+        }
+        let referenced: Vec<FileId> = old
+            .library_imports
+            .iter()
+            .map(|s| &s.uris.selected)
+            .chain(old.library_exports.iter().map(|s| &s.uris.selected))
+            .chain(old.part_includes.iter().map(|s| &s.uris.selected))
+            .chain(old.doc_library_imports.iter().map(|s| &s.uris.selected))
+            .filter_map(|u| match u {
+                DirectiveUri::WithFile { file, .. } => Some(*file),
+                _ => None,
+            })
+            .collect();
+        for target in referenced {
+            self.files[target.0 as usize]
+                .referencing_files
+                .shift_remove(&file);
+        }
+        self.apply_refresh(file, data);
+        self.discover();
+        api_changed
     }
 
     /// The second half of Dart `refresh`: `_updateKind` and the directive
@@ -809,12 +859,10 @@ struct RefreshData {
 /// has empty content and `exists = false`), parses it (`parseCode`) and
 /// computes the unlinked unit (`serializeAstUnlinked2`).
 fn refresh_data(path: &str, is_dart_core: bool, config: &FileConfig, salt: &[u32]) -> RefreshData {
-    let (content, exists) = match std::fs::read(path) {
-        Ok(bytes) => match String::from_utf8(bytes) {
-            Ok(text) => (text, true),
-            Err(_) => (String::new(), false),
-        },
-        Err(_) => (String::new(), false),
+    // Through the overlays of the language server (open documents).
+    let (content, exists) = match dartr_project::fs::read_string_strict(path) {
+        Some(text) => (text, true),
+        None => (String::new(), false),
     };
     let content = match content.strip_prefix('\u{feff}') {
         Some(rest) => rest.to_string(),

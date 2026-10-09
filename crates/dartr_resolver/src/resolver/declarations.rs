@@ -407,10 +407,68 @@ impl<'a> ResolverVisitor<'a> {
         self.set_this_type(None);
     }
 
-    /// Dart `visitPrimaryConstructorBody` (primary constructors, an
-    /// experiment). STUB.
+    /// Dart `visitPrimaryConstructorBody`.
     pub fn visit_primary_constructor_body(&mut self, node: Id<PrimaryConstructorBody>) {
-        let _ = node;
+        let primary_constructor_declaration =
+            crate::element_binding_visitor::primary_constructor_body_declaration(self.ast, node);
+        if primary_constructor_declaration.is_none() {
+            let this_keyword = self.ast[node].this_keyword;
+            let d = self.at_token(
+                dartr_diagnostics::diag::primary_constructor_body_without_declaration(),
+                this_keyword,
+            );
+            self.report(d);
+        }
+
+        // Dart `primaryConstructorDeclaration?.declaredFragment?.element`.
+        let element = primary_constructor_declaration
+            .and_then(|d| self.declared_element(d))
+            .and_then(|e| e.cast::<ExecutableElement>());
+        let return_type = element.map(|e| self.constructor_return_type(e));
+        let outer_function = self.enclosing_function;
+
+        self.enclosing_function = element;
+        self.setup_this_type();
+        self.check_unreachable_node(node);
+        let doc = self.ast[node].documentation_comment;
+        self.visit_opt(doc);
+        let metadata = self.ast[node].metadata;
+        self.visit_list(metadata);
+
+        // Dart: `flowAnalysis.bodyOrInitializer_enter` when the declaration
+        // is not null (then `element` is not null).
+        let formal_parameters = element.map(|e| self.formal_parameters_of(e));
+        if let Some(formal_parameters) = &formal_parameters {
+            {
+                let ast = &*self.ast;
+                self.flow_analysis.body_or_initializer_enter(
+                    ast,
+                    self.tables,
+                    node.raw(),
+                    Some(formal_parameters),
+                    None,
+                );
+            }
+            self.flow_analysis.executable_declaration_enter(
+                node.raw(),
+                Some(formal_parameters),
+                false,
+            );
+        }
+
+        let initializers = self.ast[node].initializers;
+        self.visit_list(initializers);
+        let body = self.ast[node].body;
+        let imposed = return_type.filter(|&t| !matches!(self.ctx.ty(t), TypeKind::Dynamic));
+        self.resolve_function_body(body, imposed);
+
+        if formal_parameters.is_some() {
+            self.flow_analysis
+                .executable_declaration_exit(body.raw(), false);
+            self.flow_analysis.body_or_initializer_exit();
+        }
+        self.enclosing_function = outer_function;
+        self.set_this_type(None);
     }
 
     pub fn visit_primary_constructor_declaration(
@@ -421,7 +479,7 @@ impl<'a> ResolverVisitor<'a> {
     }
 
     pub fn visit_primary_constructor_name(&mut self, node: Id<PrimaryConstructorName>) {
-        let _ = node;
+        self.visit_children(node);
     }
 
     // ------------------------------------------------------------ functions

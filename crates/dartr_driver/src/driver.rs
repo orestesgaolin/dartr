@@ -50,6 +50,16 @@ pub struct LinkState {
     pub registry: LinkedRegistry,
 }
 
+/// The result of [`Driver::change_file`].
+#[derive(Debug, Default)]
+pub struct FileChange {
+    /// Whether the API of the file changed (cycles were removed).
+    pub api_changed: bool,
+    /// The libraries to analyze again (defining units). After an API
+    /// change they must be linked first ([`Driver::link_libraries`]).
+    pub libraries: Vec<FileId>,
+}
+
 /// Dart `AnalysisDriver` (the linking part only).
 pub struct Driver {
     pub fs: FileSystemState,
@@ -149,6 +159,103 @@ impl Driver {
         for (i, result) in results.into_iter().enumerate() {
             self.cycles.insert(order[i], result.expect("cycle linked"));
         }
+    }
+
+    /// Dart `AnalysisDriver.changeFile` with the v1 invalidation of design
+    /// §4.2: reads [path] again. If only function bodies changed, every
+    /// linked cycle is kept and only the library of the file must be
+    /// analyzed again. If the API changed (declarations, directives, the
+    /// file was created or deleted), the cycles of the libraries that
+    /// contain or reference the file and all their transitive users are
+    /// removed (Dart `LibraryCycle.dispose` through `directUsers`); the
+    /// next [`Driver::link_libraries`] links them again, and unaffected
+    /// cycles are reused.
+    pub fn change_file(&mut self, path: &str) -> FileChange {
+        let Some(file) = self.fs.get_existing_from_path(path) else {
+            let file = self.fs.get_file_for_path(path);
+            self.fs.discover();
+            let libraries = self.fs.library_of(file).into_iter().collect();
+            return FileChange {
+                api_changed: true,
+                libraries,
+            };
+        };
+        let mut seeds: IndexSet<FileId> = IndexSet::new();
+        self.change_seeds(file, &mut seeds);
+        let api_changed = self.fs.change_file(file);
+        if !api_changed {
+            let libraries = self.fs.library_of(file).into_iter().collect();
+            return FileChange {
+                api_changed,
+                libraries,
+            };
+        }
+        self.change_seeds(file, &mut seeds);
+        // The cycles of the seeds and their transitive users. Cycles that
+        // were invalidated before stay in `graph.cycles` (ids are indices)
+        // but no library points to them any more; skip them.
+        let mut invalid: IndexSet<CycleId> = IndexSet::new();
+        let mut stack: Vec<CycleId> = seeds
+            .iter()
+            .filter_map(|l| self.graph.cycle_of_library.get(l).copied())
+            .collect();
+        while let Some(c) = stack.pop() {
+            if !self.is_live(c) || !invalid.insert(c) {
+                continue;
+            }
+            stack.extend(self.graph.cycle(c).direct_users.iter().copied());
+        }
+        let mut libraries: IndexSet<FileId> = IndexSet::new();
+        for &c in &invalid {
+            libraries.extend(self.graph.cycle(c).libraries.iter().copied());
+        }
+        for l in &libraries {
+            self.graph.cycle_of_library.shift_remove(l);
+        }
+        for c in &invalid {
+            self.cycles.shift_remove(c);
+        }
+        libraries.extend(seeds);
+        let libraries = libraries
+            .into_iter()
+            .filter(|&l| self.fs.file(l).content.is_some() && self.fs.file(l).kind().is_library())
+            .collect();
+        FileChange {
+            api_changed,
+            libraries,
+        }
+    }
+
+    /// The library of [file] (or the file) and the libraries of the files
+    /// that reference it.
+    fn change_seeds(&mut self, file: FileId, seeds: &mut IndexSet<FileId>) {
+        if let Some(l) = self.fs.library_of(file) {
+            seeds.insert(l);
+        }
+        if self.fs.file(file).kind().is_library() {
+            seeds.insert(file);
+        }
+        let referencing: Vec<FileId> = self
+            .fs
+            .file(file)
+            .referencing_files
+            .iter()
+            .copied()
+            .collect();
+        for r in referencing {
+            if let Some(l) = self.fs.library_of(r) {
+                seeds.insert(l);
+            }
+        }
+    }
+
+    /// Whether [cycle] is the current cycle of its libraries.
+    fn is_live(&self, cycle: CycleId) -> bool {
+        self.graph
+            .cycle(cycle)
+            .libraries
+            .first()
+            .is_some_and(|l| self.graph.cycle_of_library.get(l) == Some(&cycle))
     }
 
     /// The link input of a library file (Dart `LibraryFileKind` as

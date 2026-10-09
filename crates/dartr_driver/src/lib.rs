@@ -9,6 +9,7 @@ pub mod driver;
 pub mod file_state;
 pub mod library_graph;
 pub mod link_resolver;
+pub mod project;
 pub mod unlinked_data;
 pub mod uri;
 

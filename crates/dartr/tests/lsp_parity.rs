@@ -1136,3 +1136,152 @@ fn lsp_formatting_parity() {
     let failures = report("formatting", &dart, &dartr);
     assert_eq!(failures, 0, "LSP session differs from dart language-server");
 }
+
+/// Whether the analysis driver of dartr reports [code] before the error
+/// verifiers merge (see `PENDING_VERIFIER_CODES` in `analyze_parity.rs`).
+fn is_driver_code(code: &str) -> bool {
+    !matches!(
+        code,
+        "argument_type_not_assignable"
+            | "body_might_complete_normally"
+            | "invalid_assignment"
+            | "missing_required_argument"
+            | "non_abstract_class_inherits_abstract_member"
+            | "unused_local_variable"
+            | "unused_import"
+            | "unused_element"
+            | "dead_code"
+    )
+}
+
+fn write_driver_project() -> std::path::PathBuf {
+    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("lsp_driver");
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("lib")).unwrap();
+    std::fs::create_dir_all(root.join(".dart_tool")).unwrap();
+    let root = root.canonicalize().unwrap();
+    let write = |rel: &str, content: &str| std::fs::write(root.join(rel), content).unwrap();
+    write("pubspec.yaml", "name: p\nenvironment:\n  sdk: ^3.9.0\n");
+    write(
+        ".dart_tool/package_config.json",
+        "{\"configVersion\":2,\"packages\":[{\"name\":\"p\",\"rootUri\":\"../\",\"packageUri\":\"lib/\",\"languageVersion\":\"3.13\"}]}",
+    );
+    write("lib/a.dart", "class A {\n  int get x => 1;\n}\n");
+    write(
+        "lib/b.dart",
+        "import 'a.dart';\n\nObject f() => [A().x, A().y];\n",
+    );
+    write(
+        "lib/c.dart",
+        "import 'b.dart';\n\nObject g() => [f(), missing];\n",
+    );
+    root
+}
+
+/// Initial analysis, then edits that the driver handles incrementally
+/// (design §4.2): a body-only change (only that library is analyzed again)
+/// and API changes (the cycle and its users are linked again).
+fn run_driver_session(mut c: LspClient, root: &Path) -> (Transcript, i32) {
+    let root_uri = format!("{}/", file_uri(root));
+    let uri = |rel: &str| format!("{root_uri}{rel}");
+    let read = |rel: &str| std::fs::read_to_string(root.join(rel)).unwrap();
+    let snap = |c: &LspClient| snapshot_where(c, &root_uri, is_driver_code);
+    let change = |c: &mut LspClient, rel: &str, version: i64, text: &str| {
+        c.notify(
+            "textDocument/didChange",
+            json!({"textDocument": {"uri": uri(rel), "version": version}, "contentChanges": [{"text": text}]}),
+        );
+        c.settle(true);
+    };
+    let mut t: Transcript = Vec::new();
+    let init = c.request("initialize", dart_code_initialize_params(root));
+    assert!(init["result"]["capabilities"].is_object(), "{init}");
+    c.notify("initialized", json!({}));
+    c.settle(true);
+    t.push(("initial analysis".into(), snap(&c)));
+
+    for rel in ["lib/a.dart", "lib/b.dart"] {
+        c.notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {"uri": uri(rel), "languageId": "dart", "version": 1, "text": read(rel)}}),
+        );
+    }
+    c.settle(true);
+    t.push(("open a and b".into(), snap(&c)));
+
+    // Body only: the API of b does not change.
+    change(
+        &mut c,
+        "lib/b.dart",
+        2,
+        "import 'a.dart';\n\nObject f() => [A().x, A().y, undefinedInBody];\n",
+    );
+    t.push(("body change in b".into(), snap(&c)));
+
+    // API change of a: the getter `y` exists now; b is linked and analyzed
+    // again.
+    change(
+        &mut c,
+        "lib/a.dart",
+        2,
+        "class A {\n  int get x => 1;\n  int get y => 2;\n}\n",
+    );
+    t.push(("add getter y to a".into(), snap(&c)));
+
+    // Body change of a: an error in a only.
+    change(
+        &mut c,
+        "lib/a.dart",
+        3,
+        "class A {\n  int get x => 1;\n  int get y => nope;\n}\n",
+    );
+    t.push(("body change in a".into(), snap(&c)));
+
+    // API change of b: `f` is removed; c, a user of b, reports it.
+    change(
+        &mut c,
+        "lib/b.dart",
+        3,
+        "import 'a.dart';\n\nint h() => A().x;\n",
+    );
+    t.push(("remove f from b".into(), snap(&c)));
+
+    // Close: the content on disk is used again.
+    c.notify("textDocument/didClose", doc(&uri("lib/a.dart")));
+    c.notify("textDocument/didClose", doc(&uri("lib/b.dart")));
+    c.settle(true);
+    t.push(("close a and b".into(), snap(&c)));
+    let (response, code) = c.shutdown_and_exit();
+    t.push(("shutdown".into(), response));
+    (t, code)
+}
+
+#[test]
+fn lsp_driver_diagnostics_and_invalidation() {
+    if !dart_available() {
+        eprintln!("skipped: `dart` is not on PATH");
+        return;
+    }
+    let root = write_driver_project();
+    let mut args = vec!["language-server", "--protocol=lsp"];
+    args.extend(session_args());
+    let (dart, dart_code) = run_driver_session(LspClient::spawn("dart", &args, &[]), &root);
+    let (dartr, dartr_code) = run_driver_session(LspClient::spawn(dartr_bin(), &args, &[]), &root);
+    assert_eq!(dart_code, 0);
+    assert_eq!(dartr_code, 0);
+    // The comparison is not empty: every edit step has semantic diagnostics.
+    for (name, value) in &dart {
+        if name == "shutdown" {
+            continue;
+        }
+        let count: usize = value["diagnostics"]
+            .as_object()
+            .unwrap()
+            .values()
+            .map(|l| l.as_array().unwrap().len())
+            .sum();
+        assert!(count >= 1, "expected diagnostics in step {name}: {value}");
+    }
+    let failures = report("driver diagnostics and invalidation", &dart, &dartr);
+    assert_eq!(failures, 0, "LSP session differs from dart language-server");
+}
