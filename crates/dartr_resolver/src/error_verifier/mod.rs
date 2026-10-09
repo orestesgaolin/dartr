@@ -363,8 +363,13 @@ impl<'a> ErrorVerifier<'a> {
         self.tables.static_type.get(node).copied()
     }
 
-    /// Dart `node.element`.
+    /// Dart `node.element` (`PrefixedIdentifier.element` is the element of
+    /// its identifier).
     pub fn element(&self, node: impl Into<NodeId>) -> Option<dartr_element::ElemRef> {
+        let node = node.into();
+        if let Some(prefixed) = self.ast.cast::<dartr_ast::PrefixedIdentifier>(node) {
+            return self.tables.element.get(self.ast[prefixed].identifier).copied();
+        }
         self.tables.element.get(node).copied()
     }
 
