@@ -79,6 +79,7 @@ pub mod variable_declaration_resolver;
 
 // Stubs: one module per Dart resolver file, filled by units C3–C9.
 pub mod annotation_resolver;
+pub mod element_metadata;
 pub mod applicable_extensions;
 pub mod assignment_expression_resolver;
 pub mod binary_expression_resolver;
