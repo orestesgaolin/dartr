@@ -165,6 +165,24 @@ impl<'a> FlowAnalysisHelper<'a> {
         info
     }
 
+    /// Dart `flow?.postIncDec(node, variable, writtenType)`, with
+    /// [`FlowTypes::is_expression`] answered for [node] (see [`Self::write`]).
+    pub fn post_inc_dec(
+        &mut self,
+        ast: &Ast,
+        node: NodeId,
+        variable: EId<PromotableElement>,
+        written_type: TypeId,
+    ) {
+        let is_expression = crate::generated::dispatch::is_expression_kind(ast.kind(node));
+        let Some(flow) = self.flow.as_mut() else {
+            return;
+        };
+        WRITE_EXPRESSION.with(|c| c.set(if is_expression { Some(node) } else { None }));
+        flow.post_inc_dec(node, variable, SharedTypeView::new(written_type));
+        WRITE_EXPRESSION.with(|c| c.set(None));
+    }
+
     /// Dart `asExpression`.
     pub fn as_expression(&mut self, ast: &Ast, tables: &ResolutionTables, node: Id<AsExpression>) {
         if self.flow.is_none() {

@@ -124,12 +124,25 @@ pub struct ElementData {
 
 impl ElementData {
     pub fn new(name: Option<Name>, first_fragment: FragmentId) -> ElementData {
+        let flags = ElementFlagCell::default();
+        // Dart `ExecutableElementImpl()` / `FieldElementImpl()`:
+        // `hasEnclosingTypeParameterReference` is conservative (`true`) until
+        // the linker computes it (`enclosing_type_parameters_flag.dart`).
+        // The bits are only read for executables and fields.
+        flags.set(
+            crate::ElementFlags::EXECUTABLE_ELEMENT_HAS_ENCLOSING_TYPE_PARAMETER_REFERENCE,
+            true,
+        );
+        flags.set(
+            crate::ElementFlags::FIELD_ELEMENT_HAS_ENCLOSING_TYPE_PARAMETER_REFERENCE,
+            true,
+        );
         ElementData {
             name,
             library: None,
             enclosing: None,
             first_fragment,
-            flags: ElementFlagCell::default(),
+            flags,
             previous_fragment_of_different_kind: None,
         }
     }
