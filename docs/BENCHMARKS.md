@@ -42,3 +42,20 @@ Note: `bench/setup_corpus.sh` runs `flutter pub get` in `packages/hrv` of visibl
 Flutter then adds `analyzer: exclude: [build/**]` to that package's `analysis_options.yaml`.
 The corpus therefore differs from the commit in this one file. It is reproducible and the
 same for `dart analyze` and `dartr analyze`.
+
+## Baseline on an idle machine (2026-10-09 08:31–08:39)
+
+Load average before the run: 2.75. One other process used one core (a hung `dartr` run of the
+resolver agent, 1 of 15 cores); no agent was working. `hyperfine -i -w 1 -r 3`, isolated
+`--cache` directory deleted before each run. Line counts are all Dart files of the analyzed tree
+except `.dart_tool` (the provisional table above counted `lib/` only for the first three).
+
+| corpus | Dart lines | mean | σ |
+|---|---|---|---|
+| flutter (packages/flutter) | 1,309,663 | 19.631 s | 0.243 s |
+| flutter_tools | 455,099 | 7.554 s | 0.172 s |
+| analyzer-9.0.0 (pub) | 909,249 | 7.119 s | 0.150 s |
+| visible-app @ 005d4cfad | 1,559,637 | 72.791 s | 0.211 s |
+
+These replace the provisional numbers as the baseline for comparisons. Raw log:
+`bench/results/baseline-idle.log` (not committed; results are git-ignored).
