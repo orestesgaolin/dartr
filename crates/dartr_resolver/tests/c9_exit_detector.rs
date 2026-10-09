@@ -3,9 +3,9 @@
 mod support;
 
 use dartr_ast::NodeKind;
-use dartr_element::ElemRef;
+use dartr_element::Tag;
 
-use support::{Analyzed, analyze};
+use support::{analyze, Analyzed};
 
 fn run(source: &str) -> Option<Analyzed> {
     let analyzed = analyze(&[("main.dart", source)]);
@@ -82,22 +82,28 @@ void eagerArgument() {
   print(throw 0);
 }
 "#;
-    let Some(mut analyzed) = run(source) else {
+    let Some(analyzed) = run(source) else {
         return;
     };
 
-    // Method-invocation resolution belongs to C3 and is still a stub in this
-    // worktree. Supply the result that its final implementation records, so
-    // this test exercises ExitDetector's resolved executable check.
-    let declaration = analyzed.node_at(NodeKind::FunctionDeclaration, "Never abort", 0, 0);
-    let abort = analyzed
-        .declared_element(declaration)
-        .expect("abort element");
     let method_name = analyzed.node_at(NodeKind::SimpleIdentifier, "abort();", 0, 0);
-    analyzed.library.units[0]
+    let abort_reference = *analyzed
+        .unit()
         .tables
         .element
-        .insert(method_name, ElemRef::Base(abort));
+        .get(method_name)
+        .expect("resolved abort invocation");
+    assert_eq!(
+        analyzed
+            .element_of(method_name)
+            .expect("abort executable")
+            .tag(),
+        Tag::TopLevelFunction
+    );
+    assert_eq!(
+        dartr_typesystem::member::return_type(&analyzed.ctx(analyzed.unit()), abort_reference,),
+        dartr_element::TypeId::NEVER
+    );
 
     let never_call = analyzed.node_at(NodeKind::ExpressionStatement, "abort();", 0, 0);
     assert!(exits_resolved(&analyzed, never_call));
