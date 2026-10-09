@@ -7,12 +7,14 @@ use dartr_ast::{
     TypeAnnotation,
 };
 use dartr_diagnostics::diag;
+use dartr_element::diagnostics::type_arg;
 use dartr_element::{
     EId, ElemRef, ElementId, FormalParameterElement, FragmentFlags, InterfaceElement, Nullability,
     ParameterKind, PrefixElement, PropertyAccessorElement, Tag, TypeAliasElement, TypeId, TypeKind,
     TypeParameterElement, VariableElement,
 };
 use dartr_typesystem::generic_inferrer::{GenericInferrer, InferenceErrorEntity, InferenceFlags};
+use dartr_typesystem::type_algebra::MapSubstitution;
 use dartr_typesystem::{TypeExt, lookup, member};
 
 use crate::ast_ext::identifier_name;
@@ -440,18 +442,18 @@ fn explicit_annotation_type_arguments(
             rv.report(diagnostic);
             return Some(vec![TypeId::DYNAMIC; type_parameters.len()]);
         }
-        return Some(
-            argument_nodes
-                .iter()
-                .map(|argument| {
-                    rv.tables
-                        .annotation_type
-                        .get(*argument)
-                        .copied()
-                        .unwrap_or(TypeId::DYNAMIC)
-                })
-                .collect(),
-        );
+        let type_arguments: Vec<TypeId> = argument_nodes
+            .iter()
+            .map(|argument| {
+                rv.tables
+                    .annotation_type
+                    .get(*argument)
+                    .copied()
+                    .unwrap_or(TypeId::DYNAMIC)
+            })
+            .collect();
+        check_type_arguments_matching_bounds(rv, &argument_nodes, type_parameters, &type_arguments);
+        return Some(type_arguments);
     }
 
     if !rv.generic_metadata_is_enabled() {
@@ -459,6 +461,38 @@ fn explicit_annotation_type_arguments(
     }
 
     None
+}
+
+fn check_type_arguments_matching_bounds(
+    rv: &mut ResolverVisitor<'_>,
+    argument_nodes: &[Id<TypeAnnotation>],
+    type_parameters: &[EId<TypeParameterElement>],
+    type_arguments: &[TypeId],
+) {
+    let substitution = MapSubstitution::from_pairs(type_parameters, type_arguments);
+    for ((&node, &parameter), &argument) in argument_nodes
+        .iter()
+        .zip(type_parameters)
+        .zip(type_arguments)
+    {
+        let Some(bound) = rv.ctx.type_parameter_bound(parameter) else {
+            continue;
+        };
+        let bound = substitution.substitute_type(&rv.ctx, bound);
+        if rv.type_system.is_subtype_of(argument, bound) {
+            continue;
+        }
+        let Some(parameter_name) = rv.ctx.element_name(parameter.raw()) else {
+            continue;
+        };
+        let diagnostic = diag::type_argument_not_matching_bounds(
+            type_arg(&rv.ctx, argument),
+            parameter_name,
+            type_arg(&rv.ctx, bound),
+        );
+        let diagnostic = rv.at(diagnostic, node);
+        rv.report(diagnostic);
+    }
 }
 
 fn infer_annotation_type_arguments(

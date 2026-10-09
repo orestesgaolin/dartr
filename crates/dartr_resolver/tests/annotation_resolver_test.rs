@@ -247,6 +247,30 @@ void f() {}
 }
 
 #[test]
+fn explicit_type_argument_must_match_bound() {
+    let source = r#"
+class A<T extends num> {
+  final T value;
+  const A(this.value);
+}
+
+@A<String>('value')
+void f() {}
+"#;
+    let Some(a) = run(&[("main.dart", source)]) else {
+        return;
+    };
+
+    assert!(
+        a.diagnostic_names()
+            .iter()
+            .any(|name| name.starts_with("type_argument_not_matching_bounds@")),
+        "{:?}",
+        a.diagnostic_names()
+    );
+}
+
+#[test]
 fn invalid_and_undefined_annotations_report_at_annotation() {
     let source = r#"
 var mutable = 0;
