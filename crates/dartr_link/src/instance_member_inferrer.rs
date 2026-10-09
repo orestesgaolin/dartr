@@ -15,10 +15,9 @@
 //! [`crate::link::link_cycle`] removes them before the store is frozen
 //! (Dart: the linker has its own `InheritanceManager3`).
 //!
-//! The type of a field or top-level variable with an initializer comes from
-//! the initializer (Dart `_PropertyInducingElementTypeInference`, unit C10:
-//! needs the resolver). [`infer_variable_without_initializer`] is the part
-//! of it that does not resolve an expression.
+//! The types of fields and top-level variables that come from their
+//! initializers are inferred on demand when this inferrer reads them
+//! ([`crate::top_level_inference`]).
 
 use dartr_ast::*;
 use dartr_element::*;
@@ -30,7 +29,6 @@ use indexmap::IndexSet;
 
 use crate::dump::{has_implicit_return_type, has_implicit_type, is_final, is_origin_getter_setter, is_origin_variable, is_static};
 use crate::link::Linker;
-use crate::types::unit_ast;
 use crate::types_builder::{set_return_type, set_variable_type};
 
 /// Dart `TopLevelInference._performOverrideInference`: the interface
@@ -46,7 +44,6 @@ pub fn perform(lk: &Linker<'_>, ctx: &Ctx<'_>) {
         elements.extend(l.mixins.iter().map(|e| e.upcast()));
     }
     let mut inferrer = InstanceMemberInferrer {
-        lk,
         ctx,
         inheritance: InheritanceManager3::new(*ctx),
         interfaces_to_infer: IndexSet::new(),
@@ -56,26 +53,10 @@ pub fn perform(lk: &Linker<'_>, ctx: &Ctx<'_>) {
     for &element in &elements {
         inferrer.infer_class(element);
     }
-
-    // _InitializerInference.perform for the fields of extensions and the
-    // top-level variables (the fields of interface elements are done at the
-    // end of `_inferClass`, see there).
-    for b in &lk.builders {
-        let l = ctx.get(b.element);
-        for &e in &l.extensions {
-            for &f in &ctx.instance(e.upcast()).fields {
-                infer_variable_without_initializer(lk, ctx, f.upcast());
-            }
-        }
-        for &v in &l.top_level_variables {
-            infer_variable_without_initializer(lk, ctx, v.upcast());
-        }
-    }
 }
 
 /// Dart `InstanceMemberInferrer`.
-struct InstanceMemberInferrer<'l, 'c, 'a> {
-    lk: &'l Linker<'l>,
+struct InstanceMemberInferrer<'c, 'a> {
     ctx: &'c Ctx<'a>,
     inheritance: InheritanceManager3<'a>,
     interfaces_to_infer: IndexSet<EId<InterfaceElement>>,
@@ -179,7 +160,7 @@ enum Accessor {
     Field(EId<FieldElement>),
 }
 
-impl<'a> InstanceMemberInferrer<'_, '_, 'a> {
+impl<'a> InstanceMemberInferrer<'_, 'a> {
     fn current(&self) -> EId<InterfaceElement> {
         self.current.expect("currentInterfaceElement")
     }
@@ -379,13 +360,6 @@ impl<'a> InstanceMemberInferrer<'_, '_, 'a> {
             self.infer_executable(method);
         }
 
-        // _InitializerInference: a field without a type and without an
-        // initializer is `dynamic` (Dart infers it on the first read of its
-        // type; the subtypes of this class read it after this point).
-        for &field in &i.fields {
-            infer_variable_without_initializer(self.lk, ctx, field.upcast());
-        }
-
         // Infer initializing formal parameter types. This must happen after
         // field types are inferred.
         for &constructor in &i.constructors {
@@ -407,7 +381,8 @@ impl<'a> InstanceMemberInferrer<'_, '_, 'a> {
                 Tag::FieldFormalParameter if pe.first_fragment().raw().tag() == Tag::FieldFormalParameter => {
                     if let Some(field) = pe.field.get() {
                         // Dart reads `field.type`, which infers it from the
-                        // initializer when needed (unit C10).
+                        // initializer when needed.
+                        dartr_element::type_inference::ensure_property_type(ctx, field.upcast());
                         if let Some(t) = ctx.get(field).type_.get() {
                             pe.type_.set(Some(t));
                             changed = true;
@@ -660,61 +635,5 @@ impl<'a> InstanceMemberInferrer<'_, '_, 'a> {
             return Some(overridden_type);
         }
         Some(replace_type_parameters(ctx, overridden_type, element_type_parameters))
-    }
-}
-
-/// The part of Dart `_PropertyInducingElementTypeInference.perform` that
-/// does not resolve an initializer: a field or top-level variable with an
-/// implicit type and no type yet gets `dynamic` when no fragment has an
-/// initializer, and `Object?` for a declaring formal parameter without a
-/// default value (not function-typed). A variable with an initializer keeps
-/// no type (unit C10).
-pub fn infer_variable_without_initializer(lk: &Linker<'_>, ctx: &Ctx<'_>, element: EId<PropertyInducingElement>) {
-    if is_origin_getter_setter(ctx, element.raw()) || !has_implicit_type(ctx, element.raw()) {
-        return;
-    }
-    if ctx.property_inducing(element).type_.get().is_some() {
-        return;
-    }
-    let mut has_initializer = false;
-    let mut object_question = false;
-    for fragment in crate::dump::fragments(ctx, element.raw()) {
-        // Enum constants and `values` have a synthetic initializer in Dart
-        // (a `VariableDeclaration` that the port does not build).
-        let Some(&(lib, unit, node)) = lk.core.fragment_nodes.get(&fragment) else {
-            has_initializer = true;
-            continue;
-        };
-        let ast = unit_ast(lk, lib as u32, unit as u32);
-        if let Some(v) = ast.cast::<VariableDeclaration>(node) {
-            if ast.get(v).initializer.is_some() {
-                has_initializer = true;
-            }
-        } else if let Some(p) = ast.cast::<RegularFormalParameter>(node) {
-            let p = ast.get(p);
-            if p.default_clause.is_some() {
-                has_initializer = true;
-            } else if p.function_typed_suffix.is_none() {
-                object_question = true;
-                break;
-            }
-        } else if let Some(p) = ast.cast::<FieldFormalParameter>(node) {
-            if ast.get(p).default_clause.is_some() {
-                has_initializer = true;
-            }
-        } else if let Some(p) = ast.cast::<SuperFormalParameter>(node) {
-            if ast.get(p).default_clause.is_some() {
-                has_initializer = true;
-            }
-        } else {
-            has_initializer = true;
-        }
-    }
-    if object_question {
-        set_variable_type(ctx, element, TypeSystem::new(*ctx).object_question());
-        return;
-    }
-    if !has_initializer {
-        set_variable_type(ctx, element, TypeId::DYNAMIC);
     }
 }

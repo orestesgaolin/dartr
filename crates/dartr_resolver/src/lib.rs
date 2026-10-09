@@ -57,6 +57,7 @@ pub mod ast_rewrite;
 pub mod element_binding_visitor;
 pub mod element_ext;
 pub mod element_walker;
+pub mod ast_resolver;
 pub mod named_type_resolver;
 pub mod record_type_annotation_resolver;
 pub mod resolution_visitor;
