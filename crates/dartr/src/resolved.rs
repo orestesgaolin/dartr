@@ -27,7 +27,7 @@ use dartr_link::dump::{
     compare_utf16, element_name, error_json, first_fragment, fragment_offset, ref_,
 };
 use dartr_resolver::library_analyzer::{
-    LibraryAnalysisInput, ResolvedUnit, UnitInput, analyze_library,
+    ExternalUnitCache, LibraryAnalysisInput, ResolvedUnit, UnitInput, analyze_library,
 };
 use dartr_resolver::options::AnalysisOptions;
 use dartr_syntax::severity_lower_name;
@@ -75,6 +75,14 @@ pub fn dump_resolved_all(inputs: &[String], mode: ResolvedMode) -> Vec<String> {
         .map(|w| dartr_link::types_builder::world_type_provider(w))
         .collect();
 
+    let sources: Vec<_> = linked.drivers.iter().map(|d| d.unit_sources()).collect();
+    let caches: Vec<ExternalUnitCache<'_>> = worlds
+        .iter()
+        .zip(&tps)
+        .zip(sources)
+        .map(|((w, tp), s)| ExternalUnitCache::new(w, tp, AnalysisOptions::default(), s))
+        .collect();
+
     let start = std::time::Instant::now();
     let lines = inputs
         .par_iter()
@@ -94,6 +102,7 @@ pub fn dump_resolved_all(inputs: &[String], mode: ResolvedMode) -> Vec<String> {
                     library: *library,
                     units: units.clone(),
                     options: *options,
+                    external: Some(&caches[*driver]),
                 };
                 match catch_unwind(AssertUnwindSafe(|| analyze_library(&input))) {
                     Ok(result) => {

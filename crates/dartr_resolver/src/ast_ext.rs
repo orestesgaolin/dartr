@@ -409,6 +409,28 @@ pub fn instance_creation_is_const(ast: &Ast, node: Id<InstanceCreationExpression
     }
 }
 
+/// Dart `TypedLiteralImpl.isConst` of a `ListLiteral` or `SetOrMapLiteral`
+/// [node]: `constKeyword != null || inConstantContext`.
+pub fn typed_literal_is_const(ast: &Ast, node: NodeId) -> bool {
+    let const_keyword = if let Some(list) = ast.cast::<ListLiteral>(node) {
+        ast[list].const_keyword
+    } else if let Some(set_or_map) = ast.cast::<SetOrMapLiteral>(node) {
+        ast[set_or_map].const_keyword
+    } else {
+        None
+    };
+    const_keyword.is_some() || in_constant_context(ast, node)
+}
+
+/// Dart `DotShorthandConstructorInvocationImpl.isConst`:
+/// `constKeyword?.keyword == Keyword.CONST || inConstantContext`.
+pub fn dot_shorthand_constructor_invocation_is_const(
+    ast: &Ast,
+    node: Id<DotShorthandConstructorInvocation>,
+) -> bool {
+    is_keyword(ast, ast[node].const_keyword, "const") || in_constant_context(ast, node.raw())
+}
+
 /// Dart `ExpressionImpl.inConstantContext`
 /// (`constantContext(includeSelf: false) != null`).
 pub fn in_constant_context(ast: &Ast, node: NodeId) -> bool {

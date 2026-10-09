@@ -817,4 +817,12 @@ impl<V> NodeMap<V> {
         let i = id.into().index();
         self.values.get_mut(i).and_then(|v| v.take())
     }
+
+    /// The entries in node order.
+    pub fn iter(&self) -> impl Iterator<Item = (NodeId, &V)> {
+        self.values
+            .iter()
+            .enumerate()
+            .filter_map(|(i, v)| v.as_ref().map(|v| (NodeId::from_index(i), v)))
+    }
 }
