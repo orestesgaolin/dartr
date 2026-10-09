@@ -19,6 +19,7 @@ dartr_link.workspace = true
 dartr_typesystem.workspace = true
 dartr_project.workspace = true
 dartr_cli.workspace = true
+dartr_format.workspace = true
 indexmap.workspace = true
 
 [dev-dependencies]

@@ -11,18 +11,25 @@
 //! - [`short`]: the "short" style (language versions before 3.7): chunks,
 //!   rules and the line splitter.
 //! - [`testing`]: the `.unit` / `.stmt` test file format of dart_style.
+//! - [`cli`], [`io`], [`config_cache`], [`analysis_options`]: the `format`
+//!   command (`dart format`): options, file walk, language version and
+//!   formatter options lookup, output.
 //!
 //! Offsets (selections, error offsets) are UTF-16 code units like Dart, and
 //! line widths are measured in UTF-16 code units ([`text::utf16_len`]).
 
+pub mod analysis_options;
 pub mod ast_extensions;
 pub mod back_end;
+pub mod cli;
 pub mod comment_type;
+pub mod config_cache;
 pub mod constants;
 pub mod dart_formatter;
 pub mod dart_version_history;
 pub mod exceptions;
 pub mod front_end;
+pub mod io;
 pub mod piece;
 pub mod short;
 pub mod source_code;

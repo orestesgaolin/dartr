@@ -31,15 +31,12 @@ dart-code dynamic textDocument/definition [dart]
 dart-code dynamic textDocument/documentColor [dart]
 dart-code dynamic textDocument/documentHighlight [dart]
 dart-code dynamic textDocument/documentLink [dart,**/pubspec.yaml,**/analysis_options.yaml]
-dart-code dynamic textDocument/formatting [dart]
 dart-code dynamic textDocument/hover [dart]
 dart-code dynamic textDocument/implementation [dart]
 dart-code dynamic textDocument/inlayHint [dart]
 dart-code dynamic textDocument/inlineValue [dart]
-dart-code dynamic textDocument/onTypeFormatting [dart]
 dart-code dynamic textDocument/prepareCallHierarchy [dart]
 dart-code dynamic textDocument/prepareTypeHierarchy [dart]
-dart-code dynamic textDocument/rangeFormatting [dart]
 dart-code dynamic textDocument/references [dart]
 dart-code dynamic textDocument/rename [dart]
 dart-code dynamic textDocument/semanticTokens [dart]
@@ -72,12 +69,8 @@ static static completionProvider.completionItem.labelDetailsSupport
 static static completionProvider.resolveProvider
 static static completionProvider.triggerCharacters
 static static definitionProvider
-static static documentFormattingProvider
 static static documentHighlightProvider
 static static documentLinkProvider.resolveProvider
-static static documentOnTypeFormattingProvider.firstTriggerCharacter
-static static documentOnTypeFormattingProvider.moreTriggerCharacter
-static static documentRangeFormattingProvider
 static static executeCommandProvider.workDoneProgress
 static static experimental.interactiveResolveProvider.kinds
 static static experimental.textDocument.augmentation

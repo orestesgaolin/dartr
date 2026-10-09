@@ -1,0 +1,189 @@
+{
+ "edits": [
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 13,
+     "line": 1
+    },
+    "start": {
+     "character": 13,
+     "line": 1
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 19,
+     "line": 1
+    },
+    "start": {
+     "character": 19,
+     "line": 1
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 25,
+     "line": 1
+    },
+    "start": {
+     "character": 25,
+     "line": 1
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 26,
+     "line": 1
+    },
+    "start": {
+     "character": 26,
+     "line": 1
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 29,
+     "line": 1
+    },
+    "start": {
+     "character": 29,
+     "line": 1
+    }
+   }
+  },
+  {
+   "newText": "\n  ",
+   "range": {
+    "end": {
+     "character": 30,
+     "line": 1
+    },
+    "start": {
+     "character": 30,
+     "line": 1
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 38,
+     "line": 1
+    },
+    "start": {
+     "character": 38,
+     "line": 1
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 39,
+     "line": 1
+    },
+    "start": {
+     "character": 39,
+     "line": 1
+    }
+   }
+  },
+  {
+   "newText": "\n    ",
+   "range": {
+    "end": {
+     "character": 40,
+     "line": 1
+    },
+    "start": {
+     "character": 40,
+     "line": 1
+    }
+   }
+  },
+  {
+   "newText": "\n    ",
+   "range": {
+    "end": {
+     "character": 42,
+     "line": 1
+    },
+    "start": {
+     "character": 42,
+     "line": 1
+    }
+   }
+  },
+  {
+   "newText": "\n    ",
+   "range": {
+    "end": {
+     "character": 44,
+     "line": 1
+    },
+    "start": {
+     "character": 44,
+     "line": 1
+    }
+   }
+  },
+  {
+   "newText": "\n  ",
+   "range": {
+    "end": {
+     "character": 46,
+     "line": 1
+    },
+    "start": {
+     "character": 46,
+     "line": 1
+    }
+   }
+  },
+  {
+   "newText": "\n  ",
+   "range": {
+    "end": {
+     "character": 48,
+     "line": 1
+    },
+    "start": {
+     "character": 48,
+     "line": 1
+    }
+   }
+  },
+  {
+   "newText": "\n",
+   "range": {
+    "end": {
+     "character": 60,
+     "line": 1
+    },
+    "start": {
+     "character": 60,
+     "line": 1
+    }
+   }
+  }
+ ],
+ "file": "lib/short_style.dart",
+ "formatted": "// @dart = 3.6\nvoid f(int a, int b, {int c = 1}) {\n  var list = [\n    a,\n    b,\n    c,\n  ];\n  print(list);\n}\n",
+ "unformatted": "// @dart = 3.6\nvoid f(int a,int b,{int c=1}){var list=[a,b,c,];print(list);}\n"
+}
