@@ -175,6 +175,7 @@ void f() {
   const marker = 1;
   @marker
   var value = 0;
+  value;
 }
 "#;
     let Some(a) = run(&[("main.dart", source)]) else {

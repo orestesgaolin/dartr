@@ -633,9 +633,11 @@ void f(Box<int> box) {
         ),
         "int"
     );
-    assert!(
-        analyzed.diagnostic_names().is_empty(),
-        "{:?}",
-        analyzed.diagnostic_names()
-    );
+    // The unused locals are reported by the wave D warnings, like the analyzer.
+    let names: Vec<String> = analyzed
+        .diagnostic_names()
+        .into_iter()
+        .filter(|n| !n.starts_with("unused_local_variable@"))
+        .collect();
+    assert!(names.is_empty(), "{names:?}");
 }
