@@ -92,6 +92,19 @@ impl YamlNode {
     }
     /// `deepEquals`, independent of source location or scalar style.
     pub fn value_equals(&self, other: &Self) -> bool {
+        self.deep_equals(other, false)
+    }
+
+    /// `deepEqualsMap().containsKey`: the duplicate mapping key check of
+    /// `Loader._loadMapping`. A `LinkedHashMap` with custom `equals` and
+    /// `hashCode` only calls `deepEquals` when the `deepHashCode`s match.
+    pub fn key_equals(&self, other: &Self) -> bool {
+        self.deep_equals(other, true)
+    }
+
+    /// `hashed`: the comparison runs inside a `deepEqualsMap` lookup, so
+    /// the `deepHashCode`s of the two values must also match.
+    fn deep_equals(&self, other: &Self, hashed: bool) -> bool {
         match (&self.kind, &other.kind) {
             (NodeKind::Scalar(a), NodeKind::Scalar(b)) => match (a, b) {
                 (Scalar::Float(a), Scalar::Float(b)) => a == b || (a.is_nan() && b.is_nan()),
@@ -102,20 +115,40 @@ impl YamlNode {
                         && *b <= 9223372036854775808.0
                         && b.fract() == 0.0
                         && *a == *b as i64
+                        && !(hashed && int_and_double_hashes_differ(*a, *b))
                 }
                 _ => a == b,
             },
             (NodeKind::List(a), NodeKind::List(b)) => {
-                a.len() == b.len() && a.iter().zip(b).all(|(a, b)| a.value_equals(b))
+                a.len() == b.len() && a.iter().zip(b).all(|(a, b)| a.deep_equals(b, hashed))
             }
             (NodeKind::Map(a), NodeKind::Map(b)) => {
+                // `_mapEquals` looks up each key with `containsKey` (hashed)
+                // and compares the values with `equals`.
                 a.len() == b.len()
                     && a.iter().all(|(k, v)| {
                         b.iter()
-                            .any(|(k2, v2)| k.value_equals(k2) && v.value_equals(v2))
+                            .any(|(k2, v2)| k.deep_equals(k2, true) && v.deep_equals(v2, hashed))
                     })
             }
             _ => false,
         }
     }
+}
+
+/// Whether the Dart VM gives a different `hashCode` to the `int` [int] and
+/// the `double` [double] when `int == double` is true.
+///
+/// `double.hashCode` uses the `int` hash when the double converts to an
+/// `int` and back without change. The VM does this conversion with the
+/// hardware instruction: on arm64 (`fcvtzs`) 2^63 saturates to
+/// 9223372036854775807, which converts back to 2^63, so the hashes match;
+/// on x86 (`cvttsd2si`) 2^63 gives -2^63, so 2^63 gets a `double` hash. Seen
+/// with Dart 3.13.3: `9223372036854775808.0.hashCode` is 15352 (the hash of
+/// `9223372036854775807`) on macOS arm64 and 279223178035724288 on Linux
+/// x86-64. Only this pair has equal values and platform-dependent hashes.
+fn int_and_double_hashes_differ(int: i64, double: f64) -> bool {
+    cfg!(any(target_arch = "x86_64", target_arch = "x86"))
+        && int == i64::MAX
+        && double == 9223372036854775808.0
 }
