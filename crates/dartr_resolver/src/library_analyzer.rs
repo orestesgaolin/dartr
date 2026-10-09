@@ -115,7 +115,7 @@ pub fn analyze_library(input: &LibraryAnalysisInput<'_>) -> ResolvedLibrary {
         units,
     };
     compute_constants(input, &mut library);
-    compute_diagnostics(input, &mut library);
+    compute_diagnostics(input, &scopes, &library_features, &mut library);
     library
 }
 
@@ -134,8 +134,19 @@ fn compute_constants(_input: &LibraryAnalysisInput<'_>, _library: &mut ResolvedL
 /// fields verifier, the warnings with the used local elements, lints,
 /// `_checkForInconsistentLanguageVersionOverride`, `IgnoreValidator`, and
 /// the filtering of ignored diagnostics (`_filterIgnoredDiagnostics`).
-/// STUB (wave D).
-fn compute_diagnostics(_input: &LibraryAnalysisInput<'_>, _library: &mut ResolvedLibrary) {}
+/// STUB (wave D): only the error verifier runs.
+fn compute_diagnostics(
+    input: &LibraryAnalysisInput<'_>,
+    scopes: &LibraryScopes,
+    library_features: &dartr_element::FeatureSet,
+    library: &mut ResolvedLibrary,
+) {
+    let mut library_context = crate::error_verifier::LibraryVerificationContext::default();
+    for unit in &mut library.units {
+        // Dart `_computeVerifyErrors(fileAnalysis, ...)`.
+        crate::error_verifier::compute_verify_errors(input, scopes, library_features, unit, &mut library_context);
+    }
+}
 
 fn global_ctx<'a>(input: &LibraryAnalysisInput<'a>, sink: &'a NoopSink) -> Ctx<'a> {
     static EMPTY: std::sync::OnceLock<dartr_element::FeatureSet> = std::sync::OnceLock::new();

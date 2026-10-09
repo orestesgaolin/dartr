@@ -66,7 +66,9 @@ pub mod scope_context;
 // C2: the resolver core.
 pub mod body_inference_context;
 pub mod element_resolver;
+pub mod error;
 pub mod error_detection_helpers;
+pub mod error_verifier;
 pub mod flow_analysis_visitor;
 pub mod lexical_lookup;
 pub mod shared_type_analyzer;
