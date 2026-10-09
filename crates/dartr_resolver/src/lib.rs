@@ -46,6 +46,7 @@ pub mod generated {
 }
 
 pub mod ast_ext;
+pub mod error;
 pub mod library_analyzer;
 pub mod options;
 pub mod resolver;

@@ -134,8 +134,181 @@ fn compute_constants(_input: &LibraryAnalysisInput<'_>, _library: &mut ResolvedL
 /// fields verifier, the warnings with the used local elements, lints,
 /// `_checkForInconsistentLanguageVersionOverride`, `IgnoreValidator`, and
 /// the filtering of ignored diagnostics (`_filterIgnoredDiagnostics`).
-/// STUB (wave D).
-fn compute_diagnostics(_input: &LibraryAnalysisInput<'_>, _library: &mut ResolvedLibrary) {}
+///
+/// Units whose resolution panicked are skipped. A panic in a verifier is
+/// caught and recorded as the unit's panic (the analyzer reports an
+/// exception for the library).
+///
+/// Not here: the error verifier and the FFI verifier (D4–D7), lints
+/// (`dartr_lints`), the SDK constraint verifier, `IgnoreValidator` and the
+/// ignore filtering (`dartr_cli`). Dart runs the warnings only when
+/// `analysisOptions.warning` is set (the default).
+fn compute_diagnostics(input: &LibraryAnalysisInput<'_>, library: &mut ResolvedLibrary) {
+    use crate::error::*;
+
+    let sink = NoopSink;
+    let library_features = {
+        let ctx = global_ctx(input, &sink);
+        ctx.get(input.library).feature_set.clone()
+    };
+    let scopes = {
+        let ctx = Ctx {
+            world: input.world,
+            current: None,
+            local: None,
+            tp: input.type_provider,
+            features: &library_features,
+            req: &sink,
+        };
+        LibraryScopes::build(&ctx, input.library)
+    };
+    let mut panics: Vec<Option<String>> = library.units.iter().map(|u| u.panic.clone()).collect();
+    let mut verifiers: Vec<UnitVerifier<'_>> = Vec::new();
+    for (index, (unit, unit_input)) in library.units.iter_mut().zip(&input.units).enumerate() {
+        let ResolvedUnit {
+            path,
+            uri,
+            fragment,
+            ast,
+            unit: unit_node,
+            tables,
+            rt,
+            local,
+            diagnostics,
+            ..
+        } = unit;
+        let ctx = Ctx {
+            world: input.world,
+            current: None,
+            local: Some(&*local),
+            tp: input.type_provider,
+            features: &library_features,
+            req: &sink,
+        };
+        verifiers.push(UnitVerifier {
+            ctx,
+            type_system: dartr_typesystem::TypeSystem::new(ctx),
+            index,
+            path,
+            uri,
+            parsed: &unit_input.parsed,
+            ast,
+            unit: *unit_node,
+            tables,
+            rt,
+            library: input.library,
+            fragment: *fragment,
+            scopes: &scopes,
+            options: input.options,
+            features: unit_input.parsed.feature_set,
+            diagnostics,
+        });
+    }
+
+    // Dart `_computeVerifyErrors` (per unit): the constant verifier, the
+    // inheritance override verifier, the error verifier, the FFI verifier.
+    unit_step("InheritanceOverrideVerifier", &mut verifiers, &mut panics, &mut |v| {
+        inheritance_override::verify_unit(v)
+    });
+
+    library_step("MemberDuplicateDefinitionVerifier", &mut verifiers, &mut panics, &mut |vs| {
+        member_duplicate_definition_verifier::check_library(vs)
+    });
+    // Dart `_libraryVerificationContext.constructorFieldsVerifier.report()`.
+    // The error verifier adds the constructors (D4–D7).
+    let mut constructor_fields = constructor_fields_verifier::ConstructorFieldsVerifier::default();
+    library_step("ConstructorFieldsVerifier", &mut verifiers, &mut panics, &mut |vs| {
+        constructor_fields.report(vs)
+    });
+
+    // Dart `if (_analysisOptions.warning)`: the used local elements of all
+    // units, then `_computeWarnings` per unit.
+    let mut used_parts = Vec::new();
+    for v in &verifiers {
+        if panics[v.index].is_some() {
+            continue;
+        }
+        match catch_unwind(AssertUnwindSafe(|| unused_local_elements_verifier::gather_used_local_elements(v))) {
+            Ok(used) => used_parts.push(used),
+            Err(e) => panics[v.index] = Some(format!("GatherUsedLocalElementsVisitor: {}", panic_message(&*e))),
+        }
+    }
+    let used = unused_local_elements_verifier::UsedLocalElements::merge(used_parts);
+    let prevents_import_warnings = imports_verifier::has_diagnostic_reported_that_prevents_import_warnings(&verifiers);
+    // Dart `_computeWarnings`, the steps of one unit in Dart order.
+    unit_step("_computeWarnings", &mut verifiers, &mut panics, &mut |v| {
+        unicode_text_verifier::verify(v);
+        dead_code_verifier::verify(v);
+        best_practices_verifier::verify(v);
+        override_verifier::verify(v);
+        redeclare_verifier::verify(v);
+        todo_finder::find_in(v);
+        language_version_override_verifier::verify(v);
+        if !prevents_import_warnings {
+            imports_verifier::verify(v);
+        }
+        unused_local_elements_verifier::verify(v, &used);
+    });
+
+    // Dart `_checkForInconsistentLanguageVersionOverride`.
+    check_for_inconsistent_language_version_override(&mut verifiers);
+
+    drop(verifiers);
+    for (unit, panic) in library.units.iter_mut().zip(panics) {
+        if unit.panic.is_none() {
+            unit.panic = panic;
+        }
+    }
+}
+
+/// Dart `_checkForInconsistentLanguageVersionOverride`. STUB (wd-errors).
+fn check_for_inconsistent_language_version_override(verifiers: &mut [crate::error::UnitVerifier<'_>]) {
+    let _ = verifiers;
+}
+
+/// Runs [step] on each unit that resolved without a panic; a panic of the
+/// step is recorded for the unit.
+fn unit_step(
+    name: &str,
+    verifiers: &mut [crate::error::UnitVerifier<'_>],
+    panics: &mut [Option<String>],
+    step: &mut dyn FnMut(&mut crate::error::UnitVerifier<'_>),
+) {
+    for v in verifiers.iter_mut() {
+        if panics[v.index].is_some() {
+            continue;
+        }
+        if let Err(e) = catch_unwind(AssertUnwindSafe(|| step(v))) {
+            panics[v.index] = Some(format!("{name}: {}", panic_message(&*e)));
+        }
+    }
+}
+
+/// Runs a library-wide [step]; a panic is recorded for the first unit
+/// without a panic.
+fn library_step(
+    name: &str,
+    verifiers: &mut [crate::error::UnitVerifier<'_>],
+    panics: &mut [Option<String>],
+    step: &mut dyn FnMut(&mut [crate::error::UnitVerifier<'_>]),
+) {
+    if panics.iter().any(Option::is_some) {
+        // Dart: an exception in resolution aborts the library analysis.
+        return;
+    }
+    if let Err(e) = catch_unwind(AssertUnwindSafe(|| step(verifiers))) {
+        if let Some(slot) = panics.first_mut() {
+            *slot = Some(format!("{name}: {}", panic_message(&*e)));
+        }
+    }
+}
+
+fn panic_message(e: &(dyn std::any::Any + Send)) -> String {
+    e.downcast_ref::<String>()
+        .cloned()
+        .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+        .unwrap_or_else(|| "panic".to_string())
+}
 
 fn global_ctx<'a>(input: &LibraryAnalysisInput<'a>, sink: &'a NoopSink) -> Ctx<'a> {
     static EMPTY: std::sync::OnceLock<dartr_element::FeatureSet> = std::sync::OnceLock::new();
