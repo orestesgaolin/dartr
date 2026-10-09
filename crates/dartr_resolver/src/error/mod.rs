@@ -59,6 +59,8 @@ pub mod must_call_super_verifier;
 pub mod null_safe_api_verifier;
 pub mod use_result_verifier;
 pub mod widget_preview_verifier;
+// Shared helpers of the D10 verifiers (Dart AST and element getters).
+pub mod support;
 
 // D11: types, literals, returns, constructors, class modifiers.
 pub mod base_or_final_type_verifier;
