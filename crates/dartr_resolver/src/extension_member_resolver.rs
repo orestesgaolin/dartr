@@ -16,8 +16,8 @@ use crate::resolver::ResolverVisitor;
 /// Dart `ResolverVisitor.visitExtensionOverride(node, contextType: contextType)`.
 pub fn visit_extension_override(rv: &mut ResolverVisitor<'_>, node: Id<ExtensionOverride>, context_type: TypeId) {
     let _ = context_type;
-    // STUB (C6): fallback.
-    rv.fallback_expression(node.upcast());
+    // STUB (C6): fallback; an extension override has no static type.
+    rv.fallback_visit_expressions_below(node.raw());
 }
 
 /// Dart `ExtensionResolutionResult` / `ExtensionResolutionError`: the getter
