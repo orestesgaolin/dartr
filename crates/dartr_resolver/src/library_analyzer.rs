@@ -131,7 +131,32 @@ pub fn analyze_library(input: &LibraryAnalysisInput<'_>) -> ResolvedLibrary {
     };
     compute_constants(input, &mut library);
     compute_diagnostics(input, &mut library);
+    for (unit, unit_input) in library.units.iter_mut().zip(&input.units) {
+        filter_ignored_diagnostics(unit, &unit_input.parsed);
+    }
     library
+}
+
+/// Dart `_filterIgnoredDiagnostics`: removes the diagnostics that an
+/// `// ignore:` or `// ignore_for_file:` comment of the unit ignores. The
+/// options have no unignorable codes yet (`analyzer: cannot-ignore`).
+fn filter_ignored_diagnostics(unit: &mut ResolvedUnit, parsed: &ParsedUnit) {
+    if unit.diagnostics.is_empty() {
+        return;
+    }
+    let tokens = &parsed.ast.tokens;
+    let begin = parsed.ast[parsed.unit].begin_token;
+    let ignore_info = dartr_ast_builder::ignore_info::IgnoreInfo::for_dart(
+        tokens,
+        begin,
+        &parsed.line_info,
+        &tokens.source,
+    );
+    if !ignore_info.has_ignores() {
+        return;
+    }
+    unit.diagnostics
+        .retain(|d| !ignore_info.ignored(d, &parsed.line_info));
 }
 
 /// Dart `_resolveDirectives` (directive elements, URI diagnostics of
