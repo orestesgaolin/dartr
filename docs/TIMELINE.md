@@ -60,6 +60,12 @@ at each merge; the final process report is written from it.
 | 10-09 10:50 | 162b1c1 | CI fix: setup-dart in the job | coordinator | run 2: macOS tests, clippy, determinism green |
 | 10-09 11:00 | 497d142 | wave C7 literals, record literals, for loops | Opus | flutter_tools (unseen): ListLiteral 97.3%, SetOrMapLiteral 97.2% |
 | 10-09 11:10 | 31e9720 | dart_style formatter, `dartr format`, LSP formatting | Opus | byte-exact: 8,702 dart_style tests; flutter_tools 366/366 and analyzer-9.0.0 456/456 (unseen) |
+| 10-09 11:35 | 38c0fee | wave C3 invocations | Opus | flutter_tools: resolved 42.3% → 52.0% |
+| 10-09 11:50 | 3450c10 | wave C10 top-level inference | Opus | flutter_tools: elements unmasked 42% → 67% |
+| 10-09 11:55 | 0b9624b | wave C4+C5 properties and operators | Opus | flutter_tools: resolved 52% → 90.8% |
+| 10-09 12:10 | 51f6003 | wave C8 instance creation, references, dot shorthands | Opus | flutter_tools: resolved 99.70%, elements unmasked 100% |
+| 10-09 12:30 | 32826b0 | x86: follow the Dart VM for NaN bits and YAML 2^63 keys | Opus | tested on x86-64 Linux (OrbStack); CI found it |
+| 10-09 13:40 | b98027a | wave C6+C9 extensions, annotations, comment refs, exit detector | Codex | **resolver at parity:** flutter_tools types 100%, elements 99.84%; analyzer-9.0.0 types 100%, elements 99.81% (both unseen) |
 
 ## Incidents and lessons
 
@@ -101,3 +107,14 @@ at each merge; the final process report is written from it.
   `target.noindex` (symlinked as `target`), and `.metadata_never_index` markers are in `~/worktrees`,
   `third_party` and `bench/corpus`. A probe could not prove which method this macOS honours,
   because Spotlight was too backlogged to index even the control file in 3 minutes.
+- **Network outage (10-09 ~13:00):** DNS failures stopped all Claude agents and subagents at once;
+  Codex runs hung in a reconnect loop because `chatgpt.com` was unreachable while GitHub and
+  `api.openai.com` worked. All work was committed or on disk. Codex sessions were resumed with
+  `codex exec resume <root session id>`; the first id found by working directory was a sub-agent
+  thread, so resume must use the root `exec` session (`payload.source == "exec"`).
+- **Wrong recipient (10-09 11:40):** a message meant for C8 went to C10. An agent-id map is now
+  checked before every message.
+- **Early wait (10-09):** `herdr pane wait-output --match CODEX_EXIT=` matched the marker in the
+  command line itself. The marker is now printed as `CODEX_""EXIT` so only the real exit matches.
+- **Disk (10-09 12:15):** 46 GB free with 21 worktrees. Main's build output was cleaned (12 GB to
+  1.2 GB); finished worktrees are removed right after merge.
