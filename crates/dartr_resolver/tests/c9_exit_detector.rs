@@ -5,7 +5,7 @@ mod support;
 use dartr_ast::NodeKind;
 use dartr_element::Tag;
 
-use support::{analyze, Analyzed};
+use support::{Analyzed, analyze};
 
 fn run(source: &str) -> Option<Analyzed> {
     let analyzed = analyze(&[("main.dart", source)]);

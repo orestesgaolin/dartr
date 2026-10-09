@@ -238,7 +238,10 @@ impl<'a> ResolverVisitor<'a> {
         node: impl Into<NodeId>,
     ) -> LocatedDiagnostic {
         let node = node.into();
-        diagnostic.at_offset(self.ast.offset(node) as usize, self.ast.length(node) as usize)
+        diagnostic.at_offset(
+            self.ast.offset(node) as usize,
+            self.ast.length(node) as usize,
+        )
     }
 
     /// Dart `diagnostic.at(token)`.
@@ -314,7 +317,11 @@ impl<'a> ResolverVisitor<'a> {
     /// `TypeAnalyzer` mixin): dispatches [node] with the context type
     /// [schema], finishes null shorting, and leaves the (possibly rewritten)
     /// node on the rewrite stack; the caller must [`Self::pop_rewrite`].
-    pub fn analyze_expression_node(&mut self, node: Id<Expression>, schema: TypeId) -> ExprResult<'a> {
+    pub fn analyze_expression_node(
+        &mut self,
+        node: Id<Expression>,
+        schema: TypeId,
+    ) -> ExprResult<'a> {
         dartr_flow::type_analyzer::TypeAnalyzer::analyze_expression(
             self,
             node,
@@ -370,9 +377,7 @@ impl<'a> ResolverVisitor<'a> {
             *self.rewrite_stack.last_mut().unwrap() = Some(new);
         }
         match parent {
-            Some(parent) => self
-                .ast
-                .replace_child(parent, old.raw(), new.raw()),
+            Some(parent) => self.ast.replace_child(parent, old.raw(), new.raw()),
             None => self.ast.replace_with(old, new),
         }
         crate::error::dead_code_verifier::maybe_rewrite_first_dead_node(self, old.raw(), new.raw());

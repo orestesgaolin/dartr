@@ -3,7 +3,9 @@
 use dartr_ast::*;
 use dartr_syntax::TokenType;
 
-use crate::ast_extensions::{can_block_split, can_split, cascade_allow_inline, has_single_element, looks_like_static_call};
+use crate::ast_extensions::{
+    can_block_split, can_split, cascade_allow_inline, has_single_element, looks_like_static_call,
+};
 use crate::back_end::code_writer::Indent;
 use crate::piece::{CallType, ChainCall, ChainPiece, PieceId, PieceKind, State};
 
@@ -320,7 +322,11 @@ impl ChainBuilder {
                 let mut call_type = CallType::UnsplittableCall;
 
                 let argument_list = &ast[invocation.argument_list];
-                if can_split(ast, argument_list.arguments, argument_list.right_parenthesis) {
+                if can_split(
+                    ast,
+                    argument_list.arguments,
+                    argument_list.right_parenthesis,
+                ) {
                     call_type = CallType::SplittableCall;
                 }
 
@@ -375,8 +381,9 @@ impl ChainBuilder {
 
             // Postfix expressions.
             NodeKind::FunctionExpressionInvocation => {
-                let invocation =
-                    &ast[ast.cast::<FunctionExpressionInvocation>(expression).unwrap()];
+                let invocation = &ast[ast
+                    .cast::<FunctionExpressionInvocation>(expression)
+                    .unwrap()];
                 self.unwrap_postfix(v, expression, invocation.function.raw(), |v, target| {
                     v.build(|v| {
                         v.add(target);
@@ -407,7 +414,9 @@ impl ChainBuilder {
             }
 
             NodeKind::PostfixExpression
-                if ast.tokens.ty(ast[ast.cast::<PostfixExpression>(expression).unwrap()].operator)
+                if ast
+                    .tokens
+                    .ty(ast[ast.cast::<PostfixExpression>(expression).unwrap()].operator)
                     == TokenType::BANG =>
             {
                 let postfix = &ast[ast.cast::<PostfixExpression>(expression).unwrap()];
@@ -491,9 +500,8 @@ impl ChainBuilder {
         let expression = ast.cast::<Expression>(target).unwrap();
         self.allow_split_in_target = can_block_split(ast, expression);
 
-        self.has_single_element_target = v
-            .style
-            .avoid_splitting_single_element_call_chain_targets()
-            && has_single_element(ast, expression);
+        self.has_single_element_target =
+            v.style.avoid_splitting_single_element_call_chain_targets()
+                && has_single_element(ast, expression);
     }
 }

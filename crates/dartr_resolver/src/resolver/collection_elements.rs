@@ -27,12 +27,20 @@ impl<'a> ResolverVisitor<'a> {
         self.analyze_expression_node(node, context_type);
     }
 
-    pub(crate) fn resolve_element_for_element(&mut self, node: Id<ForElement>, context: Option<CollectionLiteralContext>) {
+    pub(crate) fn resolve_element_for_element(
+        &mut self,
+        node: Id<ForElement>,
+        context: Option<CollectionLiteralContext>,
+    ) {
         for_resolver::visit_for_element(self, node, context);
         self.push_rewrite(None);
     }
 
-    pub(crate) fn resolve_element_if_element(&mut self, node: Id<IfElement>, context: Option<CollectionLiteralContext>) {
+    pub(crate) fn resolve_element_if_element(
+        &mut self,
+        node: Id<IfElement>,
+        context: Option<CollectionLiteralContext>,
+    ) {
         typed_literal_resolver::visit_if_element(self, node, context);
         self.push_rewrite(None);
     }

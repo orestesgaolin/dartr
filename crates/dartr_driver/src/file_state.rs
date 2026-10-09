@@ -49,7 +49,9 @@ pub struct SourceFactory {
 impl SourceFactory {
     /// Dart `forUri2(uri)?.fullName`.
     pub fn for_uri(&self, uri: &Uri) -> Option<String> {
-        let path = self.workspace.resolve_uri(&uri.to_string(), self.sdk.as_ref())?;
+        let path = self
+            .workspace
+            .resolve_uri(&uri.to_string(), self.sdk.as_ref())?;
         Some(path)
     }
 
@@ -257,10 +259,7 @@ pub struct FileSystemState {
 }
 
 impl FileSystemState {
-    pub fn new(
-        source_factory: SourceFactory,
-        config_for: ConfigFor,
-    ) -> FileSystemState {
+    pub fn new(source_factory: SourceFactory, config_for: ConfigFor) -> FileSystemState {
         FileSystemState {
             source_factory,
             declared_variables: IndexMap::new(),
@@ -504,7 +503,10 @@ impl FileSystemState {
             let uri = self.build_directive_uri(container, configuration.uri.as_deref());
             let value = configuration.value_or_true();
             if selected.is_none()
-                && self.declared_variables.get(&configuration.name).map(String::as_str)
+                && self
+                    .declared_variables
+                    .get(&configuration.name)
+                    .map(String::as_str)
                     == Some(value)
             {
                 selected = Some(uri.clone());
@@ -519,7 +521,11 @@ impl FileSystemState {
     }
 
     /// Dart `_buildDirectiveUri`.
-    fn build_directive_uri(&mut self, container: FileId, relative_uri_str: Option<&str>) -> DirectiveUri {
+    fn build_directive_uri(
+        &mut self,
+        container: FileId,
+        relative_uri_str: Option<&str>,
+    ) -> DirectiveUri {
         let Some(relative_uri_str) = relative_uri_str else {
             return DirectiveUri::WithoutString;
         };
@@ -543,7 +549,11 @@ impl FileSystemState {
     }
 
     /// Dart `_fileForRelativeUri`.
-    fn file_for_relative_uri(&mut self, container: FileId, relative_uri_str: Option<&str>) -> Option<FileId> {
+    fn file_for_relative_uri(
+        &mut self,
+        container: FileId,
+        relative_uri_str: Option<&str>,
+    ) -> Option<FileId> {
         let relative = Uri::try_parse(relative_uri_str?)?;
         let absolute = Uri::resolve_relative(&self.file(container).uri, &relative);
         self.get_file_for_uri(&absolute)
@@ -556,7 +566,9 @@ impl FileSystemState {
     /// directive URI.
     pub fn library_of_uri(&self, uri: &DirectiveUri) -> Option<FileId> {
         match uri {
-            DirectiveUri::WithFile { file, .. } if self.file(*file).kind().is_library() => Some(*file),
+            DirectiveUri::WithFile { file, .. } if self.file(*file).kind().is_library() => {
+                Some(*file)
+            }
             _ => None,
         }
     }
@@ -587,9 +599,9 @@ impl FileSystemState {
 
     /// Dart `FileKind.hasPart`.
     pub fn has_part(&self, container: FileId, part: FileId) -> bool {
-        self.file(container).c().part_includes.iter().any(|d| {
-            matches!(&d.uris.selected, DirectiveUri::WithFile { file, .. } if *file == part)
-        })
+        self.file(container).c().part_includes.iter().any(
+            |d| matches!(&d.uris.selected, DirectiveUri::WithFile { file, .. } if *file == part),
+        )
     }
 
     /// Dart `FileKind.library`: the library of a library or part file.
@@ -775,11 +787,12 @@ fn refresh_data(path: &str, is_dart_core: bool, config: &FileConfig, salt: &[u32
         signature.add_uint32_list(salt);
         let experiments = &config.experiments;
         let (major, minor) = config.package_language_version;
-        let features = dartr_parser::experimental_features::ExperimentalFeatures::for_language_version(
-            major,
-            minor,
-            experiments,
-        );
+        let features =
+            dartr_parser::experimental_features::ExperimentalFeatures::for_language_version(
+                major,
+                minor,
+                experiments,
+            );
         signature.add_feature_set(|name| crate::unlinked_data::feature_enabled(features, name));
         signature.add_language_version(major, minor);
         signature.add_string(&content_hash);

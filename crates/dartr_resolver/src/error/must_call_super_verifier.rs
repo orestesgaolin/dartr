@@ -220,10 +220,10 @@ fn verify_super_is_called(
     fragment: dartr_element::FragmentId,
     overridden_enclosing_name: Option<String>,
 ) {
-    let invokes_super_self = v
-        .ctx
-        .fragment_data(fragment)
-        .is_some_and(|f| f.flags.has(FragmentFlags::EXECUTABLE_FRAGMENT_INVOKES_SUPER_SELF));
+    let invokes_super_self = v.ctx.fragment_data(fragment).is_some_and(|f| {
+        f.flags
+            .has(FragmentFlags::EXECUTABLE_FRAGMENT_INVOKES_SUPER_SELF)
+    });
     if !invokes_super_self {
         let range = token_range(v.ast, v.ast[node].name);
         let class_name = overridden_enclosing_name.unwrap_or_default();

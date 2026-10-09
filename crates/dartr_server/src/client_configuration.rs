@@ -47,11 +47,13 @@ impl LspResourceClientConfiguration<'_> {
     /// Dart `lineLength`: the page width of the formatter, `None` for the
     /// default of the formatter.
     pub fn line_length(&self) -> Option<i64> {
-        self.setting("lineLength").and_then(Value::as_i64).or_else(|| {
-            self.fallback
-                .and_then(|f| f.get("lineLength"))
-                .and_then(Value::as_i64)
-        })
+        self.setting("lineLength")
+            .and_then(Value::as_i64)
+            .or_else(|| {
+                self.fallback
+                    .and_then(|f| f.get("lineLength"))
+                    .and_then(Value::as_i64)
+            })
     }
 }
 
@@ -134,11 +136,20 @@ mod tests {
             ],
         );
         let a = c.for_resource("/a/lib/x.dart");
-        assert_eq!((a.line_length(), a.enable_sdk_formatter()), (Some(40), false));
+        assert_eq!(
+            (a.line_length(), a.enable_sdk_formatter()),
+            (Some(40), false)
+        );
         // The nearest folder wins; missing settings come from the global ones.
         let nested = c.for_resource("/a/nested/x.dart");
-        assert_eq!((nested.line_length(), nested.enable_sdk_formatter()), (Some(100), true));
+        assert_eq!(
+            (nested.line_length(), nested.enable_sdk_formatter()),
+            (Some(100), true)
+        );
         let outside = c.for_resource("/ab/x.dart");
-        assert_eq!((outside.line_length(), outside.enable_sdk_formatter()), (Some(100), false));
+        assert_eq!(
+            (outside.line_length(), outside.enable_sdk_formatter()),
+            (Some(100), false)
+        );
     }
 }

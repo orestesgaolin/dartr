@@ -38,7 +38,10 @@ pub fn check_declaration(v: &mut UnitVerifier<'_>, node: NodeId, name_token: Tok
         declared_and_inherited_non_final_instance_fields(&ctx, element, &mut IndexSet::new());
     if !names.is_empty() {
         let range = token_range(v.ast, name_token);
-        v.report(diag::must_be_immutable(&names.join(", ")).at_offset(range.0 as usize, range.1 as usize));
+        v.report(
+            diag::must_be_immutable(&names.join(", "))
+                .at_offset(range.0 as usize, range.1 as usize),
+        );
     }
 }
 
@@ -61,7 +64,9 @@ fn declared_and_inherited_non_final_instance_fields(
     if let Some(supertype) = ctx.element_supertype(element)
         && let Some(s) = ctx.interface_element(supertype)
     {
-        result.extend(declared_and_inherited_non_final_instance_fields(ctx, s, visited));
+        result.extend(declared_and_inherited_non_final_instance_fields(
+            ctx, s, visited,
+        ));
     }
     result
 }

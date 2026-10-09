@@ -149,8 +149,7 @@ impl PieceImpl for InfixPiece {
                     // We can format each operand separately if the operand is
                     // on its own line. This happens when the operator is split
                     // and we aren't the first or last operand.
-                    let separate =
-                        state == State::SPLIT && i > 0 && i < self.operands.len() - 1;
+                    let separate = state == State::SPLIT && i > 0 && i < self.operands.len() - 1;
 
                     writer.format(self.operands[i], separate);
                     if i < self.operands.len() - 1 {

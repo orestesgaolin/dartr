@@ -115,7 +115,8 @@ fn check_widget_preview(v: &mut UnitVerifier<'_>, node: Id<Annotation>) {
     if !is_valid_application {
         let range = node_range(ast, ast[node].name);
         v.report(
-            diag::invalid_widget_preview_application().at_offset(range.0 as usize, range.1 as usize),
+            diag::invalid_widget_preview_application()
+                .at_offset(range.0 as usize, range.1 as usize),
         );
     }
 

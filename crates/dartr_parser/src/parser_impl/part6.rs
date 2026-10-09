@@ -1,6 +1,12 @@
 // Dart source: pkg/_fe_analyzer_shared/lib/src/parser/parser_impl.dart (lines 10490-12597)
 
-#![allow(unused_imports, unused_variables, unused_mut, unused_assignments, clippy::all)]
+#![allow(
+    unused_imports,
+    unused_variables,
+    unused_mut,
+    unused_assignments,
+    clippy::all
+)]
 
 #[allow(unused_imports)]
 use crate::type_info::{
@@ -326,7 +332,8 @@ impl<L: Listener> Parser<L> {
                 // "Whenever on appears after a try block or after a preceding on clause
                 // on a try block, we unconditionally parse it as an on clause".
                 on_keyword = Some(token);
-                let type_info = compute_type_mut(self.tokens_mut(),
+                let type_info = compute_type_mut(
+                    self.tokens_mut(),
                     token,
                     /* required = */ true,
                     false,
@@ -814,7 +821,8 @@ impl<L: Listener> Parser<L> {
         kind: DeclarationKind,
         enclosing_declaration_name: Option<&str>,
     ) -> TokenId {
-        let mut type_info = compute_type_mut(self.tokens_mut(),
+        let mut type_info = compute_type_mut(
+            self.tokens_mut(),
             before_start,
             /* required = */ false,
             /* inDeclaration = */ true,
@@ -838,7 +846,8 @@ impl<L: Listener> Parser<L> {
                 .insert_synthetic_keyword(before_name, Keyword::OPERATOR);
 
             // Having inserted the keyword the type now possibly compute differently.
-            type_info = compute_type_mut(self.tokens_mut(),
+            type_info = compute_type_mut(
+                self.tokens_mut(),
                 before_start,
                 /* required = */ true,
                 /* inDeclaration = */ true,
@@ -1239,9 +1248,16 @@ impl<L: Listener> Parser<L> {
     ) -> TokenId {
         let mut token = token;
         let start = token;
-        let type_arg =
-            compute_type_param_or_arg_mut(self.tokens_mut(), token, /* inDeclaration = */ true, false);
-        let mut next = { let skipped = type_arg.skip_mut(self.tokens_mut(), token); self.next(skipped) };
+        let type_arg = compute_type_param_or_arg_mut(
+            self.tokens_mut(),
+            token,
+            /* inDeclaration = */ true,
+            false,
+        );
+        let mut next = {
+            let skipped = type_arg.skip_mut(self.tokens_mut(), token);
+            self.next(skipped)
+        };
         let case = match self.lexeme(next) {
             "[]" | "[" => 0,
             "{" => 1,
@@ -1301,7 +1317,8 @@ impl<L: Listener> Parser<L> {
                     || (self.is_a(after_end_group, TokenType::QUESTION)
                         && self.is_identifier(self.next(after_end_group)))
                 {
-                    let type_info = compute_variable_pattern_type_mut(self.tokens_mut(),
+                    let type_info = compute_variable_pattern_type_mut(
+                        self.tokens_mut(),
                         token,
                         /* required = */ true,
                     );
@@ -1399,8 +1416,12 @@ impl<L: Listener> Parser<L> {
                     );
                 }
             }
-            let potential_type_arg = compute_type_param_or_arg_mut(self.tokens_mut(), token, false, false);
-            let after_token = { let skipped = potential_type_arg.skip_mut(self.tokens_mut(), token); self.next(skipped) };
+            let potential_type_arg =
+                compute_type_param_or_arg_mut(self.tokens_mut(), token, false, false);
+            let after_token = {
+                let skipped = potential_type_arg.skip_mut(self.tokens_mut(), token);
+                self.next(skipped)
+            };
             if self.is_a(after_token, TokenType::OPEN_PAREN) && !potential_type_arg.recovered() {
                 let type_arg = potential_type_arg;
                 token = type_arg.parse_arguments(token, self);
@@ -1479,7 +1500,8 @@ impl<L: Listener> Parser<L> {
                 token = next;
                 keyword = Some(next);
                 let next_is_paren = self.is_a(self.next(token), TokenType::OPEN_PAREN);
-                type_info = compute_variable_pattern_type_mut(self.tokens_mut(), token, next_is_paren);
+                type_info =
+                    compute_variable_pattern_type_mut(self.tokens_mut(), token, next_is_paren);
                 token = type_info.parse_type(token, self);
             } else {
                 is_bare_identifier = true;
@@ -1950,7 +1972,8 @@ impl<L: Listener> Parser<L> {
                 return None;
             }
         }
-        let type_param_or_arg = compute_type_param_or_arg_mut(self.tokens_mut(), token, false, false);
+        let type_param_or_arg =
+            compute_type_param_or_arg_mut(self.tokens_mut(), token, false, false);
         token = type_param_or_arg.skip_mut(self.tokens_mut(), token);
         next = self.next(token);
         if self.is_a(next, TokenType::INDEX) {
@@ -1979,7 +2002,8 @@ impl<L: Listener> Parser<L> {
     ///
     /// objectPattern ::= typeName typeArguments? '(' patternFields? ')'
     pub fn skip_object_pattern_rest(&mut self, token: TokenId) -> Option<TokenId> {
-        let type_param_or_arg = compute_type_param_or_arg_mut(self.tokens_mut(), token, false, false);
+        let type_param_or_arg =
+            compute_type_param_or_arg_mut(self.tokens_mut(), token, false, false);
         let token = type_param_or_arg.skip_mut(self.tokens_mut(), token);
         let next = self.tokens().next(token).get()?;
         if !self.is_a(next, TokenType::OPEN_PAREN) {

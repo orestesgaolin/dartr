@@ -45,7 +45,13 @@ pub fn method_invocation(v: &mut UnitVerifier<'_>, node: Id<MethodInvocation>) {
     let method_name = ast.tokens.lexeme(ast[ast[node].method_name].token);
     if ctx.is_element(element.raw(), "dart.async", "Completer") && method_name == "complete" {
         if let Some(&t) = ctx.type_arguments(target_type).first() {
-            check_types(v, node.raw(), "Completer.complete", t, ast[node].argument_list);
+            check_types(
+                v,
+                node.raw(),
+                "Completer.complete",
+                t,
+                ast[node].argument_list,
+            );
         }
     }
 }

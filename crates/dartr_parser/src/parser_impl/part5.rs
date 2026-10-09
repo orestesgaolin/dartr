@@ -397,8 +397,12 @@ impl<L: Listener> Parser<L> {
         const_keyword: Option<TokenId>,
     ) -> TokenId {
         debug_assert!(self.is_a(self.next(start), TokenType::LT));
-        let type_param_or_arg =
-            compute_type_param_or_arg_mut(self.tokens_mut(), start, /* inDeclaration = */ true, false);
+        let type_param_or_arg = compute_type_param_or_arg_mut(
+            self.tokens_mut(),
+            start,
+            /* inDeclaration = */ true,
+            false,
+        );
         let mut token = type_param_or_arg.skip_mut(self.tokens_mut(), start);
         if self.is_a(self.next(token), TokenType::OPEN_PAREN) {
             if let Some(const_keyword) = const_keyword {
@@ -474,7 +478,8 @@ impl<L: Listener> Parser<L> {
             // "Inside" a continuation we can't have a function literal.
             return self.parse_send(token, context, constant_pattern_context);
         }
-        let type_info = compute_type_mut(self.tokens_mut(),
+        let type_info = compute_type_mut(
+            self.tokens_mut(),
             token,
             /* required = */ false,
             false,
@@ -485,7 +490,10 @@ impl<L: Listener> Parser<L> {
         let name = self.next(before_name);
         if self.is_identifier(name) {
             let type_param = compute_type_param_or_arg_mut(self.tokens_mut(), name, false, false);
-            let next = { let skipped = type_param.skip_mut(self.tokens_mut(), name); self.next(skipped) };
+            let next = {
+                let skipped = type_param.skip_mut(self.tokens_mut(), name);
+                self.next(skipped)
+            };
             if self.is_a(next, TokenType::OPEN_PAREN) {
                 let after = self.next(self.end_group(next).unwrap());
                 if self.looks_like_function_body(after) {
@@ -562,9 +570,13 @@ impl<L: Listener> Parser<L> {
             if (value == "Map" || value == "Set")
                 && !self.is_a(self.next(identifier), TokenType::PERIOD)
             {
-                let arg = compute_type_param_or_arg_mut(self.tokens_mut(), identifier, false, false);
+                let arg =
+                    compute_type_param_or_arg_mut(self.tokens_mut(), identifier, false, false);
                 potential_type_arg = Some(arg);
-                let after_token = { let skipped = arg.skip_mut(self.tokens_mut(), identifier); self.next(skipped) };
+                let after_token = {
+                    let skipped = arg.skip_mut(self.tokens_mut(), identifier);
+                    self.next(skipped)
+                };
                 if self.is_a(after_token, TokenType::OPEN_CURLY_BRACKET) {
                     // Recover by ignoring both the `new` and the `Map`/`Set` and parse as
                     // a literal map/set.
@@ -580,9 +592,13 @@ impl<L: Listener> Parser<L> {
                     );
                 }
             } else if value == "List" && !self.is_a(self.next(identifier), TokenType::PERIOD) {
-                let arg = compute_type_param_or_arg_mut(self.tokens_mut(), identifier, false, false);
+                let arg =
+                    compute_type_param_or_arg_mut(self.tokens_mut(), identifier, false, false);
                 potential_type_arg = Some(arg);
-                let after_token = { let skipped = arg.skip_mut(self.tokens_mut(), identifier); self.next(skipped) };
+                let after_token = {
+                    let skipped = arg.skip_mut(self.tokens_mut(), identifier);
+                    self.next(skipped)
+                };
                 if self.is_a(after_token, TokenType::OPEN_SQUARE_BRACKET)
                     || self.is_a(after_token, TokenType::INDEX)
                 {
@@ -608,9 +624,13 @@ impl<L: Listener> Parser<L> {
             let not_identifier = next;
             let value = self.lexeme(not_identifier).to_string();
             if value == "<" {
-                let arg = compute_type_param_or_arg_mut(self.tokens_mut(), new_keyword, false, false);
+                let arg =
+                    compute_type_param_or_arg_mut(self.tokens_mut(), new_keyword, false, false);
                 potential_type_arg = Some(arg);
-                let after_token = { let skipped = arg.skip_mut(self.tokens_mut(), new_keyword); self.next(skipped) };
+                let after_token = {
+                    let skipped = arg.skip_mut(self.tokens_mut(), new_keyword);
+                    self.next(skipped)
+                };
                 if self.is_a(after_token, TokenType::OPEN_CURLY_BRACKET)
                     || self.is_a(after_token, TokenType::OPEN_SQUARE_BRACKET)
                     || self.is_a(after_token, TokenType::INDEX)
@@ -729,7 +749,10 @@ impl<L: Listener> Parser<L> {
             // Special-case-recovery for `const Map<..>?{}` and `const Set<..>?{}`.
             let arg = compute_type_param_or_arg_mut(self.tokens_mut(), next, false, false);
             potential_type_arg = Some(arg);
-            let after_token = { let skipped = arg.skip_mut(self.tokens_mut(), next); self.next(skipped) };
+            let after_token = {
+                let skipped = arg.skip_mut(self.tokens_mut(), next);
+                self.next(skipped)
+            };
             if self.is_a(after_token, TokenType::OPEN_CURLY_BRACKET) {
                 let next_value = self.string_value(next_next);
                 if next_value == Some("{") {
@@ -760,7 +783,10 @@ impl<L: Listener> Parser<L> {
             // Special-case-recovery for `const List<..>?[` and `const List<..>?[]`.
             let arg = compute_type_param_or_arg_mut(self.tokens_mut(), next, false, false);
             potential_type_arg = Some(arg);
-            let after_token = { let skipped = arg.skip_mut(self.tokens_mut(), next); self.next(skipped) };
+            let after_token = {
+                let skipped = arg.skip_mut(self.tokens_mut(), next);
+                self.next(skipped)
+            };
             if self.is_a(after_token, TokenType::OPEN_SQUARE_BRACKET)
                 || self.is_a(after_token, TokenType::INDEX)
             {
@@ -1011,7 +1037,10 @@ impl<L: Listener> Parser<L> {
             let identifier = next;
             let arg = compute_type_param_or_arg_mut(self.tokens_mut(), identifier, false, false);
             potential_type_arg = Some(arg);
-            let after = { let skipped = arg.skip_mut(self.tokens_mut(), identifier); self.next(skipped) };
+            let after = {
+                let skipped = arg.skip_mut(self.tokens_mut(), identifier);
+                self.next(skipped)
+            };
             after_token = Some(after);
             if self.is_a(after, TokenType::OPEN_CURLY_BRACKET) {
                 let value = self.lexeme(identifier).to_string();
@@ -1058,7 +1087,10 @@ impl<L: Listener> Parser<L> {
         };
         let after_token = match after_token {
             Some(after) => after,
-            None => { let skipped = potential_type_arg.skip_mut(self.tokens_mut(), token); self.next(skipped) },
+            None => {
+                let skipped = potential_type_arg.skip_mut(self.tokens_mut(), token);
+                self.next(skipped)
+            }
         };
         let type_arg =
             if self.is_a(after_token, TokenType::OPEN_PAREN) && !potential_type_arg.recovered() {
@@ -1335,7 +1367,8 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 9625): `TypeInfo computeTypeAfterIsOrAs(Token token)`
     pub fn compute_type_after_is_or_as(&mut self, token: TokenId) -> TypeInfo {
-        let mut type_info = compute_type_mut(self.tokens_mut(),
+        let mut type_info = compute_type_mut(
+            self.tokens_mut(),
             token,
             /* required = */ true,
             false,
@@ -1432,7 +1465,8 @@ impl<L: Listener> Parser<L> {
         let mut token = token;
         if self.is_identifier(token) {
             if self.is_a(self.next(token), TokenType::LT) {
-                let type_param = compute_type_param_or_arg_mut(self.tokens_mut(), token, false, false);
+                let type_param =
+                    compute_type_param_or_arg_mut(self.tokens_mut(), token, false, false);
                 if type_param == NO_TYPE_PARAM_OR_ARG {
                     return false;
                 }
@@ -1468,7 +1502,8 @@ impl<L: Listener> Parser<L> {
         let const_token = self.next(start);
         debug_assert!(self.is_a(const_token, Keyword::CONST));
         if !is_modifier(self.tokens(), self.next(const_token)) {
-            let type_info = compute_type_mut(self.tokens_mut(),
+            let type_info = compute_type_mut(
+                self.tokens_mut(),
                 const_token,
                 /* required = */ false,
                 false,
@@ -1640,7 +1675,8 @@ impl<L: Listener> Parser<L> {
 
         let mut type_info: TypeInfo = match type_info {
             Some(type_info) => type_info.clone(),
-            None => compute_type_mut(self.tokens_mut(),
+            None => compute_type_mut(
+                self.tokens_mut(),
                 before_type,
                 /* required = */ false,
                 false,
@@ -1674,8 +1710,9 @@ impl<L: Listener> Parser<L> {
                     self.listener.begin_metadata_star(start_next);
                     self.listener.end_metadata_star(/* count = */ 0);
                 }
-                let before_formals = compute_type_param_or_arg_mut(self.tokens_mut(), next, false, false)
-                    .parse_variables(next, self);
+                let before_formals =
+                    compute_type_param_or_arg_mut(self.tokens_mut(), next, false, false)
+                        .parse_variables(next, self);
                 let start_next = self.next(start);
                 self.listener.begin_local_function_declaration(start_next);
                 token = type_info.parse_type(before_type, self);
@@ -1805,7 +1842,8 @@ impl<L: Listener> Parser<L> {
                 Some(message),
                 None,
             );
-            type_info = compute_type_mut(self.tokens_mut(),
+            type_info = compute_type_mut(
+                self.tokens_mut(),
                 before_type,
                 /* required = */ true,
                 false,

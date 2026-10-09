@@ -33,7 +33,9 @@ use dartr_typesystem::member;
 
 use super::VerifierHost;
 use super::support::{corresponding_parameter, display_name, in_declaration_context, node_range};
-use crate::element_metadata::{AnnotationRef, UnitAst, accessor_variable, element_annotations, flags};
+use crate::element_metadata::{
+    AnnotationRef, UnitAst, accessor_variable, element_annotations, flags,
+};
 
 /// Dart `UseResultVerifier.checkFunctionExpressionInvocation(node)`.
 pub fn check_function_expression_invocation<'a, H: VerifierHost<'a>>(

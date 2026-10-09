@@ -192,8 +192,15 @@ fn compute_constants(input: &LibraryAnalysisInput<'_>, library: &mut ResolvedLib
                 continue;
             }
             let ctx = engine.ctx(unit);
-            constants.extend(crate::constant::utilities::find_constants(&ctx, index as u32, unit));
-            constants.extend(crate::constant::utilities::find_dependencies(&engine, index as u32));
+            constants.extend(crate::constant::utilities::find_constants(
+                &ctx,
+                index as u32,
+                unit,
+            ));
+            constants.extend(crate::constant::utilities::find_dependencies(
+                &engine,
+                index as u32,
+            ));
         }
         crate::constant::compute::compute_constants(&engine, &constants);
         // Dart `_computeConstantErrors` of each unit (in
@@ -351,19 +358,28 @@ fn compute_diagnostics(input: &LibraryAnalysisInput<'_>, library: &mut ResolvedL
 
     // Dart `_computeVerifyErrors` (per unit): the constant verifier, the
     // inheritance override verifier, the error verifier, the FFI verifier.
-    unit_step("InheritanceOverrideVerifier", &mut verifiers, &mut panics, &mut |v| {
-        inheritance_override::verify_unit(v)
-    });
+    unit_step(
+        "InheritanceOverrideVerifier",
+        &mut verifiers,
+        &mut panics,
+        &mut |v| inheritance_override::verify_unit(v),
+    );
 
-    library_step("MemberDuplicateDefinitionVerifier", &mut verifiers, &mut panics, &mut |vs| {
-        member_duplicate_definition_verifier::check_library(vs)
-    });
+    library_step(
+        "MemberDuplicateDefinitionVerifier",
+        &mut verifiers,
+        &mut panics,
+        &mut |vs| member_duplicate_definition_verifier::check_library(vs),
+    );
     // Dart `_libraryVerificationContext.constructorFieldsVerifier.report()`.
     // The error verifier adds the constructors (D4–D7).
     let mut constructor_fields = constructor_fields_verifier::ConstructorFieldsVerifier::default();
-    library_step("ConstructorFieldsVerifier", &mut verifiers, &mut panics, &mut |vs| {
-        constructor_fields.report(vs)
-    });
+    library_step(
+        "ConstructorFieldsVerifier",
+        &mut verifiers,
+        &mut panics,
+        &mut |vs| constructor_fields.report(vs),
+    );
 
     // Dart `if (_analysisOptions.warning)`: the used local elements of all
     // units, then `_computeWarnings` per unit.
@@ -372,20 +388,30 @@ fn compute_diagnostics(input: &LibraryAnalysisInput<'_>, library: &mut ResolvedL
         if panics[v.index].is_some() {
             continue;
         }
-        match catch_unwind(AssertUnwindSafe(|| unused_local_elements_verifier::gather_used_local_elements(v))) {
+        match catch_unwind(AssertUnwindSafe(|| {
+            unused_local_elements_verifier::gather_used_local_elements(v)
+        })) {
             Ok(used) => used_parts.push(used),
-            Err(e) => panics[v.index] = Some(format!("GatherUsedLocalElementsVisitor: {}", panic_message(&*e))),
+            Err(e) => {
+                panics[v.index] = Some(format!(
+                    "GatherUsedLocalElementsVisitor: {}",
+                    panic_message(&*e)
+                ))
+            }
         }
     }
     let used = unused_local_elements_verifier::UsedLocalElements::merge(used_parts);
-    let prevents_import_warnings = imports_verifier::has_diagnostic_reported_that_prevents_import_warnings(&verifiers);
+    let prevents_import_warnings =
+        imports_verifier::has_diagnostic_reported_that_prevents_import_warnings(&verifiers);
     // Dart `fileAnalysis.importsTracking` (recorded during resolution in
     // Dart; replayed from the resolved units here).
     let imports_tracking = if prevents_import_warnings {
         imports_verifier::ImportsTracking::default()
     } else {
-        catch_unwind(AssertUnwindSafe(|| imports_verifier::compute_imports_tracking(&verifiers)))
-            .unwrap_or_default()
+        catch_unwind(AssertUnwindSafe(|| {
+            imports_verifier::compute_imports_tracking(&verifiers)
+        }))
+        .unwrap_or_default()
     };
     // Dart `_computeWarnings`, the steps of one unit in Dart order.
     unit_step("_computeWarnings", &mut verifiers, &mut panics, &mut |v| {
@@ -417,7 +443,9 @@ fn compute_diagnostics(input: &LibraryAnalysisInput<'_>, library: &mut ResolvedL
 /// directive whose part has a language version override that is different
 /// from the one of the library (or has one when the library has none, or
 /// the reverse).
-fn check_for_inconsistent_language_version_override(verifiers: &mut [crate::error::UnitVerifier<'_>]) {
+fn check_for_inconsistent_language_version_override(
+    verifiers: &mut [crate::error::UnitVerifier<'_>],
+) {
     use crate::error::VerifierHost;
     use crate::error::language_version_override_verifier::language_version_token;
     use dartr_element::DirectiveUri;
@@ -452,14 +480,20 @@ fn check_for_inconsistent_language_version_override(verifiers: &mut [crate::erro
             };
             let index = part_index;
             part_index += 1;
-            let Some(DirectiveUri::Unit { library_fragment, .. }) = parts.get(index).map(|p| &p.directive.uri) else {
+            let Some(DirectiveUri::Unit {
+                library_fragment, ..
+            }) = parts.get(index).map(|p| &p.directive.uri)
+            else {
                 continue;
             };
-            let Some(part) = verifiers.iter().position(|p| p.fragment == *library_fragment) else {
+            let Some(part) = verifiers
+                .iter()
+                .position(|p| p.fragment == *library_fragment)
+            else {
                 continue;
             };
-            let part_override =
-                language_version_token(verifiers[part].ast, verifiers[part].unit).map(|(_, major, minor)| (major, minor));
+            let part_override = language_version_token(verifiers[part].ast, verifiers[part].unit)
+                .map(|(_, major, minor)| (major, minor));
             let should_report = match (library_override, part_override) {
                 (Some(library), Some(part)) => library != part,
                 (Some(_), None) | (None, Some(_)) => true,
@@ -467,10 +501,10 @@ fn check_for_inconsistent_language_version_override(verifiers: &mut [crate::erro
             };
             if should_report {
                 let uri = ast[directive].uri;
-                reports.push(dartr_diagnostics::diag::inconsistent_language_version_override().at_offset(
-                    ast.offset(uri) as usize,
-                    ast.length(uri) as usize,
-                ));
+                reports.push(
+                    dartr_diagnostics::diag::inconsistent_language_version_override()
+                        .at_offset(ast.offset(uri) as usize, ast.length(uri) as usize),
+                );
             } else {
                 nested.push(part);
             }
@@ -573,7 +607,14 @@ fn resolve_file(
             features: unit.parsed.feature_set,
         };
         let result = catch_unwind(AssertUnwindSafe(|| {
-            crate::element_binding_visitor::bind_unit(&ctx, &ast, root, unit.fragment, &mut tables, &mut rt);
+            crate::element_binding_visitor::bind_unit(
+                &ctx,
+                &ast,
+                root,
+                unit.fragment,
+                &mut tables,
+                &mut rt,
+            );
             crate::resolution_visitor::resolve_unit(
                 &ctx,
                 unit_ctx,
@@ -583,7 +624,14 @@ fn resolve_file(
                 &mut rt,
                 &mut diagnostics,
             );
-            let mut resolver = ResolverVisitor::new(ctx, &mut ast, &mut tables, &mut rt, &mut diagnostics, unit_ctx);
+            let mut resolver = ResolverVisitor::new(
+                ctx,
+                &mut ast,
+                &mut tables,
+                &mut rt,
+                &mut diagnostics,
+                unit_ctx,
+            );
             resolver.visit_node(root.raw());
             resolver.flush_type_analyzer_errors();
         }));

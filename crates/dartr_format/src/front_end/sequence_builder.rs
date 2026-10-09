@@ -58,8 +58,7 @@ impl SequenceBuilder {
     pub fn build_with(&mut self, v: &mut AstNodeVisitor<'_>, force_split: bool) -> PieceId {
         // If the sequence only contains a single piece, just return it
         // directly and discard the unnecessary wrapping.
-        if self.left_bracket.is_none() && self.elements.len() == 1 && self.right_bracket.is_none()
-        {
+        if self.left_bracket.is_none() && self.elements.len() == 1 && self.right_bracket.is_none() {
             let element = sequence_element(&mut v.arena, self.elements[0]);
             if element.hanging_comments.is_empty() {
                 return element.piece;

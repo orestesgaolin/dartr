@@ -59,13 +59,21 @@ fn best_practices_ported() {
     let (failures, count) = run_ported(best_practices::CASES, |_| true);
     let unexpected: Vec<&String> = failures
         .iter()
-        .filter(|f| !KNOWN_FAILURES.iter().any(|(n, _)| f.starts_with(&format!("{n}:"))))
+        .filter(|f| {
+            !KNOWN_FAILURES
+                .iter()
+                .any(|(n, _)| f.starts_with(&format!("{n}:")))
+        })
         .collect();
     eprintln!("{} of {count} cases pass", count - failures.len());
     assert!(
         unexpected.is_empty(),
         "{} of {count} cases failed:\n{}",
         unexpected.len(),
-        unexpected.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("\n")
+        unexpected
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
 }

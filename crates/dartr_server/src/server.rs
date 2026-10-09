@@ -300,7 +300,8 @@ impl Server {
         let id = self.next_request_id;
         self.next_request_id += 1;
         self.pending.insert(id, pending);
-        self.channel.send(&json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
+        self.channel
+            .send(&json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
         id
     }
 
@@ -326,7 +327,10 @@ impl Server {
     // Dispatch.
 
     fn handle_message(&mut self, message: Value) -> Flow {
-        let method = message.get("method").and_then(Value::as_str).map(str::to_string);
+        let method = message
+            .get("method")
+            .and_then(Value::as_str)
+            .map(str::to_string);
         let id = message.get("id").cloned();
         match (method, id) {
             (Some(method), Some(id)) => {
@@ -428,7 +432,10 @@ impl Server {
             }
             "textDocument/formatting" => self.format_request(&params, FormatKind::Document),
             "textDocument/rangeFormatting" => {
-                let range = params.get("range").cloned().ok_or_else(|| invalid_params(method))?;
+                let range = params
+                    .get("range")
+                    .cloned()
+                    .ok_or_else(|| invalid_params(method))?;
                 self.format_request(&params, FormatKind::Range(range))
             }
             "textDocument/onTypeFormatting" => {
@@ -539,11 +546,8 @@ impl Server {
                 let result = message.get("result");
                 if let Some(list) = result.and_then(Value::as_array) {
                     if list.len() == folders.len() + 1 {
-                        let workspace_folder_config: Vec<(String, Value)> = folders
-                            .iter()
-                            .cloned()
-                            .zip(list.iter().cloned())
-                            .collect();
+                        let workspace_folder_config: Vec<(String, Value)> =
+                            folders.iter().cloned().zip(list.iter().cloned()).collect();
                         let new_global = list.last().cloned().unwrap_or(Value::Null);
                         let old_excluded =
                             excluded_folders(&self.client_configuration.global_value());
@@ -609,7 +613,10 @@ impl Server {
     /// Dart `InitializeMessageHandler.handle`.
     fn initialize(&mut self, params: Value) -> ErrorOr<Value> {
         self.client = ClientCapabilities::new(
-            params.get("capabilities").cloned().unwrap_or_else(|| json!({})),
+            params
+                .get("capabilities")
+                .cloned()
+                .unwrap_or_else(|| json!({})),
         );
         self.init = InitializationOptions::parse(params.get("initializationOptions"));
         let mut workspace_paths = Vec::new();
@@ -805,7 +812,8 @@ impl Server {
         // `illegal_character`, columns without the mark).
         let text = dartr_syntax::strip_bom(text).to_string();
         dartr_project::fs::set_overlay(&path, Some(text.clone()));
-        self.overlays.insert(path.clone(), Document { content: text });
+        self.overlays
+            .insert(path.clone(), Document { content: text });
         self.file_changed(&path);
         if !self.priority.contains(&path) {
             self.priority.push(path.clone());
@@ -1097,8 +1105,12 @@ impl Server {
         // a context root (for example an open file that is not under a
         // folder, without workspace folders).
         self.dirty = analyzed.clone();
-        self.dirty
-            .extend(self.priority.iter().filter(|p| p.ends_with(".dart")).cloned());
+        self.dirty.extend(
+            self.priority
+                .iter()
+                .filter(|p| p.ends_with(".dart"))
+                .cloned(),
+        );
         self.analyzed = analyzed;
         self.parsed.clear();
     }
@@ -1374,7 +1386,10 @@ fn is_dart_document(params: &Value) -> bool {
 }
 
 fn invalid_params(method: &str) -> ResponseError {
-    ResponseError::new(codes::INVALID_PARAMS, format!("Invalid params for {method}"))
+    ResponseError::new(
+        codes::INVALID_PARAMS,
+        format!("Invalid params for {method}"),
+    )
 }
 
 fn folder_paths(list: Option<&Value>) -> Vec<String> {
@@ -1393,7 +1408,12 @@ fn excluded_folders(config: &Value) -> Vec<String> {
     config
         .get("analysisExcludedFolders")
         .and_then(Value::as_array)
-        .map(|l| l.iter().filter_map(Value::as_str).map(str::to_string).collect())
+        .map(|l| {
+            l.iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -1439,9 +1459,11 @@ mod tests {
             "{}/../dartr/tests/lsp_fixtures/lsp_project",
             env!("CARGO_MANIFEST_DIR")
         ));
-        s.handle_message(json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-            "capabilities": capabilities, "rootUri": path_to_uri(&root),
-        }}));
+        s.handle_message(
+            json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+                "capabilities": capabilities, "rootUri": path_to_uri(&root),
+            }}),
+        );
         s.handle_message(json!({"jsonrpc": "2.0", "method": "initialized", "params": {}}));
         (s, buffer)
     }
@@ -1528,10 +1550,14 @@ mod tests {
         let buffer = Buffer::default();
         let channel = Channel::new(Box::new(buffer.clone()), None);
         let mut s = Server::new(ServerOptions::parse(&[], true).unwrap(), channel);
-        s.handle_message(json!({"jsonrpc": "2.0", "id": 1, "method": "textDocument/hover", "params": {}}));
+        s.handle_message(
+            json!({"jsonrpc": "2.0", "id": 1, "method": "textDocument/hover", "params": {}}),
+        );
         s.handle_message(json!({"jsonrpc": "2.0", "id": 2, "method": "initialize", "params": {"capabilities": {}}}));
         s.handle_message(json!({"jsonrpc": "2.0", "id": 3, "method": "initialize", "params": {"capabilities": {}}}));
-        s.handle_message(json!({"jsonrpc": "2.0", "id": 4, "method": "textDocument/hover", "params": {}}));
+        s.handle_message(
+            json!({"jsonrpc": "2.0", "id": 4, "method": "textDocument/hover", "params": {}}),
+        );
         let m = buffer.messages();
         assert_eq!(response(&m, 1)["error"]["code"], json!(-32002));
         assert!(response(&m, 2)["result"]["capabilities"].is_object());

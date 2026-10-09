@@ -174,7 +174,9 @@ impl<'a> AstNodeVisitor<'a> {
         builder.left_bracket(self, left_bracket);
         builder.visit_all(self, arguments, true);
         builder.right_bracket(self, right_bracket, None, None);
-        let force_split = self.style.preserve_trailing_comma_before(ast, right_bracket);
+        let force_split = self
+            .style
+            .preserve_trailing_comma_before(ast, right_bracket);
         let arguments_piece = builder.build_with(self, force_split, true);
 
         // If the call is complex enough, force it to split even if it would
@@ -522,8 +524,7 @@ impl<'a> AstNodeVisitor<'a> {
 
                     // The condition clause.
                     if let Some(condition_expression) = condition {
-                        parts_list
-                            .add_comments_before(self, ast.begin_token(condition_expression));
+                        parts_list.add_comments_before(self, ast.begin_token(condition_expression));
                         let piece = self.build(|v| {
                             v.visit(condition_expression);
                             v.token(right_separator);
@@ -563,8 +564,9 @@ impl<'a> AstNodeVisitor<'a> {
                         // Add the updater builder to the clause builder so
                         // that any comments around a trailing comma after the
                         // updaters don't get dropped.
-                        let force_split =
-                            self.style.preserve_trailing_comma_before(ast, right_parenthesis);
+                        let force_split = self
+                            .style
+                            .preserve_trailing_comma_before(ast, right_parenthesis);
                         parts_list.add_inner_builder(self, updater_builder, force_split);
                     }
 
@@ -854,7 +856,9 @@ impl<'a> AstNodeVisitor<'a> {
             ));
             self.add(piece);
         } else {
-            let piece = self.arena.add(AssignPiece::new(operator_piece, value_piece));
+            let piece = self
+                .arena
+                .add(AssignPiece::new(operator_piece, value_piece));
             self.add(piece);
         }
     }
@@ -1031,8 +1035,7 @@ impl<'a> AstNodeVisitor<'a> {
             //     } finally Bar {
             //       body;
             //     }
-            let force_split =
-                i < catch_clauses.len() - 1 || try_statement.finally_block.is_some();
+            let force_split = i < catch_clauses.len() - 1 || try_statement.finally_block.is_some();
             self.write_block(catch_clause.body, force_split);
         }
 
@@ -1088,24 +1091,31 @@ impl<'a> AstNodeVisitor<'a> {
 
             // Include the `show` and `hide` clauses.
             for &combinator_node in ast.list_raw(combinators) {
-                let (keyword, names) = if let Some(hide) = ast.cast::<HideCombinator>(combinator_node) {
-                    let hide = &ast[hide];
-                    (hide.keyword, ast.list(hide.hidden_names))
-                } else {
-                    let show = &ast[ast.cast::<ShowCombinator>(combinator_node).unwrap()];
-                    (show.keyword, ast.list(show.shown_names))
-                };
+                let (keyword, names) =
+                    if let Some(hide) = ast.cast::<HideCombinator>(combinator_node) {
+                        let hide = &ast[hide];
+                        (hide.keyword, ast.list(hide.hidden_names))
+                    } else {
+                        let show = &ast[ast.cast::<ShowCombinator>(combinator_node).unwrap()];
+                        (show.keyword, ast.list(show.shown_names))
+                    };
                 let mut operands = vec![v.token_piece(keyword)];
                 for &name in names {
                     operands.push(v.token_piece_with(ast[name].token, None, true, false));
                 }
                 let is_3_dot_7 = v.style.is_3_dot_7();
-                clauses.push(v.arena.add(InfixPiece::new(operands, is_3_dot_7, Indent::Expression)));
+                clauses.push(v.arena.add(InfixPiece::new(
+                    operands,
+                    is_3_dot_7,
+                    Indent::Expression,
+                )));
             }
 
             // If there are clauses, include them.
             if !clauses.is_empty() {
-                let piece = v.arena.add(ClausePiece::new(directive_piece, clauses, false));
+                let piece = v
+                    .arena
+                    .add(ClausePiece::new(directive_piece, clauses, false));
                 v.add(piece);
             } else {
                 v.add(directive_piece);
@@ -1185,9 +1195,11 @@ impl<'a> AstNodeVisitor<'a> {
         });
 
         let is_3_dot_7 = self.style.is_3_dot_7();
-        let piece = self
-            .arena
-            .add(InfixPiece::new(vec![left_piece, right_piece], is_3_dot_7, indent));
+        let piece = self.arena.add(InfixPiece::new(
+            vec![left_piece, right_piece],
+            is_3_dot_7,
+            indent,
+        ));
         self.add(piece);
     }
 
@@ -1306,7 +1318,9 @@ impl<'a> AstNodeVisitor<'a> {
         // If we are always writing a trailing comma (because it's a
         // single-element record), then the comma shouldn't force a split.
         let force_split = style.commas != Commas::AlwaysTrailing
-            && self.style.preserve_trailing_comma_before(ast, right_bracket);
+            && self
+                .style
+                .preserve_trailing_comma_before(ast, right_bracket);
         let piece = builder.build_with(self, force_split, block_shaped);
         self.add(piece);
     }
@@ -1354,7 +1368,8 @@ impl<'a> AstNodeVisitor<'a> {
             {
                 // This element begins a new line. Add the elements on the
                 // previous line to the list builder and start a new line.
-                let finished = std::mem::replace(&mut line_builder, DelimitedListBuilder::new(line_style));
+                let finished =
+                    std::mem::replace(&mut line_builder, DelimitedListBuilder::new(line_style));
                 builder.add_inner_builder(self, finished, false);
                 at_line_start = true;
             }
@@ -1453,7 +1468,15 @@ impl<'a> AstNodeVisitor<'a> {
         name: Option<TokenId>,
     ) {
         let ast = self.ast;
-        self.write_parameter(Some(ty), name, ast.list_raw(metadata), &[], None, None, None);
+        self.write_parameter(
+            Some(ty),
+            name,
+            ast.list_raw(metadata),
+            &[],
+            None,
+            None,
+            None,
+        );
     }
 
     /// Writes a [ListPiece] for a record literal or pattern.
@@ -1519,7 +1542,12 @@ impl<'a> AstNodeVisitor<'a> {
     }
 
     /// Writes a [ListPiece] for a type argument or type parameter list.
-    pub fn write_type_list(&mut self, left_bracket: TokenId, elements: &[NodeId], right_bracket: TokenId) {
+    pub fn write_type_list(
+        &mut self,
+        left_bracket: TokenId,
+        elements: &[NodeId],
+        right_bracket: TokenId,
+    ) {
         self.write_list(
             elements,
             left_bracket,
@@ -1581,7 +1609,11 @@ impl<'a> AstNodeVisitor<'a> {
 
     /// Handles the `async`, `sync*`, or `async*` modifiers on a function
     /// body.
-    pub fn write_function_body_modifiers(&mut self, keyword: Option<TokenId>, star: Option<TokenId>) {
+    pub fn write_function_body_modifiers(
+        &mut self,
+        keyword: Option<TokenId>,
+        star: Option<TokenId>,
+    ) {
         // The `async` or `sync` keyword.
         self.token_soft(keyword);
         self.token_soft(star);
@@ -1703,13 +1735,17 @@ impl<'a> AstNodeVisitor<'a> {
 
     /// Writes the `<variable> in <expression>` part of an identifier or
     /// pattern for-in loop.
-    fn write_for_in(&mut self, left_hand_side: NodeId, in_keyword: TokenId, sequence: Id<Expression>) {
+    fn write_for_in(
+        &mut self,
+        left_hand_side: NodeId,
+        in_keyword: TokenId,
+        sequence: Id<Expression>,
+    ) {
         let ast = self.ast;
         // Hoist any leading comments so they don't force the for-in clauses
         // to split.
         self.hoist_leading_comments(first_non_comment_token(ast, left_hand_side), |v| {
-            let left_piece =
-                v.node_piece_with(left_hand_side, false, NodeContext::ForLoopVariable);
+            let left_piece = v.node_piece_with(left_hand_side, false, NodeContext::ForLoopVariable);
             let sequence_piece = v.create_for_in_sequence(in_keyword, sequence);
             let is_3_dot_7 = v.style.is_3_dot_7();
             v.arena.add(ForInPiece::new(
@@ -1815,9 +1851,9 @@ impl<'a> AstNodeVisitor<'a> {
             //    target.method(argument)
             //        .setter = value;
             //
-            NodeKind::MethodInvocation | NodeKind::PropertyAccess | NodeKind::PrefixedIdentifier => {
-                true
-            }
+            NodeKind::MethodInvocation
+            | NodeKind::PropertyAccess
+            | NodeKind::PrefixedIdentifier => true,
 
             // Otherwise, it must be an actual block construct.
             _ => node_can_block_split(ast, left_hand_side),

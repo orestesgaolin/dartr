@@ -26,7 +26,9 @@ use dartr_typesystem::type_system_operations::TypeSystemOperations;
 
 use crate::body_inference_context::BodyInferenceContext;
 use crate::flow_analysis_visitor::ResolverFlow;
-use crate::resolver::{CollectionLiteralContext, ExprResult, ResolverVisitor, SchemaOf, TypeViewOf};
+use crate::resolver::{
+    CollectionLiteralContext, ExprResult, ResolverVisitor, SchemaOf, TypeViewOf,
+};
 use crate::shared_type_analyzer::SharedTypeAnalyzerErrors;
 
 impl<'a> TypeAnalysisNullShortingInterface for ResolverVisitor<'a> {
@@ -65,10 +67,11 @@ impl<'a> TypeAnalysisNullShortingInterface for ResolverVisitor<'a> {
         inner_result: ExpressionResultOf<Self>,
         whole_expression: Id<Expression>,
     ) -> ExpressionResultOf<Self> {
-        let inferred_type = dartr_flow::flow_analysis_operations::FlowAnalysisTypeOperations::make_nullable(
-            &self.flow_analysis.type_operations,
-            inner_result.type_,
-        );
+        let inferred_type =
+            dartr_flow::flow_analysis_operations::FlowAnalysisTypeOperations::make_nullable(
+                &self.flow_analysis.type_operations,
+                inner_result.type_,
+            );
         let mut inner_result = inner_result;
         loop {
             // End non-nullable promotion of the null-aware variable.
@@ -168,7 +171,12 @@ impl<'a> TypeAnalyzer for ResolverVisitor<'a> {
         if self.ast.is::<DartPattern>(node) {
             let pattern: Id<DartPattern> = Id::from_raw(node);
             let result = self.resolve_pattern_dispatch(pattern, context);
-            let mut info = self.tables.pattern_info.get(node).copied().unwrap_or_default();
+            let mut info = self
+                .tables
+                .pattern_info
+                .get(node)
+                .copied()
+                .unwrap_or_default();
             info.matched_value_type = Some(result.matched_value_type.unwrap_type_view());
             self.tables.pattern_info.insert(node, info);
             result
@@ -258,8 +266,13 @@ impl<'a> TypeAnalyzer for ResolverVisitor<'a> {
         &mut self,
         node: Id<Statement>,
         case_index: usize,
-    ) -> SwitchStatementMemberInfo<NodeId, Id<Statement>, Id<Expression>, EId<PromotableElement>, Name>
-    {
+    ) -> SwitchStatementMemberInfo<
+        NodeId,
+        Id<Statement>,
+        Id<Expression>,
+        EId<PromotableElement>,
+        Name,
+    > {
         crate::pattern_resolver::get_switch_statement_member_info(self, node, case_index)
     }
 
@@ -326,7 +339,12 @@ impl<'a> TypeAnalyzer for ResolverVisitor<'a> {
         crate::pattern_resolver::handle_default(self, node, case_index, sub_index);
     }
 
-    fn handle_list_pattern_rest_element(&mut self, _container: Id<DartPattern>, _rest_element: NodeId) {}
+    fn handle_list_pattern_rest_element(
+        &mut self,
+        _container: Id<DartPattern>,
+        _rest_element: NodeId,
+    ) {
+    }
 
     /// Dart `handleMapPatternEntry`.
     fn handle_map_pattern_entry(
@@ -340,7 +358,12 @@ impl<'a> TypeAnalyzer for ResolverVisitor<'a> {
         self.pop_rewrite();
     }
 
-    fn handle_map_pattern_rest_element(&mut self, _container: Id<DartPattern>, _rest_element: NodeId) {}
+    fn handle_map_pattern_rest_element(
+        &mut self,
+        _container: Id<DartPattern>,
+        _rest_element: NodeId,
+    ) {
+    }
 
     /// Dart `handleMergedStatementCase`.
     fn handle_merged_statement_case(
@@ -373,8 +396,15 @@ impl<'a> TypeAnalyzer for ResolverVisitor<'a> {
     fn handle_no_statement(&mut self, _node: Id<Statement>) {}
 
     /// Dart `handleSwitchBeforeAlternative`.
-    fn handle_switch_before_alternative(&mut self, node: NodeId, case_index: usize, sub_index: usize) {
-        crate::pattern_resolver::handle_switch_before_alternative(self, node, case_index, sub_index);
+    fn handle_switch_before_alternative(
+        &mut self,
+        node: NodeId,
+        case_index: usize,
+        sub_index: usize,
+    ) {
+        crate::pattern_resolver::handle_switch_before_alternative(
+            self, node, case_index, sub_index,
+        );
     }
 
     /// Dart `handleSwitchScrutinee`.
@@ -426,15 +456,21 @@ impl<'a> TypeAnalyzer for ResolverVisitor<'a> {
 
     /// Dart `setVariableType`.
     fn set_variable_type(&mut self, variable: EId<PromotableElement>, type_: TypeViewOf) {
-        crate::variable_declaration_resolver::set_variable_type(self, variable, type_.unwrap_type_view());
+        crate::variable_declaration_resolver::set_variable_type(
+            self,
+            variable,
+            type_.unwrap_type_view(),
+        );
     }
 
     /// Dart `variableTypeFromInitializerType`.
     fn variable_type_from_initializer_type(&mut self, type_: TypeViewOf) -> TypeViewOf {
-        SharedTypeView::new(crate::variable_declaration_resolver::variable_type_from_initializer_type(
-            self,
-            type_.unwrap_type_view(),
-        ))
+        SharedTypeView::new(
+            crate::variable_declaration_resolver::variable_type_from_initializer_type(
+                self,
+                type_.unwrap_type_view(),
+            ),
+        )
     }
 
     dartr_type_analyzer::type_analyzer_mixin!();

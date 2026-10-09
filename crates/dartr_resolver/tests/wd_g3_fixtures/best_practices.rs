@@ -1194,9 +1194,15 @@ class C {
     Ported {
         name: "import_deferred_library_with_load_function_test.dart::ImportDeferredLibraryWithLoadFunctionTest::test_deferredImport_withLoadLibraryFunction",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"void loadLibrary() {}
+        packages: &[(
+            "test",
+            &[(
+                "a.dart",
+                r#"void loadLibrary() {}
 void f() {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'a.dart' deferred as p;
 // [diag.importDeferredLibraryWithLoadFunction][column 1][length 30] The imported library defines a top-level function named 'loadLibrary' that is hidden by deferring this library.
 void main() {
@@ -1208,9 +1214,15 @@ void main() {
     Ported {
         name: "import_deferred_library_with_load_function_test.dart::ImportDeferredLibraryWithLoadFunctionTest::test_deferredImport_withLoadLibraryFunction_hide",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"void loadLibrary() {}
+        packages: &[(
+            "test",
+            &[(
+                "a.dart",
+                r#"void loadLibrary() {}
 void f() {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'a.dart' deferred as p hide loadLibrary;
 void main() {
   p.f();
@@ -1221,10 +1233,16 @@ void main() {
     Ported {
         name: "import_deferred_library_with_load_function_test.dart::ImportDeferredLibraryWithLoadFunctionTest::test_deferredImport_withLoadLibraryFunction_hide2",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"void loadLibrary() {}
+        packages: &[(
+            "test",
+            &[(
+                "a.dart",
+                r#"void loadLibrary() {}
 void f() {}
 void f2() {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'a.dart' deferred as p hide f2;
 // [diag.importDeferredLibraryWithLoadFunction][column 1][length 38] The imported library defines a top-level function named 'loadLibrary' that is hidden by deferring this library.
 void main() {
@@ -1236,9 +1254,15 @@ void main() {
     Ported {
         name: "import_deferred_library_with_load_function_test.dart::ImportDeferredLibraryWithLoadFunctionTest::test_deferredImport_withLoadLibraryFunction_show",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"void loadLibrary() {}
+        packages: &[(
+            "test",
+            &[(
+                "a.dart",
+                r#"void loadLibrary() {}
 void f() {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'a.dart' deferred as p show f;
 void main() {
   p.f();
@@ -1249,8 +1273,14 @@ void main() {
     Ported {
         name: "import_deferred_library_with_load_function_test.dart::ImportDeferredLibraryWithLoadFunctionTest::test_deferredImport_withoutLoadLibraryFunction",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"void f() {}
-"#), ]), ],
+        packages: &[(
+            "test",
+            &[(
+                "a.dart",
+                r#"void f() {}
+"#,
+            )],
+        )],
         source: r#"import 'a.dart' deferred as p;
 void main() {
   p.f();
@@ -1261,9 +1291,15 @@ void main() {
     Ported {
         name: "import_deferred_library_with_load_function_test.dart::ImportDeferredLibraryWithLoadFunctionTest::test_nonDeferredImport_withLoadLibraryFunction",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"void loadLibrary() {}
+        packages: &[(
+            "test",
+            &[(
+                "a.dart",
+                r#"void loadLibrary() {}
 void f() {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'a.dart' as p;
 void main() {
   p.f();
@@ -1274,12 +1310,18 @@ void main() {
     Ported {
         name: "invalid_use_of_visible_for_testing_member_test.dart::InvalidUseOfVisibleForTestingMemberTest::test_constructor_primary",
         strict_inference: false,
-        packages: &[("test", &[("lib1.dart", r#"import 'package:meta/meta.dart';
+        packages: &[(
+            "test",
+            &[(
+                "lib1.dart",
+                r#"import 'package:meta/meta.dart';
 class A.named() {
   @visibleForTesting
   this;
 }
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'lib1.dart';
 void f() {
   A.named();
@@ -1292,13 +1334,19 @@ void f() {
     Ported {
         name: "invalid_use_of_visible_for_testing_member_test.dart::InvalidUseOfVisibleForTestingMemberTest::test_export_hide",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"import 'package:meta/meta.dart';
+        packages: &[(
+            "test",
+            &[(
+                "a.dart",
+                r#"import 'package:meta/meta.dart';
 
 @visibleForTesting
 class A {}
 
 class B {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"export 'a.dart' hide A;
 "#,
         expected: None,
@@ -1306,13 +1354,19 @@ class B {}
     Ported {
         name: "invalid_use_of_visible_for_testing_member_test.dart::InvalidUseOfVisibleForTestingMemberTest::test_export_show",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"import 'package:meta/meta.dart';
+        packages: &[(
+            "test",
+            &[(
+                "a.dart",
+                r#"import 'package:meta/meta.dart';
 
 @visibleForTesting
 class A {}
 
 class B {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"export 'a.dart' show A;
 "#,
         expected: None,
@@ -1320,12 +1374,18 @@ class B {}
     Ported {
         name: "invalid_use_of_visible_for_testing_member_test.dart::InvalidUseOfVisibleForTestingMemberTest::test_functionInExtension",
         strict_inference: false,
-        packages: &[("test", &[("lib1.dart", r#"import 'package:meta/meta.dart';
+        packages: &[(
+            "test",
+            &[(
+                "lib1.dart",
+                r#"import 'package:meta/meta.dart';
 extension E on List {
   @visibleForTesting
   int m() => 1;
 }
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'lib1.dart';
 void f() {
   E([]).m();
@@ -1338,12 +1398,18 @@ void f() {
     Ported {
         name: "invalid_use_of_visible_for_testing_member_test.dart::InvalidUseOfVisibleForTestingMemberTest::test_getter",
         strict_inference: false,
-        packages: &[("test", &[("lib1.dart", r#"import 'package:meta/meta.dart';
+        packages: &[(
+            "test",
+            &[(
+                "lib1.dart",
+                r#"import 'package:meta/meta.dart';
 class A {
   @visibleForTesting
   int get a => 7;
 }
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'lib1.dart';
 void f() {
   A().a;
@@ -1356,13 +1422,19 @@ void f() {
     Ported {
         name: "invalid_use_of_visible_for_testing_member_test.dart::InvalidUseOfVisibleForTestingMemberTest::test_import_hide",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"import 'package:meta/meta.dart';
+        packages: &[(
+            "test",
+            &[(
+                "a.dart",
+                r#"import 'package:meta/meta.dart';
 
 @visibleForTesting
 class A {}
 
 class B {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'a.dart' hide A;
 
 void f(B _) {}
@@ -1372,13 +1444,19 @@ void f(B _) {}
     Ported {
         name: "invalid_use_of_visible_for_testing_member_test.dart::InvalidUseOfVisibleForTestingMemberTest::test_import_show",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"import 'package:meta/meta.dart';
+        packages: &[(
+            "test",
+            &[(
+                "a.dart",
+                r#"import 'package:meta/meta.dart';
 
 @visibleForTesting
 class A {}
 
 class B {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'a.dart' show A;
 //                   ^
 // [diag.invalidUseOfVisibleForTestingMember] The member 'A' can only be used within 'package:test/a.dart' or a test.
@@ -1392,12 +1470,18 @@ void f(A _) {}
     Ported {
         name: "invalid_use_of_visible_for_testing_member_test.dart::InvalidUseOfVisibleForTestingMemberTest::test_method",
         strict_inference: false,
-        packages: &[("test", &[("lib1.dart", r#"import 'package:meta/meta.dart';
+        packages: &[(
+            "test",
+            &[(
+                "lib1.dart",
+                r#"import 'package:meta/meta.dart';
 class A {
   @visibleForTesting
   void a() {}
 }
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'lib1.dart';
 void f() => A().a();
 //              ^
@@ -1408,12 +1492,18 @@ void f() => A().a();
     Ported {
         name: "invalid_use_of_visible_for_testing_member_test.dart::InvalidUseOfVisibleForTestingMemberWithTestInAncestorPathTest::test_method_inAncestorTestDir",
         strict_inference: false,
-        packages: &[("test", &[("lib1.dart", r#"import 'package:meta/meta.dart';
+        packages: &[(
+            "test",
+            &[(
+                "lib1.dart",
+                r#"import 'package:meta/meta.dart';
 class A {
   @visibleForTesting
   void a() {}
 }
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'lib1.dart';
 void f() => A().a();
 //              ^
@@ -1910,13 +2000,19 @@ String get v => '';
     Ported {
         name: "assignment_of_do_not_store_test.dart::AssignmentOfDoNotStoreTest::test_topLevelVariable_libraryAnnotation",
         strict_inference: false,
-        packages: &[("test", &[("library.dart", r#"@doNotStore
+        packages: &[(
+            "test",
+            &[(
+                "library.dart",
+                r#"@doNotStore
 library lib;
 
 import 'package:meta/meta.dart';
 
 final v = '';
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'library.dart';
 
 class A {
@@ -2254,11 +2350,17 @@ Future<String> get v async => '';
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_assignmentExpression_compound_deprecatedGetter",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"@deprecated
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"@deprecated
 int get x => 0;
 
 set x(int _) {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 void f() {
@@ -2272,11 +2374,17 @@ void f() {
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_assignmentExpression_compound_deprecatedSetter",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"int get x => 0;
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"int get x => 0;
 
 @deprecated
 set x(int _) {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 void f() {
@@ -2290,11 +2398,17 @@ void f() {
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_assignmentExpression_simple_deprecatedGetter",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"@deprecated
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"@deprecated
 int get x => 0;
 
 set x(int _) {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 void f() {
@@ -2306,9 +2420,15 @@ void f() {
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_assignmentExpression_simple_deprecatedGetterSetter",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"@deprecated
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"@deprecated
 int x = 1;
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 void f() {
@@ -2322,11 +2442,17 @@ void f() {
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_assignmentExpression_simple_deprecatedSetter",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"int get x => 0;
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"int get x => 0;
 
 @deprecated
 set x(int _) {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 void f() {
@@ -2340,11 +2466,17 @@ void f() {
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_call",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"class A {
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"class A {
   @deprecated
   call() {}
 }
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 void f(A a) {
@@ -2358,9 +2490,15 @@ void f(A a) {
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_class",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"@deprecated
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"@deprecated
 class A {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 void f(A a) {}
@@ -2372,9 +2510,15 @@ void f(A a) {}
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_class_inDeprecatedFunctionTypeAlias",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"@deprecated
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"@deprecated
 class A {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 @deprecated
@@ -2385,9 +2529,15 @@ typedef A T();
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_class_inDeprecatedGenericTypeAlias",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"@deprecated
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"@deprecated
 class A {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 @deprecated
@@ -2398,11 +2548,17 @@ typedef T = A Function();
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_compoundAssignment",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"class A {
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"class A {
   @deprecated
   A operator+(A a) { return a; }
 }
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 f(A a, A b) {
@@ -2416,11 +2572,17 @@ f(A a, A b) {
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_constructor_inAnnotation",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"class MyAnnotation {
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"class MyAnnotation {
   @deprecated
   const MyAnnotation();
 }
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 @MyAnnotation()
@@ -2432,11 +2594,17 @@ void g() {}
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_deprecatedField_inObjectPattern_explicitName",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"class C {
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"class C {
   @Deprecated('')
   final int foo = 0;
 }
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 int g(Object s) =>
@@ -2452,11 +2620,17 @@ int g(Object s) =>
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_deprecatedField_inObjectPattern_inferredName",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"class C {
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"class C {
   @Deprecated('')
   final int foo = 0;
 }
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 int g(Object s) =>
@@ -2472,13 +2646,19 @@ int g(Object s) =>
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_dotShorthandConstructorInvocation_deprecatedClass_deprecatedConstructor",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"@deprecated
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"@deprecated
 class A {
   @deprecated
   A();
 }
 void wantA(A _) {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 void f() {
@@ -2494,12 +2674,18 @@ void f() {
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_dotShorthandConstructorInvocation_deprecatedClass_undeprecatedConstructor",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"@deprecated
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"@deprecated
 class A {
   A();
 }
 void wantA(A _) {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 void f() {
@@ -2513,12 +2699,18 @@ void f() {
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_dotShorthandConstructorInvocation_deprecatedClass_undeprecatedNamedConstructor",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"@deprecated
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"@deprecated
 class A {
   A.a();
 }
 void wantA(A _) {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 void f() {
@@ -2532,12 +2724,18 @@ void f() {
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_dotShorthandConstructorInvocation_namedConstructor",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"class A {
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"class A {
   @deprecated
   A.named(int i) {}
 }
 void wantA(A _) {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 f() {
@@ -2551,12 +2749,18 @@ f() {
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_dotShorthandConstructorInvocation_undeprecatedClass_deprecatedConstructor",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"class A {
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"class A {
   @deprecated
   A();
 }
 void wantA(A _) {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 void f() {
@@ -2570,12 +2774,18 @@ void f() {
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_dotShorthandInvocation_deprecatedMethod",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"class A {
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"class A {
   @deprecated
   static A m() => A();
 }
 void wantA(A _) {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 void f() {
@@ -2589,12 +2799,18 @@ void f() {
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_dotShorthandPropertyAccess",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"class A {
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"class A {
   @deprecated
   static A get x => A();
 }
 void wantA(A _) {}
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 void f() {
@@ -2608,9 +2824,15 @@ void f() {
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_export",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"@deprecated
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"@deprecated
 library a;
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"export 'package:aaa/a.dart';
 // [diag.deprecatedMemberUse][column 1][length 28] 'package:aaa/a.dart' is deprecated and shouldn't be used.
 "#,
@@ -2619,9 +2841,15 @@ library a;
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_export_fromSamePackage",
         strict_inference: false,
-        packages: &[("test", &[("lib2.dart", r#"@deprecated
+        packages: &[(
+            "test",
+            &[(
+                "lib2.dart",
+                r#"@deprecated
 library a;
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"export 'lib2.dart';
 "#,
         expected: None,
@@ -2629,11 +2857,17 @@ library a;
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_extensionOverride",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"@deprecated
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"@deprecated
 extension E on int {
   int get foo => 0;
 }
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 void f() {
@@ -2647,11 +2881,17 @@ void f() {
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_field_implicitGetter",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"class A {
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"class A {
   @deprecated
   int foo = 0;
 }
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 void f(A a) {
@@ -2665,11 +2905,17 @@ void f(A a) {
     Ported {
         name: "deprecated_member_use_test.dart::DeprecatedMemberUse_PackageConfigWorkspaceTest::test_field_implicitSetter",
         strict_inference: false,
-        packages: &[("aaa", &[("a.dart", r#"class A {
+        packages: &[(
+            "aaa",
+            &[(
+                "a.dart",
+                r#"class A {
   @deprecated
   int foo = 0;
 }
-"#), ]), ],
+"#,
+            )],
+        )],
         source: r#"import 'package:aaa/a.dart';
 
 void f(A a) {
@@ -2683,12 +2929,24 @@ void f(A a) {
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_deprecated_class_asExpression",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"class A {}
-"#), ("b.dart", r#"library b;
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"class A {}
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"library b;
 
 @deprecated
 export 'a.dart';
-"#), ]), ],
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'b.dart';
 
 void f() {
@@ -2702,12 +2960,24 @@ void f() {
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_deprecated_class_asExpression_prefixed",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"class A {}
-"#), ("b.dart", r#"library b;
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"class A {}
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"library b;
 
 @deprecated
 export 'a.dart';
-"#), ]), ],
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'b.dart' as prefix;
 
 void f() {
@@ -2721,12 +2991,24 @@ void f() {
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_deprecated_class_asType",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"class A {}
-"#), ("b.dart", r#"library b;
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"class A {}
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"library b;
 
 @deprecated
 export 'a.dart';
-"#), ]), ],
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'b.dart';
 
 void f(A a) {}
@@ -2738,12 +3020,24 @@ void f(A a) {}
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_deprecated_class_asType_prefixed",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"class A {}
-"#), ("b.dart", r#"library b;
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"class A {}
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"library b;
 
 @deprecated
 export 'a.dart';
-"#), ]), ],
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'b.dart' as prefix;
 
 void f(prefix.A a) {}
@@ -2755,12 +3049,24 @@ void f(prefix.A a) {}
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_deprecated_class_import_show",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"class A {}
-"#), ("b.dart", r#"library b;
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"class A {}
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"library b;
 
 @deprecated
 export 'a.dart';
-"#), ]), ],
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'b.dart' show A;
 
 void f(A a) {}
@@ -2772,12 +3078,24 @@ void f(A a) {}
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_deprecated_function",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"void foo() {}
-"#), ("b.dart", r#"library b;
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"void foo() {}
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"library b;
 
 @deprecated
 export 'a.dart';
-"#), ]), ],
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'b.dart';
 
 void f() {
@@ -2791,12 +3109,24 @@ void f() {
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_deprecated_function_prefixed",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"void foo() {}
-"#), ("b.dart", r#"library b;
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"void foo() {}
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"library b;
 
 @deprecated
 export 'a.dart';
-"#), ]), ],
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'b.dart' as prefix;
 
 void f() {
@@ -2810,15 +3140,27 @@ void f() {
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_deprecated_getter",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"int get foo => 0;
-"#), ("b.dart", r#"library b;
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"int get foo => 0;
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"library b;
 
 @deprecated
 export 'a.dart';
 
 /// Does not prevent the hint.
 set foo(int _) {}
-"#), ]), ],
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'b.dart';
 
 void f() {
@@ -2832,15 +3174,27 @@ void f() {
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_deprecated_getter_prefixed",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"int get foo => 0;
-"#), ("b.dart", r#"library b;
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"int get foo => 0;
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"library b;
 
 @deprecated
 export 'a.dart';
 
 /// Does not prevent the hint.
 set foo(int _) {}
-"#), ]), ],
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'b.dart' as prefix;
 
 void f() {
@@ -2854,13 +3208,29 @@ void f() {
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_deprecated_libraryCycle",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"void foo() {}
-"#), ("b.dart", r#"import 'c.dart';
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"void foo() {}
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"import 'c.dart';
 
 @deprecated
 export 'a.dart';
-"#), ("c.dart", r#"import 'b.dart';
-"#), ]), ],
+"#,
+                ),
+                (
+                    "c.dart",
+                    r#"import 'b.dart';
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'b.dart';
 
 void f() {
@@ -2874,15 +3244,27 @@ void f() {
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_deprecated_setter",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"void set foo(int _) {}
-"#), ("b.dart", r#"library b;
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"void set foo(int _) {}
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"library b;
 
 @deprecated
 export 'a.dart';
 
 /// Does not prevent the hint.
 int get foo => 0;
-"#), ]), ],
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'b.dart';
 
 void f() {
@@ -2896,15 +3278,27 @@ void f() {
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_deprecated_setter_prefixed",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"void set foo(int _) {}
-"#), ("b.dart", r#"library b;
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"void set foo(int _) {}
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"library b;
 
 @deprecated
 export 'a.dart';
 
 /// Does not prevent the hint.
 int get foo => 0;
-"#), ]), ],
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'b.dart' as prefix;
 
 void f() {
@@ -2918,12 +3312,24 @@ void f() {
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_deprecated_variable",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"var foo = 0;
-"#), ("b.dart", r#"library b;
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"var foo = 0;
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"library b;
 
 @deprecated
 export 'a.dart';
-"#), ]), ],
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'b.dart';
 
 void f() {
@@ -2937,11 +3343,27 @@ void f() {
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_notDeprecated_class_exportedFromPart",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"class A {}
-"#), ("b.dart", r#"part of 'c.dart';
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"class A {}
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"part of 'c.dart';
 export 'a.dart';
-"#), ("c.dart", r#"part 'b.dart';
-"#), ]), ],
+"#,
+                ),
+                (
+                    "c.dart",
+                    r#"part 'b.dart';
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'c.dart';
 
 void f(A a) {}
@@ -2951,14 +3373,26 @@ void f(A a) {}
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_notDeprecated_class_hasDirectImport",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"class A {}
-"#), ("b.dart", r#"library;
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"class A {}
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"library;
 
 @deprecated
 export 'a.dart';
 
 class B {}
-"#), ]), ],
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'a.dart';
 import 'b.dart';
 
@@ -2969,15 +3403,27 @@ void f(A a, B b) {}
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_notDeprecated_class_hasNotDeprecatedExport",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"class A {}
-"#), ("b.dart", r#"library b;
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"class A {}
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"library b;
 
 @deprecated
 export 'a.dart';
 
 // Not deprecated.
 export 'a.dart';
-"#), ]), ],
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'b.dart';
 
 void f(A a) {}
@@ -2987,14 +3433,26 @@ void f(A a) {}
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_notDeprecated_class_import_hide",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"class A {}
-"#), ("b.dart", r#"library b;
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"class A {}
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"library b;
 
 @deprecated
 export 'a.dart';
 
 class B {}
-"#), ]), ],
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'a.dart';
 import 'b.dart' hide A;
 
@@ -3005,9 +3463,21 @@ void f(A a, B b) {}
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_notDeprecated_class_onlyNotDeprecatedExport",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"class A {}
-"#), ("b.dart", r#"export 'a.dart';
-"#), ]), ],
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"class A {}
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"export 'a.dart';
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'b.dart';
 
 void f(A a) {}
@@ -3017,14 +3487,26 @@ void f(A a) {}
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_notDeprecated_getter_useSetter",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"int get foo => 0;
-"#), ("b.dart", r#"library b;
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"int get foo => 0;
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"library b;
 
 @deprecated
 export 'a.dart';
 
 set foo(int _) {}
-"#), ]), ],
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'b.dart';
 
 void f() {
@@ -3036,14 +3518,26 @@ void f() {
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_notDeprecated_getter_useSetter_prefixed",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"int get foo => 0;
-"#), ("b.dart", r#"library b;
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"int get foo => 0;
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"library b;
 
 @deprecated
 export 'a.dart';
 
 set foo(int _) {}
-"#), ]), ],
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'b.dart' as prefix;
 
 void f() {
@@ -3055,14 +3549,26 @@ void f() {
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_notDeprecated_setter_useGetter",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"set foo(int _) {}
-"#), ("b.dart", r#"library b;
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"set foo(int _) {}
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"library b;
 
 @deprecated
 export 'a.dart';
 
 int get foo => 0;
-"#), ]), ],
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'b.dart';
 
 void f() {
@@ -3074,14 +3580,26 @@ void f() {
     Ported {
         name: "deprecated_export_use_test.dart::DeprecatedExportUseTest::test_notDeprecated_setter_useGetter_prefixed",
         strict_inference: false,
-        packages: &[("test", &[("a.dart", r#"set foo(int _) {}
-"#), ("b.dart", r#"library b;
+        packages: &[(
+            "test",
+            &[
+                (
+                    "a.dart",
+                    r#"set foo(int _) {}
+"#,
+                ),
+                (
+                    "b.dart",
+                    r#"library b;
 
 @deprecated
 export 'a.dart';
 
 int get foo => 0;
-"#), ]), ],
+"#,
+                ),
+            ],
+        )],
         source: r#"import 'b.dart' as prefix;
 
 void f() {

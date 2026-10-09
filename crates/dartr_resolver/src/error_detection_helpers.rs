@@ -40,7 +40,11 @@ impl<'a> ResolverVisitor<'a> {
     }
 
     /// Dart `checkForBodyMayCompleteNormally(body:, errorNode:)`.
-    pub fn check_for_body_may_complete_normally(&mut self, body: dartr_ast::NodeId, error_node: dartr_ast::NodeId) {
+    pub fn check_for_body_may_complete_normally(
+        &mut self,
+        body: dartr_ast::NodeId,
+        error_node: dartr_ast::NodeId,
+    ) {
         let _ = (body, error_node);
     }
 

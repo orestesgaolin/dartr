@@ -76,7 +76,14 @@ void main() {
     let Some(library) = library else {
         return;
     };
-    assert!(start.elapsed() < Duration::from_secs(30), "took {:?}", start.elapsed());
-    let panic = library.units[0].panic.clone().expect("the unit stops with a panic");
+    assert!(
+        start.elapsed() < Duration::from_secs(30),
+        "took {:?}",
+        start.elapsed()
+    );
+    let panic = library.units[0]
+        .panic
+        .clone()
+        .expect("the unit stops with a panic");
     assert!(panic.contains("StackOverflowError"), "{panic}");
 }

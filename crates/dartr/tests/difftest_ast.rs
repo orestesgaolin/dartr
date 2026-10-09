@@ -29,7 +29,11 @@ fn ast_parity_on_fixtures() {
     let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
     let dirs = vec![fixtures.join("ast"), fixtures.join("events")];
     let files = collect_dart_files(&dirs).unwrap();
-    assert!(files.len() >= 40, "fixtures not found in {}", fixtures.display());
+    assert!(
+        files.len() >= 40,
+        "fixtures not found in {}",
+        fixtures.display()
+    );
 
     let report = run(&options(dirs)).unwrap();
     assert_eq!(report.files, files.len());

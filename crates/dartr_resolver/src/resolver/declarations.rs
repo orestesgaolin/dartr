@@ -29,7 +29,10 @@ impl<'a> ResolverVisitor<'a> {
     }
 
     /// The formal parameters of an executable element.
-    pub fn formal_parameters_of(&self, element: EId<ExecutableElement>) -> Vec<EId<FormalParameterElement>> {
+    pub fn formal_parameters_of(
+        &self,
+        element: EId<ExecutableElement>,
+    ) -> Vec<EId<FormalParameterElement>> {
         self.ctx.executable(element).formal_params.clone()
     }
 
@@ -272,11 +275,19 @@ impl<'a> ResolverVisitor<'a> {
         let formal_parameters = self.formal_parameters_of(element);
         {
             let ast = &*self.ast;
-            self.flow_analysis
-                .body_or_initializer_enter(ast, self.tables, node.raw(), Some(&formal_parameters), None);
+            self.flow_analysis.body_or_initializer_enter(
+                ast,
+                self.tables,
+                node.raw(),
+                Some(&formal_parameters),
+                None,
+            );
         }
-        self.flow_analysis
-            .executable_declaration_enter(node.raw(), Some(&formal_parameters), false);
+        self.flow_analysis.executable_declaration_enter(
+            node.raw(),
+            Some(&formal_parameters),
+            false,
+        );
 
         let initializers = self.ast[node].initializers;
         self.visit_list(initializers);
@@ -292,7 +303,8 @@ impl<'a> ResolverVisitor<'a> {
         if self.ast[node].factory_keyword.is_some() {
             self.check_for_body_may_complete_normally(body.raw(), node.raw());
         }
-        self.flow_analysis.executable_declaration_exit(body.raw(), false);
+        self.flow_analysis
+            .executable_declaration_exit(body.raw(), false);
         self.flow_analysis.body_or_initializer_exit();
         crate::error::dead_code_verifier::flow_end(self, node);
         self.enclosing_function = outer_function;
@@ -339,12 +351,19 @@ impl<'a> ResolverVisitor<'a> {
 
     /// Dart `visitSuperConstructorInvocation`.
     pub fn visit_super_constructor_invocation(&mut self, node: Id<SuperConstructorInvocation>) {
-        crate::instance_creation_expression_resolver::visit_super_constructor_invocation(self, node);
+        crate::instance_creation_expression_resolver::visit_super_constructor_invocation(
+            self, node,
+        );
     }
 
     /// Dart `visitRedirectingConstructorInvocation`.
-    pub fn visit_redirecting_constructor_invocation(&mut self, node: Id<RedirectingConstructorInvocation>) {
-        crate::instance_creation_expression_resolver::visit_redirecting_constructor_invocation(self, node);
+    pub fn visit_redirecting_constructor_invocation(
+        &mut self,
+        node: Id<RedirectingConstructorInvocation>,
+    ) {
+        crate::instance_creation_expression_resolver::visit_redirecting_constructor_invocation(
+            self, node,
+        );
     }
 
     pub fn visit_method_declaration(&mut self, node: Id<MethodDeclaration>) {
@@ -378,11 +397,19 @@ impl<'a> ResolverVisitor<'a> {
         let formal_parameters = self.formal_parameters_of(element);
         {
             let ast = &*self.ast;
-            self.flow_analysis
-                .body_or_initializer_enter(ast, self.tables, node.raw(), Some(&formal_parameters), None);
+            self.flow_analysis.body_or_initializer_enter(
+                ast,
+                self.tables,
+                node.raw(),
+                Some(&formal_parameters),
+                None,
+            );
         }
-        self.flow_analysis
-            .executable_declaration_enter(node.raw(), Some(&formal_parameters), false);
+        self.flow_analysis.executable_declaration_enter(
+            node.raw(),
+            Some(&formal_parameters),
+            false,
+        );
         let body = self.ast[node].body;
         let imposed = if matches!(self.ctx.ty(return_type), TypeKind::Dynamic) {
             None
@@ -397,7 +424,8 @@ impl<'a> ResolverVisitor<'a> {
             // Dart `checkForBodyMayCompleteNormally(body:, errorNode: node.name)`.
             self.check_for_body_may_complete_normally(body.raw(), node.raw());
         }
-        self.flow_analysis.executable_declaration_exit(body.raw(), false);
+        self.flow_analysis
+            .executable_declaration_exit(body.raw(), false);
         self.flow_analysis.body_or_initializer_exit();
         crate::error::dead_code_verifier::flow_end(self, node);
         self.enclosing_function = outer_function;
@@ -417,7 +445,10 @@ impl<'a> ResolverVisitor<'a> {
         let _ = node;
     }
 
-    pub fn visit_primary_constructor_declaration(&mut self, node: Id<PrimaryConstructorDeclaration>) {
+    pub fn visit_primary_constructor_declaration(
+        &mut self,
+        node: Id<PrimaryConstructorDeclaration>,
+    ) {
         self.visit_children(node);
     }
 
@@ -452,11 +483,19 @@ impl<'a> ResolverVisitor<'a> {
             self.flow().function_expression_begin(node.raw());
         } else {
             let ast = &*self.ast;
-            self.flow_analysis
-                .body_or_initializer_enter(ast, self.tables, node.raw(), Some(&formal_parameters), None);
+            self.flow_analysis.body_or_initializer_enter(
+                ast,
+                self.tables,
+                node.raw(),
+                Some(&formal_parameters),
+                None,
+            );
         }
-        self.flow_analysis
-            .executable_declaration_enter(node.raw(), Some(&formal_parameters), is_local);
+        self.flow_analysis.executable_declaration_enter(
+            node.raw(),
+            Some(&formal_parameters),
+            is_local,
+        );
 
         let function_expression = self.ast[node].function_expression;
         self.resolve_expression(function_expression.upcast(), function_type);
@@ -468,7 +507,8 @@ impl<'a> ResolverVisitor<'a> {
         if !is_setter {
             self.check_for_body_may_complete_normally(body.raw(), node.raw());
         }
-        self.flow_analysis.executable_declaration_exit(body.raw(), is_local);
+        self.flow_analysis
+            .executable_declaration_exit(body.raw(), is_local);
         if is_local {
             self.flow().function_expression_end();
         } else {
@@ -507,19 +547,37 @@ impl<'a> ResolverVisitor<'a> {
 
     pub fn visit_regular_formal_parameter(&mut self, node: Id<RegularFormalParameter>) {
         let n = &self.ast[node];
-        let parts = (n.documentation_comment, n.metadata, n.type_, n.function_typed_suffix, n.default_clause);
+        let parts = (
+            n.documentation_comment,
+            n.metadata,
+            n.type_,
+            n.function_typed_suffix,
+            n.default_clause,
+        );
         self.visit_formal_parameter(node.raw(), parts);
     }
 
     pub fn visit_field_formal_parameter(&mut self, node: Id<FieldFormalParameter>) {
         let n = &self.ast[node];
-        let parts = (n.documentation_comment, n.metadata, n.type_, n.function_typed_suffix, n.default_clause);
+        let parts = (
+            n.documentation_comment,
+            n.metadata,
+            n.type_,
+            n.function_typed_suffix,
+            n.default_clause,
+        );
         self.visit_formal_parameter(node.raw(), parts);
     }
 
     pub fn visit_super_formal_parameter(&mut self, node: Id<SuperFormalParameter>) {
         let n = &self.ast[node];
-        let parts = (n.documentation_comment, n.metadata, n.type_, n.function_typed_suffix, n.default_clause);
+        let parts = (
+            n.documentation_comment,
+            n.metadata,
+            n.type_,
+            n.function_typed_suffix,
+            n.default_clause,
+        );
         self.visit_formal_parameter(node.raw(), parts);
     }
 
@@ -557,11 +615,17 @@ impl<'a> ResolverVisitor<'a> {
         }
     }
 
-    pub fn visit_formal_parameter_default_clause(&mut self, node: Id<FormalParameterDefaultClause>) {
+    pub fn visit_formal_parameter_default_clause(
+        &mut self,
+        node: Id<FormalParameterDefaultClause>,
+    ) {
         self.visit_children(node);
     }
 
-    pub fn visit_function_typed_formal_parameter_suffix(&mut self, node: Id<FunctionTypedFormalParameterSuffix>) {
+    pub fn visit_function_typed_formal_parameter_suffix(
+        &mut self,
+        node: Id<FunctionTypedFormalParameterSuffix>,
+    ) {
         self.visit_children(node);
     }
 
@@ -644,11 +708,17 @@ impl<'a> ResolverVisitor<'a> {
         self.visit_children(node);
     }
 
-    pub fn visit_record_type_annotation_named_field(&mut self, node: Id<RecordTypeAnnotationNamedField>) {
+    pub fn visit_record_type_annotation_named_field(
+        &mut self,
+        node: Id<RecordTypeAnnotationNamedField>,
+    ) {
         self.visit_children(node);
     }
 
-    pub fn visit_record_type_annotation_named_fields(&mut self, node: Id<RecordTypeAnnotationNamedFields>) {
+    pub fn visit_record_type_annotation_named_fields(
+        &mut self,
+        node: Id<RecordTypeAnnotationNamedFields>,
+    ) {
         self.visit_children(node);
     }
 
@@ -721,7 +791,11 @@ impl<'a> ResolverVisitor<'a> {
 
     // For loop parts: resolved by the for resolver (C7).
 
-    pub fn visit_for_each_parts_with_declaration(&mut self, _node: Id<ForEachPartsWithDeclaration>) {}
+    pub fn visit_for_each_parts_with_declaration(
+        &mut self,
+        _node: Id<ForEachPartsWithDeclaration>,
+    ) {
+    }
 
     pub fn visit_for_each_parts_with_identifier(&mut self, _node: Id<ForEachPartsWithIdentifier>) {}
 

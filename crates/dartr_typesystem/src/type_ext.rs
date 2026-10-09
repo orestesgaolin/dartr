@@ -47,13 +47,25 @@ pub fn type_mentions_store(ctx: &Ctx<'_>, t: TypeId, store: StoreId) -> bool {
     fn alias_mentions(ctx: &Ctx<'_>, alias: Option<AliasId>, store: StoreId) -> bool {
         alias.is_some_and(|a| {
             let a = ctx.alias(a);
-            a.element.store() == store || ctx.list(a.args).iter().any(|&t| type_mentions_store(ctx, t, store))
+            a.element.store() == store
+                || ctx
+                    .list(a.args)
+                    .iter()
+                    .any(|&t| type_mentions_store(ctx, t, store))
         })
     }
     match *ctx.ty(t) {
-        TypeKind::Interface { element, args, alias, .. } => {
+        TypeKind::Interface {
+            element,
+            args,
+            alias,
+            ..
+        } => {
             element.store() == store
-                || ctx.list(args).iter().any(|&t| type_mentions_store(ctx, t, store))
+                || ctx
+                    .list(args)
+                    .iter()
+                    .any(|&t| type_mentions_store(ctx, t, store))
                 || alias_mentions(ctx, alias, store)
         }
         TypeKind::Function(f) => {
@@ -73,17 +85,36 @@ pub fn type_mentions_store(ctx: &Ctx<'_>, t: TypeId, store: StoreId) -> bool {
             }) || type_mentions_store(ctx, f.ret, store)
                 || alias_mentions(ctx, f.alias, store)
         }
-        TypeKind::Record { positional, named, alias, .. } => {
-            ctx.list(positional).iter().any(|&t| type_mentions_store(ctx, t, store))
-                || ctx.list(named).iter().any(|n| type_mentions_store(ctx, n.ty, store))
+        TypeKind::Record {
+            positional,
+            named,
+            alias,
+            ..
+        } => {
+            ctx.list(positional)
+                .iter()
+                .any(|&t| type_mentions_store(ctx, t, store))
+                || ctx
+                    .list(named)
+                    .iter()
+                    .any(|n| type_mentions_store(ctx, n.ty, store))
                 || alias_mentions(ctx, alias, store)
         }
-        TypeKind::TypeParameter { param, promoted_bound, alias, .. } => {
+        TypeKind::TypeParameter {
+            param,
+            promoted_bound,
+            alias,
+            ..
+        } => {
             param.store() == store
                 || promoted_bound.is_some_and(|b| type_mentions_store(ctx, b, store))
                 || alias_mentions(ctx, alias, store)
         }
-        TypeKind::Dynamic | TypeKind::Void | TypeKind::Invalid | TypeKind::Unknown | TypeKind::Never(_) => false,
+        TypeKind::Dynamic
+        | TypeKind::Void
+        | TypeKind::Invalid
+        | TypeKind::Unknown
+        | TypeKind::Never(_) => false,
     }
 }
 

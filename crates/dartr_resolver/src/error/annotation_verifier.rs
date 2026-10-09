@@ -38,8 +38,7 @@ use super::support::{
 use super::{UnitVerifier, VerifierHost};
 use crate::ast_ext::formal_parameter_parts;
 use crate::element_metadata::{
-    AnnotationRef, TargetKind, UnitAst, WorkspacePackage, element_annotations, flags,
-    target_kinds,
+    AnnotationRef, TargetKind, UnitAst, WorkspacePackage, element_annotations, flags, target_kinds,
 };
 
 /// Dart `AnnotationVerifier`.
@@ -124,15 +123,13 @@ impl AnnotationVerifier {
         let parent_element_is_private = parent_element.is_some_and(|e| is_private(&ctx, e));
         if let Some(p) = ast.cast::<TopLevelVariableDeclaration>(parent) {
             for &variable in ast.list(ast[ast[p].variables].variables) {
-                if declared_element(&ctx, v.tables, variable).is_some_and(|e| is_private(&ctx, e))
-                {
+                if declared_element(&ctx, v.tables, variable).is_some_and(|e| is_private(&ctx, e)) {
                     report_node(v, diag::invalid_internal_annotation(), variable.raw());
                 }
             }
         } else if let Some(p) = ast.cast::<FieldDeclaration>(parent) {
             for &variable in ast.list(ast[ast[p].fields].variables) {
-                if declared_element(&ctx, v.tables, variable).is_some_and(|e| is_private(&ctx, e))
-                {
+                if declared_element(&ctx, v.tables, variable).is_some_and(|e| is_private(&ctx, e)) {
                     report_node(v, diag::invalid_internal_annotation(), variable.raw());
                 }
             }
@@ -844,7 +841,11 @@ fn find_undefined_use_result_parameter(
 ) -> Option<Id<Expression>> {
     let ast = v.ast;
     let constructor_name = ast.cast::<PrefixedIdentifier>(ast[node].name)?;
-    if ast.tokens.lexeme(ast[ast[constructor_name].identifier].token) != "unless" {
+    if ast
+        .tokens
+        .lexeme(ast[ast[constructor_name].identifier].token)
+        != "unless"
+    {
         return None;
     }
     let unless_param = element.string_argument(None, Some("parameterDefined"))?;

@@ -67,7 +67,10 @@ fn outline_json(line_info: &LineInfo, o: &Outline) -> Value {
     if let Some(children) = &o.children {
         m.insert(
             "children".into(),
-            children.iter().map(|c| outline_json(line_info, c)).collect(),
+            children
+                .iter()
+                .map(|c| outline_json(line_info, c))
+                .collect(),
         );
     }
     Value::Object(m)

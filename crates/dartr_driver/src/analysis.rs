@@ -10,10 +10,10 @@ use std::sync::Arc;
 
 use indexmap::IndexMap;
 
+use dartr_ast_builder::ParsedUnit;
 use dartr_element::{
     Ctx, DirectiveUri, EId, FId, FeatureSet, LibraryElement, LibraryFragment, NoopSink,
 };
-use dartr_ast_builder::ParsedUnit;
 use dartr_resolver::library_analyzer::{
     ExternalUnitCache, LibraryAnalysisInput, ResolvedLibrary, UnitInput, analyze_library,
 };

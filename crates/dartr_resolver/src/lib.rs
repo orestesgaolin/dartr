@@ -54,11 +54,11 @@ pub mod resolver;
 pub mod tables;
 
 // C1: scopes, element binding, resolution visitor.
+pub mod ast_resolver;
 pub mod ast_rewrite;
 pub mod element_binding_visitor;
 pub mod element_ext;
 pub mod element_walker;
-pub mod ast_resolver;
 pub mod named_type_resolver;
 pub mod record_type_annotation_resolver;
 pub mod resolution_visitor;
@@ -80,13 +80,13 @@ pub mod variable_declaration_resolver;
 
 // Stubs: one module per Dart resolver file, filled by units C3–C9.
 pub mod annotation_resolver;
-pub mod element_metadata;
 pub mod applicable_extensions;
 pub mod assignment_expression_resolver;
 pub mod binary_expression_resolver;
 pub mod comment_reference_resolver;
 pub mod constructor_reference_resolver;
 pub mod dot_shorthand_resolver;
+pub mod element_metadata;
 pub mod exit_detector;
 pub mod extension_member_resolver;
 pub mod for_resolver;
@@ -109,6 +109,8 @@ pub mod type_property_resolver;
 pub mod typed_literal_resolver;
 pub mod yield_statement_resolver;
 
-pub use library_analyzer::{LibraryAnalysisInput, ResolvedLibrary, ResolvedUnit, UnitInput, analyze_library};
+pub use library_analyzer::{
+    LibraryAnalysisInput, ResolvedLibrary, ResolvedUnit, UnitInput, analyze_library,
+};
 pub use resolver::ResolverVisitor;
 pub use tables::ResolverTables;

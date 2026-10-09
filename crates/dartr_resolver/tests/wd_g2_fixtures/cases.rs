@@ -374,10 +374,16 @@ f() {
     Ported {
         name: r#"dead_code_test.dart::DeadCodeTest_AnonymousMethodsExperiment::test_deadBlock_if_debugConst_prefixedIdentifier2"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib2.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib2.dart"#,
+                r#"
 class A {
   static const bool DEBUG = false;
-}"#)])],
+}"#,
+            )],
+        )],
         source: r#"
 import 'lib2.dart';
 f() {
@@ -389,11 +395,17 @@ f() {
     Ported {
         name: r#"dead_code_test.dart::DeadCodeTest_AnonymousMethodsExperiment::test_deadBlock_if_debugConst_propertyAccessor"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib2.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib2.dart"#,
+                r#"
 class A {
   static const bool DEBUG = false;
 }
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib2.dart' as LIB;
 f() {
@@ -2101,10 +2113,16 @@ Iterable<int> f() sync* {
     Ported {
         name: r#"duplicate_hidden_name_test.dart::DuplicateHiddenNameTest::test_library_hidden"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 class A {}
 class B {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 export 'lib1.dart' hide A, B, A;
 //                            ^
@@ -2115,10 +2133,16 @@ export 'lib1.dart' hide A, B, A;
     Ported {
         name: r#"duplicate_import_test.dart::DuplicateExportTest::test_library_duplicateExport"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 class A {}
 class B {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 export 'lib1.dart';
 export 'lib1.dart';
@@ -2130,10 +2154,16 @@ export 'lib1.dart';
     Ported {
         name: r#"duplicate_import_test.dart::DuplicateExportTest::test_library_duplicateExport_differentShow"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 class A {}
 class B {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 export 'lib1.dart' show A;
 export 'lib1.dart' show B;
@@ -2143,10 +2173,16 @@ export 'lib1.dart' show B;
     Ported {
         name: r#"duplicate_import_test.dart::DuplicateExportTest::test_library_duplicateExport_sameShow"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 class A {}
 class B {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 export 'lib1.dart' show A;
 export 'lib1.dart' show A;
@@ -2158,9 +2194,15 @@ export 'lib1.dart' show A;
     Ported {
         name: r#"duplicate_import_test.dart::DuplicateImportTest::test_library_duplicateImport_absolute_absolute"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"a.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"a.dart"#,
+                r#"
 class A {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'package:test/a.dart';
 import 'package:test/a.dart';
@@ -2174,9 +2216,15 @@ final a = A();
     Ported {
         name: r#"duplicate_import_test.dart::DuplicateImportTest::test_library_duplicateImport_relative_absolute"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"a.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"a.dart"#,
+                r#"
 class A {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'a.dart';
 import 'package:test/a.dart';
@@ -2190,9 +2238,15 @@ final a = A();
     Ported {
         name: r#"duplicate_import_test.dart::DuplicateImportTest::test_library_duplicateImport_relative_relative"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"a.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"a.dart"#,
+                r#"
 class A {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'a.dart';
 import 'a.dart';
@@ -2206,10 +2260,16 @@ final a = A();
     Ported {
         name: r#"duplicate_shown_name_test.dart::DuplicateShownNameTest::test_library_shown"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 class A {}
 class B {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 export 'lib1.dart' show A, B, A;
 //                            ^
@@ -2431,11 +2491,17 @@ main() {
     Ported {
         name: r#"unnecessary_import_test.dart::UnnecessaryImportTest::test_library_annotationOnDirective"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 class A {
   const A() {}
 }
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 @A()
 import 'lib1.dart';
@@ -2445,11 +2511,23 @@ import 'lib1.dart';
     Ported {
         name: r#"unnecessary_import_test.dart::UnnecessaryImportTest::test_library_as_equalPrefixes_referenced"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[
+                (
+                    r#"lib1.dart"#,
+                    r#"
 class A {}
-"#), (r#"lib2.dart"#, r#"
+"#,
+                ),
+                (
+                    r#"lib2.dart"#,
+                    r#"
 class B {}
-"#)])],
+"#,
+                ),
+            ],
+        )],
         source: r#"
 import 'lib1.dart' as one;
 import 'lib2.dart' as one;
@@ -2460,13 +2538,29 @@ f(one.A a, one.B b) {}
     Ported {
         name: r#"unnecessary_import_test.dart::UnnecessaryImportTest::test_library_as_equalPrefixes_referenced_via_export"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[
+                (
+                    r#"lib1.dart"#,
+                    r#"
 class A {}
-"#), (r#"lib2.dart"#, r#"
+"#,
+                ),
+                (
+                    r#"lib2.dart"#,
+                    r#"
 class B {}
-"#), (r#"lib3.dart"#, r#"
+"#,
+                ),
+                (
+                    r#"lib3.dart"#,
+                    r#"
 export 'lib2.dart';
-"#)])],
+"#,
+                ),
+            ],
+        )],
         source: r#"
 import 'lib1.dart' as one;
 import 'lib3.dart' as one;
@@ -2477,11 +2571,23 @@ f(one.A a, one.B b) {}
     Ported {
         name: r#"unnecessary_import_test.dart::UnnecessaryImportTest::test_library_as_equalPrefixes_unreferenced"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[
+                (
+                    r#"lib1.dart"#,
+                    r#"
 class A {}
-"#), (r#"lib2.dart"#, r#"
+"#,
+                ),
+                (
+                    r#"lib2.dart"#,
+                    r#"
 class B {}
-"#)])],
+"#,
+                ),
+            ],
+        )],
         source: r#"
 import 'lib1.dart' as one;
 import 'lib2.dart' as one; // ignore: unused_import
@@ -2492,10 +2598,16 @@ f(one.A a) {}
     Ported {
         name: r#"unnecessary_import_test.dart::UnnecessaryImportTest::test_library_as_show_multipleElements"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 class A {}
 class B {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart' as one show A, B;
 f(one.A a, one.B b) {}
@@ -2505,10 +2617,16 @@ f(one.A a, one.B b) {}
     Ported {
         name: r#"unnecessary_import_test.dart::UnnecessaryImportTest::test_library_as_showTopLevelFunction"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 class One {}
 topLevelFunction() {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart' hide topLevelFunction;
 import 'lib1.dart' as one show topLevelFunction;
@@ -2521,10 +2639,16 @@ f(One o) {
     Ported {
         name: r#"unnecessary_import_test.dart::UnnecessaryImportTest::test_library_as_showTopLevelFunction_multipleDirectives"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 class One {}
 topLevelFunction() {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart' hide topLevelFunction;
 import 'lib1.dart' as one show topLevelFunction;
@@ -8715,11 +8839,17 @@ enum E {
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_annotationOnDirective"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 class A {
   const A() {}
 }
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 @A()
 import 'lib1.dart';
@@ -8738,12 +8868,24 @@ import 'dart:core';
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_export"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[
+                (
+                    r#"lib1.dart"#,
+                    r#"
 export 'lib2.dart';
 class One {}
-"#), (r#"lib2.dart"#, r#"
+"#,
+                ),
+                (
+                    r#"lib2.dart"#,
+                    r#"
 class Two {}
-"#)])],
+"#,
+                ),
+            ],
+        )],
         source: r#"
 import 'lib1.dart';
 Two two = Two();
@@ -8753,15 +8895,31 @@ Two two = Two();
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_export2"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[
+                (
+                    r#"lib1.dart"#,
+                    r#"
 export 'lib2.dart';
 class One {}
-"#), (r#"lib2.dart"#, r#"
+"#,
+                ),
+                (
+                    r#"lib2.dart"#,
+                    r#"
 export 'lib3.dart';
 class Two {}
-"#), (r#"lib3.dart"#, r#"
+"#,
+                ),
+                (
+                    r#"lib3.dart"#,
+                    r#"
 class Three {}
-"#)])],
+"#,
+                ),
+            ],
+        )],
         source: r#"
 import 'lib1.dart';
 Three? three;
@@ -8771,16 +8929,32 @@ Three? three;
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_export_infiniteLoop"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[
+                (
+                    r#"lib1.dart"#,
+                    r#"
 export 'lib2.dart';
 class One {}
-"#), (r#"lib2.dart"#, r#"
+"#,
+                ),
+                (
+                    r#"lib2.dart"#,
+                    r#"
 export 'lib3.dart';
 class Two {}
-"#), (r#"lib3.dart"#, r#"
+"#,
+                ),
+                (
+                    r#"lib3.dart"#,
+                    r#"
 export 'lib2.dart';
 class Three {}
-"#)])],
+"#,
+                ),
+            ],
+        )],
         source: r#"
 import 'lib1.dart';
 Two? two;
@@ -8790,11 +8964,17 @@ Two? two;
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_extension_instance_call"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 extension E on int {
   int call(int x) => 0;
 }
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart';
 
@@ -8807,11 +8987,17 @@ f() {
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_extension_instance_getter"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 extension E on String {
   String get empty => '';
 }
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart';
 
@@ -8824,11 +9010,17 @@ f() {
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_extension_instance_getter_fromObjectPattern"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"a.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"a.dart"#,
+                r#"
 extension E on int {
   bool get foo => true;
 }
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'a.dart';
 
@@ -8841,11 +9033,17 @@ void f(Object? x) {
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_extension_instance_indexRead"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"a.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"a.dart"#,
+                r#"
 extension E on int {
   int operator[](_) => 0;
 }
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'a.dart';
 
@@ -8858,12 +9056,18 @@ void f() {
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_extension_instance_indexReadWrite"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"a.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"a.dart"#,
+                r#"
 extension E on int {
   int operator[](_) => 0;
   void operator[]=(_, __) {}
 }
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'a.dart';
 
@@ -8876,11 +9080,17 @@ void f() {
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_extension_instance_indexWrite"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"a.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"a.dart"#,
+                r#"
 extension E on int {
   void operator[]=(_, __) {}
 }
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'a.dart';
 
@@ -8893,11 +9103,17 @@ void f() {
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_extension_instance_method"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 extension E on String {
   String empty() => '';
 }
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart';
 
@@ -8910,11 +9126,17 @@ f() {
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_extension_instance_operator_binary"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 extension E on String {
   String operator -(String s) => this;
 }
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart';
 
@@ -8927,11 +9149,17 @@ f() {
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_extension_instance_operator_unary"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 extension E on String {
   void operator -() {}
 }
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart';
 
@@ -8944,11 +9172,17 @@ f() {
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_extension_instance_setter"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 extension E on String {
   void set foo(int i) {}
 }
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart';
 
@@ -8961,11 +9195,17 @@ f() {
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_extension_override_getter"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 extension E on String {
   String get empty => '';
 }
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart';
 
@@ -8978,11 +9218,17 @@ f() {
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_extension_prefixed_isUsed"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 extension E on String {
   String empty() => '';
 }
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart' as lib1;
 
@@ -8995,11 +9241,17 @@ f() {
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_extension_prefixed_notUsed"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 extension E on String {
   String empty() => '';
 }
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart' as lib1;
 //     ^^^^^^^^^^^
@@ -9010,11 +9262,17 @@ import 'lib1.dart' as lib1;
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_extension_static_field"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 extension E on String {
   static const String empty = '';
 }
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart';
 
@@ -9027,9 +9285,15 @@ f() {
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_hide"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 class A {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart';
 import 'lib1.dart' hide A;
@@ -9052,9 +9316,15 @@ import 'dart:async';
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_metadata"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 const x = 0;
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 @A(x)
 import 'lib1.dart';
@@ -9068,15 +9338,27 @@ class A {
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_multipleExtensions"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[
+                (
+                    r#"lib1.dart"#,
+                    r#"
 extension E on String {
   String a() => '';
 }
-"#), (r#"lib2.dart"#, r#"
+"#,
+                ),
+                (
+                    r#"lib2.dart"#,
+                    r#"
 extension E on String {
   String b() => '';
 }
-"#)])],
+"#,
+                ),
+            ],
+        )],
         source: r#"
 import 'lib1.dart';
 //     ^^^^^^^^^^^
@@ -9126,9 +9408,15 @@ void f() {
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_prefixed"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 class A {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart';
 //     ^^^^^^^^^^^
@@ -9165,11 +9453,23 @@ void f() {}
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_prefixed_samePrefix_notUsed"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[
+                (
+                    r#"lib1.dart"#,
+                    r#"
 class A {}
-"#), (r#"lib2.dart"#, r#"
+"#,
+                ),
+                (
+                    r#"lib2.dart"#,
+                    r#"
 class B {}
-"#)])],
+"#,
+                ),
+            ],
+        )],
         source: r#"
 import 'lib1.dart' as one;
 import 'lib2.dart' as one;
@@ -9182,11 +9482,23 @@ one.A a = one.A();
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_prefixed_samePrefix_referenced"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[
+                (
+                    r#"lib1.dart"#,
+                    r#"
 class A {}
-"#), (r#"lib2.dart"#, r#"
+"#,
+                ),
+                (
+                    r#"lib2.dart"#,
+                    r#"
 class B {}
-"#)])],
+"#,
+                ),
+            ],
+        )],
         source: r#"
 import 'lib1.dart' as one;
 import 'lib2.dart' as one;
@@ -9198,13 +9510,29 @@ one.B b = one.B();
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_prefixed_samePrefix_referenced_via_export"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[
+                (
+                    r#"lib1.dart"#,
+                    r#"
 class A {}
-"#), (r#"lib2.dart"#, r#"
+"#,
+                ),
+                (
+                    r#"lib2.dart"#,
+                    r#"
 class B {}
-"#), (r#"lib3.dart"#, r#"
+"#,
+                ),
+                (
+                    r#"lib3.dart"#,
+                    r#"
 export 'lib2.dart';
-"#)])],
+"#,
+                ),
+            ],
+        )],
         source: r#"
 import 'lib1.dart' as one;
 import 'lib3.dart' as one;
@@ -9216,10 +9544,16 @@ one.B b = one.B();
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_prefixed_show_multipleElements"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 class A {}
 class B {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart' as one show A, B;
 one.A a = one.A();
@@ -9230,10 +9564,16 @@ one.B b = one.B();
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_prefixed_showTopLevelFunction"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 class One {}
 topLevelFunction() {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart' hide topLevelFunction;
 import 'lib1.dart' as one show topLevelFunction;
@@ -9251,10 +9591,16 @@ class A {
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_prefixed_showTopLevelFunction_multipleDirectives"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 class One {}
 topLevelFunction() {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart' hide topLevelFunction;
 import 'lib1.dart' as one show topLevelFunction;
@@ -9271,9 +9617,15 @@ class A {
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_prefixed_systemLibrary"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"a.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"a.dart"#,
+                r#"
 class File {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'dart:io' as prefix;
 //     ^^^^^^^^^
@@ -9286,10 +9638,16 @@ prefix.File? f;
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_show"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 class A {}
 class B {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart' show A;
 import 'lib1.dart' show B;
@@ -9302,9 +9660,15 @@ A a = A();
     Ported {
         name: r#"unused_import_test.dart::UnusedImportTest::test_library_systemLibrary"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 class File {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'dart:io';
 //     ^^^^^^^^^
@@ -10084,12 +10448,18 @@ import 'dart:core' as core show int;
     Ported {
         name: r#"unused_shown_name_test.dart::UnusedShownNameTest::test_extension_instance_method_unused"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 extension E on String {
   String empty() => '';
 }
 String s = '';
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart' show E, s;
 //                      ^
@@ -10104,11 +10474,17 @@ f() {
     Ported {
         name: r#"unused_shown_name_test.dart::UnusedShownNameTest::test_extension_instance_method_used"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 extension E on String {
   String empty() => '';
 }
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart' show E;
 
@@ -10121,9 +10497,15 @@ f() {
     Ported {
         name: r#"unused_shown_name_test.dart::UnusedShownNameTest::test_referenced_prefixed_assignmentExpression"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"a.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"a.dart"#,
+                r#"
 var a = 0;
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'a.dart' as p show a;
 
@@ -10136,9 +10518,15 @@ void f() {
     Ported {
         name: r#"unused_shown_name_test.dart::UnusedShownNameTest::test_referenced_prefixed_postfixExpression"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"a.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"a.dart"#,
+                r#"
 var a = 0;
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'a.dart' as p show a;
 
@@ -10151,9 +10539,15 @@ void f() {
     Ported {
         name: r#"unused_shown_name_test.dart::UnusedShownNameTest::test_referenced_prefixed_prefixExpression"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"a.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"a.dart"#,
+                r#"
 var a = 0;
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'a.dart' as p show a;
 
@@ -10166,9 +10560,15 @@ void f() {
     Ported {
         name: r#"unused_shown_name_test.dart::UnusedShownNameTest::test_referenced_unprefixed_assignmentExpression"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"a.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"a.dart"#,
+                r#"
 var a = 0;
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'a.dart' show a;
 
@@ -10181,9 +10581,15 @@ void f() {
     Ported {
         name: r#"unused_shown_name_test.dart::UnusedShownNameTest::test_referenced_unprefixed_postfixExpression"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"a.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"a.dart"#,
+                r#"
 var a = 0;
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'a.dart' show a;
 
@@ -10196,9 +10602,15 @@ void f() {
     Ported {
         name: r#"unused_shown_name_test.dart::UnusedShownNameTest::test_referenced_unprefixed_prefixExpression"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"a.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"a.dart"#,
+                r#"
 var a = 0;
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'a.dart' show a;
 
@@ -10211,10 +10623,16 @@ void f() {
     Ported {
         name: r#"unused_shown_name_test.dart::UnusedShownNameTest::test_unreferenced"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 class A {}
 class B {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart' show A, B;
 //                         ^
@@ -10226,11 +10644,17 @@ A a = A();
     Ported {
         name: r#"unused_shown_name_test.dart::UnusedShownNameTest::test_unreferenced_dotShorthand"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"a.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"a.dart"#,
+                r#"
 class A {}
 
 void f(A a) {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'a.dart' show A, f;
 //                   ^
@@ -10259,10 +10683,16 @@ main() {
     Ported {
         name: r#"unused_shown_name_test.dart::UnusedShownNameTest::test_unusedShownName_as"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 class A {}
 class B {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart' as p show A, B;
 //                              ^
@@ -10274,12 +10704,18 @@ p.A a = p.A();
     Ported {
         name: r#"unused_shown_name_test.dart::UnusedShownNameTest::test_unusedShownName_duplicates"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 class A {}
 class B {}
 class C {}
 class D {}
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart' show A, B;
 //                         ^
@@ -10295,12 +10731,18 @@ C c = C();
     Ported {
         name: r#"unused_shown_name_test.dart::UnusedShownNameTest::test_unusedShownName_topLevelVariable"#,
         strict_inference: false,
-        packages: &[("test", &[(r#"lib1.dart"#, r#"
+        packages: &[(
+            "test",
+            &[(
+                r#"lib1.dart"#,
+                r#"
 const int var1 = 1;
 const int var2 = 2;
 const int var3 = 3;
 const int var4 = 4;
-"#)])],
+"#,
+            )],
+        )],
         source: r#"
 import 'lib1.dart' show var1, var2;
 import 'lib1.dart' show var3, var4;

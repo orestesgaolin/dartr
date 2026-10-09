@@ -4,8 +4,8 @@
 //! (Dart `LineInfo`, `CharacterLocation`). Offsets are UTF-16 code units,
 //! like token offsets.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::fmt;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// A location in a file: one-based line and column numbers (Dart
 /// `CharacterLocation`).

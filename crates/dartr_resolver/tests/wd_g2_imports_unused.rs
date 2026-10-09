@@ -39,13 +39,21 @@ fn g2_verifiers_report_the_diagnostics_of_the_analyzer_tests() {
     let (failures, count) = run_ported_with_codes(cases::CASES, G2_CODES, |_| true);
     let unexpected: Vec<&String> = failures
         .iter()
-        .filter(|f| !KNOWN_FAILURES.iter().any(|(n, _)| f.starts_with(&format!("{n}:"))))
+        .filter(|f| {
+            !KNOWN_FAILURES
+                .iter()
+                .any(|(n, _)| f.starts_with(&format!("{n}:")))
+        })
         .collect();
     eprintln!("{} of {count} cases pass", count - failures.len());
     assert!(
         unexpected.is_empty(),
         "{} of {count} cases failed:\n{}",
         unexpected.len(),
-        unexpected.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("\n")
+        unexpected
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
 }

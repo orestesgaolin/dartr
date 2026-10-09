@@ -16,11 +16,12 @@ use dartr_ast::{
     DotShorthandInvocation, EnumDeclaration, FormalParameterList, Id, ImplementsClause,
     InstanceCreationExpression, MethodInvocation, MixinDeclaration, NamedArgument, NamedType,
     NodeId, PrimaryConstructorBody, PrimaryConstructorDeclaration,
-    RedirectingConstructorInvocation, SuperConstructorInvocation, SuperFormalParameter,
-    WithClause,
+    RedirectingConstructorInvocation, SuperConstructorInvocation, SuperFormalParameter, WithClause,
 };
 use dartr_diagnostics::{LocatableDiagnostic, diag};
-use dartr_element::{ConstructorElement, ElemRef, ElementId, FormalParameterElement, Tag, TypeKind};
+use dartr_element::{
+    ConstructorElement, ElemRef, ElementId, FormalParameterElement, Tag, TypeKind,
+};
 use dartr_typesystem::{member, type_ext};
 
 use super::support::{
@@ -284,17 +285,21 @@ pub fn primary_constructor_declaration(
 ) {
     let ast = v.ast;
     let initializers: Vec<NodeId> = primary_constructor_body(ast, node)
-        .map(|b| ast.list(ast[b].initializers).iter().map(|i| i.raw()).collect())
+        .map(|b| {
+            ast.list(ast[b].initializers)
+                .iter()
+                .map(|i| i.raw())
+                .collect()
+        })
         .unwrap_or_default();
     let super_constructor = super_constructor_of(v, node.raw());
     // Dart `PrimaryConstructorDeclaration.errorRange`.
     let start = ast.offset(node);
     let end = match ast[node].constructor_name {
         Some(n) => ast.end(n),
-        None => crate::ast_ext::token_end(
-            ast,
-            ast[node].const_keyword.unwrap_or(ast[node].type_name),
-        ),
+        None => {
+            crate::ast_ext::token_end(ast, ast[node].const_keyword.unwrap_or(ast[node].type_name))
+        }
     };
     check_for_deprecated_optional_super_parameters(
         v,
@@ -357,7 +362,10 @@ fn check_for_deprecated_extend(v: &mut UnitVerifier<'_>, node: Option<Id<NamedTy
 }
 
 /// Dart `_checkForDeprecatedImplement(namedTypes)`.
-fn check_for_deprecated_implement(v: &mut UnitVerifier<'_>, named_types: Option<Vec<Id<NamedType>>>) {
+fn check_for_deprecated_implement(
+    v: &mut UnitVerifier<'_>,
+    named_types: Option<Vec<Id<NamedType>>>,
+) {
     let Some(named_types) = named_types else {
         return;
     };
@@ -599,8 +607,7 @@ fn check_for_deprecated_optional_super_parameters(
             continue;
         }
         if type_ext::is_positional(kind) {
-            if super_positional_count
-                <= positional_argument_count + positional_super_argument_count
+            if super_positional_count <= positional_argument_count + positional_super_argument_count
             {
                 continue;
             }
@@ -619,7 +626,10 @@ fn check_for_deprecated_optional_super_parameters(
 }
 
 /// Dart `_checkForDeprecatedSubclass(namedTypes)`.
-fn check_for_deprecated_subclass(v: &mut UnitVerifier<'_>, named_types: Option<Vec<Id<NamedType>>>) {
+fn check_for_deprecated_subclass(
+    v: &mut UnitVerifier<'_>,
+    named_types: Option<Vec<Id<NamedType>>>,
+) {
     let Some(named_types) = named_types else {
         return;
     };

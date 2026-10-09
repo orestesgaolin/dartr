@@ -102,7 +102,12 @@ impl TextPiece {
 
     /// Dart `CommentPiece(trailingWhitespace, soft: soft)`.
     pub fn comment(trailing_whitespace: Whitespace, soft: bool) -> TextPiece {
-        TextPiece::with_kind(soft, TextKind::Comment { trailing_whitespace })
+        TextPiece::with_kind(
+            soft,
+            TextKind::Comment {
+                trailing_whitespace,
+            },
+        )
     }
 
     /// Dart `EnableFormattingCommentPiece(sourceOffset, trailingWhitespace,

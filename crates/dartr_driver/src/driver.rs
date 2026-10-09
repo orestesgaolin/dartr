@@ -81,7 +81,12 @@ impl Driver {
         }
         // The cycles to link, dependencies first.
         let mut order: IndexSet<CycleId> = IndexSet::new();
-        fn visit(graph: &LibraryGraph, linked: &IndexMap<CycleId, Arc<LinkedCycle>>, c: CycleId, order: &mut IndexSet<CycleId>) {
+        fn visit(
+            graph: &LibraryGraph,
+            linked: &IndexMap<CycleId, Arc<LinkedCycle>>,
+            c: CycleId,
+            order: &mut IndexSet<CycleId>,
+        ) {
             if linked.contains_key(&c) || order.contains(&c) {
                 return;
             }
@@ -155,7 +160,12 @@ impl Driver {
         }
     }
 
-    fn unit_input(&self, file: FileId, is_library: bool, visited: &mut IndexSet<FileId>) -> LinkUnitInput {
+    fn unit_input(
+        &self,
+        file: FileId,
+        is_library: bool,
+        visited: &mut IndexSet<FileId>,
+    ) -> LinkUnitInput {
         visited.insert(file);
         let fs = &self.fs;
         let f = fs.file(file);
@@ -202,11 +212,14 @@ impl Driver {
                         relative_uri: relative_uri.clone(),
                         unit: Box::new(self.unit_input(part, false, visited)),
                     },
-                    (DirectiveUri::WithFile {
-                        relative_uri_str,
-                        relative_uri,
-                        file: target,
-                    }, _) => {
+                    (
+                        DirectiveUri::WithFile {
+                            relative_uri_str,
+                            relative_uri,
+                            file: target,
+                        },
+                        _,
+                    ) => {
                         let t = fs.file(*target);
                         LinkPartUri::Other(LinkDirectiveUri::Source {
                             relative_uri_string: relative_uri_str.clone(),
@@ -301,15 +314,17 @@ impl<'a> Job<'a> {
             // A snapshot that has all direct dependencies (they published
             // before this cycle became ready).
             let state = self.shared.lock().unwrap().0.clone();
-            let linked = link_cycle(&state.world, &state.registry, &crate::link_resolver::ResolverForLinking, &self.inputs[i]);
+            let linked = link_cycle(
+                &state.world,
+                &state.registry,
+                &crate::link_resolver::ResolverForLinking,
+                &self.inputs[i],
+            );
             let linked = Arc::new(linked);
             {
                 let mut shared = self.shared.lock().unwrap();
                 let (state, results) = &mut *shared;
-                let libraries = linked
-                    .libraries
-                    .iter()
-                    .map(|l| (l.uri.clone(), l.element));
+                let libraries = linked.libraries.iter().map(|l| (l.uri.clone(), l.element));
                 state.world = state.world.with_store(linked.store.clone(), libraries);
                 for l in &linked.libraries {
                     state.registry.libraries.insert(l.uri.clone(), l.clone());

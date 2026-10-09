@@ -40,7 +40,9 @@ pub struct ServerOptions {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
     /// A flag; `true` if `--no-<name>` is allowed.
-    Flag { negatable: bool },
+    Flag {
+        negatable: bool,
+    },
     Option,
     MultiOption,
 }
@@ -71,12 +73,27 @@ const OPTIONS: &[(&str, Kind)] = &[
     ("train-using", Kind::Option),
     ("disable-file-byte-store", Kind::Flag { negatable: true }),
     ("with-fine-dependencies", Kind::Flag { negatable: true }),
-    ("disable-server-exception-handling", Kind::Flag { negatable: true }),
-    ("disable-server-feature-completion", Kind::Flag { negatable: true }),
-    ("disable-server-feature-search", Kind::Flag { negatable: true }),
+    (
+        "disable-server-exception-handling",
+        Kind::Flag { negatable: true },
+    ),
+    (
+        "disable-server-feature-completion",
+        Kind::Flag { negatable: true },
+    ),
+    (
+        "disable-server-feature-search",
+        Kind::Flag { negatable: true },
+    ),
     ("plugins", Kind::Flag { negatable: true }),
-    ("disable-silent-analysis-exceptions", Kind::Flag { negatable: false }),
-    ("disable-status-notification-debouncing", Kind::Flag { negatable: false }),
+    (
+        "disable-silent-analysis-exceptions",
+        Kind::Flag { negatable: false },
+    ),
+    (
+        "disable-status-notification-debouncing",
+        Kind::Flag { negatable: false },
+    ),
     ("internal-print-to-console", Kind::Flag { negatable: false }),
     ("report-protocol-version", Kind::Option),
     // Removed options that the parser still accepts.

@@ -163,9 +163,9 @@ impl<'a> TokenStreamRewriter<'a> {
         let left_bracket = self
             .tokens
             .push_synthetic(TokenType::OPEN_CURLY_BRACKET, offset, byte);
-        let right_bracket = self
-            .tokens
-            .push_synthetic(TokenType::CLOSE_CURLY_BRACKET, offset, byte);
+        let right_bracket =
+            self.tokens
+                .push_synthetic(TokenType::CLOSE_CURLY_BRACKET, offset, byte);
         self.insert_token(previous_token, left_bracket);
         self.insert_token(left_bracket, right_bracket);
         self.set_end_group(left_bracket, right_bracket);

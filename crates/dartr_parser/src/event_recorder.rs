@@ -2,7 +2,6 @@
 //
 // GENERATED FILE. DO NOT EDIT. Run `python3 tools/codegen/gen_listener.py`.
 
-
 //! A listener that writes every call as JSON: `["eventName", arg, ...]`.
 //! Used by `dartr dump events`; the oracle writes the same JSON with
 //! `tools/oracle/bin/event_recorder.g.dart`.
@@ -123,7 +122,13 @@ impl EventRecorder {
     }
 
     /// Dart `ParserError.fromTokens`.
-    fn record_error(&mut self, tokens: &Tokens, message: &CfeMessage, start: TokenId, end: TokenId) {
+    fn record_error(
+        &mut self,
+        tokens: &Tokens,
+        message: &CfeMessage,
+        start: TokenId,
+        end: TokenId,
+    ) {
         use std::fmt::Write;
         if !self.first {
             self.errors.push(',');
@@ -189,7 +194,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_arguments(&mut self, tokens: &mut Tokens, count: i32, begin_token: TokenId, end_token: TokenId) {
+    fn end_arguments(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endArguments");
         self.int(count as i64);
         self.token(tokens, begin_token);
@@ -197,7 +208,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_object_pattern_fields(&mut self, tokens: &mut Tokens, count: i32, begin_token: TokenId, end_token: TokenId) {
+    fn handle_object_pattern_fields(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("handleObjectPatternFields");
         self.int(count as i64);
         self.token(tokens, begin_token);
@@ -205,7 +222,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_async_modifier(&mut self, tokens: &mut Tokens, async_token: Option<TokenId>, star_token: Option<TokenId>) {
+    fn handle_async_modifier(
+        &mut self,
+        tokens: &mut Tokens,
+        async_token: Option<TokenId>,
+        star_token: Option<TokenId>,
+    ) {
         self.begin("handleAsyncModifier");
         self.opt_token(tokens, async_token);
         self.opt_token(tokens, star_token);
@@ -218,14 +240,25 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_await_expression(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId) {
+    fn end_await_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endAwaitExpression");
         self.token(tokens, begin_token);
         self.token(tokens, end_token);
         self.end();
     }
 
-    fn end_invalid_await_expression(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId, error_code: &'static CfeCode) {
+    fn end_invalid_await_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+        error_code: &'static CfeCode,
+    ) {
         self.begin("endInvalidAwaitExpression");
         self.token(tokens, begin_token);
         self.token(tokens, end_token);
@@ -240,7 +273,14 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_block(&mut self, tokens: &mut Tokens, count: i32, begin_token: TokenId, end_token: TokenId, block_kind: BlockKind) {
+    fn end_block(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+        block_kind: BlockKind,
+    ) {
         self.begin("endBlock");
         self.int(count as i64);
         self.token(tokens, begin_token);
@@ -272,7 +312,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_case_expression(&mut self, tokens: &mut Tokens, case_keyword: TokenId, when: Option<TokenId>, colon: TokenId) {
+    fn end_case_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        case_keyword: TokenId,
+        when: Option<TokenId>,
+        colon: TokenId,
+    ) {
         self.begin("endCaseExpression");
         self.token(tokens, case_keyword);
         self.opt_token(tokens, when);
@@ -280,14 +326,26 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn begin_class_or_mixin_or_extension_body(&mut self, tokens: &mut Tokens, kind: DeclarationKind, token: TokenId) {
+    fn begin_class_or_mixin_or_extension_body(
+        &mut self,
+        tokens: &mut Tokens,
+        kind: DeclarationKind,
+        token: TokenId,
+    ) {
         self.begin("beginClassOrMixinOrExtensionBody");
         self.string(kind.name());
         self.token(tokens, token);
         self.end();
     }
 
-    fn end_class_or_mixin_or_extension_body(&mut self, tokens: &mut Tokens, kind: DeclarationKind, member_count: i32, begin_token: TokenId, end_token: TokenId) {
+    fn end_class_or_mixin_or_extension_body(
+        &mut self,
+        tokens: &mut Tokens,
+        kind: DeclarationKind,
+        member_count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endClassOrMixinOrExtensionBody");
         self.string(kind.name());
         self.int(member_count as i64);
@@ -296,13 +354,29 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn begin_class_or_mixin_or_named_mixin_application_prelude(&mut self, tokens: &mut Tokens, token: TokenId) {
+    fn begin_class_or_mixin_or_named_mixin_application_prelude(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+    ) {
         self.begin("beginClassOrMixinOrNamedMixinApplicationPrelude");
         self.token(tokens, token);
         self.end();
     }
 
-    fn begin_class_declaration(&mut self, tokens: &mut Tokens, begin: TokenId, abstract_token: Option<TokenId>, sealed_token: Option<TokenId>, base_token: Option<TokenId>, interface_token: Option<TokenId>, final_token: Option<TokenId>, augment_token: Option<TokenId>, mixin_token: Option<TokenId>, name: TokenId) {
+    fn begin_class_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        begin: TokenId,
+        abstract_token: Option<TokenId>,
+        sealed_token: Option<TokenId>,
+        base_token: Option<TokenId>,
+        interface_token: Option<TokenId>,
+        final_token: Option<TokenId>,
+        augment_token: Option<TokenId>,
+        mixin_token: Option<TokenId>,
+        name: TokenId,
+    ) {
         self.begin("beginClassDeclaration");
         self.token(tokens, begin);
         self.opt_token(tokens, abstract_token);
@@ -316,21 +390,37 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_class_extends(&mut self, tokens: &mut Tokens, extends_keyword: Option<TokenId>, type_count: i32) {
+    fn handle_class_extends(
+        &mut self,
+        tokens: &mut Tokens,
+        extends_keyword: Option<TokenId>,
+        type_count: i32,
+    ) {
         self.begin("handleClassExtends");
         self.opt_token(tokens, extends_keyword);
         self.int(type_count as i64);
         self.end();
     }
 
-    fn handle_implements(&mut self, tokens: &mut Tokens, implements_keyword: Option<TokenId>, interfaces_count: i32) {
+    fn handle_implements(
+        &mut self,
+        tokens: &mut Tokens,
+        implements_keyword: Option<TokenId>,
+        interfaces_count: i32,
+    ) {
         self.begin("handleImplements");
         self.opt_token(tokens, implements_keyword);
         self.int(interfaces_count as i64);
         self.end();
     }
 
-    fn handle_class_header(&mut self, tokens: &mut Tokens, begin: TokenId, class_keyword: TokenId, native_token: Option<TokenId>) {
+    fn handle_class_header(
+        &mut self,
+        tokens: &mut Tokens,
+        begin: TokenId,
+        class_keyword: TokenId,
+        native_token: Option<TokenId>,
+    ) {
         self.begin("handleClassHeader");
         self.token(tokens, begin);
         self.token(tokens, class_keyword);
@@ -338,13 +428,22 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_recover_declaration_header(&mut self, tokens: &mut Tokens, kind: DeclarationHeaderKind) {
+    fn handle_recover_declaration_header(
+        &mut self,
+        tokens: &mut Tokens,
+        kind: DeclarationHeaderKind,
+    ) {
         self.begin("handleRecoverDeclarationHeader");
         self.string(kind.name());
         self.end();
     }
 
-    fn end_class_declaration(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId) {
+    fn end_class_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endClassDeclaration");
         self.token(tokens, begin_token);
         self.token(tokens, end_token);
@@ -363,7 +462,15 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn begin_mixin_declaration(&mut self, tokens: &mut Tokens, begin_token: TokenId, augment_token: Option<TokenId>, base_token: Option<TokenId>, mixin_keyword: TokenId, name: TokenId) {
+    fn begin_mixin_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        augment_token: Option<TokenId>,
+        base_token: Option<TokenId>,
+        mixin_keyword: TokenId,
+        name: TokenId,
+    ) {
         self.begin("beginMixinDeclaration");
         self.token(tokens, begin_token);
         self.opt_token(tokens, augment_token);
@@ -373,7 +480,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_mixin_on(&mut self, tokens: &mut Tokens, on_keyword: Option<TokenId>, type_count: i32) {
+    fn handle_mixin_on(
+        &mut self,
+        tokens: &mut Tokens,
+        on_keyword: Option<TokenId>,
+        type_count: i32,
+    ) {
         self.begin("handleMixinOn");
         self.opt_token(tokens, on_keyword);
         self.int(type_count as i64);
@@ -397,7 +509,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_mixin_declaration(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId) {
+    fn end_mixin_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endMixinDeclaration");
         self.token(tokens, begin_token);
         self.token(tokens, end_token);
@@ -410,13 +527,23 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn begin_extension_declaration_prelude(&mut self, tokens: &mut Tokens, extension_keyword: TokenId) {
+    fn begin_extension_declaration_prelude(
+        &mut self,
+        tokens: &mut Tokens,
+        extension_keyword: TokenId,
+    ) {
         self.begin("beginExtensionDeclarationPrelude");
         self.token(tokens, extension_keyword);
         self.end();
     }
 
-    fn begin_extension_declaration(&mut self, tokens: &mut Tokens, augment_token: Option<TokenId>, extension_keyword: TokenId, name: Option<TokenId>) {
+    fn begin_extension_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        augment_token: Option<TokenId>,
+        extension_keyword: TokenId,
+        name: Option<TokenId>,
+    ) {
         self.begin("beginExtensionDeclaration");
         self.opt_token(tokens, augment_token);
         self.token(tokens, extension_keyword);
@@ -424,7 +551,14 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_extension_declaration(&mut self, tokens: &mut Tokens, begin_token: TokenId, extension_keyword: TokenId, on_keyword: Option<TokenId>, end_token: TokenId) {
+    fn end_extension_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        extension_keyword: TokenId,
+        on_keyword: Option<TokenId>,
+        end_token: TokenId,
+    ) {
         self.begin("endExtensionDeclaration");
         self.token(tokens, begin_token);
         self.token(tokens, extension_keyword);
@@ -439,7 +573,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn begin_extension_type_declaration(&mut self, tokens: &mut Tokens, augment_keyword: Option<TokenId>, extension_keyword: TokenId, name: TokenId) {
+    fn begin_extension_type_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        augment_keyword: Option<TokenId>,
+        extension_keyword: TokenId,
+        name: TokenId,
+    ) {
         self.begin("beginExtensionTypeDeclaration");
         self.opt_token(tokens, augment_keyword);
         self.token(tokens, extension_keyword);
@@ -447,7 +587,15 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_extension_type_declaration(&mut self, tokens: &mut Tokens, begin_token: TokenId, augment_token: Option<TokenId>, extension_keyword: TokenId, type_keyword: TokenId, end_token: TokenId) {
+    fn end_extension_type_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        augment_token: Option<TokenId>,
+        extension_keyword: TokenId,
+        type_keyword: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endExtensionTypeDeclaration");
         self.token(tokens, begin_token);
         self.opt_token(tokens, augment_token);
@@ -463,7 +611,15 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_primary_constructor(&mut self, tokens: &mut Tokens, kind: DeclarationKind, begin_token: TokenId, end_token: TokenId, const_keyword: Option<TokenId>, has_constructor_name: bool) {
+    fn end_primary_constructor(
+        &mut self,
+        tokens: &mut Tokens,
+        kind: DeclarationKind,
+        begin_token: TokenId,
+        end_token: TokenId,
+        const_keyword: Option<TokenId>,
+        has_constructor_name: bool,
+    ) {
         self.begin("endPrimaryConstructor");
         self.string(kind.name());
         self.token(tokens, begin_token);
@@ -473,7 +629,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_no_primary_constructor(&mut self, tokens: &mut Tokens, kind: DeclarationKind, token: TokenId, const_keyword: Option<TokenId>) {
+    fn handle_no_primary_constructor(
+        &mut self,
+        tokens: &mut Tokens,
+        kind: DeclarationKind,
+        token: TokenId,
+        const_keyword: Option<TokenId>,
+    ) {
         self.begin("handleNoPrimaryConstructor");
         self.string(kind.name());
         self.token(tokens, token);
@@ -487,7 +649,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_primary_constructor_body(&mut self, tokens: &mut Tokens, begin_token: TokenId, begin_initializers: Option<TokenId>, end_token: TokenId) {
+    fn end_primary_constructor_body(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        begin_initializers: Option<TokenId>,
+        end_token: TokenId,
+    ) {
         self.begin("endPrimaryConstructorBody");
         self.token(tokens, begin_token);
         self.opt_token(tokens, begin_initializers);
@@ -543,7 +711,14 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_constructor_reference(&mut self, tokens: &mut Tokens, start: TokenId, period_before_name: Option<TokenId>, end_token: TokenId, constructor_reference_context: ConstructorReferenceContext) {
+    fn end_constructor_reference(
+        &mut self,
+        tokens: &mut Tokens,
+        start: TokenId,
+        period_before_name: Option<TokenId>,
+        end_token: TokenId,
+        constructor_reference_context: ConstructorReferenceContext,
+    ) {
         self.begin("endConstructorReference");
         self.token(tokens, start);
         self.opt_token(tokens, period_before_name);
@@ -558,7 +733,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_do_while_statement(&mut self, tokens: &mut Tokens, do_keyword: TokenId, while_keyword: TokenId, end_token: TokenId) {
+    fn end_do_while_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        do_keyword: TokenId,
+        while_keyword: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endDoWhileStatement");
         self.token(tokens, do_keyword);
         self.token(tokens, while_keyword);
@@ -596,7 +777,14 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn begin_enum_declaration(&mut self, tokens: &mut Tokens, begin_token: TokenId, augment_token: Option<TokenId>, enum_keyword: TokenId, name: TokenId) {
+    fn begin_enum_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        augment_token: Option<TokenId>,
+        enum_keyword: TokenId,
+        name: TokenId,
+    ) {
         self.begin("beginEnumDeclaration");
         self.token(tokens, begin_token);
         self.opt_token(tokens, augment_token);
@@ -605,7 +793,15 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_enum_declaration(&mut self, tokens: &mut Tokens, begin_token: TokenId, enum_keyword: TokenId, left_brace: TokenId, member_count: i32, end_token: TokenId) {
+    fn end_enum_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        enum_keyword: TokenId,
+        left_brace: TokenId,
+        member_count: i32,
+        end_token: TokenId,
+    ) {
         self.begin("endEnumDeclaration");
         self.token(tokens, begin_token);
         self.token(tokens, enum_keyword);
@@ -615,14 +811,25 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_enum_elements(&mut self, tokens: &mut Tokens, elements_end_token: TokenId, elements_count: i32) {
+    fn handle_enum_elements(
+        &mut self,
+        tokens: &mut Tokens,
+        elements_end_token: TokenId,
+        elements_count: i32,
+    ) {
         self.begin("handleEnumElements");
         self.token(tokens, elements_end_token);
         self.int(elements_count as i64);
         self.end();
     }
 
-    fn handle_enum_header(&mut self, tokens: &mut Tokens, augment_token: Option<TokenId>, enum_keyword: TokenId, left_brace: TokenId) {
+    fn handle_enum_header(
+        &mut self,
+        tokens: &mut Tokens,
+        augment_token: Option<TokenId>,
+        enum_keyword: TokenId,
+        left_brace: TokenId,
+    ) {
         self.begin("handleEnumHeader");
         self.opt_token(tokens, augment_token);
         self.token(tokens, enum_keyword);
@@ -649,7 +856,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_enum_element(&mut self, tokens: &mut Tokens, begin_token: TokenId, augment_token: Option<TokenId>) {
+    fn handle_enum_element(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        augment_token: Option<TokenId>,
+    ) {
         self.begin("handleEnumElement");
         self.token(tokens, begin_token);
         self.opt_token(tokens, augment_token);
@@ -669,21 +881,39 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_extraneous_expression(&mut self, tokens: &mut Tokens, token: TokenId, message: CfeMessage) {
+    fn handle_extraneous_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        message: CfeMessage,
+    ) {
         self.begin("handleExtraneousExpression");
         self.token(tokens, token);
         self.message(&message);
         self.end();
     }
 
-    fn handle_expression_statement(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId) {
+    fn handle_expression_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("handleExpressionStatement");
         self.token(tokens, begin_token);
         self.token(tokens, end_token);
         self.end();
     }
 
-    fn begin_factory(&mut self, tokens: &mut Tokens, declaration_kind: DeclarationKind, last_consumed: TokenId, augment_token: Option<TokenId>, external_token: Option<TokenId>, const_token: Option<TokenId>) {
+    fn begin_factory(
+        &mut self,
+        tokens: &mut Tokens,
+        declaration_kind: DeclarationKind,
+        last_consumed: TokenId,
+        augment_token: Option<TokenId>,
+        external_token: Option<TokenId>,
+        const_token: Option<TokenId>,
+    ) {
         self.begin("beginFactory");
         self.string(declaration_kind.name());
         self.token(tokens, last_consumed);
@@ -693,7 +923,14 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_factory(&mut self, tokens: &mut Tokens, kind: DeclarationKind, begin_token: TokenId, factory_keyword: TokenId, end_token: TokenId) {
+    fn end_factory(
+        &mut self,
+        tokens: &mut Tokens,
+        kind: DeclarationKind,
+        begin_token: TokenId,
+        factory_keyword: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endFactory");
         self.string(kind.name());
         self.token(tokens, begin_token);
@@ -702,7 +939,15 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn begin_formal_parameter(&mut self, tokens: &mut Tokens, token: TokenId, kind: MemberKind, required_token: Option<TokenId>, covariant_token: Option<TokenId>, var_final_or_const: Option<TokenId>) {
+    fn begin_formal_parameter(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        kind: MemberKind,
+        required_token: Option<TokenId>,
+        covariant_token: Option<TokenId>,
+        var_final_or_const: Option<TokenId>,
+    ) {
         self.begin("beginFormalParameter");
         self.token(tokens, token);
         self.string(kind.name());
@@ -712,7 +957,19 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_formal_parameter(&mut self, tokens: &mut Tokens, var_or_final: Option<TokenId>, this_keyword: Option<TokenId>, super_keyword: Option<TokenId>, period_after_this_or_super: Option<TokenId>, name_token: TokenId, initializer_start: Option<TokenId>, initializer_end: Option<TokenId>, kind: FormalParameterKind, member_kind: MemberKind) {
+    fn end_formal_parameter(
+        &mut self,
+        tokens: &mut Tokens,
+        var_or_final: Option<TokenId>,
+        this_keyword: Option<TokenId>,
+        super_keyword: Option<TokenId>,
+        period_after_this_or_super: Option<TokenId>,
+        name_token: TokenId,
+        initializer_start: Option<TokenId>,
+        initializer_end: Option<TokenId>,
+        kind: FormalParameterKind,
+        member_kind: MemberKind,
+    ) {
         self.begin("endFormalParameter");
         self.opt_token(tokens, var_or_final);
         self.opt_token(tokens, this_keyword);
@@ -726,7 +983,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_no_formal_parameters(&mut self, tokens: &mut Tokens, token: TokenId, kind: MemberKind) {
+    fn handle_no_formal_parameters(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        kind: MemberKind,
+    ) {
         self.begin("handleNoFormalParameters");
         self.token(tokens, token);
         self.string(kind.name());
@@ -740,7 +1002,14 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_formal_parameters(&mut self, tokens: &mut Tokens, count: i32, begin_token: TokenId, end_token: TokenId, kind: MemberKind) {
+    fn end_formal_parameters(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+        kind: MemberKind,
+    ) {
         self.begin("endFormalParameters");
         self.int(count as i64);
         self.token(tokens, begin_token);
@@ -749,7 +1018,21 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_fields(&mut self, tokens: &mut Tokens, kind: DeclarationKind, abstract_token: Option<TokenId>, augment_token: Option<TokenId>, external_token: Option<TokenId>, static_token: Option<TokenId>, covariant_token: Option<TokenId>, late_token: Option<TokenId>, var_final_or_const: Option<TokenId>, count: i32, begin_token: TokenId, end_token: TokenId) {
+    fn end_fields(
+        &mut self,
+        tokens: &mut Tokens,
+        kind: DeclarationKind,
+        abstract_token: Option<TokenId>,
+        augment_token: Option<TokenId>,
+        external_token: Option<TokenId>,
+        static_token: Option<TokenId>,
+        covariant_token: Option<TokenId>,
+        late_token: Option<TokenId>,
+        var_final_or_const: Option<TokenId>,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endFields");
         self.string(kind.name());
         self.opt_token(tokens, abstract_token);
@@ -771,21 +1054,36 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_for_initializer_expression_statement(&mut self, tokens: &mut Tokens, token: TokenId, for_in: bool) {
+    fn handle_for_initializer_expression_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        for_in: bool,
+    ) {
         self.begin("handleForInitializerExpressionStatement");
         self.token(tokens, token);
         self.bool(for_in);
         self.end();
     }
 
-    fn handle_for_initializer_local_variable_declaration(&mut self, tokens: &mut Tokens, token: TokenId, for_in: bool) {
+    fn handle_for_initializer_local_variable_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        for_in: bool,
+    ) {
         self.begin("handleForInitializerLocalVariableDeclaration");
         self.token(tokens, token);
         self.bool(for_in);
         self.end();
     }
 
-    fn handle_for_initializer_pattern_variable_assignment(&mut self, tokens: &mut Tokens, keyword: TokenId, equals: TokenId) {
+    fn handle_for_initializer_pattern_variable_assignment(
+        &mut self,
+        tokens: &mut Tokens,
+        keyword: TokenId,
+        equals: TokenId,
+    ) {
         self.begin("handleForInitializerPatternVariableAssignment");
         self.token(tokens, keyword);
         self.token(tokens, equals);
@@ -798,7 +1096,15 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_for_loop_parts(&mut self, tokens: &mut Tokens, for_keyword: TokenId, left_paren: TokenId, left_separator: TokenId, right_separator: TokenId, update_expression_count: i32) {
+    fn handle_for_loop_parts(
+        &mut self,
+        tokens: &mut Tokens,
+        for_keyword: TokenId,
+        left_paren: TokenId,
+        left_separator: TokenId,
+        right_separator: TokenId,
+        update_expression_count: i32,
+    ) {
         self.begin("handleForLoopParts");
         self.token(tokens, for_keyword);
         self.token(tokens, left_paren);
@@ -826,7 +1132,15 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_for_in_loop_parts(&mut self, tokens: &mut Tokens, await_token: Option<TokenId>, for_token: TokenId, left_parenthesis: TokenId, pattern_keyword: Option<TokenId>, in_keyword: TokenId) {
+    fn handle_for_in_loop_parts(
+        &mut self,
+        tokens: &mut Tokens,
+        await_token: Option<TokenId>,
+        for_token: TokenId,
+        left_parenthesis: TokenId,
+        pattern_keyword: Option<TokenId>,
+        in_keyword: TokenId,
+    ) {
         self.begin("handleForInLoopParts");
         self.opt_token(tokens, await_token);
         self.token(tokens, for_token);
@@ -896,7 +1210,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_block_function_body(&mut self, tokens: &mut Tokens, count: i32, begin_token: TokenId, end_token: TokenId) {
+    fn end_block_function_body(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endBlockFunctionBody");
         self.int(count as i64);
         self.token(tokens, begin_token);
@@ -910,7 +1230,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_function_body_skipped(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId, is_expression_body: bool) {
+    fn handle_function_body_skipped(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+        is_expression_body: bool,
+    ) {
         self.begin("handleFunctionBodySkipped");
         self.token(tokens, begin_token);
         self.token(tokens, end_token);
@@ -924,7 +1250,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_function_name(&mut self, tokens: &mut Tokens, begin_token: TokenId, token: TokenId, is_function_expression: bool) {
+    fn end_function_name(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        token: TokenId,
+        is_function_expression: bool,
+    ) {
         self.begin("endFunctionName");
         self.token(tokens, begin_token);
         self.token(tokens, token);
@@ -938,7 +1270,14 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_typedef(&mut self, tokens: &mut Tokens, augment_token: Option<TokenId>, typedef_keyword: TokenId, equals: Option<TokenId>, end_token: TokenId) {
+    fn end_typedef(
+        &mut self,
+        tokens: &mut Tokens,
+        augment_token: Option<TokenId>,
+        typedef_keyword: TokenId,
+        equals: Option<TokenId>,
+        end_token: TokenId,
+    ) {
         self.begin("endTypedef");
         self.opt_token(tokens, augment_token);
         self.token(tokens, typedef_keyword);
@@ -975,7 +1314,19 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn begin_named_mixin_application(&mut self, tokens: &mut Tokens, begin_token: TokenId, abstract_token: Option<TokenId>, sealed_token: Option<TokenId>, base_token: Option<TokenId>, interface_token: Option<TokenId>, final_token: Option<TokenId>, augment_token: Option<TokenId>, mixin_token: Option<TokenId>, name: TokenId) {
+    fn begin_named_mixin_application(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        abstract_token: Option<TokenId>,
+        sealed_token: Option<TokenId>,
+        base_token: Option<TokenId>,
+        interface_token: Option<TokenId>,
+        final_token: Option<TokenId>,
+        augment_token: Option<TokenId>,
+        mixin_token: Option<TokenId>,
+        name: TokenId,
+    ) {
         self.begin("beginNamedMixinApplication");
         self.token(tokens, begin_token);
         self.opt_token(tokens, abstract_token);
@@ -989,13 +1340,25 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_named_mixin_application_with_clause(&mut self, tokens: &mut Tokens, with_keyword: TokenId) {
+    fn handle_named_mixin_application_with_clause(
+        &mut self,
+        tokens: &mut Tokens,
+        with_keyword: TokenId,
+    ) {
         self.begin("handleNamedMixinApplicationWithClause");
         self.token(tokens, with_keyword);
         self.end();
     }
 
-    fn end_named_mixin_application(&mut self, tokens: &mut Tokens, begin: TokenId, class_keyword: TokenId, equals: TokenId, implements_keyword: Option<TokenId>, end_token: TokenId) {
+    fn end_named_mixin_application(
+        &mut self,
+        tokens: &mut Tokens,
+        begin: TokenId,
+        class_keyword: TokenId,
+        equals: TokenId,
+        implements_keyword: Option<TokenId>,
+        end_token: TokenId,
+    ) {
         self.begin("endNamedMixinApplication");
         self.token(tokens, begin);
         self.token(tokens, class_keyword);
@@ -1041,7 +1404,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_if_statement(&mut self, tokens: &mut Tokens, if_token: TokenId, else_token: Option<TokenId>, end_token: TokenId) {
+    fn end_if_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        if_token: TokenId,
+        else_token: Option<TokenId>,
+        end_token: TokenId,
+    ) {
         self.begin("endIfStatement");
         self.token(tokens, if_token);
         self.opt_token(tokens, else_token);
@@ -1055,7 +1424,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_then_statement(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId) {
+    fn end_then_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endThenStatement");
         self.token(tokens, begin_token);
         self.token(tokens, end_token);
@@ -1068,7 +1442,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_else_statement(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId) {
+    fn end_else_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endElseStatement");
         self.token(tokens, begin_token);
         self.token(tokens, end_token);
@@ -1081,14 +1460,24 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_import_prefix(&mut self, tokens: &mut Tokens, deferred_keyword: Option<TokenId>, as_keyword: Option<TokenId>) {
+    fn handle_import_prefix(
+        &mut self,
+        tokens: &mut Tokens,
+        deferred_keyword: Option<TokenId>,
+        as_keyword: Option<TokenId>,
+    ) {
         self.begin("handleImportPrefix");
         self.opt_token(tokens, deferred_keyword);
         self.opt_token(tokens, as_keyword);
         self.end();
     }
 
-    fn end_import(&mut self, tokens: &mut Tokens, import_keyword: TokenId, semicolon: Option<TokenId>) {
+    fn end_import(
+        &mut self,
+        tokens: &mut Tokens,
+        import_keyword: TokenId,
+        semicolon: Option<TokenId>,
+    ) {
         self.begin("endImport");
         self.token(tokens, import_keyword);
         self.opt_token(tokens, semicolon);
@@ -1119,7 +1508,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_conditional_uri(&mut self, tokens: &mut Tokens, if_keyword: TokenId, left_paren: TokenId, equal_sign: Option<TokenId>) {
+    fn end_conditional_uri(
+        &mut self,
+        tokens: &mut Tokens,
+        if_keyword: TokenId,
+        left_paren: TokenId,
+        equal_sign: Option<TokenId>,
+    ) {
         self.begin("endConditionalUri");
         self.token(tokens, if_keyword);
         self.token(tokens, left_paren);
@@ -1140,7 +1535,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_implicit_creation_expression(&mut self, tokens: &mut Tokens, token: TokenId, open_angle_bracket: TokenId) {
+    fn end_implicit_creation_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        open_angle_bracket: TokenId,
+    ) {
         self.begin("endImplicitCreationExpression");
         self.token(tokens, token);
         self.token(tokens, open_angle_bracket);
@@ -1165,7 +1565,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_field_initializer(&mut self, tokens: &mut Tokens, assignment: TokenId, end_token: TokenId) {
+    fn end_field_initializer(
+        &mut self,
+        tokens: &mut Tokens,
+        assignment: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endFieldInitializer");
         self.token(tokens, assignment);
         self.token(tokens, end_token);
@@ -1214,7 +1619,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_initializers(&mut self, tokens: &mut Tokens, count: i32, begin_token: TokenId, end_token: TokenId) {
+    fn end_initializers(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endInitializers");
         self.int(count as i64);
         self.token(tokens, begin_token);
@@ -1264,14 +1675,25 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn begin_library_augmentation(&mut self, tokens: &mut Tokens, augment_keyword: TokenId, library_keyword: TokenId) {
+    fn begin_library_augmentation(
+        &mut self,
+        tokens: &mut Tokens,
+        augment_keyword: TokenId,
+        library_keyword: TokenId,
+    ) {
         self.begin("beginLibraryAugmentation");
         self.token(tokens, augment_keyword);
         self.token(tokens, library_keyword);
         self.end();
     }
 
-    fn end_library_augmentation(&mut self, tokens: &mut Tokens, augment_keyword: TokenId, library_keyword: TokenId, semicolon: TokenId) {
+    fn end_library_augmentation(
+        &mut self,
+        tokens: &mut Tokens,
+        augment_keyword: TokenId,
+        library_keyword: TokenId,
+        semicolon: TokenId,
+    ) {
         self.begin("endLibraryAugmentation");
         self.token(tokens, augment_keyword);
         self.token(tokens, library_keyword);
@@ -1285,7 +1707,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_library_name(&mut self, tokens: &mut Tokens, library_keyword: TokenId, semicolon: TokenId, has_name: bool) {
+    fn end_library_name(
+        &mut self,
+        tokens: &mut Tokens,
+        library_keyword: TokenId,
+        semicolon: TokenId,
+        has_name: bool,
+    ) {
         self.begin("endLibraryName");
         self.token(tokens, library_keyword);
         self.token(tokens, semicolon);
@@ -1293,7 +1721,14 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_literal_map_entry(&mut self, tokens: &mut Tokens, colon: TokenId, end_token: TokenId, null_aware_key_token: Option<TokenId>, null_aware_value_token: Option<TokenId>) {
+    fn handle_literal_map_entry(
+        &mut self,
+        tokens: &mut Tokens,
+        colon: TokenId,
+        end_token: TokenId,
+        null_aware_key_token: Option<TokenId>,
+        null_aware_value_token: Option<TokenId>,
+    ) {
         self.begin("handleLiteralMapEntry");
         self.token(tokens, colon);
         self.token(tokens, end_token);
@@ -1302,7 +1737,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_map_pattern_entry(&mut self, tokens: &mut Tokens, colon: TokenId, end_token: TokenId) {
+    fn handle_map_pattern_entry(
+        &mut self,
+        tokens: &mut Tokens,
+        colon: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("handleMapPatternEntry");
         self.token(tokens, colon);
         self.token(tokens, end_token);
@@ -1315,21 +1755,36 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_interpolation_expression(&mut self, tokens: &mut Tokens, left_bracket: TokenId, right_bracket: Option<TokenId>) {
+    fn handle_interpolation_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        left_bracket: TokenId,
+        right_bracket: Option<TokenId>,
+    ) {
         self.begin("handleInterpolationExpression");
         self.token(tokens, left_bracket);
         self.opt_token(tokens, right_bracket);
         self.end();
     }
 
-    fn end_literal_string(&mut self, tokens: &mut Tokens, interpolation_count: i32, end_token: TokenId) {
+    fn end_literal_string(
+        &mut self,
+        tokens: &mut Tokens,
+        interpolation_count: i32,
+        end_token: TokenId,
+    ) {
         self.begin("endLiteralString");
         self.int(interpolation_count as i64);
         self.token(tokens, end_token);
         self.end();
     }
 
-    fn handle_adjacent_string_literals(&mut self, tokens: &mut Tokens, start_token: TokenId, literal_count: i32) {
+    fn handle_adjacent_string_literals(
+        &mut self,
+        tokens: &mut Tokens,
+        start_token: TokenId,
+        literal_count: i32,
+    ) {
         self.begin("handleAdjacentStringLiterals");
         self.token(tokens, start_token);
         self.int(literal_count as i64);
@@ -1352,7 +1807,19 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn begin_method(&mut self, tokens: &mut Tokens, declaration_kind: DeclarationKind, augment_token: Option<TokenId>, external_token: Option<TokenId>, static_token: Option<TokenId>, covariant_token: Option<TokenId>, var_final_or_const: Option<TokenId>, get_or_set: Option<TokenId>, name: TokenId, enclosing_declaration_name: Option<&str>) {
+    fn begin_method(
+        &mut self,
+        tokens: &mut Tokens,
+        declaration_kind: DeclarationKind,
+        augment_token: Option<TokenId>,
+        external_token: Option<TokenId>,
+        static_token: Option<TokenId>,
+        covariant_token: Option<TokenId>,
+        var_final_or_const: Option<TokenId>,
+        get_or_set: Option<TokenId>,
+        name: TokenId,
+        enclosing_declaration_name: Option<&str>,
+    ) {
         self.begin("beginMethod");
         self.string(declaration_kind.name());
         self.opt_token(tokens, augment_token);
@@ -1366,7 +1833,16 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_method(&mut self, tokens: &mut Tokens, kind: DeclarationKind, get_or_set: Option<TokenId>, begin_token: TokenId, begin_param: TokenId, begin_initializers: Option<TokenId>, end_token: TokenId) {
+    fn end_method(
+        &mut self,
+        tokens: &mut Tokens,
+        kind: DeclarationKind,
+        get_or_set: Option<TokenId>,
+        begin_token: TokenId,
+        begin_param: TokenId,
+        begin_initializers: Option<TokenId>,
+        end_token: TokenId,
+    ) {
         self.begin("endMethod");
         self.string(kind.name());
         self.opt_token(tokens, get_or_set);
@@ -1377,7 +1853,20 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn begin_constructor(&mut self, tokens: &mut Tokens, declaration_kind: DeclarationKind, augment_token: Option<TokenId>, external_token: Option<TokenId>, static_token: Option<TokenId>, covariant_token: Option<TokenId>, var_final_or_const: Option<TokenId>, get_or_set: Option<TokenId>, new_token: Option<TokenId>, name: TokenId, enclosing_declaration_name: Option<&str>) {
+    fn begin_constructor(
+        &mut self,
+        tokens: &mut Tokens,
+        declaration_kind: DeclarationKind,
+        augment_token: Option<TokenId>,
+        external_token: Option<TokenId>,
+        static_token: Option<TokenId>,
+        covariant_token: Option<TokenId>,
+        var_final_or_const: Option<TokenId>,
+        get_or_set: Option<TokenId>,
+        new_token: Option<TokenId>,
+        name: TokenId,
+        enclosing_declaration_name: Option<&str>,
+    ) {
         self.begin("beginConstructor");
         self.string(declaration_kind.name());
         self.opt_token(tokens, augment_token);
@@ -1392,7 +1881,16 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_constructor(&mut self, tokens: &mut Tokens, kind: DeclarationKind, begin_token: TokenId, new_token: Option<TokenId>, begin_param: TokenId, begin_initializers: Option<TokenId>, end_token: TokenId) {
+    fn end_constructor(
+        &mut self,
+        tokens: &mut Tokens,
+        kind: DeclarationKind,
+        begin_token: TokenId,
+        new_token: Option<TokenId>,
+        begin_param: TokenId,
+        begin_initializers: Option<TokenId>,
+        end_token: TokenId,
+    ) {
         self.begin("endConstructor");
         self.string(kind.name());
         self.token(tokens, begin_token);
@@ -1421,7 +1919,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_metadata(&mut self, tokens: &mut Tokens, begin_token: TokenId, period_before_name: Option<TokenId>, end_token: TokenId) {
+    fn end_metadata(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        period_before_name: Option<TokenId>,
+        end_token: TokenId,
+    ) {
         self.begin("endMetadata");
         self.token(tokens, begin_token);
         self.opt_token(tokens, period_before_name);
@@ -1435,7 +1939,14 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_optional_formal_parameters(&mut self, tokens: &mut Tokens, count: i32, begin_token: TokenId, end_token: TokenId, kind: MemberKind) {
+    fn end_optional_formal_parameters(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+        kind: MemberKind,
+    ) {
         self.begin("endOptionalFormalParameters");
         self.int(count as i64);
         self.token(tokens, begin_token);
@@ -1463,7 +1974,14 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_part_of(&mut self, tokens: &mut Tokens, part_keyword: TokenId, of_keyword: TokenId, semicolon: TokenId, has_name: bool) {
+    fn end_part_of(
+        &mut self,
+        tokens: &mut Tokens,
+        part_keyword: TokenId,
+        of_keyword: TokenId,
+        semicolon: TokenId,
+        has_name: bool,
+    ) {
         self.begin("endPartOf");
         self.token(tokens, part_keyword);
         self.token(tokens, of_keyword);
@@ -1478,7 +1996,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_redirecting_factory_body(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId) {
+    fn end_redirecting_factory_body(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endRedirectingFactoryBody");
         self.token(tokens, begin_token);
         self.token(tokens, end_token);
@@ -1491,21 +2014,36 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_native_function_body(&mut self, tokens: &mut Tokens, native_token: TokenId, semicolon: TokenId) {
+    fn handle_native_function_body(
+        &mut self,
+        tokens: &mut Tokens,
+        native_token: TokenId,
+        semicolon: TokenId,
+    ) {
         self.begin("handleNativeFunctionBody");
         self.token(tokens, native_token);
         self.token(tokens, semicolon);
         self.end();
     }
 
-    fn handle_native_function_body_ignored(&mut self, tokens: &mut Tokens, native_token: TokenId, semicolon: TokenId) {
+    fn handle_native_function_body_ignored(
+        &mut self,
+        tokens: &mut Tokens,
+        native_token: TokenId,
+        semicolon: TokenId,
+    ) {
         self.begin("handleNativeFunctionBodyIgnored");
         self.token(tokens, native_token);
         self.token(tokens, semicolon);
         self.end();
     }
 
-    fn handle_native_function_body_skipped(&mut self, tokens: &mut Tokens, native_token: TokenId, semicolon: TokenId) {
+    fn handle_native_function_body_skipped(
+        &mut self,
+        tokens: &mut Tokens,
+        native_token: TokenId,
+        semicolon: TokenId,
+    ) {
         self.begin("handleNativeFunctionBodySkipped");
         self.token(tokens, native_token);
         self.token(tokens, semicolon);
@@ -1518,14 +2056,25 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_expression_function_body(&mut self, tokens: &mut Tokens, arrow_token: TokenId, end_token: Option<TokenId>) {
+    fn handle_expression_function_body(
+        &mut self,
+        tokens: &mut Tokens,
+        arrow_token: TokenId,
+        end_token: Option<TokenId>,
+    ) {
         self.begin("handleExpressionFunctionBody");
         self.token(tokens, arrow_token);
         self.opt_token(tokens, end_token);
         self.end();
     }
 
-    fn end_return_statement(&mut self, tokens: &mut Tokens, has_expression: bool, begin_token: TokenId, end_token: TokenId) {
+    fn end_return_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        has_expression: bool,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endReturnStatement");
         self.bool(has_expression);
         self.token(tokens, begin_token);
@@ -1558,7 +2107,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_switch_statement(&mut self, tokens: &mut Tokens, switch_keyword: TokenId, end_token: TokenId) {
+    fn end_switch_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        switch_keyword: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endSwitchStatement");
         self.token(tokens, switch_keyword);
         self.token(tokens, end_token);
@@ -1571,7 +2125,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_switch_expression(&mut self, tokens: &mut Tokens, switch_keyword: TokenId, end_token: TokenId) {
+    fn end_switch_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        switch_keyword: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endSwitchExpression");
         self.token(tokens, switch_keyword);
         self.token(tokens, end_token);
@@ -1584,7 +2143,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_switch_block(&mut self, tokens: &mut Tokens, case_count: i32, begin_token: TokenId, end_token: TokenId) {
+    fn end_switch_block(
+        &mut self,
+        tokens: &mut Tokens,
+        case_count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endSwitchBlock");
         self.int(case_count as i64);
         self.token(tokens, begin_token);
@@ -1598,7 +2163,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_switch_expression_block(&mut self, tokens: &mut Tokens, case_count: i32, begin_token: TokenId, end_token: TokenId) {
+    fn end_switch_expression_block(
+        &mut self,
+        tokens: &mut Tokens,
+        case_count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endSwitchExpressionBlock");
         self.int(case_count as i64);
         self.token(tokens, begin_token);
@@ -1612,14 +2183,24 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_literal_symbol(&mut self, tokens: &mut Tokens, hash_token: TokenId, identifier_count: i32) {
+    fn end_literal_symbol(
+        &mut self,
+        tokens: &mut Tokens,
+        hash_token: TokenId,
+        identifier_count: i32,
+    ) {
         self.begin("endLiteralSymbol");
         self.token(tokens, hash_token);
         self.int(identifier_count as i64);
         self.end();
     }
 
-    fn handle_throw_expression(&mut self, tokens: &mut Tokens, throw_token: TokenId, end_token: TokenId) {
+    fn handle_throw_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        throw_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("handleThrowExpression");
         self.token(tokens, throw_token);
         self.token(tokens, end_token);
@@ -1632,7 +2213,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_rethrow_statement(&mut self, tokens: &mut Tokens, rethrow_token: TokenId, end_token: TokenId) {
+    fn end_rethrow_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        rethrow_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endRethrowStatement");
         self.token(tokens, rethrow_token);
         self.token(tokens, end_token);
@@ -1657,7 +2243,19 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn begin_fields(&mut self, tokens: &mut Tokens, declaration_kind: DeclarationKind, augment_token: Option<TokenId>, abstract_token: Option<TokenId>, external_token: Option<TokenId>, static_token: Option<TokenId>, covariant_token: Option<TokenId>, late_token: Option<TokenId>, var_final_or_const: Option<TokenId>, last_consumed: TokenId) {
+    fn begin_fields(
+        &mut self,
+        tokens: &mut Tokens,
+        declaration_kind: DeclarationKind,
+        augment_token: Option<TokenId>,
+        abstract_token: Option<TokenId>,
+        external_token: Option<TokenId>,
+        static_token: Option<TokenId>,
+        covariant_token: Option<TokenId>,
+        late_token: Option<TokenId>,
+        var_final_or_const: Option<TokenId>,
+        last_consumed: TokenId,
+    ) {
         self.begin("beginFields");
         self.string(declaration_kind.name());
         self.opt_token(tokens, augment_token);
@@ -1671,7 +2269,20 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_top_level_fields(&mut self, tokens: &mut Tokens, augment_token: Option<TokenId>, abstract_token: Option<TokenId>, external_token: Option<TokenId>, static_token: Option<TokenId>, covariant_token: Option<TokenId>, late_token: Option<TokenId>, var_final_or_const: Option<TokenId>, count: i32, begin_token: TokenId, end_token: TokenId) {
+    fn end_top_level_fields(
+        &mut self,
+        tokens: &mut Tokens,
+        augment_token: Option<TokenId>,
+        abstract_token: Option<TokenId>,
+        external_token: Option<TokenId>,
+        static_token: Option<TokenId>,
+        covariant_token: Option<TokenId>,
+        late_token: Option<TokenId>,
+        var_final_or_const: Option<TokenId>,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endTopLevelFields");
         self.opt_token(tokens, augment_token);
         self.opt_token(tokens, abstract_token);
@@ -1686,7 +2297,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn begin_top_level_method(&mut self, tokens: &mut Tokens, last_consumed: TokenId, augment_token: Option<TokenId>, external_token: Option<TokenId>) {
+    fn begin_top_level_method(
+        &mut self,
+        tokens: &mut Tokens,
+        last_consumed: TokenId,
+        augment_token: Option<TokenId>,
+        external_token: Option<TokenId>,
+    ) {
         self.begin("beginTopLevelMethod");
         self.token(tokens, last_consumed);
         self.opt_token(tokens, augment_token);
@@ -1694,7 +2311,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_top_level_method(&mut self, tokens: &mut Tokens, begin_token: TokenId, get_or_set: Option<TokenId>, end_token: TokenId) {
+    fn end_top_level_method(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        get_or_set: Option<TokenId>,
+        end_token: TokenId,
+    ) {
         self.begin("endTopLevelMethod");
         self.token(tokens, begin_token);
         self.opt_token(tokens, get_or_set);
@@ -1720,7 +2343,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_catch_block(&mut self, tokens: &mut Tokens, on_keyword: Option<TokenId>, catch_keyword: Option<TokenId>, comma: Option<TokenId>) {
+    fn handle_catch_block(
+        &mut self,
+        tokens: &mut Tokens,
+        on_keyword: Option<TokenId>,
+        catch_keyword: Option<TokenId>,
+        comma: Option<TokenId>,
+    ) {
         self.begin("handleCatchBlock");
         self.opt_token(tokens, on_keyword);
         self.opt_token(tokens, catch_keyword);
@@ -1734,7 +2363,14 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_try_statement(&mut self, tokens: &mut Tokens, catch_count: i32, try_keyword: TokenId, finally_keyword: Option<TokenId>, end_token: TokenId) {
+    fn end_try_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        catch_count: i32,
+        try_keyword: TokenId,
+        finally_keyword: Option<TokenId>,
+        end_token: TokenId,
+    ) {
         self.begin("endTryStatement");
         self.int(catch_count as i64);
         self.token(tokens, try_keyword);
@@ -1743,7 +2379,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_type(&mut self, tokens: &mut Tokens, begin_token: TokenId, question_mark: Option<TokenId>) {
+    fn handle_type(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        question_mark: Option<TokenId>,
+    ) {
         self.begin("handleType");
         self.token(tokens, begin_token);
         self.opt_token(tokens, question_mark);
@@ -1774,7 +2415,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_declared_variable_pattern(&mut self, tokens: &mut Tokens, keyword: Option<TokenId>, variable: TokenId, in_assignment_pattern: bool) {
+    fn handle_declared_variable_pattern(
+        &mut self,
+        tokens: &mut Tokens,
+        keyword: Option<TokenId>,
+        variable: TokenId,
+        in_assignment_pattern: bool,
+    ) {
         self.begin("handleDeclaredVariablePattern");
         self.opt_token(tokens, keyword);
         self.token(tokens, variable);
@@ -1782,7 +2429,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_wildcard_pattern(&mut self, tokens: &mut Tokens, keyword: Option<TokenId>, wildcard: TokenId) {
+    fn handle_wildcard_pattern(
+        &mut self,
+        tokens: &mut Tokens,
+        keyword: Option<TokenId>,
+        wildcard: TokenId,
+    ) {
         self.begin("handleWildcardPattern");
         self.opt_token(tokens, keyword);
         self.token(tokens, wildcard);
@@ -1801,7 +2453,14 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_record_type(&mut self, tokens: &mut Tokens, left_bracket: TokenId, question_mark: Option<TokenId>, count: i32, has_named_fields: bool) {
+    fn end_record_type(
+        &mut self,
+        tokens: &mut Tokens,
+        left_bracket: TokenId,
+        question_mark: Option<TokenId>,
+        count: i32,
+        has_named_fields: bool,
+    ) {
         self.begin("endRecordType");
         self.token(tokens, left_bracket);
         self.opt_token(tokens, question_mark);
@@ -1826,7 +2485,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_record_type_named_fields(&mut self, tokens: &mut Tokens, count: i32, left_bracket: TokenId) {
+    fn end_record_type_named_fields(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        left_bracket: TokenId,
+    ) {
         self.begin("endRecordTypeNamedFields");
         self.int(count as i64);
         self.token(tokens, left_bracket);
@@ -1839,7 +2503,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_function_type(&mut self, tokens: &mut Tokens, function_token: TokenId, question_mark: Option<TokenId>) {
+    fn end_function_type(
+        &mut self,
+        tokens: &mut Tokens,
+        function_token: TokenId,
+        question_mark: Option<TokenId>,
+    ) {
         self.begin("endFunctionType");
         self.token(tokens, function_token);
         self.opt_token(tokens, question_mark);
@@ -1852,7 +2521,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_type_arguments(&mut self, tokens: &mut Tokens, count: i32, begin_token: TokenId, end_token: TokenId) {
+    fn end_type_arguments(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endTypeArguments");
         self.int(count as i64);
         self.token(tokens, begin_token);
@@ -1885,7 +2560,14 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_type_variable(&mut self, tokens: &mut Tokens, token: TokenId, index: i32, extends_or_super: Option<TokenId>, variance: Option<TokenId>) {
+    fn end_type_variable(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        index: i32,
+        extends_or_super: Option<TokenId>,
+        variance: Option<TokenId>,
+    ) {
         self.begin("endTypeVariable");
         self.token(tokens, token);
         self.int(index as i64);
@@ -1900,14 +2582,23 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_type_variables(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId) {
+    fn end_type_variables(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endTypeVariables");
         self.token(tokens, begin_token);
         self.token(tokens, end_token);
         self.end();
     }
 
-    fn report_variance_modifier_not_enabled(&mut self, tokens: &mut Tokens, variance: Option<TokenId>) {
+    fn report_variance_modifier_not_enabled(
+        &mut self,
+        tokens: &mut Tokens,
+        variance: Option<TokenId>,
+    ) {
         self.begin("reportVarianceModifierNotEnabled");
         self.opt_token(tokens, variance);
         self.end();
@@ -1919,14 +2610,25 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_function_expression(&mut self, tokens: &mut Tokens, begin_token: TokenId, end_token: TokenId) {
+    fn end_function_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endFunctionExpression");
         self.token(tokens, begin_token);
         self.token(tokens, end_token);
         self.end();
     }
 
-    fn begin_variables_declaration(&mut self, tokens: &mut Tokens, token: TokenId, late_token: Option<TokenId>, var_final_or_const: Option<TokenId>) {
+    fn begin_variables_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        late_token: Option<TokenId>,
+        var_final_or_const: Option<TokenId>,
+    ) {
         self.begin("beginVariablesDeclaration");
         self.token(tokens, token);
         self.opt_token(tokens, late_token);
@@ -1934,7 +2636,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_variables_declaration(&mut self, tokens: &mut Tokens, count: i32, end_token: Option<TokenId>) {
+    fn end_variables_declaration(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        end_token: Option<TokenId>,
+    ) {
         self.begin("endVariablesDeclaration");
         self.int(count as i64);
         self.opt_token(tokens, end_token);
@@ -1947,7 +2654,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_while_statement(&mut self, tokens: &mut Tokens, while_keyword: TokenId, end_token: TokenId) {
+    fn end_while_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        while_keyword: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endWhileStatement");
         self.token(tokens, while_keyword);
         self.token(tokens, end_token);
@@ -1978,7 +2690,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_assignment_expression(&mut self, tokens: &mut Tokens, token: TokenId, end_token: TokenId) {
+    fn handle_assignment_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("handleAssignmentExpression");
         self.token(tokens, token);
         self.token(tokens, end_token);
@@ -1991,7 +2708,14 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_anonymous_method_invocation(&mut self, tokens: &mut Tokens, begin_token: TokenId, function_definition: Option<TokenId>, end_token: TokenId, is_expression: bool) {
+    fn end_anonymous_method_invocation(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        function_definition: Option<TokenId>,
+        end_token: TokenId,
+        is_expression: bool,
+    ) {
         self.begin("endAnonymousMethodInvocation");
         self.token(tokens, begin_token);
         self.opt_token(tokens, function_definition);
@@ -2031,7 +2755,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_dot_access(&mut self, tokens: &mut Tokens, token: TokenId, end_token: TokenId, is_null_aware: bool) {
+    fn handle_dot_access(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        end_token: TokenId,
+        is_null_aware: bool,
+    ) {
         self.begin("handleDotAccess");
         self.token(tokens, token);
         self.token(tokens, end_token);
@@ -2039,7 +2769,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_cascade_access(&mut self, tokens: &mut Tokens, token: TokenId, end_token: TokenId, is_null_aware: bool) {
+    fn handle_cascade_access(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        end_token: TokenId,
+        is_null_aware: bool,
+    ) {
         self.begin("handleCascadeAccess");
         self.token(tokens, token);
         self.token(tokens, end_token);
@@ -2058,7 +2794,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_conditional_expression(&mut self, tokens: &mut Tokens, question: TokenId, colon: TokenId, end_token: TokenId) {
+    fn end_conditional_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        question: TokenId,
+        colon: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endConditionalExpression");
         self.token(tokens, question);
         self.token(tokens, colon);
@@ -2084,7 +2826,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn begin_for_control_flow(&mut self, tokens: &mut Tokens, await_token: Option<TokenId>, for_token: TokenId) {
+    fn begin_for_control_flow(
+        &mut self,
+        tokens: &mut Tokens,
+        await_token: Option<TokenId>,
+        for_token: TokenId,
+    ) {
         self.begin("beginForControlFlow");
         self.opt_token(tokens, await_token);
         self.token(tokens, for_token);
@@ -2158,21 +2905,37 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_function_typed_formal_parameter(&mut self, tokens: &mut Tokens, name_token: TokenId, question: Option<TokenId>) {
+    fn end_function_typed_formal_parameter(
+        &mut self,
+        tokens: &mut Tokens,
+        name_token: TokenId,
+        question: Option<TokenId>,
+    ) {
         self.begin("endFunctionTypedFormalParameter");
         self.token(tokens, name_token);
         self.opt_token(tokens, question);
         self.end();
     }
 
-    fn handle_identifier(&mut self, tokens: &mut Tokens, token: TokenId, context: IdentifierContext) {
+    fn handle_identifier(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        context: IdentifierContext,
+    ) {
         self.begin("handleIdentifier");
         self.token(tokens, token);
         self.string(context.name());
         self.end();
     }
 
-    fn handle_indexed_expression(&mut self, tokens: &mut Tokens, question: Option<TokenId>, open_square_bracket: TokenId, close_square_bracket: TokenId) {
+    fn handle_indexed_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        question: Option<TokenId>,
+        open_square_bracket: TokenId,
+        close_square_bracket: TokenId,
+    ) {
         self.begin("handleIndexedExpression");
         self.opt_token(tokens, question);
         self.token(tokens, open_square_bracket);
@@ -2192,7 +2955,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_is_operator(&mut self, tokens: &mut Tokens, is_operator: TokenId, not: Option<TokenId>) {
+    fn handle_is_operator(
+        &mut self,
+        tokens: &mut Tokens,
+        is_operator: TokenId,
+        not: Option<TokenId>,
+    ) {
         self.begin("handleIsOperator");
         self.token(tokens, is_operator);
         self.opt_token(tokens, not);
@@ -2205,7 +2973,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_break_statement(&mut self, tokens: &mut Tokens, has_target: bool, break_keyword: TokenId, end_token: TokenId) {
+    fn handle_break_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        has_target: bool,
+        break_keyword: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("handleBreakStatement");
         self.bool(has_target);
         self.token(tokens, break_keyword);
@@ -2213,7 +2987,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_continue_statement(&mut self, tokens: &mut Tokens, has_target: bool, continue_keyword: TokenId, end_token: TokenId) {
+    fn handle_continue_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        has_target: bool,
+        continue_keyword: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("handleContinueStatement");
         self.bool(has_target);
         self.token(tokens, continue_keyword);
@@ -2234,7 +3014,15 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_assert(&mut self, tokens: &mut Tokens, assert_keyword: TokenId, kind: Assert, left_parenthesis: TokenId, comma_token: Option<TokenId>, end_token: TokenId) {
+    fn end_assert(
+        &mut self,
+        tokens: &mut Tokens,
+        assert_keyword: TokenId,
+        kind: Assert,
+        left_parenthesis: TokenId,
+        comma_token: Option<TokenId>,
+        end_token: TokenId,
+    ) {
         self.begin("endAssert");
         self.token(tokens, assert_keyword);
         self.string(kind.name());
@@ -2268,7 +3056,14 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_literal_list(&mut self, tokens: &mut Tokens, count: i32, left_bracket: TokenId, const_keyword: Option<TokenId>, right_bracket: TokenId) {
+    fn handle_literal_list(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        left_bracket: TokenId,
+        const_keyword: Option<TokenId>,
+        right_bracket: TokenId,
+    ) {
         self.begin("handleLiteralList");
         self.int(count as i64);
         self.token(tokens, left_bracket);
@@ -2277,7 +3072,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_list_pattern(&mut self, tokens: &mut Tokens, count: i32, left_bracket: TokenId, right_bracket: TokenId) {
+    fn handle_list_pattern(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        left_bracket: TokenId,
+        right_bracket: TokenId,
+    ) {
         self.begin("handleListPattern");
         self.int(count as i64);
         self.token(tokens, left_bracket);
@@ -2285,7 +3086,15 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_literal_set_or_map(&mut self, tokens: &mut Tokens, count: i32, left_brace: TokenId, const_keyword: Option<TokenId>, right_brace: TokenId, has_set_entry: bool) {
+    fn handle_literal_set_or_map(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        left_brace: TokenId,
+        const_keyword: Option<TokenId>,
+        right_brace: TokenId,
+        has_set_entry: bool,
+    ) {
         self.begin("handleLiteralSetOrMap");
         self.int(count as i64);
         self.token(tokens, left_brace);
@@ -2295,7 +3104,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_map_pattern(&mut self, tokens: &mut Tokens, count: i32, left_brace: TokenId, right_brace: TokenId) {
+    fn handle_map_pattern(
+        &mut self,
+        tokens: &mut Tokens,
+        count: i32,
+        left_brace: TokenId,
+        right_brace: TokenId,
+    ) {
         self.begin("handleMapPattern");
         self.int(count as i64);
         self.token(tokens, left_brace);
@@ -2364,20 +3179,33 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_no_constructor_reference_continuation_after_type_arguments(&mut self, tokens: &mut Tokens, token: TokenId) {
+    fn handle_no_constructor_reference_continuation_after_type_arguments(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+    ) {
         self.begin("handleNoConstructorReferenceContinuationAfterTypeArguments");
         self.token(tokens, token);
         self.end();
     }
 
-    fn handle_no_identifier(&mut self, tokens: &mut Tokens, token: TokenId, identifier_context: IdentifierContext) {
+    fn handle_no_identifier(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        identifier_context: IdentifierContext,
+    ) {
         self.begin("handleNoIdentifier");
         self.token(tokens, token);
         self.string(identifier_context.name());
         self.end();
     }
 
-    fn handle_no_type_name_in_constructor_reference(&mut self, tokens: &mut Tokens, token: TokenId) {
+    fn handle_no_type_name_in_constructor_reference(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+    ) {
         self.begin("handleNoTypeNameInConstructorReference");
         self.token(tokens, token);
         self.end();
@@ -2419,21 +3247,37 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_operator_name(&mut self, tokens: &mut Tokens, operator_keyword: TokenId, token: TokenId) {
+    fn handle_operator_name(
+        &mut self,
+        tokens: &mut Tokens,
+        operator_keyword: TokenId,
+        token: TokenId,
+    ) {
         self.begin("handleOperatorName");
         self.token(tokens, operator_keyword);
         self.token(tokens, token);
         self.end();
     }
 
-    fn handle_invalid_operator_name(&mut self, tokens: &mut Tokens, operator_keyword: TokenId, token: TokenId) {
+    fn handle_invalid_operator_name(
+        &mut self,
+        tokens: &mut Tokens,
+        operator_keyword: TokenId,
+        token: TokenId,
+    ) {
         self.begin("handleInvalidOperatorName");
         self.token(tokens, operator_keyword);
         self.token(tokens, token);
         self.end();
     }
 
-    fn handle_parenthesized_condition(&mut self, tokens: &mut Tokens, token: TokenId, case_: Option<TokenId>, when: Option<TokenId>) {
+    fn handle_parenthesized_condition(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        case_: Option<TokenId>,
+        when: Option<TokenId>,
+    ) {
         self.begin("handleParenthesizedCondition");
         self.token(tokens, token);
         self.opt_token(tokens, case_);
@@ -2453,7 +3297,11 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn begin_parenthesized_expression_or_record_literal(&mut self, tokens: &mut Tokens, token: TokenId) {
+    fn begin_parenthesized_expression_or_record_literal(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+    ) {
         self.begin("beginParenthesizedExpressionOrRecordLiteral");
         self.token(tokens, token);
         self.end();
@@ -2465,7 +3313,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_record_literal(&mut self, tokens: &mut Tokens, token: TokenId, count: i32, const_keyword: Option<TokenId>) {
+    fn end_record_literal(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        count: i32,
+        const_keyword: Option<TokenId>,
+    ) {
         self.begin("endRecordLiteral");
         self.token(tokens, token);
         self.int(count as i64);
@@ -2522,7 +3376,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_object_pattern(&mut self, tokens: &mut Tokens, first_identifier: TokenId, dot: Option<TokenId>, second_identifier: Option<TokenId>) {
+    fn handle_object_pattern(
+        &mut self,
+        tokens: &mut Tokens,
+        first_identifier: TokenId,
+        dot: Option<TokenId>,
+        second_identifier: Option<TokenId>,
+    ) {
         self.begin("handleObjectPattern");
         self.token(tokens, first_identifier);
         self.opt_token(tokens, dot);
@@ -2542,14 +3402,25 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_super_expression(&mut self, tokens: &mut Tokens, token: TokenId, context: IdentifierContext) {
+    fn handle_super_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        context: IdentifierContext,
+    ) {
         self.begin("handleSuperExpression");
         self.token(tokens, token);
         self.string(context.name());
         self.end();
     }
 
-    fn begin_switch_case(&mut self, tokens: &mut Tokens, label_count: i32, expression_count: i32, begin_token: TokenId) {
+    fn begin_switch_case(
+        &mut self,
+        tokens: &mut Tokens,
+        label_count: i32,
+        expression_count: i32,
+        begin_token: TokenId,
+    ) {
         self.begin("beginSwitchCase");
         self.int(label_count as i64);
         self.int(expression_count as i64);
@@ -2557,7 +3428,17 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_switch_case(&mut self, tokens: &mut Tokens, label_count: i32, expression_count: i32, default_keyword: Option<TokenId>, colon_after_default: Option<TokenId>, statement_count: i32, begin_token: TokenId, end_token: TokenId) {
+    fn end_switch_case(
+        &mut self,
+        tokens: &mut Tokens,
+        label_count: i32,
+        expression_count: i32,
+        default_keyword: Option<TokenId>,
+        colon_after_default: Option<TokenId>,
+        statement_count: i32,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endSwitchCase");
         self.int(label_count as i64);
         self.int(expression_count as i64);
@@ -2574,7 +3455,14 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_switch_expression_case(&mut self, tokens: &mut Tokens, begin_token: TokenId, when: Option<TokenId>, arrow: TokenId, end_token: TokenId) {
+    fn end_switch_expression_case(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        when: Option<TokenId>,
+        arrow: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("endSwitchExpressionCase");
         self.token(tokens, begin_token);
         self.opt_token(tokens, when);
@@ -2583,7 +3471,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_this_expression(&mut self, tokens: &mut Tokens, token: TokenId, context: IdentifierContext) {
+    fn handle_this_expression(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        context: IdentifierContext,
+    ) {
         self.begin("handleThisExpression");
         self.token(tokens, token);
         self.string(context.name());
@@ -2624,7 +3517,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_valued_formal_parameter(&mut self, tokens: &mut Tokens, equals: TokenId, token: TokenId, kind: FormalParameterKind) {
+    fn handle_valued_formal_parameter(
+        &mut self,
+        tokens: &mut Tokens,
+        equals: TokenId,
+        token: TokenId,
+        kind: FormalParameterKind,
+    ) {
         self.begin("handleValuedFormalParameter");
         self.token(tokens, equals);
         self.token(tokens, token);
@@ -2656,7 +3555,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_yield_statement(&mut self, tokens: &mut Tokens, yield_token: TokenId, star_token: Option<TokenId>, end_token: TokenId) {
+    fn end_yield_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        yield_token: TokenId,
+        star_token: Option<TokenId>,
+        end_token: TokenId,
+    ) {
         self.begin("endYieldStatement");
         self.token(tokens, yield_token);
         self.opt_token(tokens, star_token);
@@ -2664,7 +3569,14 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn end_invalid_yield_statement(&mut self, tokens: &mut Tokens, begin_token: TokenId, star_token: Option<TokenId>, end_token: TokenId, error_code: &'static CfeCode) {
+    fn end_invalid_yield_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        begin_token: TokenId,
+        star_token: Option<TokenId>,
+        end_token: TokenId,
+        error_code: &'static CfeCode,
+    ) {
         self.begin("endInvalidYieldStatement");
         self.token(tokens, begin_token);
         self.opt_token(tokens, star_token);
@@ -2673,7 +3585,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_recoverable_error(&mut self, tokens: &mut Tokens, message: CfeMessage, start_token: TokenId, end_token: TokenId) {
+    fn handle_recoverable_error(
+        &mut self,
+        tokens: &mut Tokens,
+        message: CfeMessage,
+        start_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("handleRecoverableError");
         self.message(&message);
         self.token(tokens, start_token);
@@ -2682,7 +3600,13 @@ impl Listener for EventRecorder {
         self.record_error(tokens, &message, start_token, end_token);
     }
 
-    fn handle_experiment_not_enabled(&mut self, tokens: &mut Tokens, experimental_flag: ExperimentalFlag, begin_token: TokenId, end_token: TokenId) {
+    fn handle_experiment_not_enabled(
+        &mut self,
+        tokens: &mut Tokens,
+        experimental_flag: ExperimentalFlag,
+        begin_token: TokenId,
+        end_token: TokenId,
+    ) {
         self.begin("handleExperimentNotEnabled");
         self.string(experimental_flag.name());
         self.token(tokens, begin_token);
@@ -2696,7 +3620,14 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_unescape_error(&mut self, tokens: &mut Tokens, message: CfeMessage, location: TokenId, string_offset: i32, length: i32) {
+    fn handle_unescape_error(
+        &mut self,
+        tokens: &mut Tokens,
+        message: CfeMessage,
+        location: TokenId,
+        string_offset: i32,
+        length: i32,
+    ) {
         self.begin("handleUnescapeError");
         self.message(&message);
         self.token(tokens, location);
@@ -2705,7 +3636,12 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_invalid_statement(&mut self, tokens: &mut Tokens, token: TokenId, message: CfeMessage) {
+    fn handle_invalid_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        token: TokenId,
+        message: CfeMessage,
+    ) {
         self.begin("handleInvalidStatement");
         self.token(tokens, token);
         self.message(&message);
@@ -2718,7 +3654,11 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_type_argument_application(&mut self, tokens: &mut Tokens, open_angle_bracket: TokenId) {
+    fn handle_type_argument_application(
+        &mut self,
+        tokens: &mut Tokens,
+        open_angle_bracket: TokenId,
+    ) {
         self.begin("handleTypeArgumentApplication");
         self.token(tokens, open_angle_bracket);
         self.end();
@@ -2730,7 +3670,13 @@ impl Listener for EventRecorder {
         self.end();
     }
 
-    fn handle_pattern_variable_declaration_statement(&mut self, tokens: &mut Tokens, keyword: TokenId, equals: TokenId, semicolon: TokenId) {
+    fn handle_pattern_variable_declaration_statement(
+        &mut self,
+        tokens: &mut Tokens,
+        keyword: TokenId,
+        equals: TokenId,
+        semicolon: TokenId,
+    ) {
         self.begin("handlePatternVariableDeclarationStatement");
         self.token(tokens, keyword);
         self.token(tokens, equals);
@@ -2767,8 +3713,19 @@ impl Listener for EventRecorder {
         self.token(tokens, token);
         self.end();
     }
-
 }
 
 #[allow(dead_code)]
-fn _types(_: Assert, _: BlockKind, _: ConstructorReferenceContext, _: DeclarationHeaderKind, _: DeclarationKind, _: ExperimentalFlag, _: FormalParameterKind, _: IdentifierContext, _: MemberKind, _: &CfeCode) {}
+fn _types(
+    _: Assert,
+    _: BlockKind,
+    _: ConstructorReferenceContext,
+    _: DeclarationHeaderKind,
+    _: DeclarationKind,
+    _: ExperimentalFlag,
+    _: FormalParameterKind,
+    _: IdentifierContext,
+    _: MemberKind,
+    _: &CfeCode,
+) {
+}

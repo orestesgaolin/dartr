@@ -11,7 +11,7 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 const TIMEOUT: Duration = Duration::from_secs(60);
 const QUIET: Duration = Duration::from_millis(300);

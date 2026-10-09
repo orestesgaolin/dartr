@@ -340,7 +340,8 @@ impl<'a> DelimitedListBuilder<'a> {
         // Add any hanging inline block comments to the previous element
         // before the subsequent ",".
         for comment in inline_comments.iter() {
-            let comment_piece = v.comment_piece(comment, crate::back_end::code_writer::Whitespace::None);
+            let comment_piece =
+                v.comment_piece(comment, crate::back_end::code_writer::Whitespace::None);
             list_element(&mut v.arena, *self.elements.last().unwrap())
                 .add_comment(comment_piece, true);
         }
@@ -373,7 +374,8 @@ impl<'a> DelimitedListBuilder<'a> {
                 wrote_blank = true;
             }
 
-            let comment_piece = v.comment_piece(comment, crate::back_end::code_writer::Whitespace::None);
+            let comment_piece =
+                v.comment_piece(comment, crate::back_end::code_writer::Whitespace::None);
             let element = v.arena.add(ListElementPiece::comment(comment_piece));
             self.elements.push(element);
         }
@@ -387,7 +389,8 @@ impl<'a> DelimitedListBuilder<'a> {
 
         // Leading comments are written before the next element.
         for comment in leading_comments.iter() {
-            let comment_piece = v.comment_piece(comment, crate::back_end::code_writer::Whitespace::None);
+            let comment_piece =
+                v.comment_piece(comment, crate::back_end::code_writer::Whitespace::None);
             self.leading_comments.push(comment_piece);
         }
     }
@@ -434,7 +437,8 @@ impl<'a> DelimitedListBuilder<'a> {
         // If we're on the final comma after the last element, the comma isn't
         // meaningful because there can't be leading comments after it.
         if !has_element_after {
-            let before = std::mem::replace(&mut self.comments_before_comma, CommentSequence::empty());
+            let before =
+                std::mem::replace(&mut self.comments_before_comma, CommentSequence::empty());
             self.comments_before_comma = before.concatenate(comments_before_element);
             comments_before_element = CommentSequence::empty();
         }
@@ -446,7 +450,8 @@ impl<'a> DelimitedListBuilder<'a> {
             && comments_before_element.lines_before(0) == 0
         {
             let (hanging, remaining) = comments_before_element.split_at(1);
-            let before = std::mem::replace(&mut self.comments_before_comma, CommentSequence::empty());
+            let before =
+                std::mem::replace(&mut self.comments_before_comma, CommentSequence::empty());
             self.comments_before_comma = before.concatenate(hanging);
             comments_before_element = remaining;
         }

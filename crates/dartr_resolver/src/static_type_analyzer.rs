@@ -66,7 +66,11 @@ pub fn visit_double_literal(rv: &mut ResolverVisitor<'_>, node: Id<DoubleLiteral
     rv.record_static_type(node, t);
 }
 
-pub fn visit_integer_literal(rv: &mut ResolverVisitor<'_>, node: Id<IntegerLiteral>, context_type: TypeId) {
+pub fn visit_integer_literal(
+    rv: &mut ResolverVisitor<'_>,
+    node: Id<IntegerLiteral>,
+    context_type: TypeId,
+) {
     let ts = rv.type_system;
     let tp = rv.ctx.tp;
     let strict_casts = rv.unit.options.strict_casts;
@@ -89,7 +93,10 @@ pub fn visit_null_literal(rv: &mut ResolverVisitor<'_>, node: Id<NullLiteral>) {
     rv.record_static_type(node, t);
 }
 
-pub fn visit_parenthesized_expression(rv: &mut ResolverVisitor<'_>, node: Id<ParenthesizedExpression>) {
+pub fn visit_parenthesized_expression(
+    rv: &mut ResolverVisitor<'_>,
+    node: Id<ParenthesizedExpression>,
+) {
     let t = rv.type_or_throw(rv.ast[node].expression);
     rv.record_static_type(node, t);
 }
@@ -112,11 +119,12 @@ pub fn visit_string_interpolation(rv: &mut ResolverVisitor<'_>, node: Id<StringI
 #[allow(clippy::unnecessary_unwrap)] // Keeps the condition of the Dart code.
 pub fn visit_super_expression(rv: &mut ResolverVisitor<'_>, node: Id<SuperExpression>) {
     let this_type = rv.this_type();
-    let info = rv
-        .flow_analysis
-        .flow
-        .as_mut()
-        .map(|flow| flow.this_or_super(SharedTypeView::new(this_type.unwrap_or(TypeId::DYNAMIC)), true));
+    let info = rv.flow_analysis.flow.as_mut().map(|flow| {
+        flow.this_or_super(
+            SharedTypeView::new(this_type.unwrap_or(TypeId::DYNAMIC)),
+            true,
+        )
+    });
     rv.flow_analysis
         .store_expression_info(node.upcast::<Expression>(), info);
     match this_type {

@@ -161,8 +161,14 @@ pub fn generate_minimal_edits(
     scanner_configuration: ScannerConfiguration,
     range: Option<(u32, u32)>,
 ) -> Vec<Value> {
-    MinimalEditComputer::new(line_info, unformatted, formatted, scanner_configuration, range)
-        .compute_minimal_edits()
+    MinimalEditComputer::new(
+        line_info,
+        unformatted,
+        formatted,
+        scanner_configuration,
+        range,
+    )
+    .compute_minimal_edits()
 }
 
 /// A scanned source: the UTF-16 text, the tokens and the first token.
@@ -253,15 +259,21 @@ const ALLOWED_ADD_OR_REMOVED_TOKENS: [TokenType; 2] = [TokenType::COMMA, TokenTy
 
 /// Dart `allowedLexemeDifferences`: comments may have trailing spaces
 /// removed from lines.
-const ALLOWED_LEXEME_DIFFERENCES: [TokenType; 2] =
-    [TokenType::MULTI_LINE_COMMENT, TokenType::SINGLE_LINE_COMMENT];
+const ALLOWED_LEXEME_DIFFERENCES: [TokenType; 2] = [
+    TokenType::MULTI_LINE_COMMENT,
+    TokenType::SINGLE_LINE_COMMENT,
+];
 
 /// Dart `allowedSubstitutions`: tokens that the formatter may replace with
 /// a sequence of other tokens.
 fn allowed_substitutions(ty: TokenType) -> &'static [&'static [TokenType]] {
     use TokenType as T;
     match ty {
-        T::GT_GT_GT => &[&[T::GT, T::GT, T::GT], &[T::GT, T::GT_GT], &[T::GT_GT, T::GT]],
+        T::GT_GT_GT => &[
+            &[T::GT, T::GT, T::GT],
+            &[T::GT, T::GT_GT],
+            &[T::GT_GT, T::GT],
+        ],
         T::GT_GT => &[&[T::GT, T::GT]],
         T::LT_LT => &[&[T::LT, T::LT]],
         T::INDEX => &[&[T::OPEN_SQUARE_BRACKET, T::CLOSE_SQUARE_BRACKET]],
@@ -364,7 +376,14 @@ impl<'a> MinimalEditComputer<'a> {
                 if !same_token_types {
                     // The formatter added an allowed token, advance over it.
                     if ALLOWED_ADD_OR_REMOVED_TOKENS.contains(&self.formatted.ty(formatted_token)) {
-                        advance!(self.formatted, formatted_tokens, formatted_token, formatted_end, formatted_has_more, 1);
+                        advance!(
+                            self.formatted,
+                            formatted_tokens,
+                            formatted_token,
+                            formatted_end,
+                            formatted_has_more,
+                            1
+                        );
                         continue;
                     }
 
@@ -372,7 +391,14 @@ impl<'a> MinimalEditComputer<'a> {
                     if ALLOWED_ADD_OR_REMOVED_TOKENS
                         .contains(&self.unformatted.ty(unformatted_token))
                     {
-                        advance!(self.unformatted, unformatted_tokens, unformatted_token, unformatted_end, unformatted_has_more, 1);
+                        advance!(
+                            self.unformatted,
+                            unformatted_tokens,
+                            unformatted_token,
+                            unformatted_end,
+                            unformatted_has_more,
+                            1
+                        );
                         continue;
                     }
 
@@ -383,8 +409,22 @@ impl<'a> MinimalEditComputer<'a> {
                         &self.formatted,
                         formatted_token,
                     ) {
-                        advance!(self.unformatted, unformatted_tokens, unformatted_token, unformatted_end, unformatted_has_more, 1);
-                        advance!(self.formatted, formatted_tokens, formatted_token, formatted_end, formatted_has_more, num);
+                        advance!(
+                            self.unformatted,
+                            unformatted_tokens,
+                            unformatted_token,
+                            unformatted_end,
+                            unformatted_has_more,
+                            1
+                        );
+                        advance!(
+                            self.formatted,
+                            formatted_tokens,
+                            formatted_token,
+                            formatted_end,
+                            formatted_has_more,
+                            num
+                        );
                         continue;
                     }
 
@@ -396,8 +436,22 @@ impl<'a> MinimalEditComputer<'a> {
                         &self.unformatted,
                         unformatted_token,
                     ) {
-                        advance!(self.formatted, formatted_tokens, formatted_token, formatted_end, formatted_has_more, 1);
-                        advance!(self.unformatted, unformatted_tokens, unformatted_token, unformatted_end, unformatted_has_more, num);
+                        advance!(
+                            self.formatted,
+                            formatted_tokens,
+                            formatted_token,
+                            formatted_end,
+                            formatted_has_more,
+                            1
+                        );
+                        advance!(
+                            self.unformatted,
+                            unformatted_tokens,
+                            unformatted_token,
+                            unformatted_end,
+                            unformatted_has_more,
+                            num
+                        );
                         continue;
                     }
                 }
@@ -410,8 +464,22 @@ impl<'a> MinimalEditComputer<'a> {
                         && self.unformatted.lexeme(unformatted_token)
                             != self.formatted.lexeme(formatted_token)
                     {
-                        advance!(self.unformatted, unformatted_tokens, unformatted_token, unformatted_end, unformatted_has_more, 1);
-                        advance!(self.formatted, formatted_tokens, formatted_token, formatted_end, formatted_has_more, 1);
+                        advance!(
+                            self.unformatted,
+                            unformatted_tokens,
+                            unformatted_token,
+                            unformatted_end,
+                            unformatted_has_more,
+                            1
+                        );
+                        advance!(
+                            self.formatted,
+                            formatted_tokens,
+                            formatted_token,
+                            formatted_end,
+                            formatted_has_more,
+                            1
+                        );
                         allow_any_content_differences = true;
                         continue;
                     }
@@ -596,8 +664,12 @@ impl<'a> MinimalEditComputer<'a> {
         // location as they are applied in one shot. They should not account
         // for the previous edits in the same set.
         let new_text = String::from_utf16_lossy(new_text);
-        self.edits
-            .push(text_edit(self.line_info, start_offset, end_offset, &new_text));
+        self.edits.push(text_edit(
+            self.line_info,
+            start_offset,
+            end_offset,
+            &new_text,
+        ));
     }
 
     /// Dart `_generateFallback`: the results if the edits cannot be
@@ -608,7 +680,11 @@ impl<'a> MinimalEditComputer<'a> {
         if self.range_start.is_none() && self.range_end.is_none() {
             // A full document format falls back to one edit for the whole
             // document.
-            generate_full_edit(self.line_info, self.unformatted_source, self.formatted_source)
+            generate_full_edit(
+                self.line_info,
+                self.unformatted_source,
+                self.formatted_source,
+            )
         } else {
             // A range format cannot reduce the edits to the range: format
             // nothing.
@@ -655,9 +731,14 @@ mod tests {
             json!({"range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 0}}, "text": "😀"}),
             json!({"range": {"start": {"line": 0, "character": 2}, "end": {"line": 0, "character": 3}}, "text": "-"}),
         ];
-        assert_eq!(apply_changes("ab\ncde\n", &changes).unwrap(), "😀-b\ncXYe\n");
+        assert_eq!(
+            apply_changes("ab\ncde\n", &changes).unwrap(),
+            "😀-b\ncXYe\n"
+        );
         assert_eq!(apply_changes("x", &[json!({"text": "y"})]).unwrap(), "y");
-        let bad = [json!({"range": {"start": {"line": 5, "character": 0}, "end": {"line": 5, "character": 0}}, "text": ""})];
+        let bad = [
+            json!({"range": {"start": {"line": 5, "character": 0}, "end": {"line": 5, "character": 0}}, "text": ""}),
+        ];
         assert_eq!(
             apply_changes("x", &bad).unwrap_err().code,
             codes::CLIENT_SERVER_INCONSISTENT_STATE

@@ -284,13 +284,12 @@ pub fn resolve_arguments_to_parameters(
 
     let mut used_names: Option<indexmap::IndexSet<String>> = None;
     if let Some(list) = enclosing_constructor_formal_parameter_list {
-        let result =
-            crate::error::super_formal_parameters_verifier::verify_super_formal_parameters(
-                rv,
-                list,
-                report,
-                positional_argument_count != 0,
-            );
+        let result = crate::error::super_formal_parameters_verifier::verify_super_formal_parameters(
+            rv,
+            list,
+            report,
+            positional_argument_count != 0,
+        );
         positional_argument_count += result.positional_argument_count;
         if !result.named_argument_names.is_empty() {
             used_names = Some(result.named_argument_names.into_iter().collect());
@@ -492,10 +491,16 @@ fn enum_constant_type_name(rv: &ResolverVisitor<'_>, node: NodeId) -> Option<Str
 /// element is set by the resolution visitor). [node] is an
 /// `ImportDirective` or an `ExportDirective` of the unit.
 pub fn visit_namespace_directive(rv: &mut ResolverVisitor<'_>, node: NodeId) {
-    use dartr_ast::{CompilationUnit, ExportDirective, HideCombinator, ImportDirective, ShowCombinator};
+    use dartr_ast::{
+        CompilationUnit, ExportDirective, HideCombinator, ImportDirective, ShowCombinator,
+    };
     // The index of the directive in `libraryImports` / `libraryExports`.
     let is_import = rv.ast.is::<ImportDirective>(node);
-    let Some(unit) = rv.ast.parent(node).and_then(|p| rv.ast.cast::<CompilationUnit>(p)) else {
+    let Some(unit) = rv
+        .ast
+        .parent(node)
+        .and_then(|p| rv.ast.cast::<CompilationUnit>(p))
+    else {
         return;
     };
     let index = rv
@@ -515,9 +520,15 @@ pub fn visit_namespace_directive(rv: &mut ResolverVisitor<'_>, node: NodeId) {
     };
     let fragment = rv.ctx.fragment(rv.unit.fragment);
     let uri = if is_import {
-        fragment.library_imports.get(index).map(|i| &i.directive.uri)
+        fragment
+            .library_imports
+            .get(index)
+            .map(|i| &i.directive.uri)
     } else {
-        fragment.library_exports.get(index).map(|e| &e.directive.uri)
+        fragment
+            .library_exports
+            .get(index)
+            .map(|e| &e.directive.uri)
     };
     // Dart: the library is null when the URI is not valid.
     let Some(dartr_element::DirectiveUri::Library { library, .. }) = uri else {
@@ -543,7 +554,9 @@ pub fn visit_namespace_directive(rv: &mut ResolverVisitor<'_>, node: NodeId) {
         let name_str = crate::ast_ext::identifier_name(rv.ast, name).to_string();
         // Dart `namespace.get2(name) ?? namespace.get2('$name=')`; a getter
         // or setter resolves to its variable.
-        if let Some(element) = crate::error::imports_verifier::combinator_name_element(&rv.ctx, library, &name_str) {
+        if let Some(element) =
+            crate::error::imports_verifier::combinator_name_element(&rv.ctx, library, &name_str)
+        {
             rv.set_element(name, Some(ElemRef::Base(element)));
         }
     }

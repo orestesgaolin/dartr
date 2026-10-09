@@ -252,7 +252,10 @@ impl TypeResolution {
                     return t;
                 }
                 self.builders[b as usize].building = true;
-                let p: Vec<TypeId> = positional.iter().map(|&t| self.build_type(lk, ctx, t)).collect();
+                let p: Vec<TypeId> = positional
+                    .iter()
+                    .map(|&t| self.build_type(lk, ctx, t))
+                    .collect();
                 let n: Vec<RecordNamedField> = named
                     .iter()
                     .map(|&(name, t)| RecordNamedField {
@@ -319,7 +322,10 @@ impl TypeResolution {
             Vec::new()
         } else if !arguments.is_empty() {
             if arguments.len() == parameters.len() {
-                arguments.iter().map(|&a| self.build_type(lk, ctx, a)).collect()
+                arguments
+                    .iter()
+                    .map(|&a| self.build_type(lk, ctx, a))
+                    .collect()
             } else {
                 vec![TypeId::DYNAMIC; parameters.len()]
             }
@@ -329,7 +335,9 @@ impl TypeResolution {
                 .map(|&p| {
                     let default = match self.pending_defaults.get(&p) {
                         Some(&d) => d,
-                        None => LType::Built(ctx.get(p).default_type.get().unwrap_or(TypeId::DYNAMIC)),
+                        None => {
+                            LType::Built(ctx.get(p).default_type.get().unwrap_or(TypeId::DYNAMIC))
+                        }
                     };
                     self.build_type(lk, ctx, default)
                 })
@@ -338,9 +346,18 @@ impl TypeResolution {
     }
 
     /// `NamedTypeBuilder._getAliasedType`.
-    fn get_aliased_type(&mut self, lk: &Linker<'_>, ctx: &Ctx<'_>, element: EId<TypeAliasElement>) -> TypeId {
+    fn get_aliased_type(
+        &mut self,
+        lk: &Linker<'_>,
+        ctx: &Ctx<'_>,
+        element: EId<TypeAliasElement>,
+    ) -> TypeId {
         if element.store() != lk.core.store.id {
-            return ctx.get(element).aliased_type.get().unwrap_or(TypeId::INVALID);
+            return ctx
+                .get(element)
+                .aliased_type
+                .get()
+                .unwrap_or(TypeId::INVALID);
         }
         let first = ctx.get(element).first_fragment();
         let Some(&(lib, unit, node)) = lk.core.fragment_nodes.get(&first.raw()) else {
@@ -389,7 +406,14 @@ impl TypeResolution {
 
     /// The type of a type annotation node, `dynamic` when absent (Dart
     /// `_buildNodeType`).
-    fn build_node_type(&mut self, lk: &Linker<'_>, ctx: &Ctx<'_>, lib: u32, unit: u32, node: Option<Id<TypeAnnotation>>) -> TypeId {
+    fn build_node_type(
+        &mut self,
+        lk: &Linker<'_>,
+        ctx: &Ctx<'_>,
+        lib: u32,
+        unit: u32,
+        node: Option<Id<TypeAnnotation>>,
+    ) -> TypeId {
         match node.and_then(|n| self.node_type((lib, unit, n.raw()))) {
             Some(t) => self.build_type(lk, ctx, t),
             None => TypeId::DYNAMIC,
@@ -499,7 +523,13 @@ impl TypeResolution {
     }
 
     /// `FunctionTypeBuilder.getParameters`.
-    fn function_builder_parameters(&mut self, lk: &Linker<'_>, lib: u32, unit: u32, list: Id<FormalParameterList>) -> Vec<LParam> {
+    fn function_builder_parameters(
+        &mut self,
+        lk: &Linker<'_>,
+        lib: u32,
+        unit: u32,
+        list: Id<FormalParameterList>,
+    ) -> Vec<LParam> {
         let ast = unit_ast(lk, lib, unit);
         let mut out = Vec::new();
         for &p in ast.list(ast.get(list).parameters) {
@@ -517,8 +547,10 @@ impl TypeResolution {
                         Nullability::None
                     };
                     let type_params = type_parameter_elements(lk, lib, unit, s2.type_parameters);
-                    let params = self.function_builder_parameters(lk, lib, unit, s2.formal_parameters);
-                    let return_type = self.node_type_or_dynamic(lib, unit, formal_parameter_type_node(ast, p));
+                    let params =
+                        self.function_builder_parameters(lk, lib, unit, s2.formal_parameters);
+                    let return_type =
+                        self.node_type_or_dynamic(lib, unit, formal_parameter_type_node(ast, p));
                     self.add_builder(BuilderKind::Function {
                         type_params,
                         params,
@@ -546,7 +578,12 @@ impl TypeResolution {
 }
 
 /// The elements of the type parameters of a type parameter list node.
-fn type_parameter_elements(lk: &Linker<'_>, lib: u32, unit: u32, list: Option<Id<TypeParameterList>>) -> Vec<EId<TypeParameterElement>> {
+fn type_parameter_elements(
+    lk: &Linker<'_>,
+    lib: u32,
+    unit: u32,
+    list: Option<Id<TypeParameterList>>,
+) -> Vec<EId<TypeParameterElement>> {
     let Some(list) = list else { return Vec::new() };
     let ast = unit_ast(lk, lib, unit);
     ast.list(ast.get(list).type_parameters)
@@ -644,10 +681,16 @@ impl<'r, 'l, 'a> ReferenceResolver<'r, 'l, 'a> {
     }
 
     /// `withTypeParameterScope(elements)`.
-    fn with_type_parameter_scope(&mut self, elements: &[EId<TypeParameterElement>], f: impl FnOnce(&mut Self)) {
+    fn with_type_parameter_scope(
+        &mut self,
+        elements: &[EId<TypeParameterElement>],
+        f: impl FnOnce(&mut Self),
+    ) {
         let mut map = IndexMap::new();
         for &e in elements {
-            let Some(name) = self.ctx.get(e).name else { continue };
+            let Some(name) = self.ctx.get(e).name else {
+                continue;
+            };
             let name = self.lk.core.name_str(name);
             if self.wildcard_variables && name == "_" {
                 continue;
@@ -658,7 +701,11 @@ impl<'r, 'l, 'a> ReferenceResolver<'r, 'l, 'a> {
     }
 
     /// `withTypeParameterList(node)`.
-    fn with_type_parameter_list(&mut self, list: Option<Id<TypeParameterList>>, f: impl FnOnce(&mut Self)) {
+    fn with_type_parameter_list(
+        &mut self,
+        list: Option<Id<TypeParameterList>>,
+        f: impl FnOnce(&mut Self),
+    ) {
         let elements = type_parameter_elements(self.lk, self.lib, self.unit, list);
         self.with_type_parameter_scope(&elements, f);
     }
@@ -676,7 +723,12 @@ impl<'r, 'l, 'a> ReferenceResolver<'r, 'l, 'a> {
         };
         let mut getters: IndexMap<Arc<str>, (ElementId, bool)> = IndexMap::new();
         let mut setters: IndexMap<Arc<str>, (ElementId, bool)> = IndexMap::new();
-        for e in i.getters.iter().map(|e| e.raw()).chain(i.methods.iter().map(|e| e.raw())) {
+        for e in i
+            .getters
+            .iter()
+            .map(|e| e.raw())
+            .chain(i.methods.iter().map(|e| e.raw()))
+        {
             if let Some(n) = lookup_name(self.lk, e) {
                 getters.entry(n.into()).or_insert((e, is_static(e)));
             }
@@ -716,7 +768,11 @@ impl<'r, 'l, 'a> ReferenceResolver<'r, 'l, 'a> {
             Tag::Class | Tag::Enum | Tag::Mixin | Tag::Extension | Tag::ExtensionType => {
                 self.ctx.instance(EId::from_raw(e)).type_params.clone()
             }
-            Tag::TypeAlias => self.ctx.get(EId::<TypeAliasElement>::from_raw(e)).type_params.clone(),
+            Tag::TypeAlias => self
+                .ctx
+                .get(EId::<TypeAliasElement>::from_raw(e))
+                .type_params
+                .clone(),
             Tag::Method | Tag::Constructor | Tag::Getter | Tag::Setter | Tag::TopLevelFunction => {
                 self.ctx.executable(EId::from_raw(e)).type_params.clone()
             }
@@ -727,7 +783,9 @@ impl<'r, 'l, 'a> ReferenceResolver<'r, 'l, 'a> {
     /// Dart `visitCompilationUnit`.
     pub fn resolve_unit(&mut self) {
         let ast = self.ast();
-        let unit = self.lk.builders[self.lib as usize].units[self.unit as usize].parsed.unit;
+        let unit = self.lk.builders[self.lib as usize].units[self.unit as usize]
+            .parsed
+            .unit;
         for &d in ast.list(ast.get(unit).declarations) {
             self.visit_declaration(d.raw());
         }
@@ -754,7 +812,9 @@ impl<'r, 'l, 'a> ReferenceResolver<'r, 'l, 'a> {
                 }
                 if let Some(element) = element {
                     r.with_instance_scope(element, |r| {
-                        if let Some(p) = ast.cast::<PrimaryConstructorDeclaration>(n.name_part.raw()) {
+                        if let Some(p) =
+                            ast.cast::<PrimaryConstructorDeclaration>(n.name_part.raw())
+                        {
                             r.visit_formal_parameter_list(ast.get(p).formal_parameters);
                         }
                         for m in class_body_members(ast, n.body) {
@@ -794,7 +854,9 @@ impl<'r, 'l, 'a> ReferenceResolver<'r, 'l, 'a> {
                 }
                 if let Some(element) = element {
                     r.with_instance_scope(element, |r| {
-                        if let Some(p) = ast.cast::<PrimaryConstructorDeclaration>(n.name_part.raw()) {
+                        if let Some(p) =
+                            ast.cast::<PrimaryConstructorDeclaration>(n.name_part.raw())
+                        {
                             r.visit_formal_parameter_list(ast.get(p).formal_parameters);
                         }
                         for m in enum_body_members(ast, n.body) {
@@ -828,7 +890,8 @@ impl<'r, 'l, 'a> ReferenceResolver<'r, 'l, 'a> {
             let n = ast.get(n);
             let element = self.element_of(d);
             let tps = self.type_params_of(element);
-            let primary = self.lk.builders[self.lib as usize].is_enabled(ExperimentalFlag::PrimaryConstructors);
+            let primary = self.lk.builders[self.lib as usize]
+                .is_enabled(ExperimentalFlag::PrimaryConstructors);
             self.with_type_parameter_scope(&tps, |r| {
                 if let Some(tpl) = class_name_part_type_parameters(ast, n.name_part) {
                     r.visit_type_parameter_list(tpl);
@@ -982,8 +1045,15 @@ impl<'r, 'l, 'a> ReferenceResolver<'r, 'l, 'a> {
         };
         self.visit_type(bound);
         if let Some(f) = declared_fragment(self.lk, self.key(node))
-            && self.ctx.fragment_data(f).unwrap().previous_fragment.is_none()
-            && let Some(e) = self.element_of(node).and_then(|e| e.cast::<TypeParameterElement>())
+            && self
+                .ctx
+                .fragment_data(f)
+                .unwrap()
+                .previous_fragment
+                .is_none()
+            && let Some(e) = self
+                .element_of(node)
+                .and_then(|e| e.cast::<TypeParameterElement>())
             && let Some(t) = self.tr.node_types.get(&self.key(bound.raw())).copied()
         {
             self.tr.pending_bounds.insert(e, t);
@@ -1049,7 +1119,9 @@ impl<'r, 'l, 'a> ReferenceResolver<'r, 'l, 'a> {
             let prefix_element = self.lookup(prefix_name).getter;
             element = match prefix_element {
                 Some(ScopeElement::Prefix(_, scope)) => {
-                    self.scopes.prefix_lookup(scope, ast.tokens.lexeme(n.name)).getter
+                    self.scopes
+                        .prefix_lookup(scope, ast.tokens.lexeme(n.name))
+                        .getter
                 }
                 _ => None,
             };
@@ -1084,7 +1156,11 @@ impl<'r, 'l, 'a> ReferenceResolver<'r, 'l, 'a> {
                     .is_some_and(|en| {
                         matches!(
                             en.tag(),
-                            Tag::Class | Tag::Enum | Tag::Mixin | Tag::Extension | Tag::ExtensionType
+                            Tag::Class
+                                | Tag::Enum
+                                | Tag::Mixin
+                                | Tag::Extension
+                                | Tag::ExtensionType
                         )
                     });
                 if self.in_static_member && enclosing_is_instance {
@@ -1142,8 +1218,12 @@ impl<'r, 'l, 'a> ReferenceResolver<'r, 'l, 'a> {
             Nullability::None
         };
         let type_params = type_parameter_elements(self.lk, self.lib, self.unit, n.type_parameters);
-        let params = self.tr.function_builder_parameters(self.lk, self.lib, self.unit, n.parameters);
-        let return_type = self.tr.node_type_or_dynamic(self.lib, self.unit, n.return_type);
+        let params =
+            self.tr
+                .function_builder_parameters(self.lk, self.lib, self.unit, n.parameters);
+        let return_type = self
+            .tr
+            .node_type_or_dynamic(self.lib, self.unit, n.return_type);
         let key = self.key(node);
         let b = self.tr.add_builder(BuilderKind::Function {
             type_params,
@@ -1176,7 +1256,8 @@ impl<'r, 'l, 'a> ReferenceResolver<'r, 'l, 'a> {
                 self.visit_type(f.type_);
                 named.push((
                     self.lk.core.name(ast.tokens.lexeme(f.name)),
-                    self.tr.node_type_or_dynamic(self.lib, self.unit, Some(f.type_)),
+                    self.tr
+                        .node_type_or_dynamic(self.lib, self.unit, Some(f.type_)),
                 ));
             }
         }
@@ -1204,7 +1285,11 @@ impl<'r, 'l, 'a> ReferenceResolver<'r, 'l, 'a> {
 impl TypeResolution {
     /// The `(fragment, type parameter list)` of a declaration node (Dart
     /// `_fragmentTypeParameters`).
-    fn fragment_type_parameters(&self, lk: &Linker<'_>, key: NodeKey) -> Option<(FragmentId, Option<Id<TypeParameterList>>)> {
+    fn fragment_type_parameters(
+        &self,
+        lk: &Linker<'_>,
+        key: NodeKey,
+    ) -> Option<(FragmentId, Option<Id<TypeParameterList>>)> {
         let ast = unit_ast(lk, key.0, key.1);
         let n = key.2;
         let list = if let Some(c) = ast.cast::<ClassDeclaration>(n) {
@@ -1241,7 +1326,12 @@ impl TypeResolution {
             let Some((fragment, Some(list))) = self.fragment_type_parameters(lk, key) else {
                 continue;
             };
-            if ctx.fragment_data(fragment).unwrap().previous_fragment.is_some() {
+            if ctx
+                .fragment_data(fragment)
+                .unwrap()
+                .previous_fragment
+                .is_some()
+            {
                 continue;
             }
             let Some(&element) = ctx.fragment_data(fragment).unwrap().element.try_get() else {
@@ -1266,7 +1356,9 @@ impl TypeResolution {
             };
             let ast = unit_ast(lk, key.0, key.1);
             for &tp in ast.list(ast.get(list).type_parameters) {
-                let Some(e) = declared_element(lk, (key.0, key.1, tp.raw())).and_then(|e| e.cast::<TypeParameterElement>()) else {
+                let Some(e) = declared_element(lk, (key.0, key.1, tp.raw()))
+                    .and_then(|e| e.cast::<TypeParameterElement>())
+                else {
                     continue;
                 };
                 if let Some(&d) = self.pending_defaults.get(&e) {
@@ -1279,12 +1371,20 @@ impl TypeResolution {
     }
 
     /// `_breakSelfCycles`.
-    fn break_self_cycles(&mut self, lk: &Linker<'_>, lib: u32, unit: u32, list: Id<TypeParameterList>) {
+    fn break_self_cycles(
+        &mut self,
+        lk: &Linker<'_>,
+        lib: u32,
+        unit: u32,
+        list: Id<TypeParameterList>,
+    ) {
         let ast = unit_ast(lk, lib, unit);
         let type_parameters = ast.list(ast.get(list).type_parameters);
         let mut by_name: Option<IndexMap<&str, Id<TypeParameter>>> = None;
         for &parameter in type_parameters {
-            let Some(bound) = ast.get(parameter).bound else { continue };
+            let Some(bound) = ast.get(parameter).bound else {
+                continue;
+            };
             if !ast.is::<NamedTypeNode>(bound.raw()) {
                 continue;
             }
@@ -1302,14 +1402,18 @@ impl TypeResolution {
                     break;
                 }
                 step += 1;
-                let next = ast.get(c).bound.and_then(|b| ast.cast::<NamedTypeNode>(b.raw())).and_then(|b| {
-                    let b = ast.get(b);
-                    if b.import_prefix.is_none() {
-                        by_name.get(ast.tokens.lexeme(b.name)).copied()
-                    } else {
-                        None
-                    }
-                });
+                let next = ast
+                    .get(c)
+                    .bound
+                    .and_then(|b| ast.cast::<NamedTypeNode>(b.raw()))
+                    .and_then(|b| {
+                        let b = ast.get(b);
+                        if b.import_prefix.is_none() {
+                            by_name.get(ast.tokens.lexeme(b.name)).copied()
+                        } else {
+                            None
+                        }
+                    });
                 match next {
                     Some(n) => current = Some(n),
                     None => {
@@ -1319,7 +1423,8 @@ impl TypeResolution {
                 }
             }
             if current.is_some() {
-                self.bound_overrides.insert((lib, unit, bound.raw()), LType::Built(TypeId::DYNAMIC));
+                self.bound_overrides
+                    .insert((lib, unit, bound.raw()), LType::Built(TypeId::DYNAMIC));
             }
         }
     }
@@ -1337,10 +1442,21 @@ impl TypeResolution {
         let ast = unit_ast(lk, lib, unit);
         let mut all_cycles: Vec<Vec<NodeKey>> = Vec::new();
         for &parameter in ast.list(ast.get(list).type_parameters) {
-            let Some(bound) = ast.get(parameter).bound else { continue };
-            let Some(t) = self.default_node_type((lib, unit, bound.raw())) else { continue };
+            let Some(bound) = ast.get(parameter).bound else {
+                continue;
+            };
+            let Some(t) = self.default_node_type((lib, unit, bound.raw())) else {
+                continue;
+            };
             let mut visited = IndexSet::new();
-            let cycles = self.find_raw_type_paths(lk, ctx, (lib, unit, parameter.raw()), t, declaration, &mut visited);
+            let cycles = self.find_raw_type_paths(
+                lk,
+                ctx,
+                (lib, unit, parameter.raw()),
+                t,
+                declaration,
+                &mut visited,
+            );
             all_cycles.extend(cycles);
         }
         for cycle in all_cycles {
@@ -1348,8 +1464,10 @@ impl TypeResolution {
                 let ast = unit_ast(lk, parameter.0, parameter.1);
                 let p = ast.cast::<TypeParameter>(parameter.2).unwrap();
                 if let Some(bound) = ast.get(p).bound {
-                    self.bound_overrides
-                        .insert((parameter.0, parameter.1, bound.raw()), LType::Built(TypeId::DYNAMIC));
+                    self.bound_overrides.insert(
+                        (parameter.0, parameter.1, bound.raw()),
+                        LType::Built(TypeId::DYNAMIC),
+                    );
                 }
             }
         }
@@ -1385,7 +1503,10 @@ impl TypeResolution {
                             Tag::Class | Tag::Enum | Tag::Mixin | Tag::ExtensionType => {
                                 ctx.instance(EId::from_raw(declaration)).type_params.clone()
                             }
-                            Tag::TypeAlias => ctx.get(EId::<TypeAliasElement>::from_raw(declaration)).type_params.clone(),
+                            Tag::TypeAlias => ctx
+                                .get(EId::<TypeAliasElement>::from_raw(declaration))
+                                .type_params
+                                .clone(),
                             _ => Vec::new(),
                         };
                         for parameter in parameters {
@@ -1394,12 +1515,25 @@ impl TypeResolution {
                                 continue;
                             };
                             let ast = unit_ast(lk, l as u32, u as u32);
-                            let Some(p) = ast.cast::<TypeParameter>(node) else { continue };
-                            let Some(bound) = ast.get(p).bound else { continue };
-                            let Some(bt) = self.default_node_type((l as u32, u as u32, bound.raw())) else {
+                            let Some(p) = ast.cast::<TypeParameter>(node) else {
                                 continue;
                             };
-                            let tails = self.find_raw_type_paths(lk, ctx, (l as u32, u as u32, node), bt, end, visited);
+                            let Some(bound) = ast.get(p).bound else {
+                                continue;
+                            };
+                            let Some(bt) =
+                                self.default_node_type((l as u32, u as u32, bound.raw()))
+                            else {
+                                continue;
+                            };
+                            let tails = self.find_raw_type_paths(
+                                lk,
+                                ctx,
+                                (l as u32, u as u32, node),
+                                bt,
+                                end,
+                                visited,
+                            );
                             for tail in tails {
                                 let mut path = vec![start_parameter];
                                 path.extend(tail);
@@ -1410,7 +1544,14 @@ impl TypeResolution {
                     }
                 } else {
                     for &argument in arguments {
-                        paths.extend(self.find_raw_type_paths(lk, ctx, start_parameter, argument, end, visited));
+                        paths.extend(self.find_raw_type_paths(
+                            lk,
+                            ctx,
+                            start_parameter,
+                            argument,
+                            end,
+                            visited,
+                        ));
                     }
                 }
             }
@@ -1420,14 +1561,35 @@ impl TypeResolution {
                 return_type,
                 ..
             } => {
-                paths.extend(self.find_raw_type_paths(lk, ctx, start_parameter, *return_type, end, visited));
+                paths.extend(self.find_raw_type_paths(
+                    lk,
+                    ctx,
+                    start_parameter,
+                    *return_type,
+                    end,
+                    visited,
+                ));
                 for &tp in type_params {
                     if let Some(bound) = self.bound_of(ctx, tp) {
-                        paths.extend(self.find_raw_type_paths(lk, ctx, start_parameter, bound, end, visited));
+                        paths.extend(self.find_raw_type_paths(
+                            lk,
+                            ctx,
+                            start_parameter,
+                            bound,
+                            end,
+                            visited,
+                        ));
                     }
                 }
                 for p in params {
-                    paths.extend(self.find_raw_type_paths(lk, ctx, start_parameter, p.ty, end, visited));
+                    paths.extend(self.find_raw_type_paths(
+                        lk,
+                        ctx,
+                        start_parameter,
+                        p.ty,
+                        end,
+                        visited,
+                    ));
                 }
             }
             BuilderKind::Record { .. } => {}
@@ -1450,7 +1612,9 @@ impl TypeResolution {
         let mut elements = Vec::new();
         let mut bounds: Vec<LType> = Vec::new();
         for &node in nodes {
-            let Some(e) = declared_element(lk, (lib, unit, node.raw())).and_then(|e| e.cast::<TypeParameterElement>()) else {
+            let Some(e) = declared_element(lk, (lib, unit, node.raw()))
+                .and_then(|e| e.cast::<TypeParameterElement>())
+            else {
                 return;
             };
             elements.push(e);
@@ -1479,7 +1643,8 @@ impl TypeResolution {
             }
             for &i in &component {
                 let variance = type_parameter_variance(ctx, elements[i]);
-                if let Some(r) = self.replace_upper_lower(ctx, bounds[i], &upper, &lower, variance) {
+                if let Some(r) = self.replace_upper_lower(ctx, bounds[i], &upper, &lower, variance)
+                {
                     bounds[i] = r;
                 }
             }
@@ -1491,7 +1656,8 @@ impl TypeResolution {
             lower.insert(elements[i], LType::Built(TypeId::NEVER));
             for j in 0..length {
                 let variance = type_parameter_variance(ctx, elements[j]);
-                if let Some(r) = self.replace_upper_lower(ctx, bounds[j], &upper, &lower, variance) {
+                if let Some(r) = self.replace_upper_lower(ctx, bounds[j], &upper, &lower, variance)
+                {
                     bounds[j] = r;
                 }
             }
@@ -1502,7 +1668,14 @@ impl TypeResolution {
     }
 
     /// `_TypeParametersGraph._collectReferencesFrom`.
-    fn collect_references(&self, ctx: &Ctx<'_>, parameters: &[EId<TypeParameterElement>], index: usize, t: Option<LType>, edges: &mut [Vec<usize>]) {
+    fn collect_references(
+        &self,
+        ctx: &Ctx<'_>,
+        parameters: &[EId<TypeParameterElement>],
+        index: usize,
+        t: Option<LType>,
+        edges: &mut [Vec<usize>],
+    ) {
         let Some(t) = t else { return };
         match t {
             LType::Builder(b) => match &self.builders[b as usize].kind {
@@ -1513,7 +1686,13 @@ impl TypeResolution {
                     ..
                 } => {
                     for &tp in type_params {
-                        self.collect_references(ctx, parameters, index, self.bound_of(ctx, tp), edges);
+                        self.collect_references(
+                            ctx,
+                            parameters,
+                            index,
+                            self.bound_of(ctx, tp),
+                            edges,
+                        );
                     }
                     for p in params {
                         self.collect_references(ctx, parameters, index, Some(p.ty), edges);
@@ -1560,12 +1739,22 @@ impl TypeResolution {
                         // visitNamedTypeBuilder: the arguments with the
                         // variance of the type parameters of the element.
                         let parameters: Vec<EId<TypeParameterElement>> = match element {
-                            Some(e) if matches!(e.tag(), Tag::Class | Tag::Enum | Tag::Mixin | Tag::Extension | Tag::ExtensionType) => {
+                            Some(e)
+                                if matches!(
+                                    e.tag(),
+                                    Tag::Class
+                                        | Tag::Enum
+                                        | Tag::Mixin
+                                        | Tag::Extension
+                                        | Tag::ExtensionType
+                                ) =>
+                            {
                                 ctx.instance(EId::from_raw(e)).type_params.clone()
                             }
-                            Some(e) if e.tag() == Tag::TypeAlias => {
-                                ctx.get(EId::<TypeAliasElement>::from_raw(e)).type_params.clone()
-                            }
+                            Some(e) if e.tag() == Tag::TypeAlias => ctx
+                                .get(EId::<TypeAliasElement>::from_raw(e))
+                                .type_params
+                                .clone(),
                             _ => Vec::new(),
                         };
                         let mut new_arguments: Option<Vec<LType>> = None;
@@ -1573,10 +1762,14 @@ impl TypeResolution {
                             // Dart `_typeArguments`: arguments without a
                             // matching parameter keep their variance.
                             let v = match parameters.get(i) {
-                                Some(&p) => variance_combine(variance, type_parameter_variance(ctx, p)),
+                                Some(&p) => {
+                                    variance_combine(variance, type_parameter_variance(ctx, p))
+                                }
                                 None => variance,
                             };
-                            if let Some(r) = self.replace_upper_lower(ctx, argument, upper, lower, v) {
+                            if let Some(r) =
+                                self.replace_upper_lower(ctx, argument, upper, lower, v)
+                            {
                                 new_arguments.get_or_insert_with(|| arguments.clone())[i] = r;
                             }
                         }
@@ -1603,18 +1796,23 @@ impl TypeResolution {
                         let mut new_bounds: Vec<Option<LType>> = vec![None; type_params.len()];
                         for (i, &tp) in type_params.iter().enumerate() {
                             if let Some(bound) = self.bound_of(ctx, tp)
-                                && let Some(new_bound) = self.replace_upper_lower(ctx, bound, upper, lower, variance)
+                                && let Some(new_bound) =
+                                    self.replace_upper_lower(ctx, bound, upper, lower, variance)
                             {
-                                new_type_params.get_or_insert_with(|| type_params.clone())[i] = ctx.fresh_copy(tp);
+                                new_type_params.get_or_insert_with(|| type_params.clone())[i] =
+                                    ctx.fresh_copy(tp);
                                 new_bounds[i] = Some(new_bound);
                             }
                         }
-                        let mut substitution: Option<Vec<(EId<TypeParameterElement>, TypeId)>> = None;
+                        let mut substitution: Option<Vec<(EId<TypeParameterElement>, TypeId)>> =
+                            None;
                         if let Some(new_type_params) = &new_type_params {
                             let map: Vec<(EId<TypeParameterElement>, TypeId)> = type_params
                                 .iter()
                                 .zip(new_type_params.iter())
-                                .map(|(&old, &new)| (old, ctx.type_parameter_type(new, Nullability::None)))
+                                .map(|(&old, &new)| {
+                                    (old, ctx.type_parameter_type(new, Nullability::None))
+                                })
                                 .collect();
                             for (i, &new) in new_type_params.iter().enumerate() {
                                 // freshCopy() keeps the bound; `..bound =`
@@ -1644,13 +1842,16 @@ impl TypeResolution {
                         };
                         // visitType: the visited type (or the type itself),
                         // substituted when there are new type parameters.
-                        let visit_type = |this: &mut Self, t: LType, v: Variance| -> Option<LType> {
-                            let result = this.replace_upper_lower(ctx, t, upper, lower, v);
-                            match &substitution {
-                                Some(map) => Some(this.substitute_ltype(ctx, result.unwrap_or(t), map)),
-                                None => result,
-                            }
-                        };
+                        let visit_type =
+                            |this: &mut Self, t: LType, v: Variance| -> Option<LType> {
+                                let result = this.replace_upper_lower(ctx, t, upper, lower, v);
+                                match &substitution {
+                                    Some(map) => {
+                                        Some(this.substitute_ltype(ctx, result.unwrap_or(t), map))
+                                    }
+                                    None => result,
+                                }
+                            };
                         let new_return = match visit_type(self, return_type, variance) {
                             Some(r) => {
                                 changed = true;
@@ -1687,14 +1888,18 @@ impl TypeResolution {
                         let mut changed = false;
                         let mut p2 = positional.clone();
                         for t in p2.iter_mut() {
-                            if let Some(r) = self.replace_upper_lower(ctx, *t, upper, lower, variance) {
+                            if let Some(r) =
+                                self.replace_upper_lower(ctx, *t, upper, lower, variance)
+                            {
                                 *t = r;
                                 changed = true;
                             }
                         }
                         let mut n2 = named.clone();
                         for (_, t) in n2.iter_mut() {
-                            if let Some(r) = self.replace_upper_lower(ctx, *t, upper, lower, variance) {
+                            if let Some(r) =
+                                self.replace_upper_lower(ctx, *t, upper, lower, variance)
+                            {
                                 *t = r;
                                 changed = true;
                             }
@@ -1717,11 +1922,19 @@ impl TypeResolution {
     /// `Substitution.fromMap(map).substituteType(t)` over a linking type:
     /// built types are substituted, builders are copied when something
     /// changes.
-    fn substitute_ltype(&mut self, ctx: &Ctx<'_>, t: LType, map: &[(EId<TypeParameterElement>, TypeId)]) -> LType {
+    fn substitute_ltype(
+        &mut self,
+        ctx: &Ctx<'_>,
+        t: LType,
+        map: &[(EId<TypeParameterElement>, TypeId)],
+    ) -> LType {
         match t {
             LType::Built(id) => {
                 let (params, args): (Vec<_>, Vec<_>) = map.iter().copied().unzip();
-                LType::Built(dartr_typesystem::MapSubstitution::from_pairs(&params, &args).substitute_type(ctx, id))
+                LType::Built(
+                    dartr_typesystem::MapSubstitution::from_pairs(&params, &args)
+                        .substitute_type(ctx, id),
+                )
             }
             LType::Builder(b) => {
                 let kind = self.builders[b as usize].kind.clone();
@@ -1732,7 +1945,10 @@ impl TypeResolution {
                         nullability,
                         node,
                     } => {
-                        let new_arguments: Vec<LType> = arguments.iter().map(|&a| self.substitute_ltype(ctx, a, map)).collect();
+                        let new_arguments: Vec<LType> = arguments
+                            .iter()
+                            .map(|&a| self.substitute_ltype(ctx, a, map))
+                            .collect();
                         if new_arguments == arguments {
                             return t;
                         }
@@ -1755,7 +1971,12 @@ impl TypeResolution {
                             p.ty = self.substitute_ltype(ctx, p.ty, map);
                         }
                         let new_return = self.substitute_ltype(ctx, return_type, map);
-                        if new_return == return_type && new_params.iter().zip(params.iter()).all(|(a, b)| a.ty == b.ty) {
+                        if new_return == return_type
+                            && new_params
+                                .iter()
+                                .zip(params.iter())
+                                .all(|(a, b)| a.ty == b.ty)
+                        {
                             return t;
                         }
                         BuilderKind::Function {
@@ -1772,9 +1993,14 @@ impl TypeResolution {
                         named,
                         nullability,
                     } => {
-                        let new_positional: Vec<LType> = positional.iter().map(|&a| self.substitute_ltype(ctx, a, map)).collect();
-                        let new_named: Vec<(Name, LType)> =
-                            named.iter().map(|&(n, a)| (n, self.substitute_ltype(ctx, a, map))).collect();
+                        let new_positional: Vec<LType> = positional
+                            .iter()
+                            .map(|&a| self.substitute_ltype(ctx, a, map))
+                            .collect();
+                        let new_named: Vec<(Name, LType)> = named
+                            .iter()
+                            .map(|&(n, a)| (n, self.substitute_ltype(ctx, a, map)))
+                            .collect();
                         if new_positional == positional && new_named == named {
                             return t;
                         }
@@ -1804,10 +2030,17 @@ impl TypeResolution {
         variance: Variance,
     ) -> Option<LType> {
         if let TypeKind::TypeParameter { param, .. } = *ctx.ty(id) {
-            let map = if variance == Variance::Contravariant { lower } else { upper };
+            let map = if variance == Variance::Contravariant {
+                lower
+            } else {
+                upper
+            };
             return map.get(&param).copied();
         }
-        let all_built = upper.values().chain(lower.values()).all(|v| matches!(v, LType::Built(_)));
+        let all_built = upper
+            .values()
+            .chain(lower.values())
+            .all(|v| matches!(v, LType::Built(_)));
         if !all_built {
             return None;
         }
@@ -1822,7 +2055,8 @@ impl TypeResolution {
             lower: built(lower),
             variance,
         };
-        dartr_typesystem::replacement_visitor::ReplacementVisitor::visit(&mut visitor, id).map(LType::Built)
+        dartr_typesystem::replacement_visitor::ReplacementVisitor::visit(&mut visitor, id)
+            .map(LType::Built)
     }
 }
 
@@ -1847,9 +2081,14 @@ impl<'a> dartr_typesystem::replacement_visitor::ReplacementVisitor<'a> for Upper
         };
     }
 
-    fn visit_type_argument(&mut self, parameter: EId<TypeParameterElement>, argument: TypeId) -> Option<TypeId> {
+    fn visit_type_argument(
+        &mut self,
+        parameter: EId<TypeParameterElement>,
+        argument: TypeId,
+    ) -> Option<TypeId> {
         let saved = self.variance;
-        self.variance = variance_combine(self.variance, type_parameter_variance(&self.ctx, parameter));
+        self.variance =
+            variance_combine(self.variance, type_parameter_variance(&self.ctx, parameter));
         let r = dartr_typesystem::replacement_visitor::ReplacementVisitor::visit(self, argument);
         self.variance = saved;
         r

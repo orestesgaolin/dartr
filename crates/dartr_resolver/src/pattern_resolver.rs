@@ -276,7 +276,11 @@ pub fn member_groups(ast: &Ast, node: Id<SwitchStatement>) -> Vec<SwitchStatemen
 }
 
 /// The group [case_index] of the switch statement [node].
-pub(crate) fn member_group(ast: &Ast, node: NodeId, case_index: usize) -> Option<SwitchStatementCaseGroup> {
+pub(crate) fn member_group(
+    ast: &Ast,
+    node: NodeId,
+    case_index: usize,
+) -> Option<SwitchStatementCaseGroup> {
     let node = ast.cast::<SwitchStatement>(node)?;
     member_groups(ast, node).into_iter().nth(case_index)
 }
@@ -290,7 +294,10 @@ fn to_pattern_variables(
 ) -> PatternVariables {
     variables
         .iter()
-        .filter_map(|(&name, &e)| e.cast::<dartr_element::PromotableElement>().map(|e| (name, e)))
+        .filter_map(|(&name, &e)| {
+            e.cast::<dartr_element::PromotableElement>()
+                .map(|e| (name, e))
+        })
         .collect()
 }
 
