@@ -301,7 +301,7 @@ impl<'a> Job<'a> {
             // A snapshot that has all direct dependencies (they published
             // before this cycle became ready).
             let state = self.shared.lock().unwrap().0.clone();
-            let linked = link_cycle(&state.world, &state.registry, &self.inputs[i]);
+            let linked = link_cycle(&state.world, &state.registry, &crate::link_resolver::ResolverForLinking, &self.inputs[i]);
             let linked = Arc::new(linked);
             {
                 let mut shared = self.shared.lock().unwrap();

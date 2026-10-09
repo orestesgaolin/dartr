@@ -895,7 +895,7 @@ pub(crate) fn element_type_parameters(
 
 /// Dart `InterfaceElementImpl.primaryConstructor`: the constructor whose
 /// fragment is a primary constructor.
-fn primary_constructor_of(
+pub(crate) fn primary_constructor_of(
     ctx: &Ctx<'_>,
     element: EId<InstanceElement>,
 ) -> Option<EId<ConstructorElement>> {

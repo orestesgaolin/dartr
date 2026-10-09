@@ -72,6 +72,71 @@ fn elements_parity_on_override_inference_fixtures() {
     );
 }
 
+/// Top-level inference (unit C10, `fixtures/top_level_inference`), without
+/// masking the inferred types: initializers of top-level variables and
+/// fields inferred on demand (also from override inference and field
+/// formal parameters), dependency cycles (`typeInferenceError`), function
+/// expressions with local parameters and type parameters.
+#[test]
+fn elements_parity_on_top_level_inference_fixtures() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/top_level_inference");
+    let report = run(&Options {
+        mask_inferred: false,
+        ..options(vec![dir.join("variables.dart")])
+    })
+    .unwrap();
+    assert_eq!(report.files, 1);
+    assert_eq!(report.different(), 0, "{}{}", report.difference_report(20), report.summary());
+}
+
+/// Enum constants: Dart infers their types from the synthetic instance
+/// creation of each constant.
+#[test]
+#[ignore = "needs the instance creation resolver (unit C8)"]
+fn elements_parity_on_top_level_inference_enum_fixtures() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/top_level_inference");
+    let report = run(&Options {
+        mask_inferred: false,
+        ..options(vec![dir.join("enums.dart")])
+    })
+    .unwrap();
+    assert_eq!(report.files, 1);
+    assert_eq!(report.different(), 0, "{}{}", report.difference_report(20), report.summary());
+}
+
+fn assert_unmasked_parity(dir: PathBuf, min_files: usize) {
+    let files = collect_dart_files(std::slice::from_ref(&dir)).unwrap();
+    assert!(files.len() >= min_files, "fixtures not found in {}", dir.display());
+    let report = run(&Options {
+        mask_inferred: false,
+        ..options(vec![dir])
+    })
+    .unwrap();
+    assert_eq!(report.files, files.len());
+    assert_eq!(report.different(), 0, "{}{}", report.difference_report(20), report.summary());
+}
+
+/// The cases of the analyzer's `top_level_inference_test.dart` (unit C10,
+/// one file per test, `fixtures/top_level_inference/analyzer`) whose
+/// initializers the resolver of this unit resolves, without masking.
+#[test]
+fn elements_parity_on_analyzer_top_level_inference_tests() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/top_level_inference/analyzer");
+    assert_unmasked_parity(dir, 82);
+}
+
+/// The other cases of `top_level_inference_test.dart`: their initializers
+/// are invocations, property accesses, operators and instance creations.
+/// They are identical with the resolvers of units C3–C8 merged (checked on
+/// a merge of the wave C branches); then move them to
+/// `fixtures/top_level_inference/analyzer`.
+#[test]
+#[ignore = "needs the property, operator and instance creation resolvers (units C4-C6, C8)"]
+fn elements_parity_on_analyzer_top_level_inference_tests_wave_c() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/top_level_inference/analyzer_wave_c");
+    assert_unmasked_parity(dir, 62);
+}
+
 /// The `dart:` libraries of the SDK of the `dart` on PATH, linked from
 /// source (the `dart:core` cycle and every other SDK cycle).
 #[test]

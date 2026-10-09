@@ -994,6 +994,7 @@ pub trait TypeExt<'a> {
     fn extension_type_representation(&self, element: EId<ExtensionTypeElement>) -> TypeId {
         let ctx = self.ctx();
         let field = ctx.get(element).fields[0];
+        dartr_element::type_inference::ensure_property_type(&ctx, field.upcast());
         ctx.get(field).type_.get().unwrap_or(TypeId::INVALID)
     }
 

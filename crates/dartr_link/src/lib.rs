@@ -32,6 +32,7 @@ pub mod link;
 pub mod outline;
 pub mod reference;
 pub mod scope;
+pub mod top_level_inference;
 pub mod type_bounds;
 pub mod types;
 pub mod types_builder;
