@@ -323,6 +323,7 @@ pub fn return_type(ctx: &Ctx<'_>, e: ElemRef) -> TypeId {
     let executable = base
         .cast::<ExecutableElement>()
         .expect("returnType of an executable");
+    dartr_element::type_inference::ensure_accessor_return_type(ctx, executable);
     let result = crate::element_type::executable_return_type(ctx, executable);
     match e {
         ElemRef::Base(_) => result,
@@ -366,8 +367,12 @@ fn base_type(ctx: &Ctx<'_>, base: ElementId) -> TypeId {
 fn variable_type(ctx: &Ctx<'_>, variable: EId<VariableElement>) -> TypeId {
     let raw = variable.raw();
     if let Some(p) = raw.cast::<FormalParameterElement>() {
+        dartr_element::type_inference::ensure_formal_parameter_type(ctx, p);
         return ctx.get(p).type_.get().unwrap_or(TypeId::INVALID);
     }
+    // Dart `PropertyInducingElementImpl.type`: infers on demand while
+    // linking.
+    dartr_element::type_inference::ensure_variable_type(ctx, raw);
     if let Some(f) = raw.cast::<FieldElement>() {
         return ctx.get(f).type_.get().unwrap_or(TypeId::INVALID);
     }

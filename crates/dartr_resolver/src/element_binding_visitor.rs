@@ -121,6 +121,45 @@ pub fn bind_unit(
     staging.commit(ctx, local, library);
 }
 
+/// Dart `ElementBindingVisitor.forPartialResolution(fragment: fragment)
+/// .bindSubtree(enclosingFragment, node)`: binds the local declarations of
+/// the subtree [node] (summary2 `AstResolver`: initializers, default
+/// values, annotations and constructor initializers while linking). The
+/// local fragments are enclosed by [enclosing_fragment]. Needs a context
+/// with a local arena.
+pub fn bind_subtree(
+    ctx: &Ctx<'_>,
+    ast: &Ast,
+    fragment: FId<LibraryFragment>,
+    enclosing_fragment: FragmentId,
+    node: NodeId,
+    tables: &mut ResolutionTables,
+    rt: &mut ResolverTables,
+) {
+    let local = &ctx
+        .local
+        .expect("element binding needs a context with a local arena")
+        .store;
+    let library = ctx.fragment(fragment).library;
+    let mut visitor = ElementBindingVisitor {
+        ctx: *ctx,
+        library,
+        library_fragment: fragment,
+        library_directive_index: 0,
+        import_index: 0,
+        export_index: 0,
+        part_index: 0,
+        walker: None,
+        holder: ElementHolder::new(enclosing_fragment),
+        staging: Staging::new(local),
+        tables,
+        rt,
+    };
+    ast.accept(node, &mut visitor);
+    let staging = std::mem::replace(&mut visitor.staging, Staging::new(local));
+    staging.commit(ctx, local, library);
+}
+
 // ------------------------------------------------------------------ staging
 
 /// The staged fragments of one kind (see the module documentation).
