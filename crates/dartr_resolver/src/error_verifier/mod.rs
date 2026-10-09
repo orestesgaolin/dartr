@@ -474,6 +474,20 @@ pub fn compute_verify_errors(
         features: unit_input.parsed.feature_set,
     };
     let reported = unit.diagnostics.len();
+    // Dart `RecordingDiagnosticListener` keeps a set: equal diagnostics
+    // (the resolver and the verifier can report the same one) are kept
+    // once, in report order.
+    let dedupe = |diagnostics: &mut Vec<Diagnostic>| {
+        let mut seen = IndexSet::new();
+        diagnostics.retain(|d| {
+            seen.insert((
+                d.code as *const dartr_diagnostics::DiagnosticCode,
+                d.offset,
+                d.length,
+                d.message.clone(),
+            ))
+        });
+    };
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         verify_unit(
             ctx,
@@ -496,8 +510,12 @@ pub fn compute_verify_errors(
             unit_ctx,
         );
     }));
+    if result.is_ok() {
+        dedupe(&mut unit.diagnostics);
+    }
     if let Err(e) = result {
         unit.diagnostics.truncate(reported);
+        dedupe(&mut unit.diagnostics);
         if std::env::var_os("DARTR_DEBUG_VERIFY").is_some() {
             let message = e
                 .downcast_ref::<String>()

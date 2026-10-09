@@ -1,7 +1,7 @@
 # Diagnostic codes that ErrorVerifier can report: every diag.<name> used in
 # pkg/analyzer/lib/src/generated/{error_verifier,error_detection_helpers}.dart and
 # pkg/analyzer/lib/src/error/{bool_expression_verifier,nullable_dereference_verifier}.dart
-# (pinned SDK), as the "code" of the diagnostics JSON (see constant_codes.txt).
+# (pinned SDK; names in comments excluded), as the "code" of the diagnostics JSON (see constant_codes.txt).
 #
 # Usage: difftest resolved --codes-file tools/difftest/error_verifier_codes.txt <paths>
 abstract_field_initializer
@@ -120,7 +120,6 @@ induced_setter_without_body
 initializer_for_non_existent_field
 initializer_for_static_field
 initializing_formal_for_non_existent_field
-instance_access_to_static_member
 instance_member_access_from_factory
 instance_member_access_from_static
 instantiate_abstract_class
@@ -138,7 +137,6 @@ invalid_use_of_covariant
 invalid_use_of_null_value
 invalid_use_of_type_outside_library
 late_final_field_with_const_constructor
-list_element_type_not_assignable
 main_first_positional_parameter_type
 main_has_required_named_parameters
 main_has_too_many_required_positional_parameters
@@ -204,11 +202,9 @@ representation_field_modifier
 representation_field_trailing_comma
 rethrow_outside_catch
 return_in_generative_constructor
-set_element_type_not_assignable
 shared_deferred_prefix
 static_access_to_instance_member
 subtype_of_deferred_class
-subtype_of_disallowed_type
 super_formal_parameter_type_is_not_subtype_of_associated
 super_formal_parameter_without_associated_named
 super_formal_parameter_without_associated_positional
