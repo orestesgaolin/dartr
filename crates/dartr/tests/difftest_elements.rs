@@ -122,7 +122,7 @@ fn assert_unmasked_parity(dir: PathBuf, min_files: usize) {
 #[test]
 fn elements_parity_on_analyzer_top_level_inference_tests() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/top_level_inference/analyzer");
-    assert_unmasked_parity(dir, 77);
+    assert_unmasked_parity(dir, 82);
 }
 
 /// The other cases of `top_level_inference_test.dart`: their initializers
@@ -131,10 +131,10 @@ fn elements_parity_on_analyzer_top_level_inference_tests() {
 /// a merge of the wave C branches); then move them to
 /// `fixtures/top_level_inference/analyzer`.
 #[test]
-#[ignore = "needs the invocation, property, operator and instance creation resolvers (units C3-C6, C8)"]
+#[ignore = "needs the property, operator and instance creation resolvers (units C4-C6, C8)"]
 fn elements_parity_on_analyzer_top_level_inference_tests_wave_c() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/top_level_inference/analyzer_wave_c");
-    assert_unmasked_parity(dir, 67);
+    assert_unmasked_parity(dir, 62);
 }
 
 /// The `dart:` libraries of the SDK of the `dart` on PATH, linked from
