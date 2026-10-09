@@ -16,7 +16,6 @@ use dartr_driver::file_state::{FileConfig, FileId, FileSystemState, SourceFactor
 use dartr_driver::uri::Uri;
 use dartr_element::{ConstExprId, Ctx, ElementId, FeatureSet, Generation, NoopSink, StoreId};
 use dartr_link::dump::{DumpSources, error_json, library_json};
-use dartr_parser::experimental_flags::ExperimentalFlag;
 use dartr_project::{
     AnalysisContextCollection, CollectionOptions, DartSdk, Packages, Workspace, paths,
 };
@@ -217,38 +216,13 @@ impl DumpSources for Sources<'_> {
     }
 }
 
-fn experiment_flags(names: &[&str]) -> Vec<ExperimentalFlag> {
-    ExperimentalFlag::VALUES
-        .iter()
-        .copied()
-        .filter(|f| names.contains(&f.name()))
-        .collect()
-}
-
 /// A driver for one analysis context of the collection.
 fn context_driver_for(
     collection: &Rc<AnalysisContextCollection>,
     context_index: usize,
     generation: Arc<Generation>,
 ) -> Driver {
-    let context = &collection.contexts[context_index];
-    let source_factory = SourceFactory {
-        workspace: context.root.workspace.clone(),
-        sdk: context.sdk.as_deref().cloned(),
-    };
-    let collection = collection.clone();
-    let config_for = Box::new(move |path: &str, uri: &str| {
-        let context = &collection.contexts[context_index];
-        let version = context.language_version(path, uri);
-        let options = collection.options_for(context, path);
-        let flags = options.enable_experiment_flags.clone().unwrap_or_default();
-        let enabled = dartr_project::experiments::enabled_experiments(&flags);
-        FileConfig {
-            package_language_version: (version.major, version.minor),
-            experiments: experiment_flags(&enabled),
-        }
-    });
-    Driver::new(FileSystemState::new(source_factory, config_for), generation)
+    dartr_driver::project::context_driver(collection, context_index, generation)
 }
 
 /// The driver of the `dart:` inputs: a context with only the SDK.

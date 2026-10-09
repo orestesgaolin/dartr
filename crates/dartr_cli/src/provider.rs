@@ -6,8 +6,10 @@
 //! the `errors:` severity processing of `analysis_options.yaml` (that is
 //! server side, see [crate::server]).
 //!
-//! [ParseOnlyProvider] gives the parse diagnostics only. The analysis driver
-//! (`dartr_driver`) will implement the trait with the full diagnostics.
+//! [ParseOnlyProvider] gives the parse diagnostics only (kept for
+//! comparison: `dartr analyze --dartr-parse-only`).
+//! [crate::driver_provider::DriverProvider] gives the diagnostics of the
+//! analysis driver (`dartr_driver`).
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, OnceLock};
@@ -109,16 +111,16 @@ struct ParseTask {
 }
 
 /// Settings derived from one [AnalysisOptions].
-struct FileSettings {
-    experiments: Vec<ExperimentalFlag>,
+pub(crate) struct FileSettings {
+    pub(crate) experiments: Vec<ExperimentalFlag>,
     /// Dart `unignorableDiagnosticCodeNames`.
-    unignorable_names: HashSet<String>,
+    pub(crate) unignorable_names: HashSet<String>,
     /// The enabled lint rules that `dartr_lints` implements.
-    lint_rules: Vec<&'static str>,
+    pub(crate) lint_rules: Vec<&'static str>,
 }
 
 impl FileSettings {
-    fn new(options: &AnalysisOptions) -> FileSettings {
+    pub(crate) fn new(options: &AnalysisOptions) -> FileSettings {
         let experiments = options
             .enabled_experiments()
             .iter()
@@ -235,20 +237,39 @@ fn finish_unit(
     lints: Vec<Diagnostic>,
     settings: &FileSettings,
 ) -> FileDiagnostics {
-    let parsed = &unit.parsed;
+    finish_file(
+        &unit.path,
+        &unit.content,
+        &unit.parsed,
+        unit.parsed.diagnostics.clone(),
+        lints,
+        settings,
+    )
+}
+
+/// The diagnostics of one unit: the analysis [diagnostics] (parse
+/// diagnostics first), [lints], the ignore-comment diagnostics, filtered
+/// with the ignore comments of the unit.
+pub(crate) fn finish_file(
+    path: &str,
+    content: &str,
+    parsed: &ParsedUnit,
+    mut diagnostics: Vec<Diagnostic>,
+    lints: Vec<Diagnostic>,
+    settings: &FileSettings,
+) -> FileDiagnostics {
     let tokens = &parsed.ast.tokens;
     let first = parsed.ast.begin_token(dartr_ast::NodeId::from(parsed.unit));
-    let ignore_info = IgnoreInfo::for_dart(tokens, first, &parsed.line_info, &unit.content);
+    let ignore_info = IgnoreInfo::for_dart(tokens, first, &parsed.line_info, content);
     let unignorable = &settings.unignorable_names;
-    let mut diagnostics = parsed.diagnostics.clone();
     diagnostics.extend(lints);
-    if !is_generated(&unit.path) {
+    if !is_generated(path) {
         diagnostics.extend(validate_ignores(&ignore_info, unignorable));
     }
     let diagnostics =
         filter_ignored_diagnostics(diagnostics, &ignore_info, &parsed.line_info, unignorable);
     FileDiagnostics {
-        path: unit.path.clone(),
+        path: path.to_string(),
         line_info: parsed.line_info.clone(),
         diagnostics,
     }
@@ -490,7 +511,7 @@ fn run_library(
     result
 }
 
-fn pool() -> &'static rayon::ThreadPool {
+pub(crate) fn pool() -> &'static rayon::ThreadPool {
     static POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
     POOL.get_or_init(|| {
         rayon::ThreadPoolBuilder::new()

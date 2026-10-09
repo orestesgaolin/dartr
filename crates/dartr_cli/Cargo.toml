@@ -13,6 +13,10 @@ dartr_ast_builder.workspace = true
 dartr_diagnostics.workspace = true
 dartr_project.workspace = true
 dartr_lints.workspace = true
+dartr_driver.workspace = true
+dartr_element.workspace = true
+dartr_resolver.workspace = true
+indexmap.workspace = true
 rayon.workspace = true
 libc = "0.2.190"
 

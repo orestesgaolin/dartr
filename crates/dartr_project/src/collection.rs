@@ -274,26 +274,16 @@ impl AnalysisContext {
     /// package of the file, or of the SDK, or the current language version
     /// for files outside of packages.
     pub fn language_version(&self, path: &str, uri: &str) -> LanguageVersion {
-        let sdk_version = self
-            .sdk
+        language_version_in(&self.packages, self.sdk_language_version(), path, uri)
+    }
+
+    /// The language version of the SDK of the context, or the current
+    /// language version.
+    pub fn sdk_language_version(&self) -> LanguageVersion {
+        self.sdk
             .as_deref()
             .and_then(DartSdk::language_version)
-            .unwrap_or(CURRENT_LANGUAGE_VERSION);
-        if uri.starts_with("dart:") {
-            return sdk_version;
-        }
-        let package = if uri.starts_with("package:") {
-            package_config::split_package_uri(uri).and_then(|(name, _)| self.packages.get(&name))
-        } else if uri.starts_with("file:") {
-            paths::file_uri_to_path(uri).and_then(|p| self.packages.package_for_path(&p))
-        } else {
-            None
-        };
-        let package = package.or_else(|| self.packages.package_for_path(path));
-        match package {
-            Some(package) => package.language_version.unwrap_or(sdk_version),
-            None => CURRENT_LANGUAGE_VERSION,
-        }
+            .unwrap_or(CURRENT_LANGUAGE_VERSION)
     }
 
     /// The `fix_data.yaml` files of the context that the analysis server
@@ -340,4 +330,29 @@ fn create_sdk(
         }
     }
     sdk.cloned()
+}
+
+/// [AnalysisContext::language_version] with the [packages] and the
+/// [sdk_version] of a context (for code that cannot hold the context).
+pub fn language_version_in(
+    packages: &Packages,
+    sdk_version: LanguageVersion,
+    path: &str,
+    uri: &str,
+) -> LanguageVersion {
+    if uri.starts_with("dart:") {
+        return sdk_version;
+    }
+    let package = if uri.starts_with("package:") {
+        package_config::split_package_uri(uri).and_then(|(name, _)| packages.get(&name))
+    } else if uri.starts_with("file:") {
+        paths::file_uri_to_path(uri).and_then(|p| packages.package_for_path(&p))
+    } else {
+        None
+    };
+    let package = package.or_else(|| packages.package_for_path(path));
+    match package {
+        Some(package) => package.language_version.unwrap_or(sdk_version),
+        None => CURRENT_LANGUAGE_VERSION,
+    }
 }
