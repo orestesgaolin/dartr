@@ -821,7 +821,7 @@ impl<'a> ConstantEvaluationEngine<'a> {
         if !is_const_constructor(&ctx, constant) {
             return;
         }
-        if let Some(redirected) = get_const_redirected_constructor(&ctx, ElemRef::Base(constant)) {
+        if let Some(redirected) = self.get_const_redirected_constructor(ElemRef::Base(constant)) {
             callback(ConstantTarget::Element(member::base_element(
                 &ctx, redirected,
             )));
@@ -1125,45 +1125,67 @@ pub fn super_constructor_parameter(ctx: &Ctx<'_>, e: ElementId) -> Option<ElemRe
     }
 }
 
-/// Dart `getConstRedirectedConstructor(constructor)`: if [constructor]
-/// redirects to another const constructor, the const constructor it
-/// redirects to.
-pub fn get_const_redirected_constructor(ctx: &Ctx<'_>, constructor: ElemRef) -> Option<ElemRef> {
-    let base = member::base_element(ctx, constructor);
-    if !is_factory_constructor(ctx, base) {
-        return None;
-    }
-    let enclosing = ctx.element_data(base)?.enclosing?;
-    if enclosing == ctx.tp.symbol_element().raw() {
-        // The dart:core.Symbol has a const factory constructor that
-        // redirects to dart:_internal.Symbol. That in turn redirects to an
-        // external const constructor, which we won't be able to evaluate.
-        // So stop following the chain of redirections at dart:core.Symbol,
-        // and let [evaluateInstanceCreationExpression] handle it specially.
-        return None;
-    }
-    let redirected = ctx
-        .get(EId::<dartr_element::ConstructorElement>::from_raw(base))
-        .redirected_constructor
-        .get()?;
-    // Dart `ConstructorMember.redirectedConstructor` substitutes.
-    let redirected = match constructor {
-        ElemRef::Base(_) => redirected,
-        ElemRef::Member(_) => {
-            // `from2(redirected.baseElement,
-            // substitution.mapInterfaceType(redirected.returnType))`.
-            let return_type = member::return_type(ctx, redirected);
-            let return_type =
-                member::substitution(ctx, constructor).substitute_type(ctx, return_type);
-            member::constructor_from2(ctx, member::base_element(ctx, redirected), return_type)
+impl ConstantEvaluationEngine<'_> {
+    /// Dart `getConstRedirectedConstructor(constructor)`: if [constructor]
+    /// redirects to another const constructor, the const constructor it
+    /// redirects to.
+    pub fn get_const_redirected_constructor(&self, constructor: ElemRef) -> Option<ElemRef> {
+        let ctx = self.global_ctx();
+        let base = member::base_element(&ctx, constructor);
+        if !is_factory_constructor(&ctx, base) {
+            return None;
         }
-    };
-    if !is_const_constructor(ctx, member::base_element(ctx, redirected)) {
-        // Delegating to a non-const constructor--this is not allowed (and
-        // is checked elsewhere).
-        return None;
+        let enclosing = ctx.element_data(base)?.enclosing?;
+        if enclosing == ctx.tp.symbol_element().raw() {
+            // The dart:core.Symbol has a const factory constructor that
+            // redirects to dart:_internal.Symbol. That in turn redirects to
+            // an external const constructor, which we won't be able to
+            // evaluate. So stop following the chain of redirections at
+            // dart:core.Symbol, and let [evaluateInstanceCreationExpression]
+            // handle it specially.
+            return None;
+        }
+        let redirected = ctx
+            .get(EId::<dartr_element::ConstructorElement>::from_raw(base))
+            .redirected_constructor
+            .get()?;
+        let redirected_base = member::base_element(&ctx, redirected);
+        // Dart `redirectedConstructor` is substituted with the type of the
+        // redirection (`= B<int>.bar`). The linked element may be the base
+        // constructor: take the type from the resolved declaration.
+        let mut redirect_type = member::return_type(&ctx, redirected);
+        if let Some(decl) = self.declaration(base) {
+            let u = self.unit(decl.unit);
+            if let Some(d) = u.ast.cast::<ConstructorDeclaration>(decl.node)
+                && let Some(name) = u.ast[d].redirected_constructor
+                && let Some(&t) = u.tables.annotation_type.get(u.ast[name].type_)
+                && ctx.interface_element(t).is_some()
+                && !t.is_local()
+            {
+                redirect_type = t;
+            }
+        }
+        // Dart `ConstructorMember.redirectedConstructor`:
+        // `from2(redirected.baseElement,
+        // substitution.mapInterfaceType(redirected.returnType))`.
+        if let ElemRef::Member(_) = constructor {
+            redirect_type =
+                member::substitution(&ctx, constructor).substitute_type(&ctx, redirect_type);
+        }
+        let redirected = if ctx.interface_element(redirect_type).is_some()
+            && !ctx.type_arguments(redirect_type).is_empty()
+        {
+            member::constructor_from2(&ctx, redirected_base, redirect_type)
+        } else {
+            redirected
+        };
+        if !is_const_constructor(&ctx, redirected_base) {
+            // Delegating to a non-const constructor--this is not allowed
+            // (and is checked elsewhere).
+            return None;
+        }
+        Some(redirected)
     }
-    Some(redirected)
 }
 
 /// The element of an annotation (Dart `ElementAnnotationImpl.element`:
@@ -4463,6 +4485,7 @@ impl<'e, 'a> InstanceCreationEvaluator<'e, 'a> {
         });
 
         let redirection_result = follow_constant_redirection_chain(
+            engine,
             &ctx,
             constructor,
             &invocation_positional_values,
@@ -4503,6 +4526,7 @@ impl<'e, 'a> InstanceCreationEvaluator<'e, 'a> {
 /// Dart `_followConstantRedirectionChain`.
 #[allow(clippy::too_many_arguments)]
 fn follow_constant_redirection_chain(
+    engine: &ConstantEvaluationEngine<'_>,
     ctx: &Ctx<'_>,
     original_constructor: ElemRef,
     positional_values: &[DartObjectImpl],
@@ -4514,7 +4538,7 @@ fn follow_constant_redirection_chain(
 ) -> RedirectionResult {
     let mut constructor = original_constructor;
     let mut constructors_visited = IndexSet::new();
-    while let Some(redirected_constructor) = get_const_redirected_constructor(ctx, constructor) {
+    while let Some(redirected_constructor) = engine.get_const_redirected_constructor(constructor) {
         constructors_visited.insert(member::base_element(ctx, constructor));
         if constructors_visited.contains(&member::base_element(ctx, redirected_constructor)) {
             // Cycle in redirecting factory constructors--this is not allowed
