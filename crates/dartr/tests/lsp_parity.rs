@@ -708,3 +708,291 @@ fn lsp_lints_and_error_processors() {
     let failures = report("lints and errors: processors", &dart, &dartr);
     assert_eq!(failures, 0, "LSP session differs from dart language-server");
 }
+
+/// The environment variable that enables the formatting parity steps that
+/// need real formatter output. The formatting styles of `dartr_format`
+/// (phase 10 "p10-format") are stubs until they are merged: until then
+/// dartr returns `null` for every file that needs changes. Without the
+/// variable, only the steps whose result does not depend on the formatter
+/// output run (syntax errors, unknown and non-Dart files, disabled
+/// formatter, trigger checks of on-type formatting, already formatted
+/// files).
+const FORMAT_PARITY_ENV: &str = "DARTR_FORMAT_PARITY";
+
+fn format_parity_enabled() -> bool {
+    // The formatting styles are ported: always compare formatted output.
+    // `DARTR_FORMAT_PARITY=0` skips these steps.
+    std::env::var_os(FORMAT_PARITY_ENV).is_none_or(|v| v != "0")
+}
+
+/// A package with files that need formatting, a nested package whose
+/// `analysis_options.yaml` sets `formatter: page_width` and
+/// `trailing_commas`, a file at language version 3.6 (short style) and a
+/// file with syntax errors.
+fn write_format_project() -> std::path::PathBuf {
+    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("lsp_format");
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("lib")).unwrap();
+    std::fs::create_dir_all(root.join("wide/lib")).unwrap();
+    let root = root.canonicalize().unwrap();
+    let write = |rel: &str, content: &str| std::fs::write(root.join(rel), content).unwrap();
+    let needs = "import 'dart:math';\nclass  A{\nint x=1  ;\n  void f( int a,int b ){ if(a>b){print( 'a' );} else {print('b');}\n  }\n  List<int> get items => [1,2,3,];\n}\nvoid main(){var a=A();a.f(1,2);\n  var veryLongVariableNameNumberOne = max(1000000, 2000000) + max(3000000, 4000000) + 5;\n// comment   \n  print(veryLongVariableNameNumberOne);}\n";
+    write("pubspec.yaml", "name: p\nenvironment:\n  sdk: ^3.13.0\n");
+    write("lib/needs.dart", needs);
+    write("lib/formatted.dart", "class A {\n  int x = 1;\n}\n");
+    write("lib/broken.dart", "void main() {\n  var x = ;\n  print(x)\n}\n");
+    write(
+        "lib/short_style.dart",
+        "// @dart = 3.6\nvoid f(int a,int b,{int c=1}){var list=[a,b,c,];print(list);}\n",
+    );
+    write(
+        "lib/unicode_crlf.dart",
+        "// \u{1F600} \u{e9}moji\r\nvar  s = '\u{1F600}';\r\nvoid f( ){print( s );   /* \u{1F600} */ print(s);}\r\n",
+    );
+    write("wide/pubspec.yaml", "name: wide\nenvironment:\n  sdk: ^3.13.0\n");
+    write(
+        "wide/analysis_options.yaml",
+        "formatter:\n  page_width: 120\n  trailing_commas: preserve\n",
+    );
+    write("wide/lib/needs.dart", needs);
+    root
+}
+
+const FORMATTING_OPTIONS: &str = r#"{"tabSize": 2, "insertSpaces": true}"#;
+
+fn formatting_params(uri: &str) -> Value {
+    json!({"textDocument": {"uri": uri}, "options": serde_json::from_str::<Value>(FORMATTING_OPTIONS).unwrap()})
+}
+
+fn range_formatting_params(uri: &str, start: (u32, u32), end: (u32, u32)) -> Value {
+    let mut p = formatting_params(uri);
+    p["range"] = json!({"start": position(start.0, start.1), "end": position(end.0, end.1)});
+    p
+}
+
+fn on_type_params(uri: &str, at: (u32, u32), ch: &str) -> Value {
+    let mut p = formatting_params(uri);
+    p["position"] = position(at.0, at.1);
+    p["ch"] = json!(ch);
+    p
+}
+
+/// The requests of the server since index [from]: the method, and for
+/// (un)registrations the formatting entries without ids (the Dart server
+/// registers more features, so the ids differ).
+fn server_requests_since(c: &LspClient, from: usize) -> Value {
+    let formatting = |list: &Value| -> Value {
+        list.as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r["method"].as_str().unwrap().contains("ormatting"))
+            .map(|r| {
+                let mut r = r.clone();
+                r.as_object_mut().unwrap().remove("id");
+                r
+            })
+            .collect()
+    };
+    Value::Array(
+        c.server_requests[from..]
+            .iter()
+            .map(|(m, p)| match m.as_str() {
+                "client/registerCapability" => json!([m, formatting(&p["registrations"])]),
+                "client/unregisterCapability" => json!([m, formatting(&p["unregisterations"])]),
+                _ => json!([m]),
+            })
+            .collect(),
+    )
+}
+
+fn run_format_session(mut c: LspClient, root: &Path, with_formatter: bool) -> (Transcript, i32) {
+    let root_uri = format!("{}/", file_uri(root));
+    let uri = |rel: &str| format!("{root_uri}{rel}");
+    let read = |rel: &str| std::fs::read_to_string(root.join(rel)).unwrap();
+    let mut t: Transcript = Vec::new();
+    let init = c.request("initialize", dart_code_initialize_params(root));
+    assert!(init["result"]["capabilities"].is_object(), "{init}");
+    c.notify("initialized", json!({}));
+    c.settle(true);
+    t.push((
+        "registrations after initialized".into(),
+        server_requests_since(&c, 0)
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r[0] == json!("client/registerCapability"))
+            .cloned()
+            .collect(),
+    ));
+    let needs = uri("lib/needs.dart");
+    let broken = uri("lib/broken.dart");
+    let formatted = uri("lib/formatted.dart");
+    // An open document: requests use the overlay.
+    c.notify(
+        "textDocument/didOpen",
+        json!({"textDocument": {"uri": broken, "languageId": "dart", "version": 1, "text": read("lib/broken.dart")}}),
+    );
+    c.settle(true);
+
+    // Results that do not depend on the formatter output.
+    t.push(("formatting: syntax errors".into(), c.request("textDocument/formatting", formatting_params(&broken))));
+    t.push((
+        "rangeFormatting: syntax errors".into(),
+        c.request("textDocument/rangeFormatting", range_formatting_params(&broken, (1, 0), (2, 5))),
+    ));
+    t.push((
+        "onTypeFormatting: syntax errors".into(),
+        c.request("textDocument/onTypeFormatting", on_type_params(&broken, (1, 11), ";")),
+    ));
+    t.push((
+        "formatting: already formatted".into(),
+        c.request("textDocument/formatting", formatting_params(&formatted)),
+    ));
+    t.push((
+        "formatting: missing file".into(),
+        c.request("textDocument/formatting", formatting_params(&uri("lib/missing.dart"))),
+    ));
+    t.push((
+        "formatting: non-Dart file".into(),
+        c.request("textDocument/formatting", formatting_params(&uri("pubspec.yaml"))),
+    ));
+    t.push((
+        "formatting: non-file URI".into(),
+        c.request("textDocument/formatting", formatting_params("untitled:Untitled-1")),
+    ));
+    // Not a trigger: `;` and `}` that do not end a statement or block, and
+    // another character.
+    t.push((
+        "onTypeFormatting: ';' not at a statement end".into(),
+        c.request("textDocument/onTypeFormatting", on_type_params(&needs, (2, 4), ";")),
+    ));
+    t.push((
+        "onTypeFormatting: '}' inside a string".into(),
+        c.request("textDocument/onTypeFormatting", on_type_params(&needs, (3, 41), "}")),
+    ));
+    t.push((
+        "onTypeFormatting: other character".into(),
+        c.request("textDocument/onTypeFormatting", on_type_params(&needs, (2, 10), "x")),
+    ));
+    t.push((
+        "onTypeFormatting: line after the end".into(),
+        c.request("textDocument/onTypeFormatting", on_type_params(&needs, (900, 0), ";")),
+    ));
+
+    if with_formatter {
+        let wide = uri("wide/lib/needs.dart");
+        for (name, u) in [
+            ("needs.dart", &needs),
+            ("wide/lib/needs.dart (analysis options)", &wide),
+            ("short_style.dart (language version 3.6)", &uri("lib/short_style.dart")),
+            ("unicode_crlf.dart", &uri("lib/unicode_crlf.dart")),
+        ] {
+            t.push((format!("formatting {name}"), c.request("textDocument/formatting", formatting_params(u))));
+        }
+        t.push((
+            "rangeFormatting in the middle".into(),
+            c.request("textDocument/rangeFormatting", range_formatting_params(&needs, (2, 0), (4, 3))),
+        ));
+        t.push((
+            "rangeFormatting: invalid line".into(),
+            c.request("textDocument/rangeFormatting", range_formatting_params(&needs, (200, 0), (400, 0))),
+        ));
+        t.push((
+            "onTypeFormatting after '}'".into(),
+            c.request("textDocument/onTypeFormatting", on_type_params(&needs, (4, 3), "}")),
+        ));
+        t.push((
+            "onTypeFormatting after ';'".into(),
+            c.request("textDocument/onTypeFormatting", on_type_params(&needs, (2, 10), ";")),
+        ));
+        // An edited open document is formatted from the overlay.
+        c.notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {"uri": needs, "languageId": "dart", "version": 1, "text": read("lib/needs.dart")}}),
+        );
+        c.notify(
+            "textDocument/didChange",
+            json!({"textDocument": {"uri": needs, "version": 2}, "contentChanges": [
+                {"range": {"start": position(11, 0), "end": position(11, 0)}, "text": "int   g( )=>1;\n"}
+            ]}),
+        );
+        c.settle(true);
+        t.push((
+            "formatting an edited overlay".into(),
+            c.request("textDocument/formatting", formatting_params(&needs)),
+        ));
+        // `dart.lineLength` from `workspace/configuration` (global and
+        // workspace folder); the analysis options of `wide` win.
+        c.configuration = json!({"lineLength": 40});
+        c.notify("workspace/didChangeConfiguration", json!({"settings": null}));
+        c.settle(false);
+        t.push((
+            "formatting with dart.lineLength 40".into(),
+            c.request("textDocument/formatting", formatting_params(&needs)),
+        ));
+        t.push((
+            "formatting with dart.lineLength 40, page_width in analysis options".into(),
+            c.request("textDocument/formatting", formatting_params(&wide)),
+        ));
+    }
+
+    // `dart.enableSdkFormatter: false`: the formatter is unregistered and
+    // requests return `null`, also for missing files.
+    let before = c.server_requests.len();
+    c.configuration = json!({"enableSdkFormatter": false});
+    c.notify("workspace/didChangeConfiguration", json!({"settings": null}));
+    c.settle(false);
+    t.push(("enableSdkFormatter false: server requests".into(), server_requests_since(&c, before)));
+    t.push(("formatting: disabled".into(), c.request("textDocument/formatting", formatting_params(&needs))));
+    t.push((
+        "formatting: disabled, missing file".into(),
+        c.request("textDocument/formatting", formatting_params(&uri("lib/missing.dart"))),
+    ));
+    let before = c.server_requests.len();
+    c.configuration = json!({});
+    c.notify("workspace/didChangeConfiguration", json!({"settings": null}));
+    c.settle(false);
+    t.push(("enableSdkFormatter default: server requests".into(), server_requests_since(&c, before)));
+
+    let (response, code) = c.shutdown_and_exit();
+    t.push(("shutdown".into(), response));
+    (t, code)
+}
+
+#[test]
+fn lsp_formatting_parity() {
+    if !dart_available() {
+        eprintln!("skipped: `dart` is not on PATH");
+        return;
+    }
+    let with_formatter = format_parity_enabled();
+    if !with_formatter {
+        println!(
+            "formatting steps with formatter output skipped: they need the ported formatter \
+             styles (p10-format); set {FORMAT_PARITY_ENV}=1 to run them"
+        );
+    }
+    let root = write_format_project();
+    let mut args = vec!["language-server", "--protocol=lsp"];
+    args.extend(session_args());
+    let (dart, dart_code) =
+        run_format_session(LspClient::spawn("dart", &args, &[]), &root, with_formatter);
+    let (dartr, dartr_code) =
+        run_format_session(LspClient::spawn(dartr_bin(), &args, &[]), &root, with_formatter);
+    assert_eq!(dart_code, 0);
+    assert_eq!(dartr_code, 0);
+    if let Some(dir) = std::env::var_os("DARTR_LSP_TRANSCRIPTS") {
+        for (name, t) in [("dart", &dart), ("dartr", &dartr)] {
+            let path = Path::new(&dir).join(format!("lsp_format_transcript_{name}.json"));
+            std::fs::write(&path, serde_json::to_string_pretty(&json!(t)).unwrap()).unwrap();
+            println!("transcript: {}", path.display());
+        }
+    }
+    // The comparison is not empty: the real server formats.
+    if with_formatter {
+        let full = &dart.iter().find(|(n, _)| n == "formatting needs.dart").unwrap().1;
+        assert!(full["result"].as_array().is_some_and(|e| e.len() > 10), "{full}");
+    }
+    let failures = report("formatting", &dart, &dartr);
+    assert_eq!(failures, 0, "LSP session differs from dart language-server");
+}

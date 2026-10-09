@@ -28,6 +28,13 @@ enum Command {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+    /// Formats Dart code like `dart format` (same options, output and exit
+    /// codes).
+    #[command(disable_help_flag = true)]
+    Format {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// Writes internal data structures as JSON Lines (same format as
     /// tools/oracle), one object per file.
     Dump {
@@ -69,10 +76,36 @@ fn main() -> anyhow::Result<()> {
         );
         std::process::exit(code);
     }
+    // `format` has the command line of `dart format` (package:args rules and
+    // messages), so it is parsed by dartr_format and not by clap.
+    if argv.first().map(String::as_str) == Some("format") {
+        use std::io::IsTerminal;
+        let stdin = std::io::stdin();
+        let stdout = std::io::stdout();
+        let stderr = std::io::stderr();
+        let code = {
+            let mut stdout = std::io::BufWriter::new(stdout.lock());
+            let mut stderr = stderr.lock();
+            let code = dartr_format::cli::run(
+                &argv[1..],
+                dartr_format::cli::CommandIo {
+                    stdin_has_terminal: stdin.is_terminal(),
+                    stdin: &mut stdin.lock(),
+                    stderr_is_terminal: std::io::stderr().is_terminal(),
+                    stdout: &mut stdout,
+                    stderr: &mut stderr,
+                },
+            );
+            use std::io::Write;
+            let _ = stdout.flush();
+            code
+        };
+        std::process::exit(code);
+    }
     let cli = Cli::parse();
     match cli.command {
         Command::Dump { mode, files } => dump::run(mode, files),
-        Command::Analyze { .. } => unreachable!("handled before clap"),
+        Command::Analyze { .. } | Command::Format { .. } => unreachable!("handled before clap"),
         Command::LanguageServer { args } => {
             std::process::exit(dartr_legacy::run_with_args(&args, true))
         }

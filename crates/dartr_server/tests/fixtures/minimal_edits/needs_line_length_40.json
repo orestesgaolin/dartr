@@ -1,0 +1,501 @@
+{
+ "edits": [
+  {
+   "newText": "\n",
+   "range": {
+    "end": {
+     "character": 0,
+     "line": 1
+    },
+    "start": {
+     "character": 0,
+     "line": 1
+    }
+   }
+  },
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 7,
+     "line": 1
+    },
+    "start": {
+     "character": 6,
+     "line": 1
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 8,
+     "line": 1
+    },
+    "start": {
+     "character": 8,
+     "line": 1
+    }
+   }
+  },
+  {
+   "newText": "  ",
+   "range": {
+    "end": {
+     "character": 0,
+     "line": 2
+    },
+    "start": {
+     "character": 0,
+     "line": 2
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 5,
+     "line": 2
+    },
+    "start": {
+     "character": 5,
+     "line": 2
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 6,
+     "line": 2
+    },
+    "start": {
+     "character": 6,
+     "line": 2
+    }
+   }
+  },
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 9,
+     "line": 2
+    },
+    "start": {
+     "character": 7,
+     "line": 2
+    }
+   }
+  },
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 10,
+     "line": 3
+    },
+    "start": {
+     "character": 9,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 16,
+     "line": 3
+    },
+    "start": {
+     "character": 16,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 22,
+     "line": 3
+    },
+    "start": {
+     "character": 21,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 23,
+     "line": 3
+    },
+    "start": {
+     "character": 23,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": "\n   ",
+   "range": {
+    "end": {
+     "character": 24,
+     "line": 3
+    },
+    "start": {
+     "character": 24,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 27,
+     "line": 3
+    },
+    "start": {
+     "character": 27,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 29,
+     "line": 3
+    },
+    "start": {
+     "character": 29,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 30,
+     "line": 3
+    },
+    "start": {
+     "character": 30,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 32,
+     "line": 3
+    },
+    "start": {
+     "character": 32,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": "\n      ",
+   "range": {
+    "end": {
+     "character": 33,
+     "line": 3
+    },
+    "start": {
+     "character": 33,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 40,
+     "line": 3
+    },
+    "start": {
+     "character": 39,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 44,
+     "line": 3
+    },
+    "start": {
+     "character": 43,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": "\n    ",
+   "range": {
+    "end": {
+     "character": 46,
+     "line": 3
+    },
+    "start": {
+     "character": 46,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": "\n      ",
+   "range": {
+    "end": {
+     "character": 54,
+     "line": 3
+    },
+    "start": {
+     "character": 54,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": "\n    ",
+   "range": {
+    "end": {
+     "character": 65,
+     "line": 3
+    },
+    "start": {
+     "character": 65,
+     "line": 3
+    }
+   }
+  },
+  {
+   "newText": "\n",
+   "range": {
+    "end": {
+     "character": 0,
+     "line": 5
+    },
+    "start": {
+     "character": 0,
+     "line": 5
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 28,
+     "line": 5
+    },
+    "start": {
+     "character": 28,
+     "line": 5
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 30,
+     "line": 5
+    },
+    "start": {
+     "character": 30,
+     "line": 5
+    }
+   }
+  },
+  {
+   "newText": "",
+   "range": {
+    "end": {
+     "character": 32,
+     "line": 5
+    },
+    "start": {
+     "character": 31,
+     "line": 5
+    }
+   }
+  },
+  {
+   "newText": "\n",
+   "range": {
+    "end": {
+     "character": 0,
+     "line": 7
+    },
+    "start": {
+     "character": 0,
+     "line": 7
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 11,
+     "line": 7
+    },
+    "start": {
+     "character": 11,
+     "line": 7
+    }
+   }
+  },
+  {
+   "newText": "\n  ",
+   "range": {
+    "end": {
+     "character": 12,
+     "line": 7
+    },
+    "start": {
+     "character": 12,
+     "line": 7
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 17,
+     "line": 7
+    },
+    "start": {
+     "character": 17,
+     "line": 7
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 18,
+     "line": 7
+    },
+    "start": {
+     "character": 18,
+     "line": 7
+    }
+   }
+  },
+  {
+   "newText": "\n  ",
+   "range": {
+    "end": {
+     "character": 22,
+     "line": 7
+    },
+    "start": {
+     "character": 22,
+     "line": 7
+    }
+   }
+  },
+  {
+   "newText": " ",
+   "range": {
+    "end": {
+     "character": 28,
+     "line": 7
+    },
+    "start": {
+     "character": 28,
+     "line": 7
+    }
+   }
+  },
+  {
+   "newText": "\n     ",
+   "range": {
+    "end": {
+     "character": 37,
+     "line": 8
+    },
+    "start": {
+     "character": 37,
+     "line": 8
+    }
+   }
+  },
+  {
+   "newText": "\n     ",
+   "range": {
+    "end": {
+     "character": 61,
+     "line": 8
+    },
+    "start": {
+     "character": 61,
+     "line": 8
+    }
+   }
+  },
+  {
+   "newText": "\n     ",
+   "range": {
+    "end": {
+     "character": 85,
+     "line": 8
+    },
+    "start": {
+     "character": 85,
+     "line": 8
+    }
+   }
+  },
+  {
+   "newText": "  ",
+   "range": {
+    "end": {
+     "character": 0,
+     "line": 9
+    },
+    "start": {
+     "character": 0,
+     "line": 9
+    }
+   }
+  },
+  {
+   "newText": "\n",
+   "range": {
+    "end": {
+     "character": 39,
+     "line": 10
+    },
+    "start": {
+     "character": 39,
+     "line": 10
+    }
+   }
+  }
+ ],
+ "file": "lib/needs.dart",
+ "formatted": "import 'dart:math';\n\nclass A {\n  int x = 1;\n  void f(int a, int b) {\n    if (a > b) {\n      print('a');\n    } else {\n      print('b');\n    }\n  }\n\n  List<int> get items => [1, 2, 3];\n}\n\nvoid main() {\n  var a = A();\n  a.f(1, 2);\n  var veryLongVariableNameNumberOne =\n      max(1000000, 2000000) +\n      max(3000000, 4000000) +\n      5;\n  // comment\n  print(veryLongVariableNameNumberOne);\n}\n",
+ "unformatted": "import 'dart:math';\nclass  A{\nint x=1  ;\n  void f( int a,int b ){ if(a>b){print( 'a' );} else {print('b');}\n  }\n  List<int> get items => [1,2,3,];\n}\nvoid main(){var a=A();a.f(1,2);\n  var veryLongVariableNameNumberOne = max(1000000, 2000000) + max(3000000, 4000000) + 5;\n// comment\n  print(veryLongVariableNameNumberOne);}\n"
+}
