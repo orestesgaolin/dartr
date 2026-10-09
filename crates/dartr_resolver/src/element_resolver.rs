@@ -178,9 +178,7 @@ pub fn visit_super_constructor_invocation(
             parent
                 .and_then(|p| rv.ast.cast::<dartr_ast::PrimaryConstructorBody>(p))
                 .and_then(|b| {
-                    crate::element_binding_visitor::primary_constructor_body_declaration(
-                        rv.ast, b,
-                    )
+                    crate::element_binding_visitor::primary_constructor_body_declaration(rv.ast, b)
                 })
                 .map(|d| rv.ast[d].formal_parameters)
         });
