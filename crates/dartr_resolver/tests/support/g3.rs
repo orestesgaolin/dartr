@@ -238,7 +238,17 @@ pub fn parse_markers(source: &str) -> (String, Vec<(String, usize, usize)>) {
 
 /// Runs the [cases] whose names pass [filter]; returns (failures, run).
 pub fn run_ported(cases: &[Ported], filter: impl Fn(&str) -> bool) -> (Vec<String>, usize) {
-    let codes: Vec<&str> = CODES
+    run_ported_with_codes(cases, CODES, filter)
+}
+
+/// [run_ported] comparing the diagnostics of the codes listed in
+/// [codes_text] (one code per line, `#` comments).
+pub fn run_ported_with_codes(
+    cases: &[Ported],
+    codes_text: &str,
+    filter: impl Fn(&str) -> bool,
+) -> (Vec<String>, usize) {
+    let codes: Vec<&str> = codes_text
         .lines()
         .map(str::trim)
         .filter(|l| !l.is_empty() && !l.starts_with('#'))

@@ -58,8 +58,10 @@ field_initialized_in_initializer_and_declaration
 field_initialized_in_parameter_and_initializer
 final_initialized_in_declaration_and_constructor
 final_not_initialized_constructor
+fixme
 generic_function_type_cannot_be_type_argument
 getter_not_subtype_setter_types
+hack
 illegal_async_generator_return_type
 illegal_async_return_type
 illegal_concrete_enum_member
@@ -151,6 +153,7 @@ subtype_of_sealed_class
 tearoff_with_must_be_const_parameter
 text_direction_code_point_in_comment
 text_direction_code_point_in_literal
+todo
 type_argument_not_matching_bounds
 type_check_with_null
 unchecked_use_of_nullable_value
@@ -159,6 +162,7 @@ undefined_identifier
 undefined_referenced_parameter
 undefined_setter
 undefined_shown_name
+undone
 unnecessary_cast
 unnecessary_final
 unnecessary_import

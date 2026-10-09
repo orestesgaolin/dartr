@@ -5,8 +5,12 @@ duplicate_export
 duplicate_hidden_name
 duplicate_import
 duplicate_shown_name
+fixme
+hack
+todo
 undefined_hidden_name
 undefined_shown_name
+undone
 unnecessary_import
 unused_catch_clause
 unused_catch_stack
