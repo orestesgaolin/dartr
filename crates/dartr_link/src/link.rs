@@ -271,6 +271,7 @@ pub fn link_cycle(
     // _createTypeSystem, _resolveTypes
     let type_provider = crate::types_builder::create_type_provider(&linker);
     crate::types_builder::resolve_types(&mut linker, &type_provider);
+    create_load_library_functions(&mut linker, &type_provider);
     // _MixinsInference._resetHierarchies: hierarchies computed during mixin
     // inference may have seen mixins that were not inferred yet.
     clear_interface_caches(&mut linker.core.store, true);
@@ -499,5 +500,44 @@ pub fn clear_interface_caches(store: &mut ElementStore, hierarchies: bool) {
     let indexes: Vec<u32> = e.extension_types.iter().map(|(i, _)| i).collect();
     for i in indexes {
         clear(e.extension_types.get_mut(i), hierarchies);
+    }
+}
+
+/// Dart `LoadLibraryFunctionProvider._create`: the synthetic static
+/// `Future<dynamic> loadLibrary()` of each library.
+fn create_load_library_functions(linker: &mut Linker<'_>, tp: &TypeProvider) {
+    use crate::reference::TopLevelReferenceKind;
+    let Some(&future_dynamic) = tp.future_dynamic_type.try_get() else {
+        return;
+    };
+    for index in 0..linker.builders.len() {
+        let name = linker.core.name("loadLibrary");
+        let lib_fragment = linker.builders[index].units[0].fragment;
+        let library = linker.builders[index].element;
+        let mut data = FragmentData::new(Some(name), None);
+        data.enclosing_fragment = Some(lib_fragment.raw());
+        data.flags.set(
+            FragmentFlags::TOP_LEVEL_FUNCTION_FRAGMENT_IS_ORIGIN_LOAD_LIBRARY,
+            true,
+        );
+        data.flags
+            .set(FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC, true);
+        let store = &mut linker.core.store;
+        let fragment = store.add_fragment::<TopLevelFunctionFragment>(TopLevelFunctionFragment {
+            executable: ExecutableFragmentData::new(data),
+        });
+        let mut exec = ExecutableElementData::new(ElementData::new(Some(name), fragment.raw()));
+        exec.return_type = VarSlot::with(future_dynamic);
+        let element =
+            store.add::<TopLevelFunctionElement>(TopLevelFunctionElement { executable: exec });
+        store.fragment(fragment).element.set_once(element.raw());
+        store.get(library).load_library_function.set_once(element);
+        let builder = &mut linker.builders[index];
+        let r = builder
+            .references
+            .reference
+            .get_or_create_top_level(TopLevelReferenceKind::Function, "loadLibrary");
+        builder.references.reference.set_element(r, element.raw());
+        builder.element_references.insert(element.raw(), r);
     }
 }
