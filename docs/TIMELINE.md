@@ -70,6 +70,8 @@ at each merge; the final process report is written from it.
 | 10-09 18:30 | 06e0cf1 | synthetic loadLibrary for deferred imports | Sonnet | 60 deferred-import language tests 2,204/2,204; element dump unchanged |
 | 10-09 22:55 | 85cc9a8 | primary-constructor bodies resolved | Opus | visible-app 269 files: resolved types 98.48% → 100% |
 | 10-09 22:55 | 27d71ac | driver-backed diagnostics for `dartr analyze` and LSP (invalidation v1) | Opus | flutter_tools (unseen) 0/0 exact; visible-app extras 73 → 36 after the primary-constructor merge |
+| 10-10 00:05 | 871b43a | @optionalTypeArgs in strict inference; primary-constructor parameters in field initializers | Sonnet | visible-app `dartr analyze`: 36 → 0 false positives |
+| 10-10 01:30 | d019285 | **error verifier + all error/* verifiers integrated** (wave D4–D12) | Opus | 5,571 tests; `dartr analyze` vs `dart analyze`: visible-app 0 extra, flutter_tools exact, analyzer-9.0.0 25,595/27,278 matched, 30 extra (both unseen) |
 
 ## Incidents and lessons
 
@@ -146,3 +148,11 @@ at each merge; the final process report is written from it.
   `DiagnosticsProvider` (milestone 2). `LibraryElement.load_library_function` is never set by the
   linker. Primary-constructor bodies are not resolved. Lint batch A (`cx-lints-a`, Codex) needs a
   Claude fix pass (52/83 rules differ); lint batch B not started.
+- **Merge conflict resolved wrongly (10-10 00:50):** two agents had fixed `@optionalTypeArgs` in parallel.
+  The coordinator kept one side without running the other side's fixture test first. The real cause was
+  that both implementations wrote to the same cache field with different bit layouts. The full test run
+  and the corpus check caught it before the push. Lessons: do not give two agents the same fix, and run
+  the other side's tests before choosing a side in a conflict.
+- **Quiet mode (10-09 23:30):** the operator asked for quiet fans. All heavy commands now take one shared
+  `lockf` lock (2 build jobs, nice 15). Agents may not run scripts from the coordinator's scratchpad
+  (the permission classifier blocked `heavy.sh`), so the lock is written inline.
