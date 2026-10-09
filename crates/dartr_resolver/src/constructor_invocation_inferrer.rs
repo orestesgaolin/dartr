@@ -402,7 +402,7 @@ fn resolve_deferred_function_literals(
 /// formalParameters:, diagnosticReporter:,
 /// enclosingConstructorFormalParameterList:)`: records the parameter of
 /// each argument (Dart `correspondingStaticParameters`, here
-/// `ResolutionTables::param_element` keyed by the argument node) and
+/// `ResolutionTables::param_element` keyed by the argument expression) and
 /// reports the argument count and name errors when [report] is set.
 ///
 /// The super formal parameters of
@@ -551,12 +551,15 @@ pub fn resolve_arguments_to_parameters(
     }
 
     for (i, &argument) in arguments.iter().enumerate() {
+        // Keyed by the argument expression (the expression of a named
+        // argument; Dart `Expression.correspondingParameter`).
+        let expression = argument_expression(rv, argument);
         match resolved_parameters[i] {
             Some(p) => {
-                rv.tables.param_element.insert(argument, p);
+                rv.tables.param_element.insert(expression, p);
             }
             None => {
-                rv.tables.param_element.remove(argument);
+                rv.tables.param_element.remove(expression);
             }
         }
     }
