@@ -9,26 +9,42 @@
 //! for expressions (resolves the subexpressions, the type is `dynamic`),
 //! nothing for statements and collection elements.
 
-use dartr_ast::{Id, DotShorthandConstructorInvocation, DotShorthandInvocation, DotShorthandPropertyAccess};
-use dartr_element::TypeId;
 use crate::resolver::ResolverVisitor;
+use dartr_ast::{
+    DotShorthandConstructorInvocation, DotShorthandInvocation, DotShorthandPropertyAccess, Id,
+};
+use dartr_element::TypeId;
 
 /// Dart `ResolverVisitor.visitDotShorthandConstructorInvocation(node, contextType: contextType)`.
-pub fn visit_dot_shorthand_constructor_invocation(rv: &mut ResolverVisitor<'_>, node: Id<DotShorthandConstructorInvocation>, context_type: TypeId) {
-    let _ = context_type;
-    // STUB (C8): fallback.
-    rv.fallback_expression(node.upcast());
+pub fn visit_dot_shorthand_constructor_invocation(
+    rv: &mut ResolverVisitor<'_>,
+    node: Id<DotShorthandConstructorInvocation>,
+    context_type: TypeId,
+) {
+    crate::instance_creation_expression_resolver::visit_dot_shorthand_constructor_invocation(
+        rv,
+        node,
+        context_type,
+    );
 }
 
 /// Dart `ResolverVisitor.visitDotShorthandInvocation(node, contextType: contextType)`.
-pub fn visit_dot_shorthand_invocation(rv: &mut ResolverVisitor<'_>, node: Id<DotShorthandInvocation>, context_type: TypeId) {
+pub fn visit_dot_shorthand_invocation(
+    rv: &mut ResolverVisitor<'_>,
+    node: Id<DotShorthandInvocation>,
+    context_type: TypeId,
+) {
     let _ = context_type;
     // STUB (C8): fallback.
     rv.fallback_expression(node.upcast());
 }
 
 /// Dart `ResolverVisitor.visitDotShorthandPropertyAccess(node, contextType: contextType)`.
-pub fn visit_dot_shorthand_property_access(rv: &mut ResolverVisitor<'_>, node: Id<DotShorthandPropertyAccess>, context_type: TypeId) {
+pub fn visit_dot_shorthand_property_access(
+    rv: &mut ResolverVisitor<'_>,
+    node: Id<DotShorthandPropertyAccess>,
+    context_type: TypeId,
+) {
     let _ = context_type;
     // STUB (C8): fallback.
     rv.fallback_expression(node.upcast());

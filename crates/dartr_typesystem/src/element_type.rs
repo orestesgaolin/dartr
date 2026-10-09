@@ -26,6 +26,26 @@ pub fn formal_parameter_as_fn_param(ctx: &Ctx<'_>, param: EId<FormalParameterEle
     }
 }
 
+/// `ExecutableElementImpl.returnType`: the return type; for a constructor
+/// whose return type is not set, `enclosingElement.thisType`
+/// (`ConstructorElementImpl.returnType`). Else a type that is not set is
+/// `InvalidType`.
+pub fn executable_return_type(ctx: &Ctx<'_>, element: EId<ExecutableElement>) -> TypeId {
+    if let Some(t) = ctx.executable(element).return_type.get() {
+        return t;
+    }
+    if element.raw().tag() == dartr_element::Tag::Constructor {
+        if let Some(interface) = ctx
+            .element_data(element.raw())
+            .and_then(|d| d.enclosing)
+            .and_then(|e| e.cast::<dartr_element::InterfaceElement>())
+        {
+            return ctx.interface_this_type(interface);
+        }
+    }
+    TypeId::INVALID
+}
+
 /// `ExecutableElementImpl.type`.
 pub fn executable_type(ctx: &Ctx<'_>, element: EId<ExecutableElement>) -> TypeId {
     let data = ctx.executable(element);
@@ -37,7 +57,7 @@ pub fn executable_type(ctx: &Ctx<'_>, element: EId<ExecutableElement>) -> TypeId
         .iter()
         .map(|&p| formal_parameter_as_fn_param(ctx, p))
         .collect();
-    let ret = data.return_type.get().unwrap_or(TypeId::INVALID);
+    let ret = executable_return_type(ctx, element);
     let t = ctx.function_type(&data.type_params, &params, ret, Nullability::None, None);
     data.type_.set(Some(t));
     t

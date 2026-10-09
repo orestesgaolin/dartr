@@ -323,11 +323,7 @@ pub fn return_type(ctx: &Ctx<'_>, e: ElemRef) -> TypeId {
     let executable = base
         .cast::<ExecutableElement>()
         .expect("returnType of an executable");
-    let result = ctx
-        .executable(executable)
-        .return_type
-        .get()
-        .unwrap_or(TypeId::INVALID);
+    let result = crate::element_type::executable_return_type(ctx, executable);
     match e {
         ElemRef::Base(_) => result,
         ElemRef::Member(_) => self::substitution(ctx, e).substitute_type(ctx, result),
