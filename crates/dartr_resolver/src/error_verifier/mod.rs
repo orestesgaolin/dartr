@@ -485,6 +485,8 @@ pub fn compute_verify_errors(
             unit_ctx,
             library_context,
         );
+        // Dart: `unit.accept(FfiVerifier(...))` after the ErrorVerifier.
+        crate::ffi_verifier::verify_unit(ctx, &unit.ast, unit.unit, &unit.tables, &unit.rt, &mut unit.diagnostics, unit_ctx);
     }));
     if let Err(e) = result {
         unit.diagnostics.truncate(reported);
