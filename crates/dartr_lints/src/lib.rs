@@ -112,6 +112,49 @@ impl<'a> LinterContext<'a> {
     pub fn constant_type_system(&self) -> Option<constants::ConstantTypeSystem<'a>> {
         Some(constants::ConstantTypeSystem(self.resolved?.ctx))
     }
+    /// The texts of `DartType` diagnostic arguments: Dart `convertTypeNames`
+    /// (`getDisplayString(preferTypeAlias: true)`, disambiguated when two
+    /// types have the same display string).
+    pub fn type_argument_texts(&self, types: &[dartr_element::TypeId]) -> Vec<String> {
+        let Some(resolved) = self.resolved else {
+            return Vec::new();
+        };
+        let arguments: Vec<dartr_diagnostics::DiagnosticArg> = types
+            .iter()
+            .map(|&ty| {
+                dartr_diagnostics::DiagnosticArg::Type(dartr_element::diagnostics::type_arg(
+                    &resolved.ctx,
+                    ty,
+                ))
+            })
+            .collect();
+        dartr_diagnostics::convert_type_names(&arguments).0
+    }
+    /// The text of one `DartType` diagnostic argument.
+    pub fn type_argument_text(&self, ty: dartr_element::TypeId) -> String {
+        self.type_argument_texts(&[ty]).pop().unwrap_or_default()
+    }
+    /// Dart `element.metadata.annotations.any((a) => a._isPackageMetaGetter(name))`
+    /// (`hasAwaitNotRequired`, `hasOptionalTypeArgs`, ...): an annotation
+    /// that is the top-level getter [name] of the library named `meta`.
+    pub fn has_package_meta_getter(&self, element: dartr_element::ElementId, name: &str) -> bool {
+        use dartr_typesystem::TypeExt;
+        let Some(resolved) = self.resolved else {
+            return false;
+        };
+        let Some(metadata) = resolved.metadata else {
+            return false;
+        };
+        let ctx = &resolved.ctx;
+        metadata.annotations(element).into_iter().any(|annotation| {
+            metadata.annotation_element(annotation).is_some_and(|a| {
+                a.tag() == dartr_element::Tag::Getter
+                    && ctx.element_name(a) == Some(name)
+                    && dartr_typesystem::member::library(ctx, dartr_element::ElemRef::Base(a))
+                        .is_some_and(|library| ctx.element_name(library.raw()) == Some("meta"))
+            })
+        })
+    }
     pub fn static_type(&self, node: impl Into<NodeId>) -> Option<dartr_element::TypeId> {
         self.resolved?.tables.static_type.get(node.into()).copied()
     }

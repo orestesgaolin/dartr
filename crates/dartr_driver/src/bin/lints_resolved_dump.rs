@@ -69,9 +69,12 @@ fn run() {
         // Dart `kind.library ?? kind.asLibrary`: each file is analyzed in its
         // library; a part without a library is analyzed as a library.
         let mut libraries: IndexMap<FileId, usize> = IndexMap::new();
+        // The library in which each selected file is analyzed (by path).
+        let mut library_of_path: IndexMap<String, FileId> = IndexMap::new();
         for (&index, &file) in selected.iter().zip(&files) {
             let library = driver.fs.library_or_as_library(file);
             libraries.entry(library).or_insert(index);
+            library_of_path.insert(paths[index].clone(), library);
         }
         driver.fs.discover();
         let library_files: Vec<_> = libraries.keys().copied().collect();
@@ -115,6 +118,14 @@ fn run() {
                         .collect();
                     if let Some(panic) = &unit.panic {
                         eprintln!("resolution panic: {}: {}", unit.path, panic);
+                    }
+                    // A part that more than one library includes has the
+                    // result of its own library (Dart `kind.library`).
+                    if library_of_path
+                        .get(unit.path.as_ref())
+                        .is_some_and(|&library| library != file)
+                    {
+                        continue;
                     }
                     results.insert(unit.path.to_string(), json!({"path":unit.path.as_ref(),"diagnostics":diagnostics,"panic":unit.panic,"resolution":facts}));
                 }

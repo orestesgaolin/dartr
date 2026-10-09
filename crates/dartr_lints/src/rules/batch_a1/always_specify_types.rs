@@ -1,8 +1,6 @@
 // Dart source: pkg/linter/lib/src/rules/always_specify_types.dart
 
-use super::helpers::{
-    KnownAnnotation, declared_type, display_type, element_annotation_status, lexeme, node_type,
-};
+use super::helpers::{declared_type, display_type, lexeme, node_type};
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::{Id, NodeId, NodeKind, RegularFormalParameter, VariableDeclarationList};
 use dartr_diagnostics::{Diagnostic, diag};
@@ -29,9 +27,8 @@ fn report_keyword(
     ty: TypeId,
     out: &mut Vec<Diagnostic>,
 ) {
-    let Some(name) = display_type(c, ty) else {
-        return;
-    };
+    // Dart passes the `DartType` as the argument (`convertTypeNames`).
+    let name = c.type_argument_text(ty);
     if lexeme(c, keyword) == "var" {
         c.report_token(
             out,
@@ -88,8 +85,7 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             if !matches!(
                 node_type(c, node).map(|ty| r.ctx.ty(ty)),
                 Some(TypeKind::Interface { .. })
-            ) || element_annotation_status(c, element, KnownAnnotation::OptionalTypeArgs)
-                != Some(false)
+            ) || c.has_package_meta_getter(element, "optionalTypeArgs")
             {
                 return;
             }
@@ -136,8 +132,7 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                 if let Some(keyword) = n.const_final_or_var_keyword {
                     let ty = declared_type(c, node);
                     if lexeme(c, keyword) == "var" && ty.is_some_and(|ty| ty != TypeId::DYNAMIC) {
-                        let name = display_type(c, ty.expect("non-dynamic type"))
-                            .expect("resolved type has a display string");
+                        let name = c.type_argument_text(ty.expect("non-dynamic type"));
                         c.report_token(
                             out,
                             &diag::ALWAYS_SPECIFY_TYPES_REPLACE_KEYWORD,
@@ -148,7 +143,8 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                         c.report_token(out, &diag::ALWAYS_SPECIFY_TYPES_ADD_TYPE, keyword, &[]);
                     }
                 } else if let Some(ty) = declared_type(c, node) {
-                    if let Some(name) = display_type(c, ty).filter(|_| ty != TypeId::DYNAMIC) {
+                    if ty != TypeId::DYNAMIC {
+                        let name = c.type_argument_text(ty);
                         c.report_node(
                             out,
                             &diag::ALWAYS_SPECIFY_TYPES_SPECIFY_TYPE,
