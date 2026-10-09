@@ -372,9 +372,12 @@ pub fn resolve_arguments_to_parameters(
         match resolved_parameters[i] {
             Some(p) => {
                 rv.tables.param_element.insert(expression, p);
+                let ty = member::type_(&rv.ctx, p);
+                rv.rt.corresponding_parameter_type.insert(expression, ty);
             }
             None => {
                 rv.tables.param_element.remove(expression);
+                rv.rt.corresponding_parameter_type.remove(expression);
             }
         }
     }

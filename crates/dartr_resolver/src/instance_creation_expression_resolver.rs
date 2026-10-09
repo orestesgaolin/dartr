@@ -131,7 +131,8 @@ fn resolve_instance_creation_expression(
         .copied()
         .unwrap_or(TypeId::DYNAMIC);
     rv.record_static_type(node, ty);
-    // Dart `checkForArgumentTypesNotAssignableInList` (wave D).
+    let argument_list = rv.ast[node].argument_list;
+    rv.check_for_argument_types_not_assignable_in_list(argument_list);
 }
 
 /// Dart `ResolverVisitor.visitDotShorthandConstructorInvocation(node,
@@ -262,7 +263,8 @@ fn resolve_dot_shorthand_constructor_invocation(
     }
     .resolve_invocation(rv);
     rv.record_static_type(node, return_type);
-    // Dart `checkForArgumentTypesNotAssignableInList` (wave D).
+    let argument_list = rv.ast[node].argument_list;
+    rv.check_for_argument_types_not_assignable_in_list(argument_list);
 }
 
 /// Dart `ResolverVisitor.visitSuperConstructorInvocation(node)`.
@@ -282,7 +284,7 @@ pub fn visit_super_constructor_invocation(
         });
     let argument_list = rv.ast[node].argument_list;
     resolve_invocation_base(rv, node.raw(), argument_list, target);
-    // Dart `checkForArgumentTypesNotAssignableInList` (wave D).
+    rv.check_for_argument_types_not_assignable_in_list(argument_list);
 }
 
 /// Dart `ResolverVisitor.visitRedirectingConstructorInvocation(node)`.
@@ -302,7 +304,7 @@ pub fn visit_redirecting_constructor_invocation(
         });
     let argument_list = rv.ast[node].argument_list;
     resolve_invocation_base(rv, node.raw(), argument_list, target);
-    // Dart `checkForArgumentTypesNotAssignableInList` (wave D).
+    rv.check_for_argument_types_not_assignable_in_list(argument_list);
 }
 
 /// Dart `ResolverVisitor.visitEnumConstantDeclaration(node)` (after the
@@ -385,7 +387,7 @@ pub fn visit_enum_constant_declaration(
                 resolve_invocation_base(rv, node.raw(), argument_list, target);
             });
             rv.visit_opt(type_arguments);
-            // Dart `checkForArgumentTypesNotAssignableInList` (wave D).
+            rv.check_for_argument_types_not_assignable_in_list(argument_list);
         }
         None => {
             // Dart: `definingLibrary.featureSet.isEnabled(enhanced_enums)`.

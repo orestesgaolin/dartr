@@ -1092,6 +1092,14 @@ pub fn record_corresponding_parameters(
                 rv.tables.param_element.remove(argument.expression);
             }
         }
+        match parameter {
+            Some(p) => {
+                rv.rt.corresponding_parameter_type.insert(argument.expression, p.ty);
+            }
+            None => {
+                rv.rt.corresponding_parameter_type.remove(argument.expression);
+            }
+        }
     }
 }
 
