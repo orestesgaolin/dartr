@@ -17,14 +17,17 @@ use crate::dart_formatter::DartFormatter;
 use crate::source_code::SourceCode;
 use crate::text::utf16_len;
 
-use super::argument_list_visitor::ArgumentListVisitor;
 use super::arena::{ChunkId, RuleId};
+use super::argument_list_visitor::ArgumentListVisitor;
 use super::call_chain_visitor::CallChainVisitor;
 use super::chunk_builder::ChunkBuilder;
 use super::rule::argument::{NamedRule, PositionalRule};
 use super::rule::combinator::CombinatorRule;
 use super::rule::type_argument::TypeArgumentRule;
 use super::source_comment::SourceComment;
+
+/// Returns the operands and operator of a binary node (see [SourceVisitor::visit_binary]).
+type DestructureNode = fn(&Ast, NodeId) -> Option<(NodeId, TokenId, NodeId)>;
 
 type Callback<'a> = Option<fn(&mut SourceVisitor<'a>)>;
 
@@ -392,11 +395,17 @@ impl<'a> SourceVisitor<'a> {
             let (condition, message) = match ast.kind(parent) {
                 NodeKind::AssertInitializer => {
                     let assertion = &ast[Id::<AssertInitializer>::from_raw(parent)];
-                    (assertion.condition.raw(), assertion.message.map(|m| m.raw()))
+                    (
+                        assertion.condition.raw(),
+                        assertion.message.map(|m| m.raw()),
+                    )
                 }
                 _ => {
                     let assertion = &ast[Id::<AssertStatement>::from_raw(parent)];
-                    (assertion.condition.raw(), assertion.message.map(|m| m.raw()))
+                    (
+                        assertion.condition.raw(),
+                        assertion.message.map(|m| m.raw()),
+                    )
                 }
             };
             if condition != node.raw() && ast.is::<StringLiteral>(condition) {
@@ -409,12 +418,14 @@ impl<'a> SourceVisitor<'a> {
                 }
             }
         } else if ast.kind(parent) == NodeKind::VariableDeclaration
-            || ast.cast::<AssignmentExpression>(parent).is_some_and(|assignment| {
-                ast[assignment].right_hand_side.raw() == node.raw()
-                    && ast
-                        .parent(assignment)
-                        .is_some_and(|p| ast.kind(p) == NodeKind::ExpressionStatement)
-            })
+            || ast
+                .cast::<AssignmentExpression>(parent)
+                .is_some_and(|assignment| {
+                    ast[assignment].right_hand_side.raw() == node.raw()
+                        && ast
+                            .parent(assignment)
+                            .is_some_and(|p| ast.kind(p) == NodeKind::ExpressionStatement)
+                })
         {
             // Don't add extra indentation in a variable initializer or assignment:
             //
@@ -1610,7 +1621,11 @@ impl<'a> SourceVisitor<'a> {
         self.builder.end_span();
     }
 
-    pub fn visit_formal_parameter_list(&mut self, node: Id<FormalParameterList>, nest_expression: bool) {
+    pub fn visit_formal_parameter_list(
+        &mut self,
+        node: Id<FormalParameterList>,
+        nest_expression: bool,
+    ) {
         let ast = self.ast;
         let n = &ast[node];
         let parameters = ast.list_raw(n.parameters);
@@ -1667,7 +1682,10 @@ impl<'a> SourceVisitor<'a> {
                 // Don't allow splitting before the first argument (i.e. right after
                 // the bare "(" in a lambda. Instead, just stuff a null chunk in there
                 // to avoid confusing the arg rule.
-                self.builder.arena.rule_mut(positional).before_argument(None);
+                self.builder
+                    .arena
+                    .rule_mut(positional)
+                    .before_argument(None);
             } else {
                 // Split before the first argument.
                 let chunk = self.zero_split();
@@ -2362,8 +2380,7 @@ impl<'a> SourceVisitor<'a> {
     pub fn finish_index_expression(&mut self, node: Id<IndexExpression>) {
         let ast = self.ast;
         let n = &ast[node];
-        if n
-            .target
+        if n.target
             .is_some_and(|target| ast.kind(target) == NodeKind::IndexExpression)
         {
             // Edge case: On a chain of [] accesses, allow splitting between them.
@@ -3092,7 +3109,10 @@ impl<'a> SourceVisitor<'a> {
         self.token_opt(n.question);
     }
 
-    fn visit_record_type_annotation_named_field(&mut self, node: Id<RecordTypeAnnotationNamedField>) {
+    fn visit_record_type_annotation_named_field(
+        &mut self,
+        node: Id<RecordTypeAnnotationNamedField>,
+    ) {
         let n = &self.ast[node];
         self.visit_parameter_metadata(n.metadata, |v| {
             v.visit(n.type_);
@@ -3144,7 +3164,12 @@ impl<'a> SourceVisitor<'a> {
         // formatter ensures it gets a newline after it. Since the script tag must
         // come at the top of the file, we don't have to worry about preceding
         // comments or whitespace.
-        self.write_text(dart_trim(ast.tokens.lexeme(script_tag)), script_tag, None, true);
+        self.write_text(
+            dart_trim(ast.tokens.lexeme(script_tag)),
+            script_tag,
+            None,
+            true,
+        );
         self.two_newlines();
     }
 
@@ -3349,7 +3374,12 @@ impl<'a> SourceVisitor<'a> {
         }
 
         let guarded_pattern = &ast[n.guarded_pattern];
-        flatten_or(ast, guarded_pattern.pattern.raw(), &mut or_branches, &mut or_tokens);
+        flatten_or(
+            ast,
+            guarded_pattern.pattern.raw(),
+            &mut or_branches,
+            &mut or_tokens,
+        );
 
         // Wrap the rule for splitting after "=>" around the pattern so that a
         // split in the pattern forces the expression to move to the next line too.
@@ -3604,7 +3634,9 @@ impl<'a> SourceVisitor<'a> {
         //             aValue,
         //         b =
         //             bValue;
-        let parent = ast.cast::<VariableDeclarationList>(ast.parent(node).unwrap()).unwrap();
+        let parent = ast
+            .cast::<VariableDeclarationList>(ast.parent(node).unwrap())
+            .unwrap();
         let has_multiple_variables = ast[parent].variables.len() > 1;
 
         self.visit_assignment(n.equals.unwrap(), initializer.raw(), has_multiple_variables);
@@ -3741,7 +3773,9 @@ impl<'a> SourceVisitor<'a> {
         // Preserve a blank line before the first directive since users (in
         // particular the test package) sometimes use that for metadata that
         // applies to the entire library and not the following directive itself.
-        let unit = ast.cast::<CompilationUnit>(ast.parent(directive).unwrap()).unwrap();
+        let unit = ast
+            .cast::<CompilationUnit>(ast.parent(directive).unwrap())
+            .unwrap();
         let is_first = ast.list_raw(ast[unit].directives).first() == Some(&directive);
 
         self.visit_nodes(
@@ -3816,7 +3850,10 @@ impl<'a> SourceVisitor<'a> {
         } else {
             let split = self.solo_split(Cost::NORMAL);
             if let Some(rule) = rule {
-                self.builder.arena.rule_mut(split).constrain_when_split(rule);
+                self.builder
+                    .arena
+                    .rule_mut(split)
+                    .constrain_when_split(rule);
             }
         }
 
@@ -3870,7 +3907,7 @@ impl<'a> SourceVisitor<'a> {
     fn visit_binary(
         &mut self,
         node: NodeId,
-        destructure_node: fn(&Ast, NodeId) -> Option<(NodeId, TokenId, NodeId)>,
+        destructure_node: DestructureNode,
         precedence: Option<u8>,
         nest: bool,
     ) {
@@ -3891,7 +3928,7 @@ impl<'a> SourceVisitor<'a> {
         fn traverse(
             v: &mut SourceVisitor,
             e: NodeId,
-            destructure_node: fn(&Ast, NodeId) -> Option<(NodeId, TokenId, NodeId)>,
+            destructure_node: DestructureNode,
             precedence: Option<u8>,
         ) {
             let ast = v.ast;
@@ -3947,7 +3984,12 @@ impl<'a> SourceVisitor<'a> {
     }
 
     /// Visits a type parameter or type argument list.
-    fn visit_generic_list(&mut self, left_bracket: TokenId, right_bracket: TokenId, nodes: &[NodeId]) {
+    fn visit_generic_list(
+        &mut self,
+        left_bracket: TokenId,
+        right_bracket: TokenId,
+        nodes: &[NodeId],
+    ) {
         let ast = self.ast;
         let rule = self.builder.arena.add_rule(TypeArgumentRule::new_rule());
         self.builder.start_lazy_rule(Some(rule));
@@ -3956,7 +3998,10 @@ impl<'a> SourceVisitor<'a> {
 
         self.token(left_bracket);
         let chunk = self.zero_split();
-        self.builder.arena.rule_mut(rule).before_argument(Some(chunk));
+        self.builder
+            .arena
+            .rule_mut(rule)
+            .before_argument(Some(chunk));
 
         // Set the block nesting in case an argument is a function type with a
         // trailing comma or a record type.
@@ -3978,7 +4023,10 @@ impl<'a> SourceVisitor<'a> {
 
                 self.token(comma);
                 let chunk = self.split();
-                self.builder.arena.rule_mut(rule).before_argument(Some(chunk));
+                self.builder
+                    .arena
+                    .rule_mut(rule)
+                    .before_argument(Some(chunk));
             }
         }
 
@@ -4305,9 +4353,7 @@ impl<'a> SourceVisitor<'a> {
         // Unlike other collections, records don't force outer ones to split.
         if split_outer_collection {
             // Force all of the surrounding collections to split.
-            for split in &mut self.collection_splits {
-                *split = true;
-            }
+            self.collection_splits.fill(true);
 
             // Add this collection to the stack.
             self.collection_splits.push(false);
@@ -4439,7 +4485,12 @@ impl<'a> SourceVisitor<'a> {
         self.builder.end_rule();
 
         // Now write the delimiter itself.
-        self.write_text(ast.tokens.lexeme(first_delimiter), first_delimiter, None, true);
+        self.write_text(
+            ast.tokens.lexeme(first_delimiter),
+            first_delimiter,
+            None,
+            true,
+        );
         if first_delimiter != n.right_parenthesis {
             self.token(n.right_parenthesis);
         }
@@ -4544,7 +4595,11 @@ impl<'a> SourceVisitor<'a> {
     ///     ) variable;
     ///
     /// Otherwise, we can.
-    fn separator_between_type_and_variable(&mut self, type_: Option<Id<TypeAnnotation>>, is_solo: bool) {
+    fn separator_between_type_and_variable(
+        &mut self,
+        type_: Option<Id<TypeAnnotation>>,
+        is_solo: bool,
+    ) {
         let Some(type_) = type_ else {
             return;
         };
@@ -4554,7 +4609,8 @@ impl<'a> SourceVisitor<'a> {
         if let Some(function_type) = ast.cast::<GenericFunctionType>(type_) {
             // Function types get block-like formatting if they have a trailing comma.
             let parameters = ast.list_raw(ast[ast[function_type].parameters].parameters);
-            is_block_type = !parameters.is_empty() && has_comma_after(ast, *parameters.last().unwrap());
+            is_block_type =
+                !parameters.is_empty() && has_comma_after(ast, *parameters.last().unwrap());
         } else if ast.kind(type_) == NodeKind::RecordTypeAnnotation {
             // Record types always have block-like formatting.
             is_block_type = true;
@@ -4592,7 +4648,9 @@ impl<'a> SourceVisitor<'a> {
         // Force a split in an empty catch if there is a finally or other catch
         // after it:
         if ast.kind(parent) == NodeKind::CatchClause {
-            if let Some(try_statement) = ast.parent(parent).and_then(|p| ast.cast::<TryStatement>(p)) {
+            if let Some(try_statement) =
+                ast.parent(parent).and_then(|p| ast.cast::<TryStatement>(p))
+            {
                 let try_statement = &ast[try_statement];
 
                 // Split the catch if there is something after it, a finally or another
@@ -5010,7 +5068,12 @@ impl<'a> SourceVisitor<'a> {
     /// Does nothing if [token] is `None`. If [before] is given, it will be
     /// executed before the token is outout. Likewise, [after] will be called
     /// after the token is output.
-    pub fn token_with(&mut self, token: Option<TokenId>, before: Callback<'a>, after: Callback<'a>) {
+    pub fn token_with(
+        &mut self,
+        token: Option<TokenId>,
+        before: Callback<'a>,
+        after: Callback<'a>,
+    ) {
         let Some(token) = token else {
             return;
         };
@@ -5042,7 +5105,10 @@ impl<'a> SourceVisitor<'a> {
         }
 
         // If the token's comments are already handled, do not write them here.
-        if self.suppress_preceding_comments_and_new_lines.contains(&token) {
+        if self
+            .suppress_preceding_comments_and_new_lines
+            .contains(&token)
+        {
             return false;
         }
 
@@ -5092,7 +5158,8 @@ impl<'a> SourceVisitor<'a> {
                 CommentType::Block
             };
 
-            let mut source_comment = SourceComment::new(text.to_string(), type_, lines_before, flush_left);
+            let mut source_comment =
+                SourceComment::new(text.to_string(), type_, lines_before, flush_left);
 
             // If this comment contains either of the selection endpoints, mark them
             // in the comment.
@@ -5112,11 +5179,9 @@ impl<'a> SourceVisitor<'a> {
             previous_line = self.end_line(comment);
         }
 
-        let first_lines_before = self.builder.write_comments(
-            comments,
-            token_line - previous_line,
-            tokens.lexeme(token),
-        );
+        let first_lines_before =
+            self.builder
+                .write_comments(comments, token_line - previous_line, tokens.lexeme(token));
 
         // TODO(rnystrom): This is wrong. Consider:
         //
@@ -5135,7 +5200,13 @@ impl<'a> SourceVisitor<'a> {
     ///
     /// If [offset] is given, uses that for calculating selection location.
     /// Otherwise, uses the offset of [token].
-    fn write_text(&mut self, text: &str, token: TokenId, offset: Option<i64>, merge_empty_splits: bool) {
+    fn write_text(
+        &mut self,
+        text: &str,
+        token: TokenId,
+        offset: Option<i64>,
+        merge_empty_splits: bool,
+    ) {
         let offset = offset.unwrap_or_else(|| self.ast.tokens.offset(token) as i64);
 
         self.builder.write(text, merge_empty_splits);
@@ -5145,7 +5216,8 @@ impl<'a> SourceVisitor<'a> {
         if self.source.selection_start.is_some() {
             let length = utf16_len(text) as i64;
             if let Some(start) = self.get_selection_start_within(offset, length) {
-                self.builder.start_selection_from_end((length - start) as i32);
+                self.builder
+                    .start_selection_from_end((length - start) as i32);
             }
 
             if let Some(end) = self.get_selection_end_within(offset, length) {
@@ -5216,7 +5288,9 @@ impl<'a> SourceVisitor<'a> {
             return None;
         }
 
-        if end == length && Some(self.find_selection_end()) == self.source.selection_start.map(|s| s as i64) {
+        if end == length
+            && Some(self.find_selection_end()) == self.source.selection_start.map(|s| s as i64)
+        {
             return None;
         }
 
@@ -5330,7 +5404,9 @@ fn assignment_cost(ast: &Ast, right_hand_side: NodeId) -> i32 {
 /// [InvocationExpression].
 fn invocation_argument_list(ast: &Ast, node: NodeId) -> Option<Id<ArgumentList>> {
     match ast.kind(node) {
-        NodeKind::MethodInvocation => Some(ast[Id::<MethodInvocation>::from_raw(node)].argument_list),
+        NodeKind::MethodInvocation => {
+            Some(ast[Id::<MethodInvocation>::from_raw(node)].argument_list)
+        }
         NodeKind::FunctionExpressionInvocation => {
             Some(ast[Id::<FunctionExpressionInvocation>::from_raw(node)].argument_list)
         }

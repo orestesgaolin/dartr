@@ -342,7 +342,9 @@ impl ChunkBuilder {
                 if pending_space && chunk != last {
                     // We've already created a split after the comment, so if it doesn't
                     // split, it should get a space.
-                    self.arena.chunk_mut(last).update_split(None, false, Some(true));
+                    self.arena
+                        .chunk_mut(last)
+                        .update_split(None, false, Some(true));
                 }
             } else {
                 // Split before the comment if it starts a line.
@@ -572,7 +574,9 @@ impl ChunkBuilder {
     /// of text containing the selection has been output.
     pub fn start_selection_from_end(&mut self, from_end: i32) {
         let last = *self.level_ref().chunks.last().unwrap();
-        self.arena.chunk_mut(last).start_selection_from_end(from_end);
+        self.arena
+            .chunk_mut(last)
+            .start_selection_from_end(from_end);
     }
 
     /// Marks the selection ending point as occurring [from_end] characters to the
@@ -880,7 +884,12 @@ impl ChunkBuilder {
 
         // Otherwise, it gets a space if the following token is not a delimiter or
         // the empty string, for EOF.
-        token != ")" && token != "]" && token != "}" && token != "," && token != ";" && !token.is_empty()
+        token != ")"
+            && token != "]"
+            && token != "}"
+            && token != ","
+            && token != ";"
+            && !token.is_empty()
     }
 
     fn needs_blank_line_before_comment(&self, comment: &SourceComment) -> bool {

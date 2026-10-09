@@ -48,7 +48,10 @@ impl SolveStateQueue {
             let old = self.positions_by_score.get_mut(&old_score).unwrap();
             let i = old.iter().position(|&p| p == index).unwrap();
             old.swap_remove(i);
-            self.positions_by_score.entry(score).or_default().push(index);
+            self.positions_by_score
+                .entry(score)
+                .or_default()
+                .push(index);
             self.scores[index] = score;
         }
         self.queue[index] = state;
@@ -70,7 +73,10 @@ impl SolveStateQueue {
         self.queue.push(state.clone());
         let score = score_of(&state);
         self.scores.push(score);
-        self.positions_by_score.entry(score).or_default().push(index);
+        self.positions_by_score
+            .entry(score)
+            .or_default()
+            .push(index);
         self.bubble_up(state, index, info, arena);
     }
 
@@ -130,7 +136,12 @@ impl SolveStateQueue {
     /// Distinguish states based on the rule values just so that states with the
     /// same cost range but different rule values don't get considered identical
     /// and inadvertantly merged.
-    fn compare_rules(a: &SolveState, b: &SolveState, info: &SplitterInfo, arena: &Arena) -> Ordering {
+    fn compare_rules(
+        a: &SolveState,
+        b: &SolveState,
+        info: &SplitterInfo,
+        arena: &Arena,
+    ) -> Ordering {
         for &rule in &info.rules {
             let a_value = a.get_value(arena, rule);
             let b_value = b.get_value(arena, rule);
@@ -217,7 +228,13 @@ impl SolveStateQueue {
     ///
     /// Put element into the empty cell at `index`. While the `element` has
     /// higher priority than the parent, swap it with the parent.
-    fn bubble_up(&mut self, element: Rc<SolveState>, mut index: usize, info: &SplitterInfo, arena: &Arena) {
+    fn bubble_up(
+        &mut self,
+        element: Rc<SolveState>,
+        mut index: usize,
+        info: &SplitterInfo,
+        arena: &Arena,
+    ) {
         while index > 0 {
             let parent_index = (index - 1) / 2;
             let parent = &self.queue[parent_index];
@@ -239,7 +256,13 @@ impl SolveStateQueue {
     ///
     /// Put element into the empty cell at `index`. While the `element` has lower
     /// priority than either child, swap it with the highest priority child.
-    fn bubble_down(&mut self, element: Rc<SolveState>, mut index: usize, info: &SplitterInfo, arena: &Arena) {
+    fn bubble_down(
+        &mut self,
+        element: Rc<SolveState>,
+        mut index: usize,
+        info: &SplitterInfo,
+        arena: &Arena,
+    ) {
         let length = self.queue.len();
         let mut right_child_index = index * 2 + 2;
 

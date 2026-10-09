@@ -190,7 +190,12 @@ impl SolveState {
     /// If neither of these is the case, the states overlap. Returns `<0` if this
     /// state is better, or `>0` if [other] wins. If the states do not overlap,
     /// returns `0`.
-    pub fn compare_overlap(&self, other: &SolveState, info: &SplitterInfo, arena: &Arena) -> Ordering {
+    pub fn compare_overlap(
+        &self,
+        other: &SolveState,
+        info: &SplitterInfo,
+        arena: &Arena,
+    ) -> Ordering {
         if !self.is_overlapping(other, info, arena) {
             return Ordering::Equal;
         }
@@ -373,7 +378,8 @@ impl SolveState {
                     indent += arena.nesting(chunk_info.nesting).total_used_indent();
 
                     if chunk_info.is_block
-                        && arena.indent_block(chunks[i], |rule| self.rule_values.get_value(arena, rule))
+                        && arena
+                            .indent_block(chunks[i], |rule| self.rule_values.get_value(arena, rule))
                     {
                         indent += Indent::EXPRESSION;
                     }
@@ -415,7 +421,15 @@ impl SolveState {
             let chunk_info = &info.chunk_infos[i];
 
             if self.splits.should_split_at(i) {
-                self.end_line(info, ctx.arena, page_width, &mut length, &mut start, &mut found_overflow_rules, i);
+                self.end_line(
+                    info,
+                    ctx.arena,
+                    page_width,
+                    &mut length,
+                    &mut start,
+                    &mut found_overflow_rules,
+                    i,
+                );
 
                 let arena = &mut *ctx.arena;
                 if chunk_info.has_spans {
@@ -609,7 +623,12 @@ impl SolveState {
     ///
     /// We do this lazily because the calculation is a bit slow, and is only
     /// needed when we have two states with the same score.
-    fn init_constraints(&self, info: &SplitterInfo, arena: &Arena, bound: &[bool]) -> Vec<Option<i32>> {
+    fn init_constraints(
+        &self,
+        info: &SplitterInfo,
+        arena: &Arena,
+        bound: &[bool],
+    ) -> Vec<Option<i32>> {
         let mut constraints = vec![None; info.rules.len()];
 
         for (position, &bound_rule) in info.rules.iter().enumerate() {

@@ -11,8 +11,14 @@
 //! The objects that Dart links by reference (chunks, rules, spans, nesting
 //! levels) are in an [arena::Arena].
 
-pub mod argument_list_visitor;
+#![allow(
+    clippy::collapsible_if,
+    clippy::too_many_arguments,
+    clippy::needless_range_loop
+)]
+
 pub mod arena;
+pub mod argument_list_visitor;
 pub mod call_chain_visitor;
 pub mod chunk;
 pub mod chunk_builder;

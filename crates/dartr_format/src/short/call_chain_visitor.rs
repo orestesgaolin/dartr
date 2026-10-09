@@ -5,8 +5,8 @@ use dartr_syntax::TokenType;
 
 use crate::ast_extensions::{has_comma_after, is_collection_literal, looks_like_static_call};
 
-use super::argument_list_visitor::ArgumentListVisitor;
 use super::arena::RuleId;
+use super::argument_list_visitor::ArgumentListVisitor;
 use super::rule::argument::PositionalRule;
 use super::source_visitor::{SourceVisitor, argument_expression};
 

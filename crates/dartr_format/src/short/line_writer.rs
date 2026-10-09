@@ -58,7 +58,14 @@ impl<'a> WriterContext<'a> {
             return cached.clone();
         }
 
-        let children = self.arena.chunk(chunk).block.as_ref().unwrap().children.clone();
+        let children = self
+            .arena
+            .chunk(chunk)
+            .block
+            .as_ref()
+            .unwrap()
+            .children
+            .clone();
         let mut writer = LineWriter::new(children, column);
         let result = Rc::new(writer.write_lines(self, false));
         self.block_cache.insert(key, result.clone());
@@ -125,7 +132,11 @@ impl LineWriter {
     ///
     /// Since this is linear and line splitting is worse it's good to feed the
     /// line splitter smaller lists of chunks when possible.
-    pub fn write_lines(&mut self, ctx: &mut WriterContext, is_compilation_unit: bool) -> FormatResult {
+    pub fn write_lines(
+        &mut self,
+        ctx: &mut WriterContext,
+        is_compilation_unit: bool,
+    ) -> FormatResult {
         // Now that we know what hard splits there will be, break the chunks into
         // independently splittable lines.
         let mut total_cost = 0;

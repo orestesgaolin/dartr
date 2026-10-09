@@ -61,7 +61,10 @@ fn short_benchmarks() {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../third_party/dart_style/benchmark/case");
     if !dir.exists() {
-        eprintln!("skipped: {} not found (run tools/fetch_sdk.sh)", dir.display());
+        eprintln!(
+            "skipped: {} not found (run tools/fetch_sdk.sh)",
+            dir.display()
+        );
         return;
     }
     let filter = std::env::var("FORMAT_BENCHMARK_FILTER").ok();

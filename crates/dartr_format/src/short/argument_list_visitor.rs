@@ -523,7 +523,11 @@ impl ArgumentSublist {
             .builder
             .split(true, Some(arguments[0]) != self.all_arguments_first);
         self.previous_split = Some(split);
-        visitor.builder.arena.rule_mut(rule).before_argument(Some(split));
+        visitor
+            .builder
+            .arena
+            .rule_mut(rule)
+            .before_argument(Some(split));
 
         // Try to not split the positional arguments.
         if is_positional {
@@ -537,7 +541,11 @@ impl ArgumentSublist {
             if i != arguments.len() - 1 {
                 let split = visitor.split();
                 self.previous_split = Some(split);
-                visitor.builder.arena.rule_mut(rule).before_argument(Some(split));
+                visitor
+                    .builder
+                    .arena
+                    .rule_mut(rule)
+                    .before_argument(Some(split));
             }
         }
 
@@ -568,7 +576,11 @@ impl ArgumentSublist {
                 .disable_split_on_inner_rules();
 
             // Tell it to use the rule we've already created.
-            visitor.before_block(argument_block, self.block_rule.unwrap(), self.previous_split);
+            visitor.before_block(
+                argument_block,
+                self.block_rule.unwrap(),
+                self.previous_split,
+            );
         } else if nest_block_argument {
             // Edge case: Only bump the nesting if there are multiple arguments. This
             // lets us avoid spurious indentation in cases like:
