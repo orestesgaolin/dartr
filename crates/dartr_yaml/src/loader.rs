@@ -210,7 +210,7 @@ impl Loader {
                     crate::NodeKind::Map(entries) => {
                         let event = self.parser.parse()?;
                         let value = self.load_node(event)?;
-                        if entries.iter().any(|(key, _)| key.value_equals(&child)) {
+                        if entries.iter().any(|(key, _)| key.key_equals(&child)) {
                             return Err(YamlException {
                                 runtime_error: None,
                                 message: "Duplicate mapping key.".into(),
