@@ -51,6 +51,9 @@ jobs:
             os: macos-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1.8.1
+        with:
+          sdk: 3.13.3
       - uses: ./.github/actions/setup-dart-sdk
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release --workspace
@@ -62,6 +65,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1.8.1
+        with:
+          sdk: 3.13.3
       - uses: ./.github/actions/setup-dart-sdk
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release -p dartr
