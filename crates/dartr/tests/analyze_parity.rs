@@ -347,3 +347,155 @@ fn analyze_parity_non_dart_files() {
         failures.join("\n")
     );
 }
+
+const LINT_RULES: &str = "\
+linter:
+  rules:
+    - always_declare_return_types
+    - avoid_empty_else
+    - avoid_multiple_declarations_per_line
+    - camel_case_types
+    - constant_identifier_names
+    - curly_braces_in_flow_control_structures
+    - directives_ordering
+    - empty_statements
+    - eol_at_end_of_file
+    - file_names
+    - unnecessary_new
+    - unawaited_futures
+";
+
+const LINT_A: &str = "\
+import 'package:p/util.dart';
+import 'dart:math';
+
+class my_class {}
+class other_class {} // ignore: camel_case_types
+
+f() => 1;
+
+int g(int a) {
+  if (a > 1) return max(a, 2);
+  if (a == 0) { return 1; } else ;
+  return utilValue + Object().hashCode;
+}
+
+const my_const = 1;
+// ignore: type=lint
+const other_const = 2;
+// ignore: unnecessary_new, duplicate_ignore
+Object h() => new Object();
+Object i() => new Object(); // ignore: avoid_empty_else, unnecessary_new
+";
+
+const LINT_UTIL: &str = "\
+const int utilValue = 3;
+int a = 1, b = 2;
+void k() {
+  ;
+}
+";
+
+const LINT_LIB: &str = "\
+part 'Bad_Name_part.dart';
+part 'bad_name_two.dart';
+
+class lib_class {}
+f2() {}
+";
+
+const LINT_PART: &str = "\
+part of 'Bad_Name.dart';
+
+class part_class {}
+// ignore: always_declare_return_types
+f3() {}
+Object p() => new Object();
+";
+
+const LINT_PART_TWO: &str = "\
+// ignore_for_file: camel_case_types, unnecessary_new
+part of 'Bad_Name.dart';
+
+class part_two {}
+f4() {}
+Object q() => new Object();
+";
+
+fn lint_project(base: &Path, name: &str, options: &str) -> PathBuf {
+    let root = base.join(name);
+    let pc = package_config("3.13");
+    write_project(
+        &root,
+        &[
+            ("pubspec.yaml", "name: p\nenvironment:\n  sdk: ^3.9.0\n"),
+            (".dart_tool/package_config.json", &pc),
+            ("analysis_options.yaml", options),
+            ("lib/a.dart", LINT_A),
+            ("lib/util.dart", LINT_UTIL),
+            ("lib/Bad_Name.dart", LINT_LIB),
+            ("lib/Bad_Name_part.dart", LINT_PART),
+            ("lib/bad_name_two.dart", LINT_PART_TWO),
+            ("lib/no_eol.dart", "int z() => 1;"),
+            ("lib/syntax.dart", "int y() => 1 // ignore: expected_token\nint w() { return 1 }\nclass sx {}\n"),
+        ],
+    );
+    root
+}
+
+/// AST-only lint rules (the implemented ones): lints of a library with
+/// parts, `// ignore:` comments for lints, `errors:` overrides of lint
+/// severities, `cannot-ignore`, with parse errors in the same project.
+#[test]
+fn analyze_parity_lints() {
+    if !dart_available() {
+        eprintln!("skipped: dart 3.13.3 is not on PATH");
+        return;
+    }
+    let base = scratch().join("lints");
+    let plain = lint_project(&base, "plain", LINT_RULES);
+    let overrides = lint_project(
+        &base,
+        "overrides",
+        &format!(
+            "analyzer:\n  errors:\n    camel_case_types: error\n    empty_statements: warning\n    unnecessary_new: ignore\n    avoid_empty_else: false\n    duplicate_ignore: info\n{LINT_RULES}"
+        ),
+    );
+    let cannot_ignore = lint_project(
+        &base,
+        "cannot_ignore",
+        &format!(
+            "analyzer:\n  cannot-ignore:\n    - camel_case_types\n    - unnecessary_new\n  errors:\n    unnecessary_new: warning\n{LINT_RULES}"
+        ),
+    );
+    let mut cases: Vec<(&Path, Vec<&str>)> = Vec::new();
+    for p in [&plain, &overrides, &cannot_ignore] {
+        for args in [
+            vec![],
+            vec!["--fatal-infos"],
+            vec!["--format=json"],
+            vec!["--format=machine"],
+        ] {
+            cases.push((p.as_path(), args));
+        }
+    }
+    cases.push((plain.as_path(), vec!["lib/Bad_Name_part.dart"]));
+    cases.push((plain.as_path(), vec!["lib/bad_name_two.dart", "lib/a.dart"]));
+    let failures: Vec<String> = std::thread::scope(|scope| {
+        let handles: Vec<_> = cases
+            .iter()
+            .map(|(cwd, args)| scope.spawn(move || compare(cwd, args)))
+            .collect();
+        handles
+            .into_iter()
+            .filter_map(|h| h.join().unwrap())
+            .collect()
+    });
+    assert!(
+        failures.is_empty(),
+        "{} of {} cases differ:\n{}",
+        failures.len(),
+        cases.len(),
+        failures.join("\n")
+    );
+}

@@ -43,12 +43,17 @@ fn is_non_dart(uri: &str) -> bool {
 /// diagnostics of non-Dart files) only, empty lists
 /// removed, only documents of the fixture project.
 fn snapshot(c: &LspClient, root_uri: &str) -> Value {
+    snapshot_where(c, root_uri, is_syntactic)
+}
+
+/// Like [snapshot], with the codes that [keep] accepts.
+fn snapshot_where(c: &LspClient, root_uri: &str, keep: fn(&str) -> bool) -> Value {
     let in_root = |uri: &String| uri.starts_with(root_uri);
     let mut diagnostics = BTreeMap::new();
     for (uri, list) in &c.state.diagnostics {
         let list: Vec<Value> = list
             .iter()
-            .filter(|d| is_non_dart(uri) || d["code"].as_str().is_some_and(is_syntactic))
+            .filter(|d| is_non_dart(uri) || d["code"].as_str().is_some_and(keep))
             .cloned()
             .collect();
         if in_root(uri) && !list.is_empty() {
@@ -523,5 +528,119 @@ fn lsp_non_dart_files_and_package_language_version() {
     assert_eq!(dart_code, 0);
     assert_eq!(dartr_code, 0);
     let failures = report("non-Dart files, language version", &dart, &dartr);
+    assert_eq!(failures, 0, "LSP session differs from dart language-server");
+}
+
+/// Syntactic diagnostics, lints (AST-only rules are implemented) and the
+/// ignore-comment diagnostics.
+fn is_syntactic_or_lint(code: &str) -> bool {
+    is_syntactic(code)
+        || matches!(code, "duplicate_ignore" | "unignorable_ignore")
+        || codes_by_name(code)
+            .iter()
+            .any(|c| c.diagnostic_type == DiagnosticType::Lint)
+}
+
+fn write_lint_project() -> std::path::PathBuf {
+    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("lsp_lints");
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("lib")).unwrap();
+    std::fs::create_dir_all(root.join(".dart_tool")).unwrap();
+    let root = root.canonicalize().unwrap();
+    let write = |rel: &str, content: &str| std::fs::write(root.join(rel), content).unwrap();
+    write("pubspec.yaml", "name: p\nenvironment:\n  sdk: ^3.9.0\n");
+    write(
+        ".dart_tool/package_config.json",
+        "{\"configVersion\":2,\"packages\":[{\"name\":\"p\",\"rootUri\":\"../\",\"packageUri\":\"lib/\",\"languageVersion\":\"3.13\"}]}",
+    );
+    write(
+        "analysis_options.yaml",
+        "analyzer:\n  errors:\n    camel_case_types: error\n    empty_statements: ignore\n    always_declare_return_types: warning\n  cannot-ignore:\n    - unnecessary_new\nlinter:\n  rules:\n    - always_declare_return_types\n    - camel_case_types\n    - empty_statements\n    - unnecessary_new\n    - constant_identifier_names\n    - unawaited_futures\n",
+    );
+    write(
+        "lib/main_lib.dart",
+        "part 'main_part.dart';\n\nclass lib_class {}\nclass ignored_class {} // ignore: camel_case_types\nf() {;}\nObject o() => new Object(); // ignore: unnecessary_new\nint x() => 1 // ignore: expected_token\n",
+    );
+    write(
+        "lib/main_part.dart",
+        "part of 'main_lib.dart';\n\nclass part_class {}\nconst my_const = 1;\n// ignore: type=lint\nconst other_const = 2;\n",
+    );
+    write("lib/plain.dart", "int ok() => 1;\n");
+    root
+}
+
+fn run_lint_session(mut c: LspClient, root: &Path) -> (Transcript, i32) {
+    let root_uri = format!("{}/", file_uri(root));
+    let uri = |rel: &str| format!("{root_uri}{rel}");
+    let read = |rel: &str| std::fs::read_to_string(root.join(rel)).unwrap();
+    let snap = |c: &LspClient| snapshot_where(c, &root_uri, is_syntactic_or_lint);
+    let mut t: Transcript = Vec::new();
+    let init = c.request("initialize", dart_code_initialize_params(root));
+    assert!(init["result"]["capabilities"].is_object(), "{init}");
+    c.notify("initialized", json!({}));
+    c.settle(true);
+    t.push(("initial analysis".into(), snap(&c)));
+
+    for rel in ["lib/main_lib.dart", "lib/main_part.dart", "lib/plain.dart"] {
+        c.notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {"uri": uri(rel), "languageId": "dart", "version": 1, "text": read(rel)}}),
+        );
+    }
+    c.settle(true);
+    t.push(("open files".into(), snap(&c)));
+
+    // A new lint and a new ignore comment in the part (an overlay).
+    c.notify(
+        "textDocument/didChange",
+        json!({"textDocument": {"uri": uri("lib/main_part.dart"), "version": 2}, "contentChanges": [
+            {"text": "part of 'main_lib.dart';\n\nclass part_class {}\nclass second_part {}\ng() {}\n// ignore: always_declare_return_types, always_declare_return_types\nh() {}\nObject n() => new Object();\n"}
+        ]}),
+    );
+    c.settle(true);
+    t.push(("change part".into(), snap(&c)));
+
+    // A change of the defining unit: the lints of the part still run on
+    // the library.
+    c.notify(
+        "textDocument/didChange",
+        json!({"textDocument": {"uri": uri("lib/main_lib.dart"), "version": 2}, "contentChanges": [
+            {"text": "part 'main_part.dart';\n\nclass lib_class {}\nclass Fine {}\nf() {}\n"}
+        ]}),
+    );
+    c.settle(true);
+    t.push(("change library".into(), snap(&c)));
+
+    c.notify("textDocument/didClose", doc(&uri("lib/main_part.dart")));
+    c.settle(true);
+    t.push(("close part".into(), snap(&c)));
+    let (response, code) = c.shutdown_and_exit();
+    t.push(("shutdown".into(), response));
+    (t, code)
+}
+
+#[test]
+fn lsp_lints_and_error_processors() {
+    if !dart_available() {
+        eprintln!("skipped: `dart` is not on PATH");
+        return;
+    }
+    let root = write_lint_project();
+    let mut args = vec!["language-server", "--protocol=lsp"];
+    args.extend(session_args());
+    let (dart, dart_code) = run_lint_session(LspClient::spawn("dart", &args, &[]), &root);
+    let (dartr, dartr_code) = run_lint_session(LspClient::spawn(dartr_bin(), &args, &[]), &root);
+    assert_eq!(dart_code, 0);
+    assert_eq!(dartr_code, 0);
+    // The comparison is not empty: the real server reports lints.
+    let opened = &dart.iter().find(|(n, _)| n == "change part").unwrap().1;
+    let count: usize = opened["diagnostics"]
+        .as_object()
+        .unwrap()
+        .values()
+        .map(|l| l.as_array().unwrap().len())
+        .sum();
+    assert!(count >= 5, "expected lint diagnostics: {opened}");
+    let failures = report("lints and errors: processors", &dart, &dartr);
     assert_eq!(failures, 0, "LSP session differs from dart language-server");
 }
