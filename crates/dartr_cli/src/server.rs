@@ -10,7 +10,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use dartr_diagnostics::{Diagnostic, DiagnosticSeverity};
-use dartr_project::AnalysisContextCollection;
+use dartr_project::{AnalysisContextCollection, FileKind};
 use dartr_project::analysis_options::DiagnosticSeverity as OptionsSeverity;
 use dartr_syntax::LineInfo;
 
@@ -110,13 +110,13 @@ impl LineInfoCache {
     }
 }
 
-/// Dart `mapEngineErrors` + `newAnalysisError_fromEngine` for the
-/// diagnostics of one file.
-pub fn analysis_errors(
+/// The diagnostics of a Dart file with the `errors:` processors of its
+/// analysis options applied (Dart `mapEngineErrors`): the severity is the
+/// processed one, and diagnostics with the severity `ignore` are removed.
+pub fn processed_diagnostics<'a>(
     collection: &AnalysisContextCollection,
-    file: &FileDiagnostics,
-    line_infos: &mut LineInfoCache,
-) -> Vec<AnalysisError> {
+    file: &'a FileDiagnostics,
+) -> Vec<(&'a Diagnostic, DiagnosticSeverity)> {
     let options = collection
         .context_for(&file.path)
         .map(|context| collection.options_for(context, &file.path).clone());
@@ -135,9 +135,67 @@ pub fn analysis_errors(
             },
             None => diagnostic.code.severity(),
         };
-        result.push(new_analysis_error(file, diagnostic, severity, line_infos));
+        result.push((diagnostic, severity));
     }
     result
+}
+
+/// Dart `mapEngineErrors` + `newAnalysisError_fromEngine` for the
+/// diagnostics of one file.
+pub fn analysis_errors(
+    collection: &AnalysisContextCollection,
+    file: &FileDiagnostics,
+    line_infos: &mut LineInfoCache,
+) -> Vec<AnalysisError> {
+    if FileKind::of(&file.path) != FileKind::Dart {
+        return non_dart_analysis_errors(file);
+    }
+    processed_diagnostics(collection, file)
+        .into_iter()
+        .map(|(diagnostic, severity)| new_analysis_error(file, diagnostic, severity, line_infos))
+        .collect()
+}
+
+/// Dart `AnalyzerConverter.convertAnalysisErrors` for non-Dart files
+/// (`ContextManager._analyzeAnalysisOptionsYaml` and others): the severity
+/// processing is done already (`non_dart::diagnostics_for_file`), there is no
+/// `url`, and the locations of context messages use the line info of the
+/// analyzed file, also when they name another file.
+fn non_dart_analysis_errors(file: &FileDiagnostics) -> Vec<AnalysisError> {
+    file.diagnostics
+        .iter()
+        .map(|diagnostic| {
+            let code = diagnostic.code;
+            let context_messages = diagnostic
+                .context_messages
+                .iter()
+                .map(|m| ContextMessage {
+                    message: m.message_text(true),
+                    location: location(
+                        &m.file_path,
+                        m.offset.max(0) as usize,
+                        m.length.max(0) as usize,
+                        &file.line_info,
+                    ),
+                })
+                .collect();
+            AnalysisError {
+                severity: diagnostic.severity,
+                type_: code.diagnostic_type.name(),
+                location: location(
+                    &file.path,
+                    diagnostic.offset,
+                    diagnostic.length,
+                    &file.line_info,
+                ),
+                message: diagnostic.message.clone(),
+                correction: diagnostic.correction.clone(),
+                code: code.lower_case_name().to_string(),
+                url: None,
+                context_messages,
+            }
+        })
+        .collect()
 }
 
 fn new_analysis_error(

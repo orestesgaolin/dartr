@@ -1,0 +1,6 @@
+linter:
+  rules:
+    avoid_print: definitely
+    made_up_rule: false
+    prefer_single_quotes: true
+    prefer_double_quotes: true

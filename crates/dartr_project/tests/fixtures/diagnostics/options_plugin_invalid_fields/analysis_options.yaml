@@ -1,0 +1,9 @@
+plugins:
+  first:
+    path: 42
+    unknown: true
+    diagnostics: 42
+  second:
+    git: 42
+  third:
+    hosted: 42

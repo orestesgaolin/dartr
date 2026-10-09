@@ -1,0 +1,5 @@
+# 👋
+name: bad-é
+author: old
+flutter:
+  assets: [absent.png]

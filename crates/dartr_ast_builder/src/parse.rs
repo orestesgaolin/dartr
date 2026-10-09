@@ -13,6 +13,7 @@ use dartr_parser::experimental_features::ExperimentalFeatures;
 use dartr_parser::experimental_flags::ExperimentalFlag;
 use dartr_syntax::analyzer_scanner::{
     AnalyzerScanResult, CURRENT_LANGUAGE_VERSION, scan_for_analyzer,
+    scan_for_analyzer_with_configuration,
 };
 use dartr_syntax::{LineInfo, ScannerResult};
 
@@ -95,7 +96,18 @@ fn parse_impl(
         scan_diagnostic_count,
         feature_version,
         ..
-    } = scan_for_analyzer(content);
+    } = match package {
+        None => scan_for_analyzer(content),
+        Some((version, experiments)) => scan_for_analyzer_with_configuration(
+            content,
+            ExperimentalFeatures::for_language_version(version.0, version.1, experiments)
+                .build_scanner_configuration(),
+            |(major, minor)| {
+                ExperimentalFeatures::for_language_version(major as u32, minor as u32, experiments)
+                    .build_scanner_configuration()
+            },
+        ),
+    };
     let ScannerResult {
         tokens,
         first,

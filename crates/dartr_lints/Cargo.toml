@@ -1,0 +1,14 @@
+[package]
+name = "dartr_lints"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+dartr_ast.workspace = true
+dartr_ast_builder.workspace = true
+dartr_parser.workspace = true
+dartr_syntax.workspace = true
+dartr_diagnostics.workspace = true
+indexmap.workspace = true
+serde_json.workspace = true

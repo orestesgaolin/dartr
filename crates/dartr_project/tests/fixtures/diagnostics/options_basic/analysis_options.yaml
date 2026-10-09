@@ -1,0 +1,11 @@
+analyzer:
+  mystery: true
+  errors:
+    no_such_diagnostic: warning
+  language:
+    strict-casts: maybe
+linter:
+  rules:
+    - no_such_lint
+    - avoid_print
+    - avoid_print

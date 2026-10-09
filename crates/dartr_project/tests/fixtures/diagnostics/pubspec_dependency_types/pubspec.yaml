@@ -1,0 +1,11 @@
+name: dependencies
+dependencies:
+  string: any
+  boolean: true
+  number: 42
+  list: [one]
+  unknown:
+    strange: true
+  multiple:
+    path: missing
+    git: https://example.com/project.git

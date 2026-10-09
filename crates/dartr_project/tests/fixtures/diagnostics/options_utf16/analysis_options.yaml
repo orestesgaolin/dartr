@@ -1,0 +1,6 @@
+# 👋
+analyzer:
+  errors:
+    unknown_é: warning
+linter:
+  rules: [bad_é]

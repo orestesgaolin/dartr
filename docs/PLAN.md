@@ -90,6 +90,7 @@ both modes on the fixtures and `dart:core`.
 | `dartr_ast`         | `analyzer/lib/src/dart/ast` (AST nodes, visitors)              |
 | `dartr_parser`      | `_fe_analyzer_shared/lib/src/parser`                           |
 | `dartr_ast_builder` | `analyzer/lib/src/fasta` (`ast_builder.dart`, `doc_comment_builder.dart`, `error_converter.dart`), `stack_listener.dart`, `parseString` |
+| `dartr_yaml`        | `package:yaml` 3.1.4 scanner, parser, loader, node styles and source spans |
 | `dartr_project`     | package_config, pubspec, `analysis_options.yaml`, context discovery, SDK location |
 | `dartr_semantics`   | elements, types, type system, inheritance, resolution, inference, flow analysis, constants, error verifiers |
 | `dartr_lints`       | `pkg/linter` rules                                             |
@@ -123,3 +124,11 @@ Data model rules:
 | 9 | `dartr analyze` CLI | output and exit code parity  (CLI, formats, exit codes, ignore comments, `errors:` done in `dartr_cli` with the parse-only `DiagnosticsProvider`; parity: `crates/dartr/tests/analyze_parity.rs`, `tools/analyze_parity.py`) |
 | 10 | LSP server, then legacy subset (`dart analyze`/`dart fix`), then full legacy (IntelliJ) | Dart-Code works through the shim; `flutter analyze` works; LSP request parity |
 | 11 | performance | benchmark report vs baseline |
+
+## Open: analyzer plugins
+
+`dart analyze` loads analyzer plugins (`analysis_options.yaml` `plugins:`; new-style
+`analysis_server_plugin` and legacy `analyzer_plugin`). visible-app uses one (Jaspr lints:
+`styles_ordering`, `prefer_html_components`, `sort_children_last`). dartr does not run plugins yet.
+Options: run Dart plugins out of process like the analysis server does (plugin isolates need a
+Dart VM), or port popular plugins. Decide after phase 10b.

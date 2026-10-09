@@ -1,0 +1,8 @@
+analyzer:
+  errors:
+    deprecated_field: ignore
+    invalid_dependency: error
+    package_names: warning
+    undefined_lint: info
+linter:
+  rules: [missing_rule, package_names]

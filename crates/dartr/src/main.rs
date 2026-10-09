@@ -36,6 +36,21 @@ enum Command {
         /// per line.
         files: Vec<PathBuf>,
     },
+    /// Starts the language server (LSP over stdin and stdout). Accepts the
+    /// options of `dart language-server`.
+    #[command(name = "language-server", disable_help_flag = true)]
+    LanguageServer {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    /// Starts the analysis server like the server snapshot (`dart
+    /// analysis_server.dart.snapshot`): the default protocol is the legacy
+    /// protocol, `--lsp` selects LSP.
+    #[command(name = "analysis-server", hide = true, disable_help_flag = true)]
+    AnalysisServer {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -58,5 +73,11 @@ fn main() -> anyhow::Result<()> {
     match cli.command {
         Command::Dump { mode, files } => dump::run(mode, files),
         Command::Analyze { .. } => unreachable!("handled before clap"),
+        Command::LanguageServer { args } => {
+            std::process::exit(dartr_server::run_with_args(&args, true))
+        }
+        Command::AnalysisServer { args } => {
+            std::process::exit(dartr_server::run_with_args(&args, false))
+        }
     }
 }

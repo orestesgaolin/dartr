@@ -1,0 +1,2 @@
+# This fixture tests the diagnostic for multiple newlines at end of file.
+eol_extra.dart whitespace=-blank-at-eof

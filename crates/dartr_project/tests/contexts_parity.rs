@@ -25,9 +25,18 @@ fn fixtures() -> PathBuf {
 }
 
 fn oracle_json(paths: &[String]) -> Value {
-    let output = Command::new("dart")
-        .current_dir(repo_root().join("tools/oracle"))
-        .args(["run", "bin/contexts.dart"])
+    let mut command = Command::new(std::env::var("DARTR_DART").unwrap_or_else(|_| "dart".into()));
+    command.current_dir(repo_root().join("tools/oracle"));
+    if let Ok(packages) = std::env::var("DARTR_ORACLE_PACKAGES") {
+        // Run the pinned cached packages directly, without invoking pub or a
+        // Flutter wrapper that writes to an external SDK/cache directory.
+        command
+            .arg(format!("--packages={packages}"))
+            .arg("bin/contexts.dart");
+    } else {
+        command.args(["run", "bin/contexts.dart"]);
+    }
+    let output = command
         .args(paths)
         .output()
         .expect("`dart` must be on PATH");
