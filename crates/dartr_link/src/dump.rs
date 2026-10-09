@@ -33,6 +33,16 @@ pub trait DumpSources {
     /// `Expression.toSource()` of a const expression (default values: Dart
     /// `defaultValueCode`).
     fn const_expr_source(&self, store: StoreId, expr: ConstExprId) -> String;
+
+    /// The value of the `"const"` key of the const top-level variable or
+    /// field (enum constants included) [element], as JSON text: a JSON
+    /// string with Dart `DartObjectImpl.toString()`, or `null` for an
+    /// invalid constant. `None`: the key is not written (the default, and
+    /// `dump elements` without `--with-const`).
+    fn const_value_json(&self, ctx: &Ctx<'_>, element: ElementId) -> Option<String> {
+        let _ = (ctx, element);
+        None
+    }
 }
 
 /// One JSON line (without newline) for library [library], `"path"` = [path].
@@ -77,6 +87,8 @@ enum Json {
     Str(String),
     Arr(Vec<Json>),
     Obj(Vec<(String, Json)>),
+    /// JSON text that is written as it is.
+    Raw(String),
 }
 
 impl Json {
@@ -100,6 +112,7 @@ impl Json {
                 let _ = write!(out, "{i}");
             }
             Json::Str(s) => write_json_string(out, s),
+            Json::Raw(s) => out.push_str(s),
             Json::Arr(items) => {
                 out.push('[');
                 for (i, item) in items.iter().enumerate() {
@@ -515,6 +528,11 @@ impl Dumper<'_, '_> {
                         }
                     });
                 o.put("typeInferenceError", Json::opt_str(error));
+                if is_const(ctx, e)
+                    && let Some(value) = self.sources.const_value_json(ctx, e)
+                {
+                    o.put("const", Json::Raw(value));
+                }
             }
             Tag::Getter | Tag::Setter => {
                 let accessor = EId::<PropertyAccessorElement>::from_raw(e);

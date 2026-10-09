@@ -18,11 +18,8 @@ env:
 
 jobs:
   fmt:
-    # The workspace is not rustfmt-clean yet. Report only; do not block.
-    # Remove `continue-on-error` after one `cargo fmt --all` commit.
-    name: rustfmt (non-blocking)
+    name: rustfmt
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
       - run: cargo fmt --all --check

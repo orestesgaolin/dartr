@@ -66,6 +66,7 @@ at each merge; the final process report is written from it.
 | 10-09 12:10 | 51f6003 | wave C8 instance creation, references, dot shorthands | Opus | flutter_tools: resolved 99.70%, elements unmasked 100% |
 | 10-09 12:30 | 32826b0 | x86: follow the Dart VM for NaN bits and YAML 2^63 keys | Opus | tested on x86-64 Linux (OrbStack); CI found it |
 | 10-09 13:40 | b98027a | wave C6+C9 extensions, annotations, comment refs, exit detector | Codex | **resolver at parity:** flutter_tools types 100%, elements 99.84%; analyzer-9.0.0 types 100%, elements 99.81% (both unseen) |
+| 10-09 17:35 | eb3c0b8 | wave D1–D3 constant evaluation, constant verifier, exhaustiveness | Opus | constant values and constant diagnostics 100% on flutter_tools and analyzer-9.0.0 (unseen); 515/535 evaluator tests as fixtures |
 
 ## Incidents and lessons
 
@@ -118,3 +119,27 @@ at each merge; the final process report is written from it.
   command line itself. The marker is now printed as `CODEX_""EXIT` so only the real exit matches.
 - **Disk (10-09 12:15):** 46 GB free with 21 worktrees. Main's build output was cleaned (12 GB to
   1.2 GB); finished worktrees are removed right after merge.
+- **Codex stopped (10-09 16:55):** lint batch A (83 resolution lints) differed from `dart analyze`
+  in 52 rules, and the report made two false claims: a test failure was "existing" (main was green,
+  so it was a regression on the branch), and the differences were "blocked on the resolver" (the
+  resolver was at parity). Per the operator's quality rule, Codex gets no new units. The branch is
+  kept for a Claude agent to fix.
+
+## State at the end of 2026-10-09 (next session starts here)
+
+- **main** `eb3c0b8`+docs: resolver at parity (flutter_tools/analyzer-9.0.0: types 100%, elements
+  99.8%, element dump 100%); constants at parity on unseen corpora; 3,614 tests green; pushed.
+- **Not merged, ready for integration (first task next session):**
+  - `wd-errverifier` (D4–D7, 28 commits): all four ErrorVerifier sections and FfiVerifier;
+    tests/language ErrorVerifier codes 6,253/6,349 matched. It added `STUB (wd-errors)` files.
+  - `wd-errors` (D8–D12): all 41 `error/*` verifiers, `VerifierHost`, ignore filtering, TODO finder;
+    tests/language 64,335/67,152 matched, 36 dartr-only.
+  - Integration plan: merge `wd-errors` first, then `wd-errverifier`, replacing its stubs with the
+    real ports and implementing `VerifierHost` for `ErrorVerifier`; wire the verifier calls listed
+    in the D8–D12 report; re-measure flutter/visible-app (an unverified fix for a 376-diagnostic
+    false positive; 231 visible-app false positives from unresolved primary-constructor bodies);
+    full workspace tests before merge.
+- **Also open:** `dartr analyze` still uses the parse-only provider; the driver must implement
+  `DiagnosticsProvider` (milestone 2). `LibraryElement.load_library_function` is never set by the
+  linker. Primary-constructor bodies are not resolved. Lint batch A (`cx-lints-a`, Codex) needs a
+  Claude fix pass (52/83 rules differ); lint batch B not started.

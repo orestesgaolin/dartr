@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::Parser;
-use dartr_difftest::{Options, run};
+use dartr_difftest::{Options, parse_codes, run};
 
 #[derive(Parser)]
 #[command(
@@ -48,6 +48,21 @@ struct Cli {
     /// Remove the diagnostics before the comparison.
     #[arg(long)]
     no_diagnostics: bool,
+    /// Keep only the diagnostics with these codes (comma separated, as the
+    /// `"code"` of the diagnostics JSON, for example
+    /// `const_eval_throws_exception`) on both sides before the comparison,
+    /// and print a table per code (oracle, matched, dartr-only).
+    #[arg(long, value_delimiter = ',')]
+    codes: Vec<String>,
+    /// Like `--codes`, with the codes read from a file: one code per line;
+    /// empty lines and lines that start with `#` are ignored. Can be given
+    /// with `--codes` (the sets are joined).
+    #[arg(long)]
+    codes_file: Option<PathBuf>,
+    /// Mode `elements`: pass `--with-const` to the oracle and to `dartr dump`
+    /// (adds the constant value `"const"` to const variables).
+    #[arg(long)]
+    with_const: bool,
     /// Time limit per input file in seconds (a batch gets 60 s plus this
     /// per file; 0 = no limit).
     #[arg(long, default_value_t = 10)]
@@ -70,6 +85,25 @@ fn main() -> anyhow::Result<ExitCode> {
         None => std::env::current_exe()?
             .with_file_name(format!("dartr{}", std::env::consts::EXE_SUFFIX)),
     };
+    let mut codes: std::collections::BTreeSet<String> = cli
+        .codes
+        .iter()
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty())
+        .collect();
+    if let Some(path) = &cli.codes_file {
+        let text = std::fs::read_to_string(path)
+            .map_err(|e| anyhow::anyhow!("reading {}: {e}", path.display()))?;
+        let file_codes = parse_codes(&text);
+        if file_codes.is_empty() {
+            anyhow::bail!("no codes in {}", path.display());
+        }
+        codes.extend(file_codes);
+    }
+    let mut extra_args = Vec::new();
+    if cli.with_const {
+        extra_args.push("--with-const".to_string());
+    }
     let options = Options {
         mode: cli.mode,
         inputs: cli.paths,
@@ -84,11 +118,14 @@ fn main() -> anyhow::Result<ExitCode> {
         mask_inferred: cli.mask_inferred,
         kinds: cli.kinds,
         no_diagnostics: cli.no_diagnostics,
+        codes,
+        extra_args,
         timeout_per_file: cli.timeout_per_file,
     };
     let report = run(&options)?;
     print!("{}", report.difference_report(cli.max_report));
     print!("{}", report.kind_report());
+    print!("{}", report.code_report());
     print!("{}", report.summary());
     Ok(if report.different() == 0 {
         ExitCode::SUCCESS

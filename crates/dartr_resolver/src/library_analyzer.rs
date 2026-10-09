@@ -17,7 +17,9 @@
 //! diagnostic for the library in that case).
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
+
+use indexmap::IndexMap;
 
 use dartr_ast::{Ast, CompilationUnit, Id};
 use dartr_ast_builder::ParsedUnit;
@@ -28,6 +30,10 @@ use dartr_element::{
 };
 use rayon::prelude::*;
 
+use dartr_constant::DeclaredVariables;
+
+use crate::constant::evaluation::{ConstantEvaluationEngine, ConstantValues, ExternalUnits};
+use crate::constant::exhaustiveness::ExhaustivenessCache;
 use crate::options::AnalysisOptions;
 use crate::resolver::{ResolverVisitor, UnitContext};
 use crate::scope::LibraryScopes;
@@ -57,6 +63,10 @@ pub struct LibraryAnalysisInput<'a> {
     /// the `part` directives (depth first).
     pub units: Vec<UnitInput>,
     pub options: AnalysisOptions,
+    /// The resolved units of other libraries, for the constants that the
+    /// library reads from them (see [`crate::constant`]). `None`: the
+    /// constants of other libraries have no value.
+    pub external: Option<&'a dyn ExternalUnits>,
 }
 
 /// The resolution of one unit.
@@ -82,6 +92,10 @@ pub struct ResolvedUnit {
 pub struct ResolvedLibrary {
     pub library: EId<LibraryElement>,
     pub units: Vec<ResolvedUnit>,
+    /// The constant values computed for the library (Dart: the
+    /// `evaluationResult` of the elements and annotations), by
+    /// `_computeConstants`. The annotation keys use the unit index.
+    pub constants: ConstantValues,
 }
 
 /// Dart `LibraryAnalyzer.analyze()`.
@@ -113,6 +127,7 @@ pub fn analyze_library(input: &LibraryAnalysisInput<'_>) -> ResolvedLibrary {
     let mut library = ResolvedLibrary {
         library: input.library,
         units,
+        constants: ConstantValues::default(),
     };
     compute_constants(input, &mut library);
     compute_diagnostics(input, &mut library);
@@ -125,8 +140,115 @@ pub fn analyze_library(input: &LibraryAnalysisInput<'_>) -> ResolvedLibrary {
 fn resolve_directives(_input: &LibraryAnalysisInput<'_>, _unit: &UnitInput) {}
 
 /// Dart `_computeConstants`: evaluates the constants of all units
-/// (`computeConstants` over `_findConstants`). STUB (wave D, D1–D2).
-fn compute_constants(_input: &LibraryAnalysisInput<'_>, _library: &mut ResolvedLibrary) {}
+/// (`computeConstants` over `_findConstants`), then
+/// `_computeConstantErrors` (the constant verifier) of each unit; the
+/// diagnostics of the verifier are appended to the unit diagnostics (Dart
+/// runs the verifier first in `_computeVerifyErrors`, after resolution).
+fn compute_constants(input: &LibraryAnalysisInput<'_>, library: &mut ResolvedLibrary) {
+    static DECLARED_VARIABLES: std::sync::LazyLock<DeclaredVariables> =
+        std::sync::LazyLock::new(DeclaredVariables::new);
+    let units = std::mem::take(&mut library.units);
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        let engine = ConstantEvaluationEngine::new(
+            input.world,
+            input.type_provider,
+            input.library,
+            &DECLARED_VARIABLES,
+            &units,
+            input.external,
+        );
+        let mut constants = Vec::new();
+        for (index, unit) in units.iter().enumerate() {
+            if unit.panic.is_some() {
+                continue;
+            }
+            let ctx = engine.ctx(unit);
+            constants.extend(crate::constant::utilities::find_constants(
+                &ctx,
+                index as u32,
+                unit,
+            ));
+            constants.extend(crate::constant::utilities::find_dependencies(
+                &engine,
+                index as u32,
+            ));
+        }
+        crate::constant::compute::compute_constants(&engine, &constants);
+        // Dart `_computeConstantErrors` of each unit (in
+        // `_computeVerifyErrors`), with the evaluation results of
+        // `_computeConstants`.
+        let mut cache = ExhaustivenessCache::default();
+        let mut verifier_diagnostics = Vec::with_capacity(units.len());
+        for (index, unit) in units.iter().enumerate() {
+            if unit.panic.is_some() {
+                verifier_diagnostics.push(Ok(Vec::new()));
+                continue;
+            }
+            let diagnostics = catch_unwind(AssertUnwindSafe(|| {
+                crate::constant::constant_verifier::verify_unit(&engine, &mut cache, index as u32)
+            }))
+            .map_err(|e| panic_message(&*e));
+            verifier_diagnostics.push(diagnostics);
+        }
+        (engine.values.into_inner(), verifier_diagnostics)
+    }));
+    library.units = units;
+    match result {
+        Ok((values, verifier_diagnostics)) => {
+            library.constants = values;
+            for (unit, diagnostics) in library.units.iter_mut().zip(verifier_diagnostics) {
+                match diagnostics {
+                    Ok(diagnostics) => append_unique(&mut unit.diagnostics, diagnostics),
+                    Err(message) => {
+                        if unit.panic.is_none() {
+                            unit.panic = Some(format!("constant verifier: {message}"));
+                        }
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            let message = panic_message(&*e);
+            if let Some(unit) = library.units.first_mut()
+                && unit.panic.is_none()
+            {
+                unit.panic = Some(format!("constant evaluation: {message}"));
+            }
+        }
+    }
+}
+
+/// Appends [diagnostics] to [target] like Dart's
+/// `RecordingDiagnosticListener` (a `Set<Diagnostic>`): a diagnostic equal
+/// to one already recorded (same code, offset, length and message) is
+/// dropped.
+fn append_unique(target: &mut Vec<Diagnostic>, diagnostics: Vec<Diagnostic>) {
+    if diagnostics.is_empty() {
+        return;
+    }
+    let key = |d: &Diagnostic| {
+        (
+            d.code as *const dartr_diagnostics::DiagnosticCode as usize,
+            d.offset,
+            d.length,
+            d.message.clone(),
+        )
+    };
+    let mut seen: indexmap::IndexSet<_> = target.iter().map(key).collect();
+    for d in diagnostics {
+        if seen.insert(key(&d)) {
+            target.push(d);
+        }
+    }
+}
+
+/// The message of a caught panic.
+fn panic_message(e: &(dyn std::any::Any + Send)) -> String {
+    e.downcast_ref::<String>()
+        .cloned()
+        .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+        .unwrap_or_else(|| "panic".to_string())
+}
 
 /// Dart `_computeDiagnostics`: `InheritanceOverrideVerifier`,
 /// `_computeVerifyErrors` per unit (error verifier, constant verifier,
@@ -233,4 +355,158 @@ fn resolve_file(
         diagnostics,
         panic,
     }
+}
+
+/// [`ExternalUnits`] that resolves the units of other libraries on demand
+/// and keeps them (shared by the analyses of many libraries).
+pub struct ExternalUnitCache<'w> {
+    world: &'w WorldSnapshot,
+    tp: &'w TypeProvider,
+    options: AnalysisOptions,
+    /// The parsed units by path, with their URIs.
+    sources: IndexMap<Arc<str>, (Arc<str>, Arc<ParsedUnit>)>,
+    scopes: Mutex<IndexMap<EId<LibraryElement>, Arc<LibraryScopes>>>,
+    units: Mutex<IndexMap<FId<LibraryFragment>, Arc<OnceLock<Option<Arc<ResolvedUnit>>>>>>,
+}
+
+impl<'w> ExternalUnitCache<'w> {
+    /// A cache over [world]; [sources] maps the path of every unit that may
+    /// be resolved to its URI and parsed unit.
+    pub fn new(
+        world: &'w WorldSnapshot,
+        tp: &'w TypeProvider,
+        options: AnalysisOptions,
+        sources: IndexMap<Arc<str>, (Arc<str>, Arc<ParsedUnit>)>,
+    ) -> ExternalUnitCache<'w> {
+        ExternalUnitCache {
+            world,
+            tp,
+            options,
+            sources,
+            scopes: Mutex::new(IndexMap::new()),
+            units: Mutex::new(IndexMap::new()),
+        }
+    }
+
+    fn library_scopes(&self, library: EId<LibraryElement>) -> Arc<LibraryScopes> {
+        if let Some(s) = self.scopes.lock().unwrap().get(&library) {
+            return s.clone();
+        }
+        let sink = NoopSink;
+        let features = {
+            let input = self.input(library);
+            let ctx = global_ctx(&input, &sink);
+            ctx.get(library).feature_set.clone()
+        };
+        let ctx = Ctx {
+            world: self.world,
+            current: None,
+            local: None,
+            tp: self.tp,
+            features: &features,
+            req: &sink,
+        };
+        let scopes = Arc::new(LibraryScopes::build(&ctx, library));
+        self.scopes
+            .lock()
+            .unwrap()
+            .entry(library)
+            .or_insert(scopes)
+            .clone()
+    }
+
+    fn input(&self, library: EId<LibraryElement>) -> LibraryAnalysisInput<'w> {
+        LibraryAnalysisInput {
+            world: self.world,
+            type_provider: self.tp,
+            library,
+            units: Vec::new(),
+            options: self.options,
+            external: None,
+        }
+    }
+
+    fn resolve(&self, fragment: FId<LibraryFragment>) -> Option<Arc<ResolvedUnit>> {
+        let sink = NoopSink;
+        let (library, path) = {
+            let ctx = Ctx {
+                world: self.world,
+                current: None,
+                local: None,
+                tp: self.tp,
+                features: &EMPTY_FEATURES,
+                req: &sink,
+            };
+            let f = ctx.fragment(fragment);
+            (f.library, f.source.path.clone())
+        };
+        let (uri, parsed) = self.sources.get(&path)?.clone();
+        let scopes = self.library_scopes(library);
+        let input = self.input(library);
+        let features = {
+            let ctx = global_ctx(&input, &sink);
+            ctx.get(library).feature_set.clone()
+        };
+        let unit = UnitInput {
+            path,
+            uri,
+            parsed,
+            fragment,
+        };
+        let resolved = resolve_file(&input, &scopes, &features, &unit);
+        if resolved.panic.is_some() {
+            return None;
+        }
+        Some(Arc::new(resolved))
+    }
+}
+
+static EMPTY_FEATURES: std::sync::LazyLock<dartr_element::FeatureSet> =
+    std::sync::LazyLock::new(dartr_element::FeatureSet::default);
+
+impl ExternalUnits for ExternalUnitCache<'_> {
+    fn resolved_unit(&self, fragment: FId<LibraryFragment>) -> Option<Arc<ResolvedUnit>> {
+        let cell = self
+            .units
+            .lock()
+            .unwrap()
+            .entry(fragment)
+            .or_insert_with(|| Arc::new(OnceLock::new()))
+            .clone();
+        cell.get_or_init(|| self.resolve(fragment)).clone()
+    }
+}
+
+/// Dart `computeConstantValue()` of [elements] (variables of the library
+/// of [library] or of other libraries) after the analysis of [library]:
+/// the value, or `None` for an invalid constant (Dart `null`).
+pub fn compute_constant_values(
+    input: &LibraryAnalysisInput<'_>,
+    library: &ResolvedLibrary,
+    elements: &[dartr_element::ElementId],
+) -> IndexMap<dartr_element::ElementId, Option<String>> {
+    static DECLARED_VARIABLES: std::sync::LazyLock<DeclaredVariables> =
+        std::sync::LazyLock::new(DeclaredVariables::new);
+    let engine = ConstantEvaluationEngine::new(
+        input.world,
+        input.type_provider,
+        input.library,
+        &DECLARED_VARIABLES,
+        &library.units,
+        input.external,
+    );
+    *engine.values.borrow_mut() = library.constants.clone();
+    let mut result = IndexMap::new();
+    for &e in elements {
+        let value = catch_unwind(AssertUnwindSafe(|| {
+            engine.compute_constant_value_of(e).map(|v| {
+                let ctx = engine.global_ctx();
+                let ts = dartr_typesystem::TypeSystem::new(ctx);
+                v.display(&ts)
+            })
+        }))
+        .unwrap_or(None);
+        result.insert(e, value);
+    }
+    result
 }

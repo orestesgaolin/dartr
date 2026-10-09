@@ -8,11 +8,14 @@
 
 use std::sync::Arc;
 
+use indexmap::IndexMap;
+
+use dartr_ast_builder::ParsedUnit;
 use dartr_element::{
     Ctx, DirectiveUri, EId, FId, FeatureSet, LibraryElement, LibraryFragment, NoopSink,
 };
 use dartr_resolver::library_analyzer::{
-    LibraryAnalysisInput, ResolvedLibrary, UnitInput, analyze_library,
+    ExternalUnitCache, LibraryAnalysisInput, ResolvedLibrary, UnitInput, analyze_library,
 };
 use dartr_resolver::options::AnalysisOptions;
 
@@ -40,12 +43,14 @@ impl Driver {
         let world = &self.state.world;
         let (library, units) = self.library_units(file)?;
         let tp = dartr_link::types_builder::world_type_provider(world);
+        let external = ExternalUnitCache::new(world, &tp, options, self.unit_sources());
         let input = LibraryAnalysisInput {
             world,
             type_provider: &tp,
             library,
             units,
             options,
+            external: Some(&external),
         };
         let mut library = analyze_library(&input);
         let diagnostics = crate::lints::compute_lints(&input, &library, enabled);
@@ -53,6 +58,19 @@ impl Driver {
             unit.diagnostics.extend(lints);
         }
         Some(library)
+    }
+
+    /// The parsed units of all discovered files by path, with their URIs
+    /// (the sources of an [`ExternalUnitCache`]).
+    pub fn unit_sources(&self) -> IndexMap<Arc<str>, (Arc<str>, Arc<ParsedUnit>)> {
+        self.fs
+            .files()
+            .iter()
+            .filter_map(|f| {
+                let content = f.content.as_ref()?;
+                Some((f.path.clone(), (f.uri_str.clone(), content.parsed.clone())))
+            })
+            .collect()
     }
 
     /// The library element of [file] (the defining unit) and the inputs of
