@@ -82,6 +82,27 @@ impl State<'_> {
 
 /// Dart `TypePropertyResolver.resolve`.
 pub fn resolve(rv: &mut ResolverVisitor<'_>, q: PropertyQuery<'_>) -> ResolutionResult {
+    resolve_impl(rv, q, None)
+}
+
+/// Dart `TypePropertyResolver.resolve` with a token as the
+/// `propertyErrorEntity` (an operator, the `[` of an index expression):
+/// the nullable dereference is reported at [property_error_token];
+/// `q.property_error_entity` is only used to find the parent node when
+/// `q.receiver` is `None`.
+pub fn resolve_at_token(
+    rv: &mut ResolverVisitor<'_>,
+    q: PropertyQuery<'_>,
+    property_error_token: dartr_syntax::TokenId,
+) -> ResolutionResult {
+    resolve_impl(rv, q, Some(property_error_token))
+}
+
+fn resolve_impl(
+    rv: &mut ResolverVisitor<'_>,
+    q: PropertyQuery<'_>,
+    property_error_token: Option<dartr_syntax::TokenId>,
+) -> ResolutionResult {
     let mut s = State {
         receiver: q.receiver,
         name: q.name,
@@ -136,7 +157,21 @@ pub fn resolve(rv: &mut ResolverVisitor<'_>, q: PropertyQuery<'_>) -> Resolution
             None => rv.ast.parent(q.property_error_entity),
         });
         let locatable = nullable_dereference_diagnostic(rv, parent_node, q.name);
-        rv.report_nullable_dereference(locatable, q.property_error_entity, receiver_type);
+        match property_error_token {
+            None => {
+                rv.report_nullable_dereference(locatable, q.property_error_entity, receiver_type)
+            }
+            Some(token) => {
+                // Dart `nullableDereferenceVerifier.report` at a token.
+                let locatable = if ts.dart_eq(receiver_type, ctx.tp.null_type()) {
+                    diag::invalid_use_of_null_value()
+                } else {
+                    locatable
+                };
+                let d = rv.at_token(locatable, token);
+                rv.report(d);
+            }
+        }
         s.reported_getter_error = true;
         s.reported_setter_error = true;
 

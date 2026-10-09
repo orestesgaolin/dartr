@@ -82,6 +82,15 @@ pub fn substitute(ctx: &Ctx<'_>, e: ElemRef, substitution: &MapSubstitution) -> 
         return e;
     }
     let base = base_element(ctx, e);
+    // `GetterElementImpl.substitute`, `SetterElementImpl.substitute`,
+    // `MethodElementImpl.substitute`, `FieldElementImpl.substitute`: the
+    // declaration itself when its type does not reference a type parameter
+    // of the enclosing element.
+    if let ElemRef::Base(_) = e
+        && !has_enclosing_type_parameter_reference(ctx, base)
+    {
+        return e;
+    }
     let combined = match e {
         ElemRef::Base(_) => substitution.clone(),
         ElemRef::Member(_) => self::substitution(ctx, e).and_then(ctx, substitution),
@@ -92,6 +101,20 @@ pub fn substitute(ctx: &Ctx<'_>, e: ElemRef, substitution: &MapSubstitution) -> 
         return make_member(ctx, base, &fresh.1);
     }
     make_member(ctx, base, &combined)
+}
+
+/// `hasEnclosingTypeParameterReference` of a getter, setter, method or
+/// field (computed by the linker, `enclosing_type_parameters_flag.dart`);
+/// `true` for other elements (their `substitute` has no such shortcut).
+fn has_enclosing_type_parameter_reference(ctx: &Ctx<'_>, base: ElementId) -> bool {
+    let flag = match base.tag() {
+        Tag::Getter | Tag::Setter | Tag::Method => {
+            ElementFlags::EXECUTABLE_ELEMENT_HAS_ENCLOSING_TYPE_PARAMETER_REFERENCE
+        }
+        Tag::Field => ElementFlags::FIELD_ELEMENT_HAS_ENCLOSING_TYPE_PARAMETER_REFERENCE,
+        _ => return true,
+    };
+    ctx.element_data(base).is_none_or(|d| d.flags.has(flag))
 }
 
 /// `_SubstitutedTypeParameters(elements, substitution)`: fresh copies of
