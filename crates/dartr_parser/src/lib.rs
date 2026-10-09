@@ -69,8 +69,8 @@ pub mod type_info_impl;
 pub mod util;
 
 pub use analyzer::{AnalyzerParseResult, parse_for_analyzer};
+pub use dartr_syntax::{TokenId, Tokens};
 pub use experimental_features::{ExperimentalFeatures, ExperimentalFlag};
 pub use listener::Listener;
 pub use listener_stack::ListenerStack;
 pub use parser_impl::Parser;
-pub use dartr_syntax::{TokenId, Tokens};

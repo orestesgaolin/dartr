@@ -97,14 +97,22 @@ fn tall_benchmarks() {
 
     let dir = test_dir().join("../benchmark/case");
     if !dir.exists() {
-        eprintln!("skipped: {} not found (run tools/fetch_sdk.sh)", dir.display());
+        eprintln!(
+            "skipped: {} not found (run tools/fetch_sdk.sh)",
+            dir.display()
+        );
         return;
     }
     let filter = std::env::var("FORMAT_TEST_FILTER").ok();
     let mut paths: Vec<PathBuf> = std::fs::read_dir(&dir)
         .unwrap()
         .map(|entry| entry.unwrap().path())
-        .filter(|path| matches!(path.extension().and_then(|e| e.to_str()), Some("unit" | "stmt")))
+        .filter(|path| {
+            matches!(
+                path.extension().and_then(|e| e.to_str()),
+                Some("unit" | "stmt")
+            )
+        })
         .collect();
     paths.sort();
     let mut failures = Vec::new();

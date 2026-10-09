@@ -130,7 +130,10 @@ pub struct DocDirectiveParameter {
     pub expected_format: DocDirectiveParameterFormat,
 }
 
-const fn param(name: &'static str, expected_format: DocDirectiveParameterFormat) -> DocDirectiveParameter {
+const fn param(
+    name: &'static str,
+    expected_format: DocDirectiveParameterFormat,
+) -> DocDirectiveParameter {
     DocDirectiveParameter {
         name,
         expected_format,

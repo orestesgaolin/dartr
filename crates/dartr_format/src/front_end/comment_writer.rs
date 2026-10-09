@@ -281,7 +281,9 @@ impl<'a> CommentSequence<'a> {
 
     /// Whether this sequence contains any comments that require a newline.
     pub fn requires_newline(&self) -> bool {
-        self.comments.iter().any(|comment| comment.requires_newline())
+        self.comments
+            .iter()
+            .any(|comment| comment.requires_newline())
     }
 
     /// The number of newlines between the comment at [comment_index] and the
@@ -386,13 +388,15 @@ impl<'a> CommentSequence<'a> {
             return self;
         }
 
-        let mut lines_between = Vec::with_capacity(self.lines_between.len() + other.lines_between.len() - 1);
+        let mut lines_between =
+            Vec::with_capacity(self.lines_between.len() + other.lines_between.len() - 1);
         // Include all of the newlines from the left sequence, except the
         // last.
         lines_between.extend_from_slice(&self.lines_between[..self.lines_between.len() - 1]);
         // Combine the trailing newline of the left sequence and the leading
         // newline of the right sequence.
-        lines_between.push(self.lines_between[self.lines_between.len() - 1] + other.lines_between[0]);
+        lines_between
+            .push(self.lines_between[self.lines_between.len() - 1] + other.lines_between[0]);
         // Include the remaining newlines of the right sequence.
         lines_between.extend_from_slice(&other.lines_between[1..]);
 

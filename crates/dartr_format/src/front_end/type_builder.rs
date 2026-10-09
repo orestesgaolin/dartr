@@ -5,7 +5,9 @@ use dartr_syntax::TokenId;
 
 use crate::ast_extensions::{first_non_comment_token, has_comma_before, has_non_empty_body};
 use crate::back_end::code_writer::Indent;
-use crate::piece::{ClausePiece, InfixPiece, ListStyle, PieceId, PrimaryTypePiece, TypeBodyType, TypePiece};
+use crate::piece::{
+    ClausePiece, InfixPiece, ListStyle, PieceId, PrimaryTypePiece, TypeBodyType, TypePiece,
+};
 
 use super::ast_node_visitor::AstNodeVisitor;
 use super::delimited_list_builder::DelimitedListBuilder;
@@ -237,20 +239,12 @@ impl<'k> TypeBuilder<'k> {
                 });
 
                 let parameters = v.node_piece(ast[constructor].formal_parameters);
-                let clauses = self
-                    .clauses
-                    .iter()
-                    .map(|clause| clause.build(v))
-                    .collect();
+                let clauses = self.clauses.iter().map(|clause| clause.build(v)).collect();
 
                 let body_piece = build_body(v);
 
                 let piece = v.arena.add(PrimaryTypePiece::new(
-                    header,
-                    parameters,
-                    clauses,
-                    body_piece,
-                    body_type,
+                    header, parameters, clauses, body_piece, body_type,
                 ));
                 v.add(piece);
             } else {
@@ -337,8 +331,7 @@ fn build_normal_block_enum_body(
     }
     builder.right_bracket(v, body.right_bracket, None, body.semicolon);
     let force_split = force_split
-        || v
-            .style
+        || v.style
             .preserve_trailing_comma_before(ast, body.semicolon.unwrap_or(body.right_bracket));
     builder.build_with(v, force_split, true)
 }

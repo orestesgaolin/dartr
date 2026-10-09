@@ -126,7 +126,10 @@ impl<'a> ResolverVisitor<'a> {
         self.flow_analysis.labeled_statement_exit(node);
     }
 
-    pub fn visit_pattern_variable_declaration_statement(&mut self, node: Id<PatternVariableDeclarationStatement>) {
+    pub fn visit_pattern_variable_declaration_statement(
+        &mut self,
+        node: Id<PatternVariableDeclarationStatement>,
+    ) {
         self.check_unreachable_node(node);
         let declaration = self.ast[node].declaration;
         self.visit_node(declaration.raw());
@@ -175,8 +178,10 @@ impl<'a> ResolverVisitor<'a> {
         if !catch_clauses.is_empty() {
             self.flow().try_catch_statement_body_end(body.raw());
             for catch_clause in catch_clauses {
-                let exception = self.catch_parameter_element(self.ast[catch_clause].exception_parameter);
-                let stack_trace = self.catch_parameter_element(self.ast[catch_clause].stack_trace_parameter);
+                let exception =
+                    self.catch_parameter_element(self.ast[catch_clause].exception_parameter);
+                let stack_trace =
+                    self.catch_parameter_element(self.ast[catch_clause].stack_trace_parameter);
                 self.flow()
                     .try_catch_statement_catch_begin(exception, stack_trace);
                 self.visit_node(catch_clause.raw());
@@ -198,7 +203,10 @@ impl<'a> ResolverVisitor<'a> {
 
     /// The element of a catch clause parameter (Dart
     /// `parameter?.declaredFragment?.element as PromotableElementImpl?`).
-    fn catch_parameter_element(&self, parameter: Option<Id<CatchClauseParameter>>) -> Option<EId<PromotableElement>> {
+    fn catch_parameter_element(
+        &self,
+        parameter: Option<Id<CatchClauseParameter>>,
+    ) -> Option<EId<PromotableElement>> {
         let fragment = *self.tables.declared_fragment.get(parameter?)?;
         let element = *self.ctx.fragment_data(fragment)?.element.try_get()?;
         element.cast::<PromotableElement>()
@@ -247,10 +255,16 @@ impl<'a> ResolverVisitor<'a> {
 
     /// Dart `FunctionBodyImpl.resolve(resolver, imposedType)`: resolves the
     /// body [node] and returns its inferred return type.
-    pub fn resolve_function_body(&mut self, node: Id<FunctionBody>, imposed_type: Option<TypeId>) -> TypeId {
+    pub fn resolve_function_body(
+        &mut self,
+        node: Id<FunctionBody>,
+        imposed_type: Option<TypeId>,
+    ) -> TypeId {
         let raw = node.raw();
         match self.ast.kind(raw) {
-            NodeKind::BlockFunctionBody => self.resolve_block_function_body(Id::from_raw(raw), imposed_type),
+            NodeKind::BlockFunctionBody => {
+                self.resolve_block_function_body(Id::from_raw(raw), imposed_type)
+            }
             NodeKind::ExpressionFunctionBody => {
                 self.resolve_expression_function_body(Id::from_raw(raw), imposed_type)
             }
@@ -281,9 +295,14 @@ impl<'a> ResolverVisitor<'a> {
     }
 
     /// Dart `visitBlockFunctionBody(node, imposedType:)`.
-    fn resolve_block_function_body(&mut self, node: Id<BlockFunctionBody>, imposed_type: Option<TypeId>) -> TypeId {
+    fn resolve_block_function_body(
+        &mut self,
+        node: Id<BlockFunctionBody>,
+        imposed_type: Option<TypeId>,
+    ) -> TypeId {
         let (is_async, is_generator) = self.function_body_modifiers(node.raw());
-        let body_context = BodyInferenceContext::new(&self.type_system, is_async, is_generator, imposed_type);
+        let body_context =
+            BodyInferenceContext::new(&self.type_system, is_async, is_generator, imposed_type);
         let old_body_context = self.body_context.replace(body_context);
         self.check_unreachable_node(node);
         self.visit_children(node);
@@ -299,7 +318,8 @@ impl<'a> ResolverVisitor<'a> {
         imposed_type: Option<TypeId>,
     ) -> TypeId {
         let (is_async, is_generator) = self.function_body_modifiers(node.raw());
-        let body_context = BodyInferenceContext::new(&self.type_system, is_async, is_generator, imposed_type);
+        let body_context =
+            BodyInferenceContext::new(&self.type_system, is_async, is_generator, imposed_type);
         let context_type = body_context.context_type.unwrap_or(TypeId::UNKNOWN);
         let old_body_context = self.body_context.replace(body_context);
         self.check_unreachable_node(node);

@@ -14,8 +14,8 @@ use std::sync::{Arc, OnceLock};
 
 use dartr_ast_builder::ParsedUnit;
 use dartr_ast_builder::parse::parse_file;
-use dartr_lints::{RuleContextUnit, lint_library_unfiltered};
 use dartr_diagnostics::{Diagnostic, all_codes};
+use dartr_lints::{RuleContextUnit, lint_library_unfiltered};
 use dartr_parser::ExperimentalFlag;
 use dartr_project::analysis_options::DiagnosticSeverity as OptionsSeverity;
 use dartr_project::package_config::Packages;
@@ -230,7 +230,11 @@ fn load_unit(
 
 /// The diagnostics of one unit: parse diagnostics, [lints], ignore-comment
 /// diagnostics, filtered with the ignore comments.
-fn finish_unit(unit: &LoadedUnit, lints: Vec<Diagnostic>, settings: &FileSettings) -> FileDiagnostics {
+fn finish_unit(
+    unit: &LoadedUnit,
+    lints: Vec<Diagnostic>,
+    settings: &FileSettings,
+) -> FileDiagnostics {
     let parsed = &unit.parsed;
     let tokens = &parsed.ast.tokens;
     let first = parsed.ast.begin_token(dartr_ast::NodeId::from(parsed.unit));
@@ -274,11 +278,16 @@ fn resolve_uri(uri: &str, path: &str, packages: &Packages) -> Option<String> {
     if paths::is_absolute(&decoded) {
         return Some(paths::normalize(&decoded));
     }
-    Some(paths::normalize(&paths::join(paths::dirname(path), &decoded)))
+    Some(paths::normalize(&paths::join(
+        paths::dirname(path),
+        &decoded,
+    )))
 }
 
 fn directives(parsed: &ParsedUnit, path: &str, packages: &Packages) -> Directives {
-    use dartr_ast::{Id, NodeKind, PartDirective, PartOfDirective, SimpleStringLiteral, StringLiteral};
+    use dartr_ast::{
+        Id, NodeKind, PartDirective, PartOfDirective, SimpleStringLiteral, StringLiteral,
+    };
     let ast = &parsed.ast;
     let value = |literal: Id<StringLiteral>| {
         ast.cast::<SimpleStringLiteral>(literal)
@@ -313,10 +322,7 @@ fn directives(parsed: &ParsedUnit, path: &str, packages: &Packages) -> Directive
 
 /// The files of the directory of [path] that have a `part` directive for
 /// [path] (for `part of name;`, which does not name the library file).
-fn libraries_of_named_part(
-    read: ContentReader<'_>,
-    task: &ParseTask,
-) -> Option<String> {
+fn libraries_of_named_part(read: ContentReader<'_>, task: &ParseTask) -> Option<String> {
     let dir = paths::dirname(&task.path);
     let mut names: Vec<String> = std::fs::read_dir(dir)
         .ok()?
@@ -466,9 +472,7 @@ fn run_library(
             None => {
                 // Not included by its library (or no library found).
                 let task = &requested[path];
-                if let Some(unit) =
-                    load_unit(read, path, task.package_version, &task.settings)
-                {
+                if let Some(unit) = load_unit(read, path, task.package_version, &task.settings) {
                     let lints = lint_library_unfiltered(
                         &[RuleContextUnit {
                             parsed: &unit.parsed,
@@ -539,12 +543,7 @@ pub fn diagnostics_with_reader(
             None => {
                 let context = collection
                     .context_for(&root)
-                    .and_then(|c| {
-                        collection
-                            .contexts
-                            .iter()
-                            .position(|x| std::ptr::eq(x, c))
-                    })
+                    .and_then(|c| collection.contexts.iter().position(|x| std::ptr::eq(x, c)))
                     .unwrap_or(context_of[&root]);
                 cache.task(collection, context, &root)
             }

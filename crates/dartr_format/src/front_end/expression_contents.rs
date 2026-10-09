@@ -167,8 +167,7 @@ impl ExpressionContents {
         // one.
         let parent = self.stack.last_mut().unwrap();
         parent.collections += contents.collections;
-        parent.nested_named_arguments +=
-            contents.named_arguments + contents.nested_named_arguments;
+        parent.nested_named_arguments += contents.named_arguments + contents.nested_named_arguments;
 
         contents
     }

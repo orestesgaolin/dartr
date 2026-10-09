@@ -14,19 +14,19 @@
 
 use dartr_ast::*;
 use dartr_element::{
-    ClassFragment, ConstructorFragment, ElementStore, EnumFragment, ExtensionFragment,
+    ClassFragment, ConstructorFragment, EId, ElementStore, EnumFragment, ExtensionFragment,
     ExtensionTypeFragment, FId, FieldFragment, FormalParameterFragment, FragmentFlags, FragmentId,
-    GetterFragment, LibraryElement, LibraryFragment, MixinFragment,
-    NamespaceCombinator, SetterFragment, TopLevelFunctionFragment, TopLevelVariableFragment,
-    TypeAliasFragment, TypeParameterFragment, EId,
+    GetterFragment, LibraryElement, LibraryFragment, MixinFragment, NamespaceCombinator,
+    SetterFragment, TopLevelFunctionFragment, TopLevelVariableFragment, TypeAliasFragment,
+    TypeParameterFragment,
 };
 use dartr_syntax::TokenId;
 use std::sync::Arc;
 
 use crate::ast_util::{
-    class_body_members, class_name_part_name, class_name_part_type_parameters,
-    enum_body_constants, enum_body_members, function_is_getter, function_is_setter,
-    method_is_getter, method_is_setter, offset_if_not_empty,
+    class_body_members, class_name_part_name, class_name_part_type_parameters, enum_body_constants,
+    enum_body_members, function_is_getter, function_is_setter, method_is_getter, method_is_setter,
+    offset_if_not_empty,
 };
 
 /// Dart `_InfoNode` data shared by all declarations.
@@ -259,7 +259,9 @@ impl<'a> InfoBuilder<'a> {
                 let n = ast.get(n);
                 info.imports.push(InfoImport {
                     import_keyword_offset: ast.tokens.offset(n.import_keyword),
-                    prefix_offset: n.prefix.and_then(|p| offset_if_not_empty(ast, Some(ast.get(p).token))),
+                    prefix_offset: n
+                        .prefix
+                        .and_then(|p| offset_if_not_empty(ast, Some(ast.get(p).token))),
                     combinators: b.combinators(n.combinators),
                 });
             } else if let Some(n) = ast.cast::<ExportDirective>(d) {
@@ -271,9 +273,10 @@ impl<'a> InfoBuilder<'a> {
             } else if let Some(n) = ast.cast::<PartDirective>(d) {
                 info.parts.push(ast.tokens.offset(ast.get(n).part_keyword));
             } else if let Some(n) = ast.cast::<LibraryDirective>(d)
-                && first_library_directive.is_none() {
-                    first_library_directive = Some(n);
-                }
+                && first_library_directive.is_none()
+            {
+                first_library_directive = Some(n);
+            }
         }
         if let Some(name) = first_library_directive.and_then(|l| ast.get(l).name) {
             info.library_name_offset = ast.offset(name) as i32;
@@ -380,10 +383,10 @@ impl<'a> InfoBuilder<'a> {
                         name_offset: offset_if_not_empty(ast, name),
                         documentation_comment: self.doc(comment),
                     },
-                    type_parameters: self.type_parameters(
-                        suffix.and_then(|s| ast.get(s).type_parameters),
-                    ),
-                    parameters: self.formal_parameters(suffix.map(|s| ast.get(s).formal_parameters)),
+                    type_parameters: self
+                        .type_parameters(suffix.and_then(|s| ast.get(s).type_parameters)),
+                    parameters: self
+                        .formal_parameters(suffix.map(|s| ast.get(s).formal_parameters)),
                 }
             })
             .collect()
@@ -413,7 +416,9 @@ impl<'a> InfoBuilder<'a> {
     fn code_offset_for_variable(&self, node: Id<VariableDeclaration>) -> u32 {
         let ast = self.ast;
         let list = ast.parent(node).expect("variable list");
-        let list_id = ast.cast::<VariableDeclarationList>(list).expect("variable list");
+        let list_id = ast
+            .cast::<VariableDeclarationList>(list)
+            .expect("variable list");
         if ast.list(ast.get(list_id).variables).first() == Some(&node) {
             ast.offset(ast.parent(list).expect("declaration"))
         } else {
@@ -564,7 +569,11 @@ impl<'a> InfoBuilder<'a> {
             factory_keyword_offset: None,
             type_name_offset: Some(ast.tokens.offset(n.type_name)),
             period_offset: constructor_name.map(|c| ast.tokens.offset(c.period)),
-            name_end: Some(ast.tokens.get(constructor_name.map(|c| c.name).unwrap_or(n.type_name)).end()),
+            name_end: Some(
+                ast.tokens
+                    .get(constructor_name.map(|c| c.name).unwrap_or(n.type_name))
+                    .end(),
+            ),
             this_keyword_offset: body.map(|b| ast.tokens.offset(ast.get(b).this_keyword)),
         }
     }
@@ -575,18 +584,32 @@ impl<'a> InfoBuilder<'a> {
 pub fn formal_parameter_parts(
     ast: &Ast,
     p: Id<FormalParameter>,
-) -> (Option<TokenId>, Option<Id<Comment>>, Option<Id<FunctionTypedFormalParameterSuffix>>) {
+) -> (
+    Option<TokenId>,
+    Option<Id<Comment>>,
+    Option<Id<FunctionTypedFormalParameterSuffix>>,
+) {
     let p = p.raw();
     if let Some(r) = ast.cast::<RegularFormalParameter>(p) {
         let r = ast.get(r);
         (r.name, r.documentation_comment, r.function_typed_suffix)
     } else if let Some(f) = ast.cast::<FieldFormalParameter>(p) {
         let f = ast.get(f);
-        (Some(f.name), f.documentation_comment, f.function_typed_suffix)
+        (
+            Some(f.name),
+            f.documentation_comment,
+            f.function_typed_suffix,
+        )
     } else {
-        let s = ast.cast::<SuperFormalParameter>(p).expect("formal parameter");
+        let s = ast
+            .cast::<SuperFormalParameter>(p)
+            .expect("formal parameter");
         let s = ast.get(s);
-        (Some(s.name), s.documentation_comment, s.function_typed_suffix)
+        (
+            Some(s.name),
+            s.documentation_comment,
+            s.function_typed_suffix,
+        )
     }
 }
 
@@ -614,7 +637,12 @@ impl InformativeDataApplier<'_> {
     }
 
     /// Dart `_applyFromInfo`.
-    pub fn apply(&mut self, library: EId<LibraryElement>, unit: FId<LibraryFragment>, info: &InfoUnit) {
+    pub fn apply(
+        &mut self,
+        library: EId<LibraryElement>,
+        unit: FId<LibraryFragment>,
+        info: &InfoUnit,
+    ) {
         let is_first = self.store.get(library).first_fragment().raw() == unit.raw();
         if is_first {
             let l = self.store.get_mut(library);
@@ -667,14 +695,23 @@ impl InformativeDataApplier<'_> {
         let variables: Vec<FId<TopLevelVariableFragment>> = u.variables.clone();
         let type_aliases: Vec<FId<TypeAliasFragment>> = u.type_aliases.clone();
 
-        self.apply_accessors(&getters, &setters, &info.top_level_getters, &info.top_level_setters);
+        self.apply_accessors(
+            &getters,
+            &setters,
+            &info.top_level_getters,
+            &info.top_level_setters,
+        );
         let has = |s: &ElementStore, f: FragmentId, flag: FragmentFlags| {
             s.fragment_data(f).is_some_and(|d| d.flags.has(flag))
         };
-        let (mixin_apps, plain): (Vec<FId<ClassFragment>>, Vec<FId<ClassFragment>>) = classes
-            .iter()
-            .copied()
-            .partition(|c| has(self.store, c.raw(), FragmentFlags::CLASS_FRAGMENT_IS_MIXIN_APPLICATION));
+        let (mixin_apps, plain): (Vec<FId<ClassFragment>>, Vec<FId<ClassFragment>>) =
+            classes.iter().copied().partition(|c| {
+                has(
+                    self.store,
+                    c.raw(),
+                    FragmentFlags::CLASS_FRAGMENT_IS_MIXIN_APPLICATION,
+                )
+            });
         pairs(plain, &info.class_declarations, |f, i| {
             self.apply_instance(f.raw(), i, true)
         });
@@ -683,7 +720,9 @@ impl InformativeDataApplier<'_> {
             let tps = self.store.fragment(f).type_params.clone();
             self.apply_type_parameters(&tps, &i.type_parameters);
         });
-        pairs(enums, &info.enums, |f, i| self.apply_instance(f.raw(), i, true));
+        pairs(enums, &info.enums, |f, i| {
+            self.apply_instance(f.raw(), i, true)
+        });
         pairs(extensions, &info.extensions, |f, i| {
             self.apply_instance(f.raw(), i, false)
         });
@@ -792,10 +831,16 @@ impl InformativeDataApplier<'_> {
             .collect();
         pairs(fs, &info.fields, |x, i| self.set_node(x.raw(), i));
         self.apply_accessors(&getters, &setters, &info.getters, &info.setters);
-        pairs(methods, &info.methods, |m, i| self.apply_executable(m.raw(), i));
+        pairs(methods, &info.methods, |m, i| {
+            self.apply_executable(m.raw(), i)
+        });
     }
 
-    fn apply_type_parameters(&mut self, list: &[FId<TypeParameterFragment>], info: &[InfoTypeParameter]) {
+    fn apply_type_parameters(
+        &mut self,
+        list: &[FId<TypeParameterFragment>],
+        info: &[InfoTypeParameter],
+    ) {
         pairs(list.iter().copied(), info, |f, i| {
             let d = self.store.fragment_mut(f);
             d.code_offset = Some(i.node.code_offset);
@@ -806,7 +851,11 @@ impl InformativeDataApplier<'_> {
     }
 
     /// Dart `_applyToFormalParameters`.
-    fn apply_formal_parameters(&mut self, list: &[FId<FormalParameterFragment>], info: &[InfoFormalParameter]) {
+    fn apply_formal_parameters(
+        &mut self,
+        list: &[FId<FormalParameterFragment>],
+        info: &[InfoFormalParameter],
+    ) {
         let origin = FragmentFlags::FORMAL_PARAMETER_FRAGMENT_IS_ORIGIN_DECLARATION;
         let ps: Vec<FId<FormalParameterFragment>> = list
             .iter()
@@ -830,7 +879,10 @@ fn apply_combinators(list: &mut [NamespaceCombinator], info: &[InfoCombinator]) 
 }
 
 /// The constructors of an interface fragment.
-pub fn interface_constructors(store: &ElementStore, f: FragmentId) -> Vec<FId<ConstructorFragment>> {
+pub fn interface_constructors(
+    store: &ElementStore,
+    f: FragmentId,
+) -> Vec<FId<ConstructorFragment>> {
     use dartr_element::Tag;
     let i = f.index();
     let fr = &store.fragments;
@@ -844,7 +896,10 @@ pub fn interface_constructors(store: &ElementStore, f: FragmentId) -> Vec<FId<Co
 }
 
 /// `FragmentImpl` data of any fragment, mutable.
-pub fn fragment_data_mut(store: &mut ElementStore, id: FragmentId) -> &mut dartr_element::FragmentData {
+pub fn fragment_data_mut(
+    store: &mut ElementStore,
+    id: FragmentId,
+) -> &mut dartr_element::FragmentData {
     use dartr_element::Tag;
     let i = id.index();
     let f = &mut store.fragments;
@@ -869,9 +924,10 @@ pub fn fragment_data_mut(store: &mut ElementStore, id: FragmentId) -> &mut dartr
         Tag::Prefix => co(f.prefixes.get_mut(i)),
         Tag::Library => co(f.units.get_mut(i)),
         Tag::GenericFunctionType => co(f.generic_function_types.get_mut(i)),
-        Tag::LocalVariable | Tag::PatternVariable | Tag::BindPatternVariable | Tag::JoinPatternVariable => {
-            co(f.locals.get_mut(i))
-        }
+        Tag::LocalVariable
+        | Tag::PatternVariable
+        | Tag::BindPatternVariable
+        | Tag::JoinPatternVariable => co(f.locals.get_mut(i)),
         Tag::LocalFunction => co(f.local_functions.get_mut(i)),
         Tag::Label => co(f.labels.get_mut(i)),
         Tag::MultiplyDefined => co(f.multiply_defined.get_mut(i)),

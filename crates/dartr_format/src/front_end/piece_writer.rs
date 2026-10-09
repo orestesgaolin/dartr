@@ -197,7 +197,12 @@ impl<'a> AstNodeVisitor<'a> {
                 self.writer.pending_space = false;
             }
 
-            self.write_text(code, ast.tokens.lexeme(token), ast.tokens.offset(token) as usize, false);
+            self.write_text(
+                code,
+                ast.tokens.lexeme(token),
+                ast.tokens.offset(token) as usize,
+                false,
+            );
         } else {
             self.begin_code_token(token, soft);
         }
@@ -217,7 +222,12 @@ impl<'a> AstNodeVisitor<'a> {
             leading,
             self.style.use_soft_overflow() && soft,
         ));
-        self.write_text(piece, ast.tokens.lexeme(token), ast.tokens.offset(token) as usize, true);
+        self.write_text(
+            piece,
+            ast.tokens.lexeme(token),
+            ast.tokens.offset(token) as usize,
+            true,
+        );
 
         // Remember it so we can attach hanging comments later.
         self.writer.previous_code = Some(piece);
@@ -394,9 +404,7 @@ impl<'a> AstNodeVisitor<'a> {
             let next_token = ast.tokens.next(token);
             if ast.tokens.lexeme(next_token) == "," {
                 let comma = self.make_code_piece(next_token, None, soft);
-                return self
-                    .arena
-                    .add(AdjacentPiece::new(vec![token_piece, comma]));
+                return self.arena.add(AdjacentPiece::new(vec![token_piece, comma]));
             }
         }
 
@@ -547,7 +555,12 @@ impl<'a> AstNodeVisitor<'a> {
             leading,
             self.style.use_soft_overflow() && soft,
         ));
-        self.write_text(piece, ast.tokens.lexeme(token), ast.tokens.offset(token) as usize, false);
+        self.write_text(
+            piece,
+            ast.tokens.lexeme(token),
+            ast.tokens.offset(token) as usize,
+            false,
+        );
 
         // Remember it so we can attach hanging comments later.
         self.writer.previous_code = Some(piece);
@@ -723,7 +736,9 @@ impl<'a> AstNodeVisitor<'a> {
         // would cause the start and ends to cross. Prevent that and instead
         // push the end marker to the beginning of the next token where the
         // start marker will also be pushed.
-        if relative_end == length as i64 && Some(selection_end) == self.writer.source.selection_start {
+        if relative_end == length as i64
+            && Some(selection_end) == self.writer.source.selection_start
+        {
             return None;
         }
 

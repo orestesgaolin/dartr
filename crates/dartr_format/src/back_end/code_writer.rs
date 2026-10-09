@@ -319,10 +319,8 @@ impl<'p, 'c> CodeWriter<'p, 'c> {
             ));
         } else {
             // Regular indentation, so just increase the indent.
-            self.indent_stack.push(IndentLevel::v_3_dot_7(
-                parent_indent + indent.spaces(),
-                0,
-            ));
+            self.indent_stack
+                .push(IndentLevel::v_3_dot_7(parent_indent + indent.spaces(), 0));
         }
     }
 
@@ -451,7 +449,8 @@ impl<'p, 'c> CodeWriter<'p, 'c> {
         self.pending_indent = 0;
         self.flush_whitespace();
 
-        self.solution.merge_subtree(solution.overflow, solution.cost);
+        self.solution
+            .merge_subtree(solution.overflow, solution.cost);
         self.code.group(Rc::clone(&solution.code));
     }
 
@@ -498,7 +497,8 @@ impl<'p, 'c> CodeWriter<'p, 'c> {
         // Now that we know the child's shape, see if the parent permits it.
         if let Some(parent) = self.piece_formats.last_mut() {
             let parent_state = self.solution.piece_state(pieces, parent.piece);
-            let allowed_shapes = pieces.allowed_child_shapes(parent.piece, parent_state, child.piece);
+            let allowed_shapes =
+                pieces.allowed_child_shapes(parent.piece, parent_state, child.piece);
 
             let invalid = if self.is_3_dot_7 {
                 // If the child must be inline, then invalidate because we know
@@ -602,7 +602,8 @@ impl<'p, 'c> CodeWriter<'p, 'c> {
         if !self.current_line_pieces.is_empty()
             && (self.column > self.page_width || !self.solution.is_valid())
         {
-            self.expand_pieces.extend_from_slice(&self.current_line_pieces);
+            self.expand_pieces
+                .extend_from_slice(&self.current_line_pieces);
             self.found_expand_line = true;
         } else {
             // This line was OK, so we don't need to expand the pieces on it.

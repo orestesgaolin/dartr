@@ -264,7 +264,8 @@ fn nullable_dereference_diagnostic(
 /// Dart `_lookupExtension`.
 fn lookup_extension(rv: &mut ResolverVisitor<'_>, s: &mut State<'_>, ty: TypeId) {
     let getter_name = Name::for_library(&rv.ctx, Some(rv.unit.library), s.name);
-    let result = extension_member_resolver::find_extension(rv, ty, s.name_error_entity, &getter_name);
+    let result =
+        extension_member_resolver::find_extension(rv, ty, s.name_error_entity, &getter_name);
     s.reported_getter_error = result.is_ambiguous;
     s.reported_setter_error = result.is_ambiguous;
     if result.getter.is_some() {

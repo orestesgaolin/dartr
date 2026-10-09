@@ -33,7 +33,10 @@ pub fn is_instance_member(ctx: &Ctx<'_>, e: ElementId) -> bool {
 }
 
 /// Dart `LexicalLookup.resolveGetter`.
-pub fn resolve_getter(ctx: &Ctx<'_>, scope_result: ScopeLookupResult) -> Option<LexicalLookupResult> {
+pub fn resolve_getter(
+    ctx: &Ctx<'_>,
+    scope_result: ScopeLookupResult,
+) -> Option<LexicalLookupResult> {
     let scope_getter = scope_result.getter;
     let scope_setter = scope_result.setter;
     if scope_getter.is_some() || scope_setter.is_some() {
@@ -56,7 +59,10 @@ pub fn resolve_getter(ctx: &Ctx<'_>, scope_result: ScopeLookupResult) -> Option<
 }
 
 /// Dart `LexicalLookup.resolveSetter`.
-pub fn resolve_setter(ctx: &Ctx<'_>, scope_result: ScopeLookupResult) -> Option<LexicalLookupResult> {
+pub fn resolve_setter(
+    ctx: &Ctx<'_>,
+    scope_result: ScopeLookupResult,
+) -> Option<LexicalLookupResult> {
     let scope_getter = scope_result.getter;
     let scope_setter = scope_result.setter;
     if scope_getter.is_some() || scope_setter.is_some() {

@@ -211,7 +211,10 @@ impl SourceTest {
         });
         let generation = std::sync::Arc::new(dartr_element::Generation::new(0));
         let mut driver = Driver::new(FileSystemState::new(source_factory, config_for), generation);
-        let file_ids: Vec<_> = paths.iter().map(|p| driver.fs.get_file_for_path(p)).collect();
+        let file_ids: Vec<_> = paths
+            .iter()
+            .map(|p| driver.fs.get_file_for_path(p))
+            .collect();
         driver.fs.discover();
         driver.link_libraries(&file_ids);
         let test_uri = driver.fs.file(*file_ids.last().unwrap()).uri_str.clone();

@@ -72,9 +72,17 @@ pub fn compute_variances(
                 if let Some(n) = ast.cast::<ClassTypeAlias>(d) {
                     vb.type_parameters(lib as u32, unit as u32, ast.get(n).type_parameters);
                 } else if let Some(n) = ast.cast::<ClassDeclaration>(d) {
-                    vb.type_parameters(lib as u32, unit as u32, class_name_part_type_parameters(ast, ast.get(n).name_part));
+                    vb.type_parameters(
+                        lib as u32,
+                        unit as u32,
+                        class_name_part_type_parameters(ast, ast.get(n).name_part),
+                    );
                 } else if let Some(n) = ast.cast::<EnumDeclaration>(d) {
-                    vb.type_parameters(lib as u32, unit as u32, class_name_part_type_parameters(ast, ast.get(n).name_part));
+                    vb.type_parameters(
+                        lib as u32,
+                        unit as u32,
+                        class_name_part_type_parameters(ast, ast.get(n).name_part),
+                    );
                 } else if ast.is::<FunctionTypeAlias>(d) {
                     vb.function_type_alias(key(d));
                 } else if ast.is::<GenericTypeAlias>(d) {
@@ -135,12 +143,17 @@ impl VarianceBuilder<'_, '_, '_> {
                         return Variance::Unrelated;
                     };
                     let parameters: Vec<EId<TypeParameterElement>> = match element.tag() {
-                        Tag::Class | Tag::Enum | Tag::Mixin | Tag::ExtensionType => {
-                            self.ctx.instance(EId::from_raw(element)).type_params.clone()
-                        }
+                        Tag::Class | Tag::Enum | Tag::Mixin | Tag::ExtensionType => self
+                            .ctx
+                            .instance(EId::from_raw(element))
+                            .type_params
+                            .clone(),
                         Tag::TypeAlias => {
                             self.type_alias_element(EId::from_raw(element));
-                            self.ctx.get(EId::<TypeAliasElement>::from_raw(element)).type_params.clone()
+                            self.ctx
+                                .get(EId::<TypeAliasElement>::from_raw(element))
+                                .type_params
+                                .clone()
                         }
                         _ => return Variance::Unrelated,
                     };
@@ -159,13 +172,21 @@ impl VarianceBuilder<'_, '_, '_> {
                     ..
                 } => {
                     let params: Vec<Option<LType>> = params.iter().map(|p| Some(p.ty)).collect();
-                    self.compute_function_type(variable, Some(return_type), Some(&type_params), &params)
+                    self.compute_function_type(
+                        variable,
+                        Some(return_type),
+                        Some(&type_params),
+                        &params,
+                    )
                 }
                 BuilderKind::Record {
                     positional, named, ..
                 } => {
                     let mut result = Variance::Unrelated;
-                    for t in positional.into_iter().chain(named.into_iter().map(|(_, t)| t)) {
+                    for t in positional
+                        .into_iter()
+                        .chain(named.into_iter().map(|(_, t)| t))
+                    {
                         result = variance_meet(result, self.compute(variable, Some(t)));
                     }
                     result
@@ -203,7 +224,13 @@ impl VarianceBuilder<'_, '_, '_> {
     /// `FunctionTypeBuilder.getParameters` gives them; a function-typed
     /// parameter is computed with its own function type (here: its
     /// variance directly).
-    fn parameter_variances(&mut self, variable: EId<TypeParameterElement>, lib: u32, unit: u32, list: Id<FormalParameterList>) -> Variance {
+    fn parameter_variances(
+        &mut self,
+        variable: EId<TypeParameterElement>,
+        lib: u32,
+        unit: u32,
+        list: Id<FormalParameterList>,
+    ) -> Variance {
         let ast = unit_ast(self.lk, lib, unit);
         let mut result = Variance::Unrelated;
         for &p in ast.list(ast.get(list).parameters) {
@@ -212,12 +239,17 @@ impl VarianceBuilder<'_, '_, '_> {
             let v = match suffix {
                 Some(s) => {
                     let s = ast.get(s);
-                    let ret = type_node.and_then(|t| self.tr.node_type((lib, unit, t.raw()))).or(Some(LType::Built(TypeId::DYNAMIC)));
+                    let ret = type_node
+                        .and_then(|t| self.tr.node_type((lib, unit, t.raw())))
+                        .or(Some(LType::Built(TypeId::DYNAMIC)));
                     let tps: Vec<EId<TypeParameterElement>> = match s.type_parameters {
                         Some(l) => ast
                             .list(ast.get(l).type_parameters)
                             .iter()
-                            .filter_map(|tp| declared_element(self.lk, (lib, unit, tp.raw())).and_then(|e| e.cast()))
+                            .filter_map(|tp| {
+                                declared_element(self.lk, (lib, unit, tp.raw()))
+                                    .and_then(|e| e.cast())
+                            })
                             .collect(),
                         None => Vec::new(),
                     };
@@ -233,7 +265,9 @@ impl VarianceBuilder<'_, '_, '_> {
                     variance_meet(r, inner)
                 }
                 None => {
-                    let t = type_node.and_then(|t| self.tr.node_type((lib, unit, t.raw()))).or(Some(LType::Built(TypeId::DYNAMIC)));
+                    let t = type_node
+                        .and_then(|t| self.tr.node_type((lib, unit, t.raw())))
+                        .or(Some(LType::Built(TypeId::DYNAMIC)));
                     self.compute(variable, t)
                 }
             };
@@ -247,13 +281,16 @@ impl VarianceBuilder<'_, '_, '_> {
         if let Some(f) = ast.cast::<FunctionTypeAlias>(key.2) {
             ast.get(f).type_parameters
         } else {
-            ast.get(ast.cast::<GenericTypeAlias>(key.2).unwrap()).type_parameters
+            ast.get(ast.cast::<GenericTypeAlias>(key.2).unwrap())
+                .type_parameters
         }
     }
 
     /// Dart `_functionTypeAlias`.
     fn function_type_alias(&mut self, key: NodeKey) {
-        let Some(list) = self.type_alias_params(key) else { return };
+        let Some(list) = self.type_alias_params(key) else {
+            return;
+        };
         let ast = unit_ast(self.lk, key.0, key.1);
         let params: Vec<Id<TypeParameter>> = ast.list(ast.get(list).type_parameters).to_vec();
         if self.visit.contains(&key) {
@@ -268,7 +305,8 @@ impl VarianceBuilder<'_, '_, '_> {
         self.visit.insert(key);
         let f = ast.get(ast.cast::<FunctionTypeAlias>(key.2).unwrap());
         for p in params {
-            let Some(e) = declared_element(self.lk, (key.0, key.1, p.raw())).and_then(|e| e.cast()) else {
+            let Some(e) = declared_element(self.lk, (key.0, key.1, p.raw())).and_then(|e| e.cast())
+            else {
                 continue;
             };
             let ret = f
@@ -284,7 +322,9 @@ impl VarianceBuilder<'_, '_, '_> {
 
     /// Dart `_genericTypeAlias`.
     fn generic_type_alias(&mut self, key: NodeKey) {
-        let Some(list) = self.type_alias_params(key) else { return };
+        let Some(list) = self.type_alias_params(key) else {
+            return;
+        };
         let ast = unit_ast(self.lk, key.0, key.1);
         let params: Vec<Id<TypeParameter>> = ast.list(ast.get(list).type_parameters).to_vec();
         if self.visit.contains(&key) {
@@ -305,7 +345,8 @@ impl VarianceBuilder<'_, '_, '_> {
         }
         self.visit.insert(key);
         for p in params {
-            let Some(e) = declared_element(self.lk, (key.0, key.1, p.raw())).and_then(|e| e.cast()) else {
+            let Some(e) = declared_element(self.lk, (key.0, key.1, p.raw())).and_then(|e| e.cast())
+            else {
                 continue;
             };
             let v = self.compute(e, t);
@@ -410,7 +451,11 @@ struct SbWalker<'w, 'l, 'a> {
 }
 
 /// Dart `_TypeCollector`.
-fn collect_parameter_types(ast: &Ast, list: Id<FormalParameterList>, out: &mut Vec<Id<TypeAnnotation>>) {
+fn collect_parameter_types(
+    ast: &Ast,
+    list: Id<FormalParameterList>,
+    out: &mut Vec<Id<TypeAnnotation>>,
+) {
     for &p in ast.list(ast.get(list).parameters) {
         if ast.is::<FieldFormalParameter>(p.raw()) || ast.is::<SuperFormalParameter>(p.raw()) {
             continue;
@@ -423,7 +468,11 @@ fn collect_parameter_types(ast: &Ast, list: Id<FormalParameterList>, out: &mut V
     }
 }
 
-fn collect_type_parameter_bounds(ast: &Ast, list: Option<Id<TypeParameterList>>, out: &mut Vec<Id<TypeAnnotation>>) {
+fn collect_type_parameter_bounds(
+    ast: &Ast,
+    list: Option<Id<TypeParameterList>>,
+    out: &mut Vec<Id<TypeAnnotation>>,
+) {
     if let Some(list) = list {
         for &tp in ast.list(ast.get(list).type_parameters) {
             out.extend(ast.get(tp).bound);
@@ -442,16 +491,26 @@ impl SbWalker<'_, '_, '_> {
         let key = (lib as u32, unit as u32, node);
         let ast = unit_ast(self.lk, key.0, key.1);
         let tps = |list: Option<Id<TypeParameterList>>| -> Vec<Id<TypeParameter>> {
-            list.map(|l| ast.list(ast.get(l).type_parameters).to_vec()).unwrap_or_default()
+            list.map(|l| ast.list(ast.get(l).type_parameters).to_vec())
+                .unwrap_or_default()
         };
         let (type_parameters, rhs_types) = if let Some(n) = ast.cast::<ClassDeclaration>(node) {
-            (tps(class_name_part_type_parameters(ast, ast.get(n).name_part)), Vec::new())
+            (
+                tps(class_name_part_type_parameters(ast, ast.get(n).name_part)),
+                Vec::new(),
+            )
         } else if let Some(n) = ast.cast::<ClassTypeAlias>(node) {
             (tps(ast.get(n).type_parameters), Vec::new())
         } else if let Some(n) = ast.cast::<EnumDeclaration>(node) {
-            (tps(class_name_part_type_parameters(ast, ast.get(n).name_part)), Vec::new())
+            (
+                tps(class_name_part_type_parameters(ast, ast.get(n).name_part)),
+                Vec::new(),
+            )
         } else if let Some(n) = ast.cast::<ExtensionTypeDeclaration>(node) {
-            (tps(class_name_part_type_parameters(ast, ast.get(n).name_part)), Vec::new())
+            (
+                tps(class_name_part_type_parameters(ast, ast.get(n).name_part)),
+                Vec::new(),
+            )
         } else if let Some(n) = ast.cast::<FunctionTypeAlias>(node) {
             let n = ast.get(n);
             let mut rhs = Vec::new();
@@ -527,11 +586,23 @@ impl SbWalker<'_, '_, '_> {
     }
 
     /// Dart `_visitType`.
-    fn visit_type(&mut self, deps: &mut Vec<usize>, lib: u32, unit: u32, t: Id<TypeAnnotation>, allow_type_parameters: bool) -> bool {
+    fn visit_type(
+        &mut self,
+        deps: &mut Vec<usize>,
+        lib: u32,
+        unit: u32,
+        t: Id<TypeAnnotation>,
+        allow_type_parameters: bool,
+    ) -> bool {
         let ast = unit_ast(self.lk, lib, unit);
         let raw = t.raw();
         if let Some(n) = ast.cast::<NamedTypeNode>(raw) {
-            let element = self.tr.node_elements.get(&(lib, unit, raw)).cloned().flatten();
+            let element = self
+                .tr
+                .node_elements
+                .get(&(lib, unit, raw))
+                .cloned()
+                .flatten();
             let element = match element {
                 Some(ScopeElement::Element(e)) => Some(e),
                 _ => None,
@@ -546,7 +617,11 @@ impl SbWalker<'_, '_, '_> {
                         Some(&node) => deps.push(node),
                         None => {
                             return match e.tag() {
-                                Tag::Class | Tag::Enum | Tag::Mixin | Tag::ExtensionType | Tag::Extension => self
+                                Tag::Class
+                                | Tag::Enum
+                                | Tag::Mixin
+                                | Tag::ExtensionType
+                                | Tag::Extension => self
                                     .ctx
                                     .element_data(e)
                                     .unwrap()
@@ -588,9 +663,17 @@ impl SbWalker<'_, '_, '_> {
         }
         if let Some(r) = ast.cast::<RecordTypeAnnotation>(raw) {
             let r = ast.get(r);
-            let mut types: Vec<Id<TypeAnnotation>> = ast.list(r.positional_fields).iter().map(|&f| ast.get(f).type_).collect();
+            let mut types: Vec<Id<TypeAnnotation>> = ast
+                .list(r.positional_fields)
+                .iter()
+                .map(|&f| ast.get(f).type_)
+                .collect();
             if let Some(nf) = r.named_fields {
-                types.extend(ast.list(ast.get(nf).fields).iter().map(|&f| ast.get(f).type_));
+                types.extend(
+                    ast.list(ast.get(nf).fields)
+                        .iter()
+                        .map(|&f| ast.get(f).type_),
+                );
             }
             for t in types {
                 if !self.visit_type(deps, lib, unit, t, allow_type_parameters) {
@@ -750,7 +833,8 @@ impl Finder<'_, '_, '_> {
             if let Some(e) = element
                 && e.store() == self.lk.core.store.id
                 && let Some(data) = self.lk.core.store.element_data(e)
-                && let Some(&(l, u, type_node)) = self.lk.core.fragment_nodes.get(&data.first_fragment)
+                && let Some(&(l, u, type_node)) =
+                    self.lk.core.fragment_nodes.get(&data.first_fragment)
             {
                 let key = (l as u32, u as u32, type_node);
                 if key == self.self_ {
@@ -760,13 +844,19 @@ impl Finder<'_, '_, '_> {
                 let tast = unit_ast(self.lk, key.0, key.1);
                 if let Some(c) = tast.cast::<ClassDeclaration>(type_node) {
                     if self.visited.insert(key) {
-                        self.type_parameter_list(key.0, key.1, class_name_part_type_parameters(tast, tast.get(c).name_part));
+                        self.type_parameter_list(
+                            key.0,
+                            key.1,
+                            class_name_part_type_parameters(tast, tast.get(c).name_part),
+                        );
                     }
                 } else if let Some(c) = tast.cast::<ClassTypeAlias>(type_node) {
                     if self.visited.insert(key) {
                         self.type_parameter_list(key.0, key.1, tast.get(c).type_parameters);
                     }
-                } else if tast.is::<FunctionTypeAlias>(type_node) || tast.is::<GenericTypeAlias>(type_node) {
+                } else if tast.is::<FunctionTypeAlias>(type_node)
+                    || tast.is::<GenericTypeAlias>(type_node)
+                {
                     if self.visited.insert(key) {
                         self.type_alias(key);
                     }
@@ -788,9 +878,17 @@ impl Finder<'_, '_, '_> {
             self.visit(lib, unit, g.return_type);
         } else if let Some(r) = ast.cast::<RecordTypeAnnotation>(raw) {
             let r = ast.get(r);
-            let mut types: Vec<Id<TypeAnnotation>> = ast.list(r.positional_fields).iter().map(|&f| ast.get(f).type_).collect();
+            let mut types: Vec<Id<TypeAnnotation>> = ast
+                .list(r.positional_fields)
+                .iter()
+                .map(|&f| ast.get(f).type_)
+                .collect();
             if let Some(nf) = r.named_fields {
-                types.extend(ast.list(ast.get(nf).fields).iter().map(|&f| ast.get(f).type_));
+                types.extend(
+                    ast.list(ast.get(nf).fields)
+                        .iter()
+                        .map(|&f| ast.get(f).type_),
+                );
             }
             for t in types {
                 self.visit(lib, unit, Some(t));

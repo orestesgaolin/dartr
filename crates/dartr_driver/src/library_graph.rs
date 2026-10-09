@@ -245,8 +245,10 @@ impl LibraryWalker<'_> {
                 .collect();
             package_paths.sort();
             manifest.add_string_list(&package_paths);
-            let mut sorted_files: Vec<FileId> =
-                libraries.iter().flat_map(|&l| fs.library_files(l)).collect();
+            let mut sorted_files: Vec<FileId> = libraries
+                .iter()
+                .flat_map(|&l| fs.library_files(l))
+                .collect();
             sorted_files.sort_by(|a, b| fs.file(*a).path.cmp(&fs.file(*b).path));
             for f in sorted_files {
                 let file = fs.file(f);

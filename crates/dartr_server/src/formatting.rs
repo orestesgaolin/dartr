@@ -158,7 +158,9 @@ pub fn should_trigger_formatting(
             // Directives
             LibraryDirective, ImportDirective, ExportDirective, PartDirective,
             PartOfDirective)
-        .or_else(|| token_of!(node, semicolon: ExpressionStatement, ExpressionFunctionBody).flatten()),
+        .or_else(|| {
+            token_of!(node, semicolon: ExpressionStatement, ExpressionFunctionBody).flatten()
+        }),
         // Only consider closing braces that are the end of "blocks" but not
         // things like patterns that might usually be inline.
         "}" => token_of!(node, right_bracket:
@@ -197,13 +199,38 @@ void main(){var a=A();a.f(1,2);}
 ";
 
     const DART_TRIGGERS: &[(u32, u32, &str)] = &[
-        (0, 19, ";"), (1, 14, "}"), (1, 15, "}"), (3, 9, ";"), (3, 10, ";"),
-        (4, 48, ";"), (4, 49, "}"), (4, 67, ";"), (4, 68, "}"), (5, 18, ";"),
-        (5, 19, ";"), (5, 20, "}"), (5, 21, "}"), (6, 29, ";"), (6, 30, ";"),
-        (6, 31, "}"), (6, 32, "}"), (7, 16, "}"), (7, 17, ";"), (8, 30, "}"),
-        (8, 31, "}"), (8, 32, ";"), (10, 2, "}"), (10, 3, "}"), (11, 34, ";"),
-        (12, 11, ";"), (13, 25, ";"), (14, 0, "}"), (14, 1, "}"), (15, 16, ";"),
-        (16, 31, ";"), (16, 32, "}"),
+        (0, 19, ";"),
+        (1, 14, "}"),
+        (1, 15, "}"),
+        (3, 9, ";"),
+        (3, 10, ";"),
+        (4, 48, ";"),
+        (4, 49, "}"),
+        (4, 67, ";"),
+        (4, 68, "}"),
+        (5, 18, ";"),
+        (5, 19, ";"),
+        (5, 20, "}"),
+        (5, 21, "}"),
+        (6, 29, ";"),
+        (6, 30, ";"),
+        (6, 31, "}"),
+        (6, 32, "}"),
+        (7, 16, "}"),
+        (7, 17, ";"),
+        (8, 30, "}"),
+        (8, 31, "}"),
+        (8, 32, ";"),
+        (10, 2, "}"),
+        (10, 3, "}"),
+        (11, 34, ";"),
+        (12, 11, ";"),
+        (13, 25, ";"),
+        (14, 0, "}"),
+        (14, 1, "}"),
+        (15, 16, ";"),
+        (16, 31, ";"),
+        (16, 32, "}"),
     ];
 
     #[test]
@@ -232,7 +259,11 @@ void main(){var a=A();a.f(1,2);}
             .collect();
         assert_eq!(triggers, expected);
         // Other characters never trigger; a line after the end is an error.
-        assert!(!should_trigger_formatting(&file, &json!({"line": 3, "character": 9}), "x").unwrap());
-        assert!(should_trigger_formatting(&file, &json!({"line": 900, "character": 0}), ";").is_err());
+        assert!(
+            !should_trigger_formatting(&file, &json!({"line": 3, "character": 9}), "x").unwrap()
+        );
+        assert!(
+            should_trigger_formatting(&file, &json!({"line": 900, "character": 0}), ";").is_err()
+        );
     }
 }

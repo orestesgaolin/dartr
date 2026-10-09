@@ -130,11 +130,12 @@ impl TypeAnalyzerErrors for SharedTypeAnalyzerErrors {
         original: Id<DartPattern>,
         duplicate: Id<DartPattern>,
     ) {
-        self.pending.push(SharedError::DuplicateAssignmentPatternVariable {
-            variable,
-            original,
-            duplicate,
-        });
+        self.pending
+            .push(SharedError::DuplicateAssignmentPatternVariable {
+                variable,
+                original,
+                duplicate,
+            });
     }
 
     fn duplicate_record_pattern_field(
@@ -144,7 +145,8 @@ impl TypeAnalyzerErrors for SharedTypeAnalyzerErrors {
         original: RecordPatternField<NodeId, Id<DartPattern>, Name>,
         duplicate: RecordPatternField<NodeId, Id<DartPattern>, Name>,
     ) {
-        self.has_duplicate_named_field.push(object_or_record_pattern);
+        self.has_duplicate_named_field
+            .push(object_or_record_pattern);
         self.pending.push(SharedError::DuplicateRecordPatternField {
             pattern: object_or_record_pattern,
             name,
@@ -159,8 +161,10 @@ impl TypeAnalyzerErrors for SharedTypeAnalyzerErrors {
         original: NodeId,
         duplicate: NodeId,
     ) {
-        self.pending
-            .push(SharedError::DuplicateRestPattern { original, duplicate });
+        self.pending.push(SharedError::DuplicateRestPattern {
+            original,
+            duplicate,
+        });
     }
 
     fn empty_map_pattern(&mut self, pattern: Id<DartPattern>) {
@@ -173,7 +177,10 @@ impl TypeAnalyzerErrors for SharedTypeAnalyzerErrors {
         component: EId<PromotableElement>,
     ) {
         self.pending
-            .push(SharedError::InconsistentJoinedPatternVariable { variable, component });
+            .push(SharedError::InconsistentJoinedPatternVariable {
+                variable,
+                component,
+            });
     }
 
     fn matched_type_is_strictly_non_nullable(
@@ -265,7 +272,11 @@ impl TypeAnalyzerErrors for SharedTypeAnalyzerErrors {
             .push(SharedError::SwitchCaseCompletesNormally { node, case_index });
     }
 
-    fn unnecessary_wildcard_pattern(&mut self, pattern: Id<DartPattern>, kind: UnnecessaryWildcardKind) {
+    fn unnecessary_wildcard_pattern(
+        &mut self,
+        pattern: Id<DartPattern>,
+        kind: UnnecessaryWildcardKind,
+    ) {
         match kind {
             UnnecessaryWildcardKind::LogicalAndPatternOperand => {
                 self.pending
@@ -340,7 +351,9 @@ pub fn to_diagnostic(rv: &ResolverVisitor<'_>, error: SharedError) -> Option<Loc
             operand_type,
             parameter_type,
         } => {
-            let p = ast.cast::<RelationalPattern>(pattern).expect("RelationalPattern");
+            let p = ast
+                .cast::<RelationalPattern>(pattern)
+                .expect("RelationalPattern");
             at(
                 diag::relational_pattern_operand_type_not_assignable(
                     type_arg(ctx, operand_type),
@@ -351,7 +364,9 @@ pub fn to_diagnostic(rv: &ResolverVisitor<'_>, error: SharedError) -> Option<Loc
             )
         }
         SharedError::RelationalPatternOperatorReturnTypeNotAssignableToBool(pattern) => {
-            let p = ast.cast::<RelationalPattern>(pattern).expect("RelationalPattern");
+            let p = ast
+                .cast::<RelationalPattern>(pattern)
+                .expect("RelationalPattern");
             at_token(
                 diag::relational_pattern_operator_return_type_not_assignable_to_bool(),
                 ast[p].operator,

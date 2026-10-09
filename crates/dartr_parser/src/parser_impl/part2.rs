@@ -135,7 +135,8 @@ impl<L: Listener> Parser<L> {
         token = self.ensure_identifier(token, IdentifierContext::EnumDeclaration);
         let name_token = token;
         let name: String = self.lexeme(name_token).to_string();
-        token = compute_type_param_or_arg_mut(self.tokens_mut(),
+        token = compute_type_param_or_arg_mut(
+            self.tokens_mut(),
             token,
             /* inDeclaration = */ true,
             /* allowsVariance = */ true,
@@ -490,7 +491,8 @@ impl<L: Listener> Parser<L> {
         }
         let name =
             self.ensure_identifier(token, IdentifierContext::ClassOrMixinOrExtensionDeclaration);
-        token = compute_type_param_or_arg_mut(self.tokens_mut(),
+        token = compute_type_param_or_arg_mut(
+            self.tokens_mut(),
             name,
             /* inDeclaration = */ true,
             /* allowsVariance = */ true,
@@ -567,7 +569,8 @@ impl<L: Listener> Parser<L> {
         let mut token = self.next(token);
         let equals = token;
         debug_assert!(self.is_a(equals, TokenType::EQ));
-        token = compute_type_mut(self.tokens_mut(),
+        token = compute_type_mut(
+            self.tokens_mut(),
             token,
             /* required = */ true,
             false,
@@ -883,7 +886,8 @@ impl<L: Listener> Parser<L> {
         kind: DeclarationHeaderKind,
     ) -> TokenId {
         let mut next = extends_keyword;
-        let mut token = compute_type_mut(self.tokens_mut(),
+        let mut token = compute_type_mut(
+            self.tokens_mut(),
             next,
             /* required = */ true,
             false,
@@ -906,7 +910,8 @@ impl<L: Listener> Parser<L> {
 
             while self.is_a(self.next(token), TokenType::COMMA) {
                 next = self.next(token);
-                token = compute_type_mut(self.tokens_mut(),
+                token = compute_type_mut(
+                    self.tokens_mut(),
                     next,
                     /* required = */ true,
                     false,
@@ -937,7 +942,8 @@ impl<L: Listener> Parser<L> {
             implements_keyword = Some(self.next(token));
             loop {
                 let next = self.next(token);
-                token = compute_type_mut(self.tokens_mut(),
+                token = compute_type_mut(
+                    self.tokens_mut(),
                     next,
                     /* required = */ true,
                     false,
@@ -986,7 +992,8 @@ impl<L: Listener> Parser<L> {
         }
         let name =
             self.ensure_identifier(token, IdentifierContext::ClassOrMixinOrExtensionDeclaration);
-        let header_start = compute_type_param_or_arg_mut(self.tokens_mut(),
+        let header_start = compute_type_param_or_arg_mut(
+            self.tokens_mut(),
             name,
             /* inDeclaration = */ true,
             /* allowsVariance = */ true,
@@ -1168,7 +1175,8 @@ impl<L: Listener> Parser<L> {
         let mut type_count: i32 = 0;
         loop {
             let next = self.next(token);
-            token = compute_type_mut(self.tokens_mut(),
+            token = compute_type_mut(
+                self.tokens_mut(),
                 next,
                 /* required = */ true,
                 false,
@@ -1256,9 +1264,13 @@ impl<L: Listener> Parser<L> {
         } else {
             name = None;
         }
-        token =
-            compute_type_param_or_arg_mut(self.tokens_mut(), token, /* inDeclaration = */ true, false)
-                .parse_variables(token, self);
+        token = compute_type_param_or_arg_mut(
+            self.tokens_mut(),
+            token,
+            /* inDeclaration = */ true,
+            false,
+        )
+        .parse_variables(token, self);
         self.listener
             .begin_extension_declaration(augment_token, extension_keyword, name);
         token = self.parse_primary_constructor_opt(
@@ -1277,8 +1289,13 @@ impl<L: Listener> Parser<L> {
             } else {
                 // If `on` clause is provided, report, but parse it.
                 self.report_recoverable_error(on, diag::extension_augmentation_has_on_clause());
-                let type_info: TypeInfo =
-                    compute_type_mut(self.tokens_mut(), on, /* required = */ true, false, false);
+                let type_info: TypeInfo = compute_type_mut(
+                    self.tokens_mut(),
+                    on,
+                    /* required = */ true,
+                    false,
+                    false,
+                );
                 token = type_info.ensure_type_or_void(on, self);
             }
         } else {
@@ -1296,8 +1313,13 @@ impl<L: Listener> Parser<L> {
                     on_keyword = Some(on);
                 }
             }
-            let type_info: TypeInfo =
-                compute_type_mut(self.tokens_mut(), on, /* required = */ true, false, false);
+            let type_info: TypeInfo = compute_type_mut(
+                self.tokens_mut(),
+                on,
+                /* required = */ true,
+                false,
+                false,
+            );
             token = type_info.ensure_type_or_void(on, self);
         }
 
@@ -1566,9 +1588,13 @@ impl<L: Listener> Parser<L> {
                 .ensure_identifier(token, self);
         }
         token = name;
-        token =
-            compute_type_param_or_arg_mut(self.tokens_mut(), token, /* inDeclaration = */ true, false)
-                .parse_variables(token, self);
+        token = compute_type_param_or_arg_mut(
+            self.tokens_mut(),
+            token,
+            /* inDeclaration = */ true,
+            false,
+        )
+        .parse_variables(token, self);
         self.listener
             .begin_extension_type_declaration(augment_token, extension_keyword, name);
         token = self.parse_primary_constructor_opt(
@@ -1763,8 +1789,13 @@ impl<L: Listener> Parser<L> {
 
     /// Dart (line 4118): `Token parseTypeVariablesOpt(Token token)`
     pub fn parse_type_variables_opt(&mut self, token: TokenId) -> TokenId {
-        compute_type_param_or_arg_mut(self.tokens_mut(), token, /* inDeclaration = */ true, false)
-            .parse_variables(token, self)
+        compute_type_param_or_arg_mut(
+            self.tokens_mut(),
+            token,
+            /* inDeclaration = */ true,
+            false,
+        )
+        .parse_variables(token, self)
     }
 
     /// Parse a top level field or function.
@@ -1903,7 +1934,8 @@ impl<L: Listener> Parser<L> {
                 );
             }
         }
-        let mut type_info: TypeInfo = compute_type_mut(self.tokens_mut(),
+        let mut type_info: TypeInfo = compute_type_mut(
+            self.tokens_mut(),
             token,
             /* required = */ false,
             /* inDeclaration = */ true,
@@ -1935,7 +1967,8 @@ impl<L: Listener> Parser<L> {
             }
         } {
             // Recovery: Use the reserved keyword despite that not being legal.
-            type_info = compute_type_mut(self.tokens_mut(),
+            type_info = compute_type_mut(
+                self.tokens_mut(),
                 token,
                 /* required = */ true,
                 /* inDeclaration = */ true,

@@ -47,9 +47,9 @@ fn replacement(core: &mut LinkerCore<'_>, expr: ConstExprId) -> Option<ConstExpr
         return None;
     }
     let ast = &mut core.const_exprs.ast;
-    let token = ast
-        .tokens
-        .push_synthetic_string(TokenType::STRING, NOT_SERIALIZABLE_NAME, 0, 0, Some(0));
+    let token =
+        ast.tokens
+            .push_synthetic_string(TokenType::STRING, NOT_SERIALIZABLE_NAME, 0, 0, Some(0));
     Some(ConstExprId(ast.add(SimpleIdentifier { token }).raw()))
 }
 
@@ -64,23 +64,36 @@ pub fn detach_nodes(core: &mut LinkerCore<'_>) {
             }
         };
         for (i, f) in store.fragments.fields.iter() {
-            collect(FragmentId::new(store.id, Tag::Field, i), f.constant_initializer);
+            collect(
+                FragmentId::new(store.id, Tag::Field, i),
+                f.constant_initializer,
+            );
         }
         for (i, f) in store.fragments.variables.iter() {
-            collect(FragmentId::new(store.id, Tag::TopLevelVariable, i), f.constant_initializer);
+            collect(
+                FragmentId::new(store.id, Tag::TopLevelVariable, i),
+                f.constant_initializer,
+            );
         }
         for (i, f) in store.fragments.params.iter() {
             let _ = f;
-            collect(FragmentId::new(store.id, Tag::FormalParameter, i), store.fragments.params.get(i).constant_initializer);
+            collect(
+                FragmentId::new(store.id, Tag::FormalParameter, i),
+                store.fragments.params.get(i).constant_initializer,
+            );
         }
     }
     for (id, init) in fixes {
-        let Some(new) = replacement(core, init) else { continue };
+        let Some(new) = replacement(core, init) else {
+            continue;
+        };
         let store = &mut core.store;
         let i = id.index();
         match id.tag() {
             Tag::Field => store.fragments.fields.get_mut(i).constant_initializer = Some(new),
-            Tag::TopLevelVariable => store.fragments.variables.get_mut(i).constant_initializer = Some(new),
+            Tag::TopLevelVariable => {
+                store.fragments.variables.get_mut(i).constant_initializer = Some(new)
+            }
             _ => store.fragments.params.get_mut(i).constant_initializer = Some(new),
         }
     }

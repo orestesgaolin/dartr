@@ -54,7 +54,9 @@ impl DirectiveContext {
             | DirectiveState::Script
             | DirectiveState::Library
             | DirectiveState::ImportAndExport => self.state = DirectiveState::ImportAndExport,
-            DirectiveState::Part => parser.report_recoverable_error(token, diag::export_after_part()),
+            DirectiveState::Part => {
+                parser.report_recoverable_error(token, diag::export_after_part())
+            }
             DirectiveState::PartOf => {
                 if self.is_enhanced_parts_feature_enabled {
                     self.state = DirectiveState::ImportAndExport;
@@ -74,7 +76,9 @@ impl DirectiveContext {
             | DirectiveState::Script
             | DirectiveState::Library
             | DirectiveState::ImportAndExport => self.state = DirectiveState::ImportAndExport,
-            DirectiveState::Part => parser.report_recoverable_error(token, diag::import_after_part()),
+            DirectiveState::Part => {
+                parser.report_recoverable_error(token, diag::import_after_part())
+            }
             DirectiveState::PartOf => {
                 if self.is_enhanced_parts_feature_enabled {
                     self.state = DirectiveState::ImportAndExport;

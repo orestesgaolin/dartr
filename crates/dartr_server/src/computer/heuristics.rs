@@ -127,7 +127,9 @@ pub fn test_call(ast: &Ast, node: Id<MethodInvocation>, has_test_import: bool) -
 pub fn has_deprecated(ast: &Ast, annotations: NodeList<Annotation>) -> bool {
     ast.list(annotations).iter().any(|&a| {
         let n = &ast[a];
-        let name = ast.cast::<SimpleIdentifier>(n.name).map(|id| ast.tokens.lexeme(ast[id].token));
+        let name = ast
+            .cast::<SimpleIdentifier>(n.name)
+            .map(|id| ast.tokens.lexeme(ast[id].token));
         match name {
             Some("deprecated") => n.arguments.is_none(),
             // `@Deprecated('...')`; the named constructors (`.extend()`,

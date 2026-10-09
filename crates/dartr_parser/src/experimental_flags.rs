@@ -362,5 +362,4 @@ impl ExperimentalFlag {
             ExperimentalFlag::WildcardVariables => (3, 7),
         }
     }
-
 }

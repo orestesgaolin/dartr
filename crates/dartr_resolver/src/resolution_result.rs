@@ -66,7 +66,10 @@ pub fn positional_field_index(name: &str) -> Option<usize> {
 
 /// Dart `RecordTypeExtension.fieldByName(name)` of the record type [ty].
 pub fn record_field_by_name(ctx: &Ctx<'_>, ty: TypeId, name: &str) -> Option<RecordField> {
-    let TypeKind::Record { positional, named, .. } = *ctx.ty(ty) else {
+    let TypeKind::Record {
+        positional, named, ..
+    } = *ctx.ty(ty)
+    else {
         return None;
     };
     for field in ctx.list(named) {
