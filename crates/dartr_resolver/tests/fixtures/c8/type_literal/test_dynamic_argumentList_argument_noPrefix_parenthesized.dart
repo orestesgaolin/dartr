@@ -1,0 +1,6 @@
+// Ported from pkg/analyzer/test/src/dart/resolution/type_literal_test.dart (TypeLiteralResolutionTest.test_dynamic_argumentList_argument_noPrefix_parenthesized).
+
+void f(Type t) {}
+void g() {
+  f((dynamic));
+}
