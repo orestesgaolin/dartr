@@ -238,10 +238,24 @@ The diagnostic checks (`check_for_yield_of_invalid_type`,
 
 ## 7. Open points of the core
 
-- `dartr_resolver` does not depend on `dartr_link`: linking will depend on
-  the resolver for top-level inference and constant initializers (C10,
-  design §1 order). C10 can call the resolver from `dartr_link` directly,
-  or through a hook the driver passes, whichever keeps the crates acyclic.
+- Linking calls the resolver through a hook (C10): `dartr_link` defines
+  the traits `link::LinkResolver` / `LinkResolverSession` and the request
+  `link::ExpressionRequest`; `dartr_link::link::link_cycle` takes a
+  `&dyn LinkResolver`; the driver passes `dartr_driver::link_resolver::
+  ResolverForLinking`, which calls `ast_resolver::LinkResolution` (Dart
+  `summary2/ast_resolver.dart`). Neither `dartr_link` nor `dartr_resolver`
+  depends on the other. `ast_resolver` resolves one expression in a copy
+  of its unit (the linker shares the parsed units): `bind_subtree`, the
+  resolution visitor in the initializer scope, then the resolver visitor.
+  The types of fields and top-level variables are inferred on demand
+  (Dart `PropertyInducingElementImpl.type` calls `typeInference`):
+  `dartr_element::type_inference` keeps the hook of the linking thread,
+  and the readers of variable and accessor types (`member::type_`,
+  `member::return_type`, `element_type::executable_type`,
+  `element_ext::variable_type`, ...) call `ensure_*` when the slot is
+  empty. A new reader of a field, top-level variable or accessor type in
+  code that runs during linking must call `ensure_property_type` /
+  `ensure_accessor_return_type` first.
 - Patterns, switch statements and expressions, if-case statements, pattern
   variable declarations and pattern assignments are ported
   (`pattern_resolver.rs`, `resolver/patterns.rs`,

@@ -14,10 +14,13 @@
 //!    `_resolveConstructorFieldFormals`, `_collectMixinSuperInvokedNames`
 //!    (the structural parts of the later phases).
 //!
-//! Not ported yet: type resolution (B2), type aliases, simple bounds,
-//! defaults, variance, interface cycles (B3), mixin application
-//! constructors, enum children, field promotability, `hasNonFinalField`,
-//! extension types (B4), top-level inference and the expression phases.
+//! 4. `_performTopLevelInference` ([`crate::top_level_inference`]: override
+//!    inference and the types from initializers, resolved with the
+//!    [`LinkResolver`] that the caller passes).
+//!
+//! Not ported yet: `_resolveConstantInitializers`, `_resolveDefaultValues`,
+//! `_resolveMetadata` (the resolved expressions are for constant
+//! evaluation; the element model keeps unresolved copies in [`ConstExprs`]).
 
 use std::sync::Arc;
 
