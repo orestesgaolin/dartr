@@ -199,7 +199,18 @@ impl<'a> VerifierHost<'a> for UnitVerifier<'a> {
         self.features
     }
     fn report(&mut self, diagnostic: LocatedDiagnostic) {
-        self.diagnostics.push(diagnostic.into_diagnostic());
+        let diagnostic = diagnostic.into_diagnostic();
+        // Dart `RecordingDiagnosticListener` keeps a set: a diagnostic equal
+        // to a recorded one (code, offset, length, message) is dropped.
+        let duplicate = self.diagnostics.iter().any(|d| {
+            std::ptr::eq(d.code, diagnostic.code)
+                && d.offset == diagnostic.offset
+                && d.length == diagnostic.length
+                && d.message == diagnostic.message
+        });
+        if !duplicate {
+            self.diagnostics.push(diagnostic);
+        }
     }
 }
 
