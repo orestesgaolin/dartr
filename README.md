@@ -28,7 +28,7 @@ SDK tests, Flutter, `analyzer`, a 1.5 million line application).
 | `dartr analyze` | Same options, formats and exit codes as `dart analyze` |
 | `dartr format` | Same output as `dart format` on the `dart_style` test data and corpora |
 | `dartr language-server` | Diagnostics, outline, closing labels, folding, selection ranges, document symbols, formatting; navigation (definition, type definition, implementation, references, document highlight), hover, signature help, semantic tokens, inlay hints, call and type hierarchy, workspace symbols. completion; code actions (quick fixes, assists, organize imports, sort members). **Missing:** fix all, some fixes and assists, rename |
-| Legacy protocol | **Partial:** 43 of 59 requests and 21 of 22 notifications, including errors, hover, navigation, search, `edit.format`, Flutter outline and `lsp.handle`. **Missing:** completion, quick fixes, assists, refactorings, bulk fixes (`dart fix`) (see `docs/legacy-protocol.md`) |
+| Legacy protocol | 56 of 59 requests and 22 of 22 notifications, including errors, hover, navigation, search, completion, quick fixes, assists, refactorings, bulk fixes, Flutter outline and `lsp.handle`. Some refactorings are checked only on a small fixture (see `docs/legacy-protocol.md`) |
 
 `docs/PLAN.md` has the plan and `docs/TIMELINE.md` the project history. This is
 early software: if dartr and `dart analyze` differ, dartr is wrong. Please report it

@@ -87,6 +87,7 @@ at each merge; the final process report is written from it.
 | 10-10 16:50 | 302b531 | LSP code actions: quick fixes, assists, organize imports, sort members, fix_data.yaml renames, workspace/executeCommand | Opus | every returned action identical to `dart language-server` (~7,000 import fixes, 191 create fixes, 486 assists, fixture + corpus sample); 5,585 tests |
 | 10-10 17:45 | 12b87a9 | legacy protocol: flutter domain (outline, widget descriptions), lsp.handle, clippy cleanup (43/59 requests, 21/22 notifications) | Gemini 4 (Antigravity) | 126 steps identical to `dart language-server --protocol=analyzer`, including a Flutter project; 5,586 tests |
 | 10-10 18:40 | 1c2ab18 | completion part 2: Dart driver file order, Flutter widget snippets, import edits from resolve, package: URIs, color constants | Opus | fixture 153/153, visible-app 130/130 completion lists identical; flutter_tools (unseen) 568/577; analyze on flutter_tools + analyzer-9.0.0 unchanged (27,278/27,278); 5,587 tests |
+| 10-10 19:40 | acce9e9 | legacy protocol: completion and edit domains (fixes, assists, refactorings, postfix/statement completion, bulk fixes), lsp.handle completion and code actions (56/59 requests, 22/22 notifications) | Gemini 4 (Antigravity) | 138 + 15 steps identical to `dart language-server --protocol=analyzer`; coordinator fixed API drift after the completion merge and an outdated transport test; 5,587 tests |
 
 ## Incidents and lessons
 
@@ -185,3 +186,11 @@ at each merge; the final process report is written from it.
 - **Load 73 (10-10 13:04):** a worker ran the inline lock command without `RUST_TEST_THREADS=4`, so the
   parity tests started one `dart analyze` per core (66 Dart processes). The inline command in the worker
   rules now sets `RUST_TEST_THREADS=4`.
+- **Overlapping task text (10-10 19:05):** the Gemini task for the legacy edit domain said to return what Dart
+  returns for refactorings dartr does not have. Gemini ported the refactorings instead, while agent A had just
+  been given rename and refactorings, and implemented a bulk fix that agent F owns. Lesson: a task text names
+  the owner of every neighboring feature. The fix: one engine per feature in dartr_server; A and F reuse
+  Gemini's code and dartr_legacy calls their engines.
+- **API drift between parallel branches (10-10 19:20):** the legacy branch was built against the completion
+  API before the second completion merge and did not compile after merging main. Merge checks build the
+  merged tree, so this was found before the push.
