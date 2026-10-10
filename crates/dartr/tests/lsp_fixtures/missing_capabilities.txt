@@ -27,21 +27,15 @@ dart-code dynamic textDocument/codeAction [dart,**/pubspec.yaml,**/analysis_opti
 dart-code dynamic textDocument/codeLens [dart]
 dart-code dynamic textDocument/completion [**/pubspec.yaml,**/analysis_options.yaml,**/lib/{fix_data.yaml,fix_data/**.yaml}]
 dart-code dynamic textDocument/completion [dart]
-dart-code dynamic textDocument/definition [dart]
 dart-code dynamic textDocument/documentColor [dart]
-dart-code dynamic textDocument/documentHighlight [dart]
 dart-code dynamic textDocument/documentLink [dart,**/pubspec.yaml,**/analysis_options.yaml]
-dart-code dynamic textDocument/hover [dart]
-dart-code dynamic textDocument/implementation [dart]
 dart-code dynamic textDocument/inlayHint [dart]
 dart-code dynamic textDocument/inlineValue [dart]
 dart-code dynamic textDocument/prepareCallHierarchy [dart]
 dart-code dynamic textDocument/prepareTypeHierarchy [dart]
-dart-code dynamic textDocument/references [dart]
 dart-code dynamic textDocument/rename [dart]
 dart-code dynamic textDocument/semanticTokens [dart]
 dart-code dynamic textDocument/signatureHelp [dart]
-dart-code dynamic textDocument/typeDefinition [dart]
 dart-code dynamic workspace/willRenameFiles
 static static callHierarchyProvider
 static static codeActionProvider.codeActionKinds
@@ -68,8 +62,6 @@ static static command refactor.validate
 static static completionProvider.completionItem.labelDetailsSupport
 static static completionProvider.resolveProvider
 static static completionProvider.triggerCharacters
-static static definitionProvider
-static static documentHighlightProvider
 static static documentLinkProvider.resolveProvider
 static static executeCommandProvider.workDoneProgress
 static static experimental.interactiveResolveProvider.kinds
@@ -77,11 +69,8 @@ static static experimental.textDocument.augmentation
 static static experimental.textDocument.augmented
 static static experimental.textDocument.super
 static static experimental.updateDiagnosticInformation
-static static hoverProvider
-static static implementationProvider
 static static inlayHintProvider.resolveProvider
 static static inlineValueProvider
-static static referencesProvider
 static static renameProvider.prepareProvider
 static static semanticTokensProvider.full.delta
 static static semanticTokensProvider.legend.tokenModifiers
@@ -89,7 +78,6 @@ static static semanticTokensProvider.legend.tokenTypes
 static static semanticTokensProvider.range
 static static signatureHelpProvider.retriggerCharacters
 static static signatureHelpProvider.triggerCharacters
-static static typeDefinitionProvider
 static static typeHierarchyProvider
 static static workspace.fileOperations.willRename.filters
 static static workspaceSymbolProvider
