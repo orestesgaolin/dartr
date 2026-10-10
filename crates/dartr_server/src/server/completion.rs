@@ -107,7 +107,20 @@ impl Server {
         if !path.ends_with(".dart") {
             return Ok(json!({"isIncomplete": false, "items": []}));
         }
-        let resolved = self.require_resolved_unit(&path)?;
+        let resolved = match self.require_resolved_unit(&path) {
+            Ok(r) => r,
+            Err(e) if e.code == crate::mapping::codes::FILE_NOT_ANALYZED => {
+                // Dart takes the line info from the file when the file is
+                // not analyzed, and then returns no items.
+                let Some(content) = self.content(&path) else {
+                    return Err(e);
+                };
+                let line_info = dartr_syntax::LineInfo::from_content(&content);
+                self.position_offset(&line_info, params)?;
+                return Ok(json!({"isIncomplete": false, "items": []}));
+            }
+            Err(e) => return Err(e),
+        };
         let line_info = resolved.line_info().clone();
         let offset = self.position_offset(&line_info, params)?;
         let trigger = params
@@ -211,28 +224,25 @@ impl Server {
                         .filter(|l| filter.should_include(l, &root_of))
                         .map(|l| l.uri.clone())
                         .collect();
-                    // The order of the known files of the Dart driver.
-                    let sink = NoopSink;
-                    let order_ctx = Ctx {
-                        world: &world,
-                        current: None,
-                        local: None,
-                        tp: &resolved.library.type_provider,
-                        features: &resolved.library.features,
-                        req: &sink,
-                    };
                     let uri_of_path: std::collections::HashMap<String, String> = libraries
                         .iter()
                         .map(|l| (l.path.clone(), l.uri.clone()))
                         .collect();
-                    let order = c::known::dart_known_order(
-                        &order_ctx,
-                        &c::known::KnownOrderInputs {
-                            added_files: &added_files,
-                            available_files: &available_files,
-                            uri_of_path: &uri_of_path,
-                        },
-                    );
+                    (world, libraries, included, uri_of_path)
+                }),
+                None => None,
+            }
+        } else {
+            None
+        };
+        // The order of the known files of the Dart driver.
+        let known = known.map(|(world, _libraries, included, uri_of_path)| {
+                    let order: Vec<String> = self
+                        .session
+                        .dart_known_order(context_index, &added_files, &available_files)
+                        .into_iter()
+                        .filter_map(|p| uri_of_path.get(&p).cloned())
+                        .collect();
                     let rank: std::collections::HashMap<&str, usize> =
                         order.iter().enumerate().map(|(i, u)| (u.as_str(), i)).collect();
                     let mut ordered = included.clone();
@@ -243,12 +253,7 @@ impl Server {
                         }
                     }
                     (world, ordered)
-                }),
-                None => None,
-            }
-        } else {
-            None
-        };
+        });
 
         let unit = resolved.unit();
         let sink = NoopSink;
@@ -437,7 +442,12 @@ impl Server {
         }
         let prefix = c::target::target_prefix(q.ast, &q.target, offset);
         let mut unranked: Vec<Value> = Vec::new();
-        if caps.snippets && enable_snippets {
+        // Dart `SnippetProducer.isValid`: the file must be analyzed in the
+        // root of its context (no snippets for a file outside the roots).
+        let in_context_root = self.collection.as_ref().is_some_and(|collection| {
+            collection.contexts[context_index].root.is_analyzed(&path)
+        });
+        if caps.snippets && enable_snippets && in_context_root {
             let default_range = defaults
                 .as_ref()
                 .and_then(|d| d.get("editRange"))

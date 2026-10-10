@@ -20,7 +20,6 @@ pub mod declaration;
 pub mod elem;
 pub mod keyword;
 pub mod imports;
-pub mod known;
 pub mod lsp;
 pub mod overrides;
 pub mod pass;
@@ -465,9 +464,10 @@ pub fn compute(
             .map(|t| lsp::type_display(q.ctx, t))
             .unwrap_or_default();
         eprintln!(
-            "COMPLETION location={:?} context_type={ctx_type} containing={:?}",
+            "COMPLETION location={:?} context_type={ctx_type} containing={:?} covering={:?}",
             collector.completion_location,
-            ast.kind(q.target.containing_node)
+            ast.kind(q.target.containing_node),
+            ast.kind(q.covering)
         );
         for c in &collector.suggestions {
             eprintln!("  CAND {} {}", c.completion(q.ctx), c.relevance);

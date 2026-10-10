@@ -605,6 +605,69 @@ fn lsp_completion_parity() {
     compare("fixture project", &dart, &dartr);
 }
 
+/// The completion results of [program] at [positions] (path, line,
+/// column; the files are not opened) when `initialize` has only a
+/// `rootUri` (no `workspaceFolders`), after the analysis.
+fn run_root_uri_only(program: &str, root: &Path, positions: &[(&Path, u32, u32)]) -> Vec<Value> {
+    let mut c = LspClient::spawn(program, &session_args(), &[]);
+    let mut init = dart_code_initialize_params(root);
+    init.as_object_mut().unwrap().remove("workspaceFolders");
+    init["initializationOptions"]["completionBudgetMilliseconds"] = json!(600000);
+    let response = c.request("initialize", init);
+    assert!(response["result"]["capabilities"].is_object(), "{response}");
+    c.notify("initialized", json!({}));
+    c.settle(true);
+    let mut out = Vec::new();
+    for (path, line, character) in positions {
+        let params = json!({
+            "textDocument": {"uri": file_uri(path)},
+            "position": {"line": line, "character": character},
+            "context": {"triggerKind": 1},
+        });
+        out.push(c.request("textDocument/completion", params));
+    }
+    let _ = c.shutdown_and_exit();
+    out
+}
+
+/// `initialize` with only `rootUri` (no `workspaceFolders`): completion in a
+/// file under the root, and in a file that no root contains (not open; Dart
+/// still resolves it, but gives no snippets because the file is not in the
+/// root of its context). Both lists must be the same as the lists of Dart.
+#[test]
+fn lsp_completion_root_uri_only() {
+    if !dart_available() {
+        eprintln!("skipped: `dart` is not on PATH");
+        return;
+    }
+    let root = write_project("lsp_completion_root_uri");
+    let outside = root.join("outside/lib/x.dart");
+    std::fs::create_dir_all(outside.parent().unwrap()).unwrap();
+    std::fs::write(root.join("outside/pubspec.yaml"), "name: outside\n").unwrap();
+    std::fs::write(&outside, "void f() {\n  \n}\n").unwrap();
+    let app = root.join("app");
+    let main = app.join("lib/main.dart");
+    let positions = [(main.as_path(), 47u32, 2u32), (outside.as_path(), 1, 2)];
+    let dart = run_root_uri_only("dart", &app, &positions);
+    let dartr = run_root_uri_only(dartr_bin(), &app, &positions);
+    let labels = |r: &Value| -> Vec<String> {
+        r["result"]["items"]
+            .as_array()
+            .map(|a| a.iter().map(|i| i["label"].as_str().unwrap_or("").to_string()).collect())
+            .unwrap_or_default()
+    };
+    eprintln!(
+        "under the root: dart {} items, dartr {} items; outside: dart {} items, dartr {} items",
+        labels(&dart[0]).len(),
+        labels(&dartr[0]).len(),
+        labels(&dart[1]).len(),
+        labels(&dartr[1]).len()
+    );
+    assert!(!labels(&dart[0]).is_empty(), "{}", dart[0]);
+    assert_eq!(labels(&dart[0]), labels(&dartr[0]));
+    assert_eq!(dart[1], dartr[1]);
+}
+
 /// `DARTR_LSP_COMPLETION_CORPUS=<folder>[:<every>[:<max files>]]`.
 #[test]
 fn lsp_completion_corpus() {

@@ -515,7 +515,11 @@ pub fn snippet_items(
                 item.insert("textEditText".into(), json!(s.text));
             }
         } else {
-            item.insert("textEdit".into(), json!({"range": edit_range, "newText": s.text}));
+            // Dart sends the edit of a snippet as a snippet text edit.
+            item.insert(
+                "textEdit".into(),
+                json!({"insertTextFormat": 2, "range": edit_range, "newText": s.text}),
+            );
         }
         if !s.imports.is_empty() {
             let edits = super::imports::import_edits(

@@ -559,6 +559,71 @@ impl DriverSession {
         }
     }
 
+    /// The paths of the library files that the driver of [context] knows,
+    /// in the order in which the Dart driver creates their `FileState`s
+    /// (the order of `FileSystemState.knownFiles`): `dart:core` and the
+    /// files it references (`_discoverDartCore`), the added files
+    /// (`_discoverLibraries`), the files that the library cycle walk of the
+    /// analysis of each added file creates (`_LibraryNode.computeDependencies`
+    /// and the doc imports of `addDirectivesSignature` when a cycle is
+    /// evaluated), then [available] (`discoverAvailableFiles`). Call after
+    /// [Self::link_known_libraries].
+    pub fn dart_known_order(&mut self, context: usize, added: &[String], available: &[String]) -> Vec<String> {
+        let Some(driver) = self.drivers.get_mut(&context) else {
+            return Vec::new();
+        };
+        let fs = &mut driver.fs;
+        let mut order = KnownOrder {
+            created: indexmap::IndexSet::new(),
+            evaluated: std::collections::HashSet::new(),
+        };
+        // `_discoverDartCore`.
+        let core = fs.files().iter().find(|f| &*f.uri_str == "dart:core").map(|f| f.id);
+        if let Some(core) = core {
+            order.insert(fs, core);
+            if fs.file(core).content.is_some() {
+                let c = fs.file(core).c();
+                let mut uris: Vec<dartr_driver::file_state::DirectiveUris> = Vec::new();
+                uris.extend(c.library_exports.iter().map(|d| d.uris.clone()));
+                uris.extend(c.library_imports.iter().map(|d| d.uris.clone()));
+                uris.extend(c.part_includes.iter().map(|d| d.uris.clone()));
+                uris.extend(c.doc_library_imports.iter().map(|d| d.uris.clone()));
+                for u in &uris {
+                    order.create(fs, u);
+                }
+            }
+        }
+        // `_discoverLibraries`.
+        let added_ids: Vec<FileId> = added.iter().filter_map(|p| fs.get_existing_from_path(p)).collect();
+        for &id in &added_ids {
+            order.insert(fs, id);
+        }
+        // The analysis of each added file: the walk of its library.
+        for &id in &added_ids {
+            if fs.file(id).content.is_none() {
+                continue;
+            }
+            if let Some(library) = fs.library_of(id) {
+                order.walk(fs, library);
+            }
+        }
+        // `discoverAvailableFiles`.
+        for p in available {
+            if let Some(id) = fs.get_existing_from_path(p) {
+                order.insert(fs, id);
+            }
+        }
+        order
+            .created
+            .into_iter()
+            .filter(|&id| {
+                let f = fs.file(id);
+                f.content.as_ref().is_some_and(|c| c.exists && c.kind.is_library()) && f.path.ends_with(".dart")
+            })
+            .map(|id| fs.file(id).path.to_string())
+            .collect()
+    }
+
     /// The existing Dart files that the driver of [context] knows (Dart
     /// `FileSystemState.knownFiles`), in the order the driver found them;
     /// empty when the context has no driver yet.
@@ -791,4 +856,170 @@ fn panic_message(e: &(dyn std::any::Any + Send)) -> String {
         .cloned()
         .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
         .unwrap_or_else(|| "panic".to_string())
+}
+
+/// The state of [`DriverSession::dart_known_order`].
+struct KnownOrder {
+    created: indexmap::IndexSet<FileId>,
+    /// The libraries whose cycle is computed (Dart `isEvaluated`).
+    evaluated: std::collections::HashSet<FileId>,
+}
+
+impl KnownOrder {
+    /// Dart `_buildConfigurableDirectiveUris`: the primary URI, then the
+    /// URIs of the configurations.
+    fn create(&mut self, fs: &dartr_driver::file_state::FileSystemState, uris: &dartr_driver::file_state::DirectiveUris) {
+        use dartr_driver::file_state::DirectiveUri;
+        for u in std::iter::once(&uris.primary).chain(&uris.configurations) {
+            if let DirectiveUri::WithFile { file, .. } = u {
+                self.insert(fs, *file);
+            }
+        }
+    }
+
+    /// Dart `FileSystemState._newFile`: the file, then (when the kind of
+    /// the file is `PartOfUriKnownFileKind`) the file of its library.
+    fn insert(&mut self, fs: &dartr_driver::file_state::FileSystemState, file: FileId) {
+        if !self.created.insert(file) {
+            return;
+        }
+        if let Some(c) = fs.file(file).content.as_ref() {
+            if let dartr_driver::file_state::FileKind::PartOfUriKnown { uri_file } = c.kind {
+                self.insert(fs, uri_file);
+            }
+        }
+    }
+
+    /// Dart `LibraryFileKind.fileKinds`, with the files of the part
+    /// directives created on the way.
+    fn file_kinds(&mut self, fs: &dartr_driver::file_state::FileSystemState, library: FileId) -> Vec<FileId> {
+        let mut result = Vec::new();
+        let mut visited = std::collections::HashSet::new();
+        let mut stack = vec![library];
+        // Depth first, in directive order.
+        fn visit(
+            o: &mut KnownOrder,
+            fs: &dartr_driver::file_state::FileSystemState,
+            kind: FileId,
+            result: &mut Vec<FileId>,
+            visited: &mut std::collections::HashSet<FileId>,
+        ) {
+            if !visited.insert(kind) || fs.file(kind).content.is_none() {
+                return;
+            }
+            result.push(kind);
+            let parts = fs.file(kind).c().part_includes.clone();
+            for d in &parts {
+                o.create(fs, &d.uris);
+            }
+            for d in &parts {
+                if let Some(part) = fs.included_part(kind, d) {
+                    visit(o, fs, part, result, visited);
+                }
+            }
+        }
+        while let Some(k) = stack.pop() {
+            visit(self, fs, k, &mut result, &mut visited);
+        }
+        result
+    }
+
+    /// Dart `_LibraryNode.computeDependencies`.
+    fn dependencies(&mut self, fs: &dartr_driver::file_state::FileSystemState, library: FileId) -> Vec<FileId> {
+        let mut deps = indexmap::IndexSet::new();
+        for kind in self.file_kinds(fs, library) {
+            let c = fs.file(kind).c();
+            let imports = c.library_imports.clone();
+            let exports = c.library_exports.clone();
+            for d in &imports {
+                self.create(fs, &d.uris);
+            }
+            for d in &imports {
+                if let Some(l) = fs.library_of_uri(&d.uris.selected) {
+                    deps.insert(l);
+                }
+            }
+            for d in &exports {
+                self.create(fs, &d.uris);
+            }
+            for d in &exports {
+                if let Some(l) = fs.library_of_uri(&d.uris.selected) {
+                    deps.insert(l);
+                }
+            }
+        }
+        deps.into_iter().collect()
+    }
+
+    /// Dart `_LibraryWalker.evaluateScc`: the doc imports of the files of
+    /// the cycle (sorted by path) are created by `addDirectivesSignature`.
+    fn evaluate_scc(&mut self, fs: &dartr_driver::file_state::FileSystemState, scc: &[FileId]) {
+        let mut files: Vec<FileId> = scc.iter().flat_map(|&l| fs.library_files(l)).collect();
+        files.sort_by(|a, b| fs.file(*a).path.cmp(&fs.file(*b).path));
+        for f in files {
+            let docs = fs.file(f).c().doc_library_imports.clone();
+            for d in &docs {
+                self.create(fs, &d.uris);
+            }
+        }
+        for &l in scc {
+            self.evaluated.insert(l);
+        }
+    }
+
+    /// Dart `DependencyWalker.walk` (Tarjan).
+    fn walk(&mut self, fs: &dartr_driver::file_state::FileSystemState, start: FileId) {
+        if self.evaluated.contains(&start) {
+            return;
+        }
+        struct State {
+            index: std::collections::HashMap<FileId, (u32, u32)>,
+            next: u32,
+            stack: Vec<FileId>,
+        }
+        fn strong_connect(o: &mut KnownOrder, fs: &dartr_driver::file_state::FileSystemState, st: &mut State, node: FileId) {
+            st.index.insert(node, (st.next, st.next));
+            st.next += 1;
+            st.stack.push(node);
+            for dep in o.dependencies(fs, node) {
+                if o.evaluated.contains(&dep) || dep == node {
+                    continue;
+                }
+                match st.index.get(&dep).copied() {
+                    None => {
+                        strong_connect(o, fs, st, dep);
+                        let dep_low = st.index[&dep].1;
+                        let e = st.index.get_mut(&node).unwrap();
+                        if dep_low < e.1 {
+                            e.1 = dep_low;
+                        }
+                    }
+                    Some((dep_index, _)) => {
+                        let e = st.index.get_mut(&node).unwrap();
+                        if dep_index < e.1 {
+                            e.1 = dep_index;
+                        }
+                    }
+                }
+            }
+            let (index, low) = st.index[&node];
+            if low == index {
+                let mut scc = Vec::new();
+                loop {
+                    let other = st.stack.pop().unwrap();
+                    scc.push(other);
+                    if other == node {
+                        break;
+                    }
+                }
+                o.evaluate_scc(fs, &scc);
+            }
+        }
+        let mut st = State {
+            index: std::collections::HashMap::new(),
+            next: 1,
+            stack: Vec::new(),
+        };
+        strong_connect(self, fs, &mut st, start);
+    }
 }

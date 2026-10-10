@@ -255,13 +255,15 @@ pub fn parse_package_config(content: &str, path: &str) -> Result<Packages, Strin
         added.push(package);
     }
 
+    // `SimplePackageConfig.packages` iterates the packages in the order of
+    // the package tree: sorted by root.
     Ok(Packages::new(
-        parsed
+        added
             .into_iter()
             .map(|p| Package {
-                name: p.name,
-                root: p.root,
-                lib: p.lib,
+                name: p.name.clone(),
+                root: p.root.clone(),
+                lib: p.lib.clone(),
                 language_version: p.language_version,
             })
             .collect(),

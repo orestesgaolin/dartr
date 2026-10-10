@@ -3948,7 +3948,7 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
     fn for_expression(&mut self, node: NodeId, opts: ExprOpts) {
         let ast = self.ast();
         let must_be_constant = ast.is::<Expression>(node)
-            && (dartr_resolver::ast_ext::in_constant_context(ast, node)
+            && (constant_context_including_self(ast, node)
                 || ast.parent(node).is_some_and(|p| ast.is::<FormalParameterDefaultClause>(p)));
         let must_be_static = in_static_context(ast, node);
         K::add_expression_keywords(
@@ -4668,4 +4668,54 @@ fn is_widget_type(ctx: &dartr_element::Ctx<'_>, t: TypeId) -> bool {
         .iter()
         .filter_map(|s| ctx.interface_element(*s))
         .any(is_widget)
+}
+
+/// Dart `AstNodeImpl.constantContext(includeSelf: true) != null`.
+fn constant_context_including_self(ast: &Ast, node: NodeId) -> bool {
+    use dartr_resolver::ast_ext::{has_const_keyword, in_constant_context};
+    let is_const = |t: Option<dartr_syntax::TokenId>| t.is_some_and(|t| ast.t_lexeme(t) == "const");
+    match ast.kind(node) {
+        NodeKind::Annotation | NodeKind::EnumConstantArguments | NodeKind::SwitchCase => return true,
+        NodeKind::ConstantPattern => {
+            return ast.cast::<ConstantPattern>(node).is_some_and(|c| ast[c].const_keyword.is_some());
+        }
+        NodeKind::VariableDeclarationList => {
+            return ast.cast::<VariableDeclarationList>(node).is_some_and(|l| is_const(ast[l].keyword));
+        }
+        NodeKind::InstanceCreationExpression => {
+            if ast.cast::<InstanceCreationExpression>(node).is_some_and(|i| is_const(ast[i].keyword)) {
+                return true;
+            }
+        }
+        NodeKind::DotShorthandConstructorInvocation => {
+            if let Some(d) = ast.cast::<DotShorthandConstructorInvocation>(node) {
+                if has_const_keyword(ast, node, ast[d].const_keyword) {
+                    return true;
+                }
+            }
+        }
+        NodeKind::RecordLiteral => {
+            if let Some(r) = ast.cast::<RecordLiteral>(node) {
+                if has_const_keyword(ast, node, ast[r].const_keyword) {
+                    return true;
+                }
+            }
+        }
+        NodeKind::ListLiteral => {
+            if let Some(l) = ast.cast::<ListLiteral>(node) {
+                if has_const_keyword(ast, node, ast[l].const_keyword) {
+                    return true;
+                }
+            }
+        }
+        NodeKind::SetOrMapLiteral => {
+            if let Some(l) = ast.cast::<SetOrMapLiteral>(node) {
+                if has_const_keyword(ast, node, ast[l].const_keyword) {
+                    return true;
+                }
+            }
+        }
+        _ => {}
+    }
+    in_constant_context(ast, node)
 }

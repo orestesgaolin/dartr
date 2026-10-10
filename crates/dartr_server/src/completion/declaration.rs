@@ -1826,7 +1826,7 @@ impl DeclarationHelper {
     fn matches_context_type(&self, q: &Request<'_, '_>, element: ElemRef) -> bool {
         let ctx = q.ctx;
         match q.context_type {
-            Some(c) => c == member::type_(ctx, element) || ctx.is_dart_core_function(c),
+            Some(c) => ctx.dart_eq(c, member::type_(ctx, element)) || ctx.is_dart_core_function(c),
             None => false,
         }
     }

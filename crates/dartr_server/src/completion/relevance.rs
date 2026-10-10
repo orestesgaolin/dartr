@@ -178,7 +178,8 @@ impl FeatureComputer<'_, '_> {
         let (Some(context), Some(element)) = (context, element) else {
             return 0.0;
         };
-        if element == context {
+        // Dart `DartType.operator ==` (an alias does not take part).
+        if self.ts().dart_eq(element, context) {
             1.0
         } else if self.ts().is_subtype_of(element, context) {
             0.40
@@ -406,7 +407,45 @@ impl ContextTypeVisitor<'_, '_, '_> {
                 .param_element
                 .get(self.ast()[named].argument_expression.raw())
                 .copied()
-        })?;
+        });
+        // Dart `Expression.correspondingParameter`: the parameter of the
+        // operator of a binary expression, or of an index expression.
+        let found = match found {
+            Some(f) => f,
+            None => {
+                let ast = self.ast();
+                let parent = ast.parent(argument)?;
+                let is_operand = ast
+                    .cast::<BinaryExpression>(parent)
+                    .is_some_and(|b| ast[b].right_operand.raw() == argument)
+                    || ast.cast::<IndexExpression>(parent).is_some_and(|i| ast[i].index.raw() == argument);
+                if !is_operand {
+                    return None;
+                }
+                let method = *tables.element.get(parent)?;
+                member::formal_parameters(self.ctx(), method).first().copied()?
+            }
+        };
+        // Dart gives the parameter of the instantiated invocation (a
+        // parameter member), so take the type from the function type of the
+        // argument list when the parameter is one of its parameters.
+        let ast = self.ast();
+        let list = ast.parent(argument).and_then(|p| {
+            if ast.is::<NamedArgument>(p) { ast.parent(p) } else { Some(p) }
+        });
+        if let Some(list) = list.and_then(|l| ast.cast::<ArgumentList>(l)) {
+            let base = member::base_element(self.ctx(), found);
+            let params = self
+                .argument_list_function_type(list)
+                .and_then(|t| self.function_type_params(t));
+            if let Some(p) = params
+                .iter()
+                .flatten()
+                .find(|p| p.element.is_some_and(|e| member::base_element(self.ctx(), e) == base))
+            {
+                return Some(p.ty);
+            }
+        }
         Some(member::type_(self.ctx(), found))
     }
 
