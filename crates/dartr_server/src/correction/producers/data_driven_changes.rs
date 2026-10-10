@@ -44,10 +44,81 @@ pub enum TemplatePart {
     },
 }
 
-/// Dart `CodeTemplate` (without `requiredIf`).
+/// Dart `Operator` of `expression.dart`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConditionOp {
+    And,
+    Equal,
+    NotEqual,
+}
+
+/// Dart `Expression` of `expression.dart`.
+#[derive(Clone, Debug)]
+pub enum ConditionExpr {
+    Binary(ConditionOp, Box<ConditionExpr>, Box<ConditionExpr>),
+    Variable(TemplatePart),
+    LiteralString(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ConditionValue {
+    Bool(bool),
+    Str(String),
+}
+
+impl ConditionExpr {
+    /// Dart `Expression.evaluateIn` returning a boolean.
+    pub fn evaluate_bool(&self, c: &ProducerContext<'_>, context: Option<NodeId>) -> Option<bool> {
+        match self.evaluate(c, context)? {
+            ConditionValue::Bool(b) => Some(b),
+            ConditionValue::Str(_) => None,
+        }
+    }
+
+    fn evaluate(&self, c: &ProducerContext<'_>, context: Option<NodeId>) -> Option<ConditionValue> {
+        match self {
+            ConditionExpr::LiteralString(s) => Some(ConditionValue::Str(s.clone())),
+            ConditionExpr::Variable(part) => match part {
+                TemplatePart::Text(s) => Some(ConditionValue::Str(s.clone())),
+                TemplatePart::Import { name, .. } => Some(ConditionValue::Str(name.clone())),
+                TemplatePart::Fragment(accessors) => {
+                    let s = match fragment_target(c.ast, context, accessors) {
+                        Some(target) => c.utils.get_range_text(c.range().node(target)),
+                        None => String::new(),
+                    };
+                    Some(ConditionValue::Str(s))
+                }
+            },
+            ConditionExpr::Binary(op, left, right) => match op {
+                ConditionOp::And => {
+                    let ConditionValue::Bool(l) = left.evaluate(c, context)? else {
+                        return None;
+                    };
+                    let ConditionValue::Bool(r) = right.evaluate(c, context)? else {
+                        return None;
+                    };
+                    Some(ConditionValue::Bool(l && r))
+                }
+                ConditionOp::Equal => {
+                    let l = left.evaluate(c, context)?;
+                    let r = right.evaluate(c, context)?;
+                    Some(ConditionValue::Bool(l == r))
+                }
+                ConditionOp::NotEqual => {
+                    let l = left.evaluate(c, context)?;
+                    let r = right.evaluate(c, context)?;
+                    Some(ConditionValue::Bool(l != r))
+                }
+            },
+        }
+    }
+}
+
+/// Dart `CodeTemplate`.
 #[derive(Clone, Debug)]
 pub struct CodeTemplate {
     pub parts: Vec<TemplatePart>,
+    pub required_if: Option<ConditionExpr>,
 }
 
 /// Dart `ParameterModification`.
@@ -61,6 +132,10 @@ pub enum ParameterModification {
         argument_value: Option<CodeTemplate>,
     },
     Remove(ParameterReference),
+    ChangeType {
+        reference: ParameterReference,
+        argument_value: Option<CodeTemplate>,
+    },
 }
 
 /// Dart `ElementDescriptor` of a `replacedBy` change.
@@ -459,8 +534,7 @@ fn contiguous_sub_ranges(indexes: &[usize]) -> Vec<(usize, usize)> {
     ranges
 }
 
-/// Dart `ModifyParameters.apply` (without `ChangeParameterType` and
-/// `requiredIf`).
+/// Dart `ModifyParameters.apply`.
 pub fn apply_modify_parameters(
     c: &ProducerContext<'_>,
     b: &mut FileEditBuilder<'_, '_>,
@@ -485,11 +559,18 @@ pub fn apply_modify_parameters(
                 index,
                 is_positional,
                 is_required,
+                argument_value,
                 ..
             } => {
                 index_to_new.insert(*index, m);
                 if *is_positional || *is_required {
                     to_insert.push(*index);
+                } else if let Some(cond) =
+                    argument_value.as_ref().and_then(|v| v.required_if.as_ref())
+                {
+                    if cond.evaluate_bool(c, template_context) == Some(true) {
+                        to_insert.push(*index);
+                    }
                 }
             }
             ParameterModification::Remove(reference) => {
@@ -504,24 +585,57 @@ pub fn apply_modify_parameters(
                     }
                 }
             }
+            ParameterModification::ChangeType {
+                reference,
+                argument_value,
+            } => match argument_from(ast, list, reference) {
+                None => {
+                    let index = match reference {
+                        ParameterReference::Positional(i) => *i,
+                        ParameterReference::Named(_) => remaining.last().map_or(0, |last| last + 1),
+                    };
+                    remaining.push(index);
+                    index_to_new.insert(index, m);
+                    to_insert.push(index);
+                }
+                Some(argument) => {
+                    if ast.is::<NullLiteral>(argument) {
+                        if let Some(value) = argument_value {
+                            b.add_replacement(ast.offset(argument), ast.length(argument), |e| {
+                                value.write_on(c, template_context, e);
+                            });
+                        }
+                    }
+                }
+            },
         }
     }
     to_insert.sort();
     to_delete.sort();
-    let write_argument = |e: &mut EditBuilder<'_, '_, '_>, m: &ParameterModification| {
-        if let ParameterModification::Add {
+    let write_argument = |e: &mut EditBuilder<'_, '_, '_>, m: &ParameterModification| match m {
+        ParameterModification::Add {
             name,
             is_positional,
             argument_value: Some(value),
             ..
-        } = m
-        {
+        } => {
             if !*is_positional {
                 e.write(name);
                 e.write(": ");
             }
             value.write_on(c, template_context, e);
         }
+        ParameterModification::ChangeType {
+            reference,
+            argument_value: Some(value),
+        } => {
+            if let ParameterReference::Named(name) = reference {
+                e.write(name);
+                e.write(": ");
+            }
+            value.write_on(c, template_context, e);
+        }
+        _ => {}
     };
     let write_insertion_range =
         |e: &mut EditBuilder<'_, '_, '_>, (lower, upper): (usize, usize), initial_comma: bool| {
@@ -590,17 +704,22 @@ pub fn apply_modify_parameters(
         };
         while next_insertion < insertion_ranges.len() {
             let (lower, mut upper) = insertion_ranges[next_insertion];
-            if let Some(ParameterModification::Add {
-                is_positional,
-                is_required,
-                ..
-            }) = index_to_new.get(&upper).copied()
-            {
-                // Dart: the loop does not update the parameter, so it removes
-                // the whole range of optional positional parameters.
-                if *is_positional && !*is_required {
+            match index_to_new.get(&upper).copied() {
+                Some(ParameterModification::Add {
+                    is_positional,
+                    is_required,
+                    ..
+                }) => {
+                    // Dart: the loop does not update the parameter, so it removes
+                    // the whole range of optional positional parameters.
+                    if *is_positional && !*is_required {
+                        upper = lower.wrapping_sub(1);
+                    }
+                }
+                Some(ParameterModification::ChangeType { .. }) => {
                     upper = lower.wrapping_sub(1);
                 }
+                _ => {}
             }
             if upper != lower.wrapping_sub(1) && upper >= lower {
                 let initial_comma = next_remaining > 0 || insertion_count > 0;
