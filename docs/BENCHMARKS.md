@@ -91,3 +91,27 @@ Notes:
 - dartr's system time (38.8 s on flutter, 22.5 s on flutter_tools) is far above its wall time. It
   points to threads spinning or contending; the optimization work starts there.
 - Raw results: `bench/results/compare-*.json` (git-ignored).
+
+## Thread scaling: `dartr analyze` with 1, 4 and all threads (2026-10-10 20:15–20:55, very busy machine)
+
+Question: is dartr faster because of its code or because it uses many cores? `RAYON_NUM_THREADS` limits
+dartr's thread pool. `hyperfine -i -N -w 1 -r 3`, main at a21465d. The load average was 16 to 53
+(build agents), so wall times are pessimistic; CPU user time is much less sensitive to load and is the
+better measure of the work done. "dart, empty" is from the measurement above (same day, 19:45–20:30).
+
+| corpus | dart, empty: user CPU | dartr 1 thread: wall / user / system | dartr 4 threads: wall / user / system | dartr all cores: wall / user / system |
+|---|---|---|---|---|
+| flutter | 29.0 s | 42.5 s / 27.7 s / 12.7 s | 14.3 s / 28.7 s / 21.6 s | 9.7 s / 30.8 s / 37.0 s |
+| flutter_tools | 10.5 s | 11.9 s / 7.2 s / 4.4 s | 6.1 s / 7.9 s / 11.0 s | 5.1 s / 8.7 s / 18.9 s |
+| analyzer-9.0.0 | 9.4 s | 8.9 s / 7.3 s / 1.0 s | 4.0 s / 7.6 s / 1.0 s | 2.5 s / 8.1 s / 1.2 s |
+| visible-app | 122.0 s | 112.9 s / 114.1 s / 23.7 s | 61.8 s / 119.7 s / 33.4 s | 59.5 s / 120.3 s / 56.3 s |
+
+Findings:
+- On one thread, dartr does about the same amount of work as `dart analyze` with an empty cache
+  (flutter, visible-app) or 20–30% less (flutter_tools, analyzer). The speed of a cold `dartr analyze`
+  comes mostly from analyzing files in parallel; Dart's analysis runs on one thread.
+- System time grows with the number of threads (flutter: 12.7 s on 1 thread, 37.0 s on all cores)
+  while user time stays the same. That is overhead from threads waiting and contending, not work.
+- visible-app does not get faster from 4 threads to all cores in this run (61.8 s and 59.5 s). Part of
+  its time is serial (the analyzer plugin runs in a Dart process), and the load was highest then.
+- With a warm cache, `dart analyze` skips most of the work, which dartr cannot do yet (no disk cache).
