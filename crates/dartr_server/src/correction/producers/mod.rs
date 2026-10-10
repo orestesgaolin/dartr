@@ -7,7 +7,9 @@ pub mod convert_quotes;
 pub mod create;
 pub mod create_types;
 pub mod data_driven;
+pub mod dead_code;
 pub mod extensions;
+pub mod flutter_wrap;
 pub mod import_library;
 pub mod members;
 pub mod modifiers;
@@ -126,6 +128,10 @@ pub fn generator(name: &str) -> Option<ProducerGenerator> {
         "RemoveNonNullAssertion.new" => |_: C| boxed(types::RemoveNonNullAssertion),
         "ReplaceCascadeWithDot.new" => |_: C| boxed(types::ReplaceCascadeWithDot),
         "ReplaceWithIdentifier.new" => |_: C| boxed(types::ReplaceWithIdentifier),
+        "RemoveDeadCode.new" => |_: C| boxed(dead_code::RemoveDeadCode),
+        "ImportAddShow.new" => |_: C| boxed(more::ImportAddShow),
+        "CreateExtensionSetter.new" => |_: C| boxed(extensions::CreateExtensionSetter::new()),
+        "CreateMissingOverrides.new" => |_: C| boxed(more::CreateMissingOverrides::new()),
         "MakeFinal.new" => |_: C| boxed(MakeFinal),
         "MakeVariableNullable.new" => |_: C| boxed(MakeVariableNullable::new()),
         "RemoveAnnotation.new" => |_: C| boxed(small::RemoveAnnotation::new()),
@@ -177,6 +183,7 @@ pub fn multi_generator(name: &str) -> Option<MultiProducerGenerator> {
         "CreateClass.new" => return Some(create_types::create_class_producers),
         "CreateMixin.new" => return Some(create_types::create_mixin_producers),
         "DataDriven.new" => return Some(data_driven::data_driven_producers),
+        "FlutterWrap.new" => return Some(flutter_wrap::flutter_wrap_producers),
         _ => {}
     }
     let g: MultiProducerGenerator = match ImportKind::from_name(name)? {

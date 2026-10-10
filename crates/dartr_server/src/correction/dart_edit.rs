@@ -737,6 +737,251 @@ pub fn get_camel_words(name: Option<&str>) -> Vec<String> {
     parts
 }
 
+impl EditBuilder<'_, '_, '_> {
+    /// Dart `writeReference`: the name of [element], with the import prefix
+    /// (and the import) of its library when it is a top-level element.
+    pub fn write_reference(&mut self, element: ElementId) {
+        let resolved = self.file.resolved();
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let top_level = ctx
+            .element_data(element)
+            .and_then(|d| d.enclosing)
+            .is_some_and(|e| e.tag() == dartr_element::Tag::Library);
+        if top_level {
+            self.write_library_reference(&ctx, element);
+        }
+        let name = dartr_resolver::error::support::display_name(&ctx, element);
+        self.write(&name);
+    }
+}
+
+impl EditBuilder<'_, '_, '_> {
+    /// Dart `writeTypeParameters`.
+    pub fn write_type_parameters(
+        &mut self,
+        ctx: &Ctx<'_>,
+        type_parameters: &[EId<TypeParameterElement>],
+        in_scope: &[EId<TypeParameterElement>],
+    ) {
+        if type_parameters.is_empty() {
+            return;
+        }
+        self.write("<");
+        for (i, tp) in type_parameters.iter().enumerate() {
+            if i > 0 {
+                self.write(", ");
+            }
+            let name = ctx.element_name(tp.raw()).unwrap_or("").to_string();
+            self.write(&name);
+            if let Some(bound) = ctx.get(*tp).bound.get() {
+                self.write_type_if_can(ctx, bound, in_scope, true, true, Some(" extends "));
+            }
+        }
+        self.write(">");
+    }
+
+    /// Dart `writeFormalParameters` (with names, types and default values).
+    pub fn write_formal_parameters(
+        &mut self,
+        ctx: &Ctx<'_>,
+        parameters: &[dartr_element::ElemRef],
+        in_scope: &[EId<TypeParameterElement>],
+        group_name_prefix: Option<&str>,
+    ) {
+        use dartr_element::FormalParameterElement;
+        use dartr_typesystem::type_ext::{is_named, is_optional_positional, is_required_named};
+        let mut names: Vec<String> = parameters
+            .iter()
+            .filter_map(|p| dartr_typesystem::member::name(ctx, *p).map(str::to_string))
+            .collect();
+        self.write("(");
+        let mut saw_named = false;
+        let mut saw_positional = false;
+        for (i, &parameter) in parameters.iter().enumerate() {
+            if i > 0 {
+                self.write(", ");
+            }
+            let base = dartr_typesystem::member::base_element(ctx, parameter);
+            let Some(element) = base.cast::<FormalParameterElement>() else {
+                continue;
+            };
+            let kind = ctx.get(element).kind;
+            if is_named(kind) {
+                if !saw_named {
+                    self.write("{");
+                    saw_named = true;
+                }
+            } else if is_optional_positional(kind) && !saw_positional {
+                self.write("[");
+                saw_positional = true;
+            }
+            let mut name = dartr_typesystem::member::name(ctx, parameter)
+                .unwrap_or("")
+                .to_string();
+            if name.is_empty() {
+                // Dart `_generateUniqueName`.
+                let mut index = 1;
+                loop {
+                    let candidate = format!("p{index}");
+                    if !names.contains(&candidate) {
+                        name = candidate;
+                        break;
+                    }
+                    index += 1;
+                }
+                names.push(name.clone());
+            }
+            let group_prefix = group_name_prefix
+                .map(|p| format!("{p}:"))
+                .unwrap_or_default();
+            // Dart `writeFormalParameter`.
+            if dartr_typesystem::member::is_covariant(ctx, parameter) {
+                self.write("covariant ");
+            }
+            if is_required_named(kind) {
+                self.write("required ");
+            }
+            let ty = dartr_typesystem::member::type_(ctx, parameter);
+            let type_group = format!("{group_prefix}TYPE{i}");
+            let mut has_type = false;
+            let scope = in_scope.to_vec();
+            self.add_linked_edit(&type_group, |b| {
+                has_type = b.write_type_if_can(ctx, ty, &scope, false, true, None);
+                b.add_super_types_as_suggestions(ctx, ty);
+            });
+            if !name.is_empty() {
+                if has_type {
+                    self.write(" ");
+                }
+                if is_named(kind) {
+                    self.write(&name);
+                } else {
+                    let group = format!("{group_prefix}PARAM{i}");
+                    self.add_linked_edit(&group, |b| b.write(&name));
+                }
+            }
+            if let Some(code) = dartr_element::display_string::default_value_code(ctx, element) {
+                self.write(" = ");
+                self.write(&code);
+            }
+        }
+        if saw_named {
+            self.write("}");
+        }
+        if saw_positional {
+            self.write("]");
+        }
+        self.write(")");
+    }
+
+    /// Dart `DartLinkedEditBuilder.addSuperTypesAsSuggestions`.
+    pub fn add_super_types_as_suggestions(&mut self, ctx: &Ctx<'_>, ty: TypeId) {
+        let TypeKind::Interface { element, .. } = *ctx.ty(ty) else {
+            return;
+        };
+        let display = dartr_element::type_display_string_with(ctx, ty, Default::default());
+        self.add_suggestion(LinkedEditSuggestionKind::Type, &display);
+        let substitution =
+            dartr_typesystem::type_algebra::MapSubstitution::from_interface_type(ctx, ty);
+        for &supertype in ctx.element_all_supertypes(element) {
+            let t = substitution.substitute_type(ctx, supertype);
+            let display = dartr_element::type_display_string_with(ctx, t, Default::default());
+            self.add_suggestion(LinkedEditSuggestionKind::Type, &display);
+        }
+    }
+
+    /// Dart `writeOverride` (with `invokeSuper: false`).
+    pub fn write_override(&mut self, element: dartr_element::ElemRef, set_selection: bool) {
+        use dartr_typesystem::member;
+        let resolved = self.file.resolved();
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let prefix = Self::get_indent(1);
+        let prefix2 = Self::get_indent(2);
+        let base = member::base_element(&ctx, element);
+        let is_getter = base.tag() == Tag::Getter;
+        let is_setter = base.tag() == Tag::Setter;
+        let is_method = base.tag() == Tag::Method;
+        let Some(member_name) = member::name(&ctx, element).map(str::to_string) else {
+            return;
+        };
+        if member_name.is_empty() {
+            return;
+        }
+        let is_operator = is_method
+            && !member_name
+                .chars()
+                .next()
+                .is_some_and(|ch| ch.is_alphabetic() || ch == '_' || ch == '$');
+        self.writeln("@override");
+        self.write(&prefix);
+        if is_getter {
+            self.writeln(&format!("// TODO: implement {member_name}"));
+            self.write(&prefix);
+        }
+        let type_parameters = member::type_parameters(&ctx, element);
+        let return_type = member::return_type(&ctx, element);
+        if !is_setter {
+            let options = WriteType {
+                type_params_in_scope: Some(type_parameters.clone()),
+                ..Default::default()
+            };
+            if self.write_type(Some(return_type), &options) {
+                self.write(" ");
+            }
+        }
+        if is_getter {
+            self.write("get ");
+        } else if is_setter {
+            self.write("set ");
+        } else if is_operator {
+            self.write("operator ");
+        }
+        self.write(&member_name);
+        if is_getter {
+            self.write(" => ");
+            let body = |b: &mut Self| b.write("throw UnimplementedError()");
+            if set_selection {
+                self.select_all(body);
+            } else {
+                body(self);
+            }
+            self.write(";");
+            return;
+        }
+        let parameters = member::formal_parameters(&ctx, element);
+        let function_type = member::type_(&ctx, element);
+        let function_type_parameters: Vec<EId<TypeParameterElement>> = match *ctx.ty(function_type)
+        {
+            TypeKind::Function(f) => ctx.list(f.type_params).to_vec(),
+            _ => Vec::new(),
+        };
+        self.write_type_parameters(&ctx, &function_type_parameters, &type_parameters);
+        self.write_formal_parameters(&ctx, &parameters, &type_parameters, Some(&member_name));
+        self.writeln(" {");
+        self.write(&prefix2);
+        self.write(&format!("// TODO: implement {member_name}"));
+        if is_setter || matches!(ctx.ty(return_type), TypeKind::Void) {
+            if set_selection {
+                self.select_here();
+            }
+        } else {
+            self.newline();
+            self.write(&prefix2);
+            let body = |b: &mut Self| b.write("throw UnimplementedError();");
+            if set_selection {
+                self.select_all(body);
+            } else {
+                body(self);
+            }
+        }
+        self.newline();
+        self.write(&prefix);
+        self.write("}");
+    }
+}
+
 impl super::change_builder::FileEditBuilder<'_, '_> {
     /// Dart `DartFileEditBuilder.canWriteType` at [offset].
     pub fn can_write_type_at(&mut self, offset: u32, ty: TypeId) -> bool {

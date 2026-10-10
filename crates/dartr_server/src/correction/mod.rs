@@ -22,6 +22,7 @@ pub mod code_style;
 pub mod dart_edit;
 pub mod fix_kind;
 pub mod fix_processor;
+pub mod flutter;
 pub mod generated;
 pub mod ignore;
 pub mod imports;
