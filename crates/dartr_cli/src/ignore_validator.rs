@@ -161,10 +161,12 @@ fn report_unnecessary_or_removed_ignores(
     reported: &mut Vec<Diagnostic>,
 ) {
     use dartr_lints::RuleStateType;
-    // Dart `_validDiagnosticCodeNames`.
+    // Dart `_validDiagnosticCodeNames`: the analyzer's `diagnosticCodeValues`,
+    // which has no lint codes (those are in the linter package).
     let valid_names = || {
         dartr_diagnostics::all_codes()
             .iter()
+            .filter(|c| c.diagnostic_type != dartr_diagnostics::DiagnosticType::Lint)
             .map(|c| c.lower_case_name())
     };
     for element in ignored_names {

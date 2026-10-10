@@ -109,51 +109,6 @@ pub fn annotation_status(
     (!unresolved).then_some(false)
 }
 
-/// Reads annotations from a declaration in one of the resolved library units.
-/// Imported element annotations cannot be inspected until Wave D evaluates the
-/// copied metadata and fills `metadata_flags`.
-pub fn element_annotation_status(
-    c: &LinterContext<'_>,
-    element: ElementId,
-    expected: KnownAnnotation,
-) -> Option<bool> {
-    let mut found = false;
-    let mut unresolved = false;
-    for unit in std::iter::once(*c).chain(
-        (0..c.resolved_units.len())
-            .filter(|&index| index != c.current_unit)
-            .filter_map(|index| c.resolved_unit(index)),
-    ) {
-        for node in (0..unit.ast.node_count())
-            .map(NodeId::from_index)
-            .filter(|&node| unit.declared_element(node) == Some(element))
-        {
-            found = true;
-            match annotation_status(&unit, node, expected) {
-                Some(true) => return Some(true),
-                Some(false) => {}
-                None => unresolved = true,
-            }
-        }
-    }
-    if found {
-        return (!unresolved).then_some(false);
-    }
-
-    let resolved = c.resolved?;
-    let metadata = &resolved
-        .ctx
-        .fragment_data(resolved.ctx.element_data(element)?.first_fragment)?
-        .metadata;
-    if metadata.annotations.is_empty() {
-        Some(false)
-    } else {
-        // Metadata copied from another library has no resolved annotation AST
-        // identity, and C9 does not populate this lazy flag cache.
-        None
-    }
-}
-
 pub fn declared_type(c: &LinterContext<'_>, node: impl Into<NodeId>) -> Option<TypeId> {
     let resolved = c.resolved?;
     let element = c.declared_element(node)?;

@@ -72,6 +72,29 @@ fn is_augmentation(c: &LinterContext<'_>, node: NodeId) -> bool {
     }
 }
 
+/// Dart `_isOverridingMember`: the enclosing class (a `ClassElement`, not a
+/// mixin, enum or extension) inherits a member with the name.
+fn is_overriding_member(c: &LinterContext<'_>, member: dartr_element::ElementId) -> bool {
+    let Some(r) = c.resolved else { return false };
+    let mut class = r.ctx.element_data(member).and_then(|d| d.enclosing);
+    while let Some(e) = class {
+        if e.tag() == dartr_element::Tag::Class {
+            break;
+        }
+        class = r.ctx.element_data(e).and_then(|d| d.enclosing);
+    }
+    let Some(class) = class.and_then(|e| e.cast::<InterfaceElement>()) else {
+        return false;
+    };
+    let Some(name) = element_name(c, ElemRef::Base(member)) else {
+        return false;
+    };
+    let library = r.ctx.element_data(class.raw()).and_then(|d| d.library);
+    InheritanceManager3::new(r.ctx)
+        .get_inherited(class, Name::new(&r.ctx, library, name))
+        .is_some()
+}
+
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(r) = c.resolved else { return };
     if is_augmentation(c, node) {
@@ -93,19 +116,11 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             {
                 return;
             }
-            let Some(data) = r.ctx.element_data(element) else {
+            // Dart `node.hasInheritedMethod`.
+            if crate::rules::batch_b::util::look_up_inherited_method(c, node).is_some() {
                 return;
-            };
-            let Some(enclosing) = data.enclosing.and_then(|e| e.cast::<InterfaceElement>()) else {
-                return;
-            };
-            let Some(name) = element_name(c, ElemRef::Base(element)) else {
-                return;
-            };
-            if InheritanceManager3::new(r.ctx)
-                .get_overridden(enclosing, Name::for_library(&r.ctx, data.library, name))
-                .is_some_and(|members| !members.is_empty())
-            {
+            }
+            if is_overriding_member(c, element) {
                 return;
             }
         }
