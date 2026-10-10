@@ -98,4 +98,6 @@ rules!(
     prefer_final_locals,
     prefer_is_empty,
     use_enums,
+    public_member_api_docs,
+    strict_top_level_inference,
 );
