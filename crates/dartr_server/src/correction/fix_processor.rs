@@ -44,7 +44,11 @@ pub struct FixUnit<'a> {
 }
 
 impl<'a> FixUnit<'a> {
-    fn context<'b>(&'b self, diagnostic: &'b Diagnostic, bulk: bool) -> ProducerContext<'b>
+    pub(crate) fn context<'b>(
+        &'b self,
+        diagnostic: &'b Diagnostic,
+        bulk: bool,
+    ) -> ProducerContext<'b>
     where
         'a: 'b,
     {
@@ -93,7 +97,7 @@ fn is_lint(d: &Diagnostic) -> bool {
 }
 
 /// The producer names of [d] (single, multi).
-fn producer_names(d: &Diagnostic) -> (&'static [&'static str], &'static [&'static str]) {
+pub(crate) fn producer_names(d: &Diagnostic) -> (&'static [&'static str], &'static [&'static str]) {
     let r = registry();
     let name = d.code.camel_case_name;
     if is_lint(d) {

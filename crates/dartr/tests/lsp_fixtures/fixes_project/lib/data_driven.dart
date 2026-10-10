@@ -29,3 +29,10 @@ void parameters(int a, {int? b}) {
 class Mixed with UnknownMixin {}
 
 class Implementer implements Point2, Point2 {}
+
+void deprecations(Box box) {
+  print(compute(1, 2, scale: 3));
+  box.resize(1, height: 2);
+  print(box.length);
+  print(Box.old(1));
+}

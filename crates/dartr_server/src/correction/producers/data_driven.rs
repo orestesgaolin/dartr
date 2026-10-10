@@ -7,10 +7,12 @@
 
 //! Data-driven fixes (`fix_data.yaml`, as `dart fix` applies them).
 //!
-//! Ported: the element transforms whose changes are all `rename` changes
-//! (no `oneOf` selectors, no `library` transforms). Transforms with other
-//! changes (`addParameter`, `removeParameter`, `renameParameter`,
-//! `replacedBy`, `addTypeParameter`, `changeParameterType`) give no fix.
+//! Ported: the element transforms with the changes `rename`,
+//! `renameParameter`, `addParameter`, `removeParameter`, `addTypeParameter`
+//! and `replacedBy` (code templates with `fragment` and `import`
+//! variables). Not ported: `oneOf` selectors, `requiredIf`,
+//! `changeParameterType` and `library` transforms (the transform gives no
+//! fix).
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -26,10 +28,11 @@ use super::super::fix_kind::FixKind;
 use super::super::generated::fix_kinds as k;
 use super::super::imports::{existing_imports, library_uri};
 use super::super::producer::*;
+use super::data_driven_changes::*;
 
 /// Dart `ElementKind` of `element_kind.dart`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Kind {
+pub enum Kind {
     Class,
     Constant,
     Constructor,
@@ -95,8 +98,8 @@ pub struct Transform {
     title: String,
     bulk_apply: bool,
     element: ElementDescriptor,
-    /// The new names of the `rename` changes.
-    renames: Vec<String>,
+    /// The changes (Dart `UnconditionalChangesSelector`).
+    changes: Vec<Change>,
 }
 
 fn map_value<'a>(node: &'a YamlNode, key: &str) -> Option<&'a YamlNode> {
@@ -182,19 +185,29 @@ fn parse_transforms(text: &str, package_name: Option<&str>) -> Vec<Transform> {
         let Some(changes) = map_value(t, "changes").and_then(|c| c.as_list()) else {
             continue;
         };
-        let mut renames = Vec::new();
-        let mut supported = !changes.is_empty();
+        let transform_scope = parse_variables(map_value(t, "variables"), &[], package_name);
+        let mut parsed: Vec<Change> = Vec::new();
+        let mut modifications: Vec<ParameterModification> = Vec::new();
+        let mut supported = true;
         for change in changes {
-            match string_of(map_value(change, "kind")).as_deref() {
-                Some("rename") => match string_of(map_value(change, "newName")) {
-                    Some(n) => renames.push(n),
-                    None => supported = false,
-                },
-                _ => supported = false,
+            match parse_change(
+                change,
+                kind,
+                &components,
+                &transform_scope,
+                package_name,
+                &mut modifications,
+            ) {
+                Ok(Some(c)) => parsed.push(c),
+                Ok(None) => {}
+                Err(()) => supported = false,
             }
         }
         if !supported {
             continue;
+        }
+        if !modifications.is_empty() {
+            parsed.push(Change::ModifyParameters(modifications));
         }
         out.push(Transform {
             title,
@@ -204,10 +217,294 @@ fn parse_transforms(text: &str, package_name: Option<&str>) -> Vec<Transform> {
                 kind,
                 components,
             },
-            renames,
+            changes: parsed,
         });
     }
     out
+}
+
+/// A variable scope (Dart `VariableScope`): the generators by name.
+type Scope = Vec<(String, TemplatePart)>;
+
+/// Dart `TransformSetParser._translateUri`.
+fn translate_uri(uri: &str, package_name: Option<&str>) -> String {
+    match package_name {
+        Some(p) if !uri.starts_with("dart:") && !uri.starts_with("package:") => {
+            format!("package:{p}/{uri}")
+        }
+        _ => uri.to_string(),
+    }
+}
+
+/// Dart `CodeFragmentParser.parseAccessors`.
+fn parse_accessors(text: &str) -> Option<Vec<Accessor>> {
+    let mut out = Vec::new();
+    for part in text.split('.') {
+        let part = part.trim();
+        let (name, rest) = part.split_once('[')?;
+        let index = rest.strip_suffix(']')?.trim();
+        match name.trim() {
+            "arguments" => out.push(Accessor::Argument(match index.parse::<usize>() {
+                Ok(i) => ParameterReference::Positional(i),
+                Err(_) => ParameterReference::Named(index.to_string()),
+            })),
+            "typeArguments" => out.push(Accessor::TypeArgument(index.parse().ok()?)),
+            _ => return None,
+        }
+    }
+    (!out.is_empty()).then_some(out)
+}
+
+/// Dart `_translateTemplateVariables`.
+fn parse_variables(
+    node: Option<&YamlNode>,
+    enclosing: &[(String, TemplatePart)],
+    package_name: Option<&str>,
+) -> Scope {
+    let mut scope: Scope = enclosing.to_vec();
+    let Some(entries) = node.and_then(|n| n.as_map()) else {
+        return scope;
+    };
+    for (key, value) in entries {
+        let Some(name) = key.string_value() else {
+            continue;
+        };
+        let generator = match string_of(map_value(value, "kind")).as_deref() {
+            Some("fragment") => string_of(map_value(value, "value"))
+                .and_then(|v| parse_accessors(&v))
+                .map(TemplatePart::Fragment),
+            Some("import") => {
+                let uris: Vec<String> = map_value(value, "uris")
+                    .and_then(|u| u.as_list())
+                    .map(|l| {
+                        l.iter()
+                            .filter_map(|u| u.string_value())
+                            .map(|u| translate_uri(u, package_name))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                match string_of(map_value(value, "name")) {
+                    Some(n) if !uris.is_empty() => Some(TemplatePart::Import { uris, name: n }),
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        if let Some(g) = generator {
+            scope.insert(0, (name.to_string(), g));
+        }
+    }
+    scope
+}
+
+/// Dart `_translateCodeTemplate` (`requiredIf` makes the template
+/// unsupported).
+fn parse_code_template(
+    node: Option<&YamlNode>,
+    scope: &Scope,
+    package_name: Option<&str>,
+) -> Result<Option<CodeTemplate>, ()> {
+    let Some(node) = node else { return Ok(None) };
+    if map_value(node, "requiredIf").is_some() {
+        return Err(());
+    }
+    let Some(template) = string_of(map_value(node, "expression")) else {
+        return Err(());
+    };
+    let scope = parse_variables(map_value(node, "variables"), scope, package_name);
+    // Dart `_extractTemplateComponents`.
+    let mut parts = Vec::new();
+    let mut text_start = 0;
+    let mut variable_start = template.find("{%");
+    while let Some(start) = variable_start {
+        if text_start < start {
+            parts.push(TemplatePart::Text(template[text_start..start].to_string()));
+        }
+        let Some(end) = template[start + 2..].find("%}").map(|e| e + start + 2) else {
+            return Ok(Some(CodeTemplate { parts }));
+        };
+        let name = template[start + 2..end].trim();
+        if let Some((_, g)) = scope.iter().find(|(n, _)| n == name) {
+            parts.push(g.clone());
+        }
+        text_start = end + 2;
+        variable_start = template[text_start..].find("{%").map(|s| s + text_start);
+    }
+    if text_start < template.len() {
+        parts.push(TemplatePart::Text(template[text_start..].to_string()));
+    }
+    Ok(Some(CodeTemplate { parts }))
+}
+
+fn parameter_reference(change: &YamlNode) -> Option<ParameterReference> {
+    if let Some(index) = map_value(change, "index").and_then(|i| i.scalar()) {
+        return index
+            .to_dart_string()
+            .parse()
+            .ok()
+            .map(ParameterReference::Positional);
+    }
+    string_of(map_value(change, "name")).map(ParameterReference::Named)
+}
+
+/// Dart `compatibleReplacementTypes`.
+fn compatible_replacement(old: Kind, new: Kind) -> bool {
+    use Kind::*;
+    let sets: &[&[Kind]] = &[
+        &[Constructor],
+        &[Function, Method],
+        &[Getter, Method],
+        &[Constant, Field, Getter, Variable],
+        &[Field, Setter, Variable],
+        &[Class, Enum, ExtensionType, Mixin, Typedef],
+    ];
+    sets.iter().any(|s| s.contains(&old) && s.contains(&new))
+}
+
+/// Dart `_translateChange`: `Ok(None)` for parameter modifications (added
+/// to [modifications]) and invalid changes, `Err` for changes that dartr
+/// does not support.
+fn parse_change(
+    change: &YamlNode,
+    kind: Kind,
+    _components: &[String],
+    scope: &Scope,
+    package_name: Option<&str>,
+    modifications: &mut Vec<ParameterModification>,
+) -> Result<Option<Change>, ()> {
+    let Some(change_kind) = string_of(map_value(change, "kind")) else {
+        return Ok(None);
+    };
+    match change_kind.as_str() {
+        "rename" => Ok(string_of(map_value(change, "newName")).map(Change::Rename)),
+        "renameParameter" => {
+            let (Some(old_name), Some(new_name)) = (
+                string_of(map_value(change, "oldName")),
+                string_of(map_value(change, "newName")),
+            ) else {
+                return Ok(None);
+            };
+            Ok(Some(Change::RenameParameter { old_name, new_name }))
+        }
+        "addParameter" => {
+            let index = map_value(change, "index")
+                .and_then(|i| i.scalar())
+                .and_then(|s| s.to_dart_string().parse::<usize>().ok());
+            let name = string_of(map_value(change, "name"));
+            let style = string_of(map_value(change, "style"));
+            let (Some(index), Some(name), Some(style)) = (index, name, style) else {
+                return Ok(None);
+            };
+            if !matches!(
+                style.as_str(),
+                "optional_named" | "optional_positional" | "required_named" | "required_positional"
+            ) {
+                return Ok(None);
+            }
+            let is_required = style.starts_with("required_");
+            let is_positional = style.ends_with("_positional");
+            let argument_value =
+                parse_code_template(map_value(change, "argumentValue"), scope, package_name)?;
+            if is_required && argument_value.is_none() {
+                return Ok(None);
+            }
+            modifications.push(ParameterModification::Add {
+                index,
+                name,
+                is_required,
+                is_positional,
+                argument_value,
+            });
+            Ok(None)
+        }
+        "removeParameter" => {
+            if let Some(reference) = parameter_reference(change) {
+                modifications.push(ParameterModification::Remove(reference));
+            }
+            Ok(None)
+        }
+        "addTypeParameter" => {
+            let index = map_value(change, "index")
+                .and_then(|i| i.scalar())
+                .and_then(|s| s.to_dart_string().parse::<usize>().ok());
+            let name = string_of(map_value(change, "name"));
+            let extended_type =
+                parse_code_template(map_value(change, "extends"), scope, package_name)?;
+            let argument_value =
+                parse_code_template(map_value(change, "argumentValue"), scope, package_name)?;
+            let (Some(index), Some(name), Some(argument_value)) = (index, name, argument_value)
+            else {
+                return Ok(None);
+            };
+            Ok(Some(Change::AddTypeParameter {
+                index,
+                name,
+                extended_type,
+                argument_value,
+            }))
+        }
+        "replacedBy" => {
+            let Some(element) = map_value(change, "newElement") else {
+                return Ok(None);
+            };
+            let Some(new_element) = parse_element(element, package_name) else {
+                return Ok(None);
+            };
+            if !compatible_replacement(kind, new_element.kind) {
+                return Ok(None);
+            }
+            let replace_target = map_value(change, "replaceTarget")
+                .and_then(|b| b.scalar())
+                .is_some_and(|s| s.to_dart_string() == "true");
+            let mut arguments = Vec::new();
+            if let Some(list) = map_value(change, "arguments").and_then(|l| l.as_list()) {
+                for a in list {
+                    if let Some(t) = parse_code_template(Some(a), scope, package_name)? {
+                        arguments.push(t);
+                    }
+                }
+            }
+            Ok(Some(Change::ReplacedBy {
+                new_element,
+                replace_target,
+                arguments,
+            }))
+        }
+        _ => Err(()),
+    }
+}
+
+/// Dart `_translateElement` for the `newElement` of `replacedBy`.
+fn parse_element(element: &YamlNode, package_name: Option<&str>) -> Option<NewElement> {
+    let uris = map_value(element, "uris")?.as_list()?;
+    let library_uris: Vec<String> = uris
+        .iter()
+        .filter_map(|u| u.string_value())
+        .map(|u| translate_uri(u, package_name))
+        .collect();
+    let mut kind_and_name = None;
+    for (key, value) in element.as_map()? {
+        if let Some(kind) = key.string_value().and_then(Kind::from_key) {
+            kind_and_name = string_of(Some(value)).map(|n| (kind, n));
+        }
+    }
+    let (kind, name) = kind_and_name?;
+    let mut components = vec![name];
+    if let Some(c) = kind
+        .container_keys()
+        .iter()
+        .find_map(|key| string_of(map_value(element, key)))
+    {
+        components.push(c);
+    }
+    if library_uris.is_empty() {
+        return None;
+    }
+    Some(NewElement {
+        library_uris,
+        kind,
+        components,
+    })
 }
 
 /// The parsed transforms of the fix data files, by path and content.
@@ -687,20 +984,115 @@ impl CorrectionProducer for DataDrivenFix {
     }
 
     fn compute(&mut self, c: &ProducerContext<'_>, builder: &mut ChangeBuilder<'_>) {
-        // Dart `Rename.validate` then `Rename.apply` for each change.
-        let mut edits: Vec<(u32, u32, String)> = Vec::new();
-        for new_name in &self.transform.renames {
-            let Some(edit) = rename(c, self.transform.element.kind, new_name) else {
-                return;
-            };
-            edits.extend(edit);
+        // Dart `DataDrivenFix.compute`: validate each change, then apply.
+        enum Data {
+            Edits(Vec<(u32, u32, String)>),
+            Modify(Id<ArgumentList>, Vec<ParameterModification>),
+            TypeParameter(
+                TypeParameterData,
+                usize,
+                String,
+                Option<CodeTemplate>,
+                CodeTemplate,
+            ),
+            Replaced(ReplacedByData, NewElement, bool, Vec<CodeTemplate>),
+        }
+        let transform = &self.transform;
+        let mut data: Vec<Data> = Vec::new();
+        for change in &transform.changes {
+            match change {
+                Change::Rename(new_name) => {
+                    let Some(edit) = rename(c, transform.element.kind, new_name) else {
+                        return;
+                    };
+                    data.push(Data::Edits(edit));
+                }
+                Change::RenameParameter { old_name, new_name } => {
+                    // Dart `_IgnoredData`: no edit when the change does not apply.
+                    let edits = rename_parameter(c, old_name, new_name)
+                        .into_iter()
+                        .collect();
+                    data.push(Data::Edits(edits));
+                }
+                Change::ModifyParameters(modifications) => {
+                    let Some(list) = modify_parameters_argument_list(c) else {
+                        return;
+                    };
+                    data.push(Data::Modify(list, modifications.clone()));
+                }
+                Change::AddTypeParameter {
+                    index,
+                    name,
+                    extended_type,
+                    argument_value,
+                } => {
+                    let Some(d) = add_type_parameter_validate(
+                        c,
+                        *index,
+                        extended_type.as_ref(),
+                        argument_value,
+                    ) else {
+                        return;
+                    };
+                    data.push(Data::TypeParameter(
+                        d,
+                        *index,
+                        name.clone(),
+                        extended_type.clone(),
+                        argument_value.clone(),
+                    ));
+                }
+                Change::ReplacedBy {
+                    new_element,
+                    replace_target,
+                    arguments,
+                } => {
+                    let Some(d) = replaced_by_validate(
+                        c,
+                        &transform.element.components,
+                        new_element.kind,
+                        *replace_target,
+                    ) else {
+                        return;
+                    };
+                    data.push(Data::Replaced(
+                        d,
+                        new_element.clone(),
+                        *replace_target,
+                        arguments.clone(),
+                    ));
+                }
+            }
         }
         builder.add_dart_file_edit(c.path, |b| {
-            for (offset, length, text) in &edits {
-                if *length == 0 {
-                    b.add_simple_insertion(*offset, text);
-                } else {
-                    b.add_simple_replacement(*offset, *length, text);
+            for d in &data {
+                match d {
+                    Data::Edits(edits) => {
+                        for (offset, length, text) in edits {
+                            if *length == 0 {
+                                b.add_simple_insertion(*offset, text);
+                            } else {
+                                b.add_simple_replacement(*offset, *length, text);
+                            }
+                        }
+                    }
+                    Data::Modify(list, modifications) => {
+                        apply_modify_parameters(c, b, *list, modifications);
+                    }
+                    Data::TypeParameter(d, index, name, extended_type, argument_value) => {
+                        add_type_parameter_apply(
+                            c,
+                            b,
+                            d,
+                            *index,
+                            name,
+                            extended_type.as_ref(),
+                            argument_value,
+                        );
+                    }
+                    Data::Replaced(d, new_element, replace_target, arguments) => {
+                        replaced_by_apply(c, b, d, new_element, *replace_target, arguments);
+                    }
                 }
             }
         });
