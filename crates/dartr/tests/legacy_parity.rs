@@ -1367,6 +1367,20 @@ fn extended_legacy_requests_and_notifications_match_dart_3_13_3() {
     );
     let _ = std::fs::remove_dir_all(&temp_dir);
 
+    // Both servers must answer every scripted step; a session that lost steps
+    // would otherwise compare two short lists and pass.
+    let dart_keys: Vec<_> = dart_tx.steps.keys().collect();
+    let dartr_keys: Vec<_> = dartr_tx.steps.keys().collect();
+    assert_eq!(
+        dartr_keys, dart_keys,
+        "dart and dartr recorded different steps"
+    );
+    assert!(
+        dart_tx.steps.len() >= 73,
+        "dart recorded only {} steps",
+        dart_tx.steps.len()
+    );
+
     let mut diffs = Vec::new();
     for (key, dart_val) in &dart_tx.steps {
         let dartr_val = dartr_tx.steps.get(key).expect("missing step in dartr");
