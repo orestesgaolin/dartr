@@ -277,6 +277,7 @@ dependencies = [
  "dartr_element",
  "dartr_lints",
  "dartr_parser",
+ "dartr_plugins",
  "dartr_project",
  "dartr_resolver",
  "dartr_syntax",
@@ -438,6 +439,15 @@ version = "0.1.0"
 dependencies = [
  "dartr_diagnostics",
  "dartr_syntax",
+]
+
+[[package]]
+name = "dartr_plugins"
+version = "0.1.0"
+dependencies = [
+ "dartr_project",
+ "md-5",
+ "serde_json",
 ]
 
 [[package]]

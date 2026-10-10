@@ -238,3 +238,55 @@ fn new_analysis_error(
         context_messages,
     }
 }
+
+/// A protocol `AnalysisError` from an analyzer plugin (the server forwards
+/// it as is).
+pub fn plugin_analysis_error(error: &dartr_plugins::PluginError) -> AnalysisError {
+    let location = |l: &dartr_plugins::Location| Location {
+        file: l.file.clone(),
+        offset: l.offset,
+        length: l.length,
+        start_line: l.start_line,
+        start_column: l.start_column,
+        end_line: l.end_line,
+        end_column: l.end_column,
+    };
+    let severity = match error.severity.as_str() {
+        "ERROR" => DiagnosticSeverity::Error,
+        "WARNING" => DiagnosticSeverity::Warning,
+        _ => DiagnosticSeverity::Info,
+    };
+    // Protocol `AnalysisErrorType` names.
+    const TYPES: [&str; 8] = [
+        "CHECKED_MODE_COMPILE_TIME_ERROR",
+        "COMPILE_TIME_ERROR",
+        "HINT",
+        "LINT",
+        "STATIC_TYPE_WARNING",
+        "STATIC_WARNING",
+        "SYNTACTIC_ERROR",
+        "TODO",
+    ];
+    let type_ = TYPES
+        .iter()
+        .find(|t| **t == error.type_)
+        .copied()
+        .unwrap_or("STATIC_WARNING");
+    AnalysisError {
+        severity,
+        type_,
+        location: location(&error.location),
+        message: error.message.clone(),
+        correction: error.correction.clone(),
+        code: error.code.clone(),
+        url: error.url.clone(),
+        context_messages: error
+            .context_messages
+            .iter()
+            .map(|m| ContextMessage {
+                message: m.message.clone(),
+                location: location(&m.location),
+            })
+            .collect(),
+    }
+}

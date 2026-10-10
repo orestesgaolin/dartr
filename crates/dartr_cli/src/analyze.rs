@@ -266,10 +266,56 @@ fn run_parsed(
         },
     );
     let t_contexts = start.elapsed();
+    // The analyzer plugins run in their own isolates while dartr analyzes
+    // (dartdev `--no-plugins` turns them off).
+    let plugin_jobs = if args.plugins {
+        dartr_plugins::plugin_jobs(&collection)
+    } else {
+        Vec::new()
+    };
+    let dart = collection
+        .sdk
+        .as_ref()
+        .map(|sdk| dartr_plugins::dart_executable(sdk.path()));
+    let plugin_thread = match (&dart, plugin_jobs.is_empty()) {
+        (Some(dart), false) => {
+            let dart = dart.clone();
+            let roots = roots.clone();
+            Some(std::thread::spawn(move || {
+                dartr_plugins::run_plugins(&plugin_jobs, &roots, &dart)
+            }))
+        }
+        _ => None,
+    };
     let files = analyzed_dart_files(&collection);
     let t_files = start.elapsed();
     let mut results = provider.diagnostics_for_files(&collection, &files);
     results.extend(crate::provider::non_dart_diagnostics(&collection));
+    let plugin_output = plugin_thread
+        .and_then(|t| t.join().ok())
+        .unwrap_or_default();
+    // dartdev prints `server.pluginError` and `server.error` to stderr when
+    // they arrive; they make the exit code 4 when there are no issues.
+    let server_error_received =
+        !plugin_output.plugin_errors.is_empty() || !plugin_output.server_errors.is_empty();
+    for (message, stack_trace) in &plugin_output.server_errors {
+        let _ = writeln!(
+            stderr,
+            "An unexpected error was encountered by the Analysis Server."
+        );
+        let _ = writeln!(
+            stderr,
+            "Please file an issue at https://github.com/dart-lang/sdk/issues/new/choose with \
+             the following details:\n"
+        );
+        let _ = writeln!(stderr, "{message}");
+        if !stack_trace.is_empty() {
+            let _ = writeln!(stderr, "{stack_trace}");
+        }
+    }
+    for message in &plugin_output.plugin_errors {
+        let _ = writeln!(stderr, "{message}");
+    }
     let t_diagnostics = start.elapsed();
     if std::env::var_os("DARTR_TIMINGS").is_some() {
         let _ = writeln!(
@@ -312,15 +358,37 @@ fn run_parsed(
         }
     }
 
+    // Plugin errors (Dart `NotificationManager.recordAnalysisErrors`): the
+    // plugin applied its ignore comments and severities already.
+    for error in &plugin_output.errors {
+        let error = server::plugin_analysis_error(error);
+        if error.type_ == "TODO" && error.severity == dartr_diagnostics::DiagnosticSeverity::Info {
+            continue;
+        }
+        let is_priority_file = matches!(
+            paths::basename(&error.location.file),
+            "analysis_options.yaml" | "pubspec.yaml"
+        );
+        if is_priority_file && error.severity == dartr_diagnostics::DiagnosticSeverity::Error {
+            priority_errors.push(error);
+        } else {
+            non_priority_errors.push(error);
+        }
+    }
+
     let mut out = String::new();
     if priority_errors.is_empty() && non_priority_errors.is_empty() {
         if json_format {
             output::emit_json_format(&mut out, &[], memory);
-        } else if !machine_format {
+        } else if !machine_format && !server_error_received {
             out.push_str("No issues found!\n");
         }
         let _ = stdout.write_all(out.as_bytes());
-        return Ok(ExitResult::Success as i32);
+        return Ok(if server_error_received {
+            ExitResult::Crash
+        } else {
+            ExitResult::Success
+        } as i32);
     }
 
     let sort = |errors: &mut Vec<AnalysisError>| errors.sort_by(|a, b| a.compare(b));

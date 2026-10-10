@@ -1,0 +1,9 @@
+analyzer:
+  exclude:
+    - my_lint/**
+
+plugins:
+  my_lint:
+    path: my_lint
+    diagnostics:
+      no_print_calls: true
