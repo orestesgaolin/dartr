@@ -197,6 +197,9 @@ pub fn run(args: &[String], out: &mut dyn Write, err: &mut dyn Write) -> i32 {
         Some(args.codes.iter().map(|c| c.to_lowercase()).collect())
     };
     let mut fixer = Fixer::new(&target);
+    if let Some(codes) = &codes {
+        fixer.collection.enable_lint_rules(codes);
+    }
     let result = fixer.apply_all_edits(codes.as_deref());
     let dir = if is_directory {
         target.clone()
@@ -320,7 +323,11 @@ pub fn bulk_fixes(
     if let Some(message) = codes.and_then(undefined_codes_message) {
         return Err(message);
     }
-    let mut fixer = Fixer::with_collection(AnalysisContextCollection::new(included, options));
+    let mut collection = AnalysisContextCollection::new(included, options);
+    if let Some(codes) = codes {
+        collection.enable_lint_rules(codes);
+    }
+    let mut fixer = Fixer::with_collection(collection);
     Ok(fixer.fix_errors(codes))
 }
 
