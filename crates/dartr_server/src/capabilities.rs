@@ -131,7 +131,7 @@ pub const DART_FEATURES: &[Feature] = &[
     feature("ChangeWorkspaceFoldersRegistrations", None, true),
     feature("CodeActionRegistrations", Some("codeActionProvider"), false),
     feature("CodeLensRegistrations", Some("codeLensProvider"), false),
-    feature("CompletionRegistrations", Some("completionProvider"), false),
+    feature("CompletionRegistrations", Some("completionProvider"), true),
     feature("DefinitionRegistrations", Some("definitionProvider"), true),
     feature(
         "DocumentLinkRegistrations",
@@ -245,6 +245,22 @@ fn semantic_tokens_options() -> Value {
     })
 }
 
+/// Dart `dartCompletionTriggerCharacters`.
+const DART_COMPLETION_TRIGGER_CHARACTERS: &[&str] = &[".", "=", "(", "$", "\"", "'", "{", "/", ":"];
+
+/// Dart `CompletionOptions` / `CompletionRegistrationOptions` of the Dart
+/// files.
+fn completion_options(config: &LspClientConfiguration) -> Map<String, Value> {
+    let mut m = Map::new();
+    m.insert("triggerCharacters".into(), json!(DART_COMPLETION_TRIGGER_CHARACTERS));
+    if config.global().preview_commit_characters() {
+        m.insert("allCommitCharacters".into(), json!(["("]));
+    }
+    m.insert("resolveProvider".into(), json!(true));
+    m.insert("completionItem".into(), json!({"labelDetailsSupport": true}));
+    m
+}
+
 fn dart_files() -> Value {
     json!([{"language": "dart", "scheme": "file"}])
 }
@@ -282,6 +298,12 @@ pub fn server_capabilities(client: &ClientCapabilities, config: &LspClientConfig
     let mut c = Map::new();
     if !client.text_document_dynamic("callHierarchy") {
         c.insert("callHierarchyProvider".into(), json!(true));
+    }
+    if !client.text_document_dynamic("completion") {
+        c.insert(
+            "completionProvider".into(),
+            Value::Object(completion_options(config)),
+        );
     }
     if !client.text_document_dynamic("inlayHint") {
         c.insert(
@@ -378,6 +400,18 @@ pub fn dynamic_registrations(
         out.push(reg(
             "textDocument/prepareCallHierarchy",
             json!({"documentSelector": dart_files()}),
+        ));
+    }
+    if client.text_document_dynamic("completion") {
+        let mut options = completion_options(config);
+        options.insert("documentSelector".into(), dart_files());
+        out.push(reg("textDocument/completion", Value::Object(options)));
+        // Dart `nonDartCompletionTypes`: pubspec, analysis options and fix
+        // data files.
+        let non_dart: Vec<Value> = synchronised_types().as_array().unwrap()[1..].to_vec();
+        out.push(reg(
+            "textDocument/completion",
+            json!({"documentSelector": non_dart, "resolveProvider": true}),
         ));
     }
     if client.text_document_dynamic("definition") {

@@ -24,8 +24,6 @@ dart-code static experimental.textDocument.super
 dart-code static experimental.updateDiagnosticInformation
 dart-code dynamic textDocument/codeAction [dart,**/pubspec.yaml,**/analysis_options.yaml]
 dart-code dynamic textDocument/codeLens [dart]
-dart-code dynamic textDocument/completion [**/pubspec.yaml,**/analysis_options.yaml,**/lib/{fix_data.yaml,fix_data/**.yaml}]
-dart-code dynamic textDocument/completion [dart]
 dart-code dynamic textDocument/documentColor [dart]
 dart-code dynamic textDocument/documentLink [dart,**/pubspec.yaml,**/analysis_options.yaml]
 dart-code dynamic textDocument/inlineValue [dart]
@@ -52,9 +50,6 @@ static static command dart.refactor.remove_import_prefix
 static static command dart.refactor_add.import_prefix
 static static command refactor.perform
 static static command refactor.validate
-static static completionProvider.completionItem.labelDetailsSupport
-static static completionProvider.resolveProvider
-static static completionProvider.triggerCharacters
 static static documentLinkProvider.resolveProvider
 static static executeCommandProvider.workDoneProgress
 static static experimental.interactiveResolveProvider.kinds

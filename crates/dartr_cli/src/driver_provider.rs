@@ -128,6 +128,20 @@ pub struct DriverSession {
     /// defining unit (Dart `AnalysisDriver.getResolvedLibrary` results);
     /// cleared when a file changes.
     resolved: HashMap<(usize, String), Arc<ResolvedLibraryResult>>,
+    /// The contexts whose driver ran `discoverAvailableFiles`.
+    discovered: std::collections::HashSet<usize>,
+}
+
+/// A library file that a driver knows (Dart `FileSystemState.knownFiles`
+/// with a library kind).
+#[derive(Clone, Debug)]
+pub struct KnownLibrary {
+    pub path: String,
+    pub uri: String,
+    pub is_dart: bool,
+    pub is_dart_internal: bool,
+    pub is_src: bool,
+    pub package_name: Option<String>,
 }
 
 /// A resolved library with the element model it was resolved against
@@ -450,6 +464,96 @@ impl DriverSession {
             Ok(r) => {
                 self.drivers.insert(context, driver);
                 r
+            }
+            Err(_) => None,
+        }
+    }
+
+    /// Dart `AnalysisDriver.discoverAvailableFiles` for the driver of
+    /// [context] (once: the SDK libraries and the Dart files of the package
+    /// `lib` folders), then links every library file that the driver knows
+    /// (Dart `knownFiles` + `getLibraryByUri` of each). Returns the element
+    /// model after linking and the library files in the order the driver
+    /// found them; `None` when linking panics.
+    pub fn link_known_libraries(
+        &mut self,
+        collection: &AnalysisContextCollection,
+        context: usize,
+    ) -> Option<(dartr_element::WorldSnapshot, Vec<KnownLibrary>)> {
+        if context >= collection.contexts.len() {
+            return None;
+        }
+        let generation = self
+            .generation
+            .get_or_insert_with(|| Arc::new(Generation::new(0)))
+            .clone();
+        let mut driver = self.drivers.shift_remove(&context).unwrap_or_else(|| {
+            dartr_driver::project::context_driver(collection, context, generation.clone())
+        });
+        let discover = self.discovered.insert(context);
+        let analysis_context = &collection.contexts[context];
+        let sdk = analysis_context.sdk.as_ref().or(collection.sdk.as_ref());
+        let mut available: Vec<String> = Vec::new();
+        if discover {
+            if let Some(sdk) = sdk {
+                available.extend(
+                    sdk.libraries()
+                        .iter()
+                        .filter_map(|l| sdk.map_dart_uri(&l.short_name)),
+                );
+            }
+            fn recurse(folder: &str, out: &mut Vec<String>) {
+                let Some(children) = dartr_project::fs::children(folder) else {
+                    return;
+                };
+                for child in children {
+                    match child.kind {
+                        dartr_project::fs::ResourceKind::File => {
+                            if child.path.ends_with(".dart") {
+                                out.push(child.path);
+                            }
+                        }
+                        dartr_project::fs::ResourceKind::Folder => recurse(&child.path, out),
+                    }
+                }
+            }
+            for package in analysis_context.packages.packages() {
+                recurse(&package.lib, &mut available);
+            }
+        }
+        let result = pool().install(|| {
+            catch_unwind(AssertUnwindSafe(|| {
+                for path in &available {
+                    driver.fs.get_file_for_path(path);
+                }
+                driver.fs.discover();
+                let mut libraries = Vec::new();
+                let mut ids = Vec::new();
+                for f in driver.fs.files() {
+                    let Some(content) = f.content.as_ref() else {
+                        continue;
+                    };
+                    if !content.exists || !f.path.ends_with(".dart") || !content.kind.is_library() {
+                        continue;
+                    }
+                    ids.push(f.id);
+                    libraries.push(KnownLibrary {
+                        path: f.path.to_string(),
+                        uri: f.uri_str.to_string(),
+                        is_dart: f.uri_properties.is_dart,
+                        is_dart_internal: f.uri_properties.is_dart_internal,
+                        is_src: f.uri_properties.is_src,
+                        package_name: f.uri_properties.package_name.clone(),
+                    });
+                }
+                driver.link_libraries(&ids);
+                (driver.state.world.clone(), libraries)
+            }))
+        });
+        match result {
+            Ok(r) => {
+                self.drivers.insert(context, driver);
+                Some(r)
             }
             Err(_) => None,
         }
