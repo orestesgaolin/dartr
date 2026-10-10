@@ -8,6 +8,7 @@ use crate::{LinterContext, RuleVisitorRegistry};
 pub(crate) mod container_rules;
 pub(crate) mod flutter;
 pub(crate) mod util;
+pub(crate) mod variance_checker;
 
 macro_rules! rules {
     ($($rule:ident),* $(,)?) => {
@@ -107,4 +108,6 @@ rules!(
     use_late_for_private_fields_and_variables,
     unnecessary_parenthesis,
     unnecessary_async,
+    unsafe_variance,
+    unreachable_from_main,
 );
