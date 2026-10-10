@@ -2664,13 +2664,6 @@ impl<W: Write> Server<W> {
         };
         let options = collection.options_for(context, path);
         let has = |name: &str| options.lint_rules.iter().any(|r| r == name);
-        let quote = if has("prefer_single_quotes") {
-            '\''
-        } else if has("prefer_double_quotes") {
-            '"'
-        } else {
-            '\''
-        };
         let lint_quote = if has("prefer_single_quotes") {
             Some('\'')
         } else if has("prefer_double_quotes") {
@@ -2678,11 +2671,12 @@ impl<W: Write> Server<W> {
         } else {
             None
         };
+        let quote = lint_quote.unwrap_or('\'');
         dartr_server::completion::CodeStyle {
+            lint_quote,
             specify_types: has("always_specify_types"),
             make_locals_final: has("prefer_final_locals"),
             quote,
-            lint_quote,
         }
     }
 
@@ -3288,14 +3282,6 @@ impl<W: Write> Server<W> {
         if self.roots_dirty {
             self.refresh_roots();
         }
-        // The pubspec pass (`MissingDependencyValidator`) is not ported.
-        if update_pubspec == Some(true) {
-            return Ok(protocol::EditBulkFixesResult {
-                message: String::new(),
-                edits: Vec::new(),
-                details: Vec::new(),
-            });
-        }
         let codes: Option<Vec<String>> =
             codes.map(|c| c.iter().map(|s| s.to_lowercase()).collect());
         let options = CollectionOptions {
@@ -3304,8 +3290,16 @@ impl<W: Write> Server<W> {
             enabled_experiments: self.options.enabled_experiments.clone(),
             ..Default::default()
         };
-        // The bulk fix processor of dartr_server (`BulkFixProcessor.fixErrors`).
-        match dartr_server::server::fix_cli::bulk_fixes(included, &options, codes.as_deref()) {
+        // The bulk fix processor of dartr_server (`BulkFixProcessor.fixErrors`
+        // and `fixPubspec`).
+        let result = if update_pubspec == Some(true) {
+            Ok(dartr_server::server::fix_cli::bulk_fixes_pubspec(
+                included, &options,
+            ))
+        } else {
+            dartr_server::server::fix_cli::bulk_fixes(included, &options, codes.as_deref())
+        };
+        match result {
             Err(message) => Ok(protocol::EditBulkFixesResult {
                 message,
                 edits: Vec::new(),

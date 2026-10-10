@@ -44,6 +44,8 @@ pub mod commands {
     pub const FIX_ALL_IN_WORKSPACE: &str = "dart.edit.fixAllInWorkspace";
     pub const PREVIEW_FIX_ALL_IN_WORKSPACE: &str = "dart.edit.fixAllInWorkspace.preview";
     pub const SEND_WORKSPACE_EDIT: &str = "dart.edit.sendWorkspaceEdit";
+    pub const PERFORM_REFACTOR: &str = "refactor.perform";
+    pub const VALIDATE_REFACTOR: &str = "refactor.validate";
     pub const LOG_ACTION: &str = "dart.logAction";
 
     /// The commands that dartr executes (a subset of Dart
@@ -55,6 +57,8 @@ pub mod commands {
         PREVIEW_FIX_ALL_IN_WORKSPACE,
         FIX_ALL_IN_WORKSPACE,
         SEND_WORKSPACE_EDIT,
+        PERFORM_REFACTOR,
+        VALIDATE_REFACTOR,
         LOG_ACTION,
     ];
 }
@@ -179,6 +183,44 @@ impl ChangeWorkspace for ServerWorkspace<'_> {
                 kind: element_kind(element),
                 declared_in_library,
             });
+        }
+        // Dart iterates `FileSystemState.knownFiles`: order the libraries by
+        // the known-file order of the Dart driver.
+        if result.len() > 1 {
+            let added: Vec<String> = context
+                .root
+                .analyzed_files()
+                .into_iter()
+                .filter(|f| f.ends_with(".dart"))
+                .collect();
+            let mut available: Vec<String> = Vec::new();
+            if let Some(sdk) = context.sdk.as_ref().or(collection.sdk.as_ref()) {
+                available.extend(
+                    sdk.libraries()
+                        .iter()
+                        .filter_map(|l| sdk.map_dart_uri(&l.short_name)),
+                );
+            }
+            for package in context.packages.packages() {
+                dart_files_recursively(&package.lib, &mut available);
+            }
+            if self
+                .session
+                .link_known_libraries(collection, index)
+                .is_some()
+            {
+                let order = self.session.dart_known_order(index, &added, &available);
+                let rank: HashMap<&str, usize> = order
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| (p.as_str(), i))
+                    .collect();
+                result.sort_by_key(|d| {
+                    rank.get(d.library_path.as_str())
+                        .copied()
+                        .unwrap_or(usize::MAX)
+                });
+            }
         }
         result
     }
@@ -415,14 +457,14 @@ fn to_code_action_kind(id: Option<&str>, fallback: &str) -> String {
 
 /// The kind filters of a request (Dart `CodeActionComputer.only` and
 /// `supportedKinds`).
-struct KindFilter {
+pub(crate) struct KindFilter {
     only: Option<Vec<String>>,
     supported: Option<Vec<String>>,
 }
 
 impl KindFilter {
     /// Dart `shouldIncludeAnyOfKind`.
-    fn include_any_of_kind(&self, kind: &str) -> bool {
+    pub(crate) fn include_any_of_kind(&self, kind: &str) -> bool {
         match &self.only {
             Some(only) => only
                 .iter()
@@ -432,7 +474,7 @@ impl KindFilter {
     }
 
     /// Dart `shouldIncludeKind`.
-    fn include_kind(&self, kind: &str) -> bool {
+    pub(crate) fn include_kind(&self, kind: &str) -> bool {
         let is_match = |wanted: &String| kind == wanted || kind.starts_with(&format!("{wanted}."));
         if let Some(only) = &self.only {
             return only.iter().any(is_match);
@@ -446,12 +488,12 @@ impl KindFilter {
 
 impl Server {
     /// Dart `getVersionedDocumentIdentifier`.
-    fn versioned_document(&self, path: &str) -> Value {
+    pub(crate) fn versioned_document(&self, path: &str) -> Value {
         let version = self.overlays.get(path).and_then(|d| d.version);
         json!({"uri": path_to_uri(path), "version": version})
     }
 
-    fn client_flag(&self, pointer: &str) -> bool {
+    pub(crate) fn client_flag(&self, pointer: &str) -> bool {
         self.client
             .raw
             .pointer(pointer)
@@ -460,7 +502,7 @@ impl Server {
     }
 
     /// Dart `LspClientCapabilities.applyEdit`.
-    fn editor_supports_apply_edit(&self) -> bool {
+    pub(crate) fn editor_supports_apply_edit(&self) -> bool {
         self.client_flag("/workspace/applyEdit")
     }
 
@@ -617,6 +659,14 @@ impl Server {
                 literal,
             );
             actions.extend(sort_actions(assists, &range));
+            actions.extend(self.refactor_actions(
+                &path,
+                &resolved,
+                start_offset,
+                end_offset.saturating_sub(start_offset),
+                &filter,
+                literal,
+            ));
         }
         Ok(Value::Array(actions))
     }
@@ -943,6 +993,28 @@ impl Server {
             .and_then(Value::as_array)
             .cloned()
             .unwrap_or_default();
+        if command == commands::PERFORM_REFACTOR || command == commands::VALIDATE_REFACTOR {
+            // Dart `PositionalArgCommandHandler.parseArgList`.
+            let parameters = if arguments.len() == 6 {
+                json!({
+                    "kind": arguments[0],
+                    "path": arguments[1],
+                    "docVersion": arguments[2],
+                    "offset": arguments[3],
+                    "length": arguments[4],
+                    "options": arguments[5],
+                })
+            } else {
+                json!({})
+            };
+            let progress_token = params.get("workDoneToken").cloned();
+            return self.refactor_command(
+                id,
+                &parameters,
+                command == commands::PERFORM_REFACTOR,
+                progress_token,
+            );
+        }
         let parameters = if arguments.is_empty() {
             json!({})
         } else if arguments.len() == 1 && arguments[0].is_object() {
@@ -1429,7 +1501,7 @@ impl Server {
 
     /// Dart `sendWorkspaceEditToClient`: sends `workspace/applyEdit`; the
     /// response of the command is sent when the client answers.
-    fn send_workspace_edit_to_client(
+    pub(crate) fn send_workspace_edit_to_client(
         &mut self,
         id: &Value,
         name: &str,

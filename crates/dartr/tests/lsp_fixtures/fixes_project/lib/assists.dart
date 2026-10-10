@@ -56,3 +56,30 @@ void callbacks(List<int> items) {
 dynamic helper() {
   return helperConstant + const Other(1).x;
 }
+
+class Holder {
+  void Function(List<String> paths)? callback;
+  int Function(int a, {int? b})? other;
+
+  void use(Object o, Map<String, int> map) {
+    var copy = callback;
+    var second = other;
+    print([copy, second]);
+    if (o case String(:int length)) {
+      print(length);
+    }
+    for (var MapEntry(:key, :value) in map.entries) {
+      print([key, value]);
+    }
+    if (o case String(length: int size)) {
+      print(size);
+    }
+    final Map<dynamic, Object?> loose = {};
+    for (var MapEntry(:key, :value) in loose.entries) {
+      print([key, value]);
+    }
+    if (loose['a'] case String(:int length)) {
+      print(length);
+    }
+  }
+}

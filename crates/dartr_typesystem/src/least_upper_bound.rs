@@ -489,6 +489,15 @@ impl<'a> LeastUpperBoundHelper<'a> {
         ctx.instantiate_interface(element, &[], Nullability::None)
     }
 
+    /// Whether [t] is a record or function type with a typedef alias.
+    fn is_aliased_record_or_function(ctx: &Ctx<'a>, t: TypeId) -> bool {
+        match *ctx.ty(t) {
+            TypeKind::Record { alias, .. } => alias.is_some(),
+            TypeKind::Function(f) => f.alias.is_some(),
+            _ => false,
+        }
+    }
+
     /// `getLeastUpperBound(T1, T2)`: the least upper bound of two types.
     ///
     /// https://github.com/dart-lang/language
@@ -500,8 +509,12 @@ impl<'a> LeastUpperBoundHelper<'a> {
         let ctx = self.ctx();
 
         // UP(T, T) = T
-        // Dart: identical
-        if T1 == T2 {
+        // Dart: identical. Dart types are objects: two record or function
+        // types with a typedef alias are rarely the same object (for
+        // example the types of `x!` and `y!`, or of two declarations), and
+        // the record and function cases below build a new type without the
+        // alias. Interned equal types with an alias go there too.
+        if T1 == T2 && !Self::is_aliased_record_or_function(&ctx, T1) {
             return T1;
         }
 

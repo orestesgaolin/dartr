@@ -46,11 +46,16 @@ def main():
     ap.add_argument("--timeout", type=int, default=1800)
     ap.add_argument("--top", type=int, default=12)
     ap.add_argument("--out", help="write missing.txt and extra.txt here")
+    # dart's reference run uses its own cache, not ~/.dartServer: the shared cache was stale on
+    # 2026-10-10 (a false undefined_method on flutter_tools that an empty cache did not report).
+    ap.add_argument("--dart-cache", default=os.path.join(
+        os.environ.get("TMPDIR", "/tmp"), "dartr-analyze-compare-cache"),
+        help="cache directory for dart analyze (default: $TMPDIR/dartr-analyze-compare-cache)")
     ap.add_argument("targets", nargs="+")
     args = ap.parse_args()
 
     targets = [os.path.abspath(t) for t in args.targets]
-    dart, dart_time = run(["dart", "analyze", "--format=machine"] + targets, args.timeout)
+    dart, dart_time = run(["dart", "analyze", "--format=machine", f"--cache={args.dart_cache}"] + targets, args.timeout)
     dartr, dartr_time = run([os.path.abspath(args.dartr), "analyze", "--format=machine"] + targets, args.timeout)
     expected = parse(dart.stderr + dart.stdout)
     actual = parse(dartr.stderr + dartr.stdout)

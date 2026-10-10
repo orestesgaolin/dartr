@@ -2355,6 +2355,21 @@ fn run_extended_session(program: &Path, args: &[&str], root: &Path) -> ExtendedT
             "edit.bulkFixes:nonexistent_error".to_string(),
             normalize_paths(bulk_bad, &root_str),
         );
+
+        let bulk_all = client.request("edit.bulkFixes", json!({"included": [root]}));
+        steps.insert(
+            "edit.bulkFixes:all".to_string(),
+            normalize_paths(bulk_all, &root_str),
+        );
+
+        let bulk_pubspec = client.request(
+            "edit.bulkFixes",
+            json!({"included": [root], "updatePubspec": true}),
+        );
+        steps.insert(
+            "edit.bulkFixes:updatePubspec".to_string(),
+            normalize_paths(bulk_pubspec, &root_str),
+        );
     }
 
     // 22. lsp.handle: textDocument/completion, completionItem/resolve, textDocument/codeAction

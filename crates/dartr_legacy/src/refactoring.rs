@@ -376,14 +376,6 @@ fn is_valid_identifier(name: &str) -> bool {
     chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
 }
 
-fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    match chars.next() {
-        None => String::new(),
-        Some(f) => f.to_uppercase().collect::<String>() + chars.as_str(),
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 pub fn get_refactoring(
     resolved: Option<ResolvedUnitRef>,
@@ -414,10 +406,10 @@ pub fn get_refactoring(
             compute_inline_local_refactoring(&resolved, file, off, validate_only)
         }
         protocol::RefactoringKind::ConvertMethodToGetter => {
-            compute_convert_method_to_getter(&resolved, search_engine, file, off, validate_only)
+            compute_convert(&resolved, search_engine, off, validate_only, true)
         }
         protocol::RefactoringKind::ConvertGetterToMethod => {
-            compute_convert_getter_to_method(&resolved, search_engine, file, off, validate_only)
+            compute_convert(&resolved, search_engine, off, validate_only, false)
         }
         protocol::RefactoringKind::ExtractMethod => {
             compute_extract_method_refactoring(&resolved, file, off, len, validate_only, options)
@@ -454,190 +446,77 @@ fn fatal_initial_problem(message: impl Into<String>) -> RefactoringResponse {
     }
 }
 
+/// Dart `RefactoringManager` for `RENAME`, with the rename refactorings of
+/// `dartr_server`.
 fn compute_rename_refactoring(
     resolved: &ResolvedUnitRef,
     search_engine: Option<SearchEngine<'_>>,
-    file: &str,
+    _file: &str,
     offset: u32,
     validate_only: bool,
     options: Option<&Value>,
 ) -> std::result::Result<RefactoringResponse, (&'static str, String)> {
-    let target = {
-        let sink = NoopSink;
-        let ctx = resolved.ctx(&sink);
-        let unit = resolved.unit();
-        let u = dartr_server::element_locator::Unit {
-            ctx: &ctx,
-            ast: &unit.ast,
-            tables: &unit.tables,
-        };
-        find_rename_target(&u, unit.unit, offset)
-    };
-    let Some(target) = target else {
+    use dartr_server::refactoring::rename::Engine;
+    let Some(mut search_engine) = search_engine else {
         return Ok(fatal_initial_problem("Unable to create a refactoring"));
     };
-
-    let feedback = serde_json::to_value(protocol::RENAMEFeedback {
-        offset: target.node_offset as i64,
-        length: target.node_length as i64,
-        element_kind_name: target.element_kind_name.clone(),
-        old_name: target.old_name.clone(),
+    let unit = dartr_server::server::ResolvedUnitRef {
+        library: resolved.library.clone(),
+        index: resolved.index,
+    };
+    let mut engine = Engine {
+        host: &mut search_engine,
+    };
+    let Some((target, name_offset, name_length)) = engine.element_to_rename(&unit, offset) else {
+        return Ok(fatal_initial_problem("Unable to create a refactoring"));
+    };
+    let Some(mut rename) = engine.create_rename(&unit, target) else {
+        return Ok(fatal_initial_problem("Unable to create a refactoring"));
+    };
+    let mut response = RefactoringResponse {
+        initial_problems: Vec::new(),
+        options_problems: Vec::new(),
+        final_problems: Vec::new(),
+        feedback: None,
+        change: None,
+        potential_edits: None,
+    };
+    let initial = engine.check_initial_conditions(&mut rename);
+    response.initial_problems = crate::refactoring_host::problems(&initial);
+    if initial.has_fatal_error() {
+        return Ok(response);
+    }
+    response.feedback = serde_json::to_value(protocol::RENAMEFeedback {
+        offset: if name_offset == u32::MAX {
+            -1
+        } else {
+            name_offset as i64
+        },
+        length: name_length as i64,
+        element_kind_name: engine.element_kind_name(&rename),
+        old_name: rename.old_name.clone(),
     })
     .ok();
-
-    let mut options_problems = Vec::new();
-    let new_name = options
+    let Some(new_name) = options
         .and_then(|o| o.get("newName"))
-        .and_then(Value::as_str);
-
-    if let Some(new_name) = new_name {
-        let cap_kind = capitalize(&target.element_kind_name);
-        if new_name.is_empty() {
-            options_problems.push(protocol::RefactoringProblem {
-                severity: protocol::RefactoringProblemSeverity::FATAL,
-                message: format!("{cap_kind} name must not be empty."),
-                location: None,
-            });
-        } else if !is_valid_identifier(new_name) {
-            options_problems.push(protocol::RefactoringProblem {
-                severity: protocol::RefactoringProblemSeverity::FATAL,
-                message: format!("{cap_kind} name must be a valid identifier."),
-                location: None,
-            });
-        } else if new_name == target.old_name {
-            options_problems.push(protocol::RefactoringProblem {
-                severity: protocol::RefactoringProblemSeverity::FATAL,
-                message: "The new name must be different than the current name.".to_string(),
-                location: None,
-            });
-        }
+        .and_then(Value::as_str)
+    else {
+        return Ok(response);
+    };
+    rename.new_name = new_name.to_string();
+    let options_status = engine.check_new_name(&rename);
+    response.options_problems = crate::refactoring_host::problems(&options_status);
+    if options_status.has_fatal_error() || validate_only {
+        return Ok(response);
     }
-
-    let has_fatal = options_problems
-        .iter()
-        .any(|p| matches!(p.severity, protocol::RefactoringProblemSeverity::FATAL));
-
-    let mut change = None;
-    let mut potential_edits = None;
-
-    if !validate_only
-        && !has_fatal
-        && let Some(new_name) = new_name
-    {
-        let mut file_edits_map: indexmap::IndexMap<String, Vec<protocol::SourceEdit>> =
-            indexmap::IndexMap::new();
-
-        // Add declaration edit
-        {
-            let sink = NoopSink;
-            let ctx = resolved.ctx(&sink);
-            let non_syn = dartr_element::diagnostics::non_synthetic(&ctx, target.element);
-            if let Some(ed) = ctx.element_data(non_syn) {
-                let mut cur_frag = Some(ed.first_fragment);
-                while let Some(frag) = cur_frag {
-                    if let Some(fd) = ctx.fragment_data(frag) {
-                        if let Some(name_off) = fd.name_offset
-                            && let Some(frag_path) =
-                                dartr_server::navigation::fragment_path(&ctx, frag)
-                        {
-                            let name_len = fd
-                                .name
-                                .map(|n| ctx.name_str(n).len())
-                                .unwrap_or(target.old_name.len());
-                            file_edits_map.entry(frag_path).or_default().push(
-                                protocol::SourceEdit {
-                                    offset: name_off as i64,
-                                    length: name_len as i64,
-                                    replacement: new_name.to_string(),
-                                    id: None,
-                                    description: None,
-                                },
-                            );
-                        }
-                        cur_frag = fd.next_fragment;
-                    } else {
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Add reference edits
-        if let Some(mut engine) = search_engine {
-            let selem = SElem {
-                lib: resolved.library.clone(),
-                unit: resolved.index,
-                id: target.element,
-            };
-            let refs = engine.find_element_references(&selem, false);
-            for r in refs {
-                let loc = r.location;
-                let edits = file_edits_map.entry(loc.file).or_default();
-                if !edits
-                    .iter()
-                    .any(|e| e.offset == loc.offset && e.length == loc.length)
-                {
-                    edits.push(protocol::SourceEdit {
-                        offset: loc.offset,
-                        length: loc.length,
-                        replacement: new_name.to_string(),
-                        id: None,
-                        description: None,
-                    });
-                }
-            }
-        }
-
-        // Fallback if target node wasn't covered
-        let file_edits = file_edits_map.entry(file.to_string()).or_default();
-        if !file_edits
-            .iter()
-            .any(|e| e.offset == target.node_offset as i64)
-        {
-            file_edits.push(protocol::SourceEdit {
-                offset: target.node_offset as i64,
-                length: target.node_length as i64,
-                replacement: new_name.to_string(),
-                id: None,
-                description: None,
-            });
-        }
-
-        let mut source_file_edits = Vec::new();
-        for (f, mut edits) in file_edits_map {
-            edits.sort_by(|a, b| b.offset.cmp(&a.offset));
-            source_file_edits.push(protocol::SourceFileEdit {
-                file: f,
-                file_stamp: 0,
-                edits,
-            });
-        }
-
-        let title_kind = target
-            .element_kind_name
-            .split(' ')
-            .map(capitalize)
-            .collect::<Vec<_>>()
-            .join(" ");
-        change = Some(protocol::SourceChange {
-            message: format!("Rename {title_kind} '{}' to '{new_name}'", target.old_name),
-            edits: source_file_edits,
-            linked_edit_groups: Vec::new(),
-            selection: None,
-            selection_length: None,
-            id: None,
-        });
-        let _ = &mut potential_edits;
+    let final_status = engine.check_final_conditions(&mut rename);
+    response.final_problems = crate::refactoring_host::problems(&final_status);
+    if final_status.has_fatal_error() {
+        return Ok(response);
     }
-
-    Ok(RefactoringResponse {
-        initial_problems: Vec::new(),
-        options_problems,
-        final_problems: Vec::new(),
-        feedback,
-        change,
-        potential_edits,
-    })
+    let change = engine.create_change(&mut rename);
+    response.change = Some(crate::refactoring_host::change(&change));
+    Ok(response)
 }
 
 fn find_selected_expression(
@@ -1034,350 +913,70 @@ fn compute_inline_local_refactoring(
     })
 }
 
-fn compute_convert_method_to_getter(
+/// Dart `RefactoringManager` for `CONVERT_METHOD_TO_GETTER` and
+/// `CONVERT_GETTER_TO_METHOD`, with the refactorings of `dartr_server`.
+fn compute_convert(
     resolved: &ResolvedUnitRef,
     search_engine: Option<SearchEngine<'_>>,
-    file: &str,
     offset: u32,
     validate_only: bool,
+    to_getter: bool,
 ) -> std::result::Result<RefactoringResponse, (&'static str, String)> {
-    let target_info = (|| -> Option<_> {
-        let sink = NoopSink;
-        let ctx = resolved.ctx(&sink);
-        let unit = resolved.unit();
-        let ast = &unit.ast;
-        let u = dartr_server::element_locator::Unit {
-            ctx: &ctx,
-            ast,
-            tables: &unit.tables,
-        };
-        if !is_convert_method_to_getter_available(&u, unit.unit, offset) {
-            return None;
-        }
-        let node = ast.node_covering(unit.unit, offset, 0)?;
-        let mut cur = Some(node);
-        let mut found = None;
-        while let Some(n) = cur {
-            if let Some(md) = ast.cast::<MethodDeclaration>(n) {
-                let d = &ast[md];
-                let params = d.parameters?;
-                let name_tok = ast.tokens.get(d.name);
-                let params_start = ast.offset(params.raw());
-                let params_end = ast.end(params.raw());
-                let el = u.declared_element(md)?;
-                found = Some((el, name_tok.offset, params_start, params_end - params_start));
-                break;
-            }
-            if let Some(fd) = ast.cast::<FunctionDeclaration>(n) {
-                let d = &ast[fd];
-                let fe = d.function_expression;
-                let params = ast[fe].parameters?;
-                let name_tok = ast.tokens.get(d.name);
-                let params_start = ast.offset(params.raw());
-                let params_end = ast.end(params.raw());
-                let el = u.declared_element(fd)?;
-                found = Some((el, name_tok.offset, params_start, params_end - params_start));
-                break;
-            }
-            cur = ast.parent(n);
-        }
-        found
-    })();
-    let Some((element, name_offset, params_offset, params_length)) = target_info else {
+    use dartr_server::refactoring::rename::Engine;
+    let Some(mut search_engine) = search_engine else {
         return Ok(fatal_initial_problem("Unable to create a refactoring"));
     };
-
-    let mut change = None;
-    if !validate_only {
-        let mut file_edits: indexmap::IndexMap<String, Vec<protocol::SourceEdit>> =
-            indexmap::IndexMap::new();
-        let decl_edits = file_edits.entry(file.to_string()).or_default();
-        decl_edits.push(protocol::SourceEdit {
-            offset: params_offset as i64,
-            length: params_length as i64,
-            replacement: String::new(),
-            id: None,
-            description: None,
-        });
-        decl_edits.push(protocol::SourceEdit {
-            offset: name_offset as i64,
-            length: 0,
-            replacement: "get ".to_string(),
-            id: None,
-            description: None,
-        });
-
-        if let Some(mut engine) = search_engine {
-            let selem = SElem {
-                lib: resolved.library.clone(),
-                unit: resolved.index,
-                id: element,
-            };
-            let refs = engine.find_element_references(&selem, false);
-            for r in refs {
-                let loc = r.location;
-                // Remove trailing `()` after reference if present in source
-                if let Some(src) = dartr_project::fs::read_string(&loc.file) {
-                    let after = (loc.offset + loc.length) as usize;
-                    if src.get(after..after + 2) == Some("()") {
-                        file_edits
-                            .entry(loc.file)
-                            .or_default()
-                            .push(protocol::SourceEdit {
-                                offset: after as i64,
-                                length: 2,
-                                replacement: String::new(),
-                                id: None,
-                                description: None,
-                            });
-                    }
-                }
-            }
+    let unit = dartr_server::server::ResolvedUnitRef {
+        library: resolved.library.clone(),
+        index: resolved.index,
+    };
+    let mut engine = Engine {
+        host: &mut search_engine,
+    };
+    let element = engine.element_at(&unit, offset);
+    let element = element.filter(|e| {
+        if to_getter {
+            dartr_server::element_locator::is_executable(e.id)
+        } else {
+            e.id.tag() == Tag::Getter
         }
-
-        let mut edits_list = Vec::new();
-        for (f, mut edits) in file_edits {
-            edits.sort_by(|a, b| b.offset.cmp(&a.offset));
-            edits_list.push(protocol::SourceFileEdit {
-                file: f,
-                file_stamp: 0,
-                edits,
-            });
-        }
-        change = Some(protocol::SourceChange {
-            message: "Convert Method To Getter".to_string(),
-            edits: edits_list,
-            linked_edit_groups: Vec::new(),
-            selection: None,
-            selection_length: None,
-            id: None,
-        });
-    }
-
-    Ok(RefactoringResponse {
+    });
+    let Some(element) = element else {
+        return Ok(fatal_initial_problem("Unable to create a refactoring"));
+    };
+    let mut response = RefactoringResponse {
         initial_problems: Vec::new(),
         options_problems: Vec::new(),
         final_problems: Vec::new(),
         feedback: None,
-        change,
+        change: None,
         potential_edits: None,
-    })
-}
-
-fn compute_convert_getter_to_method(
-    resolved: &ResolvedUnitRef,
-    search_engine: Option<SearchEngine<'_>>,
-    file: &str,
-    offset: u32,
-    validate_only: bool,
-) -> std::result::Result<RefactoringResponse, (&'static str, String)> {
-    let target_info = (|| -> Option<_> {
-        let sink = NoopSink;
-        let ctx = resolved.ctx(&sink);
-        let unit = resolved.unit();
-        let ast = &unit.ast;
-        let u = dartr_server::element_locator::Unit {
-            ctx: &ctx,
-            ast,
-            tables: &unit.tables,
-        };
-        let node = ast.node_covering(unit.unit, offset, 0)?;
-        let mut cur = Some(node);
-        let mut found = None;
-        while let Some(n) = cur {
-            if let Some(md) = ast.cast::<MethodDeclaration>(n) {
-                let d = &ast[md];
-                let prop = d.property_keyword?;
-                if ast.tokens.lexeme(prop) != "get" {
-                    break;
-                }
-                let prop_tok = ast.tokens.get(prop);
-                let name_tok = ast.tokens.get(d.name);
-                let el = u.declared_element(md)?;
-                found = Some((
-                    el,
-                    prop_tok.offset,
-                    name_tok.offset - prop_tok.offset,
-                    name_tok.end(),
-                ));
-                break;
-            }
-            if let Some(fd) = ast.cast::<FunctionDeclaration>(n) {
-                let d = &ast[fd];
-                let prop = d.property_keyword?;
-                if ast.tokens.lexeme(prop) != "get" {
-                    break;
-                }
-                let prop_tok = ast.tokens.get(prop);
-                let name_tok = ast.tokens.get(d.name);
-                let el = u.declared_element(fd)?;
-                found = Some((
-                    el,
-                    prop_tok.offset,
-                    name_tok.offset - prop_tok.offset,
-                    name_tok.end(),
-                ));
-                break;
-            }
-            cur = ast.parent(n);
-        }
-        found
-    })();
-    let Some((element, get_offset, get_len, name_end)) = target_info else {
-        return Ok(fatal_initial_problem("Unable to create a refactoring"));
     };
-
-    let mut change = None;
-    if !validate_only {
-        let mut file_edits: indexmap::IndexMap<String, Vec<protocol::SourceEdit>> =
-            indexmap::IndexMap::new();
-        let add_decl_edit =
-            |file_edits: &mut indexmap::IndexMap<String, Vec<protocol::SourceEdit>>,
-             f_path: String,
-             g_off: u32,
-             g_len: u32,
-             n_end: u32| {
-                let decl_edits = file_edits.entry(f_path).or_default();
-                if !decl_edits
-                    .iter()
-                    .any(|e| e.offset == n_end as i64 && e.replacement == "()")
-                {
-                    decl_edits.push(protocol::SourceEdit {
-                        offset: n_end as i64,
-                        length: 0,
-                        replacement: "()".to_string(),
-                        id: None,
-                        description: None,
-                    });
-                }
-                if !decl_edits
-                    .iter()
-                    .any(|e| e.offset == g_off as i64 && e.length == g_len as i64)
-                {
-                    decl_edits.push(protocol::SourceEdit {
-                        offset: g_off as i64,
-                        length: g_len as i64,
-                        replacement: String::new(),
-                        id: None,
-                        description: None,
-                    });
-                }
-            };
-
-        add_decl_edit(
-            &mut file_edits,
-            file.to_string(),
-            get_offset,
-            get_len,
-            name_end,
-        );
-
-        if let Some(mut engine) = search_engine {
-            let field_id = {
-                let sink = NoopSink;
-                let ctx = resolved.ctx(&sink);
-                element
-                    .cast::<dartr_element::GetterElement>()
-                    .and_then(|g| ctx.get(g).variable.get())
-                    .filter(|v| v.raw().tag() == Tag::Field)
-                    .map(|v| v.raw())
-            };
-            let getter_selems: Vec<SElem> = if let Some(fid) = field_id {
-                let field_selem = SElem {
-                    lib: resolved.library.clone(),
-                    unit: resolved.index,
-                    id: fid,
-                };
-                let (members, _) = engine.hierarchy_members_and_parameters(&field_selem);
-                members
-                    .into_iter()
-                    .filter_map(|m| {
-                        let gid = m.with(|ctx| {
-                            let f = m.id.cast::<dartr_element::FieldElement>()?;
-                            let g = ctx.get(f).getter?;
-                            let flags =
-                                dartr_resolver::element_ext::first_fragment_flags(ctx, g.raw());
-                            if flags.contains(
-                                dartr_element::FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_DECLARATION,
-                            ) {
-                                Some(g.raw())
-                            } else {
-                                None
-                            }
-                        })?;
-                        Some(m.same(gid))
-                    })
-                    .collect()
-            } else {
-                vec![SElem {
-                    lib: resolved.library.clone(),
-                    unit: resolved.index,
-                    id: element,
-                }]
-            };
-
-            for g_selem in getter_selems {
-                if let Some((frag_path, g_off, g_len, n_end)) = g_selem.with(|ctx| {
-                    let first = ctx.element_data(g_selem.id)?.first_fragment;
-                    let frag_path = dartr_server::navigation::fragment_path(ctx, first)?;
-                    let fd = ctx.fragment_data(first)?;
-                    let name_off = fd.name_offset?;
-                    let name_len = fd.name.map(|n| ctx.name_str(n).len())? as u32;
-                    let src = dartr_project::fs::read_string(&frag_path)?;
-                    let before = src.get(..name_off as usize)?;
-                    let get_pos = before.rfind("get")? as u32;
-                    Some((frag_path, get_pos, name_off - get_pos, name_off + name_len))
-                }) {
-                    add_decl_edit(&mut file_edits, frag_path, g_off, g_len, n_end);
-                }
-                let refs = engine.find_element_references(&g_selem, false);
-                for r in refs {
-                    let loc = r.location;
-                    let after = loc.offset + loc.length;
-                    let edits = file_edits.entry(loc.file).or_default();
-                    if !edits
-                        .iter()
-                        .any(|e| e.offset == after && e.replacement == "()")
-                    {
-                        edits.push(protocol::SourceEdit {
-                            offset: after,
-                            length: 0,
-                            replacement: "()".to_string(),
-                            id: None,
-                            description: None,
-                        });
-                    }
-                }
-            }
-        }
-
-        let mut edits_list = Vec::new();
-        for (f, mut edits) in file_edits {
-            edits.sort_by(|a, b| b.offset.cmp(&a.offset));
-            edits_list.push(protocol::SourceFileEdit {
-                file: f,
-                file_stamp: 0,
-                edits,
-            });
-        }
-        change = Some(protocol::SourceChange {
-            message: "Convert Getter To Method".to_string(),
-            edits: edits_list,
-            linked_edit_groups: Vec::new(),
-            selection: None,
-            selection_length: None,
-            id: None,
-        });
+    let initial = if to_getter {
+        engine.method_to_getter_initial(&element)
+    } else {
+        engine.getter_to_method_initial(&element)
+    };
+    response.initial_problems = crate::refactoring_host::problems(&initial);
+    if initial.has_fatal_error() || validate_only {
+        return Ok(response);
     }
-
-    Ok(RefactoringResponse {
-        initial_problems: Vec::new(),
-        options_problems: Vec::new(),
-        final_problems: Vec::new(),
-        feedback: None,
-        change,
-        potential_edits: None,
-    })
+    let final_status = if to_getter {
+        dartr_server::refactoring::status::RefactoringStatus::new()
+    } else {
+        engine.getter_to_method_final(&element)
+    };
+    response.final_problems = crate::refactoring_host::problems(&final_status);
+    if final_status.has_fatal_error() {
+        return Ok(response);
+    }
+    let change = if to_getter {
+        engine.method_to_getter_change(&element)
+    } else {
+        engine.getter_to_method_change(&element)
+    };
+    response.change = Some(crate::refactoring_host::change(&change));
+    Ok(response)
 }
 
 fn compute_extract_method_refactoring(

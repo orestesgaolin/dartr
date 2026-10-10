@@ -870,6 +870,11 @@ impl CorrectionProducer for AddTypeAnnotation {
             else {
                 return;
             };
+            // Checked with `dart language-server`: no assist for a pattern
+            // variable whose matched value type is `dynamic`.
+            if matches!(c.ctx.ty(ty), TypeKind::Dynamic) {
+                return;
+            }
             self.apply_change(c, builder, ast[p].keyword, ast[p].name, ty);
             return;
         }

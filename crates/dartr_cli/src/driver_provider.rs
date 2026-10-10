@@ -627,6 +627,32 @@ impl DriverSession {
             .collect()
     }
 
+    /// Returns the parsed unit sources for [context], for constructing an
+    /// `ExternalUnitCache` when evaluating constants of AST expressions.
+    pub fn unit_sources(
+        &self,
+        context: usize,
+    ) -> IndexMap<Arc<str>, (Arc<str>, Arc<dartr_ast_builder::ParsedUnit>)> {
+        self.drivers
+            .get(&context)
+            .map(|d| d.unit_sources())
+            .unwrap_or_default()
+    }
+
+    /// Ensures the library at [path] is linked in the driver of [context] and
+    /// invalidates cached resolved libraries for [context] so they see the new
+    /// `WorldSnapshot`.
+    pub fn ensure_library_linked_in(
+        &mut self,
+        collection: &AnalysisContextCollection,
+        context: usize,
+        path: &str,
+    ) {
+        if self.linked_library_in(collection, context, path).is_some() {
+            self.resolved.retain(|(c, _), _| *c != context);
+        }
+    }
+
     /// The paths of the library files that the driver of [context] knows,
     /// in the order in which the Dart driver creates their `FileState`s
     /// (the order of `FileSystemState.knownFiles`): `dart:core` and the

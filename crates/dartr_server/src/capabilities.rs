@@ -109,6 +109,13 @@ impl ClientCapabilities {
             ]),
         }
     }
+
+    /// Whether `experimental.commands` contains `"dart.goToLocation"`.
+    pub fn supports_go_to_location_command(&self) -> bool {
+        self.get(&["experimental", "commands"])
+            .and_then(Value::as_array)
+            .is_some_and(|list| list.iter().any(|v| v.as_str() == Some("dart.goToLocation")))
+    }
 }
 
 /// A Dart LSP feature (Dart `FeatureRegistration`).
@@ -130,15 +137,15 @@ pub const DART_FEATURES: &[Feature] = &[
     ),
     feature("ChangeWorkspaceFoldersRegistrations", None, true),
     feature("CodeActionRegistrations", Some("codeActionProvider"), true),
-    feature("CodeLensRegistrations", Some("codeLensProvider"), false),
+    feature("CodeLensRegistrations", Some("codeLensProvider"), true),
     feature("CompletionRegistrations", Some("completionProvider"), true),
     feature("DefinitionRegistrations", Some("definitionProvider"), true),
     feature(
         "DocumentLinkRegistrations",
         Some("documentLinkProvider"),
-        false,
+        true,
     ),
-    feature("DocumentColorRegistrations", Some("colorProvider"), false),
+    feature("DocumentColorRegistrations", Some("colorProvider"), true),
     feature(
         "DocumentHighlightsRegistrations",
         Some("documentHighlightProvider"),
@@ -180,10 +187,10 @@ pub const DART_FEATURES: &[Feature] = &[
     feature(
         "InlineValueRegistrations",
         Some("inlineValueProvider"),
-        false,
+        true,
     ),
     feature("ReferencesRegistrations", Some("referencesProvider"), true),
-    feature("RenameRegistrations", Some("renameProvider"), false),
+    feature("RenameRegistrations", Some("renameProvider"), true),
     feature(
         "SelectionRangeRegistrations",
         Some("selectionRangeProvider"),
@@ -323,6 +330,21 @@ pub fn server_capabilities(client: &ClientCapabilities, config: &LspClientConfig
     if !client.text_document_dynamic("codeAction") {
         c.insert("codeActionProvider".into(), code_action_options(client));
     }
+    if !client.text_document_dynamic("codeLens") {
+        c.insert("codeLensProvider".into(), json!({}));
+    }
+    if !client.text_document_dynamic("colorProvider") {
+        c.insert(
+            "colorProvider".into(),
+            json!({"documentSelector": dart_files()}),
+        );
+    }
+    if !client.text_document_dynamic("documentLink") {
+        c.insert(
+            "documentLinkProvider".into(),
+            json!({"resolveProvider": false}),
+        );
+    }
     // Dart `ExecuteCommandRegistrations`: static only.
     c.insert(
         "executeCommandProvider".into(),
@@ -339,6 +361,9 @@ pub fn server_capabilities(client: &ClientCapabilities, config: &LspClientConfig
             "inlayHintProvider".into(),
             json!({"resolveProvider": false}),
         );
+    }
+    if !client.text_document_dynamic("inlineValue") {
+        c.insert("inlineValueProvider".into(), json!(true));
     }
     if !client.text_document_dynamic("semanticTokens") {
         c.insert("semanticTokensProvider".into(), semantic_tokens_options());
@@ -365,6 +390,22 @@ pub fn server_capabilities(client: &ClientCapabilities, config: &LspClientConfig
         if !client.text_document_dynamic(feature) {
             c.insert(key.into(), json!(true));
         }
+    }
+    // Dart `RenameRegistrations.staticOptions`.
+    if !client.text_document_dynamic("rename") {
+        let validation = client
+            .raw
+            .pointer("/textDocument/rename/prepareSupport")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        c.insert(
+            "renameProvider".into(),
+            if validation {
+                json!({"prepareProvider": true})
+            } else {
+                json!(true)
+            },
+        );
     }
     if !client.text_document_dynamic("synchronization") {
         c.insert(
@@ -398,6 +439,17 @@ pub fn server_capabilities(client: &ClientCapabilities, config: &LspClientConfig
     c.insert(
         "workspace".into(),
         json!({"workspaceFolders": {"supported": true, "changeNotifications": true}}),
+    );
+    c.insert(
+        "experimental".into(),
+        json!({
+            "updateDiagnosticInformation": {},
+            "textDocument": {
+                "super": {},
+                "augmented": {},
+                "augmentation": {},
+            },
+        }),
     );
     Value::Object(c)
 }
@@ -446,6 +498,12 @@ pub fn dynamic_registrations(
             }),
         ));
     }
+    if client.text_document_dynamic("codeLens") {
+        out.push(reg(
+            "textDocument/codeLens",
+            json!({"documentSelector": dart_files()}),
+        ));
+    }
     if client.text_document_dynamic("completion") {
         let mut options = completion_options(config);
         options.insert("documentSelector".into(), dart_files());
@@ -461,6 +519,25 @@ pub fn dynamic_registrations(
     if client.text_document_dynamic("definition") {
         out.push(reg(
             "textDocument/definition",
+            json!({"documentSelector": dart_files()}),
+        ));
+    }
+    if client.text_document_dynamic("documentLink") {
+        out.push(reg(
+            "textDocument/documentLink",
+            json!({
+                "documentSelector": [
+                    {"language": "dart", "scheme": "file"},
+                    {"language": "yaml", "pattern": "**/pubspec.yaml", "scheme": "file"},
+                    {"language": "yaml", "pattern": "**/analysis_options.yaml", "scheme": "file"},
+                ],
+                "resolveProvider": false,
+            }),
+        ));
+    }
+    if client.text_document_dynamic("colorProvider") {
+        out.push(reg(
+            "textDocument/documentColor",
             json!({"documentSelector": dart_files()}),
         ));
     }
@@ -515,10 +592,23 @@ pub fn dynamic_registrations(
             json!({"documentSelector": dart_files(), "resolveProvider": false}),
         ));
     }
+    if client.text_document_dynamic("inlineValue") {
+        out.push(reg(
+            "textDocument/inlineValue",
+            json!({"documentSelector": dart_files()}),
+        ));
+    }
     if client.text_document_dynamic("references") {
         out.push(reg(
             "textDocument/references",
             json!({"documentSelector": dart_files()}),
+        ));
+    }
+    // Dart `RenameRegistrations`.
+    if client.text_document_dynamic("rename") {
+        out.push(reg(
+            "textDocument/rename",
+            json!({"documentSelector": dart_files(), "prepareProvider": true}),
         ));
     }
     if client.text_document_dynamic("selectionRange") {

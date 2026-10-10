@@ -12,12 +12,13 @@ use serde_json::{Map, Value, json};
 use crate::capabilities::ClientCapabilities;
 use crate::computer::closing_labels::compute_closing_labels;
 use crate::computer::folding::{DartUnitFoldingComputer, FoldingKind};
-use crate::computer::outline::{Element, Outline, compute_outline};
+use crate::computer::outline::{Element, Outline, compute_outline, compute_outline_with_flutter};
 use crate::computer::selection_ranges::compute_selection_ranges;
+use crate::flutter::{compute_flutter_outline, flutter_outline_json};
 use crate::mapping::{
     ElementKind, ErrorOr, element_kind_to_symbol_kind, read_position, to_offset, to_range,
 };
-use crate::server::ParsedFile;
+use crate::server::{ParsedFile, ResolvedUnitRef};
 use crate::uri::path_to_uri;
 
 /// Dart `toElementName`.
@@ -36,7 +37,7 @@ fn element_name(e: &Element) -> String {
 }
 
 /// Dart `toElement`.
-fn element_json(line_info: &LineInfo, e: &Element) -> Value {
+pub(crate) fn element_json(line_info: &LineInfo, e: &Element) -> Value {
     let mut m = Map::new();
     if let Some((offset, length)) = e.location {
         m.insert("range".into(), to_range(line_info, offset, length));
@@ -80,6 +81,26 @@ fn outline_json(line_info: &LineInfo, o: &Outline) -> Value {
 pub fn outline(file: &ParsedFile) -> Value {
     let unit = &file.unit;
     outline_json(&unit.line_info, &compute_outline(&unit.ast, unit.unit))
+}
+
+/// The `outline` of `dart/textDocument/publishOutline` with `withBasicFlutter: true`.
+pub fn outline_with_flutter(resolved: &ResolvedUnitRef) -> Value {
+    let sink = dartr_element::NoopSink;
+    let ctx = resolved.ctx(&sink);
+    let unit = resolved.unit();
+    outline_json(
+        resolved.line_info(),
+        &compute_outline_with_flutter(&ctx, &unit.ast, &unit.tables, unit.unit),
+    )
+}
+
+/// The `outline` of `dart/textDocument/publishFlutterOutline`.
+pub fn flutter_outline(resolved: &ResolvedUnitRef, content: &str) -> Value {
+    let sink = dartr_element::NoopSink;
+    let ctx = resolved.ctx(&sink);
+    let unit = resolved.unit();
+    let outline = compute_flutter_outline(&ctx, &unit.ast, &unit.tables, unit.unit, content);
+    flutter_outline_json(resolved.line_info(), &outline)
 }
 
 /// The `labels` of `dart/textDocument/publishClosingLabels`.

@@ -45,7 +45,7 @@ pub(crate) fn element_location(ctx: &Ctx<'_>, element: ElementId) -> Option<Stri
 }
 
 /// Dart `LibraryElement.children` (the top-level elements).
-pub(crate) fn library_children(
+pub fn library_children(
     ctx: &Ctx<'_>,
     library: dartr_element::EId<dartr_element::LibraryElement>,
 ) -> Vec<ElementId> {

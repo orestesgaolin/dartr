@@ -170,10 +170,50 @@ impl InlayHintsConfiguration {
     }
 }
 
+/// Dart `LspClientCodeLensConfiguration`: the `dart.codeLens` setting
+/// (`true`, `false` or a map of `"augmentation"` / `"augmented"`).
+#[derive(Clone, Copy, Debug)]
+pub struct CodeLensConfiguration {
+    pub augmentation: bool,
+    pub augmented: bool,
+}
+
+impl CodeLensConfiguration {
+    pub fn new(user_preference: Option<&Value>) -> Self {
+        let boolean = user_preference.and_then(Value::as_bool);
+        let map = user_preference.and_then(Value::as_object);
+        let get_enabled = |name: &str, default_value: bool| -> bool {
+            if let Some(b) = boolean {
+                return b;
+            }
+            match map.and_then(|m| m.get(name)) {
+                Some(Value::Bool(enabled)) => *enabled,
+                _ => default_value,
+            }
+        };
+        CodeLensConfiguration {
+            augmentation: get_enabled("augmentation", true),
+            augmented: get_enabled("augmented", true),
+        }
+    }
+}
+
 impl LspResourceClientConfiguration<'_> {
     /// Dart `inlayHints` (of the settings, not of the fallback).
     pub fn inlay_hints(&self) -> InlayHintsConfiguration {
         InlayHintsConfiguration::new(self.setting("inlayHints"))
+    }
+
+    /// Dart `codeLens` (of the settings, not of the fallback).
+    pub fn code_lens(&self) -> CodeLensConfiguration {
+        CodeLensConfiguration::new(self.setting("codeLens"))
+    }
+
+    /// Dart `experimentalInlineValuesProperties` (default `false`).
+    pub fn experimental_inline_values_properties(&self) -> bool {
+        self.setting("experimentalInlineValuesProperties")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
     }
 }
 
