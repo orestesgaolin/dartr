@@ -7,6 +7,7 @@
 
 use dartr_ast::to_source::to_source;
 use dartr_ast::*;
+use dartr_element::{Ctx, ResolutionTables};
 use dartr_syntax::TokenId;
 
 use super::heuristics;
@@ -57,13 +58,30 @@ pub fn compute_outline(ast: &Ast, unit: Id<CompilationUnit>) -> Outline {
     let c = Computer {
         ast,
         has_test_import: heuristics::imports_test_framework(ast, unit),
+        resolved: None,
     };
     c.compute(unit)
 }
 
-struct Computer<'a> {
+/// Dart `DartUnitOutlineComputer(result, withBasicFlutter: true).compute()`.
+pub fn compute_outline_with_flutter(
+    ctx: &Ctx<'_>,
+    ast: &Ast,
+    tables: &ResolutionTables,
+    unit: Id<CompilationUnit>,
+) -> Outline {
+    let c = Computer {
+        ast,
+        has_test_import: heuristics::imports_test_framework(ast, unit),
+        resolved: Some((ctx, tables)),
+    };
+    c.compute(unit)
+}
+
+struct Computer<'a, 'c> {
     ast: &'a Ast,
     has_test_import: bool,
+    resolved: Option<(&'a Ctx<'c>, &'a ResolutionTables)>,
 }
 
 fn safe_to_source(ast: &Ast, node: Option<NodeId>) -> String {
@@ -73,7 +91,7 @@ fn safe_to_source(ast: &Ast, node: Option<NodeId>) -> String {
     }
 }
 
-impl<'a> Computer<'a> {
+impl<'a, 'c> Computer<'a, 'c> {
     fn compute(&self, unit: Id<CompilationUnit>) -> Outline {
         let ast = self.ast;
         let mut contents = Vec::new();
@@ -649,15 +667,52 @@ pub(crate) fn first_token_after_comment_and_metadata(ast: &Ast, node: NodeId) ->
 }
 
 /// Dart `_FunctionBodyOutlinesVisitor`.
-struct FunctionBodyVisitor<'c, 'a> {
-    computer: &'c Computer<'a>,
+struct FunctionBodyVisitor<'c, 'a, 'ctx> {
+    computer: &'c Computer<'a, 'ctx>,
     contents: &'c mut Vec<Outline>,
 }
 
-impl AstVisitor for FunctionBodyVisitor<'_, '_> {
+impl AstVisitor for FunctionBodyVisitor<'_, '_, '_> {
     fn visit_function_declaration(&mut self, _ast: &Ast, node: Id<FunctionDeclaration>) {
         self.contents
             .push(self.computer.new_function_outline(node, false));
+    }
+
+    fn visit_instance_creation_expression(
+        &mut self,
+        ast: &Ast,
+        node: Id<InstanceCreationExpression>,
+    ) {
+        if let Some((ctx, tables)) = self.computer.resolved
+            && let Some(text) = crate::flutter::widget_presentation_text(ctx, ast, tables, node)
+        {
+            let mut children = Vec::new();
+            ast.accept(
+                ast[node].argument_list,
+                &mut FunctionBodyVisitor {
+                    computer: self.computer,
+                    contents: &mut children,
+                },
+            );
+            let offset = ast.offset(node);
+            let length = ast.length(node);
+            let mut e = Element::new(ElementKind::ConstructorInvocation, text);
+            e.location = Some((offset, 0));
+            self.contents.push(Outline {
+                element: e,
+                offset,
+                length,
+                code_offset: offset,
+                code_length: length,
+                children: if children.is_empty() {
+                    None
+                } else {
+                    Some(children)
+                },
+            });
+        } else {
+            self.visit_node(ast, node.raw());
+        }
     }
 
     fn visit_method_invocation(&mut self, ast: &Ast, node: Id<MethodInvocation>) {

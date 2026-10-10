@@ -78,7 +78,7 @@ fn capabilities_of(program: &str, args: &[&str], init: Value) -> Capabilities {
     let mut c = LspClient::spawn(program, args, &[]);
     let result = c.request("initialize", init);
     c.notify("initialized", json!({}));
-    c.settle(false);
+    c.settle(true);
     let mut caps = Capabilities::default();
     flatten("", &result["result"]["capabilities"], &mut caps.statics);
     for (method, params) in &c.server_requests {
