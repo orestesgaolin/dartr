@@ -135,12 +135,200 @@ pub fn snippet_context(q: &Request<'_, '_>) -> SnippetContext {
     AtTopLevel
 }
 
-/// One snippet: (prefix, label, documentation, snippet text).
+/// One snippet: (prefix, label, documentation, snippet text, the URIs of
+/// the libraries to import).
 struct Snippet {
     prefix: &'static str,
     label: &'static str,
     documentation: &'static str,
     text: String,
+    imports: Vec<String>,
+}
+
+/// The URI of the library of the Flutter widget classes (Dart
+/// `widgetsUri`).
+const WIDGETS_URI: &str = "package:flutter/widgets.dart";
+
+/// The references of the Flutter snippets (Dart
+/// `FlutterSnippetProducer.getClass` and `DartEditBuilder.writeReference`):
+/// the prefix of each Flutter name, and whether the widgets library must be
+/// imported.
+struct FlutterRefs {
+    prefixes: std::collections::HashMap<&'static str, String>,
+    import_widgets: bool,
+}
+
+impl FlutterRefs {
+    /// The reference to [name], with the prefix of its import.
+    fn r(&self, name: &str) -> String {
+        format!(
+            "{}{name}",
+            self.prefixes.get(name).map(String::as_str).unwrap_or("")
+        )
+    }
+}
+
+/// The names that the Flutter snippets reference.
+const FLUTTER_NAMES: [&str; 9] = [
+    "Widget",
+    "Placeholder",
+    "StatefulWidget",
+    "StatelessWidget",
+    "State",
+    "BuildContext",
+    "Key",
+    "AnimationController",
+    "SingleTickerProviderStateMixin",
+];
+
+/// Dart `FlutterSnippetProducer.isValid` (the Flutter classes are found)
+/// and the import prefix of each class (Dart `_getImportElement`).
+fn flutter_refs(q: &Request<'_, '_>) -> Option<FlutterRefs> {
+    let ctx = q.ctx;
+    let widgets = ctx.library_by_uri(WIDGETS_URI)?;
+    let namespace = ctx.get(widgets).export_namespace.try_get()?;
+    let mut elements = Vec::new();
+    for name in FLUTTER_NAMES {
+        let element = namespace
+            .defined_names
+            .iter()
+            .find(|(n, _)| ctx.name_str(**n) == name)
+            .map(|(_, e)| *e)?;
+        elements.push((name, element));
+    }
+    let first = ctx.get(q.library).first_fragment();
+    let imports: Vec<_> = ctx
+        .fragment(first)
+        .library_imports
+        .iter()
+        .filter_map(|i| {
+            let (_, names) = super::declaration::import_namespace(ctx, i)?;
+            Some((super::declaration::import_prefix_name(ctx, i), names))
+        })
+        .collect();
+    let mut prefixes = std::collections::HashMap::new();
+    let mut import_widgets = false;
+    for (name, element) in elements {
+        let found = imports
+            .iter()
+            .find(|(_, names)| names.iter().any(|(n, e)| n == name && *e == element));
+        match found {
+            Some((prefix, _)) => {
+                prefixes.insert(
+                    name,
+                    prefix.as_ref().map(|p| format!("{p}.")).unwrap_or_default(),
+                );
+            }
+            None => import_widgets = true,
+        }
+    }
+    Some(FlutterRefs {
+        prefixes,
+        import_widgets,
+    })
+}
+
+/// The Flutter widget snippets (Dart `FlutterStatefulWidget`,
+/// `FlutterStatefulWidgetWithAnimationController` and
+/// `FlutterStatelessWidget`), in this order.
+fn flutter_snippets(q: &Request<'_, '_>, f: &FlutterRefs) -> Vec<Snippet> {
+    let eol = q.end_of_line();
+    let name = "${1:MyWidget}";
+    let constructor =
+        if q.feature_enabled(dartr_parser::experimental_flags::ExperimentalFlag::SuperParameters) {
+            format!("  const {name}({{super.key}});")
+        } else {
+            format!("  const {name}({{{}? key}}) : super(key: key);", f.r("Key"))
+        };
+    let build = [
+        "  @override".to_string(),
+        format!(
+            "  {} build({} context) {{",
+            f.r("Widget"),
+            f.r("BuildContext")
+        ),
+        format!("    return ${{0:const {}()}};", f.r("Placeholder")),
+        "  }".to_string(),
+    ]
+    .join(eol.as_str());
+    let stateful_widget = [
+        format!("class {name} extends {} {{", f.r("StatefulWidget")),
+        constructor.clone(),
+        String::new(),
+        "  @override".to_string(),
+        format!("  State<{name}> createState() => _{name}State();"),
+        "}".to_string(),
+        String::new(),
+    ]
+    .join(eol.as_str());
+    let imports = if f.import_widgets {
+        vec![WIDGETS_URI.to_string()]
+    } else {
+        Vec::new()
+    };
+    let stful = [
+        stateful_widget.clone(),
+        format!("class _{name}State extends {}<{name}> {{", f.r("State")),
+        build.clone(),
+        "}".to_string(),
+    ]
+    .join(eol.as_str());
+    let stanim = [
+        stateful_widget,
+        format!("class _{name}State extends {}<{name}>", f.r("State")),
+        format!("    with {} {{", f.r("SingleTickerProviderStateMixin")),
+        format!("  late {} _controller;", f.r("AnimationController")),
+        String::new(),
+        "  @override".to_string(),
+        "  void initState() {".to_string(),
+        "    super.initState();".to_string(),
+        format!(
+            "    _controller = {}(vsync: this);",
+            f.r("AnimationController")
+        ),
+        "  }".to_string(),
+        String::new(),
+        "  @override".to_string(),
+        "  void dispose() {".to_string(),
+        "    _controller.dispose();".to_string(),
+        "    super.dispose();".to_string(),
+        "  }".to_string(),
+        String::new(),
+        build.clone(),
+        "}".to_string(),
+    ]
+    .join(eol.as_str());
+    let stless = [
+        format!("class {name} extends {} {{", f.r("StatelessWidget")),
+        constructor,
+        String::new(),
+        build,
+        "}".to_string(),
+    ]
+    .join(eol.as_str());
+    vec![
+        Snippet {
+            prefix: "stful",
+            label: "Flutter Stateful Widget",
+            documentation: "Insert a Flutter StatefulWidget.",
+            text: stful,
+            imports: imports.clone(),
+        },
+        Snippet {
+            prefix: "stanim",
+            label: "Flutter Widget with AnimationController",
+            documentation: "Insert a Flutter StatefulWidget with an AnimationController.",
+            text: stanim,
+            imports: imports.clone(),
+        },
+        Snippet {
+            prefix: "stless",
+            label: "Flutter Stateless Widget",
+            documentation: "Insert a Flutter StatelessWidget.",
+            text: stless,
+            imports,
+        },
+    ]
 }
 
 /// Dart `CorrectionUtils.getLinePrefix(offset)`: the whitespace at the
@@ -171,6 +359,7 @@ fn snippets_for(q: &Request<'_, '_>, context: SnippetContext) -> Vec<Snippet> {
         prefix: "fun",
         label: "fun",
         documentation: "Insert a function definition.",
+        imports: Vec::new(),
         text: block("${1:void} ${2:name}(${3:params}) {".to_string()),
     };
     match context {
@@ -180,21 +369,27 @@ fn snippets_for(q: &Request<'_, '_>, context: SnippetContext) -> Vec<Snippet> {
             } else {
                 "List<String> args"
             };
-            vec![
-                Snippet {
-                    prefix: "class",
-                    label: "class",
-                    documentation: "Insert a class definition.",
-                    text: block("class ${1:ClassName} {".to_string()),
-                },
+            let mut out = vec![Snippet {
+                prefix: "class",
+                label: "class",
+                documentation: "Insert a class definition.",
+                imports: Vec::new(),
+                text: block("class ${1:ClassName} {".to_string()),
+            }];
+            if let Some(f) = flutter_refs(q) {
+                out.extend(flutter_snippets(q, &f));
+            }
+            out.extend([
                 fun(),
                 Snippet {
                     prefix: "main",
                     label: "main()",
                     documentation: "Insert a main function, used as an entry point.",
+                    imports: Vec::new(),
                     text: format!("void main({args}) {{{eol}  $0{eol}}}"),
                 },
-            ]
+            ]);
+            out
         }
         InBlock => {
             let var_or_final = if q.style.make_locals_final {
@@ -207,6 +402,7 @@ fn snippets_for(q: &Request<'_, '_>, context: SnippetContext) -> Vec<Snippet> {
                     prefix: "do",
                     label: "do while",
                     documentation: "Insert a do-while loop.",
+                    imports: Vec::new(),
                     text: format!(
                         "do {{{eol}{}$0{eol}{}",
                         i("  "),
@@ -217,6 +413,7 @@ fn snippets_for(q: &Request<'_, '_>, context: SnippetContext) -> Vec<Snippet> {
                     prefix: "forin",
                     label: "for in",
                     documentation: "Insert a for-in loop.",
+                    imports: Vec::new(),
                     text: block(format!(
                         "for ({var_or_final} ${{1:element}} in ${{2:collection}}) {{"
                     )),
@@ -225,6 +422,7 @@ fn snippets_for(q: &Request<'_, '_>, context: SnippetContext) -> Vec<Snippet> {
                     prefix: "for",
                     label: "for",
                     documentation: "Insert a for loop.",
+                    imports: Vec::new(),
                     text: block("for (var i = 0; i < ${1:count}; i++) {".to_string()),
                 },
                 fun(),
@@ -232,6 +430,7 @@ fn snippets_for(q: &Request<'_, '_>, context: SnippetContext) -> Vec<Snippet> {
                     prefix: "ife",
                     label: "ife",
                     documentation: "Insert an if/else statement.",
+                    imports: Vec::new(),
                     text: format!(
                         "if (${{1:condition}}) {{{eol}{}$0{eol}{}{eol}{}{eol}{}",
                         i("  "),
@@ -244,12 +443,14 @@ fn snippets_for(q: &Request<'_, '_>, context: SnippetContext) -> Vec<Snippet> {
                     prefix: "if",
                     label: "if",
                     documentation: "Insert an if statement.",
+                    imports: Vec::new(),
                     text: block("if (${1:condition}) {".to_string()),
                 },
                 Snippet {
                     prefix: "switch",
                     label: "switch statement",
                     documentation: "Insert a switch statement.",
+                    imports: Vec::new(),
                     text: format!(
                         "switch (${{1:expression}}) {{{eol}{}{eol}{}$0{eol}{}{eol}{}{eol}{}",
                         i("  case ${2:value}:"),
@@ -265,6 +466,7 @@ fn snippets_for(q: &Request<'_, '_>, context: SnippetContext) -> Vec<Snippet> {
                     prefix: "test",
                     label: "test",
                     documentation: "Insert a test block.",
+                    imports: Vec::new(),
                     text: format!(
                         "test('${{1:test name}}', () {{{eol}{}$0{eol}{}",
                         i("  "),
@@ -275,6 +477,7 @@ fn snippets_for(q: &Request<'_, '_>, context: SnippetContext) -> Vec<Snippet> {
                     prefix: "group",
                     label: "group",
                     documentation: "Insert a test group block.",
+                    imports: Vec::new(),
                     text: format!(
                         "group('${{1:group name}}', () {{{eol}{}$0{eol}{}",
                         i("  "),
@@ -286,6 +489,7 @@ fn snippets_for(q: &Request<'_, '_>, context: SnippetContext) -> Vec<Snippet> {
                 prefix: "try",
                 label: "try",
                 documentation: "Insert a try/catch statement.",
+                imports: Vec::new(),
                 text: format!(
                     "try {{{eol}{}$0{eol}{}{eol}{}{eol}{}",
                     i("  "),
@@ -298,6 +502,7 @@ fn snippets_for(q: &Request<'_, '_>, context: SnippetContext) -> Vec<Snippet> {
                 prefix: "while",
                 label: "while",
                 documentation: "Insert a while loop.",
+                imports: Vec::new(),
                 text: block("while (${1:condition}) {".to_string()),
             });
             out
@@ -307,6 +512,7 @@ fn snippets_for(q: &Request<'_, '_>, context: SnippetContext) -> Vec<Snippet> {
             prefix: "switch",
             label: "switch expression",
             documentation: "Insert a switch expression.",
+            imports: Vec::new(),
             text: format!(
                 "switch (${{1:expression}}) {{{eol}{}$0{eol}{}",
                 i("  ${2:pattern} => ${3:value},"),
@@ -354,10 +560,31 @@ pub fn snippet_items(
                 item.insert("textEditText".into(), json!(s.text));
             }
         } else {
+            // Dart sends the edit of a snippet as a snippet text edit.
             item.insert(
                 "textEdit".into(),
-                json!({"range": edit_range, "newText": s.text}),
+                json!({"insertTextFormat": 2, "range": edit_range, "newText": s.text}),
             );
+        }
+        if !s.imports.is_empty() {
+            let edits = super::imports::import_edits(
+                q.ast,
+                q.root,
+                q.line_info,
+                q.content,
+                q.style.lint_quote,
+                &s.imports,
+            );
+            // Dart `snippetToCompletionItem` maps the edits of the change
+            // to snippet text edits.
+            let edits: Vec<Value> = edits
+                .into_iter()
+                .map(|mut e| {
+                    e["insertTextFormat"] = json!(2);
+                    e
+                })
+                .collect();
+            item.insert("additionalTextEdits".into(), Value::Array(edits));
         }
         // Dart `_FuzzyScoreHelper.completionItemMatches`.
         let filter = if s.prefix != s.label {

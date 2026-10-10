@@ -110,7 +110,7 @@ const ORIGIN_VARIABLE: FragmentFlags = FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT
 
 /// Dart `FieldElementImpl.declaringFormalParameter`: the declaring field
 /// formal parameter (of the primary constructor) of [field].
-fn declaring_formal_parameter(ctx: &Ctx<'_>, field: ElementId) -> Option<ElementId> {
+pub fn declaring_formal_parameter(ctx: &Ctx<'_>, field: ElementId) -> Option<ElementId> {
     let enclosing = ctx.element_data(field)?.enclosing?;
     let interface = enclosing.cast::<crate::InterfaceElement>()?;
     for &c in &ctx.interface(interface).constructors {
