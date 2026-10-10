@@ -382,14 +382,21 @@ dependencies = [
 name = "dartr_legacy"
 version = "0.1.0"
 dependencies = [
+ "dartr_ast",
  "dartr_ast_builder",
  "dartr_cli",
  "dartr_diagnostics",
+ "dartr_element",
+ "dartr_format",
  "dartr_parser",
  "dartr_project",
+ "dartr_resolver",
  "dartr_server",
  "dartr_syntax",
+ "dartr_typesystem",
  "indexmap",
+ "regress",
+ "rustc-hash",
  "serde",
  "serde_json",
 ]
