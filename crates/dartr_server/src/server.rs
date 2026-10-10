@@ -60,6 +60,7 @@ use crate::uri::{UriError, normalize, path_to_uri, uri_to_path};
 
 mod code_actions;
 mod editor;
+pub mod fix_cli;
 mod hierarchy;
 mod nav;
 mod search;

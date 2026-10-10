@@ -11,9 +11,11 @@ pub mod extensions;
 pub mod import_library;
 pub mod members;
 pub mod modifiers;
+pub mod more;
 pub mod simple;
 pub mod small;
 pub mod super_parameters;
+pub mod types;
 pub mod variables;
 
 use super::change_builder::ChangeWorkspace;
@@ -104,6 +106,26 @@ pub fn generator(name: &str) -> Option<ProducerGenerator> {
                 applicability: Applicability::AcrossSingleFile,
             })
         },
+        "MakeClassAbstract.new" => |_: C| boxed(more::MakeClassAbstract::new()),
+        "ConvertToMultilineString.new" => |_: C| boxed(more::ConvertToMultilineString),
+        "ConvertDocumentationIntoBlock.new" => |_: C| boxed(more::ConvertDocumentationIntoBlock),
+        "ConvertIntoAsyncBody.new" => |_: C| boxed(more::ConvertIntoAsyncBody),
+        "CreateNoSuchMethod.new" => |_: C| boxed(more::CreateNoSuchMethod),
+        "ReplaceFinalWithVar.new" => |c: C| boxed(types::ReplaceFinalWithVar::new(c)),
+        "RemoveUnnecessaryFinal.new" => |_: C| boxed(types::RemoveUnnecessaryFinal),
+        "RemoveVar.new" => |_: C| boxed(types::RemoveVar),
+        "RemoveTypeAnnotation.other" => |_: C| {
+            boxed(types::RemoveTypeAnnotation {
+                var_and_type: false,
+            })
+        },
+        "RemoveTypeAnnotation.fixVarAndType" => {
+            |_: C| boxed(types::RemoveTypeAnnotation { var_and_type: true })
+        }
+        "ReplaceWithVar.new" => |_: C| boxed(types::ReplaceWithVar),
+        "RemoveNonNullAssertion.new" => |_: C| boxed(types::RemoveNonNullAssertion),
+        "ReplaceCascadeWithDot.new" => |_: C| boxed(types::ReplaceCascadeWithDot),
+        "ReplaceWithIdentifier.new" => |_: C| boxed(types::ReplaceWithIdentifier),
         "MakeFinal.new" => |_: C| boxed(MakeFinal),
         "MakeVariableNullable.new" => |_: C| boxed(MakeVariableNullable::new()),
         "RemoveAnnotation.new" => |_: C| boxed(small::RemoveAnnotation::new()),

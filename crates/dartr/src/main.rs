@@ -48,6 +48,13 @@ enum Command {
         #[arg(long)]
         with_const: bool,
     },
+    /// Applies automated fixes like `dart fix` (same options, output and
+    /// exit codes).
+    #[command(disable_help_flag = true)]
+    Fix {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// Starts the language server (LSP over stdin and stdout). Accepts the
     /// options of `dart language-server`.
     #[command(name = "language-server", disable_help_flag = true)]
@@ -120,6 +127,17 @@ fn main() -> anyhow::Result<()> {
         };
         std::process::exit(code);
     }
+    // `fix` has the command line of `dart fix`.
+    if argv.first().map(String::as_str) == Some("fix") {
+        let stdout = std::io::stdout();
+        let stderr = std::io::stderr();
+        let code = dartr_server::server::fix_cli::run(
+            &argv[1..],
+            &mut stdout.lock(),
+            &mut stderr.lock(),
+        );
+        std::process::exit(code);
+    }
     let cli = Cli::parse();
     match cli.command {
         Command::Dump {
@@ -127,7 +145,7 @@ fn main() -> anyhow::Result<()> {
             files,
             with_const,
         } => dump::run(mode, files, with_const),
-        Command::Analyze { .. } | Command::Format { .. } => unreachable!("handled before clap"),
+        Command::Analyze { .. } | Command::Format { .. } | Command::Fix { .. } => unreachable!("handled before clap"),
         Command::LanguageServer { args } => {
             std::process::exit(dartr_legacy::run_with_args(&args, true))
         }

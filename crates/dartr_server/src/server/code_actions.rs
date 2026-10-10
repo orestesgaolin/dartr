@@ -40,7 +40,6 @@ pub mod commands {
     pub const APPLY_CODE_ACTION: &str = "dart.edit.codeAction.apply";
     pub const SORT_MEMBERS: &str = "dart.edit.sortMembers";
     pub const ORGANIZE_IMPORTS: &str = "dart.edit.organizeImports";
-    #[allow(dead_code)]
     pub const FIX_ALL: &str = "dart.edit.fixAll";
     pub const SEND_WORKSPACE_EDIT: &str = "dart.edit.sendWorkspaceEdit";
     pub const LOG_ACTION: &str = "dart.logAction";
@@ -50,6 +49,7 @@ pub mod commands {
     pub const SUPPORTED: &[&str] = &[
         SORT_MEMBERS,
         ORGANIZE_IMPORTS,
+        FIX_ALL,
         SEND_WORKSPACE_EDIT,
         LOG_ACTION,
     ];
@@ -594,6 +594,9 @@ impl Server {
                     commands::ORGANIZE_IMPORTS,
                 ));
             }
+            if filter.include_kind("source.fixAll") {
+                actions.push(create_action("source.fixAll", "Fix All", commands::FIX_ALL));
+            }
         }
         if filter.include_any_of_kind("quickfix") {
             let fixes = self.fix_actions(&path, &resolved, &range, &filter, literal);
@@ -950,6 +953,7 @@ impl Server {
             commands::LOG_ACTION => Some(Ok(Value::Null)),
             commands::ORGANIZE_IMPORTS => self.organize_imports_command(id, &parameters),
             commands::SORT_MEMBERS => self.sort_members_command(id, &parameters),
+            commands::FIX_ALL => self.fix_all_command(id, &parameters),
             commands::SEND_WORKSPACE_EDIT => {
                 let Some(edit) = parameters.get("edit").filter(|e| e.is_object()).cloned() else {
                     return Some(Err(ResponseError::new(
@@ -1085,6 +1089,204 @@ impl Server {
     }
 
     /// Dart `SimpleEditCommandHandler.sendSourceEditsToClient`.
+    /// Dart `FixAllCommandHandler.handle` and `_FixAllOperation`.
+    fn fix_all_command(&mut self, id: &Value, parameters: &Value) -> Option<ErrorOr<Value>> {
+        const NAME: &str = "Fix All";
+        let Some(path) = parameters
+            .get("path")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+        else {
+            return Some(Err(ResponseError::new(
+                codes::INVALID_COMMAND_ARGUMENTS,
+                format!("{NAME} requires a Map argument containing a \"path\""),
+            )));
+        };
+        let auto_triggered = parameters
+            .get("autoTriggered")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let Some(original) = self.resolved_unit_for_fix_all(&path) else {
+            return Some(Ok(Value::Null));
+        };
+        let line_info = original.line_info().clone();
+        let (edits, passes) = self.iterative_bulk_fix(&path, auto_triggered);
+        if edits.is_empty() {
+            return Some(Ok(Value::Null));
+        }
+        let edits = if passes > 1 {
+            crate::correction::bulk_fix_processor::merge_changes(edits)
+        } else {
+            edits
+        };
+        let edit = self.create_plain_workspace_edit(&edits, &path, &line_info);
+        self.send_workspace_edit_to_client(id, NAME, edit)
+    }
+
+    /// The resolved unit of [path] for `Fix All`: `None` for a file that is
+    /// not a Dart file, a generated file, or not in a context.
+    fn resolved_unit_for_fix_all(&mut self, path: &str) -> Option<ResolvedUnitRef> {
+        let collection = self.collection.as_ref()?;
+        collection.context_for(path)?;
+        if !path.ends_with(".dart") || crate::correction::bulk_fix_processor::is_generated(path) {
+            return None;
+        }
+        self.require_resolved_unit(path).ok()
+    }
+
+    /// Dart `IterativeBulkFixProcessor.fixErrorsForFile`: the edits of the
+    /// passes (each pass sees the edits of the previous passes through
+    /// temporary overlays), and the number of passes with edits.
+    pub(crate) fn iterative_bulk_fix(
+        &mut self,
+        path: &str,
+        auto_triggered: bool,
+    ) -> (Vec<SourceFileEdit>, usize) {
+        use crate::correction::bulk_fix_processor::{MAX_PASS_COUNT, apply_edits};
+        let mut edits: Vec<SourceFileEdit> = Vec::new();
+        let mut passes = 0;
+        // The overlays to restore: path -> previous document.
+        let mut saved: HashMap<String, Option<Document>> = HashMap::new();
+        let dirty = self.dirty.clone();
+        for _ in 0..MAX_PASS_COUNT {
+            let Some(resolved) = self.resolved_unit_for_fix_all(path) else {
+                break;
+            };
+            let change = self.bulk_fix_pass(path, &resolved, auto_triggered, None).0;
+            if change.is_empty() {
+                break;
+            }
+            passes += 1;
+            for file_edit in &change {
+                let Some(content) = self.content(&file_edit.file) else {
+                    continue;
+                };
+                let new_content = apply_edits(&content, &file_edit.edits);
+                if !saved.contains_key(&file_edit.file) {
+                    let previous = self.overlays.get(&file_edit.file).map(|d| Document {
+                        content: d.content.clone(),
+                        version: d.version,
+                    });
+                    saved.insert(file_edit.file.clone(), previous);
+                }
+                self.set_temporary_overlay(&file_edit.file, Some(new_content));
+            }
+            edits.extend(change);
+        }
+        for (file, previous) in saved {
+            match previous {
+                Some(doc) => {
+                    let content = doc.content.clone();
+                    self.overlays.insert(file.clone(), doc);
+                    dartr_project::fs::set_overlay(&file, Some(content));
+                    self.temporary_overlay_changed(&file);
+                }
+                None => {
+                    self.overlays.remove(&file);
+                    dartr_project::fs::set_overlay(&file, None);
+                    self.temporary_overlay_changed(&file);
+                }
+            }
+        }
+        self.dirty = dirty;
+        (edits, passes)
+    }
+
+    /// One pass of the bulk fix processor over the unit [path]: the edits
+    /// and the fixes by code (Dart `BulkFixProcessor.fixErrorsForFile`).
+    pub(crate) fn bulk_fix_pass(
+        &mut self,
+        path: &str,
+        resolved: &ResolvedUnitRef,
+        auto_triggered: bool,
+        codes: Option<Vec<String>>,
+    ) -> (
+        Vec<SourceFileEdit>,
+        crate::correction::bulk_fix_processor::ChangeMap,
+    ) {
+        use crate::correction::bulk_fix_processor::BulkFixer;
+        use crate::correction::change_builder::ChangeBuilder;
+        let diagnostics: Vec<Diagnostic> = self
+            .unit_diagnostics(path)
+            .into_iter()
+            .map(|mut d| {
+                d.severity = d.code.severity();
+                d
+            })
+            .collect();
+        let Some(collection) = &self.collection else {
+            return (Vec::new(), Default::default());
+        };
+        let options = options_for(collection, path);
+        let resolved = Rc::new(ResolvedUnitRef {
+            library: resolved.library.clone(),
+            index: resolved.index,
+        });
+        let line_info = resolved.line_info().clone();
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let unit = resolved.unit();
+        let utils = CorrectionUtils::new(&unit.ast, &line_info);
+        let fix_unit = FixUnit {
+            resolved: &resolved,
+            ctx: &ctx,
+            utils: &utils,
+            path,
+            options: &options,
+            diagnostics: &diagnostics,
+        };
+        let overlays = &self.overlays;
+        let mut workspace = ServerWorkspace {
+            session: &mut self.session,
+            collection,
+            overlays,
+        };
+        let eol = utils.end_of_line.clone();
+        let mut builder = ChangeBuilder::new(&mut workspace, Some(&eol));
+        let mut fixer = BulkFixer {
+            builder: &mut builder,
+            change_map: Default::default(),
+            codes,
+            auto_triggered,
+        };
+        fixer.fix_errors_in_unit(&fix_unit, resolved.index == 0);
+        let change_map = std::mem::take(&mut fixer.change_map);
+        let change = builder.source_change();
+        (change.edits, change_map)
+    }
+
+    /// Sets the content of [path] for the next bulk fix pass (Dart
+    /// `applyTemporaryOverlayEdits`).
+    fn set_temporary_overlay(&mut self, path: &str, content: Option<String>) {
+        match &content {
+            Some(c) => {
+                let version = self.overlays.get(path).and_then(|d| d.version);
+                self.overlays.insert(
+                    path.to_string(),
+                    Document {
+                        content: c.clone(),
+                        version,
+                    },
+                );
+            }
+            None => {
+                self.overlays.remove(path);
+            }
+        }
+        dartr_project::fs::set_overlay(path, content);
+        self.temporary_overlay_changed(path);
+    }
+
+    fn temporary_overlay_changed(&mut self, path: &str) {
+        self.parsed.remove(path);
+        self.indexes.retain(|(_, p), _| p != path);
+        self.search_scope = None;
+        self.search_words.remove(path);
+        for affected in self.session.change_file(path) {
+            self.indexes.retain(|(_, p), _| *p != affected);
+        }
+    }
+
     fn send_source_edits_to_client(
         &mut self,
         id: &Value,

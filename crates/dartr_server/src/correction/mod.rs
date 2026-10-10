@@ -15,6 +15,7 @@
 //! - [`organize_imports`], [`sort_members`]: the source actions.
 
 pub mod assist_processor;
+pub mod bulk_fix_processor;
 pub mod change;
 pub mod change_builder;
 pub mod code_style;
