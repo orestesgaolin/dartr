@@ -41,7 +41,9 @@ jobs:
             exit 1
           }
       - name: Build
-        run: cargo build --release --locked -p dartr --target ${{ matrix.target }}
+        env:
+          TAG: ${{ github.ref_name }}
+        run: DARTR_RELEASE_VERSION="${TAG#v}" cargo build --release --locked -p dartr --target ${{ matrix.target }}
       - name: Smoke test
         run: target/${{ matrix.target }}/release/dartr --version
       - name: Package
