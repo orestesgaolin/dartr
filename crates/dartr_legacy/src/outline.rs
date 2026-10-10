@@ -24,20 +24,33 @@ pub fn compute_analysis_outline(
         FileKind::LIBRARY
     };
     let library_name = compute_library_name(ast, directives);
-    let computer = OutlineComputer {
-        file,
-        ctx,
-        ast,
-        tables,
-        line_info,
-    };
-    let outline = computer.compute(unit);
+    let outline = compute_dart_outline(file, ctx, ast, tables, line_info, unit, true);
     AnalysisOutlineParams {
         file: file.to_string(),
         kind: file_kind,
         library_name,
         outline,
     }
+}
+
+pub fn compute_dart_outline(
+    file: &str,
+    ctx: &Ctx<'_>,
+    ast: &Ast,
+    tables: &ResolutionTables,
+    line_info: &LineInfo,
+    unit: Id<CompilationUnit>,
+    with_basic_flutter: bool,
+) -> Outline {
+    let computer = OutlineComputer {
+        file,
+        ctx,
+        ast,
+        tables,
+        line_info,
+        with_basic_flutter,
+    };
+    computer.compute(unit)
 }
 
 fn compute_library_name(ast: &Ast, directives: &[NodeId]) -> Option<String> {
@@ -83,6 +96,7 @@ struct OutlineComputer<'a, 'c> {
     ast: &'a Ast,
     tables: &'a ResolutionTables,
     line_info: &'a LineInfo,
+    with_basic_flutter: bool,
 }
 
 impl<'a, 'c> OutlineComputer<'a, 'c> {
@@ -973,6 +987,57 @@ impl AstVisitor for FunctionBodyOutlinesVisitor<'_, '_, '_> {
     fn visit_function_declaration(&mut self, _ast: &Ast, node: Id<FunctionDeclaration>) {
         self.contents
             .push(self.computer.new_function_outline(node, false));
+    }
+
+    fn visit_instance_creation_expression(
+        &mut self,
+        ast: &Ast,
+        node: Id<InstanceCreationExpression>,
+    ) {
+        if self.computer.with_basic_flutter
+            && let Some(text) = crate::flutter_outline::widget_presentation_text(
+                self.computer.ctx,
+                ast,
+                self.computer.tables,
+                node,
+            )
+        {
+            let mut children = Vec::new();
+            {
+                let mut sub = FunctionBodyOutlinesVisitor {
+                    computer: self.computer,
+                    contents: &mut children,
+                };
+                ast.accept(ast[node].argument_list, &mut sub);
+            }
+            let offset = ast.offset(node);
+            let length = ast.length(node);
+            let element = Element {
+                kind: ElementKind::ConstructorInvocation,
+                name: text,
+                location: Some(self.computer.get_location_offset_length(offset, 0)),
+                flags: 0,
+                parameters: None,
+                return_type: None,
+                type_parameters: None,
+                aliased_type: None,
+                extended_type: None,
+            };
+            self.contents.push(Outline {
+                element,
+                offset: offset as i64,
+                length: length as i64,
+                code_offset: offset as i64,
+                code_length: length as i64,
+                children: if children.is_empty() {
+                    None
+                } else {
+                    Some(children)
+                },
+            });
+        } else {
+            ast.visit_children(node, self);
+        }
     }
 
     fn visit_method_invocation(&mut self, ast: &Ast, node: Id<MethodInvocation>) {

@@ -36,6 +36,7 @@ pub enum FormatOutcome {
     InvalidSelection(String),
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn format_code(
     unformatted_code: &str,
     version: (u32, u32),
@@ -648,18 +649,18 @@ fn trailing_comment(
         comment = ast.tokens.get(last_token).preceding_comments.get();
         last_token = token;
     }
-    if let Some(mut c) = comment {
-        if line_info.on_same_line(ast.tokens.offset(c), ast.tokens.offset(last_token)) {
-            let mut next = ast.tokens.get(c).next.get();
-            while let Some(n) = next {
-                if !line_info.on_same_line(ast.tokens.offset(n), ast.tokens.offset(last_token)) {
-                    break;
-                }
-                c = n;
-                next = ast.tokens.get(c).next.get();
+    if let Some(mut c) = comment
+        && line_info.on_same_line(ast.tokens.offset(c), ast.tokens.offset(last_token))
+    {
+        let mut next = ast.tokens.get(c).next.get();
+        while let Some(n) = next {
+            if !line_info.on_same_line(ast.tokens.offset(n), ast.tokens.offset(last_token)) {
+                break;
             }
-            return c;
+            c = n;
+            next = ast.tokens.get(c).next.get();
         }
+        return c;
     }
     if return_comma { last_token } else { token }
 }
@@ -733,10 +734,11 @@ impl DirectiveSortPriority {
 }
 
 fn compare_directive_uri(a: &str, b: &str) -> Ordering {
-    if !a.starts_with("package:") || !b.starts_with("package:") {
-        if !a.starts_with('/') && !b.starts_with('/') {
-            return cmp_utf16(a, b);
-        }
+    if (!a.starts_with("package:") || !b.starts_with("package:"))
+        && !a.starts_with('/')
+        && !b.starts_with('/')
+    {
+        return cmp_utf16(a, b);
     }
     let Some(index_a) = a.find('/') else {
         return cmp_utf16(a, b);
@@ -954,24 +956,22 @@ impl<'a> ImportOrganizer<'a> {
                     .map(|a| self.ast.end(a.raw()))
                     .or_else(|| doc_comment.map(|c| self.ast.end(c.raw())));
 
-                if let Some(end_off) = raw_end {
-                    if let Ok(mut after_line) = self.line_info.get_offset_of_line_after(end_off) {
-                        if let Ok(next_line_offset) =
-                            self.line_info.get_offset_of_line_after(after_line)
-                        {
-                            if substring_utf16(
-                                &self.code,
-                                after_line as usize,
-                                next_line_offset as usize,
-                            )
-                            .trim()
-                            .is_empty()
-                            {
-                                after_line = next_line_offset;
-                            }
-                        }
-                        library_docs_and_annotations_end_offset = Some(after_line as usize);
+                if let Some(end_off) = raw_end
+                    && let Ok(mut after_line) = self.line_info.get_offset_of_line_after(end_off)
+                {
+                    if let Ok(next_line_offset) =
+                        self.line_info.get_offset_of_line_after(after_line)
+                        && substring_utf16(
+                            &self.code,
+                            after_line as usize,
+                            next_line_offset as usize,
+                        )
+                        .trim()
+                        .is_empty()
+                    {
+                        after_line = next_line_offset;
                     }
+                    library_docs_and_annotations_end_offset = Some(after_line as usize);
                 }
             }
 
@@ -1070,18 +1070,18 @@ impl<'a> ImportOrganizer<'a> {
                 current_priority = Some(directive_info.priority);
             }
             let mut text = directive_info.text.clone();
-            if !unused_show_names.is_empty() {
-                if let Some(show_offset) = text.find("show") {
-                    for name_id in unused_show_names {
-                        let name = self.ast.tokens.lexeme(self.ast[name_id].token);
-                        let pat1 = format!("{name},");
-                        let pat1_repl = format!("{name}, ");
-                        let pat2 = format!(", {name}");
-                        if text.contains(&pat1) {
-                            text = replace_first_from(&text, &pat1_repl, "", show_offset);
-                        } else if text.contains(&pat2) {
-                            text = replace_first_from(&text, &pat2, "", show_offset);
-                        }
+            if !unused_show_names.is_empty()
+                && let Some(show_offset) = text.find("show")
+            {
+                for name_id in unused_show_names {
+                    let name = self.ast.tokens.lexeme(self.ast[name_id].token);
+                    let pat1 = format!("{name},");
+                    let pat1_repl = format!("{name}, ");
+                    let pat2 = format!(", {name}");
+                    if text.contains(&pat1) {
+                        text = replace_first_from(&text, &pat1_repl, "", show_offset);
+                    } else if text.contains(&pat2) {
+                        text = replace_first_from(&text, &pat2, "", show_offset);
                     }
                 }
             }
@@ -1118,10 +1118,10 @@ impl<'a> ImportOrganizer<'a> {
         }
 
         let mut fc_opt = Some(first_comment);
-        if let Some(fc) = fc_opt {
-            if ast.tokens.get(fc).flags & flags::LANGUAGE_VERSION != 0 {
-                fc_opt = ast.tokens.get(fc).next.get();
-            }
+        if let Some(fc) = fc_opt
+            && ast.tokens.get(fc).flags & flags::LANGUAGE_VERSION != 0
+        {
+            fc_opt = ast.tokens.get(fc).next.get();
         }
 
         let unit_first_comment = ast
@@ -1129,27 +1129,25 @@ impl<'a> ImportOrganizer<'a> {
             .get(ast[unit].begin_token)
             .preceding_comments
             .get();
-        if let Some(fc) = fc_opt {
-            if Some(fc) == unit_first_comment {
-                return if is_ignore_comment(ast.tokens.lexeme(fc)) {
-                    Some(fc)
-                } else {
-                    None
-                };
-            }
+        if let Some(fc) = fc_opt
+            && Some(fc) == unit_first_comment
+        {
+            return if is_ignore_comment(ast.tokens.lexeme(fc)) {
+                Some(fc)
+            } else {
+                None
+            };
         }
 
         comment = fc_opt;
-        if is_pseudo_library_directive {
-            if let Some(c) = comment {
-                if line_info
-                    .line_number_difference(ast.tokens.offset(begin_token), ast.tokens.offset(c))
-                    == -1
-                {
-                    return Some(c);
-                } else {
-                    return None;
-                }
+        if is_pseudo_library_directive && let Some(c) = comment {
+            if line_info
+                .line_number_difference(ast.tokens.offset(begin_token), ast.tokens.offset(c))
+                == -1
+            {
+                return Some(c);
+            } else {
+                return None;
             }
         }
         let prev = ast.tokens.get(begin_token).previous;

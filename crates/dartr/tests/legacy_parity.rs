@@ -216,7 +216,8 @@ impl LegacyClient {
                 | "analysis.implemented"
                 | "analysis.overrides"
                 | "analysis.folding"
-                | "analysis.closingLabels"),
+                | "analysis.closingLabels"
+                | "flutter.outline"),
             ) => {
                 let params = &message["params"];
                 if let Some(file) = params["file"].as_str() {
@@ -664,6 +665,52 @@ fn find_offset(source: &str, needle: &str) -> i64 {
     source[..byte_idx].encode_utf16().count() as i64
 }
 
+fn find_line_col(source: &str, needle: &str) -> (u32, u32) {
+    let byte_idx = source
+        .find(needle)
+        .unwrap_or_else(|| panic!("needle `{needle}` not found"));
+    let prefix = &source[..byte_idx];
+    let line = prefix.bytes().filter(|&b| b == b'\n').count() as u32;
+    let line_start = prefix.rfind('\n').map(|i| i + 1).unwrap_or(0);
+    let col = prefix[line_start..].encode_utf16().count() as u32;
+    (line, col)
+}
+
+fn path_to_uri(path: &Path) -> String {
+    format!("file://{}", path.to_string_lossy())
+}
+
+fn flutter_sdk_root(dart: &Path) -> Option<PathBuf> {
+    for anc in dart.ancestors() {
+        if anc.join("packages/flutter/lib/widgets.dart").is_file()
+            && anc
+                .join("bin/cache/pkg/sky_engine/lib/_embedder.yaml")
+                .is_file()
+        {
+            return Some(anc.to_path_buf());
+        }
+    }
+    if let Ok(output) = Command::new("sh")
+        .args(["-c", "command -v flutter"])
+        .output()
+        && let Ok(text) = String::from_utf8(output.stdout)
+    {
+        let bin = PathBuf::from(text.trim());
+        if let Ok(canon) = bin.canonicalize() {
+            for anc in canon.ancestors() {
+                if anc.join("packages/flutter/lib/widgets.dart").is_file()
+                    && anc
+                        .join("bin/cache/pkg/sky_engine/lib/_embedder.yaml")
+                        .is_file()
+                {
+                    return Some(anc.to_path_buf());
+                }
+            }
+        }
+    }
+    None
+}
+
 fn run_extended_session(program: &Path, args: &[&str], root: &Path) -> ExtendedTranscript {
     let root_str = root.to_string_lossy().to_string();
     let lib_file = root.join("lib/lib.dart");
@@ -915,9 +962,17 @@ fn run_extended_session(program: &Path, args: &[&str], root: &Path) -> ExtendedT
         }),
     );
     steps.insert("server.setClientCapabilities:ok".to_string(), caps_ok);
-    let caps_err = client.request(
+    let caps_non_map = client.request(
         "server.setClientCapabilities",
         json!({"requests": [], "lspCapabilities": "bad"}),
+    );
+    steps.insert(
+        "server.setClientCapabilities:non_map_lsp".to_string(),
+        caps_non_map,
+    );
+    let caps_err = client.request(
+        "server.setClientCapabilities",
+        json!({"requests": [], "lspCapabilities": {"textDocument": "bad"}}),
     );
     steps.insert("server.setClientCapabilities:invalid".to_string(), caps_err);
     let open_url_req = client.request("server.openUrlRequest", json!({"url": "https://dart.dev"}));
@@ -1251,6 +1306,506 @@ fn run_extended_session(program: &Path, args: &[&str], root: &Path) -> ExtendedT
         general_unsub_resp,
     );
 
+    // 18. flutter domain on non-Flutter fixture (subscriptions + negative cases)
+    let completed = client.analysis_completed;
+    let flutter_sub_ok = client.request(
+        "flutter.setSubscriptions",
+        json!({"subscriptions": {"OUTLINE": [&lib_file]}}),
+    );
+    client.settle(completed, false);
+    steps.insert("flutter.setSubscriptions:ok".to_string(), flutter_sub_ok);
+    let flutter_sub_bad_service = client.request(
+        "flutter.setSubscriptions",
+        json!({"subscriptions": {"NOT_A_SERVICE": [&lib_file]}}),
+    );
+    steps.insert(
+        "flutter.setSubscriptions:invalid_service".to_string(),
+        flutter_sub_bad_service,
+    );
+    let flutter_sub_bad_path = client.request(
+        "flutter.setSubscriptions",
+        json!({"subscriptions": {"OUTLINE": ["relative.dart"]}}),
+    );
+    steps.insert(
+        "flutter.setSubscriptions:invalid_path".to_string(),
+        flutter_sub_bad_path,
+    );
+    let flutter_desc_no_widget = client.request(
+        "flutter.getWidgetDescription",
+        json!({"file": lib_file, "offset": find_offset(&lib_src, "HelperBox<T>(seed)")}),
+    );
+    steps.insert(
+        "flutter.getWidgetDescription:no_widget".to_string(),
+        flutter_desc_no_widget,
+    );
+    let flutter_desc_bad_path = client.request(
+        "flutter.getWidgetDescription",
+        json!({"file": "relative.dart", "offset": 0}),
+    );
+    steps.insert(
+        "flutter.getWidgetDescription:invalid_path".to_string(),
+        flutter_desc_bad_path,
+    );
+    let flutter_set_bad_id = client.request(
+        "flutter.setWidgetPropertyValue",
+        json!({"id": 999999, "value": {"intValue": 1}}),
+    );
+    steps.insert(
+        "flutter.setWidgetPropertyValue:invalid_id".to_string(),
+        flutter_set_bad_id,
+    );
+
+    // 19. lsp.handle domain
+    let lib_uri = path_to_uri(&lib_file);
+    let part_uri = path_to_uri(&part_file);
+    let edit_uri = path_to_uri(&edit_file);
+
+    for (label, bad_msg) in [
+        ("not_object", json!("bad")),
+        (
+            "missing_id",
+            json!({"jsonrpc": "2.0", "method": "textDocument/hover"}),
+        ),
+        ("missing_method", json!({"jsonrpc": "2.0", "id": 1})),
+    ] {
+        let resp = client.request("lsp.handle", json!({"lspMessage": bad_msg}));
+        steps.insert(format!("lsp.handle:invalid_{label}"), resp);
+    }
+
+    let lsp_unknown = client.request(
+        "lsp.handle",
+        json!({
+            "lspMessage": {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "custom/unknownMethod",
+                "params": {}
+            }
+        }),
+    );
+    steps.insert("lsp.handle:unknown_method".to_string(), lsp_unknown);
+
+    for (label, needle) in [
+        ("class_Sub", "Sub<T extends num>"),
+        ("method_compute", "compute(T input)"),
+        ("field_seed", "seed;"),
+    ] {
+        let (line, col) = find_line_col(&lib_src, needle);
+        let resp = client.request(
+            "lsp.handle",
+            json!({
+                "lspMessage": {
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "textDocument/hover",
+                    "params": {
+                        "textDocument": {"uri": lib_uri},
+                        "position": {"line": line, "character": col}
+                    }
+                }
+            }),
+        );
+        steps.insert(
+            format!("lsp.handle:hover:{label}"),
+            normalize_paths(resp, &root_str),
+        );
+    }
+
+    {
+        let (line, col) = find_line_col(&lib_src, "helperValue(box.item)");
+        let resp = client.request(
+            "lsp.handle",
+            json!({
+                "lspMessage": {
+                    "jsonrpc": "2.0",
+                    "id": 3,
+                    "method": "textDocument/definition",
+                    "params": {
+                        "textDocument": {"uri": lib_uri},
+                        "position": {"line": line, "character": col}
+                    }
+                }
+            }),
+        );
+        steps.insert(
+            "lsp.handle:definition".to_string(),
+            normalize_paths(resp, &root_str),
+        );
+    }
+
+    {
+        let (line, col) = find_line_col(&lib_src, "box.item");
+        let resp = client.request(
+            "lsp.handle",
+            json!({
+                "lspMessage": {
+                    "jsonrpc": "2.0",
+                    "id": 4,
+                    "method": "textDocument/typeDefinition",
+                    "params": {
+                        "textDocument": {"uri": lib_uri},
+                        "position": {"line": line, "character": col}
+                    }
+                }
+            }),
+        );
+        steps.insert(
+            "lsp.handle:typeDefinition".to_string(),
+            normalize_paths(resp, &root_str),
+        );
+    }
+
+    {
+        let (line, col) = find_line_col(&lib_src, "Base<T extends num>");
+        let resp = client.request(
+            "lsp.handle",
+            json!({
+                "lspMessage": {
+                    "jsonrpc": "2.0",
+                    "id": 5,
+                    "method": "textDocument/implementation",
+                    "params": {
+                        "textDocument": {"uri": lib_uri},
+                        "position": {"line": line, "character": col}
+                    }
+                }
+            }),
+        );
+        steps.insert(
+            "lsp.handle:implementation".to_string(),
+            normalize_paths(resp, &root_str),
+        );
+    }
+
+    {
+        let (line, col) = find_line_col(&lib_src, "seed;");
+        let resp = client.request(
+            "lsp.handle",
+            json!({
+                "lspMessage": {
+                    "jsonrpc": "2.0",
+                    "id": 6,
+                    "method": "textDocument/references",
+                    "params": {
+                        "textDocument": {"uri": lib_uri},
+                        "position": {"line": line, "character": col},
+                        "context": {"includeDeclaration": false}
+                    }
+                }
+            }),
+        );
+        let mut norm = normalize_paths(resp, &root_str);
+        if let Some(arr) = norm["result"]["lspResponse"]["result"].as_array_mut() {
+            arr.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+        }
+        steps.insert("lsp.handle:references".to_string(), norm);
+    }
+
+    {
+        let (line, col) = find_line_col(&lib_src, "seed;");
+        let resp = client.request(
+            "lsp.handle",
+            json!({
+                "lspMessage": {
+                    "jsonrpc": "2.0",
+                    "id": 7,
+                    "method": "textDocument/documentHighlight",
+                    "params": {
+                        "textDocument": {"uri": lib_uri},
+                        "position": {"line": line, "character": col}
+                    }
+                }
+            }),
+        );
+        let mut norm = normalize_paths(resp, &root_str);
+        if let Some(arr) = norm["result"]["lspResponse"]["result"].as_array_mut() {
+            arr.sort_by_key(|v| {
+                (
+                    v["range"]["start"]["line"].as_i64().unwrap_or(0),
+                    v["range"]["start"]["character"].as_i64().unwrap_or(0),
+                )
+            });
+        }
+        steps.insert("lsp.handle:documentHighlight".to_string(), norm);
+    }
+
+    {
+        let resp = client.request(
+            "lsp.handle",
+            json!({
+                "lspMessage": {
+                    "jsonrpc": "2.0",
+                    "id": 8,
+                    "method": "textDocument/documentSymbol",
+                    "params": {
+                        "textDocument": {"uri": lib_uri}
+                    }
+                }
+            }),
+        );
+        steps.insert(
+            "lsp.handle:documentSymbol".to_string(),
+            normalize_paths(resp, &root_str),
+        );
+    }
+
+    {
+        let resp = client.request(
+            "lsp.handle",
+            json!({
+                "lspMessage": {
+                    "jsonrpc": "2.0",
+                    "id": 9,
+                    "method": "textDocument/foldingRange",
+                    "params": {
+                        "textDocument": {"uri": lib_uri}
+                    }
+                }
+            }),
+        );
+        steps.insert(
+            "lsp.handle:foldingRange".to_string(),
+            normalize_paths(resp, &root_str),
+        );
+    }
+
+    {
+        let (line, col) = find_line_col(&lib_src, "formatGreeting('hi'");
+        let resp = client.request(
+            "lsp.handle",
+            json!({
+                "lspMessage": {
+                    "jsonrpc": "2.0",
+                    "id": 10,
+                    "method": "textDocument/signatureHelp",
+                    "params": {
+                        "textDocument": {"uri": lib_uri},
+                        "position": {"line": line, "character": col + ("formatGreeting(".len() as u32)}
+                    }
+                }
+            }),
+        );
+        steps.insert(
+            "lsp.handle:signatureHelp".to_string(),
+            normalize_paths(resp, &root_str),
+        );
+    }
+
+    {
+        let resp = client.request(
+            "lsp.handle",
+            json!({
+                "lspMessage": {
+                    "jsonrpc": "2.0",
+                    "id": 11,
+                    "method": "textDocument/formatting",
+                    "params": {
+                        "textDocument": {"uri": edit_uri},
+                        "options": {"tabSize": 2, "insertSpaces": true}
+                    }
+                }
+            }),
+        );
+        steps.insert(
+            "lsp.handle:formatting".to_string(),
+            normalize_paths(resp, &root_str),
+        );
+    }
+
+    {
+        let resp = client.request(
+            "lsp.handle",
+            json!({
+                "lspMessage": {
+                    "jsonrpc": "2.0",
+                    "id": 12,
+                    "method": "textDocument/semanticTokens/full",
+                    "params": {
+                        "textDocument": {"uri": lib_uri}
+                    }
+                }
+            }),
+        );
+        steps.insert(
+            "lsp.handle:semanticTokens/full".to_string(),
+            normalize_paths(resp, &root_str),
+        );
+    }
+
+    {
+        let resp = client.request(
+            "lsp.handle",
+            json!({
+                "lspMessage": {
+                    "jsonrpc": "2.0",
+                    "id": 13,
+                    "method": "textDocument/inlayHint",
+                    "params": {
+                        "textDocument": {"uri": lib_uri},
+                        "range": {
+                            "start": {"line": 0, "character": 0},
+                            "end": {"line": 50, "character": 0}
+                        }
+                    }
+                }
+            }),
+        );
+        steps.insert(
+            "lsp.handle:inlayHint".to_string(),
+            normalize_paths(resp, &root_str),
+        );
+    }
+
+    {
+        let (line, col) = find_line_col(&lib_src, "Sub<T extends num>");
+        let prep_resp = client.request(
+            "lsp.handle",
+            json!({
+                "lspMessage": {
+                    "jsonrpc": "2.0",
+                    "id": 14,
+                    "method": "textDocument/prepareTypeHierarchy",
+                    "params": {
+                        "textDocument": {"uri": lib_uri},
+                        "position": {"line": line, "character": col}
+                    }
+                }
+            }),
+        );
+        let item = prep_resp["result"]["lspResponse"]["result"][0].clone();
+        steps.insert(
+            "lsp.handle:prepareTypeHierarchy".to_string(),
+            normalize_paths(prep_resp, &root_str),
+        );
+        if !item.is_null() {
+            let supertypes_resp = client.request(
+                "lsp.handle",
+                json!({
+                    "lspMessage": {
+                        "jsonrpc": "2.0",
+                        "id": 15,
+                        "method": "typeHierarchy/supertypes",
+                        "params": {"item": item}
+                    }
+                }),
+            );
+            steps.insert(
+                "lsp.handle:typeHierarchy/supertypes".to_string(),
+                normalize_paths(supertypes_resp, &root_str),
+            );
+            let subtypes_resp = client.request(
+                "lsp.handle",
+                json!({
+                    "lspMessage": {
+                        "jsonrpc": "2.0",
+                        "id": 16,
+                        "method": "typeHierarchy/subtypes",
+                        "params": {"item": item}
+                    }
+                }),
+            );
+            steps.insert(
+                "lsp.handle:typeHierarchy/subtypes".to_string(),
+                normalize_paths(subtypes_resp, &root_str),
+            );
+        }
+    }
+
+    {
+        let (line, col) = find_line_col(&lib_src, "mixed() => tag;");
+        let prep_resp = client.request(
+            "lsp.handle",
+            json!({
+                "lspMessage": {
+                    "jsonrpc": "2.0",
+                    "id": 17,
+                    "method": "textDocument/prepareCallHierarchy",
+                    "params": {
+                        "textDocument": {"uri": lib_uri},
+                        "position": {"line": line, "character": col}
+                    }
+                }
+            }),
+        );
+        let item = prep_resp["result"]["lspResponse"]["result"][0].clone();
+        steps.insert(
+            "lsp.handle:prepareCallHierarchy".to_string(),
+            normalize_paths(prep_resp, &root_str),
+        );
+        if !item.is_null() {
+            let incoming_resp = client.request(
+                "lsp.handle",
+                json!({
+                    "lspMessage": {
+                        "jsonrpc": "2.0",
+                        "id": 18,
+                        "method": "callHierarchy/incomingCalls",
+                        "params": {"item": item}
+                    }
+                }),
+            );
+            steps.insert(
+                "lsp.handle:callHierarchy/incomingCalls".to_string(),
+                normalize_paths(incoming_resp, &root_str),
+            );
+            let outgoing_resp = client.request(
+                "lsp.handle",
+                json!({
+                    "lspMessage": {
+                        "jsonrpc": "2.0",
+                        "id": 19,
+                        "method": "callHierarchy/outgoingCalls",
+                        "params": {"item": item}
+                    }
+                }),
+            );
+            steps.insert(
+                "lsp.handle:callHierarchy/outgoingCalls".to_string(),
+                normalize_paths(outgoing_resp, &root_str),
+            );
+        }
+    }
+
+    {
+        let ws_resp = client.request(
+            "lsp.handle",
+            json!({
+                "lspMessage": {
+                    "jsonrpc": "2.0",
+                    "id": 20,
+                    "method": "workspace/symbol",
+                    "params": {"query": "HelperBox"}
+                }
+            }),
+        );
+        steps.insert(
+            "lsp.handle:workspace/symbol".to_string(),
+            normalize_paths(ws_resp, &root_str),
+        );
+    }
+
+    {
+        let (line, col) = find_line_col(&part_src, "compute(int input)");
+        let super_resp = client.request(
+            "lsp.handle",
+            json!({
+                "lspMessage": {
+                    "jsonrpc": "2.0",
+                    "id": 21,
+                    "method": "dart/textDocument/super",
+                    "params": {
+                        "textDocument": {"uri": part_uri},
+                        "position": {"line": line, "character": col}
+                    }
+                }
+            }),
+        );
+        steps.insert(
+            "lsp.handle:dart/textDocument/super".to_string(),
+            normalize_paths(super_resp, &root_str),
+        );
+    }
+
     assert!(
         client.analyzed_files.len() >= 2,
         "expected initial and post-analysis analysis.analyzedFiles notifications"
@@ -1286,6 +1841,7 @@ fn run_extended_session(program: &Path, args: &[&str], root: &Path) -> ExtendedT
         "analysis.implemented",
         "analysis.overrides",
         "analysis.closingLabels",
+        "flutter.outline",
     ] {
         let map = client.notifications.get(event).cloned().unwrap_or_default();
         let mut normalized = Map::new();
@@ -1376,7 +1932,7 @@ fn extended_legacy_requests_and_notifications_match_dart_3_13_3() {
         "dart and dartr recorded different steps"
     );
     assert!(
-        dart_tx.steps.len() >= 73,
+        dart_tx.steps.len() >= 100,
         "dart recorded only {} steps",
         dart_tx.steps.len()
     );
@@ -1392,4 +1948,315 @@ fn extended_legacy_requests_and_notifications_match_dart_3_13_3() {
         }
     }
     assert!(diffs.is_empty(), "differences in steps: {diffs:?}");
+}
+
+fn find_property<'a>(props: &'a [Value], name: &str) -> &'a Value {
+    props
+        .iter()
+        .find(|p| p["name"].as_str() == Some(name))
+        .unwrap_or_else(|| panic!("property `{name}` not found"))
+}
+
+fn run_flutter_session(program: &Path, args: &[&str], root: &Path) -> ExtendedTranscript {
+    let root_str = root.to_string_lossy().to_string();
+    let main_file = root.join("lib/main.dart");
+    let main_src = std::fs::read_to_string(&main_file).unwrap();
+
+    let mut client = LegacyClient::spawn(program, args);
+    client.wait_for_event("server.connected");
+
+    client.request(
+        "server.setSubscriptions",
+        json!({"subscriptions": ["STATUS"]}),
+    );
+    client.request(
+        "analysis.setSubscriptions",
+        json!({"subscriptions": {"OUTLINE": [&main_file]}}),
+    );
+    let flutter_sub_resp = client.request(
+        "flutter.setSubscriptions",
+        json!({"subscriptions": {"OUTLINE": [&main_file]}}),
+    );
+    client.request("analysis.setPriorityFiles", json!({"files": [&main_file]}));
+    let completed = client.analysis_completed;
+    client.request(
+        "analysis.setAnalysisRoots",
+        json!({"included": [root], "excluded": []}),
+    );
+    client.settle(completed, true);
+
+    let mut steps = BTreeMap::new();
+    steps.insert("flutter.setSubscriptions".to_string(), flutter_sub_resp);
+
+    // 1. flutter.getWidgetDescription on Text('Hello', ...)
+    let text_offset = find_offset(&main_src, "Text(\n          'Hello'");
+    let text_desc = client.request(
+        "flutter.getWidgetDescription",
+        json!({"file": main_file, "offset": text_offset}),
+    );
+    let text_props = text_desc["result"]["properties"]
+        .as_array()
+        .expect("Text properties")
+        .clone();
+    steps.insert(
+        "flutter.getWidgetDescription:Text".to_string(),
+        normalize_paths(text_desc, &root_str),
+    );
+
+    // Modify existing intValue property (maxLines)
+    let max_lines_id = find_property(&text_props, "maxLines")["id"]
+        .as_i64()
+        .unwrap();
+    let set_max_lines = client.request(
+        "flutter.setWidgetPropertyValue",
+        json!({"id": max_lines_id, "value": {"intValue": 3}}),
+    );
+    steps.insert(
+        "flutter.setWidgetPropertyValue:Text_maxLines_int".to_string(),
+        normalize_paths(set_max_lines, &root_str),
+    );
+
+    // Remove optional property (maxLines -> null)
+    let remove_max_lines = client.request(
+        "flutter.setWidgetPropertyValue",
+        json!({"id": max_lines_id}),
+    );
+    steps.insert(
+        "flutter.setWidgetPropertyValue:Text_maxLines_remove".to_string(),
+        normalize_paths(remove_max_lines, &root_str),
+    );
+
+    // Modify existing boolValue property (softWrap)
+    let soft_wrap_id = find_property(&text_props, "softWrap")["id"]
+        .as_i64()
+        .unwrap();
+    let set_soft_wrap = client.request(
+        "flutter.setWidgetPropertyValue",
+        json!({"id": soft_wrap_id, "value": {"boolValue": false}}),
+    );
+    steps.insert(
+        "flutter.setWidgetPropertyValue:Text_softWrap_bool".to_string(),
+        normalize_paths(set_soft_wrap, &root_str),
+    );
+
+    // Set unset optional String property (semanticsLabel)
+    let sem_label_id = find_property(&text_props, "semanticsLabel")["id"]
+        .as_i64()
+        .unwrap();
+    let set_sem_label = client.request(
+        "flutter.setWidgetPropertyValue",
+        json!({"id": sem_label_id, "value": {"stringValue": "greeting"}}),
+    );
+    steps.insert(
+        "flutter.setWidgetPropertyValue:Text_semanticsLabel_insert".to_string(),
+        normalize_paths(set_sem_label, &root_str),
+    );
+
+    // Attempt to remove required positional property (data -> null)
+    let data_id = find_property(&text_props, "data")["id"].as_i64().unwrap();
+    let remove_required = client.request("flutter.setWidgetPropertyValue", json!({"id": data_id}));
+    steps.insert(
+        "flutter.setWidgetPropertyValue:Text_data_remove_required_error".to_string(),
+        remove_required,
+    );
+
+    // Attempt invalid expression (unformatted edit fallback)
+    let invalid_expr = client.request(
+        "flutter.setWidgetPropertyValue",
+        json!({"id": max_lines_id, "value": {"expression": ")bad("}}),
+    );
+    steps.insert(
+        "flutter.setWidgetPropertyValue:invalid_expression_error".to_string(),
+        normalize_paths(invalid_expr, &root_str),
+    );
+
+    // Materialize virtual Container property (width on Text)
+    let container_prop = find_property(&text_props, "Container");
+    let container_children = container_prop["children"]
+        .as_array()
+        .expect("Container children");
+    let virt_width_id = find_property(container_children, "width")["id"]
+        .as_i64()
+        .unwrap();
+    let set_virt_width = client.request(
+        "flutter.setWidgetPropertyValue",
+        json!({"id": virt_width_id, "value": {"doubleValue": 120.0}}),
+    );
+    steps.insert(
+        "flutter.setWidgetPropertyValue:VirtualContainer_width".to_string(),
+        normalize_paths(set_virt_width, &root_str),
+    );
+
+    // 2. flutter.getWidgetDescription on Padding(padding: EdgeInsets.all(8.0), ...)
+    let padding_offset = find_offset(&main_src, "Padding(");
+    let padding_desc = client.request(
+        "flutter.getWidgetDescription",
+        json!({"file": main_file, "offset": padding_offset}),
+    );
+    let padding_props = padding_desc["result"]["properties"]
+        .as_array()
+        .expect("Padding properties")
+        .clone();
+    steps.insert(
+        "flutter.getWidgetDescription:Padding".to_string(),
+        normalize_paths(padding_desc, &root_str),
+    );
+
+    let padding_prop = find_property(&padding_props, "padding");
+    let padding_children = padding_prop["children"]
+        .as_array()
+        .expect("padding EdgeInsets children");
+    let left_id = find_property(padding_children, "left")["id"]
+        .as_i64()
+        .unwrap();
+    let set_left = client.request(
+        "flutter.setWidgetPropertyValue",
+        json!({"id": left_id, "value": {"doubleValue": 16.0}}),
+    );
+    steps.insert(
+        "flutter.setWidgetPropertyValue:EdgeInsets_left".to_string(),
+        normalize_paths(set_left, &root_str),
+    );
+
+    // 3. flutter.getWidgetDescription on Container(...)
+    let container_offset = find_offset(&main_src, "Container(\n          width: 100.0");
+    let container_desc = client.request(
+        "flutter.getWidgetDescription",
+        json!({"file": main_file, "offset": container_offset}),
+    );
+    steps.insert(
+        "flutter.getWidgetDescription:Container".to_string(),
+        normalize_paths(container_desc, &root_str),
+    );
+
+    for event in ["analysis.outline", "flutter.outline"] {
+        let map = client.notifications.get(event).cloned().unwrap_or_default();
+        let mut normalized = Map::new();
+        for (file, payload) in map {
+            let key = file.replace(&root_str, "${ROOT}");
+            normalized.insert(key, normalize_paths(payload, &root_str));
+        }
+        steps.insert(format!("notification:{event}"), Value::Object(normalized));
+    }
+
+    client.request("server.shutdown", json!({}));
+    let (_, exit_code) = client.finish();
+    assert_eq!(exit_code, 0);
+
+    ExtendedTranscript { steps }
+}
+
+#[test]
+fn flutter_legacy_requests_and_outline_match_dart_3_13_3() {
+    let Some(dart) = dart_binary() else {
+        eprintln!("skipped: Dart 3.13.3 is not available");
+        return;
+    };
+    let Some(flutter_root) = flutter_sdk_root(&dart) else {
+        eprintln!("skipped: Flutter SDK not found next to dart");
+        return;
+    };
+
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_dir = std::env::temp_dir().join(format!("dartr-legacy-flutter-{unique}"));
+    let lib_dir = temp_dir.join("lib");
+    std::fs::create_dir_all(&lib_dir).unwrap();
+
+    std::fs::write(
+        temp_dir.join("pubspec.yaml"),
+        "name: flutter_fixture\nenvironment:\n  sdk: ^3.5.0\ndependencies:\n  flutter:\n    sdk: flutter\n",
+    )
+    .unwrap();
+
+    let pub_status = Command::new(&dart)
+        .args(["pub", "get", "--offline"])
+        .current_dir(&temp_dir)
+        .env("FLUTTER_ROOT", &flutter_root)
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .status()
+        .expect("failed to run dart pub get");
+    assert!(pub_status.success(), "dart pub get --offline failed");
+
+    std::fs::write(
+        lib_dir.join("main.dart"),
+        r#"import 'package:flutter/widgets.dart';
+
+class DemoWidget extends StatelessWidget {
+  final Widget extraChild;
+
+  const DemoWidget({super.key, required this.extraChild});
+
+  @override
+  Widget build(BuildContext context) {
+    final localLabel = Text('Local');
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: <Widget>[
+        Text(
+          'Hello',
+          maxLines: 2,
+          softWrap: true,
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 14.0),
+        ),
+        Padding(
+          padding: EdgeInsets.all(8.0),
+          child: Text('Padded'),
+        ),
+        Container(
+          width: 100.0,
+          alignment: Alignment.center,
+          child: Icon(const IconData(0xe000)),
+        ),
+        localLabel,
+        extraChild,
+      ],
+    );
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    let canonical_root = temp_dir.canonicalize().unwrap();
+    let args = [
+        "language-server",
+        "--protocol=analyzer",
+        "--client-id=legacy-parity",
+    ];
+    let dart_tx = run_flutter_session(&dart, &args, &canonical_root);
+    let dartr_tx = run_flutter_session(
+        Path::new(env!("CARGO_BIN_EXE_dartr")),
+        &args,
+        &canonical_root,
+    );
+    let _ = std::fs::remove_dir_all(&temp_dir);
+
+    let dart_keys: Vec<_> = dart_tx.steps.keys().collect();
+    let dartr_keys: Vec<_> = dartr_tx.steps.keys().collect();
+    assert_eq!(
+        dartr_keys, dart_keys,
+        "dart and dartr recorded different flutter steps"
+    );
+    assert!(
+        dart_tx.steps.len() >= 13,
+        "dart recorded only {} flutter steps",
+        dart_tx.steps.len()
+    );
+
+    let mut diffs = Vec::new();
+    for (key, dart_val) in &dart_tx.steps {
+        let dartr_val = dartr_tx.steps.get(key).expect("missing step in dartr");
+        if dart_val == dartr_val {
+            println!("PASS {key}: identical");
+        } else {
+            println!("DIFF {key}:\n  dart:  {dart_val}\n  dartr: {dartr_val}");
+            diffs.push(key.clone());
+        }
+    }
+    assert!(diffs.is_empty(), "differences in flutter steps: {diffs:?}");
 }

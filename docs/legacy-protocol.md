@@ -32,9 +32,9 @@ Generated types cover every domain; runtime support is the subset below.
 | execution | 5 / 5 | 1 / 1 |
 | diagnostic | 2 / 2 | 0 / 0 |
 | analytics | 4 / 4 | 0 / 0 |
-| flutter | 0 / 3 | 0 / 1 |
-| lsp | 0 / 1 | 0 / 1 |
-| Total | 39 / 59 | 19 / 22 |
+| flutter | 3 / 3 | 1 / 1 |
+| lsp | 1 / 1 | 1 / 1 |
+| Total | 43 / 59 | 21 / 22 |
 
 Requests: `server.getVersion`, `server.shutdown`, `server.setSubscriptions`,
 `server.cancelRequest`, `server.setClientCapabilities`,
@@ -52,7 +52,8 @@ Requests: `server.getVersion`, `server.shutdown`, `server.setSubscriptions`,
 `execution.getSuggestions`, `execution.mapUri`, `execution.setSubscriptions`,
 `diagnostic.getDiagnostics`, `diagnostic.getServerPort`,
 `analytics.isEnabled`, `analytics.enable`, `analytics.sendEvent`,
-`analytics.sendTiming`.
+`analytics.sendTiming`, `flutter.getWidgetDescription`,
+`flutter.setWidgetPropertyValue`, `flutter.setSubscriptions`, `lsp.handle`.
 
 Notifications: `server.connected`, `server.error`, `server.pluginError`,
 `server.log`, `server.status`, `analysis.analyzedFiles`,
@@ -60,7 +61,7 @@ Notifications: `server.connected`, `server.error`, `server.pluginError`,
 `analysis.folding`, `analysis.highlights`, `analysis.implemented`,
 `analysis.invalidate`, `analysis.navigation`, `analysis.occurrences`,
 `analysis.outline`, `analysis.overrides`, `search.results`,
-`execution.launchData`.
+`execution.launchData`, `flutter.outline`, `lsp.notification`.
 `analysis.flushResults` is a notification, not a request.
 
 Server-initiated requests (`server.openUrlRequest`, `server.showMessageRequest`)
@@ -73,9 +74,13 @@ and `analysis.getLibraryDependencies` return `UNSUPPORTED_FEATURE` matching the
 pinned Dart 3.13.3 `UnsupportedRequestHandler`. Known analysis subscriptions are
 accepted; `FOLDING`, `NAVIGATION`, `HIGHLIGHTS`, `OCCURRENCES`, `OUTLINE`,
 `IMPLEMENTED`, `OVERRIDES`, and `CLOSING_LABELS` emit feature notifications.
+`OUTLINE` in `flutter.setSubscriptions` emits `flutter.outline` notifications.
 `ANALYZED_FILES` in `analysis.setGeneralSubscriptions` emits
 `analysis.analyzedFiles` notifications. `STATUS` emits analysis start and end,
 and `LOG` emits `server.log` request/response/notification statistics entries.
+`lsp.handle` dispatches LSP requests wrapped in the legacy protocol using the
+shared `dartr_server` handlers, and `lsp.notification` wraps server-originated
+LSP notifications when LSP client capabilities have been configured.
 
 ## Diagnostics and overlays
 
@@ -113,7 +118,10 @@ occurrences, outline, implemented, overrides, closing labels, analyzed files,
 imported elements, signatures, search requests (`search.results`,
 `search.getElementDeclarations`, and type hierarchy), edit requests (`edit.format`,
 `edit.sortMembers`, `edit.organizeDirectives`), execution context and URI mapping,
-diagnostic context inspection and server port allocation, and analytics handlers.
+diagnostic context inspection and server port allocation, analytics handlers,
+Flutter outline and widget property requests (`flutter.setSubscriptions`,
+`flutter.outline`, `flutter.getWidgetDescription`, `flutter.setWidgetPropertyValue`),
+and LSP-over-legacy requests (`lsp.handle`).
 They normalize IDs, process IDs, ports, timestamps, and nondeterministic
 notification timing. A missing Dart installation skips the differential tests.
 `DART_BIN` selects a standalone SDK executable. The test helper also detects the
@@ -128,11 +136,10 @@ python3 tools/legacy_parity.py --server target/debug/dartr --output /tmp/dartr-l
 
 ## Remaining work
 
-Completion, quick fixes, assists, refactorings, bulk fixes, Flutter outline
-requests, and LSP-over-legacy requests are not implemented in the legacy
-protocol yet. No filesystem watcher is installed; on-disk changes become visible
-after a request that triggers analysis, such as `analysis.reanalyze`. Analysis
-currently analyzes the roots synchronously on each analysis pass instead of using
-an asynchronous background scheduler. Notification batching and response ordering
-can therefore differ from Dart, while analysis start precedes completion and
-clients receive the final state.
+Completion, quick fixes, assists, refactorings, and bulk fixes are not
+implemented in the legacy protocol yet. No filesystem watcher is installed;
+on-disk changes become visible after a request that triggers analysis, such as
+`analysis.reanalyze`. Analysis currently analyzes the roots synchronously on each
+analysis pass instead of using an asynchronous background scheduler. Notification
+batching and response ordering can therefore differ from Dart, while analysis
+start precedes completion and clients receive the final state.

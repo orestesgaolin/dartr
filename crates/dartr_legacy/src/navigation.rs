@@ -12,24 +12,23 @@ use rustc_hash::FxHashMap;
 use crate::convert::{convert_navigation_target_kind, line_col_from_starts};
 use crate::protocol::{ElementKind, Location, NavigationRegion, NavigationTarget};
 
+type TargetKey = (
+    ElementKind,
+    String,
+    i64,
+    i64,
+    i64,
+    i64,
+    Option<i64>,
+    Option<i64>,
+);
+
 pub struct LegacyNavigationCollector {
     pub regions: Vec<NavigationRegion>,
     region_list: Vec<((i64, i64), Vec<i64>)>,
     region_map: FxHashMap<(i64, i64), usize>,
     pub targets: Vec<NavigationTarget>,
-    target_map: FxHashMap<
-        (
-            ElementKind,
-            String,
-            i64,
-            i64,
-            i64,
-            i64,
-            Option<i64>,
-            Option<i64>,
-        ),
-        i64,
-    >,
+    target_map: FxHashMap<TargetKey, i64>,
     pub files: Vec<String>,
     file_map: FxHashMap<String, i64>,
 }
@@ -837,10 +836,9 @@ impl AstVisitor for NavigationVisitor<'_, '_> {
                 let pat = ast[node].pattern;
                 if let Some(vp) = ast.cast::<DeclaredVariablePattern>(pat) {
                     Some(ast[vp].name)
-                } else if let Some(vp) = ast.cast::<AssignedVariablePattern>(pat) {
-                    Some(ast[vp].name)
                 } else {
-                    None
+                    ast.cast::<AssignedVariablePattern>(pat)
+                        .map(|vp| ast[vp].name)
                 }
             });
             let element = self.element(node);

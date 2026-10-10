@@ -365,10 +365,9 @@ pub fn get_element_display_name(ctx: &Ctx<'_>, element: ElementId) -> String {
 fn get_type_parameters_string(ctx: &Ctx<'_>, element: ElementId) -> Option<String> {
     let type_params = if let Some(iface) = element.cast::<InterfaceElement>() {
         &ctx.interface(iface).type_params
-    } else if let Some(ta) = element.cast::<TypeAliasElement>() {
-        &ctx.get(ta).type_params
     } else {
-        return None;
+        let ta = element.cast::<TypeAliasElement>()?;
+        &ctx.get(ta).type_params
     };
     if type_params.is_empty() {
         return None;
@@ -508,9 +507,10 @@ fn get_parameters_string(
                 default_code,
             });
         }
-    } else if let Some(ta) = element.cast::<TypeAliasElement>() {
+    } else {
+        let ta = element.cast::<TypeAliasElement>()?;
         let aliased_type = ctx.get(ta).aliased_type.get()?;
-        if let TypeKind::Function(ft) = ctx.ty(aliased_type).clone() {
+        if let TypeKind::Function(ft) = *ctx.ty(aliased_type) {
             let req_count = ft.required_positional as usize;
             for (idx, param) in ctx.list(ft.params).iter().enumerate() {
                 let kind = match param.kind {
@@ -534,8 +534,6 @@ fn get_parameters_string(
         } else {
             return None;
         }
-    } else {
-        return None;
     }
 
     entries.sort_by_key(ParamEntry::rank);

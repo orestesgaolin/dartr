@@ -1367,10 +1367,10 @@ pub fn parsed_defines_class_member(
             if check_name_part(ast[e].name_part) || check_body(ast[e].body) {
                 return true;
             }
-        } else if let Some(m) = ast.cast::<MixinDeclaration>(decl) {
-            if check_body(ast[m].body) {
-                return true;
-            }
+        } else if let Some(m) = ast.cast::<MixinDeclaration>(decl)
+            && check_body(ast[m].body)
+        {
+            return true;
         }
     }
     false
@@ -2306,11 +2306,7 @@ impl<'a> SearchEngine<'a> {
         results
     }
 
-    pub fn find_element_references(
-        &mut self,
-        element: &SElem,
-        include_potential: bool,
-    ) -> Vec<protocol::SearchResult> {
+    pub fn element_reference_matches(&mut self, element: &SElem) -> Vec<LegacyMatch> {
         let ref_elements: Vec<SElem> = if is_named_parameter(element) {
             self.hierarchy_named_parameters(element)
         } else if matches!(
@@ -2327,6 +2323,15 @@ impl<'a> SearchEngine<'a> {
         for ref_el in &ref_elements {
             matches.extend(self.search_references(ref_el));
         }
+        matches
+    }
+
+    pub fn find_element_references(
+        &mut self,
+        element: &SElem,
+        include_potential: bool,
+    ) -> Vec<protocol::SearchResult> {
+        let mut matches = self.element_reference_matches(element);
         if include_potential && is_member_element(element) {
             let name = element.with(|ctx| support::display_name(ctx, element.id));
             matches.extend(self.search_unresolved_member_references(&name));
@@ -3061,7 +3066,7 @@ impl ImportedElementsVisitor<'_, '_> {
             let is_ctor_return_type = ast
                 .parent(ident)
                 .and_then(|p| ast.cast::<ConstructorDeclaration>(p))
-                .is_some_and(|c| ast[c].type_name == Some(ident.into()));
+                .is_some_and(|c| ast[c].type_name == Some(ident));
             if !support::in_declaration_context(ast, ident) && !is_ctor_return_type {
                 let node_element =
                     support::write_or_read_element(self.ctx, ast, self.tables, ident)

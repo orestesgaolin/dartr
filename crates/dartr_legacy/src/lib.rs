@@ -5,6 +5,7 @@
 
 pub mod convert;
 pub mod edit;
+pub mod flutter_outline;
 pub mod highlights;
 pub mod implemented;
 pub mod navigation;

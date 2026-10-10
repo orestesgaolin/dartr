@@ -20,6 +20,7 @@ use dartr_element::{ElementId, NoopSink, Tag};
 use dartr_project::{AnalysisContextCollection, CollectionOptions, FileKind, fs, non_dart, paths};
 use dartr_server::args::ServerOptions;
 use dartr_syntax::LineInfo;
+use dartr_typesystem::type_ext::TypeExt;
 use indexmap::{IndexMap, IndexSet};
 use rustc_hash::FxHashMap;
 use serde_json::{Value, json};
@@ -72,6 +73,10 @@ pub const IMPLEMENTED_REQUESTS: &[&str] = &[
     "analytics.enable",
     "analytics.sendEvent",
     "analytics.sendTiming",
+    "flutter.getWidgetDescription",
+    "flutter.setWidgetPropertyValue",
+    "flutter.setSubscriptions",
+    "lsp.handle",
 ];
 pub const IMPLEMENTED_NOTIFICATIONS: &[&str] = &[
     "server.connected",
@@ -93,6 +98,8 @@ pub const IMPLEMENTED_NOTIFICATIONS: &[&str] = &[
     "analysis.overrides",
     "search.results",
     "execution.launchData",
+    "flutter.outline",
+    "lsp.notification",
 ];
 
 #[derive(Debug)]
@@ -240,6 +247,10 @@ struct Server<W: Write> {
     overlays: IndexMap<String, String>,
     priority: Vec<String>,
     subscriptions: IndexMap<String, Vec<String>>,
+    flutter_subscriptions: IndexMap<String, Vec<String>>,
+    widget_descriptions: crate::flutter_outline::WidgetDescriptions,
+    lsp_capabilities: dartr_server::capabilities::ClientCapabilities,
+    send_lsp_notifications: bool,
     status_subscribed: bool,
     log_subscribed: bool,
     general_analyzed_files_subscribed: bool,
@@ -272,6 +283,10 @@ pub fn run<R: BufRead, W: Write>(options: ServerOptions, input: R, channel: Chan
         overlays: IndexMap::new(),
         priority: Vec::new(),
         subscriptions: IndexMap::new(),
+        flutter_subscriptions: IndexMap::new(),
+        widget_descriptions: crate::flutter_outline::WidgetDescriptions::default(),
+        lsp_capabilities: default_legacy_lsp_capabilities(),
+        send_lsp_notifications: false,
         status_subscribed: false,
         log_subscribed: false,
         general_analyzed_files_subscribed: false,
@@ -596,35 +611,35 @@ impl<W: Write> Server<W> {
                     Some(v) if !v.is_null() => boolean(v, "params.supportsUris")?,
                     _ => false,
                 };
-                if let Some(lsp_caps) = params.get("lspCapabilities")
-                    && let Some(obj) = lsp_caps.as_object()
-                {
-                    for key in [
-                        "general",
-                        "notebookDocument",
-                        "textDocument",
-                        "window",
-                        "workspace",
+                if let Some(obj) = params.get("lspCapabilities").and_then(Value::as_object) {
+                    for (key, expected_ty) in [
+                        ("general", "GeneralClientCapabilities"),
+                        ("notebookDocument", "NotebookDocumentClientCapabilities"),
+                        ("textDocument", "TextDocumentClientCapabilities"),
+                        ("window", "WindowClientCapabilities"),
+                        ("workspace", "WorkspaceClientCapabilities"),
                     ] {
                         if let Some(val) = obj.get(key)
                             && !val.is_null()
                             && !val.is_object()
                         {
-                            let ty = match val {
-                                Value::Bool(_) => "bool",
-                                Value::Number(_) => "int",
-                                Value::String(_) => "String",
-                                Value::Array(_) => "List",
-                                _ => "Object",
-                            };
                             return Err(RequestFailure::new(
                                 "INVALID_PARAMETER",
                                 format!(
-                                    "The 'lspCapabilities' parameter was invalid: {key} must be of type {ty}"
+                                    "The 'lspCapabilities' parameter was invalid: {key} must be of type {expected_ty}"
                                 ),
                             ));
                         }
                     }
+                    let mut merged = default_legacy_lsp_capabilities_json();
+                    if let Some(m) = merged.as_object_mut() {
+                        for (k, v) in obj {
+                            m.insert(k.clone(), v.clone());
+                        }
+                    }
+                    self.lsp_capabilities =
+                        dartr_server::capabilities::ClientCapabilities::new(merged);
+                    self.send_lsp_notifications = true;
                 }
                 self.client_requests = requests;
                 self.supports_uris = supports_uris;
@@ -942,6 +957,48 @@ impl<W: Write> Server<W> {
             }
             "analytics.enable" | "analytics.sendEvent" | "analytics.sendTiming" => {
                 self.response(id, None)?;
+            }
+            "flutter.getWidgetDescription" => {
+                let file = string(field(params, "file")?, "params.file")?;
+                let offset = integer(field(params, "offset")?, "params.offset")?;
+                valid_path(file)?;
+                let result = self.flutter_get_widget_description(file, offset)?;
+                self.response(id, Some(wire(result)))?;
+            }
+            "flutter.setWidgetPropertyValue" => {
+                let prop_id = integer(field(params, "id")?, "params.id")?;
+                let value = match params.get("value") {
+                    Some(v) if !v.is_null() => {
+                        Some(decode_flutter_widget_property_value(v, "params.value")?)
+                    }
+                    _ => None,
+                };
+                let result = self.flutter_set_widget_property_value(prop_id, value)?;
+                self.response(id, Some(wire(result)))?;
+            }
+            "flutter.setSubscriptions" => {
+                let map = object(field(params, "subscriptions")?, "params.subscriptions")?;
+                let mut subscriptions = IndexMap::new();
+                for (service, files) in map {
+                    if service != "OUTLINE" {
+                        return Err(RequestFailure::mismatch(
+                            "params.subscriptions.key",
+                            "FlutterService",
+                            &json!(service),
+                        ));
+                    }
+                    let files =
+                        strings(files, &format!("params.subscriptions[{}]", json!(service)))?;
+                    subscriptions.insert(service.clone(), files);
+                }
+                self.flutter_subscriptions = subscriptions;
+                self.dirty = self.collection.is_some();
+                self.response(id, None)?;
+            }
+            "lsp.handle" => {
+                let lsp_message = field(params, "lspMessage")?;
+                let result = self.handle_lsp(lsp_message)?;
+                self.response(id, Some(wire(result)))?;
             }
             _ => return Err(RequestFailure::new("UNKNOWN_REQUEST", "Unknown request")),
         }
@@ -1591,6 +1648,7 @@ impl<W: Write> Server<W> {
             self.search_scope = None;
             self.search_words.clear();
             self.indexes.clear();
+            self.widget_descriptions.flush();
         }
         let mut files = IndexSet::new();
         if let Some(collection) = &self.collection {
@@ -1832,6 +1890,28 @@ impl<W: Write> Server<W> {
                     self.notify(
                         "analysis.closingLabels",
                         wire(protocol::AnalysisClosingLabelsParams { file, labels }),
+                    )?;
+                }
+            }
+        }
+        if let Some(files) = self.flutter_subscriptions.get("OUTLINE").cloned() {
+            for file in files {
+                if let Some(resolved) = self.resolve_unit(&file) {
+                    let sink = NoopSink;
+                    let ctx = resolved.ctx(&sink);
+                    let unit = resolved.unit();
+                    let outline = crate::flutter_outline::compute_flutter_outline(
+                        &ctx,
+                        &unit.ast,
+                        &unit.tables,
+                        unit.unit,
+                        &file,
+                        &unit.ast.tokens.source,
+                        resolved.line_info(),
+                    );
+                    self.notify(
+                        "flutter.outline",
+                        wire(protocol::FlutterOutlineParams { file, outline }),
                     )?;
                 }
             }
@@ -2215,9 +2295,1497 @@ impl<W: Write> Server<W> {
             if FileKind::of(&file) == FileKind::AnalysisOptions {
                 self.roots_dirty = true;
             }
+            self.widget_descriptions.flush();
             self.dirty = true;
         }
         Ok(())
+    }
+
+    fn flutter_get_widget_description(
+        &mut self,
+        file: &str,
+        offset: i64,
+    ) -> Result<protocol::FlutterGetWidgetDescriptionResult> {
+        let Some(resolved) = self.resolve_unit(file) else {
+            return Err(RequestFailure::new(
+                "FLUTTER_GET_WIDGET_DESCRIPTION_NO_WIDGET",
+                "No widget instance creation at the offset.",
+            ));
+        };
+        let version = self
+            .collection
+            .as_ref()
+            .and_then(|c| c.context_for(file).or_else(|| c.contexts.first()))
+            .map(|ctx| {
+                let v = ctx.file_info(file).language_version;
+                (v.major, v.minor)
+            })
+            .unwrap_or((3, 0));
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let unit = resolved.unit();
+        self.widget_descriptions
+            .get_description(
+                &ctx,
+                &unit.ast,
+                &unit.tables,
+                unit.unit,
+                file,
+                &unit.ast.tokens.source,
+                version,
+                offset,
+            )
+            .ok_or_else(|| {
+                RequestFailure::new(
+                    "FLUTTER_GET_WIDGET_DESCRIPTION_NO_WIDGET",
+                    "No widget instance creation at the offset.",
+                )
+            })
+    }
+
+    fn flutter_set_widget_property_value(
+        &mut self,
+        id: i64,
+        value: Option<protocol::FlutterWidgetPropertyValue>,
+    ) -> Result<protocol::FlutterSetWidgetPropertyValueResult> {
+        self.widget_descriptions
+            .set_property_value(id, value)
+            .map_err(|code| RequestFailure::new(code, ""))
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn send_lsp_notification(&mut self, method: &str, params: Value) -> io::Result<()> {
+        if !self.send_lsp_notifications {
+            return Ok(());
+        }
+        self.notify(
+            "lsp.notification",
+            wire(protocol::LspNotificationParams {
+                lsp_notification: json!({
+                    "jsonrpc": "2.0",
+                    "method": method,
+                    "params": params,
+                }),
+            }),
+        )
+    }
+
+    fn handle_lsp(&mut self, lsp_message: &Value) -> Result<protocol::LspHandleResult> {
+        if let Err(err) = validate_lsp_request_message(lsp_message) {
+            return Err(RequestFailure::new(
+                "INVALID_PARAMETER",
+                format!("The 'lspMessage' parameter was not a valid LSP request:\n{err}"),
+            ));
+        }
+        let req_id = lsp_message["id"].clone();
+        let method = lsp_message["method"].as_str().unwrap();
+        let params = lsp_message.get("params").cloned().unwrap_or(Value::Null);
+        let result = self.dispatch_lsp_method(method, &params);
+        let lsp_response = match result {
+            Ok(val) => json!({
+                "id": req_id,
+                "jsonrpc": "2.0",
+                "result": val,
+            }),
+            Err(err) => json!({
+                "id": req_id,
+                "jsonrpc": "2.0",
+                "error": err.to_json(),
+            }),
+        };
+        Ok(protocol::LspHandleResult { lsp_response })
+    }
+
+    fn dispatch_lsp_method(
+        &mut self,
+        method: &str,
+        params: &Value,
+    ) -> dartr_server::mapping::ErrorOr<Value> {
+        use dartr_server::mapping::{ResponseError, codes};
+        match method {
+            "initialize" | "initialized" => Err(ResponseError::new(
+                codes::SERVER_ALREADY_INITIALIZED,
+                "Server already initialized",
+            )),
+            "$/cancelRequest" => Ok(Value::Null),
+            "experimental/echo" => {
+                if params.is_null() || params.as_object().is_some_and(|o| o.is_empty()) {
+                    Ok(Value::Null)
+                } else {
+                    Ok(params.clone())
+                }
+            }
+            "dart/diagnosticServer" => {
+                let port = self
+                    .get_server_port()
+                    .map(|r| r.port)
+                    .map_err(|e| ResponseError::new(codes::UNHANDLED_ERROR, e.message))?;
+                Ok(json!({"port": port}))
+            }
+            "dart/updateDiagnosticInformation" => Ok(Value::Null),
+            "textDocument/documentSymbol" => self.lsp_document_symbols(params),
+            "textDocument/hover" => self.lsp_hover(params),
+            "textDocument/documentHighlight" => self.lsp_document_highlights(params),
+            "textDocument/formatting" => self.lsp_format(params, None, None),
+            "textDocument/rangeFormatting" => {
+                let range = params
+                    .get("range")
+                    .cloned()
+                    .ok_or_else(|| lsp_invalid_params(method))?;
+                self.lsp_format(params, Some(range), None)
+            }
+            "textDocument/onTypeFormatting" => {
+                let pos = params
+                    .get("position")
+                    .cloned()
+                    .ok_or_else(|| lsp_invalid_params(method))?;
+                let ch = params
+                    .get("ch")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| lsp_invalid_params(method))?
+                    .to_string();
+                self.lsp_format(params, None, Some((pos, ch)))
+            }
+            "textDocument/signatureHelp" => self.lsp_signature_help(params),
+            "textDocument/typeDefinition" => self.lsp_type_definition(params),
+            "textDocument/implementation" => self.lsp_implementation(params),
+            "textDocument/prepareTypeHierarchy" => self.lsp_prepare_type_hierarchy(params),
+            "typeHierarchy/supertypes" => self.lsp_type_hierarchy_supertypes(params),
+            "typeHierarchy/subtypes" => self.lsp_type_hierarchy_subtypes(params),
+            "textDocument/prepareCallHierarchy" => self.lsp_prepare_call_hierarchy(params),
+            "callHierarchy/incomingCalls" => self.lsp_call_hierarchy_incoming(params),
+            "callHierarchy/outgoingCalls" => self.lsp_call_hierarchy_outgoing(params),
+            "workspace/symbol" => self.lsp_workspace_symbol(params),
+            "dart/textDocument/super" => self.lsp_super(params),
+            "dart/textDocument/augmentation" => self.lsp_augmentation(params, true),
+            "dart/textDocument/augmented" => self.lsp_augmentation(params, false),
+            _ => Err(ResponseError::new(
+                codes::METHOD_NOT_FOUND,
+                format!("Unknown method {method}"),
+            )),
+        }
+    }
+
+    fn lsp_path_of_doc(&self, params: &Value) -> dartr_server::mapping::ErrorOr<String> {
+        let uri = params
+            .get("textDocument")
+            .and_then(|d| d.get("uri"))
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                dartr_server::mapping::ResponseError::new(
+                    dartr_server::mapping::codes::INVALID_FILE_PATH,
+                    "Document URI was not supplied",
+                )
+            })?;
+        self.lsp_path_of_uri(uri)
+    }
+
+    fn lsp_path_of_uri(&self, uri: &str) -> dartr_server::mapping::ErrorOr<String> {
+        use dartr_server::mapping::{ResponseError, codes};
+        use dartr_server::uri::{UriError, uri_to_path};
+        uri_to_path(uri).map_err(|e| match e {
+            UriError::NoScheme => ResponseError::with_data(
+                codes::INVALID_FILE_PATH,
+                "URI is not a valid file:// URI",
+                uri,
+            ),
+            UriError::UnsupportedScheme(s) => ResponseError::with_data(
+                codes::INVALID_FILE_PATH,
+                format!("URI scheme '{s}' is not supported. Allowed schemes are 'file'."),
+                uri,
+            ),
+            UriError::Invalid => ResponseError::with_data(
+                codes::INVALID_FILE_PATH,
+                "File URI did not contain a valid file path",
+                uri,
+            ),
+        })
+    }
+
+    fn lsp_require_resolved(
+        &mut self,
+        path: &str,
+    ) -> dartr_server::mapping::ErrorOr<ResolvedUnitRef> {
+        use dartr_server::mapping::{ResponseError, codes};
+        let not_analyzed = || {
+            ResponseError::with_data(codes::FILE_NOT_ANALYZED, "File is not being analyzed", path)
+        };
+        if !path.ends_with(".dart") {
+            return Err(not_analyzed());
+        }
+        if self.roots_dirty {
+            self.refresh_roots();
+        }
+        if self
+            .collection
+            .as_ref()
+            .is_none_or(|c| c.contexts.is_empty())
+        {
+            return Err(not_analyzed());
+        }
+        if fs::read_string(path).is_none() {
+            return Err(ResponseError::with_data(
+                codes::INVALID_FILE_PATH,
+                "File does not exist",
+                path,
+            ));
+        }
+        self.resolve_unit(path).ok_or_else(not_analyzed)
+    }
+
+    fn lsp_position_offset(
+        &self,
+        line_info: &LineInfo,
+        params: &Value,
+    ) -> dartr_server::mapping::ErrorOr<u32> {
+        use dartr_server::mapping::{ResponseError, codes, read_position, to_offset};
+        let (line, character) = params
+            .get("position")
+            .and_then(read_position)
+            .ok_or_else(|| ResponseError::new(codes::INVALID_PARAMS, "Invalid params"))?;
+        to_offset(line_info, line, character, false)
+    }
+
+    fn lsp_document_symbols(&mut self, params: &Value) -> dartr_server::mapping::ErrorOr<Value> {
+        use dartr_server::mapping::{ResponseError, codes};
+        if !lsp_is_dart_document(params) {
+            return Ok(json!([]));
+        }
+        let path = self.lsp_path_of_doc(params)?;
+        if self.roots_dirty {
+            self.refresh_roots();
+        }
+        if self
+            .collection
+            .as_ref()
+            .is_none_or(|c| c.contexts.is_empty())
+        {
+            return Err(ResponseError::with_data(
+                codes::FILE_NOT_ANALYZED,
+                "File is not being analyzed",
+                &path,
+            ));
+        }
+        if fs::read_string(&path).is_none() {
+            return Err(ResponseError::with_data(
+                codes::INVALID_FILE_PATH,
+                "File does not exist",
+                &path,
+            ));
+        }
+        let Some((content, unit, _)) = self.parse_file_for_context(&path) else {
+            return Err(ResponseError::with_data(
+                codes::FILE_NOT_ANALYZED,
+                "File is not being analyzed",
+                &path,
+            ));
+        };
+        let parsed = dartr_server::server::ParsedFile { content, unit };
+        Ok(dartr_server::features::document_symbols(
+            &self.lsp_capabilities,
+            &path,
+            &parsed,
+        ))
+    }
+
+    fn lsp_hover(&mut self, params: &Value) -> dartr_server::mapping::ErrorOr<Value> {
+        if !lsp_is_dart_document(params) {
+            return Ok(Value::Null);
+        }
+        let path = self.lsp_path_of_doc(params)?;
+        let resolved = self.lsp_require_resolved(&path)?;
+        let line_info = resolved.line_info().clone();
+        let offset = self.lsp_position_offset(&line_info, params)?;
+        let templates = self.dartdoc_templates(&path);
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let unit = resolved.unit();
+        let u = dartr_server::element_locator::Unit {
+            ctx: &ctx,
+            ast: &unit.ast,
+            tables: &unit.tables,
+        };
+        let library_name = |p: &str, uri: &str| self.hover_library_name(p, uri);
+        let computer = dartr_server::hover::HoverComputer {
+            unit: &u,
+            root: unit.unit,
+            templates: &templates,
+            library_name: &library_name,
+        };
+        let Some(hover) = computer.compute(offset) else {
+            return Ok(Value::Null);
+        };
+        let content = dartr_server::hover::hover_markdown(&hover);
+        let formats: Option<Vec<String>> = self
+            .lsp_capabilities
+            .raw
+            .pointer("/textDocument/hover/contentFormat")
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            });
+        let contents = lsp_markup_content_or_string(&formats, content);
+        Ok(json!({
+            "contents": contents,
+            "range": dartr_server::mapping::to_range(&line_info, hover.offset, hover.length),
+        }))
+    }
+
+    fn lsp_document_highlights(&mut self, params: &Value) -> dartr_server::mapping::ErrorOr<Value> {
+        if !lsp_is_dart_document(params) {
+            return Ok(json!([]));
+        }
+        let path = self.lsp_path_of_doc(params)?;
+        let resolved = self.lsp_require_resolved(&path)?;
+        let line_info = resolved.line_info().clone();
+        let offset = self.lsp_position_offset(&line_info, params)?;
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let unit = resolved.unit();
+        let u = dartr_server::element_locator::Unit {
+            ctx: &ctx,
+            ast: &unit.ast,
+            tables: &unit.tables,
+        };
+        let tokens = dartr_server::highlights::compute(&u, unit.unit, offset);
+        let highlights: Vec<Value> = tokens
+            .into_iter()
+            .map(|(token, kind)| {
+                let t = unit.ast.tokens.get(token);
+                json!({
+                    "range": dartr_server::mapping::to_range(&line_info, t.offset, t.end() - t.offset),
+                    "kind": kind,
+                })
+            })
+            .collect();
+        Ok(Value::Array(highlights))
+    }
+
+    fn lsp_format(
+        &mut self,
+        params: &Value,
+        range: Option<Value>,
+        on_type: Option<(Value, String)>,
+    ) -> dartr_server::mapping::ErrorOr<Value> {
+        use dartr_server::formatting::{FormatterOptions, format_file, should_trigger_formatting};
+        use dartr_server::mapping::{ResponseError, codes};
+        if !lsp_is_dart_document(params) {
+            return Ok(Value::Null);
+        }
+        let path = self.lsp_path_of_doc(params)?;
+        if self.roots_dirty {
+            self.refresh_roots();
+        }
+        if fs::read_string(&path).is_none() {
+            return Err(ResponseError::with_data(
+                codes::INVALID_FILE_PATH,
+                "File does not exist",
+                path,
+            ));
+        }
+        let Some((content, unit, options)) = self.parse_file_for_context(&path) else {
+            return Ok(Value::Null);
+        };
+        if !unit.diagnostics.is_empty() {
+            return Ok(Value::Null);
+        }
+        let fmt_options = FormatterOptions {
+            page_width: options.formatter_page_width,
+            trailing_commas: options.formatter_trailing_commas,
+        };
+        let file = dartr_server::server::ParsedFile { content, unit };
+        if let Some((pos, ch)) = on_type {
+            match should_trigger_formatting(&file, &pos, &ch) {
+                Ok(true) => format_file(&file, &fmt_options, None, None),
+                Ok(false) => Ok(Value::Null),
+                Err(_) => Err(ResponseError::new(
+                    codes::UNHANDLED_ERROR,
+                    "An error occurred while handling textDocument/onTypeFormatting request",
+                )),
+            }
+        } else {
+            format_file(&file, &fmt_options, None, range.as_ref())
+        }
+    }
+
+    fn lsp_signature_help(&mut self, params: &Value) -> dartr_server::mapping::ErrorOr<Value> {
+        if !lsp_is_dart_document(params) {
+            return Ok(Value::Null);
+        }
+        let auto_triggered = params
+            .pointer("/context/triggerKind")
+            .and_then(Value::as_i64)
+            == Some(2)
+            && params
+                .pointer("/context/isRetrigger")
+                .and_then(Value::as_bool)
+                == Some(false);
+        let path = self.lsp_path_of_doc(params)?;
+        let resolved = self.lsp_require_resolved(&path)?;
+        let line_info = resolved.line_info().clone();
+        let offset = self.lsp_position_offset(&line_info, params)?;
+        let formats: Option<Vec<String>> = self
+            .lsp_capabilities
+            .raw
+            .pointer("/textDocument/signatureHelp/signatureInformation/documentationFormat")
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            });
+        let null_active = self
+            .lsp_capabilities
+            .raw
+            .pointer("/textDocument/signatureHelp/signatureInformation/noActiveParameterSupport")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let templates = self.dartdoc_templates(&path);
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let unit = resolved.unit();
+        let u = dartr_server::element_locator::Unit {
+            ctx: &ctx,
+            ast: &unit.ast,
+            tables: &unit.tables,
+        };
+        let documentation = |doc: String| lsp_markup_content_or_string(&formats, doc);
+        if unit.ast.node_covering(unit.unit.raw(), offset, 0).is_none() {
+            return Ok(Value::Null);
+        }
+        if let Some((help, list_offset)) = dartr_server::signature::compute_type_arguments_signature(
+            &u,
+            unit.unit,
+            offset,
+            &templates,
+            documentation,
+            null_active,
+        ) && !(auto_triggered && offset != list_offset + 1)
+        {
+            return Ok(help);
+        }
+        let Some(signature) =
+            dartr_server::signature::compute_signature(&u, unit.unit, offset, &templates)
+        else {
+            return Ok(Value::Null);
+        };
+        if auto_triggered && offset != signature.argument_list_offset + 1 {
+            return Ok(Value::Null);
+        }
+        Ok(dartr_server::signature::to_signature_help(
+            &ctx,
+            &signature,
+            documentation,
+            null_active,
+        ))
+    }
+
+    fn lsp_type_definition(&mut self, params: &Value) -> dartr_server::mapping::ErrorOr<Value> {
+        use dartr_ast::*;
+        if !lsp_is_dart_document(params) {
+            return Ok(json!([]));
+        }
+        let supports_link = self
+            .lsp_capabilities
+            .raw
+            .pointer("/textDocument/typeDefinition/linkSupport")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let path = self.lsp_path_of_doc(params)?;
+        let Ok(resolved) = self.lsp_require_resolved(&path) else {
+            return Ok(json!([]));
+        };
+        let line_info = resolved.line_info().clone();
+        let offset = self.lsp_position_offset(&line_info, params)?;
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let unit = resolved.unit();
+        let ast = &unit.ast;
+        let u = dartr_server::element_locator::Unit {
+            ctx: &ctx,
+            ast,
+            tables: &unit.tables,
+        };
+        let Some(node) = ast.node_covering(unit.unit, offset, 0) else {
+            return Ok(json!([]));
+        };
+        let token_range = |t: dartr_syntax::TokenId| {
+            let t = ast.tokens.get(t);
+            (t.offset, t.end() - t.offset)
+        };
+        let variable_type = |e: Option<dartr_element::ElementId>| {
+            e.map(|e| dartr_resolver::element_ext::variable_type(&ctx, e))
+        };
+        let pattern_type = |n: NodeId| {
+            unit.tables
+                .pattern_info
+                .get(n)
+                .and_then(|i| i.matched_value_type)
+        };
+        let mut origin: Option<(u32, u32)> = None;
+        let mut ty: Option<dartr_element::TypeId> = None;
+        let mut element: Option<dartr_element::ElementId> = None;
+        if let Some(n) = ast.cast::<NamedType>(node) {
+            origin = Some(token_range(ast[n].name));
+            element = u
+                .element(n)
+                .filter(|e| e.cast::<dartr_element::InterfaceElement>().is_some());
+        } else if let Some(n) = ast.cast::<VariableDeclaration>(node) {
+            origin = Some(token_range(ast[n].name));
+            ty = variable_type(u.declared_element(n));
+        } else if let Some(n) = ast.cast::<DeclaredIdentifier>(node) {
+            origin = Some(token_range(ast[n].name));
+            ty = variable_type(u.declared_element(n));
+        } else if let Some(n) = ast.cast::<DeclaredVariablePattern>(node) {
+            origin = Some(token_range(ast[n].name));
+            ty = pattern_type(node);
+        } else if let Some(n) = ast.cast::<AssignedVariablePattern>(node) {
+            origin = Some(token_range(ast[n].name));
+            ty = pattern_type(node);
+        } else if let Some(n) = ast.cast::<PatternFieldName>(node) {
+            if let Some(name) = ast[n].name {
+                origin = Some(token_range(name));
+            }
+            if let Some(field) = ast.parent(n).and_then(|p| ast.cast::<PatternField>(p)) {
+                ty = pattern_type(ast[field].pattern.raw());
+            }
+        } else if let Some(n) = ast.cast::<NamedArgument>(node) {
+            origin = Some(token_range(ast[n].name));
+            ty = variable_type(dartr_resolver::error::support::corresponding_parameter(
+                &ctx,
+                ast,
+                &unit.tables,
+                n.raw(),
+            ));
+        } else if ast.is::<Expression>(node) {
+            origin = Some((ast.offset(node), ast.length(node)));
+            let mut done = false;
+            if let Some(s) = ast.cast::<SimpleIdentifier>(node) {
+                let e = u.element(s);
+                if let Some(e) = e
+                    && e.cast::<dartr_element::InterfaceElement>().is_some()
+                {
+                    element = Some(e);
+                    done = true;
+                } else if let Some(e) = e
+                    && e.cast::<dartr_element::VariableElement>().is_some()
+                    && dartr_resolver::error::support::in_declaration_context(ast, s)
+                {
+                    ty = variable_type(Some(e));
+                    done = true;
+                } else if dartr_resolver::ast_ext::simple_identifier_in_setter_context(ast, s) {
+                    let write = u.write_or_read_element(s);
+                    if let Some(w) = write
+                        && matches!(w.tag(), Tag::Getter | Tag::Setter)
+                        && let Some(variable) =
+                            dartr_resolver::element_metadata::accessor_variable(&ctx, w)
+                    {
+                        ty = variable_type(Some(variable));
+                        done = true;
+                    }
+                }
+            }
+            if !done {
+                ty = unit.tables.static_type.get(node).copied();
+            }
+        } else if ast.is::<FormalParameter>(node) {
+            origin = dartr_resolver::ast_ext::formal_parameter_parts(ast, node)
+                .name
+                .map(token_range);
+            ty = variable_type(u.declared_element(node));
+        }
+        let Some((origin_offset, origin_length)) = origin else {
+            return Ok(json!([]));
+        };
+        if element.is_none()
+            && let Some(t) = ty
+        {
+            element = match ctx.ty(t) {
+                dartr_element::TypeKind::Interface { element, .. } => Some(element.raw()),
+                dartr_element::TypeKind::TypeParameter { param, .. } => Some(param.raw()),
+                _ => None,
+            };
+        }
+        let Some(element) = element else {
+            return Ok(json!([]));
+        };
+        let Some(fragment) = dartr_server::navigation::element_fragment(&ctx, element) else {
+            return Ok(json!([]));
+        };
+        let Some(file) = dartr_server::navigation::fragment_path(&ctx, fragment) else {
+            return Ok(json!([]));
+        };
+        let Some(data) = ctx.fragment_data(fragment) else {
+            return Ok(json!([]));
+        };
+        let (Some(name_offset), Some(name)) = (data.name_offset, data.name) else {
+            return Ok(json!([]));
+        };
+        let name_length = ctx.name_str(name).encode_utf16().count() as u32;
+        let Some(target_content) = fs::read_string(&file) else {
+            return Ok(json!([]));
+        };
+        let target_lines = LineInfo::from_content(&target_content);
+        let name_range = dartr_server::mapping::to_range(&target_lines, name_offset, name_length);
+        let uri = dartr_server::uri::path_to_uri(&file);
+        if supports_link {
+            let code_range = match (data.code_offset, data.code_length) {
+                (Some(o), Some(l)) => dartr_server::mapping::to_range(&target_lines, o, l),
+                _ => name_range.clone(),
+            };
+            Ok(json!([{
+                "originSelectionRange": dartr_server::mapping::to_range(&line_info, origin_offset, origin_length),
+                "targetUri": uri,
+                "targetRange": code_range,
+                "targetSelectionRange": name_range,
+            }]))
+        } else {
+            Ok(json!({"uri": uri, "range": name_range}))
+        }
+    }
+
+    fn lsp_implementation(&mut self, params: &Value) -> dartr_server::mapping::ErrorOr<Value> {
+        if !lsp_is_dart_document(params) {
+            return Ok(json!([]));
+        }
+        let path = self.lsp_path_of_doc(params)?;
+        let resolved = self.lsp_require_resolved(&path)?;
+        let line_info = resolved.line_info().clone();
+        let offset = self.lsp_position_offset(&line_info, params)?;
+        let element = {
+            let sink = NoopSink;
+            let ctx = resolved.ctx(&sink);
+            let unit = resolved.unit();
+            let u = dartr_server::element_locator::Unit {
+                ctx: &ctx,
+                ast: &unit.ast,
+                tables: &unit.tables,
+            };
+            unit.ast
+                .node_covering(unit.unit, offset, 0)
+                .and_then(|n| dartr_server::element_locator::get_element(&u, n))
+        };
+        let Some(element) = element else {
+            return Ok(json!([]));
+        };
+        let pivot = SElem {
+            lib: resolved.library.clone(),
+            unit: resolved.index,
+            id: element,
+        };
+        let helper = pivot.with(|ctx| {
+            crate::search::HierarchyHelper::from_element(ctx, pivot.lib.context, element)
+        });
+        let Some(pivot_class) = helper.pivot_class else {
+            return Ok(json!([]));
+        };
+        let pivot_class = pivot.same(pivot_class);
+        let needs_member = pivot_class
+            .with(|ctx| helper.find_member(ctx, pivot_class.lib.context, pivot_class.id))
+            .is_some();
+        let Some(collection) = &self.collection else {
+            return Ok(json!([]));
+        };
+        let mut engine = SearchEngine {
+            collection,
+            excluded: &self.excluded,
+            session: &mut self.driver_session,
+            owned: &mut self.owned_files,
+            search_scope: &mut self.search_scope,
+            search_words: &mut self.search_words,
+            indexes: &mut self.indexes,
+        };
+        let mut all = Vec::new();
+        let mut keys = Vec::new();
+        engine.append_all_subtypes(&pivot_class, &mut all, &mut keys);
+        let mut seen: Vec<(usize, dartr_server::index::ElementKey)> = Vec::new();
+        let mut locations = Vec::new();
+        for sub in all {
+            let target = if needs_member {
+                let found = sub.with(|ctx| {
+                    helper
+                        .find_member(ctx, sub.lib.context, sub.id)
+                        .map(|m| dartr_element::diagnostics::non_synthetic(ctx, m))
+                });
+                match found {
+                    Some(m) => sub.same(m),
+                    None => continue,
+                }
+            } else {
+                sub
+            };
+            if let Some(k) = target.identity() {
+                if seen.contains(&k) {
+                    continue;
+                }
+                seen.push(k);
+            }
+            let location = target.with(|ctx| {
+                let first = ctx.element_data(target.id)?.first_fragment;
+                let path = dartr_server::navigation::fragment_path(ctx, first)?;
+                let data = ctx.fragment_data(first)?;
+                let name = data.name?;
+                Some((
+                    path,
+                    data.name_offset?,
+                    ctx.name_str(name).encode_utf16().count() as u32,
+                ))
+            });
+            if let Some((path, o, l)) = location
+                && let Some(content) = fs::read_string(&path)
+            {
+                let lines = LineInfo::from_content(&content);
+                locations.push(json!({
+                    "uri": dartr_server::uri::path_to_uri(&path),
+                    "range": dartr_server::mapping::to_range(&lines, o, l),
+                }));
+            }
+        }
+        Ok(Value::Array(locations))
+    }
+
+    fn lsp_prepare_type_hierarchy(
+        &mut self,
+        params: &Value,
+    ) -> dartr_server::mapping::ErrorOr<Value> {
+        use dartr_ast::*;
+        if !lsp_is_dart_document(params) {
+            return Ok(json!([]));
+        }
+        let path = self.lsp_path_of_doc(params)?;
+        let resolved = self.lsp_require_resolved(&path)?;
+        let line_info = resolved.line_info().clone();
+        let offset = self.lsp_position_offset(&line_info, params)?;
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let unit = resolved.unit();
+        let ast = &unit.ast;
+        let Some(node) = ast.node_covering(unit.unit.raw(), offset, 0) else {
+            return Ok(Value::Null);
+        };
+        let mut current = Some(node);
+        let mut target = None;
+        while let Some(n) = current {
+            if ast.is::<NamedType>(n)
+                || ast.is::<CommentReference>(n)
+                || ast.is::<ClassDeclaration>(n)
+                || ast.is::<MixinDeclaration>(n)
+                || ast.is::<ExtensionTypeDeclaration>(n)
+                || ast.is::<EnumDeclaration>(n)
+            {
+                target = Some(n);
+                break;
+            }
+            current = ast.parent(n);
+        }
+        let Some(target) = target else {
+            return Ok(Value::Null);
+        };
+        let is_iface = |e: ElementId| {
+            matches!(
+                e.tag(),
+                Tag::Class | Tag::Enum | Tag::Mixin | Tag::ExtensionType
+            )
+        };
+        let element = if ast.is::<NamedType>(target) {
+            unit.tables
+                .annotation_type
+                .get(target)
+                .and_then(|&t| match *ctx.ty(t) {
+                    dartr_element::TypeKind::Interface { element, .. } => Some(element.raw()),
+                    _ => None,
+                })
+        } else if let Some(c) = ast.cast::<CommentReference>(target) {
+            let expression = ast[c].expression.raw();
+            if ast.is::<Identifier>(expression) {
+                let element = unit.tables.element.get(expression).copied().or_else(|| {
+                    let p = ast.cast::<PrefixedIdentifier>(expression)?;
+                    unit.tables.element.get(ast[p].identifier.raw()).copied()
+                });
+                element
+                    .map(|e| dartr_typesystem::member::base_element(&ctx, e))
+                    .filter(|&e| is_iface(e))
+            } else {
+                None
+            }
+        } else {
+            dartr_resolver::error::support::declared_element(&ctx, &unit.tables, target)
+                .filter(|&e| is_iface(e))
+        };
+        let Some(element) = element else {
+            return Ok(Value::Null);
+        };
+        match lsp_type_hierarchy_item(&ctx, element) {
+            Some(item) => Ok(json!([item])),
+            None => Ok(Value::Null),
+        }
+    }
+
+    fn lsp_type_hierarchy_target(
+        &mut self,
+        params: &Value,
+    ) -> dartr_server::mapping::ErrorOr<Option<SElem>> {
+        use dartr_server::mapping::{ResponseError, codes};
+        let item = params.get("item").cloned().unwrap_or(Value::Null);
+        let uri = item.get("uri").and_then(Value::as_str).unwrap_or_default();
+        let path = self.lsp_path_of_uri(uri)?;
+        let resolved = self.lsp_require_resolved(&path)?;
+        let Some(reference) = item.pointer("/data/ref").and_then(Value::as_str) else {
+            return Err(ResponseError::new(
+                codes::INVALID_PARAMS,
+                "TypeHierarchyItem is missing the data field",
+            ));
+        };
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let element = lsp_locate_element(&ctx, reference).filter(|&e| {
+            matches!(
+                e.tag(),
+                Tag::Class | Tag::Enum | Tag::Mixin | Tag::ExtensionType
+            )
+        });
+        Ok(element.map(|id| SElem {
+            lib: resolved.library.clone(),
+            unit: resolved.index,
+            id,
+        }))
+    }
+
+    fn lsp_type_hierarchy_supertypes(
+        &mut self,
+        params: &Value,
+    ) -> dartr_server::mapping::ErrorOr<Value> {
+        let Some(target) = self.lsp_type_hierarchy_target(params)? else {
+            return Ok(Value::Null);
+        };
+        let items = target.with(|ctx| {
+            let interface = target.id.cast::<dartr_element::InterfaceElement>().unwrap();
+            let data = ctx.interface(interface);
+            let mut types: Vec<dartr_element::TypeId> = Vec::new();
+            if let Some(s) = data.supertype.get() {
+                types.push(s);
+            }
+            if let Some(mixin) = target.id.cast::<dartr_element::MixinElement>()
+                && let Some(list) = ctx.get(mixin).superclass_constraints.get()
+            {
+                types.extend(ctx.list(list).iter().copied());
+            }
+            if let Some(list) = data.interfaces.get() {
+                types.extend(ctx.list(list).iter().copied());
+            }
+            if let Some(list) = data.mixins.get() {
+                types.extend(ctx.list(list).iter().copied());
+            }
+            types
+                .into_iter()
+                .filter_map(|t| match *ctx.ty(t) {
+                    dartr_element::TypeKind::Interface { element, .. } => {
+                        lsp_type_hierarchy_item(ctx, element.raw())
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<Value>>()
+        });
+        Ok(Value::Array(items))
+    }
+
+    fn lsp_type_hierarchy_subtypes(
+        &mut self,
+        params: &Value,
+    ) -> dartr_server::mapping::ErrorOr<Value> {
+        let Some(target) = self.lsp_type_hierarchy_target(params)? else {
+            return Ok(Value::Null);
+        };
+        let Some(collection) = &self.collection else {
+            return Ok(json!([]));
+        };
+        let mut engine = SearchEngine {
+            collection,
+            excluded: &self.excluded,
+            session: &mut self.driver_session,
+            owned: &mut self.owned_files,
+            search_scope: &mut self.search_scope,
+            search_words: &mut self.search_words,
+            indexes: &mut self.indexes,
+        };
+        let Some(hierarchy) = engine.compute_type_hierarchy(&target, false) else {
+            return Ok(json!([]));
+        };
+        let Some(first) = hierarchy.first() else {
+            return Ok(json!([]));
+        };
+        let mut items = Vec::new();
+        for &sub_idx in &first.subclasses {
+            let Some(sub_item) = hierarchy.get(sub_idx as usize) else {
+                continue;
+            };
+            let Some(loc) = &sub_item.class_element.location else {
+                continue;
+            };
+            if let Some((resolved, el)) = self.get_element_at_offset(&loc.file, loc.offset) {
+                let sink = NoopSink;
+                let ctx = resolved.ctx(&sink);
+                if let Some(val) = lsp_type_hierarchy_item(&ctx, el) {
+                    items.push(val);
+                }
+            }
+        }
+        Ok(Value::Array(items))
+    }
+
+    fn lsp_workspace_symbol(&mut self, params: &Value) -> dartr_server::mapping::ErrorOr<Value> {
+        let query = params
+            .get("query")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        if query.is_empty() {
+            return Ok(json!([]));
+        }
+        let supported: Vec<i64> = match self
+            .lsp_capabilities
+            .raw
+            .pointer("/workspace/symbol/symbolKind/valueSet")
+            .and_then(Value::as_array)
+        {
+            Some(list) => list.iter().filter_map(Value::as_i64).collect(),
+            None => dartr_server::mapping::DEFAULT_SYMBOL_KINDS.collect(),
+        };
+        let decls = self.get_element_declarations("", None, None);
+        let mut matcher = dartr_server::fuzzy::FuzzyMatcher::new(&query);
+        let mut out = Vec::new();
+        for d in decls.declarations {
+            if out.len() >= 500 {
+                break;
+            }
+            let container = d.class_name.clone().or(d.mixin_name.clone());
+            let filtered = if d.kind == protocol::ElementKind::CONSTRUCTOR {
+                let c = container.clone().unwrap_or_else(|| "<null>".into());
+                if d.name.is_empty() || d.name == "new" {
+                    c
+                } else {
+                    format!("{c}.{}", d.name)
+                }
+            } else {
+                d.name.clone()
+            };
+            if matcher.score(&filtered) < 0.0 {
+                continue;
+            }
+            let Some(file) = decls.files.get(d.file_index as usize) else {
+                continue;
+            };
+            let Some(content) = fs::read_string(file) else {
+                continue;
+            };
+            let lines = LineInfo::from_content(&content);
+            let full_name = if d.kind == protocol::ElementKind::CONSTRUCTOR {
+                let c = container.clone().unwrap_or_else(|| "null".to_string());
+                if d.name.is_empty() || d.name == "new" {
+                    c
+                } else {
+                    format!("{c}.{}", d.name)
+                }
+            } else {
+                d.name.clone()
+            };
+            let params_str = match d.parameters.as_deref() {
+                Some("") | None => "",
+                Some("()") => "()",
+                Some(_) => "(…)",
+            };
+            let prefs: &[i64] = match d.kind {
+                protocol::ElementKind::CLASS | protocol::ElementKind::ClassTypeAlias => &[5],
+                protocol::ElementKind::CONSTRUCTOR => &[9],
+                protocol::ElementKind::ENUM => &[10],
+                protocol::ElementKind::EnumConstant => &[22, 10],
+                protocol::ElementKind::EXTENSION | protocol::ElementKind::ExtensionType => &[5],
+                protocol::ElementKind::FIELD => &[8],
+                protocol::ElementKind::FUNCTION => &[12],
+                protocol::ElementKind::GETTER | protocol::ElementKind::SETTER => &[7],
+                protocol::ElementKind::METHOD => &[6],
+                protocol::ElementKind::MIXIN => &[5],
+                protocol::ElementKind::TypeAlias => &[5],
+                _ => &[13],
+            };
+            let kind = prefs
+                .iter()
+                .copied()
+                .find(|k| supported.contains(k))
+                .unwrap_or(19);
+            let mut symbol = json!({
+                "name": format!("{full_name}{params_str}"),
+                "kind": kind,
+                "location": {
+                    "uri": dartr_server::uri::path_to_uri(file),
+                    "range": dartr_server::mapping::to_range(
+                        &lines,
+                        d.code_offset as u32,
+                        d.code_length as u32,
+                    ),
+                },
+            });
+            if let Some(c) = container {
+                symbol["containerName"] = json!(c);
+            }
+            out.push(symbol);
+        }
+        Ok(Value::Array(out))
+    }
+
+    fn lsp_call_item_json(&self, item: &LspCallItem) -> Option<Value> {
+        let content = fs::read_string(&item.file)?;
+        let lines = LineInfo::from_content(&content);
+        let supported: Vec<i64> = match self
+            .lsp_capabilities
+            .raw
+            .pointer("/textDocument/documentSymbol/symbolKind/valueSet")
+            .and_then(Value::as_array)
+        {
+            Some(list) => list.iter().filter_map(Value::as_i64).collect(),
+            None => dartr_server::mapping::DEFAULT_SYMBOL_KINDS.collect(),
+        };
+        let mut kind = item.kind.symbol_kind();
+        if let Some(k) = kind
+            && !supported.contains(&k)
+        {
+            kind = if k == 1 { Some(2) } else { None };
+        }
+        let mut v = json!({
+            "name": item.display_name,
+            "kind": kind.unwrap_or(19),
+            "uri": dartr_server::uri::path_to_uri(&item.file),
+            "range": dartr_server::mapping::to_range(&lines, item.code_range.0, item.code_range.1),
+            "selectionRange": dartr_server::mapping::to_range(&lines, item.name_range.0, item.name_range.1),
+        });
+        if let Some(c) = &item.container_name {
+            v["detail"] = json!(c);
+        }
+        Some(v)
+    }
+
+    fn lsp_prepare_call_hierarchy(
+        &mut self,
+        params: &Value,
+    ) -> dartr_server::mapping::ErrorOr<Value> {
+        use dartr_server::mapping::{ResponseError, codes};
+        if !lsp_is_dart_document(params) {
+            return Ok(json!([]));
+        }
+        let path = self.lsp_path_of_doc(params)?;
+        let resolved = self.lsp_require_resolved(&path)?;
+        let line_info = resolved.line_info().clone();
+        let offset = self.lsp_position_offset(&line_info, params)?;
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let unit = resolved.unit();
+        let u = dartr_server::element_locator::Unit {
+            ctx: &ctx,
+            ast: &unit.ast,
+            tables: &unit.tables,
+        };
+        let element = lsp_call_target_node(&unit.ast, unit.unit.raw(), offset)
+            .and_then(|n| lsp_call_element_of_node(&u, n))
+            .filter(|&e| dartr_server::element_locator::is_executable(e));
+        let Some(item) = element.and_then(|e| lsp_call_item(&ctx, e)) else {
+            return Ok(Value::Null);
+        };
+        match self.lsp_call_item_json(&item) {
+            Some(v) => Ok(json!([v])),
+            None => Err(ResponseError::new(
+                codes::INTERNAL_ERROR,
+                format!(
+                    "Call Hierarchy target was in an unavailable file: {} in {}",
+                    item.display_name, item.file
+                ),
+            )),
+        }
+    }
+
+    fn lsp_call_target(
+        &mut self,
+        params: &Value,
+    ) -> dartr_server::mapping::ErrorOr<Option<LspCallTarget>> {
+        use dartr_server::mapping::{ResponseError, codes, read_position, to_offset};
+        let item = params.get("item").cloned().unwrap_or(Value::Null);
+        let uri = item.get("uri").and_then(Value::as_str).unwrap_or_default();
+        let path = self.lsp_path_of_uri(uri)?;
+        let resolved = self.lsp_require_resolved(&path)?;
+        let line_info = resolved.line_info().clone();
+        let read = |key: &str| -> Option<(u32, u32)> {
+            let start = item
+                .pointer(&format!("/{key}/start"))
+                .and_then(read_position)?;
+            let end = item
+                .pointer(&format!("/{key}/end"))
+                .and_then(read_position)?;
+            let s = to_offset(&line_info, start.0, start.1, false).ok()?;
+            let e = to_offset(&line_info, end.0, end.1, false).ok()?;
+            Some((s, e.saturating_sub(s)))
+        };
+        let (Some(name_range), Some(_)) = (read("selectionRange"), read("range")) else {
+            return Err(ResponseError::new(
+                codes::CONTENT_MODIFIED,
+                "Content was modified since Call Hierarchy node was produced",
+            ));
+        };
+        let name = item
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        let kind =
+            LspCallKind::from_symbol_kind(item.get("kind").and_then(Value::as_i64).unwrap_or(0));
+        let found = {
+            let sink = NoopSink;
+            let ctx = resolved.ctx(&sink);
+            let unit = resolved.unit();
+            let u = dartr_server::element_locator::Unit {
+                ctx: &ctx,
+                ast: &unit.ast,
+                tables: &unit.tables,
+            };
+            let node = lsp_call_target_node(&unit.ast, unit.unit.raw(), name_range.0);
+            node.and_then(|n| lsp_call_element_of_node(&u, n).map(|e| (n, e)))
+                .filter(|(_, e)| lsp_call_display_name(&ctx, *e) == name)
+        };
+        Ok(found.map(|(n, e)| (resolved, n, e, kind)))
+    }
+
+    fn lsp_call_hierarchy_incoming(
+        &mut self,
+        params: &Value,
+    ) -> dartr_server::mapping::ErrorOr<Value> {
+        use dartr_ast::*;
+        let Some((resolved, _, mut element, kind)) = self.lsp_call_target(params)? else {
+            return Ok(json!([]));
+        };
+        if matches!(
+            element.tag(),
+            Tag::Class | Tag::Enum | Tag::Mixin | Tag::ExtensionType
+        ) && kind == LspCallKind::Constructor
+        {
+            let unnamed = {
+                let sink = NoopSink;
+                let ctx = resolved.ctx(&sink);
+                let interface = element.cast::<dartr_element::InterfaceElement>().unwrap();
+                ctx.interface(interface)
+                    .constructors
+                    .iter()
+                    .map(|c| c.raw())
+                    .find(|&c| {
+                        dartr_resolver::error::support::display_name(&ctx, c).is_empty()
+                            || ctx
+                                .element_data(c)
+                                .and_then(|d| d.name)
+                                .map(|n| ctx.name_str(n) == "new")
+                                .unwrap_or(false)
+                    })
+            };
+            match unnamed {
+                Some(c) => element = c,
+                None => return Ok(json!([])),
+            }
+        }
+        if !dartr_server::element_locator::is_executable(element) {
+            return Ok(json!([]));
+        }
+        let target = SElem {
+            lib: resolved.library.clone(),
+            unit: resolved.index,
+            id: element,
+        };
+        let Some(collection) = &self.collection else {
+            return Ok(json!([]));
+        };
+        let matches = {
+            let mut engine = SearchEngine {
+                collection,
+                excluded: &self.excluded,
+                session: &mut self.driver_session,
+                owned: &mut self.owned_files,
+                search_scope: &mut self.search_scope,
+                search_words: &mut self.search_words,
+                indexes: &mut self.indexes,
+            };
+            engine.element_reference_matches(&target)
+        };
+        let mut groups: Vec<LspIncomingCallGroup> = Vec::new();
+        for m in matches {
+            let Some(collection) = &self.collection else {
+                continue;
+            };
+            let Some(lib) = self
+                .driver_session
+                .resolved_library_in(collection, m.context, &m.path)
+            else {
+                continue;
+            };
+            let Some(unit_idx) = lib.unit_index(&m.path) else {
+                continue;
+            };
+            let r = ResolvedUnitRef {
+                library: lib,
+                index: unit_idx,
+            };
+            let sink = NoopSink;
+            let ctx = r.ctx(&sink);
+            let unit = r.unit();
+            let u = dartr_server::element_locator::Unit {
+                ctx: &ctx,
+                ast: &unit.ast,
+                tables: &unit.tables,
+            };
+            let Some(enclosing) = lsp_enclosing_element(&u, unit.unit.raw(), m.offset) else {
+                continue;
+            };
+            let Some(container) = lsp_container_of(&ctx, enclosing) else {
+                continue;
+            };
+            let Some(key) = dartr_server::index::element_key(&ctx, container) else {
+                continue;
+            };
+            let identity = (m.context, key);
+            let ast = &unit.ast;
+            let mut range = (m.offset, m.length);
+            if let Some(node) = ast.node_covering(unit.unit.raw(), m.offset, 0) {
+                let parent = ast.parent(node);
+                if ast.is::<SimpleIdentifier>(node)
+                    && let Some(mi) = parent.and_then(|p| ast.cast::<MethodInvocation>(p))
+                {
+                    let n = ast[mi].method_name.raw();
+                    range = (ast.offset(n), ast.length(n));
+                } else if m.length == 0 {
+                    range = (ast.offset(node), ast.length(node));
+                }
+            }
+            match groups.iter_mut().find(|g| g.0 == identity) {
+                Some(g) => g.2.push(range),
+                None => {
+                    let Some(item) = lsp_call_item(&ctx, container) else {
+                        continue;
+                    };
+                    groups.push((identity, item, vec![range]));
+                }
+            }
+        }
+        let mut out = Vec::new();
+        for (_, item, ranges) in groups {
+            let Some(content) = fs::read_string(&item.file) else {
+                continue;
+            };
+            let lines = LineInfo::from_content(&content);
+            let Some(from) = self.lsp_call_item_json(&item) else {
+                continue;
+            };
+            let from_ranges: Vec<Value> = ranges
+                .iter()
+                .map(|r| dartr_server::mapping::to_range(&lines, r.0, r.1))
+                .collect();
+            out.push(json!({"from": from, "fromRanges": from_ranges}));
+        }
+        Ok(Value::Array(out))
+    }
+
+    fn lsp_call_hierarchy_outgoing(
+        &mut self,
+        params: &Value,
+    ) -> dartr_server::mapping::ErrorOr<Value> {
+        use dartr_ast::*;
+        let Some((resolved, mut node, _, _)) = self.lsp_call_target(params)? else {
+            return Ok(json!([]));
+        };
+        let local_lines = resolved.line_info().clone();
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let unit = resolved.unit();
+        let ast = &unit.ast;
+        let u = dartr_server::element_locator::Unit {
+            ctx: &ctx,
+            ast,
+            tables: &unit.tables,
+        };
+        if let Some(pc) = ast.cast::<PrimaryConstructorDeclaration>(node)
+            && let Some(body) = lsp_primary_constructor_body(ast, pc)
+        {
+            node = body;
+        }
+        if !(ast.is::<FunctionDeclaration>(node)
+            || ast.is::<ConstructorDeclaration>(node)
+            || ast.is::<MethodDeclaration>(node)
+            || ast.is::<PrimaryConstructorBody>(node))
+        {
+            return Ok(json!([]));
+        }
+        let mut visitor = LspOutboundCalls {
+            unit: &u,
+            root: node,
+            nodes: Vec::new(),
+        };
+        ast.accept(node, &mut visitor);
+        let mut groups: Vec<LspOutgoingCallGroup> = Vec::new();
+        for n in visitor.nodes {
+            let Some(target) = lsp_call_element_of_node(&u, n) else {
+                continue;
+            };
+            let range = lsp_range_for_node(ast, n);
+            match groups.iter_mut().find(|g| g.0 == target) {
+                Some(g) => g.2.push(range),
+                None => {
+                    let Some(item) = lsp_call_item(&ctx, target) else {
+                        continue;
+                    };
+                    groups.push((target, item, vec![range]));
+                }
+            }
+        }
+        let mut out = Vec::new();
+        for (_, item, ranges) in groups {
+            if fs::read_string(&item.file).is_none() {
+                continue;
+            }
+            let Some(to) = self.lsp_call_item_json(&item) else {
+                continue;
+            };
+            let from_ranges: Vec<Value> = ranges
+                .iter()
+                .map(|r| dartr_server::mapping::to_range(&local_lines, r.0, r.1))
+                .collect();
+            out.push(json!({"to": to, "fromRanges": from_ranges}));
+        }
+        Ok(Value::Array(out))
+    }
+
+    fn lsp_super(&mut self, params: &Value) -> dartr_server::mapping::ErrorOr<Value> {
+        use dartr_ast::*;
+        if !lsp_is_dart_document(params) {
+            return Ok(Value::Null);
+        }
+        let path = self.lsp_path_of_doc(params)?;
+        let resolved = self.lsp_require_resolved(&path)?;
+        let line_info = resolved.line_info().clone();
+        let offset = self.lsp_position_offset(&line_info, params)?;
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let unit = resolved.unit();
+        let ast = &unit.ast;
+        let u = dartr_server::element_locator::Unit {
+            ctx: &ctx,
+            ast,
+            tables: &unit.tables,
+        };
+        let can_have_super = |n: NodeId| {
+            let mut test = n;
+            if ast.is::<VariableDeclaration>(test)
+                && let Some(p) = ast.parent(test)
+                && ast.is::<VariableDeclarationList>(p)
+            {
+                test = p;
+            }
+            if ast.is::<VariableDeclarationList>(test) {
+                if let Some(p) = ast.parent(test) {
+                    test = p;
+                } else {
+                    return false;
+                }
+            }
+            ast.is::<ClassDeclaration>(test)
+                || ast.is::<ClassMember>(test)
+                || ast.is::<PrimaryConstructorDeclaration>(test)
+        };
+        let mut cur = ast.node_covering(unit.unit.raw(), offset, 0);
+        let mut target_node = None;
+        while let Some(n) = cur {
+            if can_have_super(n) {
+                target_node = Some(n);
+                break;
+            }
+            cur = ast.parent(n);
+        }
+        let Some(node) = target_node else {
+            return Ok(Value::Null);
+        };
+        let Some(mut element) = u.locate(node) else {
+            return Ok(Value::Null);
+        };
+        if let Some(pc) = ast.cast::<PrimaryConstructorDeclaration>(node)
+            && element.tag() == Tag::Class
+            && offset > ast.tokens.get(ast[pc].type_name).end()
+            && let Some(c) =
+                dartr_resolver::scope_context::primary_constructor_of(&ctx, element.cast().unwrap())
+        {
+            element = c.raw();
+        }
+        let target_fragment = if let Some(ctor) =
+            element.cast::<dartr_element::ConstructorElement>()
+        {
+            let super_ctor = ctx
+                .get(ctor)
+                .super_constructor
+                .get()
+                .map(|c| dartr_typesystem::member::base_element(&ctx, c));
+            lsp_last_fragment(&ctx, super_ctor)
+        } else if let Some(iface) = element.cast::<dartr_element::InterfaceElement>() {
+            ctx.interface(iface)
+                .supertype
+                .get()
+                .and_then(|t| match *ctx.ty(t) {
+                    dartr_element::TypeKind::Interface { element, .. } => {
+                        ctx.element_data(element.raw()).map(|d| d.first_fragment)
+                    }
+                    _ => None,
+                })
+        } else {
+            let (super_els, iface_els) = crate::overrides::find_overridden_elements(&ctx, element);
+            let member = super_els.first().or_else(|| iface_els.first()).copied();
+            lsp_last_fragment(&ctx, member)
+        };
+        Ok(target_fragment
+            .and_then(|f| lsp_fragment_to_location(&ctx, f))
+            .unwrap_or(Value::Null))
+    }
+
+    fn lsp_augmentation(
+        &mut self,
+        params: &Value,
+        next: bool,
+    ) -> dartr_server::mapping::ErrorOr<Value> {
+        use dartr_ast::*;
+        if !lsp_is_dart_document(params) {
+            return Ok(Value::Null);
+        }
+        let path = self.lsp_path_of_doc(params)?;
+        let resolved = self.lsp_require_resolved(&path)?;
+        let line_info = resolved.line_info().clone();
+        let offset = self.lsp_position_offset(&line_info, params)?;
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let unit = resolved.unit();
+        let ast = &unit.ast;
+        let mut cur = ast.node_covering(unit.unit.raw(), offset, 0);
+        let mut decl = None;
+        while let Some(n) = cur {
+            if ast.is::<Declaration>(n) {
+                decl = Some(n);
+                break;
+            }
+            cur = ast.parent(n);
+        }
+        let target_fragment = decl
+            .and_then(|d| unit.tables.declared_fragment.get(d).copied())
+            .and_then(|f| {
+                let data = ctx.fragment_data(f)?;
+                if next {
+                    data.next_fragment
+                } else {
+                    data.previous_fragment
+                }
+            });
+        Ok(target_fragment
+            .and_then(|f| lsp_fragment_to_location(&ctx, f))
+            .unwrap_or(Value::Null))
     }
 }
 impl<W: Write> Drop for Server<W> {
@@ -2226,6 +3794,755 @@ impl<W: Write> Drop for Server<W> {
             fs::set_overlay(file, None);
         }
     }
+}
+
+type LspCallTarget = (ResolvedUnitRef, dartr_ast::NodeId, ElementId, LspCallKind);
+type LspIncomingCallGroup = (
+    (usize, dartr_server::index::ElementKey),
+    LspCallItem,
+    Vec<(u32, u32)>,
+);
+type LspOutgoingCallGroup = (ElementId, LspCallItem, Vec<(u32, u32)>);
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum LspCallKind {
+    Class,
+    Constructor,
+    Extension,
+    File,
+    Function,
+    Method,
+    Mixin,
+    Property,
+    Unknown,
+}
+
+impl LspCallKind {
+    fn for_element(e: ElementId) -> LspCallKind {
+        match e.tag() {
+            Tag::Class => LspCallKind::Class,
+            Tag::Library => LspCallKind::File,
+            Tag::Constructor => LspCallKind::Constructor,
+            Tag::Extension => LspCallKind::Extension,
+            Tag::TopLevelFunction | Tag::LocalFunction => LspCallKind::Function,
+            Tag::Getter | Tag::Setter => LspCallKind::Property,
+            Tag::Method => LspCallKind::Method,
+            Tag::Mixin => LspCallKind::Mixin,
+            _ => LspCallKind::Unknown,
+        }
+    }
+
+    fn symbol_kind(self) -> Option<i64> {
+        Some(match self {
+            LspCallKind::Class | LspCallKind::Extension | LspCallKind::Mixin => 5,
+            LspCallKind::Constructor => 9,
+            LspCallKind::File => 1,
+            LspCallKind::Function => 12,
+            LspCallKind::Method => 6,
+            LspCallKind::Property => 7,
+            LspCallKind::Unknown => return None,
+        })
+    }
+
+    fn from_symbol_kind(kind: i64) -> LspCallKind {
+        match kind {
+            5 => LspCallKind::Class,
+            9 => LspCallKind::Constructor,
+            1 => LspCallKind::File,
+            12 => LspCallKind::Function,
+            6 => LspCallKind::Method,
+            7 => LspCallKind::Property,
+            _ => LspCallKind::Unknown,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct LspCallItem {
+    display_name: String,
+    container_name: Option<String>,
+    kind: LspCallKind,
+    file: String,
+    name_range: (u32, u32),
+    code_range: (u32, u32),
+}
+
+fn lsp_container_of(ctx: &dartr_element::Ctx<'_>, element: ElementId) -> Option<ElementId> {
+    let mut current = Some(element);
+    while let Some(e) = current {
+        if matches!(
+            e.tag(),
+            Tag::Class
+                | Tag::Library
+                | Tag::Constructor
+                | Tag::Enum
+                | Tag::Extension
+                | Tag::ExtensionType
+                | Tag::TopLevelFunction
+                | Tag::LocalFunction
+                | Tag::Getter
+                | Tag::Method
+                | Tag::Mixin
+                | Tag::Setter
+        ) {
+            return Some(e);
+        }
+        current = ctx.element_data(e).and_then(|d| d.enclosing).or_else(|| {
+            let first = ctx.element_data(e)?.first_fragment;
+            let enclosing = ctx.fragment_data(first)?.enclosing_fragment?;
+            ctx.fragment_data(enclosing)?.element.try_get().copied()
+        });
+    }
+    None
+}
+
+fn lsp_call_display_name(ctx: &dartr_element::Ctx<'_>, e: ElementId) -> String {
+    match e.tag() {
+        Tag::Library => {
+            let library = e.cast::<dartr_element::LibraryElement>().unwrap();
+            let path = ctx
+                .fragment(ctx.get(library).first_fragment())
+                .source
+                .path
+                .to_string();
+            path.rsplit('/').next().unwrap_or_default().to_string()
+        }
+        Tag::Getter => format!(
+            "get {}",
+            dartr_resolver::error::support::display_name(ctx, e)
+        ),
+        Tag::Setter => format!(
+            "set {}",
+            dartr_resolver::error::support::display_name(ctx, e)
+        ),
+        _ => dartr_resolver::error::support::display_name(ctx, e),
+    }
+}
+
+fn lsp_call_item(ctx: &dartr_element::Ctx<'_>, element: ElementId) -> Option<LspCallItem> {
+    let non_synthetic = dartr_element::diagnostics::non_synthetic(ctx, element);
+    let first = ctx.element_data(non_synthetic)?.first_fragment;
+    let data = ctx.fragment_data(first)?;
+    let code_range = (data.code_offset.unwrap_or(0), data.code_length.unwrap_or(0));
+    let name_range = match (data.name_offset, data.name) {
+        (Some(o), Some(n)) => (o, ctx.name_str(n).encode_utf16().count() as u32),
+        _ => {
+            let mut range = (0, 0);
+            if let Some(f) = first.cast::<dartr_element::ConstructorFragment>() {
+                let c = ctx.fragment(f);
+                if let (Some(o), Some(n)) = (c.type_name_offset, c.type_name) {
+                    range = (o, ctx.name_str(n).encode_utf16().count() as u32);
+                } else if let Some(o) = c.new_keyword_offset {
+                    range = (o, 3);
+                } else if let Some(o) = c.factory_keyword_offset {
+                    range = (o, 7);
+                }
+            }
+            range
+        }
+    };
+    let file =
+        dartr_server::navigation::fragment_path(ctx, ctx.element_data(element)?.first_fragment)?;
+    let enclosing = ctx
+        .element_data(element)
+        .and_then(|d| d.enclosing)
+        .or_else(|| {
+            let first = ctx.element_data(element)?.first_fragment;
+            let enclosing = ctx.fragment_data(first)?.enclosing_fragment?;
+            ctx.fragment_data(enclosing)?.element.try_get().copied()
+        });
+    let container_name = enclosing
+        .and_then(|e| lsp_container_of(ctx, e))
+        .map(|c| lsp_call_display_name(ctx, c));
+    Some(LspCallItem {
+        display_name: lsp_call_display_name(ctx, element),
+        container_name,
+        kind: LspCallKind::for_element(element),
+        file,
+        name_range,
+        code_range,
+    })
+}
+
+fn lsp_call_element_of_node(
+    unit: &dartr_server::element_locator::Unit<'_, '_>,
+    node: dartr_ast::NodeId,
+) -> Option<ElementId> {
+    use dartr_ast::*;
+    let ast = unit.ast;
+    let ctx = unit.ctx;
+    let parent = ast.parent(node);
+    let element_of = |n: NodeId| {
+        unit.tables
+            .element
+            .get(n)
+            .map(|&e| dartr_typesystem::member::base_element(ctx, e))
+    };
+    let mut node = node;
+    if ast.is::<NamedType>(node) && parent.is_some_and(|p| ast.is::<ConstructorName>(p)) {
+        return element_of(parent.unwrap());
+    } else if ast.is::<ConstructorName>(node) {
+        return element_of(node);
+    } else if let Some(p) = ast.cast::<PropertyAccess>(node) {
+        node = ast[p].property_name.raw();
+    }
+    let mut element = unit.locate(node)?;
+    if element.tag() == Tag::Class && ast.is::<PrimaryConstructorDeclaration>(node) {
+        element =
+            dartr_resolver::scope_context::primary_constructor_of(ctx, element.cast()?)?.raw();
+    }
+    if matches!(element.tag(), Tag::Getter | Tag::Setter)
+        && dartr_resolver::element_metadata::is_origin_variable(ctx, element)
+    {
+        return None;
+    }
+    Some(element)
+}
+
+fn lsp_call_target_node(
+    ast: &dartr_ast::Ast,
+    root: dartr_ast::NodeId,
+    offset: u32,
+) -> Option<dartr_ast::NodeId> {
+    use dartr_ast::*;
+    let node = ast.node_covering(root, offset, 0)?;
+    let parent = ast.parent(node);
+    if ast.is::<NamedType>(node)
+        && let Some(cn) = parent.and_then(|p| ast.cast::<ConstructorName>(p))
+        && let Some(name) = ast[cn].name
+        && offset < ast.offset(name.raw())
+    {
+        return None;
+    }
+    if ast.is::<Identifier>(node)
+        && let Some(cd) = parent.and_then(|p| ast.cast::<ConstructorDeclaration>(p))
+    {
+        match ast[cd].name {
+            Some(name) if offset < ast.tokens.get(name).offset => return None,
+            None => return parent,
+            _ => {}
+        }
+    }
+    if let Some(pc) = ast.cast::<PrimaryConstructorDeclaration>(node)
+        && let Some(cn) = ast[pc].constructor_name
+        && offset < ast.tokens.get(ast[cn].name).offset
+    {
+        return None;
+    }
+    if ast.is::<PrimaryConstructorName>(node) {
+        return parent;
+    }
+    Some(node)
+}
+
+struct LspOutboundCalls<'u, 'c, 'a> {
+    unit: &'u dartr_server::element_locator::Unit<'c, 'a>,
+    root: dartr_ast::NodeId,
+    nodes: Vec<dartr_ast::NodeId>,
+}
+
+impl LspOutboundCalls<'_, '_, '_> {
+    fn collect(&mut self, node: dartr_ast::NodeId) {
+        if !self.nodes.contains(&node) {
+            self.nodes.push(node);
+        }
+    }
+}
+
+impl dartr_ast::AstVisitor for LspOutboundCalls<'_, '_, '_> {
+    fn visit_constructor_name(
+        &mut self,
+        ast: &dartr_ast::Ast,
+        node: dartr_ast::Id<dartr_ast::ConstructorName>,
+    ) {
+        self.collect(ast[node].name.map(|n| n.raw()).unwrap_or(node.raw()));
+        ast.visit_children(node.raw(), self);
+    }
+
+    fn visit_dot_shorthand_constructor_invocation(
+        &mut self,
+        ast: &dartr_ast::Ast,
+        node: dartr_ast::Id<dartr_ast::DotShorthandConstructorInvocation>,
+    ) {
+        self.collect(ast[node].constructor_name.raw());
+        ast.visit_children(node.raw(), self);
+    }
+
+    fn visit_dot_shorthand_invocation(
+        &mut self,
+        ast: &dartr_ast::Ast,
+        node: dartr_ast::Id<dartr_ast::DotShorthandInvocation>,
+    ) {
+        self.collect(ast[node].member_name.raw());
+        ast.visit_children(node.raw(), self);
+    }
+
+    fn visit_dot_shorthand_property_access(
+        &mut self,
+        ast: &dartr_ast::Ast,
+        node: dartr_ast::Id<dartr_ast::DotShorthandPropertyAccess>,
+    ) {
+        self.collect(ast[node].property_name.raw());
+        ast.visit_children(node.raw(), self);
+    }
+
+    fn visit_function_declaration(
+        &mut self,
+        ast: &dartr_ast::Ast,
+        node: dartr_ast::Id<dartr_ast::FunctionDeclaration>,
+    ) {
+        if node.raw() == self.root {
+            ast.visit_children(node.raw(), self);
+        }
+    }
+
+    fn visit_function_reference(
+        &mut self,
+        ast: &dartr_ast::Ast,
+        node: dartr_ast::Id<dartr_ast::FunctionReference>,
+    ) {
+        self.collect(node.raw());
+        ast.visit_children(node.raw(), self);
+    }
+
+    fn visit_method_invocation(
+        &mut self,
+        ast: &dartr_ast::Ast,
+        node: dartr_ast::Id<dartr_ast::MethodInvocation>,
+    ) {
+        self.collect(ast[node].method_name.raw());
+        ast.visit_children(node.raw(), self);
+    }
+
+    fn visit_prefixed_identifier(
+        &mut self,
+        ast: &dartr_ast::Ast,
+        node: dartr_ast::Id<dartr_ast::PrefixedIdentifier>,
+    ) {
+        if !ast
+            .parent(node.raw())
+            .is_some_and(|p| ast.is::<dartr_ast::NamedType>(p))
+        {
+            self.collect(ast[node].identifier.raw());
+        }
+        ast.visit_children(node.raw(), self);
+    }
+
+    fn visit_property_access(
+        &mut self,
+        ast: &dartr_ast::Ast,
+        node: dartr_ast::Id<dartr_ast::PropertyAccess>,
+    ) {
+        self.collect(ast[node].property_name.raw());
+        ast.visit_children(node.raw(), self);
+    }
+
+    fn visit_simple_identifier(
+        &mut self,
+        ast: &dartr_ast::Ast,
+        node: dartr_ast::Id<dartr_ast::SimpleIdentifier>,
+    ) {
+        let element = self
+            .unit
+            .tables
+            .element
+            .get(node.raw())
+            .map(|&e| dartr_typesystem::member::base_element(self.unit.ctx, e));
+        if element.is_some_and(|e| matches!(e.tag(), Tag::LocalFunction | Tag::TopLevelFunction))
+            && !lsp_in_declaration_context(ast, node)
+        {
+            self.collect(node.raw());
+        }
+        ast.visit_children(node.raw(), self);
+    }
+}
+
+fn lsp_range_for_node(ast: &dartr_ast::Ast, node: dartr_ast::NodeId) -> (u32, u32) {
+    use dartr_ast::*;
+    if let Some(m) = ast.cast::<MethodInvocation>(node) {
+        let n = ast[m].method_name.raw();
+        return (ast.offset(n), ast.length(n));
+    }
+    if let Some(i) = ast.cast::<InstanceCreationExpression>(node) {
+        let n = ast[i].constructor_name.raw();
+        return (ast.offset(n), ast.length(n));
+    }
+    if let Some(p) = ast.cast::<PropertyAccess>(node) {
+        let n = ast[p].property_name.raw();
+        return (ast.offset(n), ast.length(n));
+    }
+    (ast.offset(node), ast.length(node))
+}
+
+fn lsp_enclosing_element(
+    unit: &dartr_server::element_locator::Unit<'_, '_>,
+    root: dartr_ast::NodeId,
+    offset: u32,
+) -> Option<ElementId> {
+    use dartr_ast::*;
+    let ast = unit.ast;
+    let mut node = ast.node_covering(root, offset, 0);
+    let top_level = |n: NodeId| ast.parent(n).is_some_and(|p| ast.is::<CompilationUnit>(p));
+    let member_variable = |n: NodeId| {
+        ast.parent(n)
+            .and_then(|list| ast.parent(list))
+            .is_some_and(|d| {
+                ast.is::<FieldDeclaration>(d) || ast.is::<TopLevelVariableDeclaration>(d)
+            })
+    };
+    while let Some(n) = node {
+        if (ast.is::<ConstructorDeclaration>(n)
+            || (ast.is::<FunctionDeclaration>(n) && top_level(n))
+            || ast.is::<MethodDeclaration>(n)
+            || ast.is::<ClassDeclaration>(n)
+            || ast.is::<ClassTypeAlias>(n)
+            || ast.is::<EnumDeclaration>(n)
+            || ast.is::<ExtensionDeclaration>(n)
+            || ast.is::<ExtensionTypeDeclaration>(n)
+            || ast.is::<MixinDeclaration>(n)
+            || (ast.is::<VariableDeclaration>(n) && member_variable(n)))
+            && let Some(e) = unit.declared_element(n)
+        {
+            return Some(e);
+        }
+        node = ast.parent(n);
+    }
+    let unit_node = ast.cast::<CompilationUnit>(root)?;
+    let fragment = unit.tables.declared_fragment.get(unit_node.raw())?;
+    let library = fragment.cast::<dartr_element::LibraryFragment>()?;
+    Some(unit.ctx.fragment(library).library.raw())
+}
+
+fn lsp_primary_constructor_body(
+    ast: &dartr_ast::Ast,
+    node: dartr_ast::Id<dartr_ast::PrimaryConstructorDeclaration>,
+) -> Option<dartr_ast::NodeId> {
+    use dartr_ast::*;
+    let declaration = ast.parent(node.raw())?;
+    let body = if let Some(c) = ast.cast::<ClassDeclaration>(declaration) {
+        ast[c].body.raw()
+    } else {
+        let e = ast.cast::<ExtensionTypeDeclaration>(declaration)?;
+        ast[e].body.raw()
+    };
+    let block = ast.cast::<BlockClassBody>(body)?;
+    ast.list_raw(ast[block].members)
+        .iter()
+        .copied()
+        .find(|&m| ast.is::<PrimaryConstructorBody>(m))
+}
+
+fn lsp_in_declaration_context(
+    ast: &dartr_ast::Ast,
+    node: dartr_ast::Id<dartr_ast::SimpleIdentifier>,
+) -> bool {
+    use dartr_ast::*;
+    let Some(parent) = ast.parent(node.raw()) else {
+        return false;
+    };
+    if let Some(i) = ast.cast::<ImportDirective>(parent) {
+        return ast[i].prefix == Some(node);
+    }
+    if ast.is::<Label>(parent) {
+        return ast
+            .parent(parent)
+            .is_some_and(|g| ast.is::<Statement>(g) || ast.is::<SwitchMember>(g));
+    }
+    false
+}
+
+fn lsp_last_fragment(
+    ctx: &dartr_element::Ctx<'_>,
+    element: Option<ElementId>,
+) -> Option<dartr_element::FragmentId> {
+    let element = element?;
+    let mut frag = ctx.element_data(element)?.first_fragment;
+    while let Some(next) = ctx.fragment_data(frag).and_then(|d| d.next_fragment) {
+        frag = next;
+    }
+    Some(frag)
+}
+
+fn lsp_fragment_to_location(
+    ctx: &dartr_element::Ctx<'_>,
+    fragment: dartr_element::FragmentId,
+) -> Option<Value> {
+    let target = dartr_server::navigation::fragment_target(ctx, fragment)?;
+    if target.length == 0 {
+        return None;
+    }
+    let content = fs::read_string(&target.file)?;
+    let lines = LineInfo::from_content(&content);
+    Some(json!({
+        "uri": dartr_server::uri::path_to_uri(&target.file),
+        "range": dartr_server::mapping::to_range(&lines, target.offset, target.length),
+    }))
+}
+
+fn default_legacy_lsp_capabilities_json() -> Value {
+    json!({
+        "textDocument": {
+            "hover": {
+                "contentFormat": ["markdown"]
+            }
+        },
+        "workspace": {
+            "workspaceEdit": {
+                "documentChanges": true
+            }
+        }
+    })
+}
+
+fn default_legacy_lsp_capabilities() -> dartr_server::capabilities::ClientCapabilities {
+    dartr_server::capabilities::ClientCapabilities::new(default_legacy_lsp_capabilities_json())
+}
+
+fn validate_lsp_request_message(msg: &Value) -> std::result::Result<(), &'static str> {
+    let Some(obj) = msg.as_object() else {
+        return Err("");
+    };
+    if let Some(crt) = obj.get("clientRequestTime")
+        && !crt.is_null()
+        && !crt.is_i64()
+    {
+        return Err("clientRequestTime must be of type int");
+    }
+    match obj.get("id") {
+        None => return Err("id must not be undefined"),
+        Some(v) if v.is_null() => return Err("id must not be null"),
+        Some(v) if !v.is_i64() && !v.is_string() => {
+            return Err("id must be of type Either2<int, String>");
+        }
+        _ => {}
+    }
+    match obj.get("jsonrpc") {
+        None => return Err("jsonrpc must not be undefined"),
+        Some(v) if v.is_null() => return Err("jsonrpc must not be null"),
+        Some(v) if !v.is_string() => return Err("jsonrpc must be of type String"),
+        _ => {}
+    }
+    match obj.get("method") {
+        None => return Err("method must not be undefined"),
+        Some(v) if v.is_null() => return Err("method must not be null"),
+        Some(v) if !v.is_string() => return Err(""),
+        _ => {}
+    }
+    Ok(())
+}
+
+fn lsp_is_dart_document(params: &Value) -> bool {
+    params
+        .get("textDocument")
+        .and_then(|d| d.get("uri"))
+        .and_then(Value::as_str)
+        .map(|u| u.split(['?', '#']).next().unwrap_or(u).ends_with(".dart"))
+        .unwrap_or(false)
+}
+
+fn lsp_invalid_params(method: &str) -> dartr_server::mapping::ResponseError {
+    dartr_server::mapping::ResponseError::new(
+        dartr_server::mapping::codes::INVALID_PARAMS,
+        format!("Invalid params for {method}"),
+    )
+}
+
+fn lsp_markup_content_or_string(formats: &Option<Vec<String>>, content: String) -> Value {
+    match formats {
+        None => Value::String(content),
+        Some(formats) => {
+            let markdown = formats.is_empty() || formats.iter().any(|f| f == "markdown");
+            let plain = formats.iter().any(|f| f == "plaintext");
+            let kind = if plain && !markdown {
+                "plaintext"
+            } else {
+                "markdown"
+            };
+            json!({"kind": kind, "value": content})
+        }
+    }
+}
+
+fn lsp_element_location(ctx: &dartr_element::Ctx<'_>, element: ElementId) -> Option<String> {
+    let library = dartr_resolver::error::support::library_of(ctx, element)?;
+    let library_uri = ctx
+        .fragment(ctx.get(library).first_fragment())
+        .source
+        .uri
+        .to_string();
+    let enclosing = ctx.element_data(element)?.enclosing;
+    let lookup =
+        |e: ElementId| dartr_typesystem::member::lookup_name(ctx, dartr_element::ElemRef::Base(e));
+    if enclosing == Some(library.raw()) {
+        let top = lookup(element)?;
+        return Some(format!("{library_uri};{top}"));
+    }
+    let enclosing = enclosing?;
+    if ctx.element_data(enclosing)?.enclosing == Some(library.raw()) {
+        let member = lookup(element)?;
+        let top = lookup(enclosing)?;
+        return Some(format!("{library_uri};{top};{member}"));
+    }
+    None
+}
+
+fn lsp_locate_element(ctx: &dartr_element::Ctx<'_>, encoded: &str) -> Option<ElementId> {
+    let parts: Vec<&str> = encoded.split(';').collect();
+    let (uri, top, member) = match parts.as_slice() {
+        [uri, top] => (*uri, *top, None),
+        [uri, top, member] => (*uri, *top, Some(*member)),
+        _ => return None,
+    };
+    let library = ctx.world.libraries.get(uri).copied()?;
+    let l = ctx.get(library);
+    let mut children: Vec<ElementId> = Vec::new();
+    children.extend(l.classes.iter().map(|e| e.raw()));
+    children.extend(l.enums.iter().map(|e| e.raw()));
+    children.extend(l.extensions.iter().map(|e| e.raw()));
+    children.extend(l.extension_types.iter().map(|e| e.raw()));
+    children.extend(l.getters.iter().map(|e| e.raw()));
+    children.extend(l.mixins.iter().map(|e| e.raw()));
+    children.extend(l.setters.iter().map(|e| e.raw()));
+    children.extend(l.top_level_functions.iter().map(|e| e.raw()));
+    children.extend(l.top_level_variables.iter().map(|e| e.raw()));
+    children.extend(l.type_aliases.iter().map(|e| e.raw()));
+    let lookup =
+        |e: ElementId| dartr_typesystem::member::lookup_name(ctx, dartr_element::ElemRef::Base(e));
+    let top_el = children
+        .into_iter()
+        .find(|&e| lookup(e).as_deref() == Some(top))?;
+    match member {
+        None => Some(top_el),
+        Some(m) => {
+            let instance = top_el.cast::<dartr_element::InstanceElement>()?;
+            let data = ctx.instance(instance);
+            let mut members: Vec<ElementId> = Vec::new();
+            if let Some(interface) = top_el.cast::<dartr_element::InterfaceElement>() {
+                members.extend(
+                    ctx.interface(interface)
+                        .constructors
+                        .iter()
+                        .map(|e| e.raw()),
+                );
+            }
+            members.extend(data.fields.iter().map(|e| e.raw()));
+            members.extend(data.getters.iter().map(|e| e.raw()));
+            members.extend(data.methods.iter().map(|e| e.raw()));
+            members.extend(data.setters.iter().map(|e| e.raw()));
+            members.extend(data.type_params.iter().map(|e| e.raw()));
+            members
+                .into_iter()
+                .find(|&e| lookup(e).as_deref() == Some(m))
+        }
+    }
+}
+
+fn lsp_type_hierarchy_item(ctx: &dartr_element::Ctx<'_>, element: ElementId) -> Option<Value> {
+    let location = lsp_element_location(ctx, element)?;
+    let interface = element.cast::<dartr_element::InterfaceElement>()?;
+    let this_type = ctx.interface_this_type(interface);
+    let name = dartr_element::display_string::type_display_string_with(
+        ctx,
+        this_type,
+        dartr_element::display_string::DisplayOptions::default(),
+    );
+    let non_synthetic = dartr_element::diagnostics::non_synthetic(ctx, element);
+    let first = ctx.element_data(non_synthetic)?.first_fragment;
+    let data = ctx.fragment_data(first)?;
+    let path = dartr_server::navigation::fragment_path(ctx, first)?;
+    let content = fs::read_string(&path)?;
+    let lines = LineInfo::from_content(&content);
+    let name_length = data
+        .name
+        .map(|n| ctx.name_str(n).encode_utf16().count() as u32)
+        .unwrap_or(0);
+    let name_offset = data.name_offset.unwrap_or(0);
+    let code = (data.code_offset.unwrap_or(0), data.code_length.unwrap_or(0));
+    Some(json!({
+        "name": name,
+        "kind": 5,
+        "uri": dartr_server::uri::path_to_uri(&path),
+        "range": dartr_server::mapping::to_range(&lines, code.0, code.1),
+        "selectionRange": dartr_server::mapping::to_range(&lines, name_offset, name_length),
+        "data": {"ref": location},
+    }))
+}
+
+fn decode_flutter_widget_property_value(
+    value: &Value,
+    path: &str,
+) -> Result<protocol::FlutterWidgetPropertyValue> {
+    let Some(obj) = value.as_object() else {
+        return Err(RequestFailure::mismatch(
+            path,
+            "FlutterWidgetPropertyValue",
+            value,
+        ));
+    };
+    let bool_value = match obj.get("boolValue") {
+        Some(v) if !v.is_null() => Some(boolean(v, &format!("{path}.boolValue"))?),
+        _ => None,
+    };
+    let double_value = match obj.get("doubleValue") {
+        Some(v) if !v.is_null() => Some(v.as_f64().ok_or_else(|| {
+            RequestFailure::mismatch(&format!("{path}.doubleValue"), "double", v)
+        })?),
+        _ => None,
+    };
+    let int_value = match obj.get("intValue") {
+        Some(v) if !v.is_null() => Some(integer(v, &format!("{path}.intValue"))?),
+        _ => None,
+    };
+    let string_value = match obj.get("stringValue") {
+        Some(v) if !v.is_null() => Some(string(v, &format!("{path}.stringValue"))?.to_owned()),
+        _ => None,
+    };
+    let enum_value = match obj.get("enumValue") {
+        Some(v) if !v.is_null() => {
+            let e_path = format!("{path}.enumValue");
+            let Some(e_obj) = v.as_object() else {
+                return Err(RequestFailure::mismatch(
+                    &e_path,
+                    "FlutterWidgetPropertyValueEnumItem",
+                    v,
+                ));
+            };
+            let get = |k: &str| {
+                e_obj
+                    .get(k)
+                    .ok_or_else(|| RequestFailure::mismatch(&e_path, k, v))
+            };
+            let library_uri =
+                string(get("libraryUri")?, &format!("{e_path}.libraryUri"))?.to_owned();
+            let class_name = string(get("className")?, &format!("{e_path}.className"))?.to_owned();
+            let name = string(get("name")?, &format!("{e_path}.name"))?.to_owned();
+            let documentation = match e_obj.get("documentation") {
+                Some(d) if !d.is_null() => {
+                    Some(string(d, &format!("{e_path}.documentation"))?.to_owned())
+                }
+                _ => None,
+            };
+            Some(protocol::FlutterWidgetPropertyValueEnumItem {
+                library_uri,
+                class_name,
+                name,
+                documentation,
+            })
+        }
+        _ => None,
+    };
+    let expression = match obj.get("expression") {
+        Some(v) if !v.is_null() => Some(string(v, &format!("{path}.expression"))?.to_owned()),
+        _ => None,
+    };
+    Ok(protocol::FlutterWidgetPropertyValue {
+        bool_value,
+        double_value,
+        int_value,
+        string_value,
+        enum_value,
+        expression,
+    })
 }
 
 fn hover_target_node(ast: &dartr_ast::Ast, node: dartr_ast::NodeId) -> Option<dartr_ast::NodeId> {

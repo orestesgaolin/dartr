@@ -215,7 +215,7 @@ impl<'a> HighlightsComputer<'a> {
 
     fn real_target_of_property_access(&self, pa: Id<PropertyAccess>) -> Option<NodeId> {
         let cur: NodeId = pa.raw();
-        while let Some(p) = self.ast.cast::<PropertyAccess>(cur) {
+        if let Some(p) = self.ast.cast::<PropertyAccess>(cur) {
             if dartr_resolver::ast_ext::property_access_is_cascaded(self.ast, p) {
                 let mut anc = self.ast.parent(cur);
                 while let Some(a) = anc {

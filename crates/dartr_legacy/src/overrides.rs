@@ -231,12 +231,11 @@ impl<'a> OverriddenElementsFinder<'a> {
         if !self.visited.insert(class_) {
             return;
         }
-        if with_this_type {
-            if let Some(el) = self.lookup_member(class_)
-                && !self.super_elements.contains(&el)
-            {
-                self.super_elements.push(el);
-            }
+        if with_this_type
+            && let Some(el) = self.lookup_member(class_)
+            && !self.super_elements.contains(&el)
+        {
+            self.super_elements.push(el);
         }
         let iface = self.ctx.interface(class_);
         let supertype = self.interface_element_of_type(iface.supertype.get());
@@ -278,12 +277,11 @@ impl<'a> OverriddenElementsFinder<'a> {
         if !self.visited.insert(class_) {
             return;
         }
-        if check_type {
-            if let Some(el) = self.lookup_member(class_)
-                && !self.interface_elements.contains(&el)
-            {
-                self.interface_elements.push(el);
-            }
+        if check_type
+            && let Some(el) = self.lookup_member(class_)
+            && !self.interface_elements.contains(&el)
+        {
+            self.interface_elements.push(el);
         }
         let iface = self.ctx.interface(class_);
         let interfaces: Vec<_> = iface

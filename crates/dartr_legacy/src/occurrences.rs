@@ -256,10 +256,9 @@ impl AstVisitor for OccurrencesVisitor<'_, '_, '_> {
         let name = if explicit_name.is_none() {
             if let Some(p) = ast.cast::<DeclaredVariablePattern>(pattern) {
                 Some(ast[p].name)
-            } else if let Some(p) = ast.cast::<AssignedVariablePattern>(pattern) {
-                Some(ast[p].name)
             } else {
-                None
+                ast.cast::<AssignedVariablePattern>(pattern)
+                    .map(|p| ast[p].name)
             }
         } else {
             explicit_name
@@ -279,19 +278,17 @@ impl AstVisitor for OccurrencesVisitor<'_, '_, '_> {
     }
 
     fn visit_regular_formal_parameter(&mut self, ast: &Ast, node: Id<RegularFormalParameter>) {
-        if let Some(name_token) = ast[node].name {
-            if let Some(element) = self.declared(node) {
-                if element.tag() == Tag::FieldFormalParameter {
-                    let field = match self.unit.ctx.any(element) {
-                        dartr_element::AnyElement::FormalParameter(p) => {
-                            p.field.get().map(|f| f.raw())
-                        }
-                        _ => None,
-                    };
-                    self.add_occurrence(field, Some(name_token));
-                } else {
-                    self.add_occurrence(Some(element), Some(name_token));
-                }
+        if let Some(name_token) = ast[node].name
+            && let Some(element) = self.declared(node)
+        {
+            if element.tag() == Tag::FieldFormalParameter {
+                let field = match self.unit.ctx.any(element) {
+                    dartr_element::AnyElement::FormalParameter(p) => p.field.get().map(|f| f.raw()),
+                    _ => None,
+                };
+                self.add_occurrence(field, Some(name_token));
+            } else {
+                self.add_occurrence(Some(element), Some(name_token));
             }
         }
         ast.visit_children(node, self);
