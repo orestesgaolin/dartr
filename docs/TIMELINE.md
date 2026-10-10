@@ -81,6 +81,7 @@ at each merge; the final process report is written from it.
 | 10-10 12:30 | 8790cf2 | LSP: signature help, semantic tokens, inlay hints, call/type hierarchy, workspace symbols | Opus | compared with `dart language-server` on fixtures; 5,580 tests |
 | 10-10 13:00 | 5a40205 | release preparation: LICENSE, notices, README guide, release workflow, Homebrew formula | Opus | `dartr --version` checked; tag `v0.1.0-preview.1` pushed |
 | 10-10 14:10 | 0c9d176 | legacy protocol: analysis hover/navigation + 6 subscription notifications, search domain, edit.format/sortMembers/organizeDirectives | Gemini 4 (Antigravity) | 32/32 steps identical to `dart language-server --protocol=analyzer` on a clean checkout; 5,581 tests |
+| 10-10 15:00 | 00228a9 | legacy protocol: server, execution, diagnostic, analytics domains; remaining analysis and search requests (39/59 requests, 19/22 notifications) | Gemini 4 (Antigravity) | 78 steps identical to `dart language-server --protocol=analyzer`; coordinator added a step-list check; 5,581 tests |
 
 ## Incidents and lessons
 
