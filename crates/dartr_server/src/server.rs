@@ -71,6 +71,8 @@ mod watch;
 pub(crate) use code_actions::SERVER_SUPPORTED_KINDS as SERVER_SUPPORTED_CODE_ACTION_KINDS;
 pub(crate) use code_actions::commands::SUPPORTED as SUPPORTED_COMMANDS;
 pub use nav::ResolvedUnitRef;
+pub use hierarchy::library_children;
+pub use search::{Match, SElem, SearchScope, children_named, class_members, dart_hash_map_order, dart_string_hash};
 
 /// The progress token of analysis (Dart `analyzingProgressToken`).
 const ANALYZING_TOKEN: &str = "ANALYZING";

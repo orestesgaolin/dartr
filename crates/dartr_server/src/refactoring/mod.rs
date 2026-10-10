@@ -4,5 +4,7 @@
 //! a refactoring and the naming conventions. The refactorings themselves
 //! are in [`crate::server::rename`] and [`crate::server::refactor`].
 
+pub mod host;
 pub mod naming;
+pub mod rename;
 pub mod status;

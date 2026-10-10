@@ -16,6 +16,7 @@ pub mod overrides;
 pub mod postfix;
 pub mod protocol;
 pub mod refactoring;
+pub mod refactoring_host;
 pub mod search;
 pub mod server;
 pub mod statement;

@@ -376,13 +376,6 @@ fn is_valid_identifier(name: &str) -> bool {
     chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
 }
 
-fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    match chars.next() {
-        None => String::new(),
-        Some(f) => f.to_uppercase().collect::<String>() + chars.as_str(),
-    }
-}
 
 #[allow(clippy::too_many_arguments)]
 pub fn get_refactoring(
@@ -454,190 +447,70 @@ fn fatal_initial_problem(message: impl Into<String>) -> RefactoringResponse {
     }
 }
 
+/// Dart `RefactoringManager` for `RENAME`, with the rename refactorings of
+/// `dartr_server`.
 fn compute_rename_refactoring(
     resolved: &ResolvedUnitRef,
     search_engine: Option<SearchEngine<'_>>,
-    file: &str,
+    _file: &str,
     offset: u32,
     validate_only: bool,
     options: Option<&Value>,
 ) -> std::result::Result<RefactoringResponse, (&'static str, String)> {
-    let target = {
-        let sink = NoopSink;
-        let ctx = resolved.ctx(&sink);
-        let unit = resolved.unit();
-        let u = dartr_server::element_locator::Unit {
-            ctx: &ctx,
-            ast: &unit.ast,
-            tables: &unit.tables,
-        };
-        find_rename_target(&u, unit.unit, offset)
-    };
-    let Some(target) = target else {
+    use dartr_server::refactoring::rename::Engine;
+    let Some(mut search_engine) = search_engine else {
         return Ok(fatal_initial_problem("Unable to create a refactoring"));
     };
-
-    let feedback = serde_json::to_value(protocol::RENAMEFeedback {
-        offset: target.node_offset as i64,
-        length: target.node_length as i64,
-        element_kind_name: target.element_kind_name.clone(),
-        old_name: target.old_name.clone(),
+    let unit = dartr_server::server::ResolvedUnitRef {
+        library: resolved.library.clone(),
+        index: resolved.index,
+    };
+    let mut engine = Engine {
+        host: &mut search_engine,
+    };
+    let Some((target, name_offset, name_length)) = engine.element_to_rename(&unit, offset) else {
+        return Ok(fatal_initial_problem("Unable to create a refactoring"));
+    };
+    let Some(mut rename) = engine.create_rename(&unit, target) else {
+        return Ok(fatal_initial_problem("Unable to create a refactoring"));
+    };
+    let mut response = RefactoringResponse {
+        initial_problems: Vec::new(),
+        options_problems: Vec::new(),
+        final_problems: Vec::new(),
+        feedback: None,
+        change: None,
+        potential_edits: None,
+    };
+    let initial = engine.check_initial_conditions(&mut rename);
+    response.initial_problems = crate::refactoring_host::problems(&initial);
+    if initial.has_fatal_error() {
+        return Ok(response);
+    }
+    response.feedback = serde_json::to_value(protocol::RENAMEFeedback {
+        offset: if name_offset == u32::MAX { -1 } else { name_offset as i64 },
+        length: name_length as i64,
+        element_kind_name: engine.element_kind_name(&rename),
+        old_name: rename.old_name.clone(),
     })
     .ok();
-
-    let mut options_problems = Vec::new();
-    let new_name = options
-        .and_then(|o| o.get("newName"))
-        .and_then(Value::as_str);
-
-    if let Some(new_name) = new_name {
-        let cap_kind = capitalize(&target.element_kind_name);
-        if new_name.is_empty() {
-            options_problems.push(protocol::RefactoringProblem {
-                severity: protocol::RefactoringProblemSeverity::FATAL,
-                message: format!("{cap_kind} name must not be empty."),
-                location: None,
-            });
-        } else if !is_valid_identifier(new_name) {
-            options_problems.push(protocol::RefactoringProblem {
-                severity: protocol::RefactoringProblemSeverity::FATAL,
-                message: format!("{cap_kind} name must be a valid identifier."),
-                location: None,
-            });
-        } else if new_name == target.old_name {
-            options_problems.push(protocol::RefactoringProblem {
-                severity: protocol::RefactoringProblemSeverity::FATAL,
-                message: "The new name must be different than the current name.".to_string(),
-                location: None,
-            });
-        }
+    let Some(new_name) = options.and_then(|o| o.get("newName")).and_then(Value::as_str) else {
+        return Ok(response);
+    };
+    rename.new_name = new_name.to_string();
+    let options_status = engine.check_new_name(&rename);
+    response.options_problems = crate::refactoring_host::problems(&options_status);
+    if options_status.has_fatal_error() || validate_only {
+        return Ok(response);
     }
-
-    let has_fatal = options_problems
-        .iter()
-        .any(|p| matches!(p.severity, protocol::RefactoringProblemSeverity::FATAL));
-
-    let mut change = None;
-    let mut potential_edits = None;
-
-    if !validate_only
-        && !has_fatal
-        && let Some(new_name) = new_name
-    {
-        let mut file_edits_map: indexmap::IndexMap<String, Vec<protocol::SourceEdit>> =
-            indexmap::IndexMap::new();
-
-        // Add declaration edit
-        {
-            let sink = NoopSink;
-            let ctx = resolved.ctx(&sink);
-            let non_syn = dartr_element::diagnostics::non_synthetic(&ctx, target.element);
-            if let Some(ed) = ctx.element_data(non_syn) {
-                let mut cur_frag = Some(ed.first_fragment);
-                while let Some(frag) = cur_frag {
-                    if let Some(fd) = ctx.fragment_data(frag) {
-                        if let Some(name_off) = fd.name_offset
-                            && let Some(frag_path) =
-                                dartr_server::navigation::fragment_path(&ctx, frag)
-                        {
-                            let name_len = fd
-                                .name
-                                .map(|n| ctx.name_str(n).len())
-                                .unwrap_or(target.old_name.len());
-                            file_edits_map.entry(frag_path).or_default().push(
-                                protocol::SourceEdit {
-                                    offset: name_off as i64,
-                                    length: name_len as i64,
-                                    replacement: new_name.to_string(),
-                                    id: None,
-                                    description: None,
-                                },
-                            );
-                        }
-                        cur_frag = fd.next_fragment;
-                    } else {
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Add reference edits
-        if let Some(mut engine) = search_engine {
-            let selem = SElem {
-                lib: resolved.library.clone(),
-                unit: resolved.index,
-                id: target.element,
-            };
-            let refs = engine.find_element_references(&selem, false);
-            for r in refs {
-                let loc = r.location;
-                let edits = file_edits_map.entry(loc.file).or_default();
-                if !edits
-                    .iter()
-                    .any(|e| e.offset == loc.offset && e.length == loc.length)
-                {
-                    edits.push(protocol::SourceEdit {
-                        offset: loc.offset,
-                        length: loc.length,
-                        replacement: new_name.to_string(),
-                        id: None,
-                        description: None,
-                    });
-                }
-            }
-        }
-
-        // Fallback if target node wasn't covered
-        let file_edits = file_edits_map.entry(file.to_string()).or_default();
-        if !file_edits
-            .iter()
-            .any(|e| e.offset == target.node_offset as i64)
-        {
-            file_edits.push(protocol::SourceEdit {
-                offset: target.node_offset as i64,
-                length: target.node_length as i64,
-                replacement: new_name.to_string(),
-                id: None,
-                description: None,
-            });
-        }
-
-        let mut source_file_edits = Vec::new();
-        for (f, mut edits) in file_edits_map {
-            edits.sort_by(|a, b| b.offset.cmp(&a.offset));
-            source_file_edits.push(protocol::SourceFileEdit {
-                file: f,
-                file_stamp: 0,
-                edits,
-            });
-        }
-
-        let title_kind = target
-            .element_kind_name
-            .split(' ')
-            .map(capitalize)
-            .collect::<Vec<_>>()
-            .join(" ");
-        change = Some(protocol::SourceChange {
-            message: format!("Rename {title_kind} '{}' to '{new_name}'", target.old_name),
-            edits: source_file_edits,
-            linked_edit_groups: Vec::new(),
-            selection: None,
-            selection_length: None,
-            id: None,
-        });
-        let _ = &mut potential_edits;
+    let final_status = engine.check_final_conditions(&mut rename);
+    response.final_problems = crate::refactoring_host::problems(&final_status);
+    if final_status.has_fatal_error() {
+        return Ok(response);
     }
-
-    Ok(RefactoringResponse {
-        initial_problems: Vec::new(),
-        options_problems,
-        final_problems: Vec::new(),
-        feedback,
-        change,
-        potential_edits,
-    })
+    let change = engine.create_change(&mut rename);
+    response.change = Some(crate::refactoring_host::change(&change));
+    Ok(response)
 }
 
 fn find_selected_expression(

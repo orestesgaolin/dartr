@@ -28,30 +28,30 @@ use crate::uri::path_to_uri;
 
 /// An element with the resolved library whose element model it is in.
 #[derive(Clone)]
-pub(crate) struct SElem {
+pub struct SElem {
     pub lib: Arc<ResolvedLibraryResult>,
     pub unit: usize,
     pub id: ElementId,
 }
 
 impl SElem {
-    pub(crate) fn with<R>(&self, f: impl FnOnce(&Ctx<'_>) -> R) -> R {
+    pub fn with<R>(&self, f: impl FnOnce(&Ctx<'_>) -> R) -> R {
         let sink = NoopSink;
         let ctx = self.lib.ctx(self.unit, &sink);
         f(&ctx)
     }
 
-    pub(crate) fn key(&self) -> Option<ElementKey> {
+    pub fn key(&self) -> Option<ElementKey> {
         self.with(|ctx| crate::index::element_key(ctx, self.id))
     }
 
     /// The identity of the element in Dart: the same element of the same
     /// driver (each driver has its own element model).
-    pub(crate) fn identity(&self) -> Option<(usize, ElementKey)> {
+    pub fn identity(&self) -> Option<(usize, ElementKey)> {
         self.key().map(|k| (self.lib.context, k))
     }
 
-    pub(crate) fn same(&self, other: ElementId) -> SElem {
+    pub fn same(&self, other: ElementId) -> SElem {
         SElem {
             lib: self.lib.clone(),
             unit: self.unit,
@@ -62,7 +62,7 @@ impl SElem {
 
 /// A search match: the file, offset and length.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Match {
+pub struct Match {
     pub path: String,
     pub offset: u32,
     pub length: u32,
@@ -121,7 +121,7 @@ const SUBTYPES: &[RelationKind] = &[
 
 /// Dart VM `String.hashCode` (`StringHasher`: one-at-a-time over the
 /// UTF-16 code units, 30 bits, 0 is 1).
-pub(crate) fn dart_string_hash(s: &str) -> u32 {
+pub fn dart_string_hash(s: &str) -> u32 {
     let mut h: u32 = 0;
     for c in s.encode_utf16() {
         h = h.wrapping_add(c as u32);
@@ -139,7 +139,7 @@ pub(crate) fn dart_string_hash(s: &str) -> u32 {
 /// first, new entries first in their bucket, twice the buckets when more
 /// than 3/4 full) after inserting the distinct [hashes] in order: indexes
 /// into [hashes].
-pub(crate) fn dart_hash_map_order(hashes: &[u32]) -> Vec<usize> {
+pub fn dart_hash_map_order(hashes: &[u32]) -> Vec<usize> {
     let mut buckets: Vec<Vec<usize>> = vec![Vec::new(); 8];
     let mut count = 0usize;
     for (i, &h) in hashes.iter().enumerate() {
@@ -248,7 +248,7 @@ impl OwnedFiles {
 /// The files that a search looks at (Dart `OwnedFiles.filesFor(driver)` of
 /// each driver after `discoverAvailableFiles`): by context, in the order of
 /// `SearchEngineImpl._drivers`.
-pub(crate) type SearchScope = Vec<(usize, Vec<String>)>;
+pub type SearchScope = Vec<(usize, Vec<String>)>;
 
 impl Server {
     /// Dart `OwnedFiles` after `discoverAvailableFiles` of all drivers. A
@@ -1301,7 +1301,7 @@ impl Server {
 
 /// Dart `getClassMembers(clazz, name)`: the non-constructor executables
 /// and fields of [class] with the display name [name].
-pub(crate) fn class_members(ctx: &Ctx<'_>, class: ElementId, name: Option<&str>) -> Vec<ElementId> {
+pub fn class_members(ctx: &Ctx<'_>, class: ElementId, name: Option<&str>) -> Vec<ElementId> {
     let Some(instance) = class.cast::<dartr_element::InstanceElement>() else {
         return Vec::new();
     };
@@ -1326,7 +1326,7 @@ pub(crate) fn class_members(ctx: &Ctx<'_>, class: ElementId, name: Option<&str>)
 
 /// Dart `getChildren(parent, name)`: the children of [parent] (fields,
 /// getters, setters, methods, constructors) with the lookup name [name].
-pub(crate) fn children_named(ctx: &Ctx<'_>, parent: ElementId, name: &str) -> Vec<ElementId> {
+pub fn children_named(ctx: &Ctx<'_>, parent: ElementId, name: &str) -> Vec<ElementId> {
     let Some(instance) = parent.cast::<dartr_element::InstanceElement>() else {
         return Vec::new();
     };
