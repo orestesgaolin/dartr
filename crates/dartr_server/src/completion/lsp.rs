@@ -612,6 +612,7 @@ pub fn to_item(
     has_default_edit_range: bool,
     resolution: Option<Value>,
     cleaned_doc: Option<String>,
+    color_hex: Option<String>,
 ) -> Option<Value> {
     let caps = ic.caps;
     let element = c.element();
@@ -647,7 +648,9 @@ pub fn to_item(
     if label.ends_with(',') {
         label.pop();
     }
-    let kind = item_kind(ctx, caps, c, &label);
+    // Dart `server.getColorHexString(element)`: a color constant has the
+    // kind `Color`.
+    let kind = if color_hex.is_some() { Some(16) } else { item_kind(ctx, caps, c, &label) };
     let mut detail = completion_detail(
         ctx,
         c,
@@ -708,6 +711,10 @@ pub fn to_item(
                 cleaned_doc = None;
             }
         }
+    }
+    // Dart appends the hex color to the documentation.
+    if let Some(hex) = &color_hex {
+        cleaned_doc = Some(format!("{}\n\n{hex}", cleaned_doc.unwrap_or_default()).trim().to_string());
     }
     let is_deprecated = base.is_some_and(|b| elem::has_or_inherits_deprecated(ctx, b));
     let mut item = Map::new();
@@ -781,4 +788,51 @@ pub fn show_name(ctx: &Ctx<'_>, element: ElementId) -> Option<String> {
         }
     }
     ctx.element_name(element).map(|_| display_name(ctx, element))
+}
+
+/// Dart `DartType.isColor`: [ty] is the `Color` class of `dart:ui` or a
+/// subtype of it.
+pub fn is_color(ctx: &Ctx<'_>, ty: TypeId) -> bool {
+    use dartr_typesystem::TypeExt;
+    if !matches!(ctx.ty(ty), TypeKind::Interface { .. }) {
+        return false;
+    }
+    let is_exact = |t: TypeId| {
+        let Some(element) = ctx.interface_element(t) else {
+            return false;
+        };
+        let element = element.raw();
+        ctx.element_name(element) == Some("Color")
+            && member::library(ctx, ElemRef::Base(element))
+                .and_then(|l| ctx.element_name(l.raw()))
+                == Some("dart.ui")
+    };
+    is_exact(ty) || ctx.all_supertypes(ty).into_iter().any(is_exact)
+}
+
+/// Dart `DartObjectImpl.getFieldFromHierarchy`.
+fn field_from_hierarchy<'v>(
+    value: &'v dartr_constant::DartObjectImpl,
+    name: &str,
+) -> Option<&'v dartr_constant::DartObjectImpl> {
+    if let Some(f) = value.get_field(name) {
+        return Some(f);
+    }
+    field_from_hierarchy(value.get_field("(super)")?, name)
+}
+
+/// Dart `getColorHexString` of a constant value (`ColorComputer
+/// .getColorForObject`): `#RRGGBB`.
+pub fn color_hex_string(ctx: &Ctx<'_>, value: &dartr_constant::DartObjectImpl) -> Option<String> {
+    if value.is_null() || !is_color(ctx, value.ty) {
+        return None;
+    }
+    let color = field_from_hierarchy(value, "color").unwrap_or(value);
+    let channel = |name: &str| -> Option<u32> {
+        let v = field_from_hierarchy(color, name)?.to_double_value()?;
+        Some(((v * 255.0).round() as i64 & 0xff) as u32)
+    };
+    let _alpha = channel("a")?;
+    let (r, g, b) = (channel("r")?, channel("g")?, channel("b")?);
+    Some(format!("#{r:02X}{g:02X}{b:02X}"))
 }

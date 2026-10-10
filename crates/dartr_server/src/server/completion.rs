@@ -347,6 +347,35 @@ impl Server {
             has_default_text_mode,
             file_path: &path,
         };
+        // Dart `getColorHexString` of the variables of the candidates (when
+        // the client supports the kind `Color`).
+        let mut color_hex: std::collections::HashMap<dartr_element::ElementId, String> =
+            std::collections::HashMap::new();
+        if caps.item_kinds.contains(&16) {
+            let mut elements: Vec<dartr_element::ElementId> = Vec::new();
+            for candidate in &result.candidates {
+                let Some(e) = candidate.element() else {
+                    continue;
+                };
+                let b = member::base_element(&ctx, e);
+                if !matches!(b.tag(), Tag::Field | Tag::TopLevelVariable) || elements.contains(&b) {
+                    continue;
+                }
+                if c::lsp::is_color(&ctx, member::type_(&ctx, ElemRef::Base(b))) {
+                    elements.push(b);
+                }
+            }
+            if !elements.is_empty() {
+                let values = self.session.constant_values_of(context_index, q.library, &elements, |v| {
+                    c::lsp::color_hex_string(&ctx, v)
+                });
+                for (e, v) in elements.into_iter().zip(values) {
+                    if let Some(v) = v {
+                        color_hex.insert(e, v);
+                    }
+                }
+            }
+        }
         let mut ranked: Vec<(Value, f64)> = Vec::new();
         for mut candidate in result.candidates {
             match &candidate.kind {
@@ -436,6 +465,7 @@ impl Server {
                 has_default,
                 resolution,
                 doc,
+                element.and_then(|b| color_hex.get(&b).cloned()),
             ) {
                 ranked.push((item, candidate.matcher_score));
             }

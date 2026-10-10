@@ -559,6 +559,48 @@ impl DriverSession {
         }
     }
 
+    /// Dart `VariableElement.computeConstantValue()` of [elements] with the
+    /// driver of [context] (the units of other libraries are resolved on
+    /// demand), each mapped with [f]; `None` for a variable without a valid
+    /// constant value. [library] is the library of the request.
+    pub fn constant_values_of<T>(
+        &self,
+        context: usize,
+        library: dartr_element::EId<dartr_element::LibraryElement>,
+        elements: &[dartr_element::ElementId],
+        f: impl Fn(&dartr_constant::DartObjectImpl) -> Option<T>,
+    ) -> Vec<Option<T>> {
+        let Some(driver) = self.drivers.get(&context) else {
+            return elements.iter().map(|_| None).collect();
+        };
+        static DECLARED_VARIABLES: std::sync::LazyLock<dartr_constant::DeclaredVariables> =
+            std::sync::LazyLock::new(dartr_constant::DeclaredVariables::new);
+        let world = &driver.state.world;
+        let tp = dartr_link::types_builder::world_type_provider(world);
+        let external = dartr_resolver::library_analyzer::ExternalUnitCache::new(
+            world,
+            &tp,
+            dartr_resolver::options::AnalysisOptions::default(),
+            driver.unit_sources(),
+        );
+        let engine = dartr_resolver::constant::evaluation::ConstantEvaluationEngine::new(
+            world,
+            &tp,
+            library,
+            &DECLARED_VARIABLES,
+            &[],
+            Some(&external),
+        );
+        elements
+            .iter()
+            .map(|&e| {
+                catch_unwind(AssertUnwindSafe(|| engine.compute_constant_value_of(e).and_then(|v| f(&v))))
+                    .ok()
+                    .flatten()
+            })
+            .collect()
+    }
+
     /// The paths of the library files that the driver of [context] knows,
     /// in the order in which the Dart driver creates their `FileState`s
     /// (the order of `FileSystemState.knownFiles`): `dart:core` and the

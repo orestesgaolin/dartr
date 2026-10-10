@@ -17,6 +17,7 @@ dartr_project.workspace = true
 dartr_cli.workspace = true
 dartr_format.workspace = true
 dartr_element.workspace = true
+dartr_constant.workspace = true
 dartr_resolver.workspace = true
 dartr_typesystem.workspace = true
 dartr_driver.workspace = true
