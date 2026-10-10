@@ -8,7 +8,6 @@ use dartr_ast::*;
 use dartr_element::{EId, ElementId, FormalParameterElement, TypeId};
 use dartr_syntax::TokenId;
 
-use super::super::change_builder::ChangeBuilder;
 use super::super::generated::fix_kinds as k;
 use super::super::producer::*;
 use super::super::utils::Range;

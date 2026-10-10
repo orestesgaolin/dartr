@@ -25,3 +25,83 @@ transforms:
     changes:
       - kind: 'rename'
         newName: 'helperFunction'
+  - title: 'Replace with compute2'
+    date: 2024-01-01
+    element:
+      uris: ['src/helpers.dart']
+      function: 'compute'
+    changes:
+      - kind: 'replacedBy'
+        newElement:
+          uris: ['src/helpers.dart']
+          function: 'compute2'
+  - title: 'Remove scale'
+    date: 2024-01-01
+    element:
+      uris: ['src/helpers.dart']
+      function: 'compute'
+    changes:
+      - kind: 'removeParameter'
+        name: 'scale'
+  - title: 'Add type argument'
+    date: 2024-01-01
+    element:
+      uris: ['src/helpers.dart']
+      function: 'compute'
+    changes:
+      - kind: 'addTypeParameter'
+        index: 0
+        name: 'T'
+        argumentValue:
+          expression: 'int'
+  - title: 'Rename height'
+    date: 2024-01-01
+    element:
+      uris: ['src/helpers.dart']
+      method: 'resize'
+      inClass: 'Box'
+    changes:
+      - kind: 'renameParameter'
+        oldName: 'height'
+        newName: 'h'
+  - title: 'Add depth'
+    date: 2024-01-01
+    element:
+      uris: ['src/helpers.dart']
+      method: 'resize'
+      inClass: 'Box'
+    changes:
+      - kind: 'addParameter'
+        index: 1
+        name: 'depth'
+        style: required_positional
+        argumentValue:
+          expression: '{% w %} * 2'
+          variables:
+            w:
+              kind: 'fragment'
+              value: 'arguments[0]'
+  - title: 'Use size'
+    date: 2024-01-01
+    element:
+      uris: ['src/helpers.dart']
+      getter: 'length'
+      inClass: 'Box'
+    changes:
+      - kind: 'replacedBy'
+        newElement:
+          uris: ['src/helpers.dart']
+          method: 'size'
+          inClass: 'Box'
+  - title: 'Use default Box'
+    date: 2024-01-01
+    element:
+      uris: ['src/helpers.dart']
+      constructor: 'old'
+      inClass: 'Box'
+    changes:
+      - kind: 'replacedBy'
+        newElement:
+          uris: ['src/helpers.dart']
+          constructor: ''
+          inClass: 'Box'

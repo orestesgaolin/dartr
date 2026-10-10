@@ -59,3 +59,35 @@ except `.dart_tool` (the provisional table above counted `lib/` only for the fir
 
 These replace the provisional numbers as the baseline for comparisons. Raw log:
 `bench/results/baseline-idle.log` (not committed; results are git-ignored).
+
+## `dartr analyze` against `dart analyze` (2026-10-10 19:45–20:30, busy machine)
+
+Release build of main at db36afb (`dartr` with the full pipeline: errors, warnings, lints, analyzer
+plugins). `bench/compare.sh`: `hyperfine -i -N -w 1 -r 3`, run from the project directory. "dart, warm"
+uses the normal `~/.dartServer` cache, warmed by the warm-up run; "dart, empty" uses an isolated
+`--cache` directory deleted before each run (`COLD=1`). Both tools report the same diagnostics on all
+four projects (checked with `tools/analyze_compare.py`). Build agents used the machine during the runs:
+load average 8 to 18 on 15 cores.
+
+| corpus | dart, warm: mean (min–max) | dart, empty: mean (min–max) | dartr: mean (min–max) |
+|---|---|---|---|
+| visible-app | 78.775 s (57.102–93.537) | 97.083 s (91.528–102.357) | 24.945 s (24.323–25.557) |
+| flutter (packages/flutter) | 4.325 s (3.847–4.848) | 27.990 s (24.857–29.695) | 7.380 s (7.297–7.483) |
+| analyzer-9.0.0 | 3.299 s (2.325–4.959) | 8.710 s (8.529–9.031) | 1.424 s (1.418–1.431) |
+| flutter_tools | 2.673 s (2.466–2.804) | 9.467 s (9.397–9.550) | 3.665 s (3.628–3.698) |
+
+CPU time (user + system, mean per run):
+
+| corpus | dart, warm | dart, empty | dartr |
+|---|---|---|---|
+| visible-app | 76.0 + 15.5 s | 122.0 + 17.7 s | 92.7 + 68.2 s |
+| flutter | 3.8 + 2.2 s | 29.0 + 7.3 s | 26.8 + 38.8 s |
+| analyzer-9.0.0 | 3.0 + 2.0 s | 9.4 + 3.3 s | 6.9 + 1.1 s |
+| flutter_tools | 1.8 + 1.4 s | 10.5 + 3.4 s | 7.4 + 22.5 s |
+
+Notes:
+- The earlier single runs (README until this date) had Flutter at 15.4 s for `dart analyze`; with a
+  properly warmed cache it is 4.3 s, so dartr (7.4 s) is slower there.
+- dartr's system time (38.8 s on flutter, 22.5 s on flutter_tools) is far above its wall time. It
+  points to threads spinning or contending; the optimization work starts there.
+- Raw results: `bench/results/compare-*.json` (git-ignored).

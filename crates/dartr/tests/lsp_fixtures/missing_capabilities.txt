@@ -1,7 +1,4 @@
 dart-code static command dart.edit.codeAction.apply
-dart-code static command dart.edit.fixAll
-dart-code static command dart.edit.fixAllInWorkspace
-dart-code static command dart.edit.fixAllInWorkspace.preview
 dart-code static command dart.refactor.add_constructor_name
 dart-code static command dart.refactor.convert_all_formal_parameters_to_named
 dart-code static command dart.refactor.convert_selected_formal_parameters_to_named
@@ -16,9 +13,6 @@ dart-code static experimental.interactiveResolveProvider.kinds
 dart-code dynamic textDocument/rename [dart]
 dart-code dynamic workspace/willRenameFiles
 static static command dart.edit.codeAction.apply
-static static command dart.edit.fixAll
-static static command dart.edit.fixAllInWorkspace
-static static command dart.edit.fixAllInWorkspace.preview
 static static command dart.refactor.add_constructor_name
 static static command dart.refactor.convert_all_formal_parameters_to_named
 static static command dart.refactor.convert_selected_formal_parameters_to_named
