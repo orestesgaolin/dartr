@@ -117,6 +117,10 @@ pub struct LegacyMatch {
     pub context: usize,
     pub kind: protocol::SearchResultKind,
     pub is_potential: bool,
+    /// The relation of an index match (`IsReferencedBy` for other matches).
+    pub relation: RelationKind,
+    /// Dart `SearchMatch.isQualified`.
+    pub is_qualified: bool,
 }
 
 /// Unresolved member reference in a unit (`AnalysisDriverUnitIndex.usedNames`).
@@ -1773,6 +1777,8 @@ impl<'a> SearchEngine<'a> {
                         context: *context,
                         kind: result_kind.clone(),
                         is_potential: false,
+                        relation: r.kind,
+                        is_qualified: r.is_qualified,
                     });
                 }
             }
@@ -1932,6 +1938,8 @@ impl<'a> SearchEngine<'a> {
                 context: resolved.library.context,
                 kind,
                 is_potential: false,
+                relation: RelationKind::IsReferencedBy,
+                is_qualified: false,
             })
             .collect()
     }
@@ -2037,6 +2045,8 @@ impl<'a> SearchEngine<'a> {
                             context: owner,
                             kind: protocol::SearchResultKind::REFERENCE,
                             is_potential: false,
+                            relation: RelationKind::IsReferencedBy,
+                            is_qualified: false,
                         });
                     }
                 }
@@ -2299,6 +2309,8 @@ impl<'a> SearchEngine<'a> {
                         context: *context,
                         kind: r.kind.clone(),
                         is_potential: true,
+                        relation: RelationKind::IsReferencedBy,
+                        is_qualified: false,
                     });
                 }
             }

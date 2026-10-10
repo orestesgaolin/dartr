@@ -50,6 +50,7 @@ pub mod index;
 pub mod inlay_hints;
 pub mod mapping;
 pub mod navigation;
+pub mod refactoring;
 pub mod semantic_tokens;
 pub mod server;
 pub mod signature;

@@ -28,30 +28,30 @@ use crate::uri::path_to_uri;
 
 /// An element with the resolved library whose element model it is in.
 #[derive(Clone)]
-pub(crate) struct SElem {
+pub struct SElem {
     pub lib: Arc<ResolvedLibraryResult>,
     pub unit: usize,
     pub id: ElementId,
 }
 
 impl SElem {
-    pub(crate) fn with<R>(&self, f: impl FnOnce(&Ctx<'_>) -> R) -> R {
+    pub fn with<R>(&self, f: impl FnOnce(&Ctx<'_>) -> R) -> R {
         let sink = NoopSink;
         let ctx = self.lib.ctx(self.unit, &sink);
         f(&ctx)
     }
 
-    fn key(&self) -> Option<ElementKey> {
+    pub fn key(&self) -> Option<ElementKey> {
         self.with(|ctx| crate::index::element_key(ctx, self.id))
     }
 
     /// The identity of the element in Dart: the same element of the same
     /// driver (each driver has its own element model).
-    pub(crate) fn identity(&self) -> Option<(usize, ElementKey)> {
+    pub fn identity(&self) -> Option<(usize, ElementKey)> {
         self.key().map(|k| (self.lib.context, k))
     }
 
-    fn same(&self, other: ElementId) -> SElem {
+    pub fn same(&self, other: ElementId) -> SElem {
         SElem {
             lib: self.lib.clone(),
             unit: self.unit,
@@ -62,7 +62,7 @@ impl SElem {
 
 /// A search match: the file, offset and length.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Match {
+pub struct Match {
     pub path: String,
     pub offset: u32,
     pub length: u32,
@@ -70,6 +70,8 @@ pub(crate) struct Match {
     pub context: usize,
     /// The relation of an index match (`IsReferencedBy` for other matches).
     pub kind: RelationKind,
+    /// Dart `SearchMatch.isQualified`.
+    pub is_qualified: bool,
 }
 
 const REFERENCES: &[RelationKind] = &[
@@ -119,7 +121,7 @@ const SUBTYPES: &[RelationKind] = &[
 
 /// Dart VM `String.hashCode` (`StringHasher`: one-at-a-time over the
 /// UTF-16 code units, 30 bits, 0 is 1).
-pub(crate) fn dart_string_hash(s: &str) -> u32 {
+pub fn dart_string_hash(s: &str) -> u32 {
     let mut h: u32 = 0;
     for c in s.encode_utf16() {
         h = h.wrapping_add(c as u32);
@@ -137,7 +139,7 @@ pub(crate) fn dart_string_hash(s: &str) -> u32 {
 /// first, new entries first in their bucket, twice the buckets when more
 /// than 3/4 full) after inserting the distinct [hashes] in order: indexes
 /// into [hashes].
-pub(crate) fn dart_hash_map_order(hashes: &[u32]) -> Vec<usize> {
+pub fn dart_hash_map_order(hashes: &[u32]) -> Vec<usize> {
     let mut buckets: Vec<Vec<usize>> = vec![Vec::new(); 8];
     let mut count = 0usize;
     for (i, &h) in hashes.iter().enumerate() {
@@ -246,7 +248,7 @@ impl OwnedFiles {
 /// The files that a search looks at (Dart `OwnedFiles.filesFor(driver)` of
 /// each driver after `discoverAvailableFiles`): by context, in the order of
 /// `SearchEngineImpl._drivers`.
-pub(crate) type SearchScope = Vec<(usize, Vec<String>)>;
+pub type SearchScope = Vec<(usize, Vec<String>)>;
 
 impl Server {
     /// Dart `OwnedFiles` after `discoverAvailableFiles` of all drivers. A
@@ -351,7 +353,7 @@ impl Server {
     }
 
     /// The context that owns [path] in a search.
-    fn owner_of(&mut self, path: &str) -> Option<usize> {
+    pub(crate) fn owner_of(&mut self, path: &str) -> Option<usize> {
         self.search_scope()
             .iter()
             .find(|(_, files)| files.iter().any(|f| f == path))
@@ -360,7 +362,7 @@ impl Server {
 
     /// Whether [content] of [path] has one of [names] (Dart
     /// `FileState.referencedNames`); cached until a file changes.
-    fn mentions_any(&mut self, path: &str, names: &[String]) -> bool {
+    pub(crate) fn mentions_any(&mut self, path: &str, names: &[String]) -> bool {
         let words = match self.search_words.get(path) {
             Some(w) => w.clone(),
             None => {
@@ -408,7 +410,7 @@ impl Server {
 
     /// Dart `Search._addResults`: the relations with [kinds] of [element]
     /// in the files of each driver that can reference it.
-    fn search_index(&mut self, element: &SElem, kinds: &[RelationKind]) -> Vec<Match> {
+    pub(crate) fn search_index(&mut self, element: &SElem, kinds: &[RelationKind]) -> Vec<Match> {
         let Some(name) = element.with(|ctx| {
             ctx.element_data(element.id)
                 .and_then(|d| d.name)
@@ -485,6 +487,7 @@ impl Server {
                         length: r.length,
                         context: *context,
                         kind: r.kind,
+                        is_qualified: r.is_qualified,
                     });
                 }
             }
@@ -717,7 +720,7 @@ impl Server {
         self.local_references(&resolved, root, &elements)
     }
 
-    fn local_references(
+    pub(crate) fn local_references(
         &self,
         resolved: &ResolvedUnitRef,
         root: NodeId,
@@ -743,6 +746,7 @@ impl Server {
                 length,
                 context: resolved.library.context,
                 kind: RelationKind::IsReferencedBy,
+                is_qualified: false,
             })
             .collect()
     }
@@ -853,6 +857,7 @@ impl Server {
                             length: ast.length(t),
                             context: owner,
                             kind: RelationKind::IsReferencedBy,
+                            is_qualified: false,
                         });
                     }
                 }
@@ -863,7 +868,7 @@ impl Server {
 
     /// Dart `directSubtypeReferences` over all drivers: the classes whose
     /// declarations extend, mix in, implement or constrain [class].
-    fn direct_subtypes(&mut self, class: &SElem) -> Vec<SElem> {
+    pub(crate) fn direct_subtypes(&mut self, class: &SElem) -> Vec<SElem> {
         self.direct_subtypes_with_kinds(class)
             .into_iter()
             .map(|(e, _)| e)
@@ -917,7 +922,7 @@ impl Server {
     }
 
     /// Dart `SearchEngine.appendAllSubtypes(type, allSubtypes)`.
-    fn append_all_subtypes(
+    pub(crate) fn append_all_subtypes(
         &mut self,
         class: &SElem,
         all: &mut Vec<SElem>,
@@ -936,7 +941,7 @@ impl Server {
 
     /// Dart `getHierarchyMembersAndParameters(member,
     /// includeParametersForFields: true)`.
-    fn hierarchy_members_and_parameters(&mut self, member: &SElem) -> (Vec<SElem>, Vec<SElem>) {
+    pub(crate) fn hierarchy_members_and_parameters(&mut self, member: &SElem) -> (Vec<SElem>, Vec<SElem>) {
         let id = member.id;
         let mut members = Vec::new();
         let mut parameters = Vec::new();
@@ -1054,7 +1059,7 @@ impl Server {
     }
 
     /// Dart `getHierarchyNamedParameters`.
-    fn hierarchy_named_parameters(&mut self, parameter: &SElem) -> Vec<SElem> {
+    pub(crate) fn hierarchy_named_parameters(&mut self, parameter: &SElem) -> Vec<SElem> {
         let (named, name, enclosing) = parameter.with(|ctx| {
             let data = ctx.get(
                 dartr_element::EId::<dartr_element::FormalParameterElement>::from_raw(parameter.id),
@@ -1296,7 +1301,7 @@ impl Server {
 
 /// Dart `getClassMembers(clazz, name)`: the non-constructor executables
 /// and fields of [class] with the display name [name].
-fn class_members(ctx: &Ctx<'_>, class: ElementId, name: Option<&str>) -> Vec<ElementId> {
+pub fn class_members(ctx: &Ctx<'_>, class: ElementId, name: Option<&str>) -> Vec<ElementId> {
     let Some(instance) = class.cast::<dartr_element::InstanceElement>() else {
         return Vec::new();
     };
@@ -1321,7 +1326,7 @@ fn class_members(ctx: &Ctx<'_>, class: ElementId, name: Option<&str>) -> Vec<Ele
 
 /// Dart `getChildren(parent, name)`: the children of [parent] (fields,
 /// getters, setters, methods, constructors) with the lookup name [name].
-fn children_named(ctx: &Ctx<'_>, parent: ElementId, name: &str) -> Vec<ElementId> {
+pub fn children_named(ctx: &Ctx<'_>, parent: ElementId, name: &str) -> Vec<ElementId> {
     let Some(instance) = parent.cast::<dartr_element::InstanceElement>() else {
         return Vec::new();
     };

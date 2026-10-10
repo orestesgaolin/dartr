@@ -5322,7 +5322,12 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
     fn static_member_target_element(&self, target: NodeId) -> Option<ElementId> {
         let ast = self.ast();
         if ast.is::<Identifier>(target) {
-            return self.q.element(target);
+            // Dart `PrefixedIdentifier.element` is the element of its
+            // identifier.
+            return self.q.element(target).or_else(|| {
+                let p = ast.cast::<PrefixedIdentifier>(target)?;
+                self.q.element(ast[p].identifier.raw())
+            });
         }
         if let Some(t) = ast.cast::<TypeLiteral>(target) {
             return self.q.element(ast[t].type_.raw());
