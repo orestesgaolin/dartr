@@ -298,6 +298,8 @@ impl LspClient {
                     let n = params["items"].as_array().map(|a| a.len()).unwrap_or(0);
                     Value::Array(vec![self.configuration.clone(); n])
                 }
+                // Dart-Code applies the edit.
+                "workspace/applyEdit" => json!({"applied": true}),
                 _ => Value::Null,
             };
             self.send(&json!({"jsonrpc": "2.0", "id": id, "result": result}));
