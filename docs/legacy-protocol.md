@@ -24,9 +24,9 @@ Generated types cover every domain; runtime support is the subset below.
 
 | Domain | Requests implemented / total | Notifications implemented / total |
 | --- | ---: | ---: |
-| server | 5 / 7 | 5 / 5 |
+| server | 7 / 7 | 5 / 5 |
 | analysis | 14 / 14 | 12 / 12 |
-| completion | 2 / 3 | 1 / 1 |
+| completion | 3 / 3 | 1 / 1 |
 | search | 6 / 6 | 1 / 1 |
 | edit | 14 / 14 | 0 / 0 |
 | execution | 5 / 5 | 1 / 1 |
@@ -34,17 +34,19 @@ Generated types cover every domain; runtime support is the subset below.
 | analytics | 4 / 4 | 0 / 0 |
 | flutter | 3 / 3 | 1 / 1 |
 | lsp | 1 / 1 | 1 / 1 |
-| Total | 56 / 59 | 22 / 22 |
+| Total | 59 / 59 | 22 / 22 |
 
 Requests: `server.getVersion`, `server.shutdown`, `server.setSubscriptions`,
-`server.cancelRequest`, `server.setClientCapabilities`,
+`server.cancelRequest`, `server.setClientCapabilities`, `server.openUrlRequest`,
+`server.showMessageRequest`,
 `analysis.getErrors`, `analysis.getHover`, `analysis.getImportedElements`,
 `analysis.getLibraryDependencies`, `analysis.getNavigation`,
 `analysis.getReachableSources`, `analysis.getSignature`, `analysis.reanalyze`,
 `analysis.setAnalysisRoots`, `analysis.setGeneralSubscriptions`,
 `analysis.setPriorityFiles`, `analysis.setSubscriptions`,
 `analysis.updateContent`, `analysis.updateOptions`,
-`completion.getSuggestions2`, `completion.getSuggestionDetails2`,
+`completion.getSuggestions2`, `completion.registerLibraryPaths`,
+`completion.getSuggestionDetails2`,
 `search.findElementReferences`, `search.findMemberDeclarations`,
 `search.findMemberReferences`, `search.findTopLevelDeclarations`,
 `search.getElementDeclarations`, `search.getTypeHierarchy`,

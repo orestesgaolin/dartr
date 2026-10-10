@@ -539,6 +539,26 @@ fn build_insert_text(
     (text, snippet)
 }
 
+/// Dart `buildInsertText` for YAML completion suggestions (no function calls).
+pub fn build_insert_text_for_yaml(
+    supports_snippets: bool,
+    completion: &str,
+    selection_offset: usize,
+    selection_length: usize,
+) -> (String, bool) {
+    build_insert_text(
+        supports_snippets,
+        false,
+        false,
+        None,
+        &[],
+        false,
+        completion,
+        selection_offset,
+        selection_length,
+    )
+}
+
 /// Dart `removeDartDocDelimiters`.
 pub fn remove_dart_doc_delimiters(s: &str) -> String {
     let mut s = s;
