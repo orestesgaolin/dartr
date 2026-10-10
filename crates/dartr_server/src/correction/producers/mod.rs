@@ -18,6 +18,7 @@ pub mod import_library;
 pub mod members;
 pub mod modifiers;
 pub mod more;
+pub mod more2;
 pub mod simple;
 pub mod small;
 pub mod super_parameters;
@@ -153,6 +154,9 @@ pub fn generator(name: &str) -> Option<ProducerGenerator> {
         "ConvertIntoFinalField.new" => |_: C| boxed(assists2::ConvertIntoFinalField),
         "ConvertIntoGetter.new" => |_: C| boxed(assists2::ConvertIntoGetter::new(false)),
         "ConvertIntoGetter.this_" => |_: C| boxed(assists2::ConvertIntoGetter::new(true)),
+        "AddReturnNull.new" => |_: C| boxed(more2::AddReturnNull),
+        "RemoveComment.ignore" => |_: C| boxed(more2::RemoveIgnoreComment),
+        "RemoveIgnoredDiagnostic.new" => |_: C| boxed(more2::RemoveIgnoredDiagnostic::new()),
         "MakeFinal.new" => |_: C| boxed(MakeFinal),
         "MakeVariableNullable.new" => |_: C| boxed(MakeVariableNullable::new()),
         "RemoveAnnotation.new" => |_: C| boxed(small::RemoveAnnotation::new()),

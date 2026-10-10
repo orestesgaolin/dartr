@@ -30,6 +30,7 @@ pub mod insert;
 pub mod organize_imports;
 pub mod producer;
 pub mod producers;
+pub mod pubspec_fix;
 pub mod sort_members;
 pub mod utils;
 pub mod yaml_edit;
