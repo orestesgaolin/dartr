@@ -2,9 +2,9 @@
 
 //! The URI suggestions in directives (Dart `UriHelper`).
 
+use dartr_ast::*;
 #[allow(unused_imports)]
 use dartr_typesystem::TypeExt;
-use dartr_ast::*;
 
 use super::candidate::{Candidate, Kind};
 use super::target::{TokenExt, string_contents_range};
@@ -35,7 +35,12 @@ pub fn add_uri_suggestions(q: &Request<'_, '_>, out: &mut Out, node: NodeId) {
                 simple_string_literal(q, out, s);
             }
         }
-    } else if offset == start && offset == end && end as usize == content.len() && end > 0 && last_is_quote(end) {
+    } else if offset == start
+        && offset == end
+        && end as usize == content.len()
+        && end > 0
+        && last_is_quote(end)
+    {
         simple_string_literal(q, out, s);
     }
 }
@@ -148,14 +153,24 @@ fn add_file_suggestions(q: &Request<'_, '_>, out: &mut Out, partial: &str) {
             dir
         }
     };
-    let uri_prefix = if parent_uri == "." { String::new() } else { parent_uri.clone() };
-    let has_scheme = parent_uri
-        .find(':')
-        .is_some_and(|i| parent_uri[..i].chars().all(|c| c.is_ascii_alphanumeric() || "+-.".contains(c)) && i > 0);
+    let uri_prefix = if parent_uri == "." {
+        String::new()
+    } else {
+        parent_uri.clone()
+    };
+    let has_scheme = parent_uri.find(':').is_some_and(|i| {
+        parent_uri[..i]
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "+-.".contains(c))
+            && i > 0
+    });
     if !parent_uri.starts_with("file://") && has_scheme {
         return;
     }
-    let source_dir = std::path::Path::new(q.path).parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    let source_dir = std::path::Path::new(q.path)
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_default();
     let raw = parent_uri.strip_prefix("file://").unwrap_or(&parent_uri);
     let mut dir = std::path::PathBuf::from(raw);
     if dir.is_relative() {
@@ -184,9 +199,9 @@ fn add_file_suggestions(q: &Request<'_, '_>, out: &mut Out, partial: &str) {
             dartr_project::fs::ResourceKind::Folder => {
                 (!short.starts_with('.')).then(|| format!("{uri_prefix}{short}/"))
             }
-            dartr_project::fs::ResourceKind::File => {
-                short.ends_with(".dart").then(|| format!("{uri_prefix}{short}"))
-            }
+            dartr_project::fs::ResourceKind::File => short
+                .ends_with(".dart")
+                .then(|| format!("{uri_prefix}{short}")),
         };
         if let Some(c) = completion {
             if c != source_short {

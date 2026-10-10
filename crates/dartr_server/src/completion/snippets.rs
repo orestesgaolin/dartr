@@ -44,7 +44,9 @@ pub fn snippet_context(q: &Request<'_, '_>) -> SnippetContext {
         Some(Entity::Token(t)) => {
             let before = ast.tokens.get(t).before_synthetic.get().unwrap_or(t);
             let ty = ast.t_ty(before);
-            if ty == dartr_syntax::TokenType::MULTI_LINE_COMMENT || ty == dartr_syntax::TokenType::SINGLE_LINE_COMMENT {
+            if ty == dartr_syntax::TokenType::MULTI_LINE_COMMENT
+                || ty == dartr_syntax::TokenType::SINGLE_LINE_COMMENT
+            {
                 return InComment;
             }
             if ty == dartr_syntax::TokenType::STRING
@@ -93,7 +95,9 @@ pub fn snippet_context(q: &Request<'_, '_>) -> SnippetContext {
             NodeKind::SwitchExpression => return InPattern,
             NodeKind::Annotation => return InAnnotation,
             NodeKind::BlockFunctionBody => return InBlock,
-            NodeKind::ClassDeclaration | NodeKind::ExtensionDeclaration | NodeKind::MixinDeclaration => {
+            NodeKind::ClassDeclaration
+            | NodeKind::ExtensionDeclaration
+            | NodeKind::MixinDeclaration => {
                 return InClass;
             }
             NodeKind::EnumConstantArguments => return InConstantExpression,
@@ -171,7 +175,11 @@ fn snippets_for(q: &Request<'_, '_>, context: SnippetContext) -> Vec<Snippet> {
     };
     match context {
         AtTopLevel => {
-            let args = if q.in_test_directory { "" } else { "List<String> args" };
+            let args = if q.in_test_directory {
+                ""
+            } else {
+                "List<String> args"
+            };
             vec![
                 Snippet {
                     prefix: "class",
@@ -189,19 +197,29 @@ fn snippets_for(q: &Request<'_, '_>, context: SnippetContext) -> Vec<Snippet> {
             ]
         }
         InBlock => {
-            let var_or_final = if q.style.make_locals_final { "final" } else { "var" };
+            let var_or_final = if q.style.make_locals_final {
+                "final"
+            } else {
+                "var"
+            };
             let mut out = vec![
                 Snippet {
                     prefix: "do",
                     label: "do while",
                     documentation: "Insert a do-while loop.",
-                    text: format!("do {{{eol}{}$0{eol}{}", i("  "), i("} while (${1:condition});")),
+                    text: format!(
+                        "do {{{eol}{}$0{eol}{}",
+                        i("  "),
+                        i("} while (${1:condition});")
+                    ),
                 },
                 Snippet {
                     prefix: "forin",
                     label: "for in",
                     documentation: "Insert a for-in loop.",
-                    text: block(format!("for ({var_or_final} ${{1:element}} in ${{2:collection}}) {{")),
+                    text: block(format!(
+                        "for ({var_or_final} ${{1:element}} in ${{2:collection}}) {{"
+                    )),
                 },
                 Snippet {
                     prefix: "for",
@@ -247,13 +265,21 @@ fn snippets_for(q: &Request<'_, '_>, context: SnippetContext) -> Vec<Snippet> {
                     prefix: "test",
                     label: "test",
                     documentation: "Insert a test block.",
-                    text: format!("test('${{1:test name}}', () {{{eol}{}$0{eol}{}", i("  "), i("});")),
+                    text: format!(
+                        "test('${{1:test name}}', () {{{eol}{}$0{eol}{}",
+                        i("  "),
+                        i("});")
+                    ),
                 });
                 out.push(Snippet {
                     prefix: "group",
                     label: "group",
                     documentation: "Insert a test group block.",
-                    text: format!("group('${{1:group name}}', () {{{eol}{}$0{eol}{}", i("  "), i("});")),
+                    text: format!(
+                        "group('${{1:group name}}', () {{{eol}{}$0{eol}{}",
+                        i("  "),
+                        i("});")
+                    ),
                 });
             }
             out.push(Snippet {
@@ -328,10 +354,17 @@ pub fn snippet_items(
                 item.insert("textEditText".into(), json!(s.text));
             }
         } else {
-            item.insert("textEdit".into(), json!({"range": edit_range, "newText": s.text}));
+            item.insert(
+                "textEdit".into(),
+                json!({"range": edit_range, "newText": s.text}),
+            );
         }
         // Dart `_FuzzyScoreHelper.completionItemMatches`.
-        let filter = if s.prefix != s.label { s.prefix } else { s.label };
+        let filter = if s.prefix != s.label {
+            s.prefix
+        } else {
+            s.label
+        };
         if matcher.score(filter) > 0.0 {
             out.push(Value::Object(item));
         }

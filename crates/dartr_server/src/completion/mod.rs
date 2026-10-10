@@ -184,7 +184,10 @@ impl<'r, 'a> Request<'r, 'a> {
 
     /// Whether [flag] is enabled in the library.
     pub fn feature_enabled(&self, flag: ExperimentalFlag) -> bool {
-        self.ctx.get(self.library).feature_set.is_enabled(flag.name())
+        self.ctx
+            .get(self.library)
+            .feature_set
+            .is_enabled(flag.name())
     }
 
     /// Dart `isWildcardVariable` support (the `wildcard-variables` feature).
@@ -210,7 +213,10 @@ impl<'r, 'a> Request<'r, 'a> {
         while let Some((f, parent)) = stack.pop() {
             out.push((f, parent));
             for part in self.ctx.fragment(f).parts.iter().rev() {
-                if let dartr_element::DirectiveUri::Unit { library_fragment, .. } = &part.directive.uri {
+                if let dartr_element::DirectiveUri::Unit {
+                    library_fragment, ..
+                } = &part.directive.uri
+                {
                     stack.push((*library_fragment, Some(f)));
                 }
             }
@@ -232,9 +238,12 @@ impl<'r, 'a> Request<'r, 'a> {
     /// Dart `target.enclosingInterfaceElement`.
     pub fn enclosing_interface_element(&self) -> Option<EId<InterfaceElement>> {
         let ast = self.ast;
-        let member = ast.this_or_ancestor_of_type::<CompilationUnitMember>(self.target.containing_node)?;
+        let member =
+            ast.this_or_ancestor_of_type::<CompilationUnitMember>(self.target.containing_node)?;
         if ast.is::<ClassDeclaration>(member.raw()) || ast.is::<MixinDeclaration>(member.raw()) {
-            return self.declared_element(member.raw())?.cast::<InterfaceElement>();
+            return self
+                .declared_element(member.raw())?
+                .cast::<InterfaceElement>();
         }
         None
     }
@@ -313,7 +322,10 @@ pub fn dart_sort_vec<T>(items: Vec<T>, mut compare: impl FnMut(&T, &T) -> i64) -
     let mut indexes: Vec<usize> = (0..items.len()).collect();
     dartr_ast::sort::dart_sort(&mut indexes, |a, b| compare(&items[*a], &items[*b]));
     let mut slots: Vec<Option<T>> = items.into_iter().map(Some).collect();
-    indexes.into_iter().map(|i| slots[i].take().unwrap()).collect()
+    indexes
+        .into_iter()
+        .map(|i| slots[i].take().unwrap())
+        .collect()
 }
 
 /// `node.declaredFragment?.element`.
@@ -561,7 +573,9 @@ impl FileFilter {
         let in_folder = |f: &str| path.starts_with(&format!("{root}/{f}/"));
         let in_lib = in_folder("lib") || in_folder("bin") || in_folder("web");
         let mut dependencies = Vec::new();
-        if let Some(pubspec) = dartr_project::pubspec::Pubspec::read(&format!("{root}/pubspec.yaml")) {
+        if let Some(pubspec) =
+            dartr_project::pubspec::Pubspec::read(&format!("{root}/pubspec.yaml"))
+        {
             dependencies.extend(pubspec.dependencies.iter().cloned());
             if !in_lib {
                 dependencies.extend(pubspec.dev_dependencies.iter().cloned());
@@ -590,7 +604,13 @@ impl FileFilter {
             }
             return !matches!(
                 library.uri.as_str(),
-                "dart:html" | "dart:indexed_db" | "dart:js" | "dart:js_util" | "dart:svg" | "dart:web_audio" | "dart:web_gl"
+                "dart:html"
+                    | "dart:indexed_db"
+                    | "dart:js"
+                    | "dart:js_util"
+                    | "dart:svg"
+                    | "dart:web_audio"
+                    | "dart:web_gl"
             );
         }
         let Some(pubf) = &self.pub_package else {

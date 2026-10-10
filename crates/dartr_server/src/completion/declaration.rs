@@ -16,7 +16,9 @@ use dartr_typesystem::inheritance_manager3::{InheritanceManager3, NameMap};
 use dartr_typesystem::type_algebra::MapSubstitution;
 use dartr_typesystem::{TypeExt, TypeSystem, member};
 
-use super::candidate::{Candidate, ImportData, Kind, SuggestionKind, Typed, display_name, is_enum_constant};
+use super::candidate::{
+    Candidate, ImportData, Kind, SuggestionKind, Typed, display_name, is_enum_constant,
+};
 use super::target::TokenExt;
 use super::{Out, Request, elem};
 
@@ -29,7 +31,12 @@ pub struct VisibilityTracker {
 
 impl VisibilityTracker {
     /// Dart `isVisible`.
-    pub fn is_visible(&mut self, ctx: &Ctx<'_>, element: ElementId, import_data: Option<&ImportData>) -> bool {
+    pub fn is_visible(
+        &mut self,
+        ctx: &Ctx<'_>,
+        element: ElementId,
+        import_data: Option<&ImportData>,
+    ) -> bool {
         if element.tag() == Tag::Extension && ctx.element_name(element).is_none() {
             return false;
         }
@@ -149,7 +156,10 @@ fn import_prefix_name(ctx: &Ctx<'_>, import: &dartr_element::LibraryImport) -> O
 }
 
 /// The prefix element of an import.
-fn import_prefix_element(ctx: &Ctx<'_>, import: &dartr_element::LibraryImport) -> Option<ElementId> {
+fn import_prefix_element(
+    ctx: &Ctx<'_>,
+    import: &dartr_element::LibraryImport,
+) -> Option<ElementId> {
     let prefix = import.prefix?;
     ctx.fragment(prefix).element.try_get().copied()
 }
@@ -175,9 +185,8 @@ pub fn applicable_extensions(
     }
     let features = &ctx.get(library).feature_set;
     let flags = InferenceFlags {
-        generic_metadata_is_enabled: features.is_enabled(
-            dartr_parser::experimental_flags::ExperimentalFlag::GenericMetadata.name(),
-        ),
+        generic_metadata_is_enabled: features
+            .is_enabled(dartr_parser::experimental_flags::ExperimentalFlag::GenericMetadata.name()),
         inference_using_bounds_is_enabled: features.is_enabled(
             dartr_parser::experimental_flags::ExperimentalFlag::InferenceUsingBounds.name(),
         ),
@@ -452,9 +461,14 @@ impl DeclarationHelper {
                 is_type_needed,
                 false,
             ),
-            TypeKind::Record { .. } => {
-                self.add_fields_of_record_type(q, out, ty, excluded, is_keyword_needed, is_type_needed)
-            }
+            TypeKind::Record { .. } => self.add_fields_of_record_type(
+                q,
+                out,
+                ty,
+                excluded,
+                is_keyword_needed,
+                is_type_needed,
+            ),
             _ => {}
         }
     }
@@ -558,7 +572,10 @@ impl DeclarationHelper {
             parent = parent.and_then(|p| ast.parent(p));
         }
         if let Some(p) = parent {
-            if ast.is::<EnumConstantDeclaration>(p) || ast.is::<ClassMember>(p) || ast.is::<Directive>(p) {
+            if ast.is::<EnumConstantDeclaration>(p)
+                || ast.is::<ClassMember>(p)
+                || ast.is::<Directive>(p)
+            {
                 parent = ast.parent(p);
             } else if ast.is::<CompilationUnit>(p) {
                 parent = Some(containing);
@@ -615,18 +632,39 @@ impl DeclarationHelper {
                 {
                     continue;
                 }
-                self.suggest_method(q, out, ElemRef::Base(m), false, import_data, referencing, false, false);
+                self.suggest_method(
+                    q,
+                    out,
+                    ElemRef::Base(m),
+                    false,
+                    import_data,
+                    referencing,
+                    false,
+                    false,
+                );
             }
         }
         for &g in &data.getters {
             let g = g.raw();
-            if excluded.iter().any(|e| Some(e.as_str()) == ctx.element_name(g))
+            if excluded
+                .iter()
+                .any(|e| Some(e.as_str()) == ctx.element_name(g))
                 || elem::is_static(ctx, g)
                 || !elem::is_visible_in(ctx, g, q.library)
             {
                 continue;
             }
-            self.suggest_property(q, out, ElemRef::Base(g), false, import_data, referencing, false, false, false);
+            self.suggest_property(
+                q,
+                out,
+                ElemRef::Base(g),
+                false,
+                import_data,
+                referencing,
+                false,
+                false,
+                false,
+            );
         }
         if include_setters {
             for &s in &data.setters {
@@ -634,7 +672,17 @@ impl DeclarationHelper {
                 if elem::is_static(ctx, s) || !elem::is_visible_in(ctx, s, q.library) {
                     continue;
                 }
-                self.suggest_property(q, out, ElemRef::Base(s), false, import_data, referencing, false, false, false);
+                self.suggest_property(
+                    q,
+                    out,
+                    ElemRef::Base(s),
+                    false,
+                    import_data,
+                    referencing,
+                    false,
+                    false,
+                    false,
+                );
             }
         }
     }
@@ -811,7 +859,8 @@ impl DeclarationHelper {
         library: EId<LibraryElement>,
     ) {
         let ctx = q.ctx;
-        let Some(class) = elem::enclosing(ctx, redirecting).and_then(|c| c.cast::<InterfaceElement>())
+        let Some(class) =
+            elem::enclosing(ctx, redirecting).and_then(|c| c.cast::<InterfaceElement>())
         else {
             return;
         };
@@ -822,8 +871,18 @@ impl DeclarationHelper {
             if ts.is_subtype_of(ctx.interface_this_type(interface), class_type) {
                 for constructor in ctx.interface(interface).constructors.clone() {
                     let constructor = constructor.raw();
-                    if constructor != redirecting && elem::is_accessible_in(ctx, constructor, library) {
-                        self.suggest_constructor(q, out, ElemRef::Base(constructor), None, false, true, None);
+                    if constructor != redirecting
+                        && elem::is_accessible_in(ctx, constructor, library)
+                    {
+                        self.suggest_constructor(
+                            q,
+                            out,
+                            ElemRef::Base(constructor),
+                            None,
+                            false,
+                            true,
+                            None,
+                        );
                     }
                 }
             }
@@ -852,7 +911,12 @@ impl DeclarationHelper {
         };
         let data = ctx.instance(instance);
         let constructors: Vec<ElementId> = match element.cast::<InterfaceElement>() {
-            Some(i) => ctx.interface(i).constructors.iter().map(|c| c.raw()).collect(),
+            Some(i) => ctx
+                .interface(i)
+                .constructors
+                .iter()
+                .map(|c| c.raw())
+                .collect(),
             None => Vec::new(),
         };
         let getters: Vec<ElementId> = data.getters.iter().map(|g| g.raw()).collect();
@@ -860,7 +924,15 @@ impl DeclarationHelper {
         let fields: Vec<ElementId> = data.fields.iter().map(|g| g.raw()).collect();
         let methods: Vec<ElementId> = data.methods.iter().map(|g| g.raw()).collect();
         self.add_static_members(
-            q, out, &getters, &setters, &constructors, element, &fields, &methods, only_invocations,
+            q,
+            out,
+            &getters,
+            &setters,
+            &constructors,
+            element,
+            &fields,
+            &methods,
+            only_invocations,
         );
     }
 
@@ -883,7 +955,14 @@ impl DeclarationHelper {
                 .iter()
                 .map(|c| c.raw())
                 .collect();
-            self.suggest_constructors(q, out, &constructors, import, !elem::is_abstract_class(ctx, e), None);
+            self.suggest_constructors(
+                q,
+                out,
+                &constructors,
+                import,
+                !elem::is_abstract_class(ctx, e),
+                None,
+            );
         }
         for &c in &l.enums {
             let constructors: Vec<ElementId> = ctx
@@ -1028,24 +1107,57 @@ impl DeclarationHelper {
             if include_methods {
                 for &m in &data.methods {
                     let m = m.raw();
-                    if elem::is_static(ctx, m) || elem::is_operator(ctx, m) || !elem::is_visible_in(ctx, m, library) {
+                    if elem::is_static(ctx, m)
+                        || elem::is_operator(ctx, m)
+                        || !elem::is_visible_in(ctx, m, library)
+                    {
                         continue;
                     }
-                    self.suggest_method(q, out, ElemRef::Base(m), false, None, None, is_keyword_needed, is_type_needed);
+                    self.suggest_method(
+                        q,
+                        out,
+                        ElemRef::Base(m),
+                        false,
+                        None,
+                        None,
+                        is_keyword_needed,
+                        is_type_needed,
+                    );
                 }
             }
             for &g in &data.getters {
                 let g = g.raw();
-                if excluded.iter().any(|x| Some(x.as_str()) == ctx.element_name(g)) {
+                if excluded
+                    .iter()
+                    .any(|x| Some(x.as_str()) == ctx.element_name(g))
+                {
                     continue;
                 }
                 if elem::is_origin_declaration(ctx, g) {
                     if elem::is_visible_in(ctx, g, library) {
-                        self.suggest_property(q, out, ElemRef::Base(g), false, None, None, false, is_keyword_needed, is_type_needed);
+                        self.suggest_property(
+                            q,
+                            out,
+                            ElemRef::Base(g),
+                            false,
+                            None,
+                            None,
+                            false,
+                            is_keyword_needed,
+                            is_type_needed,
+                        );
                     }
                 } else if let Some(v) = elem::accessor_variable(ctx, g) {
                     if v.tag() == Tag::Field && elem::is_visible_in(ctx, v, library) {
-                        self.suggest_field(q, out, ElemRef::Base(v), None, false, is_keyword_needed, is_type_needed);
+                        self.suggest_field(
+                            q,
+                            out,
+                            ElemRef::Base(v),
+                            None,
+                            false,
+                            is_keyword_needed,
+                            is_type_needed,
+                        );
                     }
                 }
             }
@@ -1055,7 +1167,17 @@ impl DeclarationHelper {
                     if elem::is_origin_variable(ctx, s) || !elem::is_visible_in(ctx, s, library) {
                         continue;
                     }
-                    self.suggest_property(q, out, ElemRef::Base(s), false, None, None, false, false, false);
+                    self.suggest_property(
+                        q,
+                        out,
+                        ElemRef::Base(s),
+                        false,
+                        None,
+                        None,
+                        false,
+                        false,
+                        false,
+                    );
                 }
             }
         }
@@ -1131,7 +1253,14 @@ impl DeclarationHelper {
         for field in ctx.list(named) {
             let name = ctx.name_str(field.name).to_string();
             if !excluded.contains(&name) {
-                self.suggest_record_field(q, out, field.ty, name, is_keyword_needed, is_type_needed);
+                self.suggest_record_field(
+                    q,
+                    out,
+                    field.ty,
+                    name,
+                    is_keyword_needed,
+                    is_type_needed,
+                );
             }
         }
     }
@@ -1158,7 +1287,10 @@ impl DeclarationHelper {
             };
             let prefix = import_prefix_name(ctx, import);
             if std::env::var_os("DARTR_DEBUG_COMPLETION").is_some() {
-                eprintln!("IMPORT {} prefix={prefix:?}", elem::library_uri(ctx, library));
+                eprintln!(
+                    "IMPORT {} prefix={prefix:?}",
+                    elem::library_uri(ctx, library)
+                );
                 for (n, _) in &names {
                     eprintln!("  {n}");
                 }
@@ -1306,17 +1438,46 @@ impl DeclarationHelper {
                         if elem::is_operator(ctx, base) {
                             continue;
                         }
-                        self.suggest_method(q, out, m, false, None, referencing, is_keyword_needed, is_type_needed);
+                        self.suggest_method(
+                            q,
+                            out,
+                            m,
+                            false,
+                            None,
+                            referencing,
+                            is_keyword_needed,
+                            is_type_needed,
+                        );
                     }
                 }
                 Tag::Getter => {
                     if !excluded.contains(&name) {
-                        self.suggest_property(q, out, m, false, None, referencing, false, is_keyword_needed, is_type_needed);
+                        self.suggest_property(
+                            q,
+                            out,
+                            m,
+                            false,
+                            None,
+                            referencing,
+                            false,
+                            is_keyword_needed,
+                            is_type_needed,
+                        );
                     }
                 }
                 Tag::Setter => {
                     if include_setters {
-                        self.suggest_property(q, out, m, false, None, referencing, false, false, false);
+                        self.suggest_property(
+                            q,
+                            out,
+                            m,
+                            false,
+                            None,
+                            referencing,
+                            false,
+                            false,
+                            false,
+                        );
                     }
                 }
                 _ => {}
@@ -1324,12 +1485,23 @@ impl DeclarationHelper {
         }
         let all_supertypes = ctx.element_all_supertypes(element);
         let is_function = ctx.is_dart_core_function(ty);
-        if (is_function && !only_super) || all_supertypes.iter().any(|t| ctx.is_dart_core_function(*t)) {
+        if (is_function && !only_super)
+            || all_supertypes.iter().any(|t| ctx.is_dart_core_function(*t))
+        {
             let d = TypeId::DYNAMIC;
             let function_type = ctx.function_type(&[], &[], d, Nullability::None, None);
             self.suggest_function_call(q, out, function_type, None);
         }
-        self.add_extension_members(q, out, ty, excluded, include_methods, include_setters, is_keyword_needed, is_type_needed);
+        self.add_extension_members(
+            q,
+            out,
+            ty,
+            excluded,
+            include_methods,
+            include_setters,
+            is_keyword_needed,
+            is_type_needed,
+        );
         self.ops.push(NotImportedOp::InstanceExtensionMembers {
             ty,
             excluded_getters: excluded.to_vec(),
@@ -1339,7 +1511,12 @@ impl DeclarationHelper {
     }
 
     /// Dart `_addLocalDeclarations`.
-    fn add_local_declarations(&mut self, q: &Request<'_, '_>, out: &mut Out, node: NodeId) -> Option<NodeId> {
+    fn add_local_declarations(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        node: NodeId,
+    ) -> Option<NodeId> {
         let ast = q.ast;
         let mut previous: Option<NodeId> = None;
         let mut current = Some(node);
@@ -1357,7 +1534,9 @@ impl DeclarationHelper {
                     self.visit_parameter_list(q, out, Some(ast[d].parameters));
                     return Some(c);
                 }
-                NodeKind::DeclaredVariablePattern => self.visit_declared_variable_pattern(q, out, c),
+                NodeKind::DeclaredVariablePattern => {
+                    self.visit_declared_variable_pattern(q, out, c)
+                }
                 NodeKind::FieldDeclaration => return Some(c),
                 NodeKind::ForElement => {
                     let f = ast.cast::<ForElement>(c).unwrap();
@@ -1403,7 +1582,10 @@ impl DeclarationHelper {
                 }
                 NodeKind::IfElement => {
                     let n = ast.cast::<IfElement>(c).unwrap();
-                    if ast[n].else_keyword.is_none_or(|e| q.offset < ast.t_offset(e)) {
+                    if ast[n]
+                        .else_keyword
+                        .is_none_or(|e| q.offset < ast.t_offset(e))
+                    {
                         if let Some(cc) = ast[n].case_clause {
                             let pattern = ast[ast[cc].guarded_pattern].pattern;
                             self.visit_pattern(q, out, pattern.raw());
@@ -1412,7 +1594,10 @@ impl DeclarationHelper {
                 }
                 NodeKind::IfStatement => {
                     let n = ast.cast::<IfStatement>(c).unwrap();
-                    if ast[n].else_keyword.is_none_or(|e| q.offset < ast.t_offset(e)) {
+                    if ast[n]
+                        .else_keyword
+                        .is_none_or(|e| q.offset < ast.t_offset(e))
+                    {
                         if let Some(cc) = ast[n].case_clause {
                             let pattern = ast[ast[cc].guarded_pattern].pattern;
                             self.visit_pattern(q, out, pattern.raw());
@@ -1469,7 +1654,12 @@ impl DeclarationHelper {
     }
 
     /// Dart `_addLocalTypes`.
-    fn add_local_types(&mut self, q: &Request<'_, '_>, out: &mut Out, node: NodeId) -> Option<NodeId> {
+    fn add_local_types(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        node: NodeId,
+    ) -> Option<NodeId> {
         let ast = q.ast;
         let mut current = Some(node);
         while let Some(c) = current {
@@ -1513,7 +1703,12 @@ impl DeclarationHelper {
     }
 
     /// Dart `_addMembersOfEnclosingInstance`.
-    fn add_members_of_enclosing_instance(&mut self, q: &Request<'_, '_>, out: &mut Out, element: ElementId) {
+    fn add_members_of_enclosing_instance(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        element: ElementId,
+    ) {
         let ctx = q.ctx;
         let Some(instance) = element.cast::<dartr_element::InstanceElement>() else {
             return;
@@ -1530,18 +1725,39 @@ impl DeclarationHelper {
             if (elem::is_origin_declaration(ctx, g) || is_enum_values)
                 && (!must_be_static || elem::is_static(ctx, g))
             {
-                self.suggest_property(q, out, ElemRef::Base(g), false, None, referencing, true, false, false);
+                self.suggest_property(
+                    q,
+                    out,
+                    ElemRef::Base(g),
+                    false,
+                    None,
+                    referencing,
+                    true,
+                    false,
+                    false,
+                );
             }
         }
         for &s in &data.setters.clone() {
             let s = s.raw();
             if elem::is_origin_declaration(ctx, s) && (!must_be_static || elem::is_static(ctx, s)) {
-                self.suggest_property(q, out, ElemRef::Base(s), false, None, referencing, true, false, false);
+                self.suggest_property(
+                    q,
+                    out,
+                    ElemRef::Base(s),
+                    false,
+                    None,
+                    referencing,
+                    true,
+                    false,
+                    false,
+                );
             }
         }
         for &f in &data.fields.clone() {
             let f = f.raw();
-            if (elem::is_origin_declaration(ctx, f) || elem::is_origin_declaring_formal_parameter(ctx, f))
+            if (elem::is_origin_declaration(ctx, f)
+                || elem::is_origin_declaring_formal_parameter(ctx, f))
                 && (!must_be_static || elem::is_static(ctx, f))
             {
                 self.suggest_field(q, out, ElemRef::Base(f), referencing, true, false, false);
@@ -1550,7 +1766,16 @@ impl DeclarationHelper {
         for &m in &data.methods.clone() {
             let m = m.raw();
             if !must_be_static || elem::is_static(ctx, m) {
-                self.suggest_method(q, out, ElemRef::Base(m), false, None, referencing, false, false);
+                self.suggest_method(
+                    q,
+                    out,
+                    ElemRef::Base(m),
+                    false,
+                    None,
+                    referencing,
+                    false,
+                    false,
+                );
             }
         }
         let this_type = instance_this_type(ctx, element);
@@ -1567,7 +1792,12 @@ impl DeclarationHelper {
     }
 
     /// Dart `_addMembersOfEnclosingNode`.
-    fn add_members_of_enclosing_node(&mut self, q: &Request<'_, '_>, out: &mut Out, declaration: NodeId) {
+    fn add_members_of_enclosing_node(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        declaration: NodeId,
+    ) {
         let ast = q.ast;
         let ctx = q.ctx;
         let Some(element) = q.declared_element(declaration) else {
@@ -1575,7 +1805,11 @@ impl DeclarationHelper {
         };
         let type_params = |e: ElementId| -> Vec<ElementId> {
             if let Some(i) = e.cast::<dartr_element::InstanceElement>() {
-                ctx.instance(i).type_params.iter().map(|p| p.raw()).collect()
+                ctx.instance(i)
+                    .type_params
+                    .iter()
+                    .map(|p| p.raw())
+                    .collect()
             } else if let Some(a) = e.cast::<dartr_element::TypeAliasElement>() {
                 ctx.get(a).type_params.iter().map(|p| p.raw()).collect()
             } else {
@@ -1626,22 +1860,44 @@ impl DeclarationHelper {
     ) {
         let ctx = q.ctx;
         let library = q.library;
-        let is_function_like = |t: TypeId| {
-            matches!(ctx.ty(t), TypeKind::Function(_)) || ctx.is_dart_core_function(t)
-        };
+        let is_function_like =
+            |t: TypeId| matches!(ctx.ty(t), TypeKind::Function(_)) || ctx.is_dart_core_function(t);
         for &g in getters {
             if elem::is_static(ctx, g)
                 && elem::is_origin_declaration(ctx, g)
                 && elem::is_visible_in(ctx, g, library)
-                && (!only_invocations || is_function_like(member::return_type(ctx, ElemRef::Base(g))))
+                && (!only_invocations
+                    || is_function_like(member::return_type(ctx, ElemRef::Base(g))))
             {
-                self.suggest_property(q, out, ElemRef::Base(g), false, None, None, false, false, false);
+                self.suggest_property(
+                    q,
+                    out,
+                    ElemRef::Base(g),
+                    false,
+                    None,
+                    None,
+                    false,
+                    false,
+                    false,
+                );
             }
         }
         for &s in setters {
-            if elem::is_static(ctx, s) && elem::is_origin_declaration(ctx, s) && elem::is_visible_in(ctx, s, library)
+            if elem::is_static(ctx, s)
+                && elem::is_origin_declaration(ctx, s)
+                && elem::is_visible_in(ctx, s, library)
             {
-                self.suggest_property(q, out, ElemRef::Base(s), false, None, None, false, false, false);
+                self.suggest_property(
+                    q,
+                    out,
+                    ElemRef::Base(s),
+                    false,
+                    None,
+                    None,
+                    false,
+                    false,
+                    false,
+                );
             }
         }
         for &f in fields {
@@ -1654,7 +1910,10 @@ impl DeclarationHelper {
                     let enum_name = elem::enclosing(ctx, f)
                         .and_then(|e| ctx.element_name(e))
                         .unwrap_or("");
-                    let score = out.score(&format!("{enum_name}.{}", ctx.element_name(f).unwrap_or("")));
+                    let score = out.score(&format!(
+                        "{enum_name}.{}",
+                        ctx.element_name(f).unwrap_or("")
+                    ));
                     if score != -1.0 {
                         out.add(Candidate::new(
                             Kind::EnumConstant {
@@ -1670,10 +1929,13 @@ impl DeclarationHelper {
             }
         }
         if !self.cfg.must_be_assignable {
-            let allow_non_factory = (containing.tag() == Tag::Class && !elem::is_abstract_class(ctx, containing))
+            let allow_non_factory = (containing.tag() == Tag::Class
+                && !elem::is_abstract_class(ctx, containing))
                 || containing.tag() == Tag::ExtensionType;
             for &c in constructors {
-                if elem::is_visible_in(ctx, c, library) && (allow_non_factory || elem::is_factory(ctx, c)) {
+                if elem::is_visible_in(ctx, c, library)
+                    && (allow_non_factory || elem::is_factory(ctx, c))
+                {
                     self.suggest_constructor(q, out, ElemRef::Base(c), None, true, false, None);
                 }
             }
@@ -1712,7 +1974,9 @@ impl DeclarationHelper {
             }
             for &e in &l.setters {
                 let e = e.raw();
-                if elem::is_origin_declaration(ctx, e) && elem::corresponding_getter(ctx, e).is_none() {
+                if elem::is_origin_declaration(ctx, e)
+                    && elem::corresponding_getter(ctx, e).is_none()
+                {
                     self.suggest_top_level_property(q, out, e, None);
                 }
             }
@@ -1778,7 +2042,9 @@ impl DeclarationHelper {
             }
         }
         if dartr_resolver::element_metadata::is_protected(ctx, base, None) {
-            let Some(interface) = elem::enclosing(ctx, base).and_then(|e| e.cast::<InterfaceElement>()) else {
+            let Some(interface) =
+                elem::enclosing(ctx, base).and_then(|e| e.cast::<InterfaceElement>())
+            else {
                 return false;
             };
             if library != Some(q.library) {
@@ -1791,7 +2057,9 @@ impl DeclarationHelper {
                 }
             }
         }
-        if dartr_resolver::element_metadata::is_visible_for_testing(ctx, base, None) && library != Some(q.library) {
+        if dartr_resolver::element_metadata::is_visible_for_testing(ctx, base, None)
+            && library != Some(q.library)
+        {
             if let Some(root) = &q.package_root {
                 let path = library.map(|l| q.library_path(l)).unwrap_or_default();
                 if !path.starts_with(root.as_str()) {
@@ -1831,7 +2099,13 @@ impl DeclarationHelper {
         }
     }
 
-    fn suggest_class(&mut self, q: &Request<'_, '_>, out: &mut Out, element: ElementId, import: Option<&ImportData>) {
+    fn suggest_class(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        element: ElementId,
+        import: Option<&ImportData>,
+    ) {
         let ctx = q.ctx;
         if !self.visible(q, element, import) {
             return;
@@ -1847,18 +2121,41 @@ impl DeclarationHelper {
         if self.cfg.must_be_mixable && other_library && !flags.mixable_outside {
             return;
         }
-        if !(self.cfg.must_be_constant && !self.cfg.object_pattern_allowed) && !self.cfg.exclude_type_names {
+        if !(self.cfg.must_be_constant && !self.cfg.object_pattern_allowed)
+            && !self.cfg.exclude_type_names
+        {
             let score = out.score(&display_name(ctx, element));
             if score != -1.0 {
-                out.add(Candidate::with_import(Kind::Class(element), import.cloned(), score));
+                out.add(Candidate::with_import(
+                    Kind::Class(element),
+                    import.cloned(),
+                    score,
+                ));
             }
         }
         if !self.cfg.must_be_type {
             let interface = element.cast::<InterfaceElement>().unwrap();
-            let fields: Vec<ElementId> = ctx.instance(interface.raw().cast().unwrap()).fields.iter().map(|f| f.raw()).collect();
+            let fields: Vec<ElementId> = ctx
+                .instance(interface.raw().cast().unwrap())
+                .fields
+                .iter()
+                .map(|f| f.raw())
+                .collect();
             self.suggest_static_fields(q, out, &fields, import);
-            let constructors: Vec<ElementId> = ctx.interface(interface).constructors.iter().map(|c| c.raw()).collect();
-            self.suggest_constructors(q, out, &constructors, import, !elem::is_abstract_class(ctx, element), None);
+            let constructors: Vec<ElementId> = ctx
+                .interface(interface)
+                .constructors
+                .iter()
+                .map(|c| c.raw())
+                .collect();
+            self.suggest_constructors(
+                q,
+                out,
+                &constructors,
+                import,
+                !elem::is_abstract_class(ctx, element),
+                None,
+            );
         }
     }
 
@@ -1929,7 +2226,8 @@ impl DeclarationHelper {
                 has_class_name,
                 is_tear_off,
                 is_redirect,
-                suggest_unnamed_as_new: self.cfg.suggest_unnamed_as_new || self.cfg.prefer_non_invocation,
+                suggest_unnamed_as_new: self.cfg.suggest_unnamed_as_new
+                    || self.cfg.prefer_non_invocation,
                 kind: if is_tear_off || is_redirect {
                     SuggestionKind::Identifier
                 } else {
@@ -1966,20 +2264,36 @@ impl DeclarationHelper {
         }
     }
 
-    fn suggest_enum(&mut self, q: &Request<'_, '_>, out: &mut Out, element: ElementId, import: Option<&ImportData>) {
+    fn suggest_enum(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        element: ElementId,
+        import: Option<&ImportData>,
+    ) {
         let ctx = q.ctx;
         if !self.visible(q, element, import) {
             return;
         }
-        if self.cfg.must_be_extendable || self.cfg.must_be_implementable || self.cfg.must_be_mixable {
+        if self.cfg.must_be_extendable || self.cfg.must_be_implementable || self.cfg.must_be_mixable
+        {
             return;
         }
         let score = out.score(&display_name(ctx, element));
         if score != -1.0 {
-            out.add(Candidate::with_import(Kind::Enum(element), import.cloned(), score));
+            out.add(Candidate::with_import(
+                Kind::Enum(element),
+                import.cloned(),
+                score,
+            ));
         }
         if !self.cfg.must_be_type {
-            let fields: Vec<ElementId> = ctx.instance(element.cast().unwrap()).fields.iter().map(|f| f.raw()).collect();
+            let fields: Vec<ElementId> = ctx
+                .instance(element.cast().unwrap())
+                .fields
+                .iter()
+                .map(|f| f.raw())
+                .collect();
             self.suggest_static_fields(q, out, &fields, import);
             let constructors: Vec<ElementId> = ctx
                 .interface(element.cast().unwrap())
@@ -1991,12 +2305,19 @@ impl DeclarationHelper {
         }
     }
 
-    fn suggest_extension(&mut self, q: &Request<'_, '_>, out: &mut Out, element: ElementId, import: Option<&ImportData>) {
+    fn suggest_extension(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        element: ElementId,
+        import: Option<&ImportData>,
+    ) {
         let ctx = q.ctx;
         if !self.visible(q, element, import) {
             return;
         }
-        if self.cfg.must_be_extendable || self.cfg.must_be_implementable || self.cfg.must_be_mixable {
+        if self.cfg.must_be_extendable || self.cfg.must_be_implementable || self.cfg.must_be_mixable
+        {
             return;
         }
         let score = out.score(&display_name(ctx, element));
@@ -2011,25 +2332,46 @@ impl DeclarationHelper {
             ));
         }
         if !self.cfg.must_be_type {
-            let fields: Vec<ElementId> = ctx.instance(element.cast().unwrap()).fields.iter().map(|f| f.raw()).collect();
+            let fields: Vec<ElementId> = ctx
+                .instance(element.cast().unwrap())
+                .fields
+                .iter()
+                .map(|f| f.raw())
+                .collect();
             self.suggest_static_fields(q, out, &fields, import);
         }
     }
 
-    fn suggest_extension_type(&mut self, q: &Request<'_, '_>, out: &mut Out, element: ElementId, import: Option<&ImportData>) {
+    fn suggest_extension_type(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        element: ElementId,
+        import: Option<&ImportData>,
+    ) {
         let ctx = q.ctx;
         if !self.visible(q, element, import) {
             return;
         }
-        if self.cfg.must_be_extendable || self.cfg.must_be_implementable || self.cfg.must_be_mixable {
+        if self.cfg.must_be_extendable || self.cfg.must_be_implementable || self.cfg.must_be_mixable
+        {
             return;
         }
         let score = out.score(&display_name(ctx, element));
         if score != -1.0 {
-            out.add(Candidate::with_import(Kind::ExtensionType(element), import.cloned(), score));
+            out.add(Candidate::with_import(
+                Kind::ExtensionType(element),
+                import.cloned(),
+                score,
+            ));
         }
         if !self.cfg.must_be_type {
-            let fields: Vec<ElementId> = ctx.instance(element.cast().unwrap()).fields.iter().map(|f| f.raw()).collect();
+            let fields: Vec<ElementId> = ctx
+                .instance(element.cast().unwrap())
+                .fields
+                .iter()
+                .map(|f| f.raw())
+                .collect();
             self.suggest_static_fields(q, out, &fields, import);
             let constructors: Vec<ElementId> = ctx
                 .interface(element.cast().unwrap())
@@ -2078,7 +2420,13 @@ impl DeclarationHelper {
     }
 
     /// Dart `_suggestFunctionCall`.
-    fn suggest_function_call(&mut self, q: &Request<'_, '_>, out: &mut Out, ty: TypeId, element: Option<ElemRef>) {
+    fn suggest_function_call(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        ty: TypeId,
+        element: Option<ElemRef>,
+    ) {
         let score = out.score("call");
         if score != -1.0 {
             out.add(Candidate::new(
@@ -2102,8 +2450,14 @@ impl DeclarationHelper {
         if element.tag() != Tag::LocalFunction || !self.visible(q, element, None) {
             return;
         }
-        let returns_void = matches!(ctx.ty(member::return_type(ctx, ElemRef::Base(element))), TypeKind::Void);
-        if self.cfg.must_be_assignable || self.cfg.must_be_constant || (self.cfg.must_be_non_void && returns_void) {
+        let returns_void = matches!(
+            ctx.ty(member::return_type(ctx, ElemRef::Base(element))),
+            TypeKind::Void
+        );
+        if self.cfg.must_be_assignable
+            || self.cfg.must_be_constant
+            || (self.cfg.must_be_non_void && returns_void)
+        {
             return;
         }
         if is_wildcard(ctx.element_name(element)) {
@@ -2235,7 +2589,13 @@ impl DeclarationHelper {
         ));
     }
 
-    fn suggest_mixin(&mut self, q: &Request<'_, '_>, out: &mut Out, element: ElementId, import: Option<&ImportData>) {
+    fn suggest_mixin(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        element: ElementId,
+        import: Option<&ImportData>,
+    ) {
         let ctx = q.ctx;
         if !self.visible(q, element, import) {
             return;
@@ -2251,10 +2611,19 @@ impl DeclarationHelper {
         }
         let score = out.score(&display_name(ctx, element));
         if score != -1.0 {
-            out.add(Candidate::with_import(Kind::Mixin(element), import.cloned(), score));
+            out.add(Candidate::with_import(
+                Kind::Mixin(element),
+                import.cloned(),
+                score,
+            ));
         }
         if !self.cfg.must_be_type {
-            let fields: Vec<ElementId> = ctx.instance(element.cast().unwrap()).fields.iter().map(|f| f.raw()).collect();
+            let fields: Vec<ElementId> = ctx
+                .instance(element.cast().unwrap())
+                .fields
+                .iter()
+                .map(|f| f.raw())
+                .collect();
             self.suggest_static_fields(q, out, &fields, import);
         }
     }
@@ -2271,7 +2640,10 @@ impl DeclarationHelper {
         if score != -1.0 {
             let distance = self.variable_distance;
             self.variable_distance += 1;
-            out.add(Candidate::new(Kind::FormalParameter { element, distance }, score));
+            out.add(Candidate::new(
+                Kind::FormalParameter { element, distance },
+                score,
+            ));
         }
     }
 
@@ -2296,7 +2668,9 @@ impl DeclarationHelper {
         }
         let is_getter = base.tag() == Tag::Getter;
         let returns_void = matches!(ctx.ty(member::return_type(ctx, accessor)), TypeKind::Void);
-        if (self.cfg.must_be_assignable && is_getter && elem::corresponding_setter(ctx, base).is_none())
+        if (self.cfg.must_be_assignable
+            && is_getter
+            && elem::corresponding_setter(ctx, base).is_none())
             || self.cfg.must_be_constant
             || (self.cfg.must_be_non_void && returns_void)
         {
@@ -2393,13 +2767,20 @@ impl DeclarationHelper {
     }
 
     /// Dart `_suggestStaticField`.
-    fn suggest_static_field(&mut self, q: &Request<'_, '_>, out: &mut Out, element: ElementId, import: Option<&ImportData>) {
+    fn suggest_static_field(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        element: ElementId,
+        import: Option<&ImportData>,
+    ) {
         let ctx = q.ctx;
         let enclosing_is_enum = elem::enclosing(ctx, element).is_some_and(|e| e.tag() == Tag::Enum);
         let enum_constant = is_enum_constant(ctx, element);
         if !elem::is_static(ctx, element)
             || (self.cfg.must_be_assignable
-                && !(elem::is_final_variable(ctx, element) || elem::is_const_variable(ctx, element)))
+                && !(elem::is_final_variable(ctx, element)
+                    || elem::is_const_variable(ctx, element)))
             || (self.cfg.must_be_constant && !elem::is_const_variable(ctx, element))
             || (!enum_constant && enclosing_is_enum)
         {
@@ -2436,7 +2817,9 @@ impl DeclarationHelper {
         if elem::is_origin_getter_setter(ctx, element) {
             if let Some(getter) = elem::variable_getter(ctx, element) {
                 if elem::is_origin_variable(ctx, getter) {
-                    if let Some(v) = elem::accessor_variable(ctx, getter).filter(|v| v.tag() == Tag::Field) {
+                    if let Some(v) =
+                        elem::accessor_variable(ctx, getter).filter(|v| v.tag() == Tag::Field)
+                    {
                         out.add(Candidate::new(
                             Kind::Field {
                                 element: ElemRef::Base(v),
@@ -2461,11 +2844,21 @@ impl DeclarationHelper {
                 }
             }
         } else {
-            out.add(Candidate::with_import(Kind::StaticField(element), import.cloned(), score));
+            out.add(Candidate::with_import(
+                Kind::StaticField(element),
+                import.cloned(),
+                score,
+            ));
         }
     }
 
-    fn suggest_static_fields(&mut self, q: &Request<'_, '_>, out: &mut Out, fields: &[ElementId], import: Option<&ImportData>) {
+    fn suggest_static_fields(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        fields: &[ElementId],
+        import: Option<&ImportData>,
+    ) {
         for &f in fields {
             if elem::is_visible_in(q.ctx, f, q.library) {
                 self.suggest_static_field(q, out, f, import);
@@ -2480,13 +2873,25 @@ impl DeclarationHelper {
         }
     }
 
-    fn suggest_top_level_function(&mut self, q: &Request<'_, '_>, out: &mut Out, element: ElementId, import: Option<&ImportData>) {
+    fn suggest_top_level_function(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        element: ElementId,
+        import: Option<&ImportData>,
+    ) {
         let ctx = q.ctx;
         if !self.visible(q, element, import) {
             return;
         }
-        let returns_void = matches!(ctx.ty(member::return_type(ctx, ElemRef::Base(element))), TypeKind::Void);
-        if self.cfg.must_be_assignable || (self.cfg.must_be_non_void && returns_void) || self.cfg.must_be_type {
+        let returns_void = matches!(
+            ctx.ty(member::return_type(ctx, ElemRef::Base(element))),
+            TypeKind::Void
+        );
+        if self.cfg.must_be_assignable
+            || (self.cfg.must_be_non_void && returns_void)
+            || self.cfg.must_be_type
+        {
             return;
         }
         let score = out.score(&display_name(ctx, element));
@@ -2516,15 +2921,25 @@ impl DeclarationHelper {
         ));
     }
 
-    fn suggest_top_level_property(&mut self, q: &Request<'_, '_>, out: &mut Out, element: ElementId, import: Option<&ImportData>) {
+    fn suggest_top_level_property(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        element: ElementId,
+        import: Option<&ImportData>,
+    ) {
         let ctx = q.ctx;
         if !self.visible(q, element, import) {
             return;
         }
         let is_getter = element.tag() == Tag::Getter;
-        let returns_void =
-            matches!(ctx.ty(member::return_type(ctx, ElemRef::Base(element))), TypeKind::Void);
-        if (self.cfg.must_be_assignable && is_getter && elem::corresponding_setter(ctx, element).is_none())
+        let returns_void = matches!(
+            ctx.ty(member::return_type(ctx, ElemRef::Base(element))),
+            TypeKind::Void
+        );
+        if (self.cfg.must_be_assignable
+            && is_getter
+            && elem::corresponding_setter(ctx, element).is_none())
             || (self.cfg.must_be_constant && !elem::accessor_is_const(ctx, element))
             || (self.cfg.must_be_non_void && returns_void)
             || self.cfg.must_be_type
@@ -2539,7 +2954,13 @@ impl DeclarationHelper {
         }
     }
 
-    fn suggest_top_level_variable(&mut self, q: &Request<'_, '_>, out: &mut Out, element: ElementId, import: Option<&ImportData>) {
+    fn suggest_top_level_variable(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        element: ElementId,
+        import: Option<&ImportData>,
+    ) {
         let ctx = q.ctx;
         if !self.visible(q, element, import) {
             return;
@@ -2552,18 +2973,32 @@ impl DeclarationHelper {
         }
         let score = out.score(&display_name(ctx, element));
         if score != -1.0 {
-            out.add(Candidate::with_import(Kind::TopLevelVariable(element), import.cloned(), score));
+            out.add(Candidate::with_import(
+                Kind::TopLevelVariable(element),
+                import.cloned(),
+                score,
+            ));
         }
     }
 
-    fn suggest_type_alias(&mut self, q: &Request<'_, '_>, out: &mut Out, element: ElementId, import: Option<&ImportData>) {
+    fn suggest_type_alias(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        element: ElementId,
+        import: Option<&ImportData>,
+    ) {
         let ctx = q.ctx;
         if !self.visible(q, element, import) {
             return;
         }
         let score = out.score(&display_name(ctx, element));
         if score != -1.0 {
-            out.add(Candidate::with_import(Kind::TypeAlias(element), import.cloned(), score));
+            out.add(Candidate::with_import(
+                Kind::TypeAlias(element),
+                import.cloned(),
+                score,
+            ));
         }
         if !self.cfg.must_be_type {
             self.add_constructors_for_aliased_element(q, out, element, import);
@@ -2581,7 +3016,12 @@ impl DeclarationHelper {
         }
     }
 
-    fn suggest_type_parameters(&mut self, q: &Request<'_, '_>, out: &mut Out, params: &[ElementId]) {
+    fn suggest_type_parameters(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        params: &[ElementId],
+    ) {
         for &p in params {
             if !is_wildcard(q.ctx.element_name(p)) {
                 self.suggest_type_parameter(q, out, p);
@@ -2604,7 +3044,10 @@ impl DeclarationHelper {
         if score != -1.0 {
             let distance = self.variable_distance;
             self.variable_distance += 1;
-            out.add(Candidate::new(Kind::LocalVariable { element, distance }, score));
+            out.add(Candidate::new(
+                Kind::LocalVariable { element, distance },
+                score,
+            ));
         }
     }
 
@@ -2623,7 +3066,12 @@ impl DeclarationHelper {
         }
     }
 
-    fn visit_comment_reference(&mut self, q: &Request<'_, '_>, out: &mut Out, node: NodeId) -> Option<NodeId> {
+    fn visit_comment_reference(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        node: NodeId,
+    ) -> Option<NodeId> {
         let ast = q.ast;
         let comment = ast.parent(node);
         let member = comment.and_then(|c| ast.parent(c));
@@ -2645,7 +3093,12 @@ impl DeclarationHelper {
         comment
     }
 
-    fn visit_declared_variable_pattern(&mut self, q: &Request<'_, '_>, out: &mut Out, node: NodeId) {
+    fn visit_declared_variable_pattern(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        node: NodeId,
+    ) {
         if let Some(e) = q.declared_element(node) {
             self.suggest_variable(q, out, e);
         }
@@ -2674,7 +3127,12 @@ impl DeclarationHelper {
         }
     }
 
-    fn visit_parameter_list(&mut self, q: &Request<'_, '_>, out: &mut Out, list: Option<Id<FormalParameterList>>) {
+    fn visit_parameter_list(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        list: Option<Id<FormalParameterList>>,
+    ) {
         let ast = q.ast;
         let Some(list) = list else {
             return;
@@ -2693,7 +3151,9 @@ impl DeclarationHelper {
                 let p = ast.cast::<CastPattern>(pattern).unwrap();
                 self.visit_pattern(q, out, ast[p].pattern.raw());
             }
-            NodeKind::DeclaredVariablePattern => self.visit_declared_variable_pattern(q, out, pattern),
+            NodeKind::DeclaredVariablePattern => {
+                self.visit_declared_variable_pattern(q, out, pattern)
+            }
             NodeKind::ListPattern => {
                 let p = ast.cast::<ListPattern>(pattern).unwrap();
                 for &e in ast.list_raw(ast[p].elements) {
@@ -2757,7 +3217,13 @@ impl DeclarationHelper {
     }
 
     /// Dart `_visitStatements`.
-    fn visit_statements(&mut self, q: &Request<'_, '_>, out: &mut Out, statements: &[NodeId], child: Option<NodeId>) {
+    fn visit_statements(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        statements: &[NodeId],
+        child: Option<NodeId>,
+    ) {
         let ast = q.ast;
         for &statement in statements.iter().rev() {
             if Some(statement) == child {
@@ -2793,7 +3259,13 @@ impl DeclarationHelper {
         }
     }
 
-    fn visit_switch_pattern_case(&mut self, q: &Request<'_, '_>, out: &mut Out, node: NodeId, child: Option<NodeId>) {
+    fn visit_switch_pattern_case(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        node: NodeId,
+        child: Option<NodeId>,
+    ) {
         let ast = q.ast;
         let c = ast.cast::<SwitchPatternCase>(node).unwrap();
         if q.offset < ast.t_end(ast[c].colon) {
@@ -2803,7 +3275,10 @@ impl DeclarationHelper {
         self.visit_statements(q, out, &statements, child);
         let pattern = ast[ast[c].guarded_pattern].pattern;
         self.visit_pattern(q, out, pattern.raw());
-        if let Some(s) = ast.parent(node).and_then(|p| ast.cast::<SwitchStatement>(p)) {
+        if let Some(s) = ast
+            .parent(node)
+            .and_then(|p| ast.cast::<SwitchStatement>(p))
+        {
             let members = ast.list_raw(ast[s].members);
             if let Some(index) = members.iter().position(|m| *m == node) {
                 for &m in members[..index].iter().rev() {
@@ -2819,7 +3294,12 @@ impl DeclarationHelper {
         }
     }
 
-    fn visit_type_parameter_list(&mut self, q: &Request<'_, '_>, out: &mut Out, list: Option<Id<TypeParameterList>>) {
+    fn visit_type_parameter_list(
+        &mut self,
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        list: Option<Id<TypeParameterList>>,
+    ) {
         let ast = q.ast;
         let Some(list) = list else {
             return;
@@ -2840,7 +3320,10 @@ impl DeclarationHelper {
 fn is_local_variable(e: ElementId) -> bool {
     matches!(
         e.tag(),
-        Tag::LocalVariable | Tag::PatternVariable | Tag::BindPatternVariable | Tag::JoinPatternVariable
+        Tag::LocalVariable
+            | Tag::PatternVariable
+            | Tag::BindPatternVariable
+            | Tag::JoinPatternVariable
     )
 }
 
@@ -2877,8 +3360,9 @@ fn extension_type_representation(ctx: &Ctx<'_>, element: ElementId) -> Option<El
 /// Dart `ClassElement.isExactState` (Flutter `State`).
 fn is_exact_state(ctx: &Ctx<'_>, class: ElementId) -> bool {
     ctx.element_name(class) == Some("State")
-        && elem::library_of(ctx, class)
-            .is_some_and(|l| elem::library_uri(ctx, l) == "package:flutter/src/widgets/framework.dart")
+        && elem::library_of(ctx, class).is_some_and(|l| {
+            elem::library_uri(ctx, l) == "package:flutter/src/widgets/framework.dart"
+        })
 }
 
 /// The class modifiers that completion reads.

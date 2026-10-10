@@ -252,12 +252,18 @@ const DART_COMPLETION_TRIGGER_CHARACTERS: &[&str] = &[".", "=", "(", "$", "\"", 
 /// files.
 fn completion_options(config: &LspClientConfiguration) -> Map<String, Value> {
     let mut m = Map::new();
-    m.insert("triggerCharacters".into(), json!(DART_COMPLETION_TRIGGER_CHARACTERS));
+    m.insert(
+        "triggerCharacters".into(),
+        json!(DART_COMPLETION_TRIGGER_CHARACTERS),
+    );
     if config.global().preview_commit_characters() {
         m.insert("allCommitCharacters".into(), json!(["("]));
     }
     m.insert("resolveProvider".into(), json!(true));
-    m.insert("completionItem".into(), json!({"labelDetailsSupport": true}));
+    m.insert(
+        "completionItem".into(),
+        json!({"labelDetailsSupport": true}),
+    );
     m
 }
 

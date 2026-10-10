@@ -81,7 +81,10 @@ fn in_static_context(ast: &Ast, node: NodeId) -> bool {
                 .is_some_and(|k| ast.t_lexeme(k) == "static");
         }
         if ast.is::<FunctionBody>(e) {
-            if let Some(c) = ast.parent(e).and_then(|p| ast.cast::<ConstructorDeclaration>(p)) {
+            if let Some(c) = ast
+                .parent(e)
+                .and_then(|p| ast.cast::<ConstructorDeclaration>(p))
+            {
                 return ast[c].factory_keyword.is_some();
             }
         }
@@ -216,23 +219,37 @@ fn sorted_members(ast: &Ast, unit: Id<CompilationUnit>) -> Vec<NodeId> {
         .chain(ast.list_raw(ast[unit].declarations))
         .copied()
         .collect();
-    dartr_ast::sort::dart_sort(&mut members, |a, b| ast.offset(*a) as i64 - ast.offset(*b) as i64);
+    dartr_ast::sort::dart_sort(&mut members, |a, b| {
+        ast.offset(*a) as i64 - ast.offset(*b) as i64
+    });
     members
 }
 
 /// Dart `membersBeforeAndAfterMember`.
-fn members_around_member(ast: &Ast, unit: Id<CompilationUnit>, member: NodeId) -> (Option<NodeId>, Option<NodeId>) {
+fn members_around_member(
+    ast: &Ast,
+    unit: Id<CompilationUnit>,
+    member: NodeId,
+) -> (Option<NodeId>, Option<NodeId>) {
     let members = sorted_members(ast, unit);
     let Some(index) = members.iter().position(|m| *m == member) else {
         return (None, members.first().copied().filter(|_| false));
     };
-    let before = if index > 0 { Some(members[index - 1]) } else { None };
+    let before = if index > 0 {
+        Some(members[index - 1])
+    } else {
+        None
+    };
     let after = members.get(index + 1).copied();
     (before, after)
 }
 
 /// Dart `membersBeforeAndAfterOffset`.
-fn members_around_offset(ast: &Ast, unit: Id<CompilationUnit>, offset: u32) -> (Option<NodeId>, Option<NodeId>) {
+fn members_around_offset(
+    ast: &Ast,
+    unit: Id<CompilationUnit>,
+    offset: u32,
+) -> (Option<NodeId>, Option<NodeId>) {
     let mut previous = None;
     for m in sorted_members(ast, unit) {
         if offset < ast.offset(m) {
@@ -455,7 +472,10 @@ struct InvokedParameter {
 }
 
 /// Dart `ArgumentList.invokedFormalParameters`.
-fn invoked_formal_parameters(q: &Request<'_, '_>, list: Id<ArgumentList>) -> Option<Vec<InvokedParameter>> {
+fn invoked_formal_parameters(
+    q: &Request<'_, '_>,
+    list: Id<ArgumentList>,
+) -> Option<Vec<InvokedParameter>> {
     let ast = q.ast;
     let ctx = q.ctx;
     let from_function_type = |t: TypeId| -> Option<Vec<InvokedParameter>> {
@@ -481,7 +501,11 @@ fn invoked_formal_parameters(q: &Request<'_, '_>, list: Id<ArgumentList>) -> Opt
                 let t = member::return_type(ctx, e);
                 return from_function_type(t);
             }
-            Tag::Method | Tag::Constructor | Tag::TopLevelFunction | Tag::LocalFunction | Tag::Setter => {
+            Tag::Method
+            | Tag::Constructor
+            | Tag::TopLevelFunction
+            | Tag::LocalFunction
+            | Tag::Setter => {
                 return Some(
                     member::formal_parameters(ctx, e)
                         .into_iter()
@@ -523,7 +547,13 @@ fn invoked_formal_parameters(q: &Request<'_, '_>, list: Id<ArgumentList>) -> Opt
 }
 
 impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
-    pub fn new(q: &'q Request<'r, 'a>, out: Out, skip_imports: bool, suggest_overrides: bool, suggest_uris: bool) -> Self {
+    pub fn new(
+        q: &'q Request<'r, 'a>,
+        out: Out,
+        skip_imports: bool,
+        suggest_overrides: bool,
+        suggest_uris: bool,
+    ) -> Self {
         Pass {
             q,
             out,
@@ -590,7 +620,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
     }
 
     fn ident(&mut self, include_private: bool) -> IdentifierHelper {
-        let helper = self.ident.get_or_insert(IdentifierHelper { include_private });
+        let helper = self
+            .ident
+            .get_or_insert(IdentifierHelper { include_private });
         IdentifierHelper {
             include_private: helper.include_private,
         }
@@ -622,7 +654,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         let mut child = covering;
         let mut parent = ast.parent(child);
         while let Some(p) = parent {
-            if ast.begin(p) == begin && !(!ast.is::<SimpleIdentifier>(child) && is_child_in_list(ast, p, child)) {
+            if ast.begin(p) == begin
+                && !(!ast.is::<SimpleIdentifier>(child) && is_child_in_list(ast, p, child))
+            {
                 child = p;
                 parent = ast.parent(child);
             } else {
@@ -675,17 +709,35 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             NodeKind::AssertStatement => self.visit_assert_statement(node),
             NodeKind::AssignmentExpression => {
                 self.location("AssignmentExpression_rightHandSide");
-                self.for_expression(node, ExprOpts { must_be_non_void: true, ..Default::default() });
+                self.for_expression(
+                    node,
+                    ExprOpts {
+                        must_be_non_void: true,
+                        ..Default::default()
+                    },
+                );
             }
             NodeKind::AwaitExpression => {
                 self.location("AwaitExpression_expression");
-                self.for_expression(node, ExprOpts { must_be_non_void: true, ..Default::default() });
+                self.for_expression(
+                    node,
+                    ExprOpts {
+                        must_be_non_void: true,
+                        ..Default::default()
+                    },
+                );
             }
             NodeKind::BinaryExpression => {
                 let b = ast.cast::<BinaryExpression>(node).unwrap();
                 let op = ast.t_lexeme(ast[b].operator).to_string();
                 self.location(&format!("BinaryExpression_{op}_rightOperand"));
-                self.for_expression(node, ExprOpts { must_be_non_void: true, ..Default::default() });
+                self.for_expression(
+                    node,
+                    ExprOpts {
+                        must_be_non_void: true,
+                        ..Default::default()
+                    },
+                );
             }
             NodeKind::Block => self.visit_block(node),
             NodeKind::BlockEnumBody => self.visit_parent(node),
@@ -722,7 +774,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     self.kw("as");
                 } else {
                     self.location("CastPattern_type");
-                    self.for_type_annotation(node, TypeOpts { must_be_non_void: true, ..Default::default() });
+                    self.for_type_annotation(
+                        node,
+                        TypeOpts {
+                            must_be_non_void: true,
+                            ..Default::default()
+                        },
+                    );
                 }
             }
             NodeKind::CatchClause => self.visit_catch_clause(node),
@@ -730,7 +788,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             NodeKind::Comment => {}
             NodeKind::CommentReference => {
                 self.location("CommentReference_identifier");
-                self.add_lexical(DeclConfig { prefer_non_invocation: true, ..Default::default() }, node);
+                self.add_lexical(
+                    DeclConfig {
+                        prefer_non_invocation: true,
+                        ..Default::default()
+                    },
+                    node,
+                );
             }
             NodeKind::CompilationUnit => self.visit_compilation_unit(node),
             NodeKind::ConditionalExpression => {
@@ -766,7 +830,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             NodeKind::DeclaredIdentifier => self.visit_parent(node),
             NodeKind::DeclaredVariablePattern => self.visit_declared_variable_pattern(node),
             NodeKind::DoStatement => self.visit_do_statement(node),
-            NodeKind::DotShorthandConstructorInvocation => self.visit_dot_shorthand_constructor_invocation(node),
+            NodeKind::DotShorthandConstructorInvocation => {
+                self.visit_dot_shorthand_constructor_invocation(node)
+            }
             NodeKind::DotShorthandInvocation => self.visit_dot_shorthand_invocation(node),
             NodeKind::DotShorthandPropertyAccess => self.visit_dot_shorthand_property_access(node),
             NodeKind::EmptyStatement => self.visit_empty_statement(node),
@@ -780,7 +846,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             NodeKind::ExpressionFunctionBody => {
                 let b = ast.cast::<ExpressionFunctionBody>(node).unwrap();
                 let e = ast[b].expression.raw();
-                if self.offset() >= ast.t_end(ast[b].function_definition) && self.offset() <= ast.end(e) {
+                if self.offset() >= ast.t_end(ast[b].function_definition)
+                    && self.offset() <= ast.end(e)
+                {
                     self.location("ExpressionFunctionBody_expression");
                     self.for_expression(e, ExprOpts::default());
                 }
@@ -795,7 +863,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     || ast.t_covers(Some(ast[superclass].name), self.offset())
                 {
                     self.location("ExtendsClause_superclass");
-                    self.for_type_annotation(node, TypeOpts { must_be_extensible: true, ..Default::default() });
+                    self.for_type_annotation(
+                        node,
+                        TypeOpts {
+                            must_be_extensible: true,
+                            ..Default::default()
+                        },
+                    );
                 }
             }
             NodeKind::ExtensionDeclaration => self.visit_extension_declaration(node),
@@ -828,7 +902,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 let value = ast[c].value.raw();
                 if ast.n_covers(Some(value), self.offset()) {
                     self.location("DefaultFormalParameter_defaultValue");
-                    self.for_expression(value, ExprOpts { must_be_non_void: true, ..Default::default() });
+                    self.for_expression(
+                        value,
+                        ExprOpts {
+                            must_be_non_void: true,
+                            ..Default::default()
+                        },
+                    );
                 }
             }
             NodeKind::FormalParameterList => self.visit_formal_parameter_list(node),
@@ -850,7 +930,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     self.location("CompilationUnit_declaration");
                     self.kw("typedef");
                 } else if self.offset() <= ast.t_end(ast.t_next(typedef)) {
-                    self.add_lexical(DeclConfig { must_be_type: true, ..Default::default() }, node);
+                    self.add_lexical(
+                        DeclConfig {
+                            must_be_type: true,
+                            ..Default::default()
+                        },
+                        node,
+                    );
                 }
             }
             NodeKind::FunctionTypedFormalParameterSuffix => self.visit_function_typed_suffix(node),
@@ -881,7 +967,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     self.kw("implements");
                 } else {
                     self.location("ImplementsClause_interface");
-                    self.for_type_annotation(node, TypeOpts { must_be_implementable: true, ..Default::default() });
+                    self.for_type_annotation(
+                        node,
+                        TypeOpts {
+                            must_be_implementable: true,
+                            ..Default::default()
+                        },
+                    );
                 }
             }
             NodeKind::ImportDirective => self.visit_import_directive(node),
@@ -893,9 +985,17 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     self.visit_parent(node);
                     return;
                 }
-                if self.offset() >= ast.t_end(ast[i].left_bracket) && self.offset() <= ast.t_offset(ast[i].right_bracket) {
+                if self.offset() >= ast.t_end(ast[i].left_bracket)
+                    && self.offset() <= ast.t_offset(ast[i].right_bracket)
+                {
                     self.location("IndexExpression_index");
-                    self.for_expression(node, ExprOpts { must_be_non_void: true, ..Default::default() });
+                    self.for_expression(
+                        node,
+                        ExprOpts {
+                            must_be_non_void: true,
+                            ..Default::default()
+                        },
+                    );
                 }
             }
             NodeKind::InstanceCreationExpression => self.visit_instance_creation(node),
@@ -920,7 +1020,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             }
             NodeKind::LibraryDirective => {
                 if self.offset() >= ast.end(node) {
-                    if let Some(unit) = ast.parent(node).and_then(|p| ast.cast::<CompilationUnit>(p)) {
+                    if let Some(unit) = ast
+                        .parent(node)
+                        .and_then(|p| ast.cast::<CompilationUnit>(p))
+                    {
                         self.for_directive(unit, Some(node));
                         let (_, after) = members_around_member(ast, unit, node);
                         if after.is_none_or(|a| ast.is::<CompilationUnitMember>(a)) {
@@ -931,7 +1034,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             }
             NodeKind::ListLiteral => {
                 let l = ast.cast::<ListLiteral>(node).unwrap();
-                if self.offset() >= ast.t_end(ast[l].left_bracket) && self.offset() <= ast.t_offset(ast[l].right_bracket) {
+                if self.offset() >= ast.t_end(ast[l].left_bracket)
+                    && self.offset() <= ast.t_offset(ast[l].right_bracket)
+                {
                     self.location("ListLiteral_element");
                     let elements = ast.list_raw(ast[l].elements).to_vec();
                     self.for_collection_element(node, &elements);
@@ -987,7 +1092,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     && self.offset() <= ast.t_offset(ast[p].right_parenthesis)
                 {
                     self.location("ObjectPattern_fieldName");
-                    if let Some(t) = self.q.tables.annotation_type.get(ast[p].type_.raw()).copied() {
+                    if let Some(t) = self
+                        .q
+                        .tables
+                        .annotation_type
+                        .get(ast[p].type_.raw())
+                        .copied()
+                    {
                         let excluded = field_names(ast, ast[p].fields);
                         let q = self.q;
                         self.decl(DeclConfig {
@@ -995,7 +1106,14 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                             prefer_non_invocation: true,
                             ..Default::default()
                         });
-                        self.decl.as_mut().unwrap().add_getters(q, &mut self.out, t, &excluded, false, false);
+                        self.decl.as_mut().unwrap().add_getters(
+                            q,
+                            &mut self.out,
+                            t,
+                            &excluded,
+                            false,
+                            false,
+                        );
                     }
                 }
             }
@@ -1048,7 +1166,8 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 self.for_expression(
                     node,
                     ExprOpts {
-                        must_be_assignable: ty == TokenType::PLUS_PLUS || ty == TokenType::MINUS_MINUS,
+                        must_be_assignable: ty == TokenType::PLUS_PLUS
+                            || ty == TokenType::MINUS_MINUS,
                         ..Default::default()
                     },
                 );
@@ -1061,7 +1180,8 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 self.for_expression(
                     node,
                     ExprOpts {
-                        must_be_assignable: ty == TokenType::PLUS_PLUS || ty == TokenType::MINUS_MINUS,
+                        must_be_assignable: ty == TokenType::PLUS_PLUS
+                            || ty == TokenType::MINUS_MINUS,
                         ..Default::default()
                     },
                 );
@@ -1118,13 +1238,17 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 self.for_type_annotation(node, TypeOpts::default());
             }
             NodeKind::RecordTypeAnnotationPositionalField => {
-                let f = ast.cast::<RecordTypeAnnotationPositionalField>(node).unwrap();
+                let f = ast
+                    .cast::<RecordTypeAnnotationPositionalField>(node)
+                    .unwrap();
                 if ast.n_covers(Some(ast[f].type_.raw()), self.offset()) {
                     self.location("RecordTypeAnnotation_positionalFields");
                     self.for_type_annotation(node, TypeOpts::default());
                 }
             }
-            NodeKind::RedirectingConstructorInvocation => self.visit_redirecting_constructor_invocation(node),
+            NodeKind::RedirectingConstructorInvocation => {
+                self.visit_redirecting_constructor_invocation(node)
+            }
             NodeKind::RegularFormalParameter => self.visit_regular_formal_parameter(node),
             NodeKind::RelationalPattern => {
                 let p = ast.cast::<RelationalPattern>(node).unwrap();
@@ -1160,7 +1284,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             }
             NodeKind::SetOrMapLiteral => {
                 let l = ast.cast::<SetOrMapLiteral>(node).unwrap();
-                if self.offset() >= ast.t_end(ast[l].left_bracket) && self.offset() <= ast.t_offset(ast[l].right_bracket) {
+                if self.offset() >= ast.t_end(ast[l].left_bracket)
+                    && self.offset() <= ast.t_offset(ast[l].right_bracket)
+                {
                     self.location("SetOrMapLiteral_element");
                     let elements = ast.list_raw(ast[l].elements).to_vec();
                     self.for_collection_element(node, &elements);
@@ -1182,7 +1308,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 let p = ast.cast::<SuperFormalParameter>(node).unwrap();
                 let q = self.q;
                 self.decl(DeclConfig::default());
-                self.decl.as_mut().unwrap().add_parameters_from_super_constructor(q, &mut self.out, p);
+                self.decl
+                    .as_mut()
+                    .unwrap()
+                    .add_parameters_from_super_constructor(q, &mut self.out, p);
             }
             NodeKind::SwitchCase => {
                 self.location("SwitchMember_statement");
@@ -1206,10 +1335,14 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             NodeKind::SwitchExpression => {
                 let s = ast.cast::<SwitchExpression>(node).unwrap();
                 let o = self.offset();
-                if o >= ast.t_end(ast[s].left_parenthesis) && o <= ast.t_offset(ast[s].right_parenthesis) {
+                if o >= ast.t_end(ast[s].left_parenthesis)
+                    && o <= ast.t_offset(ast[s].right_parenthesis)
+                {
                     self.location("SwitchExpression_expression");
                     self.for_expression(node, ExprOpts::default());
-                } else if o >= ast.t_end(ast[s].left_bracket) && o <= ast.t_offset(ast[s].right_bracket) {
+                } else if o >= ast.t_end(ast[s].left_bracket)
+                    && o <= ast.t_offset(ast[s].right_bracket)
+                {
                     self.location("SwitchExpression_body");
                     self.for_pattern(node, true);
                 }
@@ -1221,7 +1354,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 self.location("ThrowExpression_expression");
                 self.for_expression(node, ExprOpts::default());
             }
-            NodeKind::TopLevelVariableDeclaration => self.visit_top_level_variable_declaration(node),
+            NodeKind::TopLevelVariableDeclaration => {
+                self.visit_top_level_variable_declaration(node)
+            }
             NodeKind::TryStatement => self.visit_try_statement(node),
             NodeKind::TypeArgumentList => self.for_type_annotation(node, TypeOpts::default()),
             NodeKind::TypeParameter => self.visit_type_parameter(node),
@@ -1254,11 +1389,22 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 if o <= ast.t_end(ast[w].while_keyword) {
                     self.location("Block_statement");
                     self.for_statement(node);
-                } else if ast.t_end(ast[w].left_parenthesis) <= o && o <= ast.t_offset(ast[w].right_parenthesis) {
+                } else if ast.t_end(ast[w].left_parenthesis) <= o
+                    && o <= ast.t_offset(ast[w].right_parenthesis)
+                {
                     let condition = ast[w].condition.raw();
-                    if ast.n_synthetic(condition) || o <= ast.offset(condition) || o == ast.end(condition) {
+                    if ast.n_synthetic(condition)
+                        || o <= ast.offset(condition)
+                        || o == ast.end(condition)
+                    {
                         self.location("WhileStatement_condition");
-                        self.for_expression(node, ExprOpts { must_be_non_void: true, ..Default::default() });
+                        self.for_expression(
+                            node,
+                            ExprOpts {
+                                must_be_non_void: true,
+                                ..Default::default()
+                            },
+                        );
                     }
                 }
             }
@@ -1266,7 +1412,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 let p = ast.cast::<WildcardPattern>(node).unwrap();
                 if let Some(t) = ast[p].type_ {
                     if ast.n_covers(Some(t.raw()), self.offset()) {
-                        self.add_lexical(DeclConfig { must_be_type: true, ..Default::default() }, node);
+                        self.add_lexical(
+                            DeclConfig {
+                                must_be_type: true,
+                                ..Default::default()
+                            },
+                            node,
+                        );
                     }
                 }
             }
@@ -1284,7 +1436,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     self.kw("with");
                 } else {
                     self.location("WithClause_mixinType");
-                    self.for_type_annotation(node, TypeOpts { must_be_mixable: true, ..Default::default() });
+                    self.for_type_annotation(
+                        node,
+                        TypeOpts {
+                            must_be_mixable: true,
+                            ..Default::default()
+                        },
+                    );
                 }
             }
             NodeKind::YieldStatement => {
@@ -1292,7 +1450,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 if self.offset() <= ast.t_end(ast[y].yield_keyword) {
                     self.location("Block_statement");
                     self.kw("yield");
-                } else if ast.t_synthetic(ast[y].semicolon) || self.offset() <= ast.t_end(ast[y].semicolon) {
+                } else if ast.t_synthetic(ast[y].semicolon)
+                    || self.offset() <= ast.t_end(ast[y].semicolon)
+                {
                     self.location("YieldStatement_expression");
                     self.for_expression(node, ExprOpts::default());
                 }
@@ -1310,7 +1470,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         self.for_annotation(node);
         if ast[a].constructor_name.is_none() {
             if let Some(name) = ast.cast::<SimpleIdentifier>(ast[a].name.raw()) {
-                let class_node = ast.parent(node).and_then(|p| ast.parent(p)).and_then(|p| ast.parent(p));
+                let class_node = ast
+                    .parent(node)
+                    .and_then(|p| ast.parent(p))
+                    .and_then(|p| ast.parent(p));
                 if let Some(c) = class_node.filter(|c| ast.is::<Declaration>(*c)) {
                     let line_info = self.q.line_info;
                     let name_token = ast[name].token;
@@ -1347,7 +1510,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         let mut argument_index = 0;
         if let Some(b) = before {
             if self.handled_possible_closure(b) {
-                self.for_expression(b, ExprOpts { must_be_non_void: true, ..Default::default() });
+                self.for_expression(
+                    b,
+                    ExprOpts {
+                        must_be_non_void: true,
+                        ..Default::default()
+                    },
+                );
                 return;
             }
             argument_index = arguments
@@ -1425,9 +1594,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 match possible.filter(|p| ast.t_ty(*p) == TokenType::COMMA) {
                     Some(comma) => {
                         if ast.t_synthetic(comma) {
-                            let after_is_named = arguments
-                                .iter()
-                                .any(|arg| ast.is::<NamedArgument>(*arg) && argument_expression(ast, *arg) == a);
+                            let after_is_named = arguments.iter().any(|arg| {
+                                ast.is::<NamedArgument>(*arg) && argument_expression(ast, *arg) == a
+                            });
                             if after_is_named
                                 || !before.is_some_and(|b| ast.is::<SimpleIdentifier>(b))
                                 || o > before.map(|b| ast.end(b)).unwrap_or(0)
@@ -1473,7 +1642,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 }
             }
         } else if ast.is::<Expression>(parent) {
-            self.for_expression(parent, ExprOpts { must_be_non_void: true, ..Default::default() });
+            self.for_expression(
+                parent,
+                ExprOpts {
+                    must_be_non_void: true,
+                    ..Default::default()
+                },
+            );
         }
     }
 
@@ -1501,7 +1676,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         let ty = ast[a].type_.raw();
         if ast.fully_synthetic(ty) || ast.t_covers(Some(ast.begin(ty)), o) {
             self.location("AsExpression_type");
-            self.for_type_annotation(node, TypeOpts { must_be_non_void: true, ..Default::default() });
+            self.for_type_annotation(
+                node,
+                TypeOpts {
+                    must_be_non_void: true,
+                    ..Default::default()
+                },
+            );
         }
     }
 
@@ -1519,7 +1700,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             return;
         }
         self.location("ConstructorDeclaration_initializer");
-        if let Some(c) = ast.parent(node).and_then(|p| ast.cast::<ConstructorDeclaration>(p)) {
+        if let Some(c) = ast
+            .parent(node)
+            .and_then(|p| ast.cast::<ConstructorDeclaration>(p))
+        {
             K::add_constructor_initializer_keywords(self.q, &mut self.out, c, Some(node));
         }
     }
@@ -1620,10 +1804,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     if variables.len() == 1 {
                         let should_be_type_name = ast[variables[0]].name;
                         let semicolon = ast.t_next(should_be_type_name);
-                        if ast.t_ty(semicolon) == TokenType::SEMICOLON && ast.t_next(semicolon) == dropped {
+                        if ast.t_ty(semicolon) == TokenType::SEMICOLON
+                            && ast.t_next(semicolon) == dropped
+                        {
                             self.location("ClassDeclaration_member");
                             let lexeme = ast.t_lexeme(should_be_type_name).to_string();
-                            self.ident(false).add_suggestions_from_type_name(&mut self.out, &lexeme);
+                            self.ident(false)
+                                .add_suggestions_from_type_name(&mut self.out, &lexeme);
                             return;
                         }
                     }
@@ -1647,10 +1834,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             }
             let has_synthetic_body =
                 ast.t_synthetic(ast[body].left_bracket) && ast.t_synthetic(ast[body].right_bracket);
-            self.ident(false).add_top_level_name(self.q, &mut self.out, has_synthetic_body);
+            self.ident(false)
+                .add_top_level_name(self.q, &mut self.out, has_synthetic_body);
         } else if o <= ast.t_offset(ast[body].left_bracket) {
             K::add_class_declaration_keywords(self.q, &mut self.out, c);
-        } else if o >= ast.t_end(ast[body].left_bracket) && o <= ast.t_offset(ast[body].right_bracket) {
+        } else if o >= ast.t_end(ast[body].left_bracket)
+            && o <= ast.t_offset(ast[body].right_bracket)
+        {
             if self.try_annotation_at_end_of_class_body(node) {
                 return;
             }
@@ -1665,7 +1855,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 return;
             }
             self.for_class_member(c);
-            if let Some(m) = element_before(ast, &members, o).and_then(|m| ast.cast::<MethodDeclaration>(m)) {
+            if let Some(m) =
+                element_before(ast, &members, o).and_then(|m| ast.cast::<MethodDeclaration>(m))
+            {
                 let body = ast[m].body.raw();
                 if function_body_is_empty(ast, body) {
                     K::add_function_body_modifiers(self.q, &mut self.out, Some(body));
@@ -1720,7 +1912,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             };
             let is_const = elem::is_const_constructor(self.q.ctx, e);
             let q = self.q;
-            self.decl(DeclConfig { must_be_constant: is_const, ..Default::default() });
+            self.decl(DeclConfig {
+                must_be_constant: is_const,
+                ..Default::default()
+            });
             self.decl
                 .as_mut()
                 .unwrap()
@@ -1731,7 +1926,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
     fn visit_constructor_field_initializer(&mut self, node: NodeId) {
         let ast = self.ast();
         let f = ast.cast::<ConstructorFieldInitializer>(node).unwrap();
-        let Some(constructor) = ast.parent(node).and_then(|p| ast.cast::<ConstructorDeclaration>(p)) else {
+        let Some(constructor) = ast
+            .parent(node)
+            .and_then(|p| ast.cast::<ConstructorDeclaration>(p))
+        else {
             return;
         };
         if self.offset() <= ast.t_offset(ast[f].equals) {
@@ -1741,7 +1939,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             self.location("ConstructorFieldInitializer_expression");
             if ast.n_synthetic(ast[f].field_name.raw()) && ast.t_synthetic(ast[f].equals) {
                 if let Some(p) = ast.cast::<PropertyAccess>(ast[f].expression.raw()) {
-                    if ast[p].target.is_some_and(|t| ast.is::<ThisExpression>(t.raw())) {
+                    if ast[p]
+                        .target
+                        .is_some_and(|t| ast.is::<ThisExpression>(t.raw()))
+                    {
                         if ast.t_synthetic(ast[p].operator) {
                             self.for_constructor_initializer(constructor, Some(f));
                         } else {
@@ -1751,7 +1952,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     }
                 }
             }
-            self.for_expression(node, ExprOpts { must_be_non_void: true, ..Default::default() });
+            self.for_expression(
+                node,
+                ExprOpts {
+                    must_be_non_void: true,
+                    ..Default::default()
+                },
+            );
         }
     }
 
@@ -1764,18 +1971,33 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             if let Some(e) = self.q.element(ast[n].type_.raw()) {
                 if e.is::<InterfaceElement>() {
                     let q = self.q;
-                    self.decl(DeclConfig { prefer_non_invocation: true, ..Default::default() });
-                    self.decl.as_mut().unwrap().add_static_members_of_element(q, &mut self.out, e, false);
+                    self.decl(DeclConfig {
+                        prefer_non_invocation: true,
+                        ..Default::default()
+                    });
+                    self.decl.as_mut().unwrap().add_static_members_of_element(
+                        q,
+                        &mut self.out,
+                        e,
+                        false,
+                    );
                 }
             }
             return;
         }
-        let ty = self.q.tables.annotation_type.get(ast[n].type_.raw()).copied();
+        let ty = self
+            .q
+            .tables
+            .annotation_type
+            .get(ast[n].type_.raw())
+            .copied();
         let Some(ty) = ty.filter(|t| matches!(ctx.ty(*t), TypeKind::Interface { .. })) else {
             return;
         };
         if let Some(fc) = parent.and_then(|p| ast.cast::<ConstructorDeclaration>(p)) {
-            if ast[fc].factory_keyword.is_some() && ast[fc].redirected_constructor.map(|r| r.raw()) == Some(node) {
+            if ast[fc].factory_keyword.is_some()
+                && ast[fc].redirected_constructor.map(|r| r.raw()) == Some(node)
+            {
                 let exclude = ast[fc].name.map(|n| ast.t_lexeme(n).to_string());
                 let q = self.q;
                 self.decl(DeclConfig {
@@ -1783,17 +2005,22 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     prefer_non_invocation: true,
                     ..Default::default()
                 });
-                self.decl
-                    .as_mut()
-                    .unwrap()
-                    .add_constructor_names_for_type(q, &mut self.out, ty, exclude.as_deref());
+                self.decl.as_mut().unwrap().add_constructor_names_for_type(
+                    q,
+                    &mut self.out,
+                    ty,
+                    exclude.as_deref(),
+                );
                 return;
             }
         }
         let element = ctx.interface_element(ty).unwrap().raw();
         let q = self.q;
         self.decl(DeclConfig::default());
-        self.decl.as_mut().unwrap().add_static_members_of_element(q, &mut self.out, element, true);
+        self.decl
+            .as_mut()
+            .unwrap()
+            .add_static_members_of_element(q, &mut self.out, element, true);
     }
 
     fn visit_constructor_selector(&mut self, node: NodeId) {
@@ -1802,10 +2029,16 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         if !self.feature(F::EnhancedEnums) {
             return;
         }
-        let Some(arguments) = ast.parent(node).filter(|p| ast.is::<EnumConstantArguments>(*p)) else {
+        let Some(arguments) = ast
+            .parent(node)
+            .filter(|p| ast.is::<EnumConstantArguments>(*p))
+        else {
             return;
         };
-        let Some(constant) = ast.parent(arguments).filter(|p| ast.is::<EnumConstantDeclaration>(*p)) else {
+        let Some(constant) = ast
+            .parent(arguments)
+            .filter(|p| ast.is::<EnumConstantDeclaration>(*p))
+        else {
             return;
         };
         let Some(declaration) = ast
@@ -1815,12 +2048,22 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         else {
             return;
         };
-        let Some(e) = self.q.declared_element(declaration).and_then(|e| e.cast::<InterfaceElement>()) else {
+        let Some(e) = self
+            .q
+            .declared_element(declaration)
+            .and_then(|e| e.cast::<InterfaceElement>())
+        else {
             return;
         };
         let q = self.q;
-        self.decl(DeclConfig { suggest_unnamed_as_new: true, ..Default::default() });
-        self.decl.as_mut().unwrap().add_constructor_names_for_element(q, &mut self.out, e);
+        self.decl(DeclConfig {
+            suggest_unnamed_as_new: true,
+            ..Default::default()
+        });
+        self.decl
+            .as_mut()
+            .unwrap()
+            .add_constructor_names_for_element(q, &mut self.out, e);
     }
 
     fn visit_declared_variable_pattern(&mut self, node: NodeId) {
@@ -1830,7 +2073,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         let o = self.offset();
         if ast.t_synthetic(name) {
             if ast[p].type_.is_none() && ast[p].keyword.is_none() {
-                self.for_type_annotation(node, TypeOpts { must_be_non_void: true, ..Default::default() });
+                self.for_type_annotation(
+                    node,
+                    TypeOpts {
+                        must_be_non_void: true,
+                        ..Default::default()
+                    },
+                );
                 return;
             }
             self.for_name_in_declared_variable_pattern(node);
@@ -1842,7 +2091,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         if ast[p].keyword.is_some() {
             let ty = ast[p].type_.map(|t| t.raw());
             if ty.is_none() && o < ast.t_offset(name) {
-                self.add_lexical(DeclConfig { must_be_type: true, ..Default::default() }, node);
+                self.add_lexical(
+                    DeclConfig {
+                        must_be_type: true,
+                        ..Default::default()
+                    },
+                    node,
+                );
                 return;
             }
             if !type_is_single_identifier(ast, ty) && ast.t_covers(Some(name), o) {
@@ -1865,11 +2120,19 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         if o <= ast.t_end(ast[d].do_keyword) {
             self.location("Block_statement");
             self.for_statement(node);
-        } else if ast.t_end(ast[d].left_parenthesis) <= o && o <= ast.t_offset(ast[d].right_parenthesis) {
+        } else if ast.t_end(ast[d].left_parenthesis) <= o
+            && o <= ast.t_offset(ast[d].right_parenthesis)
+        {
             let condition = ast[d].condition.raw();
             if ast.n_synthetic(condition) || o <= ast.offset(condition) || o == ast.end(condition) {
                 self.location("DoStatement_condition");
-                self.for_expression(node, ExprOpts { must_be_non_void: true, ..Default::default() });
+                self.for_expression(
+                    node,
+                    ExprOpts {
+                        must_be_non_void: true,
+                        ..Default::default()
+                    },
+                );
             }
         }
     }
@@ -1891,13 +2154,16 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         if o >= ast.t_end(ast[n].period) && o <= ast.end(ast[n].constructor_name) {
             let context = self.resolve_future_or(self.context_type_of(node));
             let ctx = self.q.ctx;
-            let Some(t) = context.filter(|t| matches!(ctx.ty(*t), TypeKind::Interface { .. })) else {
+            let Some(t) = context.filter(|t| matches!(ctx.ty(*t), TypeKind::Interface { .. }))
+            else {
                 return;
             };
             let element = ctx.interface_element(t).unwrap().raw();
             if elem::is_accessible_in(ctx, element, self.q.library) {
-                let is_const = dartr_resolver::ast_ext::dot_shorthand_constructor_invocation_is_const(ast, n);
-                let unnamed_as_new = self.feature(F::DotShorthands) || self.q.is_replacing_keyword_or_identifier();
+                let is_const =
+                    dartr_resolver::ast_ext::dot_shorthand_constructor_invocation_is_const(ast, n);
+                let unnamed_as_new =
+                    self.feature(F::DotShorthands) || self.q.is_replacing_keyword_or_identifier();
                 let q = self.q;
                 self.decl(DeclConfig {
                     must_be_constant: is_const,
@@ -1905,7 +2171,12 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     suggest_unnamed_as_new: unnamed_as_new,
                     ..Default::default()
                 });
-                self.decl.as_mut().unwrap().add_constructor_names_for_type(q, &mut self.out, t, None);
+                self.decl.as_mut().unwrap().add_constructor_names_for_type(
+                    q,
+                    &mut self.out,
+                    t,
+                    None,
+                );
             }
         }
     }
@@ -1921,7 +2192,8 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 return;
             };
             if elem::is_accessible_in(ctx, element, self.q.library) {
-                let unnamed_as_new = self.feature(F::DotShorthands) || self.q.is_replacing_keyword_or_identifier();
+                let unnamed_as_new =
+                    self.feature(F::DotShorthands) || self.q.is_replacing_keyword_or_identifier();
                 let q = self.q;
                 self.decl(DeclConfig {
                     must_be_constant: dartr_resolver::ast_ext::in_constant_context(ast, node),
@@ -1929,7 +2201,12 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     suggest_unnamed_as_new: unnamed_as_new,
                     ..Default::default()
                 });
-                self.decl.as_mut().unwrap().add_static_members_of_element(q, &mut self.out, element, false);
+                self.decl.as_mut().unwrap().add_static_members_of_element(
+                    q,
+                    &mut self.out,
+                    element,
+                    false,
+                );
             }
         }
     }
@@ -1942,8 +2219,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             return;
         };
         if elem::is_accessible_in(ctx, element, self.q.library) {
-            let unnamed_as_new = self.feature(F::DotShorthands) || self.q.is_replacing_keyword_or_identifier();
-            let prefer_non_invocation = element.is::<InterfaceElement>() && self.q.should_suggest_tear_off(element);
+            let unnamed_as_new =
+                self.feature(F::DotShorthands) || self.q.is_replacing_keyword_or_identifier();
+            let prefer_non_invocation =
+                element.is::<InterfaceElement>() && self.q.should_suggest_tear_off(element);
             let q = self.q;
             self.decl(DeclConfig {
                 suggesting_dot_shorthand: true,
@@ -1952,7 +2231,12 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 suggest_unnamed_as_new: unnamed_as_new,
                 ..Default::default()
             });
-            self.decl.as_mut().unwrap().add_static_members_of_element(q, &mut self.out, element, false);
+            self.decl.as_mut().unwrap().add_static_members_of_element(
+                q,
+                &mut self.out,
+                element,
+                false,
+            );
         }
     }
 
@@ -2006,8 +2290,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         };
         let type_name = class_name_token(ast, ast[e].name_part.raw());
         if o <= ast.t_end(type_name) {
-            let include_body = ast.t_synthetic(ast[body].left_bracket) && ast.t_synthetic(ast[body].right_bracket);
-            self.ident(false).add_top_level_name(self.q, &mut self.out, include_body);
+            let include_body =
+                ast.t_synthetic(ast[body].left_bracket) && ast.t_synthetic(ast[body].right_bracket);
+            self.ident(false)
+                .add_top_level_name(self.q, &mut self.out, include_body);
             return;
         }
         if o <= ast.t_offset(ast[body].left_bracket) {
@@ -2085,7 +2371,8 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     let f = ast.cast::<FunctionReference>(expression).unwrap();
                     if let Some(i) = ast.cast::<SimpleIdentifier>(ast[f].function.raw()) {
                         let name = ast.t_lexeme(ast[i].token).to_string();
-                        self.ident(false).add_suggestions_from_type_name(&mut self.out, &name);
+                        self.ident(false)
+                            .add_suggestions_from_type_name(&mut self.out, &name);
                     }
                 }
             }
@@ -2095,7 +2382,8 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 } else {
                     let t = ast.cast::<TypeLiteral>(expression).unwrap();
                     let name = ast.t_lexeme(ast[ast[t].type_].name).to_string();
-                    self.ident(false).add_suggestions_from_type_name(&mut self.out, &name);
+                    self.ident(false)
+                        .add_suggestions_from_type_name(&mut self.out, &name);
                 }
             }
             NodeKind::PrefixedIdentifier => {
@@ -2110,7 +2398,8 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 } else if o <= ast.end(ast[p].identifier) {
                 } else {
                     let name = ast.t_lexeme(ast[ast[p].identifier].token).to_string();
-                    self.ident(false).add_suggestions_from_type_name(&mut self.out, &name);
+                    self.ident(false)
+                        .add_suggestions_from_type_name(&mut self.out, &name);
                 }
             }
             NodeKind::SimpleIdentifier => {
@@ -2119,7 +2408,8 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 } else {
                     let i = ast.cast::<SimpleIdentifier>(expression).unwrap();
                     let name = ast.t_lexeme(ast[i].token).to_string();
-                    self.ident(false).add_suggestions_from_type_name(&mut self.out, &name);
+                    self.ident(false)
+                        .add_suggestions_from_type_name(&mut self.out, &name);
                 }
             }
             _ => self.for_expression(node, ExprOpts::default()),
@@ -2134,7 +2424,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             self.for_compilation_unit_member_before(node);
             return;
         }
-        let doc = ast.children(node).into_iter().find(|c| ast.is::<Comment>(*c));
+        let doc = ast
+            .children(node)
+            .into_iter()
+            .find(|c| ast.is::<Comment>(*c));
         if ast.n_covers(doc, o) {
             return;
         }
@@ -2151,11 +2444,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 if self.feature(F::InlineClass) {
                     K::add_text(&mut self.out, "type");
                 }
-                self.ident(false).add_top_level_name(self.q, &mut self.out, false);
+                self.ident(false)
+                    .add_top_level_name(self.q, &mut self.out, false);
                 return;
             }
         }
-        self.ident(false).add_top_level_name(self.q, &mut self.out, false);
+        self.ident(false)
+            .add_top_level_name(self.q, &mut self.out, false);
         if let Some(body) = ast.cast::<BlockClassBody>(ast[e].body.raw()) {
             if o <= ast.t_offset(ast[body].left_bracket) {
                 self.location("ExtensionDeclaration_onClause");
@@ -2166,7 +2461,8 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 }
                 return;
             }
-            if o >= ast.t_end(ast[body].left_bracket) && o <= ast.t_offset(ast[body].right_bracket) {
+            if o >= ast.t_end(ast[body].left_bracket) && o <= ast.t_offset(ast[body].right_bracket)
+            {
                 self.location("ExtensionDeclaration_member");
                 self.for_extension_member(node);
             }
@@ -2192,13 +2488,18 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             {
                 self.kw("const");
             }
-            let include_body = ast.t_synthetic(ast[body].left_bracket) && ast.t_synthetic(ast[body].right_bracket);
-            self.ident(false).add_top_level_name(self.q, &mut self.out, include_body);
+            let include_body =
+                ast.t_synthetic(ast[body].left_bracket) && ast.t_synthetic(ast[body].right_bracket);
+            self.ident(false)
+                .add_top_level_name(self.q, &mut self.out, include_body);
         } else if o >= ast.end(name_part)
-            && (o <= ast.t_offset(ast[body].left_bracket) || ast.t_synthetic(ast[body].left_bracket))
+            && (o <= ast.t_offset(ast[body].left_bracket)
+                || ast.t_synthetic(ast[body].left_bracket))
         {
             self.kw("implements");
-        } else if o >= ast.t_end(ast[body].left_bracket) && o <= ast.t_offset(ast[body].right_bracket) {
+        } else if o >= ast.t_end(ast[body].left_bracket)
+            && o <= ast.t_offset(ast[body].right_bracket)
+        {
             self.location("ExtensionTypeDeclaration_member");
             self.for_extension_type_member(node);
         }
@@ -2223,7 +2524,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     if variables.len() == 1 && ast.t_is_keyword(name) && o > ast.t_end(name) {
                         let keyword = ast.t_lexeme(name).to_string();
                         K::add_field_declaration_keywords(self.q, &mut self.out, f, Some(&keyword));
-                        self.add_lexical(DeclConfig { must_be_type: true, ..Default::default() }, node);
+                        self.add_lexical(
+                            DeclConfig {
+                                must_be_type: true,
+                                ..Default::default()
+                            },
+                            node,
+                        );
                     } else if o < ast.t_offset(name) {
                         K::add_field_declaration_keywords(self.q, &mut self.out, f, None);
                         self.for_type_annotation(
@@ -2260,7 +2567,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                         K::add_field_declaration_keywords(self.q, &mut self.out, f, None);
                         self.location("ClassDeclaration_member");
                         self.kw("var");
-                        self.add_lexical(DeclConfig { must_be_type: true, ..Default::default() }, node);
+                        self.add_lexical(
+                            DeclConfig {
+                                must_be_type: true,
+                                ..Default::default()
+                            },
+                            node,
+                        );
                     }
                 }
             }
@@ -2274,7 +2587,8 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         if constructor.is_some_and(|c| ast.is::<FormalParameterList>(c)) {
             constructor = constructor.and_then(|c| ast.parent(c));
         }
-        let Some(constructor) = constructor.and_then(|c| ast.cast::<ConstructorDeclaration>(c)) else {
+        let Some(constructor) = constructor.and_then(|c| ast.cast::<ConstructorDeclaration>(c))
+        else {
             return;
         };
         let field = self
@@ -2289,24 +2603,41 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             self.kw("required");
         }
         if ast.t_offset(this) >= o && ast[p].required_keyword.is_none_or(|r| ast.t_end(r) <= o) {
-            self.add_lexical(DeclConfig { must_be_type: true, ..Default::default() }, node);
+            self.add_lexical(
+                DeclConfig {
+                    must_be_type: true,
+                    ..Default::default()
+                },
+                node,
+            );
         }
         if ast.t_end(ast[p].period) <= o {
             let q = self.q;
             self.decl(DeclConfig::default());
-            self.decl.as_mut().unwrap().add_fields_for_initializers(q, &mut self.out, constructor, field);
+            self.decl.as_mut().unwrap().add_fields_for_initializers(
+                q,
+                &mut self.out,
+                constructor,
+                field,
+            );
         }
     }
 
     fn visit_formal_parameter_list(&mut self, node: NodeId) {
         let ast = self.ast();
         let list = ast.cast::<FormalParameterList>(node).unwrap();
-        if let Some(p) = ast.parent(node).filter(|p| ast.is::<PrimaryConstructorDeclaration>(*p)) {
+        if let Some(p) = ast
+            .parent(node)
+            .filter(|p| ast.is::<PrimaryConstructorDeclaration>(*p))
+        {
             self.visit(p);
             return;
         }
         if self.offset() >= ast.end(node) {
-            if let Some(f) = ast.parent(node).filter(|p| ast.is::<FunctionExpression>(*p)) {
+            if let Some(f) = ast
+                .parent(node)
+                .filter(|p| ast.is::<FunctionExpression>(*p))
+            {
                 self.visit_function_expression(f);
                 return;
             }
@@ -2319,15 +2650,28 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 return;
             }
             if let Some(r) = ast.cast::<RegularFormalParameter>(preceding) {
-                if ast[r].type_.is_none() && ast[r].function_typed_suffix.is_none() && self.offset() > ast.end(preceding) {
+                if ast[r].type_.is_none()
+                    && ast[r].function_typed_suffix.is_none()
+                    && self.offset() > ast.end(preceding)
+                {
                     if let Some(name) = ast[r].name {
                         let name = ast.t_lexeme(name).to_string();
-                        self.ident(false).add_suggestions_from_type_name(&mut self.out, &name);
+                        self.ident(false)
+                            .add_suggestions_from_type_name(&mut self.out, &name);
                     }
                 }
             }
         }
-        K::add_formal_parameter_keywords(self.q, &mut self.out, Some(list), true, true, true, true, true);
+        K::add_formal_parameter_keywords(
+            self.q,
+            &mut self.out,
+            Some(list),
+            true,
+            true,
+            true,
+            true,
+            true,
+        );
         self.for_type_annotation(node, TypeOpts::default());
     }
 
@@ -2339,7 +2683,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         let right = ast[p].right_separator;
         if o >= ast.t_end(left) && o <= ast.t_offset(right) {
             self.location("ForParts_condition");
-            if ast[p].condition.is_some_and(|c| ast.is::<SimpleIdentifier>(c.raw()))
+            if ast[p]
+                .condition
+                .is_some_and(|c| ast.is::<SimpleIdentifier>(c.raw()))
                 && ast.t_synthetic(left)
                 && ast.t_synthetic(right)
             {
@@ -2360,7 +2706,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         if o <= ast.t_end(ast[f].for_keyword) {
             self.location("Block_statement");
             self.for_statement(node);
-        } else if o >= ast.t_end(ast[f].left_parenthesis) && o <= ast.t_offset(ast[f].right_parenthesis) {
+        } else if o >= ast.t_end(ast[f].left_parenthesis)
+            && o <= ast.t_offset(ast[f].right_parenthesis)
+        {
             self.location("ForStatement_forLoopParts");
             let parts = ast[f].for_loop_parts.raw();
             match ast.kind(parts) {
@@ -2391,7 +2739,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     let variables = ast[p].variables;
                     let vars = ast.list(ast[variables].variables);
                     if let Some(keyword) = ast[variables].keyword {
-                        if vars.len() == 1 && ast.t_synthetic(ast[vars[0]].name) && ast.t_synthetic(ast[p].left_separator) {
+                        if vars.len() == 1
+                            && ast.t_synthetic(ast[vars[0]].name)
+                            && ast.t_synthetic(ast[p].left_separator)
+                        {
                             let after = ast.t_next(keyword);
                             if ast.t_ty(after) == TokenType::OPEN_PAREN {
                                 let end_group = ast.tokens.get(after).end_group;
@@ -2412,7 +2763,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 NodeKind::ForPartsWithExpression => {
                     let p = ast.cast::<ForPartsWithExpression>(parts).unwrap();
                     if ast.t_synthetic(ast[p].left_separator)
-                        && ast[p].initialization.is_some_and(|i| ast.is::<SimpleIdentifier>(i.raw()))
+                        && ast[p]
+                            .initialization
+                            .is_some_and(|i| ast.is::<SimpleIdentifier>(i.raw()))
                     {
                         self.kw("final");
                         self.kw("var");
@@ -2470,15 +2823,28 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         let Some(parent) = ast.parent(node).filter(|p| ast.is::<FormalParameter>(*p)) else {
             return;
         };
-        let (return_type, required, name) = if let Some(r) = ast.cast::<RegularFormalParameter>(parent) {
-            (ast[r].type_.map(|t| t.raw()), ast[r].required_keyword, ast[r].name)
-        } else if let Some(r) = ast.cast::<FieldFormalParameter>(parent) {
-            (ast[r].type_.map(|t| t.raw()), ast[r].required_keyword, Some(ast[r].name))
-        } else if let Some(r) = ast.cast::<SuperFormalParameter>(parent) {
-            (ast[r].type_.map(|t| t.raw()), ast[r].required_keyword, Some(ast[r].name))
-        } else {
-            return;
-        };
+        let (return_type, required, name) =
+            if let Some(r) = ast.cast::<RegularFormalParameter>(parent) {
+                (
+                    ast[r].type_.map(|t| t.raw()),
+                    ast[r].required_keyword,
+                    ast[r].name,
+                )
+            } else if let Some(r) = ast.cast::<FieldFormalParameter>(parent) {
+                (
+                    ast[r].type_.map(|t| t.raw()),
+                    ast[r].required_keyword,
+                    Some(ast[r].name),
+                )
+            } else if let Some(r) = ast.cast::<SuperFormalParameter>(parent) {
+                (
+                    ast[r].type_.map(|t| t.raw()),
+                    ast[r].required_keyword,
+                    Some(ast[r].name),
+                )
+            } else {
+                return;
+            };
         match return_type {
             Some(rt) if self.offset() <= ast.end(rt) => {
                 let suggest_variable_name = name.is_some_and(|n| ast.t_lexeme(n).is_empty());
@@ -2523,7 +2889,16 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                         let has_expression = ast[g].when_clause.is_some();
                         if !has_expression {
                             let must_be_static = in_static_context(ast, node);
-                            K::add_expression_keywords(self.q, &mut self.out, Some(node), true, true, true, false, must_be_static);
+                            K::add_expression_keywords(
+                                self.q,
+                                &mut self.out,
+                                Some(node),
+                                true,
+                                true,
+                                true,
+                                false,
+                                must_be_static,
+                            );
                         }
                     } else {
                         self.kw("when");
@@ -2532,7 +2907,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             }
         } else if o >= ast.t_end(ast[i].left_parenthesis) && o <= ast.t_offset(right) {
             self.location("IfElement_condition");
-            self.for_expression(node, ExprOpts { must_be_non_void: true, ..Default::default() });
+            self.for_expression(
+                node,
+                ExprOpts {
+                    must_be_non_void: true,
+                    ..Default::default()
+                },
+            );
         } else if o >= ast.t_end(right) {
             match ast[i].else_keyword {
                 Some(e) if o > ast.t_offset(e) => self.location("IfElement_elseElement"),
@@ -2576,7 +2957,8 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                                 let nt = ast[tl].type_;
                                 if ast.end(nt) < o {
                                     let name = ast.t_lexeme(ast[nt].name).to_string();
-                                    self.ident(false).add_suggestions_from_type_name(&mut self.out, &name);
+                                    self.ident(false)
+                                        .add_suggestions_from_type_name(&mut self.out, &name);
                                 }
                             }
                         }
@@ -2585,7 +2967,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             }
         } else if o >= ast.t_end(ast[i].left_parenthesis) && o <= ast.t_offset(right) {
             self.location("IfStatement_condition");
-            self.for_expression(node, ExprOpts { must_be_non_void: true, ..Default::default() });
+            self.for_expression(
+                node,
+                ExprOpts {
+                    must_be_non_void: true,
+                    ..Default::default()
+                },
+            );
         } else if o >= ast.t_end(right) {
             match ast[i].else_keyword {
                 Some(e) if o > ast.t_offset(e) => self.location("IfStatement_elseStatement"),
@@ -2626,9 +3014,11 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         let base = member::base_element(ctx, element);
         let ty = match base.tag() {
             Tag::Getter => Some(member::return_type(ctx, element)),
-            Tag::Method | Tag::TopLevelFunction | Tag::Constructor | Tag::LocalFunction | Tag::Setter => {
-                Some(member::type_(ctx, element))
-            }
+            Tag::Method
+            | Tag::TopLevelFunction
+            | Tag::Constructor
+            | Tag::LocalFunction
+            | Tag::Setter => Some(member::type_(ctx, element)),
             Tag::Prefix => {
                 let is_instance_creation = ast
                     .parent(parent)
@@ -2641,7 +3031,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     must_be_non_void: is_instance_creation,
                     ..Default::default()
                 });
-                self.decl.as_mut().unwrap().add_declarations_through_import_prefix(q, &mut self.out, base);
+                self.decl
+                    .as_mut()
+                    .unwrap()
+                    .add_declarations_through_import_prefix(q, &mut self.out, base);
                 return;
             }
             _ if base.is::<dartr_element::VariableElement>() => Some(member::type_(ctx, element)),
@@ -2649,7 +3042,12 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 if base.is::<InterfaceElement>() || base.tag() == Tag::Extension {
                     let q = self.q;
                     self.decl(DeclConfig::default());
-                    self.decl.as_mut().unwrap().add_static_members_of_element(q, &mut self.out, base, false);
+                    self.decl.as_mut().unwrap().add_static_members_of_element(
+                        q,
+                        &mut self.out,
+                        base,
+                        false,
+                    );
                 }
                 return;
             }
@@ -2657,7 +3055,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         if let Some(t) = ty {
             let q = self.q;
             self.decl(DeclConfig::default());
-            self.decl.as_mut().unwrap().add_instance_members_of_type(q, &mut self.out, t, false);
+            self.decl
+                .as_mut()
+                .unwrap()
+                .add_instance_members_of_type(q, &mut self.out, t, false);
         }
     }
 
@@ -2667,7 +3068,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         match ast[i].keyword {
             Some(k) if self.offset() > ast.t_end(k) => {
                 let name = ast[i].constructor_name.raw();
-                if ast.n_synthetic(name) || self.offset() < ast.offset(name) || ast.n_covers(Some(name), self.offset()) {
+                if ast.n_synthetic(name)
+                    || self.offset() < ast.offset(name)
+                    || ast.n_covers(Some(name), self.offset())
+                {
                     self.location("InstanceCreationExpression_constructorName");
                     let q = self.q;
                     self.decl(DeclConfig::default());
@@ -2685,8 +3089,14 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         let e = ast.cast::<IsExpression>(node).unwrap();
         let o = self.offset();
         let op = ast[e].is_operator;
-        if ast.n_synthetic(ast[e].expression.raw()) && ast.n_synthetic(ast[e].type_.raw()) && ast.t_end(op) == o {
-            let cfg = DeclConfig { must_be_static: in_static_context(ast, node), ..Default::default() };
+        if ast.n_synthetic(ast[e].expression.raw())
+            && ast.n_synthetic(ast[e].type_.raw())
+            && ast.t_end(op) == o
+        {
+            let cfg = DeclConfig {
+                must_be_static: in_static_context(ast, node),
+                ..Default::default()
+            };
             self.add_lexical(cfg, node);
             return;
         }
@@ -2696,7 +3106,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             self.for_expression(node, ExprOpts::default());
         } else if o > ast.t_end(op) {
             self.location("IsExpression_type");
-            self.add_lexical(DeclConfig { must_be_type: true, ..Default::default() }, node);
+            self.add_lexical(
+                DeclConfig {
+                    must_be_type: true,
+                    ..Default::default()
+                },
+                node,
+            );
         }
     }
 
@@ -2710,13 +3126,21 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             self.visit_parent(node);
             self.location("NullAwareElement_value");
         } else if ast[e].value_question.is_some_and(|vq| {
-            o == ast.t_end(ast[e].separator) || o == ast.t_offset(vq) || o == ast.offset(ast[e].value)
+            o == ast.t_end(ast[e].separator)
+                || o == ast.t_offset(vq)
+                || o == ast.offset(ast[e].value)
         }) {
             self.visit_parent(node);
             self.location("NullAwareElement_value");
         } else if o >= ast.t_end(ast[e].separator) {
             self.location("MapLiteralEntry_value");
-            self.for_expression(node, ExprOpts { must_be_non_void: true, ..Default::default() });
+            self.for_expression(
+                node,
+                ExprOpts {
+                    must_be_non_void: true,
+                    ..Default::default()
+                },
+            );
         }
     }
 
@@ -2728,7 +3152,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         let first = ast[m].first_token_after_comment_and_metadata(ast);
         let before_first = ast.t_prev(first).map(|t| ast.t_offset(t)).unwrap_or(0);
         if o >= before_first && o <= ast.t_end(ast[m].name) {
-            self.for_type_annotation(node, TypeOpts { is_in_declaration: true, ..Default::default() });
+            self.for_type_annotation(
+                node,
+                TypeOpts {
+                    is_in_declaration: true,
+                    ..Default::default()
+                },
+            );
             K::add_class_member_keywords(self.q, &mut self.out);
         }
         let body = ast[m].body.raw();
@@ -2772,7 +3202,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     self.location("RecordLiteral_fields");
                     must_be_non_void = true;
                 }
-                self.for_expression(node, ExprOpts { must_be_non_void, ..Default::default() });
+                self.for_expression(
+                    node,
+                    ExprOpts {
+                        must_be_non_void,
+                        ..Default::default()
+                    },
+                );
             }
             return;
         };
@@ -2787,18 +3223,27 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             }
             let element = target.and_then(|t| self.static_member_target_element(t));
             let ctx = self.q.ctx;
-            let type_ok = ty.is_none_or(|t| matches!(ctx.ty(t), TypeKind::Invalid) || ctx.is_dart_core_type(t));
+            let type_ok = ty
+                .is_none_or(|t| matches!(ctx.ty(t), TypeKind::Invalid) || ctx.is_dart_core_type(t));
             if type_ok && element.is_some() && (!is_cascaded || o + 1 == ast.t_end(operator)) {
                 let element = element.unwrap();
                 if element.is::<InterfaceElement>() {
                     let q = self.q;
                     self.decl(DeclConfig::default());
-                    self.decl.as_mut().unwrap().add_static_members_of_element(q, &mut self.out, element, false);
+                    self.decl.as_mut().unwrap().add_static_members_of_element(
+                        q,
+                        &mut self.out,
+                        element,
+                        false,
+                    );
                 }
                 if element.tag() == Tag::Prefix {
                     let q = self.q;
                     self.decl(DeclConfig::default());
-                    self.decl.as_mut().unwrap().add_declarations_through_import_prefix(q, &mut self.out, element);
+                    self.decl
+                        .as_mut()
+                        .unwrap()
+                        .add_declarations_through_import_prefix(q, &mut self.out, element);
                 }
             }
         }
@@ -2824,8 +3269,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             return;
         };
         if o <= ast.t_end(ast[m].name) {
-            let include_body = ast.t_synthetic(ast[body].left_bracket) && ast.t_synthetic(ast[body].right_bracket);
-            self.ident(false).add_top_level_name(self.q, &mut self.out, include_body);
+            let include_body =
+                ast.t_synthetic(ast[body].left_bracket) && ast.t_synthetic(ast[body].right_bracket);
+            self.ident(false)
+                .add_top_level_name(self.q, &mut self.out, include_body);
             return;
         }
         if o <= ast.t_offset(ast[body].left_bracket) {
@@ -2839,7 +3286,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             }
             self.for_mixin_member(m);
             let members = ast.list_raw(ast[body].members).to_vec();
-            if let Some(md) = element_before(ast, &members, o).and_then(|e| ast.cast::<MethodDeclaration>(e)) {
+            if let Some(md) =
+                element_before(ast, &members, o).and_then(|e| ast.cast::<MethodDeclaration>(e))
+            {
                 let b = ast[md].body.raw();
                 if function_body_is_empty(ast, b) {
                     K::add_function_body_modifiers(self.q, &mut self.out, Some(b));
@@ -2863,14 +3312,16 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     used.retain(|u| *u != own);
                     let append_colon = ast.t_synthetic(ast[n].colon);
                     for p in parameters {
-                        if !p.kind.is_named() || p.name.as_ref().is_some_and(|nm| used.contains(nm)) {
+                        if !p.kind.is_named() || p.name.as_ref().is_some_and(|nm| used.contains(nm))
+                        {
                             continue;
                         }
                         let Some(element) = p.element else {
                             continue;
                         };
                         let ctx = self.q.ctx;
-                        let name = super::candidate::display_name(ctx, member::base_element(ctx, element));
+                        let name =
+                            super::candidate::display_name(ctx, member::base_element(ctx, element));
                         let score = self.out.score(&name);
                         if score != -1.0 {
                             let is_widget = is_flutter_widget_parameter(ctx, element);
@@ -2899,7 +3350,12 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 self.location("ArgumentList_method_named");
             }
             let ctx = self.q.ctx;
-            let parameter = dartr_resolver::error::support::corresponding_parameter(ctx, ast, self.q.tables, node);
+            let parameter = dartr_resolver::error::support::corresponding_parameter(
+                ctx,
+                ast,
+                self.q.tables,
+                node,
+            );
             let param_ref = self
                 .q
                 .tables
@@ -2946,12 +3402,21 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             .and_then(|p| self.q.element(p.raw()))
             .filter(|e| e.tag() == Tag::Prefix);
         if let Some(prefix) = prefix_element {
-            if let Some(list) = ast.parent(node).filter(|p| ast.is::<VariableDeclarationList>(*p)) {
-                if let Some(s) = ast.parent(list).and_then(|p| ast.cast::<VariableDeclarationStatement>(p)) {
+            if let Some(list) = ast
+                .parent(node)
+                .filter(|p| ast.is::<VariableDeclarationList>(*p))
+            {
+                if let Some(s) = ast
+                    .parent(list)
+                    .and_then(|p| ast.cast::<VariableDeclarationStatement>(p))
+                {
                     if ast.t_synthetic(ast[s].semicolon) {
                         let q = self.q;
                         self.decl(DeclConfig::default());
-                        self.decl.as_mut().unwrap().add_declarations_through_import_prefix(q, &mut self.out, prefix);
+                        self.decl
+                            .as_mut()
+                            .unwrap()
+                            .add_declarations_through_import_prefix(q, &mut self.out, prefix);
                         return;
                     }
                 }
@@ -2968,7 +3433,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         let exclude = parent
             .and_then(|p| ast.parent(p))
             .is_some_and(|g| ast.is::<InstanceCreationExpression>(g));
-        self.for_type_annotation(node, TypeOpts { exclude_type_names: exclude, ..Default::default() });
+        self.for_type_annotation(
+            node,
+            TypeOpts {
+                exclude_type_names: exclude,
+                ..Default::default()
+            },
+        );
     }
 
     fn visit_parenthesized_expression(&mut self, node: NodeId) {
@@ -3013,11 +3484,27 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 let parent = ast.parent(node);
                 if let Some(op) = parent.and_then(|p| ast.cast::<ObjectPattern>(p)) {
                     self.location("ObjectPattern_fieldName");
-                    if let Some(t) = self.q.tables.annotation_type.get(ast[op].type_.raw()).copied() {
+                    if let Some(t) = self
+                        .q
+                        .tables
+                        .annotation_type
+                        .get(ast[op].type_.raw())
+                        .copied()
+                    {
                         let excluded = field_names(ast, ast[op].fields);
                         let q = self.q;
-                        self.decl(DeclConfig { must_be_non_void: true, ..Default::default() });
-                        self.decl.as_mut().unwrap().add_getters(q, &mut self.out, t, &excluded, false, false);
+                        self.decl(DeclConfig {
+                            must_be_non_void: true,
+                            ..Default::default()
+                        });
+                        self.decl.as_mut().unwrap().add_getters(
+                            q,
+                            &mut self.out,
+                            t,
+                            &excluded,
+                            false,
+                            false,
+                        );
                     }
                 } else if parent.is_some_and(|p| ast.is::<RecordPattern>(p)) {
                     self.location("PatternField_pattern");
@@ -3026,10 +3513,15 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             }
             Some(n) if ast[n].name.is_none() => {
                 self.location("PatternField_pattern");
-                if ast.this_or_ancestor_of_type::<PatternVariableDeclaration>(node).is_none() {
+                if ast
+                    .this_or_ancestor_of_type::<PatternVariableDeclaration>(node)
+                    .is_none()
+                {
                     K::add_variable_pattern_keywords(&mut self.out);
                 }
-                let is_keyword_needed = ast.this_or_ancestor_of_type::<GuardedPattern>(node).is_some();
+                let is_keyword_needed = ast
+                    .this_or_ancestor_of_type::<GuardedPattern>(node)
+                    .is_some();
                 self.for_pattern_field_name(n.raw(), is_keyword_needed, true);
             }
             Some(_) => {
@@ -3064,15 +3556,25 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             .is_some_and(|a| ast[a].left_hand_side.raw() == node);
         if element.tag() == Tag::Prefix {
             let q = self.q;
-            self.decl(DeclConfig { must_be_assignable, ..Default::default() });
-            self.decl.as_mut().unwrap().add_declarations_through_import_prefix(q, &mut self.out, element);
+            self.decl(DeclConfig {
+                must_be_assignable,
+                ..Default::default()
+            });
+            self.decl
+                .as_mut()
+                .unwrap()
+                .add_declarations_through_import_prefix(q, &mut self.out, element);
             return;
         }
         let in_comment = parent.is_some_and(|pa| ast.is::<CommentReference>(pa));
-        let prefer_non_invocation =
-            in_comment || (element.is::<InterfaceElement>() && self.q.should_suggest_tear_off(element));
+        let prefer_non_invocation = in_comment
+            || (element.is::<InterfaceElement>() && self.q.should_suggest_tear_off(element));
         let q = self.q;
-        self.decl(DeclConfig { must_be_assignable, prefer_non_invocation, ..Default::default() });
+        self.decl(DeclConfig {
+            must_be_assignable,
+            prefer_non_invocation,
+            ..Default::default()
+        });
         let d = self.decl.as_mut().unwrap();
         if in_comment {
             if let Some(i) = element.cast::<InterfaceElement>() {
@@ -3092,7 +3594,16 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         let formal = ast[p].formal_parameters;
         let Some(&parameter) = ast.list_raw(ast[formal].parameters).first() else {
             self.location("PrimaryConstructorDeclaration_fieldType");
-            K::add_formal_parameter_keywords(self.q, &mut self.out, Some(formal), true, true, true, true, true);
+            K::add_formal_parameter_keywords(
+                self.q,
+                &mut self.out,
+                Some(formal),
+                true,
+                true,
+                true,
+                true,
+                true,
+            );
             self.for_type_annotation(node, TypeOpts::default());
             return;
         };
@@ -3100,7 +3611,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             return;
         };
         let last = last_non_synthetic(ast, parameter);
-        let last_kw = last.filter(|t| ast.t_is_keyword(*t) && o >= ast.t_end(*t)).map(|t| ast.t_lexeme(t));
+        let last_kw = last
+            .filter(|t| ast.t_is_keyword(*t) && o >= ast.t_end(*t))
+            .map(|t| ast.t_lexeme(t));
         let after_comma = {
             let next = ast.t_next(ast.end_tok(parameter));
             ast.t_ty(next) == TokenType::COMMA && o >= ast.t_end(next)
@@ -3108,19 +3621,46 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         match last_kw {
             Some("covariant") => {
                 self.location("PrimaryConstructorDeclaration_fieldName");
-                K::add_formal_parameter_keywords(self.q, &mut self.out, Some(formal), true, true, false, true, true);
+                K::add_formal_parameter_keywords(
+                    self.q,
+                    &mut self.out,
+                    Some(formal),
+                    true,
+                    true,
+                    false,
+                    true,
+                    true,
+                );
                 self.for_type_annotation(node, TypeOpts::default());
                 return;
             }
             Some("required") => {
                 self.location("PrimaryConstructorDeclaration_fieldName");
-                K::add_formal_parameter_keywords(self.q, &mut self.out, Some(formal), false, true, false, true, true);
+                K::add_formal_parameter_keywords(
+                    self.q,
+                    &mut self.out,
+                    Some(formal),
+                    false,
+                    true,
+                    false,
+                    true,
+                    true,
+                );
                 self.for_type_annotation(node, TypeOpts::default());
                 return;
             }
             Some("final") | Some("var") => {
                 self.location("PrimaryConstructorDeclaration_fieldName");
-                K::add_formal_parameter_keywords(self.q, &mut self.out, Some(formal), true, true, false, false, true);
+                K::add_formal_parameter_keywords(
+                    self.q,
+                    &mut self.out,
+                    Some(formal),
+                    true,
+                    true,
+                    false,
+                    false,
+                    true,
+                );
                 self.for_type_annotation(node, TypeOpts::default());
                 return;
             }
@@ -3140,20 +3680,37 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     self.for_annotation(parameter);
                 } else {
                     self.location("PrimaryConstructorDeclaration_fieldType");
-                    self.add_lexical(DeclConfig { must_be_type: true, ..Default::default() }, parameter);
+                    self.add_lexical(
+                        DeclConfig {
+                            must_be_type: true,
+                            ..Default::default()
+                        },
+                        parameter,
+                    );
                 }
             } else {
                 self.location("PrimaryConstructorDeclaration_fieldName");
-                self.ident(true).add_variable(self.q, &mut self.out, parameter_type);
+                self.ident(true)
+                    .add_variable(self.q, &mut self.out, parameter_type);
             }
         } else if after_comma {
             self.location("PrimaryConstructorDeclaration_fieldType");
-            K::add_formal_parameter_keywords(self.q, &mut self.out, Some(formal), true, true, true, true, true);
+            K::add_formal_parameter_keywords(
+                self.q,
+                &mut self.out,
+                Some(formal),
+                true,
+                true,
+                true,
+                true,
+                true,
+            );
             self.for_type_annotation(node, TypeOpts::default());
         } else {
             self.location("PrimaryConstructorDeclaration_fieldName");
             let name = ast.t_lexeme(name_token).to_string();
-            self.ident(true).add_suggestions_from_type_name(&mut self.out, &name);
+            self.ident(true)
+                .add_suggestions_from_type_name(&mut self.out, &name);
         }
     }
 
@@ -3171,7 +3728,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             return;
         };
         let parent = ast.parent(node);
-        if ast.is::<ThisExpression>(target) && parent.is_some_and(|pa| ast.is::<ConstructorFieldInitializer>(pa)) {
+        if ast.is::<ThisExpression>(target)
+            && parent.is_some_and(|pa| ast.is::<ConstructorFieldInitializer>(pa))
+        {
             self.visit_parent(node);
             return;
         }
@@ -3182,22 +3741,35 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         }
         let element = self.static_member_target_element(target);
         let is_cascaded = dartr_resolver::ast_ext::property_access_is_cascaded(ast, p);
-        let type_ok = ty.is_none_or(|t| matches!(ctx.ty(t), TypeKind::Invalid) || ctx.is_dart_core_type(t));
+        let type_ok =
+            ty.is_none_or(|t| matches!(ctx.ty(t), TypeKind::Invalid) || ctx.is_dart_core_type(t));
         if type_ok && element.is_some() && (!is_cascaded || o + 1 == ast.t_end(operator)) {
             let element = element.unwrap();
             if element.is::<InterfaceElement>() {
                 let q = self.q;
                 self.decl(DeclConfig::default());
-                self.decl.as_mut().unwrap().add_static_members_of_element(q, &mut self.out, element, false);
+                self.decl.as_mut().unwrap().add_static_members_of_element(
+                    q,
+                    &mut self.out,
+                    element,
+                    false,
+                );
             }
             if element.tag() == Tag::Prefix {
                 let q = self.q;
                 self.decl(DeclConfig::default());
-                self.decl.as_mut().unwrap().add_declarations_through_import_prefix(q, &mut self.out, element);
+                self.decl
+                    .as_mut()
+                    .unwrap()
+                    .add_declarations_through_import_prefix(q, &mut self.out, element);
             }
         }
         if ty.is_none() && ast.is::<ExtensionOverride>(target) {
-            if let Some(e) = self.q.element(target).and_then(|e| e.cast::<dartr_element::ExtensionElement>()) {
+            if let Some(e) = self
+                .q
+                .element(target)
+                .and_then(|e| e.cast::<dartr_element::ExtensionElement>())
+            {
                 let q = self.q;
                 self.decl(DeclConfig::default());
                 self.decl
@@ -3214,23 +3786,49 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         let o = self.offset();
         if o == ast.t_offset(ast[r].left_parenthesis) {
             self.location("ObjectPattern_type");
-            self.add_lexical(DeclConfig { must_be_type: true, must_be_non_void: true, ..Default::default() }, node);
+            self.add_lexical(
+                DeclConfig {
+                    must_be_type: true,
+                    must_be_non_void: true,
+                    ..Default::default()
+                },
+                node,
+            );
             return;
         }
         if ast.t_end(ast[r].left_parenthesis) <= o && o <= ast.t_offset(ast[r].right_parenthesis) {
             self.location("PatternField_pattern");
             self.kw("dynamic");
             self.for_expression(node, ExprOpts::default());
-            let target = ast.list(ast[r].fields).iter().copied().find(|f| ast.end(*f) >= o);
+            let target = ast
+                .list(ast[r].fields)
+                .iter()
+                .copied()
+                .find(|f| ast.end(*f) >= o);
             if let Some(t) = target {
                 if let Some(name) = ast[t].name {
                     if o <= ast.t_offset(ast[name].colon) {
-                        let matched = self.q.tables.pattern_info.get(node).and_then(|i| i.matched_value_type);
+                        let matched = self
+                            .q
+                            .tables
+                            .pattern_info
+                            .get(node)
+                            .and_then(|i| i.matched_value_type);
                         if let Some(m) = matched {
                             let excluded = field_names(ast, ast[r].fields);
                             let q = self.q;
-                            self.decl(DeclConfig { must_be_non_void: true, ..Default::default() });
-                            self.decl.as_mut().unwrap().add_getters(q, &mut self.out, m, &excluded, false, false);
+                            self.decl(DeclConfig {
+                                must_be_non_void: true,
+                                ..Default::default()
+                            });
+                            self.decl.as_mut().unwrap().add_getters(
+                                q,
+                                &mut self.out,
+                                m,
+                                &excluded,
+                                false,
+                                false,
+                            );
                         }
                     }
                 }
@@ -3241,7 +3839,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
     fn visit_redirecting_constructor_invocation(&mut self, node: NodeId) {
         let ast = self.ast();
         let r = ast.cast::<RedirectingConstructorInvocation>(node).unwrap();
-        let Some(constructor) = ast.parent(node).and_then(|p| ast.cast::<ConstructorDeclaration>(p)) else {
+        let Some(constructor) = ast
+            .parent(node)
+            .and_then(|p| ast.cast::<ConstructorDeclaration>(p))
+        else {
             return;
         };
         self.location("ConstructorDeclaration_initializer");
@@ -3298,7 +3899,11 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 suggest_required = false;
                 self.for_type_annotation(
                     node,
-                    TypeOpts { no_dynamic: !suggest_dynamic, no_void: !suggest_void, ..Default::default() },
+                    TypeOpts {
+                        no_dynamic: !suggest_dynamic,
+                        no_void: !suggest_void,
+                        ..Default::default()
+                    },
                 );
                 suggest_dynamic = false;
                 suggest_void = false;
@@ -3312,11 +3917,19 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             self.location("FormalParameterList_parameter");
             if let Some(nt) = ast.cast::<NamedType>(ty) {
                 if let Some(ip) = ast[nt].import_prefix {
-                    if let Some(prefix) = self.q.element(ip.raw()).filter(|e| e.tag() == Tag::Prefix) {
+                    if let Some(prefix) =
+                        self.q.element(ip.raw()).filter(|e| e.tag() == Tag::Prefix)
+                    {
                         if ast.t_covers(Some(ast[nt].name), o) {
                             let q = self.q;
-                            self.decl(DeclConfig { must_be_type: true, ..Default::default() });
-                            self.decl.as_mut().unwrap().add_declarations_through_import_prefix(q, &mut self.out, prefix);
+                            self.decl(DeclConfig {
+                                must_be_type: true,
+                                ..Default::default()
+                            });
+                            self.decl
+                                .as_mut()
+                                .unwrap()
+                                .add_declarations_through_import_prefix(q, &mut self.out, prefix);
                         }
                     }
                 }
@@ -3357,7 +3970,11 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 }
                 self.for_type_annotation(
                     node,
-                    TypeOpts { no_void: !suggest_void, no_dynamic: !suggest_dynamic, ..Default::default() },
+                    TypeOpts {
+                        no_void: !suggest_void,
+                        no_dynamic: !suggest_dynamic,
+                        ..Default::default()
+                    },
                 );
             }
         }
@@ -3367,7 +3984,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         let ast = self.ast();
         if self.suggest_uris {
             if let Some(p) = ast.parent(node) {
-                if ast.is::<Configuration>(p) || ast.is::<PartOfDirective>(p) || ast.is::<UriBasedDirective>(p) {
+                if ast.is::<Configuration>(p)
+                    || ast.is::<PartOfDirective>(p)
+                    || ast.is::<UriBasedDirective>(p)
+                {
                     super::uri::add_uri_suggestions(self.q, &mut self.out, node);
                     return;
                 }
@@ -3379,7 +3999,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
     fn visit_super_constructor_invocation(&mut self, node: NodeId) {
         let ast = self.ast();
         let s = ast.cast::<SuperConstructorInvocation>(node).unwrap();
-        let Some(constructor) = ast.parent(node).and_then(|p| ast.cast::<ConstructorDeclaration>(p)) else {
+        let Some(constructor) = ast
+            .parent(node)
+            .and_then(|p| ast.cast::<ConstructorDeclaration>(p))
+        else {
             return;
         };
         self.location("ConstructorDeclaration_initializer");
@@ -3399,8 +4022,16 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     .and_then(|e| ctx.element_supertype(e));
                 if let Some(t) = super_type {
                     let q = self.q;
-                    self.decl(DeclConfig { must_be_constant: ast[constructor].const_keyword.is_some(), ..Default::default() });
-                    self.decl.as_mut().unwrap().add_constructor_names_for_type(q, &mut self.out, t, None);
+                    self.decl(DeclConfig {
+                        must_be_constant: ast[constructor].const_keyword.is_some(),
+                        ..Default::default()
+                    });
+                    self.decl.as_mut().unwrap().add_constructor_names_for_type(
+                        q,
+                        &mut self.out,
+                        t,
+                        None,
+                    );
                 }
             }
         }
@@ -3423,10 +4054,16 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             let ctx = self.q.ctx;
             let can_be_bool = self.can_be_bool(ty);
             let can_be_null = self.can_be_null(ty);
-            let can_suggest_const = !ctx.is_dart_core_function(ty) && !matches!(ctx.ty(ty), TypeKind::Function(_));
+            let can_suggest_const =
+                !ctx.is_dart_core_function(ty) && !matches!(ctx.ty(ty), TypeKind::Function(_));
             self.for_expression(
                 expression,
-                ExprOpts { can_be_bool, can_be_null, can_suggest_const, ..Default::default() },
+                ExprOpts {
+                    can_be_bool,
+                    can_be_null,
+                    can_suggest_const,
+                    ..Default::default()
+                },
             );
         }
     }
@@ -3453,14 +4090,26 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             if let Some(cp) = ast.cast::<ConstantPattern>(pattern) {
                 if let Some(i) = ast.cast::<SimpleIdentifier>(ast[cp].expression.raw()) {
                     if !ast.n_synthetic(i.raw()) && o < ast.offset(i) {
-                        self.add_lexical(DeclConfig { must_be_type: true, ..Default::default() }, node);
+                        self.add_lexical(
+                            DeclConfig {
+                                must_be_type: true,
+                                ..Default::default()
+                            },
+                            node,
+                        );
                         return;
                     }
                 }
             }
             if let Some(w) = ast.cast::<WildcardPattern>(pattern) {
                 if o < ast.t_offset(ast[w].name) {
-                    self.add_lexical(DeclConfig { must_be_type: true, ..Default::default() }, node);
+                    self.add_lexical(
+                        DeclConfig {
+                            must_be_type: true,
+                            ..Default::default()
+                        },
+                        node,
+                    );
                     return;
                 }
             }
@@ -3469,7 +4118,8 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     let nt = ast[tl].type_;
                     if ast.end(nt) < o {
                         let name = ast.t_lexeme(ast[nt].name).to_string();
-                        self.ident(false).add_suggestions_from_type_name(&mut self.out, &name);
+                        self.ident(false)
+                            .add_suggestions_from_type_name(&mut self.out, &name);
                         return;
                     }
                 }
@@ -3505,9 +4155,21 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                         self.kw("final");
                         self.kw("var");
                         if let Some(cp) = ast.cast::<ConstantPattern>(pattern) {
-                            self.for_expression(ast[cp].expression.raw(), ExprOpts { must_be_non_void: true, ..Default::default() });
+                            self.for_expression(
+                                ast[cp].expression.raw(),
+                                ExprOpts {
+                                    must_be_non_void: true,
+                                    ..Default::default()
+                                },
+                            );
                         } else {
-                            self.for_expression(pattern, ExprOpts { must_be_non_void: true, ..Default::default() });
+                            self.for_expression(
+                                pattern,
+                                ExprOpts {
+                                    must_be_non_void: true,
+                                    ..Default::default()
+                                },
+                            );
                         }
                     } else {
                         self.kw("as");
@@ -3539,9 +4201,17 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         if o <= ast.t_end(ast[s].switch_keyword) {
             self.location("Block_statement");
             self.for_statement(node);
-        } else if o >= ast.t_end(ast[s].left_parenthesis) && o <= ast.t_offset(ast[s].right_parenthesis) {
+        } else if o >= ast.t_end(ast[s].left_parenthesis)
+            && o <= ast.t_offset(ast[s].right_parenthesis)
+        {
             self.location("SwitchStatement_expression");
-            self.for_expression(node, ExprOpts { must_be_non_void: true, ..Default::default() });
+            self.for_expression(
+                node,
+                ExprOpts {
+                    must_be_non_void: true,
+                    ..Default::default()
+                },
+            );
         } else if o >= ast.t_end(ast[s].left_bracket) && o <= ast.t_offset(ast[s].right_bracket) {
             self.location("SwitchMember_statement");
             self.kw("case");
@@ -3572,7 +4242,8 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         if o > ast.t_end(ast.begin(first.raw())) {
             if ast[list].type_.is_none() {
                 let name = ast.t_lexeme(ast[first].name).to_string();
-                self.ident(true).add_suggestions_from_type_name(&mut self.out, &name);
+                self.ident(true)
+                    .add_suggestions_from_type_name(&mut self.out, &name);
             }
             return;
         }
@@ -3588,7 +4259,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         if !variable_list_is_final(ast, list) {
             self.kw("final");
         }
-        if let Some(unit) = ast.parent(node).and_then(|p| ast.cast::<CompilationUnit>(p)) {
+        if let Some(unit) = ast
+            .parent(node)
+            .and_then(|p| ast.cast::<CompilationUnit>(p))
+        {
             let (before, _) = members_around_member(ast, unit, node);
             if before.is_none_or(|b| ast.is::<Directive>(b)) {
                 self.location("CompilationUnit_directive");
@@ -3596,7 +4270,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 self.location("CompilationUnit_declaration");
             }
         }
-        self.add_lexical(DeclConfig { must_be_type: true, ..Default::default() }, node);
+        self.add_lexical(
+            DeclConfig {
+                must_be_type: true,
+                ..Default::default()
+            },
+            node,
+        );
     }
 
     fn visit_try_statement(&mut self, node: NodeId) {
@@ -3612,7 +4292,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     let clauses = ast.list(ast[t].catch_clauses);
                     match clauses.last() {
                         None => K::add_try_clause_keywords(&mut self.out, true),
-                        Some(&last) => K::add_try_clause_keywords(&mut self.out, o >= ast.end(last)),
+                        Some(&last) => {
+                            K::add_try_clause_keywords(&mut self.out, o >= ast.end(last))
+                        }
                     }
                 }
                 Some(f) if o < ast.t_offset(f) => K::add_try_clause_keywords(&mut self.out, false),
@@ -3625,7 +4307,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         let ast = self.ast();
         let p = ast.cast::<TypeParameter>(node).unwrap();
         let o = self.offset();
-        if let Some(list) = ast.parent(node).and_then(|l| ast.cast::<TypeParameterList>(l)) {
+        if let Some(list) = ast
+            .parent(node)
+            .and_then(|l| ast.cast::<TypeParameterList>(l))
+        {
             let left = ast.t_next(ast[list].right_bracket);
             let right = ast.t_next(left);
             if ast.t_ty(left) == TokenType::OPEN_PAREN
@@ -3634,7 +4319,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 && ast.t_synthetic(right)
             {
                 self.location("TypeParameter_bound");
-                self.for_type_annotation(node, TypeOpts { excluded_nodes: vec![list.raw()], ..Default::default() });
+                self.for_type_annotation(
+                    node,
+                    TypeOpts {
+                        excluded_nodes: vec![list.raw()],
+                        ..Default::default()
+                    },
+                );
                 return;
             }
         }
@@ -3644,7 +4335,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         match ast[p].extends_keyword {
             Some(e) if o > ast.t_end(e) => {
                 self.location("TypeParameter_bound");
-                self.for_type_annotation(node, TypeOpts { must_be_non_void: true, ..Default::default() });
+                self.for_type_annotation(
+                    node,
+                    TypeOpts {
+                        must_be_non_void: true,
+                        ..Default::default()
+                    },
+                );
             }
             _ => self.kw("extends"),
         }
@@ -3654,7 +4351,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         let ast = self.ast();
         let v = ast.cast::<VariableDeclaration>(node).unwrap();
         let o = self.offset();
-        let Some(list) = ast.parent(node).and_then(|p| ast.cast::<VariableDeclarationList>(p)) else {
+        let Some(list) = ast
+            .parent(node)
+            .and_then(|p| ast.cast::<VariableDeclarationList>(p))
+        else {
             return;
         };
         let grandparent = ast.parent(list);
@@ -3668,7 +4368,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         } else if grandparent.is_some_and(|g| ast.is::<ForPartsWithDeclarations>(g)) {
             if ast[v].equals.is_none()
                 && ast.list(ast[list].variables).len() == 1
-                && ast[list].type_.is_some_and(|t| ast.is::<RecordTypeAnnotation>(t.raw()))
+                && ast[list]
+                    .type_
+                    .is_some_and(|t| ast.is::<RecordTypeAnnotation>(t.raw()))
             {
                 self.kw("in");
             }
@@ -3693,7 +4395,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                         self.kw("var");
                         const_added = true;
                     }
-                    if let Some(t) = grandparent.and_then(|g| ast.cast::<TopLevelVariableDeclaration>(g)) {
+                    if let Some(t) =
+                        grandparent.and_then(|g| ast.cast::<TopLevelVariableDeclaration>(g))
+                    {
                         if ast[t].abstract_keyword.is_some() {
                             for k in ["base", "class", "final", "interface", "mixin"] {
                                 self.kw(k);
@@ -3705,9 +4409,11 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     }
                 }
                 Some(t) => {
-                    let can_be_private = grandparent
-                        .is_some_and(|g| ast.is::<FieldDeclaration>(g) || ast.is::<TopLevelVariableDeclaration>(g));
-                    self.ident(can_be_private).add_variable(self.q, &mut self.out, Some(t.raw()));
+                    let can_be_private = grandparent.is_some_and(|g| {
+                        ast.is::<FieldDeclaration>(g) || ast.is::<TopLevelVariableDeclaration>(g)
+                    });
+                    self.ident(can_be_private)
+                        .add_variable(self.q, &mut self.out, Some(t.raw()));
                 }
             }
             if let Some(fd) = grandparent.and_then(|g| ast.cast::<FieldDeclaration>(g)) {
@@ -3717,7 +4423,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 }
                 if ast[fd].static_keyword.is_none() {
                     self.kw("static");
-                    if container.is_some_and(|c| ast.is::<ClassDeclaration>(c) || ast.is::<MixinDeclaration>(c)) {
+                    if container.is_some_and(|c| {
+                        ast.is::<ClassDeclaration>(c) || ast.is::<MixinDeclaration>(c)
+                    }) {
                         if ast[fd].abstract_keyword.is_none() {
                             self.kw("abstract");
                         }
@@ -3725,7 +4433,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                             self.kw("covariant");
                         }
                     }
-                    if ast[list].late_keyword.is_none() && !container.is_some_and(|c| ast.is::<ExtensionDeclaration>(c)) {
+                    if ast[list].late_keyword.is_none()
+                        && !container.is_some_and(|c| ast.is::<ExtensionDeclaration>(c))
+                    {
                         self.kw("late");
                     }
                 }
@@ -3753,16 +4463,22 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                         self.location("MixinDeclaration_member");
                     }
                     let element = c
-                        .filter(|c| ast.is::<ClassDeclaration>(*c) || ast.is::<MixinDeclaration>(*c))
+                        .filter(|c| {
+                            ast.is::<ClassDeclaration>(*c) || ast.is::<MixinDeclaration>(*c)
+                        })
                         .and_then(|c| self.q.declared_element(c))
                         .and_then(|e| e.cast::<InterfaceElement>());
                     self.suggest_overrides_for(element, false);
                 }
-            } else if let Some(t) = grandparent.and_then(|g| ast.cast::<TopLevelVariableDeclaration>(g)) {
+            } else if let Some(t) =
+                grandparent.and_then(|g| ast.cast::<TopLevelVariableDeclaration>(g))
+            {
                 if ast[t].external_keyword.is_none() {
                     self.kw("external");
                 }
-                if ast[list].late_keyword.is_none() && !container.is_some_and(|c| ast.is::<ExtensionDeclaration>(c)) {
+                if ast[list].late_keyword.is_none()
+                    && !container.is_some_and(|c| ast.is::<ExtensionDeclaration>(c))
+                {
                     self.kw("late");
                 }
             }
@@ -3771,7 +4487,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         if let Some(equals) = ast[v].equals {
             if o >= ast.t_end(equals) {
                 self.location("VariableDeclaration_initializer");
-                self.for_expression(node, ExprOpts { must_be_non_void: true, ..Default::default() });
+                self.for_expression(
+                    node,
+                    ExprOpts {
+                        must_be_non_void: true,
+                        ..Default::default()
+                    },
+                );
             }
         }
     }
@@ -3818,31 +4540,52 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
     }
 
     fn for_annotation(&mut self, node: NodeId) {
-        self.add_lexical(DeclConfig { must_be_constant: true, ..Default::default() }, node);
+        self.add_lexical(
+            DeclConfig {
+                must_be_constant: true,
+                ..Default::default()
+            },
+            node,
+        );
     }
 
     fn for_class_like_member(&mut self, node: NodeId) {
         let ast = self.ast();
         match ast.kind(node) {
-            NodeKind::ClassDeclaration => self.for_class_member(ast.cast::<ClassDeclaration>(node).unwrap()),
+            NodeKind::ClassDeclaration => {
+                self.for_class_member(ast.cast::<ClassDeclaration>(node).unwrap())
+            }
             NodeKind::EnumDeclaration => self.for_enum_member(node),
             NodeKind::ExtensionDeclaration => self.for_extension_member(node),
             NodeKind::ExtensionTypeDeclaration => self.for_extension_type_member(node),
-            NodeKind::MixinDeclaration => self.for_mixin_member(ast.cast::<MixinDeclaration>(node).unwrap()),
+            NodeKind::MixinDeclaration => {
+                self.for_mixin_member(ast.cast::<MixinDeclaration>(node).unwrap())
+            }
             _ => {}
         }
     }
 
     fn for_class_member(&mut self, node: Id<ClassDeclaration>) {
         K::add_class_member_keywords(self.q, &mut self.out);
-        self.add_lexical(DeclConfig { must_be_type: true, ..Default::default() }, node.raw());
-        let element = self.q.declared_element(node.raw()).and_then(|e| e.cast::<InterfaceElement>());
+        self.add_lexical(
+            DeclConfig {
+                must_be_type: true,
+                ..Default::default()
+            },
+            node.raw(),
+        );
+        let element = self
+            .q
+            .declared_element(node.raw())
+            .and_then(|e| e.cast::<InterfaceElement>());
         self.suggest_overrides_for(element, false);
     }
 
     fn for_enclosing_collection(&mut self, node: NodeId) {
         let ast = self.ast();
-        let literal = ast.this_or_ancestor_matching(node, |a, n| a.is::<ListLiteral>(n) || a.is::<SetOrMapLiteral>(n));
+        let literal = ast.this_or_ancestor_matching(node, |a, n| {
+            a.is::<ListLiteral>(n) || a.is::<SetOrMapLiteral>(n)
+        });
         if let Some(l) = literal {
             let elements = if let Some(ll) = ast.cast::<ListLiteral>(l) {
                 ast.list_raw(ast[ll].elements).to_vec()
@@ -3858,9 +4601,20 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         let ast = self.ast();
         let must_be_static = in_static_context(ast, literal);
         let must_be_const = dartr_resolver::ast_ext::in_constant_context(ast, literal);
-        K::add_collection_element_keywords(self.q, &mut self.out, literal, elements, must_be_const, must_be_static);
+        K::add_collection_element_keywords(
+            self.q,
+            &mut self.out,
+            literal,
+            elements,
+            must_be_const,
+            must_be_static,
+        );
         let preceding = element_before(ast, elements, self.offset());
-        let cfg = DeclConfig { must_be_static, must_be_constant: must_be_const, ..Default::default() };
+        let cfg = DeclConfig {
+            must_be_static,
+            must_be_constant: must_be_const,
+            ..Default::default()
+        };
         self.add_lexical(cfg, preceding.unwrap_or(literal));
     }
 
@@ -3873,7 +4627,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             return;
         }
         let u = self.q.unit();
-        let Some(library) = u.directive_library(directive).and_then(|l| l.cast::<dartr_element::LibraryElement>()) else {
+        let Some(library) = u
+            .directive_library(directive)
+            .and_then(|l| l.cast::<dartr_element::LibraryElement>())
+        else {
             return;
         };
         let covering = self.q.covering;
@@ -3885,16 +4642,33 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             .map(|s| ast.t_lexeme(ast[s].token).to_string())
             .collect();
         let q = self.q;
-        self.decl(DeclConfig { prefer_non_invocation: true, ..Default::default() });
-        self.decl.as_mut().unwrap().add_from_library(q, &mut self.out, library, &excluded);
+        self.decl(DeclConfig {
+            prefer_non_invocation: true,
+            ..Default::default()
+        });
+        self.decl
+            .as_mut()
+            .unwrap()
+            .add_from_library(q, &mut self.out, library, &excluded);
     }
 
     fn for_compilation_unit_declaration(&mut self, unit: Id<CompilationUnit>) {
         K::add_compilation_unit_declaration_keywords(self.q, &mut self.out);
-        self.add_lexical(DeclConfig { must_be_type: true, ..Default::default() }, unit.raw());
+        self.add_lexical(
+            DeclConfig {
+                must_be_type: true,
+                ..Default::default()
+            },
+            unit.raw(),
+        );
     }
 
-    fn for_compilation_unit_member(&mut self, unit: Id<CompilationUnit>, before: Option<NodeId>, after: Option<NodeId>) {
+    fn for_compilation_unit_member(
+        &mut self,
+        unit: Id<CompilationUnit>,
+        before: Option<NodeId>,
+        after: Option<NodeId>,
+    ) {
         let ast = self.ast();
         if before.is_none_or(|b| ast.is::<Directive>(b)) {
             self.location("CompilationUnit_directive");
@@ -3910,7 +4684,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
 
     fn for_compilation_unit_member_before(&mut self, member: NodeId) {
         let ast = self.ast();
-        if let Some(unit) = ast.parent(member).and_then(|p| ast.cast::<CompilationUnit>(p)) {
+        if let Some(unit) = ast
+            .parent(member)
+            .and_then(|p| ast.cast::<CompilationUnit>(p))
+        {
             let (before, after) = members_around_member(ast, unit, member);
             self.for_compilation_unit_member(unit, before, after);
         }
@@ -3918,21 +4695,40 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
 
     fn for_constant_expression(&mut self, node: NodeId) {
         let ast = self.ast();
-        let in_constant_context = ast.is::<Expression>(node) && dartr_resolver::ast_ext::in_constant_context(ast, node);
+        let in_constant_context =
+            ast.is::<Expression>(node) && dartr_resolver::ast_ext::in_constant_context(ast, node);
         K::add_constant_expression_keywords(&mut self.out, in_constant_context);
-        let cfg = DeclConfig { must_be_constant: true, must_be_static: in_static_context(ast, node), ..Default::default() };
+        let cfg = DeclConfig {
+            must_be_constant: true,
+            must_be_static: in_static_context(ast, node),
+            ..Default::default()
+        };
         self.add_lexical(cfg, node);
     }
 
-    fn for_constructor_initializer(&mut self, constructor: Id<ConstructorDeclaration>, initializer: Option<Id<ConstructorFieldInitializer>>) {
+    fn for_constructor_initializer(
+        &mut self,
+        constructor: Id<ConstructorDeclaration>,
+        initializer: Option<Id<ConstructorFieldInitializer>>,
+    ) {
         let ast = self.ast();
         let field = initializer
             .and_then(|i| self.q.element(ast[i].field_name.raw()))
             .filter(|e| e.tag() == Tag::Field);
-        K::add_constructor_initializer_keywords(self.q, &mut self.out, constructor, initializer.map(|i| i.raw()));
+        K::add_constructor_initializer_keywords(
+            self.q,
+            &mut self.out,
+            constructor,
+            initializer.map(|i| i.raw()),
+        );
         let q = self.q;
         self.decl(DeclConfig::default());
-        self.decl.as_mut().unwrap().add_fields_for_initializers(q, &mut self.out, constructor, field);
+        self.decl.as_mut().unwrap().add_fields_for_initializers(
+            q,
+            &mut self.out,
+            constructor,
+            field,
+        );
     }
 
     fn for_directive(&mut self, unit: Id<CompilationUnit>, before: Option<NodeId>) {
@@ -3941,7 +4737,13 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
 
     fn for_enum_member(&mut self, node: NodeId) {
         K::add_enum_member_keywords(self.q, &mut self.out);
-        self.add_lexical(DeclConfig { must_be_type: true, ..Default::default() }, node);
+        self.add_lexical(
+            DeclConfig {
+                must_be_type: true,
+                ..Default::default()
+            },
+            node,
+        );
     }
 
     /// Dart `_forExpression`.
@@ -3949,7 +4751,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         let ast = self.ast();
         let must_be_constant = ast.is::<Expression>(node)
             && (dartr_resolver::ast_ext::in_constant_context(ast, node)
-                || ast.parent(node).is_some_and(|p| ast.is::<FormalParameterDefaultClause>(p)));
+                || ast
+                    .parent(node)
+                    .is_some_and(|p| ast.is::<FormalParameterDefaultClause>(p)));
         let must_be_static = in_static_context(ast, node);
         K::add_expression_keywords(
             self.q,
@@ -4003,19 +4807,33 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
 
     fn for_extension_member(&mut self, node: NodeId) {
         K::add_extension_member_keywords(&mut self.out, false);
-        self.add_lexical(DeclConfig { must_be_type: true, ..Default::default() }, node);
+        self.add_lexical(
+            DeclConfig {
+                must_be_type: true,
+                ..Default::default()
+            },
+            node,
+        );
     }
 
     fn for_extension_type_member(&mut self, node: NodeId) {
         K::add_extension_type_member_keywords(self.q, &mut self.out, false);
-        self.add_lexical(DeclConfig { must_be_type: true, ..Default::default() }, node);
+        self.add_lexical(
+            DeclConfig {
+                must_be_type: true,
+                ..Default::default()
+            },
+            node,
+        );
     }
 
     /// Dart `_forIncompletePrecedingClassMember`.
     fn for_incomplete_preceding_class_member(&mut self, member: NodeId) -> bool {
         let ast = self.ast();
         if self.offset() <= ast.t_end(ast.begin(member)) {
-            if let Some(m) = preceding_member(ast, member).and_then(|p| ast.cast::<MethodDeclaration>(p)) {
+            if let Some(m) =
+                preceding_member(ast, member).and_then(|p| ast.cast::<MethodDeclaration>(p))
+            {
                 let body = ast[m].body.raw();
                 if ast.fully_synthetic(body) {
                     self.location("ClassDeclaration_member");
@@ -4062,13 +4880,19 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         };
         let q = self.q;
         self.decl(cfg);
-        self.decl.as_mut().unwrap().add_instance_members_of_type(q, &mut self.out, ty, only_super);
+        self.decl
+            .as_mut()
+            .unwrap()
+            .add_instance_members_of_type(q, &mut self.out, ty, only_super);
     }
 
     /// Dart `_computeMustBeAssignable`.
     fn compute_must_be_assignable(&self, node: NodeId) -> bool {
         let ast = self.ast();
-        if let Some(a) = ast.parent(node).and_then(|p| ast.cast::<AssignmentExpression>(p)) {
+        if let Some(a) = ast
+            .parent(node)
+            .and_then(|p| ast.cast::<AssignmentExpression>(p))
+        {
             if ast[a].left_hand_side.raw() == node {
                 let li = self.q.line_info;
                 return li.get_location(self.offset()).line_number
@@ -4080,8 +4904,17 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
 
     fn for_mixin_member(&mut self, node: Id<MixinDeclaration>) {
         K::add_mixin_member_keywords(&mut self.out);
-        self.add_lexical(DeclConfig { must_be_type: true, ..Default::default() }, node.raw());
-        let element = self.q.declared_element(node.raw()).and_then(|e| e.cast::<InterfaceElement>());
+        self.add_lexical(
+            DeclConfig {
+                must_be_type: true,
+                ..Default::default()
+            },
+            node.raw(),
+        );
+        let element = self
+            .q
+            .declared_element(node.raw())
+            .and_then(|e| e.cast::<InterfaceElement>());
         self.suggest_overrides_for(element, false);
     }
 
@@ -4094,7 +4927,8 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                 self.kw("when");
                 if let Some(nt) = ast[p].type_.and_then(|t| ast.cast::<NamedType>(t.raw())) {
                     let name = ast.t_lexeme(ast[nt].name).to_string();
-                    self.ident(false).add_suggestions_from_type_name(&mut self.out, &name);
+                    self.ident(false)
+                        .add_suggestions_from_type_name(&mut self.out, &name);
                 }
             }
         } else if let Some(field) = parent.filter(|pa| ast.is::<PatternField>(*pa)) {
@@ -4116,21 +4950,37 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             if let Some(cp) = ast.cast::<ConstantPattern>(pattern) {
                 if let Some(i) = ast.cast::<SimpleIdentifier>(ast[cp].expression.raw()) {
                     if !ast.n_synthetic(i.raw()) && o < ast.offset(i) {
-                        self.add_lexical(DeclConfig { must_be_type: true, ..Default::default() }, node);
+                        self.add_lexical(
+                            DeclConfig {
+                                must_be_type: true,
+                                ..Default::default()
+                            },
+                            node,
+                        );
                         return;
                     }
                 }
             }
             if let Some(w) = ast.cast::<WildcardPattern>(pattern) {
                 if o < ast.t_offset(ast[w].name) {
-                    self.add_lexical(DeclConfig { must_be_type: true, ..Default::default() }, node);
+                    self.add_lexical(
+                        DeclConfig {
+                            must_be_type: true,
+                            ..Default::default()
+                        },
+                        node,
+                    );
                     return;
                 }
             }
         }
         if let Some(i) = ast.cast::<SimpleIdentifier>(covering) {
             if ast.n_synthetic(i.raw()) {
-                if ast.parent(covering).and_then(|p| ast.parent(p)).is_some_and(|g| ast.is::<PatternField>(g)) {
+                if ast
+                    .parent(covering)
+                    .and_then(|p| ast.parent(p))
+                    .is_some_and(|g| ast.is::<PatternField>(g))
+                {
                     K::add_variable_pattern_keywords(&mut self.out);
                     self.out.collector.prefer_constants = true;
                     let cfg = DeclConfig {
@@ -4142,10 +4992,19 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                     self.add_lexical(cfg, node);
                     return;
                 }
-            } else if ast.parent(covering).is_some_and(|p| ast.is::<ConstantPattern>(p)) {
+            } else if ast
+                .parent(covering)
+                .is_some_and(|p| ast.is::<ConstantPattern>(p))
+            {
                 K::add_pattern_keywords(&mut self.out);
                 self.out.collector.prefer_constants = true;
-                self.add_lexical(DeclConfig { must_be_non_void: true, ..Default::default() }, node);
+                self.add_lexical(
+                    DeclConfig {
+                        must_be_non_void: true,
+                        ..Default::default()
+                    },
+                    node,
+                );
                 return;
             }
         }
@@ -4182,20 +5041,45 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         self.add_lexical(cfg, node);
     }
 
-    fn for_pattern_field_name(&mut self, node: NodeId, is_keyword_needed: bool, is_type_needed: bool) {
+    fn for_pattern_field_name(
+        &mut self,
+        node: NodeId,
+        is_keyword_needed: bool,
+        is_type_needed: bool,
+    ) {
         let ast = self.ast();
-        if let Some(pattern) = ast.parent(node).and_then(|p| ast.parent(p)).filter(|p| ast.is::<DartPattern>(*p)) {
+        if let Some(pattern) = ast
+            .parent(node)
+            .and_then(|p| ast.parent(p))
+            .filter(|p| ast.is::<DartPattern>(*p))
+        {
             self.for_pattern_field_name_in_pattern(pattern, is_keyword_needed, is_type_needed);
         }
     }
 
-    fn for_pattern_field_name_in_pattern(&mut self, pattern: NodeId, is_keyword_needed: bool, is_type_needed: bool) {
+    fn for_pattern_field_name_in_pattern(
+        &mut self,
+        pattern: NodeId,
+        is_keyword_needed: bool,
+        is_type_needed: bool,
+    ) {
         let ast = self.ast();
         let (ty, fields) = if let Some(o) = ast.cast::<ObjectPattern>(pattern) {
-            (self.q.tables.annotation_type.get(ast[o].type_.raw()).copied(), ast[o].fields)
+            (
+                self.q
+                    .tables
+                    .annotation_type
+                    .get(ast[o].type_.raw())
+                    .copied(),
+                ast[o].fields,
+            )
         } else if let Some(r) = ast.cast::<RecordPattern>(pattern) {
             (
-                self.q.tables.pattern_info.get(pattern).and_then(|i| i.matched_value_type),
+                self.q
+                    .tables
+                    .pattern_info
+                    .get(pattern)
+                    .and_then(|i| i.matched_value_type),
                 ast[r].fields,
             )
         } else {
@@ -4206,11 +5090,19 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         };
         let excluded = field_names(ast, fields);
         let q = self.q;
-        self.decl(DeclConfig { must_be_non_void: true, prefer_non_invocation: true, ..Default::default() });
-        self.decl
-            .as_mut()
-            .unwrap()
-            .add_getters(q, &mut self.out, ty, &excluded, is_keyword_needed, is_type_needed);
+        self.decl(DeclConfig {
+            must_be_non_void: true,
+            prefer_non_invocation: true,
+            ..Default::default()
+        });
+        self.decl.as_mut().unwrap().add_getters(
+            q,
+            &mut self.out,
+            ty,
+            &excluded,
+            is_keyword_needed,
+            is_type_needed,
+        );
     }
 
     fn for_redirecting_constructor_invocation(&mut self, constructor: Id<ConstructorDeclaration>) {
@@ -4219,7 +5111,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         let ctx = self.q.ctx;
         let this_type = container
             .filter(|c| {
-                ast.is::<ClassDeclaration>(*c) || ast.is::<EnumDeclaration>(*c) || ast.is::<ExtensionTypeDeclaration>(*c)
+                ast.is::<ClassDeclaration>(*c)
+                    || ast.is::<EnumDeclaration>(*c)
+                    || ast.is::<ExtensionTypeDeclaration>(*c)
             })
             .and_then(|c| self.q.declared_element(c))
             .and_then(|e| e.cast::<InterfaceElement>())
@@ -4227,8 +5121,16 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         if let Some(t) = this_type {
             let name = ast[constructor].name.map(|n| ast.t_lexeme(n).to_string());
             let q = self.q;
-            self.decl(DeclConfig { must_be_constant: ast[constructor].const_keyword.is_some(), ..Default::default() });
-            self.decl.as_mut().unwrap().add_constructor_names_for_type(q, &mut self.out, t, name.as_deref());
+            self.decl(DeclConfig {
+                must_be_constant: ast[constructor].const_keyword.is_some(),
+                ..Default::default()
+            });
+            self.decl.as_mut().unwrap().add_constructor_names_for_type(
+                q,
+                &mut self.out,
+                t,
+                name.as_deref(),
+            );
         }
     }
 
@@ -4241,7 +5143,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
     fn for_type_annotation(&mut self, node: NodeId, opts: TypeOpts) {
         let ast = self.ast();
         if !opts.no_dynamic
-            && !(opts.must_be_extensible || opts.must_be_implementable || opts.must_be_mixable || opts.is_in_declaration)
+            && !(opts.must_be_extensible
+                || opts.must_be_implementable
+                || opts.must_be_mixable
+                || opts.is_in_declaration)
         {
             self.kw("dynamic");
             if !opts.no_void && !opts.must_be_non_void {
@@ -4261,7 +5166,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
                         exclude_type_names: opts.exclude_type_names,
                         ..Default::default()
                     });
-                    self.decl.as_mut().unwrap().add_declarations_through_import_prefix(q, &mut self.out, prefix);
+                    self.decl
+                        .as_mut()
+                        .unwrap()
+                        .add_declarations_through_import_prefix(q, &mut self.out, prefix);
                 }
                 return;
             }
@@ -4278,14 +5186,21 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         self.add_lexical(cfg, node);
     }
 
-    fn handled_incomplete_preceding_unit_member(&mut self, unit: Id<CompilationUnit>, preceding: NodeId) -> bool {
+    fn handled_incomplete_preceding_unit_member(
+        &mut self,
+        unit: Id<CompilationUnit>,
+        preceding: NodeId,
+    ) -> bool {
         let ast = self.ast();
         let _ = unit;
         match ast.kind(preceding) {
             NodeKind::ClassDeclaration => {
                 let c = ast.cast::<ClassDeclaration>(preceding).unwrap();
                 let no_body = match ast.cast::<BlockClassBody>(ast[c].body.raw()) {
-                    Some(b) => ast.t_synthetic(ast[b].left_bracket) && ast.t_synthetic(ast[b].right_bracket),
+                    Some(b) => {
+                        ast.t_synthetic(ast[b].left_bracket)
+                            && ast.t_synthetic(ast[b].right_bracket)
+                    }
                     None => true,
                 };
                 if no_body {
@@ -4297,7 +5212,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             NodeKind::ExtensionTypeDeclaration => {
                 let e = ast.cast::<ExtensionTypeDeclaration>(preceding).unwrap();
                 let no_body = match ast.cast::<BlockClassBody>(ast[e].body.raw()) {
-                    Some(b) => ast.t_synthetic(ast[b].left_bracket) && ast.t_synthetic(ast[b].right_bracket),
+                    Some(b) => {
+                        ast.t_synthetic(ast[b].left_bracket)
+                            && ast.t_synthetic(ast[b].right_bracket)
+                    }
                     None => true,
                 };
                 if no_body {
@@ -4353,7 +5271,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
     /// Dart `_handledRecovery`.
     fn handled_recovery(&mut self, declaration: NodeId) -> bool {
         let ast = self.ast();
-        let Some(unit) = ast.parent(declaration).and_then(|p| ast.cast::<CompilationUnit>(p)) else {
+        let Some(unit) = ast
+            .parent(declaration)
+            .and_then(|p| ast.cast::<CompilationUnit>(p))
+        else {
             return false;
         };
         let o = self.offset();
@@ -4389,9 +5310,8 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             Some(NodeKind::FunctionExpressionInvocation) => "function",
             Some(NodeKind::InstanceCreationExpression) => "constructor",
             Some(NodeKind::MethodInvocation) => "method",
-            Some(NodeKind::RedirectingConstructorInvocation) | Some(NodeKind::SuperConstructorInvocation) => {
-                "constructorRedirect"
-            }
+            Some(NodeKind::RedirectingConstructorInvocation)
+            | Some(NodeKind::SuperConstructorInvocation) => "constructorRedirect",
             _ => "",
         };
         let kind = if is_named { "named" } else { "unnamed" };
@@ -4410,7 +5330,11 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         None
     }
 
-    fn suggest_overrides_for(&mut self, element: Option<dartr_element::EId<InterfaceElement>>, skip_at: bool) {
+    fn suggest_overrides_for(
+        &mut self,
+        element: Option<dartr_element::EId<InterfaceElement>>,
+        skip_at: bool,
+    ) {
         if self.out.budget_is_empty() {
             self.out.collector.is_incomplete = true;
             return;
@@ -4459,7 +5383,8 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
         let Some(displaced) = displaced else {
             return;
         };
-        let included: Vec<String> = match record_literal.and_then(|r| ast.cast::<RecordLiteral>(r)) {
+        let included: Vec<String> = match record_literal.and_then(|r| ast.cast::<RecordLiteral>(r))
+        {
             Some(r) => ast
                 .list_raw(ast[r].fields)
                 .iter()
@@ -4503,7 +5428,9 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             if ast.t_ty(displaced) == TokenType::CLOSE_CURLY_BRACKET {
                 if let Some(identifier) = ast.t_prev(displaced) {
                     if ast.t_ty(identifier) == TokenType::IDENTIFIER
-                        && ast.t_prev(identifier).is_some_and(|a| ast.t_ty(a) == TokenType::AT)
+                        && ast
+                            .t_prev(identifier)
+                            .is_some_and(|a| ast.t_ty(a) == TokenType::AT)
                     {
                         self.location("Annotation_name");
                         self.for_annotation(node);
@@ -4519,7 +5446,10 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
     fn try_override_annotation(&mut self, identifier: TokenId, node: NodeId) {
         let lexeme = self.ast().t_lexeme(identifier).to_string();
         if !lexeme.is_empty() && "override".starts_with(&lexeme) {
-            let element = self.q.declared_element(node).and_then(|e| e.cast::<InterfaceElement>());
+            let element = self
+                .q
+                .declared_element(node)
+                .and_then(|e| e.cast::<InterfaceElement>());
             if element.is_some() {
                 self.suggest_overrides_for(element, true);
             }
@@ -4553,7 +5483,11 @@ impl<'q, 'r, 'a> Pass<'q, 'r, 'a> {
             }
         } else if !ast.t_synthetic(in_keyword) {
             self.kw("await");
-            let cfg = DeclConfig { must_be_static: in_static_context(ast, node), must_be_non_void: true, ..Default::default() };
+            let cfg = DeclConfig {
+                must_be_static: in_static_context(ast, node),
+                must_be_non_void: true,
+                ..Default::default()
+            };
             self.add_lexical(cfg, node);
         }
     }
@@ -4568,7 +5502,11 @@ fn argument_expression(ast: &Ast, argument: NodeId) -> NodeId {
 }
 
 /// Dart `argumentsBeforeAndAfterOffset`.
-fn arguments_before_and_after(ast: &Ast, list: Id<ArgumentList>, offset: u32) -> (Option<NodeId>, Option<NodeId>) {
+fn arguments_before_and_after(
+    ast: &Ast,
+    list: Id<ArgumentList>,
+    offset: u32,
+) -> (Option<NodeId>, Option<NodeId>) {
     let mut previous: Option<NodeId> = None;
     for &argument in ast.list_raw(ast[list].arguments) {
         let expression = argument_expression(ast, argument);
@@ -4583,7 +5521,11 @@ fn arguments_before_and_after(ast: &Ast, list: Id<ArgumentList>, offset: u32) ->
 }
 
 /// Dart `argumentContext(argumentIndex)`.
-fn argument_context(ast: &Ast, list: Id<ArgumentList>, argument_index: i64) -> (usize, Vec<String>) {
+fn argument_context(
+    ast: &Ast,
+    list: Id<ArgumentList>,
+    argument_index: i64,
+) -> (usize, Vec<String>) {
     let mut positional = 0;
     let mut used = Vec::new();
     for (i, &argument) in ast.list_raw(ast[list].arguments).iter().enumerate() {
@@ -4593,8 +5535,14 @@ fn argument_context(ast: &Ast, list: Id<ArgumentList>, argument_index: i64) -> (
             positional += 1;
         }
     }
-    if let Some(s) = ast.parent(list).and_then(|p| ast.cast::<SuperConstructorInvocation>(p)) {
-        if let Some(c) = ast.parent(s).and_then(|p| ast.cast::<ConstructorDeclaration>(p)) {
+    if let Some(s) = ast
+        .parent(list)
+        .and_then(|p| ast.cast::<SuperConstructorInvocation>(p))
+    {
+        if let Some(c) = ast
+            .parent(s)
+            .and_then(|p| ast.cast::<ConstructorDeclaration>(p))
+        {
             let parameters = ast[c].parameters;
             for &p in ast.list_raw(ast[parameters].parameters) {
                 if let Some(sp) = ast.cast::<SuperFormalParameter>(p) {
@@ -4645,7 +5593,8 @@ fn is_flutter_widget_parameter(ctx: &dartr_element::Ctx<'_>, parameter: ElemRef)
     if enclosing.tag() != Tag::Constructor {
         return false;
     }
-    let Some(class) = elem::enclosing(ctx, enclosing).and_then(|c| c.cast::<InterfaceElement>()) else {
+    let Some(class) = elem::enclosing(ctx, enclosing).and_then(|c| c.cast::<InterfaceElement>())
+    else {
         return false;
     };
     is_widget_type(ctx, ctx.interface_this_type(class))
@@ -4658,8 +5607,9 @@ fn is_widget_type(ctx: &dartr_element::Ctx<'_>, t: TypeId) -> bool {
     };
     let is_widget = |e: dartr_element::EId<InterfaceElement>| {
         ctx.element_name(e.raw()) == Some("Widget")
-            && elem::library_of(ctx, e.raw())
-                .is_some_and(|l| elem::library_uri(ctx, l) == "package:flutter/src/widgets/framework.dart")
+            && elem::library_of(ctx, e.raw()).is_some_and(|l| {
+                elem::library_uri(ctx, l) == "package:flutter/src/widgets/framework.dart"
+            })
     };
     if is_widget(e) {
         return true;

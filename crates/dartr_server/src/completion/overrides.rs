@@ -4,9 +4,9 @@
 //! The code of override and typed suggestions (Dart
 //! `createOverrideSuggestionData`, `createTypedSuggestionData`).
 
+use dartr_element::{Ctx, ElemRef, Tag, TypeId, TypeKind};
 #[allow(unused_imports)]
 use dartr_typesystem::TypeExt;
-use dartr_element::{Ctx, ElemRef, Tag, TypeId, TypeKind};
 use dartr_typesystem::member;
 
 use super::Request;
@@ -59,7 +59,11 @@ fn write_type(w: &mut Writer, ctx: &Ctx<'_>, ty: TypeId, write_dynamic: bool) ->
 }
 
 /// Dart `writeOverride` (with `invokeSuper` and `setSelection`).
-fn write_override(ctx: &Ctx<'_>, element: ElemRef, invoke_super: bool) -> Option<(String, String, Option<(usize, usize)>)> {
+fn write_override(
+    ctx: &Ctx<'_>,
+    element: ElemRef,
+    invoke_super: bool,
+) -> Option<(String, String, Option<(usize, usize)>)> {
     let base = member::base_element(ctx, element);
     let member_name = ctx.element_name(base)?.to_string();
     if member_name.is_empty() {
@@ -129,7 +133,10 @@ fn write_override(ctx: &Ctx<'_>, element: ElemRef, invoke_super: bool) -> Option
     // Dart `writeFormalParameters`.
     let mut names: Vec<String> = parameters
         .iter()
-        .filter_map(|p| ctx.element_name(member::base_element(ctx, *p)).map(str::to_string))
+        .filter_map(|p| {
+            ctx.element_name(member::base_element(ctx, *p))
+                .map(str::to_string)
+        })
         .collect();
     w.write("(");
     let mut saw_named = false;
@@ -214,7 +221,10 @@ fn write_override(ctx: &Ctx<'_>, element: ElemRef, invoke_super: bool) -> Option
         if invoke_super {
             w.writeln("");
             w.write(prefix2);
-            let first = parameter_names.first().map(|p| p.0.clone()).unwrap_or_default();
+            let first = parameter_names
+                .first()
+                .map(|p| p.0.clone())
+                .unwrap_or_default();
             w.select_all(&format!("super.{member_name} = {first};"));
         } else {
             w.select_here();
@@ -257,7 +267,8 @@ pub fn override_data(q: &Request<'_, '_>, c: &Candidate) -> Option<TypeImportDat
         return None;
     };
     let ctx = q.ctx;
-    let (replacement, mut display, selection) = write_override(ctx, *element, *should_invoke_super)?;
+    let (replacement, mut display, selection) =
+        write_override(ctx, *element, *should_invoke_super)?;
     let mut completion = replacement.trim().to_string();
     let annotation = "@override";
     if has_override(q, q.target.containing_node) && completion.starts_with(annotation) {
@@ -328,7 +339,9 @@ pub fn typed_data(q: &Request<'_, '_>, c: &Candidate) -> Option<TypeImportData> 
             }
         }
     }
-    if matches!(c.kind, Kind::SetState { .. }) && (typed.add_type_annotation || typed.keyword.is_some()) {
+    if matches!(c.kind, Kind::SetState { .. })
+        && (typed.add_type_annotation || typed.keyword.is_some())
+    {
         text.push_str("setState");
     } else {
         text.push_str(&completion);
@@ -351,7 +364,9 @@ fn typed_type(ctx: &Ctx<'_>, c: &Candidate) -> Option<TypeId> {
     Some(match &c.kind {
         Kind::Field { element, .. } => member::type_(ctx, *element),
         Kind::Getter { element, .. } => member::return_type(ctx, *element),
-        Kind::Method { element, .. } | Kind::SetState { element, .. } => member::type_(ctx, *element),
+        Kind::Method { element, .. } | Kind::SetState { element, .. } => {
+            member::type_(ctx, *element)
+        }
         Kind::RecordField { field_type, .. } => *field_type,
         Kind::FunctionCall { ty, .. } => *ty,
         _ => return None,
@@ -364,7 +379,9 @@ fn containing_type(ctx: &Ctx<'_>, c: &Candidate) -> Option<TypeId> {
     let base = member::base_element(ctx, element);
     let enclosing = match &c.kind {
         Kind::Constructor { .. } => elem::enclosing(ctx, base),
-        Kind::Field { .. } | Kind::Getter { .. } | Kind::Method { .. } => elem::enclosing(ctx, base),
+        Kind::Field { .. } | Kind::Getter { .. } | Kind::Method { .. } => {
+            elem::enclosing(ctx, base)
+        }
         _ => None,
     }?;
     super::declaration::instance_this_type(ctx, enclosing)

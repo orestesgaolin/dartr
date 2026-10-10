@@ -82,7 +82,9 @@ fn code_mask(text: &str) -> Vec<char> {
                     i += 2;
                     continue;
                 }
-                if chars[i] == c && (!triple || (chars.get(i + 1) == Some(&c) && chars.get(i + 2) == Some(&c))) {
+                if chars[i] == c
+                    && (!triple || (chars.get(i + 1) == Some(&c) && chars.get(i + 2) == Some(&c)))
+                {
                     i += len;
                     break;
                 }
@@ -91,7 +93,12 @@ fn code_mask(text: &str) -> Vec<char> {
                 }
                 i += 1;
             }
-            for (k, ch) in out.iter_mut().enumerate().take(i.min(chars.len())).skip(start) {
+            for (k, ch) in out
+                .iter_mut()
+                .enumerate()
+                .take(i.min(chars.len()))
+                .skip(start)
+            {
                 if chars[k] != '\n' {
                     *ch = 'S';
                 }
@@ -147,7 +154,9 @@ fn sample_positions(text: &str, every: usize) -> Vec<Position> {
         if c == '.'
             && i > 0
             && (is_ident_char(mask[i - 1]) || mask[i - 1] == ')')
-            && mask.get(i + 1).is_some_and(|n| n.is_ascii_alphabetic() || *n == '_')
+            && mask
+                .get(i + 1)
+                .is_some_and(|n| n.is_ascii_alphabetic() || *n == '_')
             && !mask[i - 1].is_ascii_digit()
             && mask.get(i.wrapping_sub(1)) != Some(&'.')
         {
@@ -178,7 +187,9 @@ fn sample_positions(text: &str, every: usize) -> Vec<Position> {
                 }
                 if k > 0 && matches!(mask[k - 1], ';' | '{' | '}') && is_ident_char(c) {
                     add("statement", i);
-                    if mask.get(i + 1).is_some_and(|n| is_ident_char(*n)) && mask.get(i + 2).is_some_and(|n| is_ident_char(*n)) {
+                    if mask.get(i + 1).is_some_and(|n| is_ident_char(*n))
+                        && mask.get(i + 2).is_some_and(|n| is_ident_char(*n))
+                    {
                         add("statement-prefix", i + 2);
                     }
                 }
@@ -187,7 +198,9 @@ fn sample_positions(text: &str, every: usize) -> Vec<Position> {
         // In the URI of a directive.
         if (c == '\'' || c == '"' || c == 'S') && i > 7 {
             let before: String = chars[i.saturating_sub(7)..i].iter().collect();
-            if (before.ends_with("import ") || before.ends_with("export ")) && (chars[i] == '\'' || chars[i] == '"') {
+            if (before.ends_with("import ") || before.ends_with("export "))
+                && (chars[i] == '\'' || chars[i] == '"')
+            {
                 add("import", i + 1);
                 // After `package:` or `dart:`.
                 let rest: String = chars[i + 1..chars.len().min(i + 40)].iter().collect();
@@ -199,7 +212,9 @@ fn sample_positions(text: &str, every: usize) -> Vec<Position> {
         // After `new ` / `const `.
         if c == ' ' && i >= 3 {
             let w = word_before(i);
-            if (w == "new" || w == "const") && mask.get(i + 1).is_some_and(|n| n.is_ascii_alphabetic()) {
+            if (w == "new" || w == "const")
+                && mask.get(i + 1).is_some_and(|n| n.is_ascii_alphabetic())
+            {
                 add("new-const", i + 1);
             }
             if w == "case" && depth > 0 {
@@ -252,16 +267,27 @@ fn run(program: &str, root: &Path, files: &[PathBuf], every: usize) -> Responses
             }
             out.push((uri.clone(), p, response));
         }
-        c.notify("textDocument/didClose", json!({"textDocument": {"uri": uri}}));
+        c.notify(
+            "textDocument/didClose",
+            json!({"textDocument": {"uri": uri}}),
+        );
     }
     let _ = c.shutdown_and_exit();
     out
 }
 
-fn run_or_reuse(program: &str, label: &str, root: &Path, files: &[PathBuf], every: usize) -> Responses {
+fn run_or_reuse(
+    program: &str,
+    label: &str,
+    root: &Path,
+    files: &[PathBuf],
+    every: usize,
+) -> Responses {
     let dump = std::env::var_os("DARTR_LSP_COMPLETION_DUMP").map(PathBuf::from);
     let server = if program == "dart" { "dart" } else { "dartr" };
-    let path = dump.as_ref().map(|d| d.join(format!("{label}.{server}.json")));
+    let path = dump
+        .as_ref()
+        .map(|d| d.join(format!("{label}.{server}.json")));
     if server == "dart" && std::env::var_os("DARTR_LSP_COMPLETION_REUSE_DART").is_some() {
         if let Some(text) = path.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
             let value: Value = serde_json::from_str(&text).unwrap();
@@ -270,10 +296,15 @@ fn run_or_reuse(program: &str, label: &str, root: &Path, files: &[PathBuf], ever
                 .unwrap()
                 .iter()
                 .map(|v| {
-                    let class: &'static str = Box::leak(v[1].as_str().unwrap().to_string().into_boxed_str());
+                    let class: &'static str =
+                        Box::leak(v[1].as_str().unwrap().to_string().into_boxed_str());
                     (
                         v[0].as_str().unwrap().to_string(),
-                        (class, v[2].as_u64().unwrap() as u32, v[3].as_u64().unwrap() as u32),
+                        (
+                            class,
+                            v[2].as_u64().unwrap() as u32,
+                            v[3].as_u64().unwrap() as u32,
+                        ),
                         v[4].clone(),
                     )
                 })
@@ -287,7 +318,11 @@ fn run_or_reuse(program: &str, label: &str, root: &Path, files: &[PathBuf], ever
             .iter()
             .map(|(u, p, r)| json!([u, p.0, p.1, p.2, r]))
             .collect();
-        std::fs::write(path, serde_json::to_string_pretty(&Value::Array(value)).unwrap()).unwrap();
+        std::fs::write(
+            path,
+            serde_json::to_string_pretty(&Value::Array(value)).unwrap(),
+        )
+        .unwrap();
     }
     out
 }
@@ -295,9 +330,15 @@ fn run_or_reuse(program: &str, label: &str, root: &Path, files: &[PathBuf], ever
 /// The ranked items of a response (without snippets) and the number of
 /// snippets.
 fn items(response: &Value) -> (Vec<Value>, usize) {
-    let all = response["result"]["items"].as_array().cloned().unwrap_or_default();
+    let all = response["result"]["items"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
     let snippets = all.iter().filter(|i| i["kind"] == json!(15)).count();
-    (all.into_iter().filter(|i| i["kind"] != json!(15)).collect(), snippets)
+    (
+        all.into_iter().filter(|i| i["kind"] != json!(15)).collect(),
+        snippets,
+    )
 }
 
 /// The text that an item inserts.
@@ -325,7 +366,11 @@ struct ClassStats {
     examples: Vec<String>,
 }
 
-fn compare(label: &str, dart: &Responses, dartr: &Responses) -> BTreeMap<&'static str, (usize, usize)> {
+fn compare(
+    label: &str,
+    dart: &Responses,
+    dartr: &Responses,
+) -> BTreeMap<&'static str, (usize, usize)> {
     println!("== {label}");
     let mut stats: BTreeMap<&'static str, ClassStats> = BTreeMap::new();
     for ((uri, pos, a), (_, _, b)) in dart.iter().zip(dartr) {
@@ -336,7 +381,9 @@ fn compare(label: &str, dart: &Responses, dartr: &Responses) -> BTreeMap<&'stati
         if sa == sb {
             s.snippets_same += 1;
         }
-        let field = |items: &[Value], f: &dyn Fn(&Value) -> Value| -> Vec<Value> { items.iter().map(f).collect() };
+        let field = |items: &[Value], f: &dyn Fn(&Value) -> Value| -> Vec<Value> {
+            items.iter().map(f).collect()
+        };
         let la = field(&ia, &|i| i["label"].clone());
         let lb = field(&ib, &|i| i["label"].clone());
         if la == lb {
@@ -349,19 +396,27 @@ fn compare(label: &str, dart: &Responses, dartr: &Responses) -> BTreeMap<&'stati
         if sa_set == sb_set {
             s.label_set += 1;
         }
-        if field(&ia, &|i| json!([i["label"], i["kind"]])) == field(&ib, &|i| json!([i["label"], i["kind"]])) {
+        if field(&ia, &|i| json!([i["label"], i["kind"]]))
+            == field(&ib, &|i| json!([i["label"], i["kind"]]))
+        {
             s.kinds += 1;
         }
-        if field(&ia, &|i| json!([i["label"], i["sortText"]])) == field(&ib, &|i| json!([i["label"], i["sortText"]])) {
+        if field(&ia, &|i| json!([i["label"], i["sortText"]]))
+            == field(&ib, &|i| json!([i["label"], i["sortText"]]))
+        {
             s.sort_texts += 1;
         }
-        if field(&ia, &|i| json!([i["label"], insert_text(i)])) == field(&ib, &|i| json!([i["label"], insert_text(i)])) {
+        if field(&ia, &|i| json!([i["label"], insert_text(i)]))
+            == field(&ib, &|i| json!([i["label"], insert_text(i)]))
+        {
             s.insert_texts += 1;
         }
         if ia == ib {
             s.identical += 1;
         }
-        if a["result"]["itemDefaults"] == b["result"]["itemDefaults"] && a["result"]["isIncomplete"] == b["result"]["isIncomplete"] {
+        if a["result"]["itemDefaults"] == b["result"]["itemDefaults"]
+            && a["result"]["isIncomplete"] == b["result"]["isIncomplete"]
+        {
             s.defaults += 1;
         }
         // Label differences (multisets).
@@ -380,7 +435,11 @@ fn compare(label: &str, dart: &Responses, dartr: &Responses) -> BTreeMap<&'stati
             }
         }
         if ia != ib && s.examples.len() < 3 {
-            let first_diff = ia.iter().zip(&ib).position(|(x, y)| x != y).unwrap_or(ia.len().min(ib.len()));
+            let first_diff = ia
+                .iter()
+                .zip(&ib)
+                .position(|(x, y)| x != y)
+                .unwrap_or(ia.len().min(ib.len()));
             s.examples.push(format!(
                 "{uri}:{}:{} ({} vs {} items), first difference at {first_diff}:\n      dart:  {}\n      dartr: {}",
                 pos.1 + 1,
@@ -396,7 +455,15 @@ fn compare(label: &str, dart: &Responses, dartr: &Responses) -> BTreeMap<&'stati
     for (class, s) in &stats {
         println!(
             "  {class}: {} positions; identical {} | labels in order {} | label set {} | +kinds {} | +sortText {} | +insert text {} | defaults {} | snippet count {}",
-            s.total, s.identical, s.labels, s.label_set, s.kinds, s.sort_texts, s.insert_texts, s.defaults, s.snippets_same
+            s.total,
+            s.identical,
+            s.labels,
+            s.label_set,
+            s.kinds,
+            s.sort_texts,
+            s.insert_texts,
+            s.defaults,
+            s.snippets_same
         );
         let mut diffs: Vec<(&String, &(usize, usize))> = s.diffs.iter().collect();
         diffs.sort_by(|a, b| (b.1.0 + b.1.1).cmp(&(a.1.0 + a.1.1)).then(a.0.cmp(b.0)));
@@ -406,7 +473,10 @@ fn compare(label: &str, dart: &Responses, dartr: &Responses) -> BTreeMap<&'stati
             .map(|(l, (m, e))| format!("{l} -{m}/+{e}"))
             .collect();
         if !top.is_empty() {
-            println!("    most different labels (missing/extra in dartr): {}", top.join(", "));
+            println!(
+                "    most different labels (missing/extra in dartr): {}",
+                top.join(", ")
+            );
         }
         for e in &s.examples {
             println!("    {e}");
@@ -452,7 +522,10 @@ fn write_project(name: &str) -> PathBuf {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, content).unwrap();
     };
-    write("app/pubspec.yaml", "name: app\nenvironment:\n  sdk: ^3.9.0\n");
+    write(
+        "app/pubspec.yaml",
+        "name: app\nenvironment:\n  sdk: ^3.9.0\n",
+    );
     write(
         "app/lib/shapes.dart",
         r#"/// Shapes.
@@ -621,9 +694,16 @@ fn lsp_completion_corpus() {
     let mut files = dart_files(if lib.is_dir() { &lib } else { &root });
     if files.len() > max_files {
         let step = files.len() / max_files;
-        files = files.into_iter().step_by(step.max(1)).take(max_files).collect();
+        files = files
+            .into_iter()
+            .step_by(step.max(1))
+            .take(max_files)
+            .collect();
     }
-    let label = format!("{}-{every}-{max_files}", root.file_name().unwrap().to_string_lossy());
+    let label = format!(
+        "{}-{every}-{max_files}",
+        root.file_name().unwrap().to_string_lossy()
+    );
     let dart = run_or_reuse("dart", &label, &root, &files, every);
     let dartr = run_or_reuse(dartr_bin(), &label, &root, &files, every);
     compare(&format!("corpus {}", root.display()), &dart, &dartr);

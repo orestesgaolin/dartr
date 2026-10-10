@@ -6,14 +6,16 @@
 
 //! The LSP completion items of the candidates (Dart `toLspCompletionItem`).
 
-#[allow(unused_imports)]
-use dartr_typesystem::TypeExt;
 use dartr_element::display_string::{DisplayOptions, default_value_code, type_display_string_with};
 use dartr_element::{Ctx, EId, ElemRef, ElementId, FormalParameterElement, Tag, TypeId, TypeKind};
+#[allow(unused_imports)]
+use dartr_typesystem::TypeExt;
 use dartr_typesystem::member;
 use serde_json::{Map, Value, json};
 
-use super::candidate::{Candidate, Kind, SuggestionKind, display_name, is_enum_constant, utf16_len};
+use super::candidate::{
+    Candidate, Kind, SuggestionKind, display_name, is_enum_constant, utf16_len,
+};
 use super::elem;
 
 /// Dart `type.getDisplayString()`.
@@ -162,7 +164,10 @@ fn parameters_string(ctx: &Ctx<'_>, element: ElemRef) -> Option<String> {
     if let Some(alias) = base.cast::<dartr_element::TypeAliasElement>() {
         let aliased = ctx.get(alias).aliased_type.get()?;
         if matches!(ctx.ty(aliased), TypeKind::Function(_)) {
-            return Some(parameters_list_string(ctx, function_type_params(ctx, aliased)));
+            return Some(parameters_list_string(
+                ctx,
+                function_type_params(ctx, aliased),
+            ));
         }
     }
     None
@@ -238,7 +243,10 @@ fn completion_detail(
                         let mut it = inner.splitn(2, char::is_whitespace);
                         let first = it.next().unwrap_or("");
                         let rest = it.next().unwrap_or("").trim_start();
-                        if !first.is_empty() && !rest.is_empty() && !rest.contains(char::is_whitespace) {
+                        if !first.is_empty()
+                            && !rest.is_empty()
+                            && !rest.contains(char::is_whitespace)
+                        {
                             return_type = Some(first.to_string());
                         }
                     }
@@ -328,7 +336,10 @@ fn element_kinds(ctx: &Ctx<'_>, element: ElementId) -> &'static [i64] {
         Tag::LocalFunction | Tag::TopLevelFunction => &[3],
         Tag::Label => &[1],
         Tag::Library => &[9],
-        Tag::LocalVariable | Tag::PatternVariable | Tag::BindPatternVariable | Tag::JoinPatternVariable => &[6],
+        Tag::LocalVariable
+        | Tag::PatternVariable
+        | Tag::BindPatternVariable
+        | Tag::JoinPatternVariable => &[6],
         Tag::Method => &[2],
         Tag::Mixin => &[7],
         Tag::FormalParameter | Tag::FieldFormalParameter | Tag::SuperFormalParameter => &[6],
@@ -362,7 +373,11 @@ fn item_kind(ctx: &Ctx<'_>, caps: &ItemCapabilities, c: &Candidate, label: &str)
         Kind::Label(_) => &[1],
         Kind::Uri(_) => {
             if !label.starts_with("dart:") {
-                if label.ends_with(".dart") { &[17, 9] } else { &[19, 9] }
+                if label.ends_with(".dart") {
+                    &[17, 9]
+                } else {
+                    &[19, 9]
+                }
             } else {
                 &[9]
             }
@@ -386,7 +401,10 @@ fn display_text(ctx: &Ctx<'_>, c: &Candidate) -> String {
         },
         Kind::SetState { typed, .. } => match &typed.data {
             Some(d) => d.display_text.clone(),
-            None => c.suggestion_data(ctx).map(|d| d.display_text).unwrap_or_default(),
+            None => c
+                .suggestion_data(ctx)
+                .map(|d| d.display_text)
+                .unwrap_or_default(),
         },
         _ => match c.typed().and_then(|t| t.data.as_ref()) {
             Some(d) => d.display_text.clone(),
@@ -460,7 +478,9 @@ fn snippet_with_tab_stops(text: &str, ranges: &[usize]) -> String {
         if start + length > units.len() {
             continue;
         }
-        out.push_str(&escape_snippet(&String::from_utf16_lossy(&units[offset..start])));
+        out.push_str(&escape_snippet(&String::from_utf16_lossy(
+            &units[offset..start],
+        )));
         let content = String::from_utf16_lossy(&units[start..start + length]);
         let number = if is_final {
             0
@@ -471,7 +491,10 @@ fn snippet_with_tab_stops(text: &str, ranges: &[usize]) -> String {
         if content.is_empty() {
             out.push_str(&format!("${number}"));
         } else {
-            out.push_str(&format!("${{{number}:{}}}", escape_snippet_variable(&content)));
+            out.push_str(&format!(
+                "${{{number}:{}}}",
+                escape_snippet_variable(&content)
+            ));
         }
         offset = start + length;
     }
@@ -546,7 +569,9 @@ pub fn clean_element_documentation(
     templates: &std::collections::HashMap<String, String>,
 ) -> Option<String> {
     let full = crate::hover::documentation(ctx, element, templates)?;
-    Some(crate::hover::clean_dartdoc(&remove_dart_doc_delimiters(&full)))
+    Some(crate::hover::clean_dartdoc(&remove_dart_doc_delimiters(
+        &full,
+    )))
 }
 
 /// Dart `ElementLocation.forElement(element)?.encoding`.
@@ -581,7 +606,9 @@ pub struct ItemContext<'i> {
 /// Dart `getCompletionDisplayUriString`.
 fn display_uri(uri: &str, file_path: &str) -> String {
     if let Some(path) = uri.strip_prefix("file://") {
-        let from = std::path::Path::new(file_path).parent().unwrap_or(std::path::Path::new("/"));
+        let from = std::path::Path::new(file_path)
+            .parent()
+            .unwrap_or(std::path::Path::new("/"));
         return relative_path(std::path::Path::new(path), from);
     }
     uri.to_string()
@@ -617,8 +644,17 @@ pub fn to_item(
     let element = c.element();
     let base = element.map(|e| member::base_element(ctx, e));
     let is_callable = base.is_some_and(|b| {
-        matches!(b.tag(), Tag::Constructor | Tag::LocalFunction | Tag::TopLevelFunction | Tag::Method)
-    }) || matches!(c.kind, Kind::FunctionCall { kind: SuggestionKind::Invocation, .. });
+        matches!(
+            b.tag(),
+            Tag::Constructor | Tag::LocalFunction | Tag::TopLevelFunction | Tag::Method
+        )
+    }) || matches!(
+        c.kind,
+        Kind::FunctionCall {
+            kind: SuggestionKind::Invocation,
+            ..
+        }
+    );
     let is_invocation = matches!(c.executable_kind(), Some(SuggestionKind::Invocation))
         || matches!(c.kind, Kind::Closure { .. } | Kind::FunctionCall { .. });
     let complete_function_calls = ic.complete_function_calls && is_callable && is_invocation;
@@ -655,13 +691,19 @@ pub fn to_item(
         is_callable,
         is_invocation,
     );
-    if !caps.label_details && !matches!(c.kind, Kind::Closure { .. } | Kind::Override { .. } | Kind::SetState { .. }) {
+    if !caps.label_details
+        && !matches!(
+            c.kind,
+            Kind::Closure { .. } | Kind::Override { .. } | Kind::SetState { .. }
+        )
+    {
         label.push_str(&detail.truncated_params);
     }
     let mut parameter_names: Option<Vec<String>> = None;
     let mut default_args: (Option<String>, Vec<usize>) = (None, Vec::new());
     if let (Some(e), Some(b)) = (element, base) {
-        if crate::element_locator::is_executable(b) && !matches!(b.tag(), Tag::Getter | Tag::Setter) {
+        if crate::element_locator::is_executable(b) && !matches!(b.tag(), Tag::Getter | Tag::Setter)
+        {
             let params = element_params(ctx, e);
             parameter_names = Some(params.iter().map(|p| p.name.clone()).collect());
             default_args = default_argument_list(&params);
@@ -669,7 +711,9 @@ pub fn to_item(
     }
     let completion = c.completion(ctx);
     let (selection_offset, selection_length) = match &c.kind {
-        Kind::Keyword { selection_offset, .. } => (*selection_offset, 0),
+        Kind::Keyword {
+            selection_offset, ..
+        } => (*selection_offset, 0),
         _ => {
             if let Some(d) = c.suggestion_data(ctx) {
                 (d.selection_offset, 0)
@@ -703,7 +747,11 @@ pub fn to_item(
     if let Some(doc) = &cleaned_doc {
         // `^_([\w ]{0,20})_$`
         if let Some(inner) = doc.strip_prefix('_').and_then(|d| d.strip_suffix('_')) {
-            if inner.chars().count() <= 20 && inner.chars().all(|ch| ch.is_alphanumeric() || ch == '_' || ch == ' ') {
+            if inner.chars().count() <= 20
+                && inner
+                    .chars()
+                    .all(|ch| ch.is_alphanumeric() || ch == '_' || ch == ' ')
+            {
                 detail.detail = inner.to_string();
                 cleaned_doc = None;
             }
@@ -768,7 +816,10 @@ pub fn to_item(
             json!({"insert": insert_range, "replace": edit_range, "newText": insert_text}),
         );
     } else {
-        item.insert("textEdit".into(), json!({"range": edit_range, "newText": insert_text}));
+        item.insert(
+            "textEdit".into(),
+            json!({"range": edit_range, "newText": insert_text}),
+        );
     }
     Some(Value::Object(item))
 }
@@ -780,5 +831,6 @@ pub fn show_name(ctx: &Ctx<'_>, element: ElementId) -> Option<String> {
             return ctx.element_name(enclosing).map(str::to_string);
         }
     }
-    ctx.element_name(element).map(|_| display_name(ctx, element))
+    ctx.element_name(element)
+        .map(|_| display_name(ctx, element))
 }

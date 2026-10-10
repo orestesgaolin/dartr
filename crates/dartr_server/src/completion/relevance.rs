@@ -11,7 +11,9 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use dartr_ast::*;
-use dartr_element::{Ctx, EId, ElemRef, ElementId, InterfaceElement, Nullability, Tag, TypeId, TypeKind};
+use dartr_element::{
+    Ctx, EId, ElemRef, ElementId, InterfaceElement, Nullability, Tag, TypeId, TypeKind,
+};
 use dartr_syntax::TokenType;
 use dartr_typesystem::{TypeExt, TypeSystem, member};
 
@@ -152,9 +154,7 @@ pub fn element_kind_name(ctx: &Ctx<'_>, element: ElementId) -> &'static str {
         | Tag::BindPatternVariable
         | Tag::JoinPatternVariable => "LOCAL_VARIABLE",
         Tag::Method => "METHOD",
-        Tag::FormalParameter | Tag::FieldFormalParameter | Tag::SuperFormalParameter => {
-            "PARAMETER"
-        }
+        Tag::FormalParameter | Tag::FieldFormalParameter | Tag::SuperFormalParameter => "PARAMETER",
         Tag::Prefix => "PREFIX",
         Tag::TopLevelVariable => "TOP_LEVEL_VARIABLE",
         Tag::TypeAlias => "TYPE_ALIAS",
@@ -254,7 +254,8 @@ impl FeatureComputer<'_, '_> {
         let mut min_depth = self.inheritance_distance(supertype, superclass, visited);
         let mut visit_types = |types: &[TypeId], min_depth: &mut i32| {
             for &t in types {
-                let depth = self.inheritance_distance(ctx.interface_element(t), superclass, visited);
+                let depth =
+                    self.inheritance_distance(ctx.interface_element(t), superclass, visited);
                 if *min_depth < 0 || (depth >= 0 && depth < *min_depth) {
                     *min_depth = depth;
                 }
@@ -298,7 +299,11 @@ impl FeatureComputer<'_, '_> {
         if Some(proposed) == containing {
             return 0.0;
         }
-        if proposed == "noSuchMethod" { -1.0 } else { 0.0 }
+        if proposed == "noSuchMethod" {
+            -1.0
+        } else {
+            0.0
+        }
     }
 
     /// Dart `keywordFeature`.
@@ -344,7 +349,11 @@ impl FeatureComputer<'_, '_> {
 // Context type
 
 /// Dart `FeatureComputer.computeContextType(node, offset)`.
-pub fn compute_context_type(req: &ContextInput<'_, '_>, node: NodeId, offset: u32) -> Option<TypeId> {
+pub fn compute_context_type(
+    req: &ContextInput<'_, '_>,
+    node: NodeId,
+    offset: u32,
+) -> Option<TypeId> {
     let visitor = ContextTypeVisitor { req, offset };
     let t = visitor.visit(node)?;
     if matches!(req.ctx.ty(t), TypeKind::Dynamic) {
@@ -366,7 +375,12 @@ struct ContextTypeVisitor<'v, 'r, 'a> {
 }
 
 /// Dart `range.endStart(a, b).contains(offset)`.
-fn end_start_contains(ast: &Ast, a: dartr_syntax::TokenId, b: dartr_syntax::TokenId, o: u32) -> bool {
+fn end_start_contains(
+    ast: &Ast,
+    a: dartr_syntax::TokenId,
+    b: dartr_syntax::TokenId,
+    o: u32,
+) -> bool {
     ast.t_end(a) <= o && o <= ast.t_offset(b)
 }
 
@@ -431,7 +445,11 @@ impl ContextTypeVisitor<'_, '_, '_> {
             || ast.is::<FunctionExpressionInvocation>(parent)
             || ast.is::<DotShorthandInvocation>(parent)
         {
-            return tables.invoke_type.get(parent).copied().filter(|t| is_function(*t));
+            return tables
+                .invoke_type
+                .get(parent)
+                .copied()
+                .filter(|t| is_function(*t));
         }
         if ast.is::<DotShorthandConstructorInvocation>(parent) {
             let d = ast.cast::<DotShorthandConstructorInvocation>(parent)?;
@@ -477,7 +495,9 @@ impl ContextTypeVisitor<'_, '_, '_> {
             let t = member::return_type(ctx, ElemRef::Base(e));
             (!matches!(ctx.ty(t), TypeKind::Dynamic)).then_some(t)
         } else if ast.is::<FunctionExpression>(parent) {
-            let declaration = ast.parent(parent).filter(|p| ast.is::<FunctionDeclaration>(*p));
+            let declaration = ast
+                .parent(parent)
+                .filter(|p| ast.is::<FunctionDeclaration>(*p));
             match declaration {
                 Some(d) => {
                     let e = super::declared_element(self.req, d)?;
@@ -485,7 +505,8 @@ impl ContextTypeVisitor<'_, '_, '_> {
                     (!matches!(ctx.ty(t), TypeKind::Dynamic)).then_some(t)
                 }
                 None => {
-                    let context = compute_context_type(self.req, ast.parent(parent)?, ast.offset(parent));
+                    let context =
+                        compute_context_type(self.req, ast.parent(parent)?, ast.offset(parent));
                     match context.map(|c| ctx.ty(c)) {
                         Some(TypeKind::Function(f)) => {
                             let r = f.ret;
@@ -526,8 +547,12 @@ impl ContextTypeVisitor<'_, '_, '_> {
             }
             NodeKind::ArgumentList => {
                 let n = ast.cast::<ArgumentList>(node)?;
-                if !end_start_contains(ast, ast[n].left_parenthesis, ast[n].right_parenthesis, offset)
-                {
+                if !end_start_contains(
+                    ast,
+                    ast[n].left_parenthesis,
+                    ast[n].right_parenthesis,
+                    offset,
+                ) {
                     return None;
                 }
                 let function_type = self.argument_list_function_type(n)?;
@@ -550,7 +575,8 @@ impl ContextTypeVisitor<'_, '_, '_> {
                             return None;
                         }
                     } else {
-                        if previous.is_none_or(|p| ast.end(p) < offset) && offset <= ast.end(argument)
+                        if previous.is_none_or(|p| ast.end(p) < offset)
+                            && offset <= ast.end(argument)
                         {
                             return self.corresponding_parameter_type(argument);
                         }
@@ -660,8 +686,13 @@ impl ContextTypeVisitor<'_, '_, '_> {
             }
             NodeKind::DoStatement => {
                 let n = ast.cast::<DoStatement>(node)?;
-                end_start_contains(ast, ast[n].left_parenthesis, ast[n].right_parenthesis, offset)
-                    .then(|| tp.bool_type())
+                end_start_contains(
+                    ast,
+                    ast[n].left_parenthesis,
+                    ast[n].right_parenthesis,
+                    offset,
+                )
+                .then(|| tp.bool_type())
             }
             NodeKind::ExpressionFunctionBody => {
                 let n = ast.cast::<ExpressionFunctionBody>(node)?;
@@ -680,9 +711,9 @@ impl ContextTypeVisitor<'_, '_, '_> {
                             .parent(parent)
                             .and_then(|p| ast.cast::<FunctionDeclaration>(p))
                         {
-                            return ast[d]
-                                .return_type
-                                .and_then(|r| self.req.tables.annotation_type.get(r.raw()).copied());
+                            return ast[d].return_type.and_then(|r| {
+                                self.req.tables.annotation_type.get(r.raw()).copied()
+                            });
                         }
                         return self.visit_parent(parent);
                     }
@@ -726,8 +757,12 @@ impl ContextTypeVisitor<'_, '_, '_> {
             }
             NodeKind::ForElement => {
                 let n = ast.cast::<ForElement>(node)?;
-                if end_start_contains(ast, ast[n].left_parenthesis, ast[n].right_parenthesis, offset)
-                {
+                if end_start_contains(
+                    ast,
+                    ast[n].left_parenthesis,
+                    ast[n].right_parenthesis,
+                    offset,
+                ) {
                     return self.visit(ast[n].for_loop_parts.raw());
                 }
                 self.visit_parent(node)
@@ -797,16 +832,25 @@ impl ContextTypeVisitor<'_, '_, '_> {
             }
             NodeKind::IfElement => {
                 let n = ast.cast::<IfElement>(node)?;
-                if end_start_contains(ast, ast[n].left_parenthesis, ast[n].right_parenthesis, offset)
-                {
+                if end_start_contains(
+                    ast,
+                    ast[n].left_parenthesis,
+                    ast[n].right_parenthesis,
+                    offset,
+                ) {
                     return Some(tp.bool_type());
                 }
                 self.visit_parent(node)
             }
             NodeKind::IfStatement => {
                 let n = ast.cast::<IfStatement>(node)?;
-                end_start_contains(ast, ast[n].left_parenthesis, ast[n].right_parenthesis, offset)
-                    .then(|| tp.bool_type())
+                end_start_contains(
+                    ast,
+                    ast[n].left_parenthesis,
+                    ast[n].right_parenthesis,
+                    offset,
+                )
+                .then(|| tp.bool_type())
             }
             NodeKind::IndexExpression => {
                 let n = ast.cast::<IndexExpression>(node)?;
@@ -979,8 +1023,12 @@ impl ContextTypeVisitor<'_, '_, '_> {
             }
             NodeKind::RecordPattern => {
                 let n = ast.cast::<RecordPattern>(node)?;
-                if !end_start_contains(ast, ast[n].left_parenthesis, ast[n].right_parenthesis, offset)
-                {
+                if !end_start_contains(
+                    ast,
+                    ast[n].left_parenthesis,
+                    ast[n].right_parenthesis,
+                    offset,
+                ) {
                     return None;
                 }
                 let t = self.matched_value_type(node)?;
@@ -1096,8 +1144,13 @@ impl ContextTypeVisitor<'_, '_, '_> {
             NodeKind::WhenClause => Some(tp.bool_type()),
             NodeKind::WhileStatement => {
                 let n = ast.cast::<WhileStatement>(node)?;
-                end_start_contains(ast, ast[n].left_parenthesis, ast[n].right_parenthesis, offset)
-                    .then(|| tp.bool_type())
+                end_start_contains(
+                    ast,
+                    ast[n].left_parenthesis,
+                    ast[n].right_parenthesis,
+                    offset,
+                )
+                .then(|| tp.bool_type())
             }
             NodeKind::YieldStatement => {
                 let n = ast.cast::<YieldStatement>(node)?;
@@ -1286,7 +1339,9 @@ impl<'q, 'r, 'a> RelevanceComputer<'q, 'r, 'a> {
             .target
             .dot_target(ast)
             .filter(|t| ast.is::<SuperExpression>(*t))
-            .and_then(|_| ast.this_or_ancestor_of_type::<MethodDeclaration>(req.target.containing_node))
+            .and_then(|_| {
+                ast.this_or_ancestor_of_type::<MethodDeclaration>(req.target.containing_node)
+            })
             .map(|m| ast.t_lexeme(ast[m].name).to_string());
         RelevanceComputer {
             req,
@@ -1311,7 +1366,8 @@ impl<'q, 'r, 'a> RelevanceComputer<'q, 'r, 'a> {
     }
 
     fn element_kind(&self, element: ElementId, distance: Option<f64>) -> f64 {
-        self.fc().element_kind_feature(element, self.location(), distance)
+        self.fc()
+            .element_kind_feature(element, self.location(), distance)
     }
 
     fn is_constant(&self, element: ElementId) -> f64 {
@@ -1345,7 +1401,12 @@ impl<'q, 'r, 'a> RelevanceComputer<'q, 'r, 'a> {
     }
 
     /// Dart `computeTopLevelRelevance`.
-    fn top_level(&self, element: ElementId, element_type: Option<TypeId>, not_imported: bool) -> i32 {
+    fn top_level(
+        &self,
+        element: ElementId,
+        element_type: Option<TypeId>,
+        not_imported: bool,
+    ) -> i32 {
         let fc = self.fc();
         compute_score(Features {
             context_type: fc.context_type_feature(self.req.context_type, element_type),
@@ -1395,7 +1456,8 @@ impl<'q, 'r, 'a> RelevanceComputer<'q, 'r, 'a> {
         let Some(referencing) = referencing.cast::<InterfaceElement>() else {
             return 0.0;
         };
-        self.fc().inheritance_distance_feature(referencing, declaring)
+        self.fc()
+            .inheritance_distance_feature(referencing, declaring)
     }
 
     /// Dart `_computeMethodRelevance`.
@@ -1433,7 +1495,12 @@ impl<'q, 'r, 'a> RelevanceComputer<'q, 'r, 'a> {
     }
 
     /// Dart `_computePropertyAccessorRelevance`.
-    fn property_accessor(&self, accessor: ElemRef, inheritance_distance: f64, not_imported: bool) -> i32 {
+    fn property_accessor(
+        &self,
+        accessor: ElemRef,
+        inheritance_distance: f64,
+        not_imported: bool,
+    ) -> i32 {
         let ctx = self.ctx();
         let base = member::base_element(ctx, accessor);
         if elem::is_origin_variable(ctx, base) {
@@ -1449,7 +1516,8 @@ impl<'q, 'r, 'a> RelevanceComputer<'q, 'r, 'a> {
         let name = super::candidate::display_name(ctx, base);
         let fc = self.fc();
         compute_score(Features {
-            context_type: fc.context_type_feature(self.req.context_type, self.accessor_type(accessor)),
+            context_type: fc
+                .context_type_feature(self.req.context_type, self.accessor_type(accessor)),
             element_kind: self.element_kind(base, Some(inheritance_distance)),
             has_deprecated: fc.has_deprecated_feature(base),
             is_constant: self.is_constant(base),

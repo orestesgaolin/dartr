@@ -8,11 +8,11 @@
 //! The keywords, labels, identifiers and overrides that completion
 //! suggests.
 
-#[allow(unused_imports)]
-use dartr_typesystem::TypeExt;
 use dartr_ast::*;
 use dartr_element::{EId, ElemRef, ElementId, InterfaceElement, Tag};
 use dartr_syntax::{TokenId, TokenType};
+#[allow(unused_imports)]
+use dartr_typesystem::TypeExt;
 use dartr_typesystem::inheritance_manager3::{InheritanceManager3, Name};
 use dartr_typesystem::member;
 
@@ -90,7 +90,11 @@ impl KeywordHelper {
     }
 
     /// Dart `addClassDeclarationKeywords`.
-    pub fn add_class_declaration_keywords(q: &Request<'_, '_>, out: &mut Out, node: Id<ClassDeclaration>) {
+    pub fn add_class_declaration_keywords(
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        node: Id<ClassDeclaration>,
+    ) {
         let ast = q.ast;
         if Self::absent_or_in(q, ast[node].extends_clause.map(|c| ast[c].extends_keyword)) {
             Self::add_keyword(out, "extends");
@@ -98,7 +102,12 @@ impl KeywordHelper {
         if Self::absent_or_in(q, ast[node].with_clause.map(|c| ast[c].with_keyword)) {
             Self::add_keyword(out, "with");
         }
-        if Self::absent_or_in(q, ast[node].implements_clause.map(|c| ast[c].implements_keyword)) {
+        if Self::absent_or_in(
+            q,
+            ast[node]
+                .implements_clause
+                .map(|c| ast[c].implements_keyword),
+        ) {
             Self::add_keyword(out, "implements");
         }
     }
@@ -108,10 +117,14 @@ impl KeywordHelper {
         for k in ["const", "covariant", "dynamic", "factory", "final", "get"] {
             Self::add_keyword(out, k);
         }
-        if q.feature_enabled(dartr_parser::experimental_flags::ExperimentalFlag::PrimaryConstructors) {
+        if q.feature_enabled(
+            dartr_parser::experimental_flags::ExperimentalFlag::PrimaryConstructors,
+        ) {
             let ast = q.ast;
             let parent = ast.this_or_ancestor_matching(q.covering, |a, n| {
-                a.is::<ClassDeclaration>(n) || a.is::<EnumDeclaration>(n) || a.is::<ExtensionTypeDeclaration>(n)
+                a.is::<ClassDeclaration>(n)
+                    || a.is::<EnumDeclaration>(n)
+                    || a.is::<ExtensionTypeDeclaration>(n)
             });
             if parent.is_some() {
                 Self::add_keyword(out, "new");
@@ -178,15 +191,34 @@ impl KeywordHelper {
                 }
             }
         }
-        Self::add_expression_keywords(q, out, Some(literal), true, true, true, must_be_const, must_be_static);
+        Self::add_expression_keywords(
+            q,
+            out,
+            Some(literal),
+            true,
+            true,
+            true,
+            must_be_const,
+            must_be_static,
+        );
     }
 
     /// Dart `addCompilationUnitDeclarationKeywords`.
     pub fn add_compilation_unit_declaration_keywords(q: &Request<'_, '_>, out: &mut Out) {
         use dartr_parser::experimental_flags::ExperimentalFlag as F;
         for k in [
-            "abstract", "class", "const", "covariant", "dynamic", "enum", "external", "final", "mixin",
-            "typedef", "var", "void",
+            "abstract",
+            "class",
+            "const",
+            "covariant",
+            "dynamic",
+            "enum",
+            "external",
+            "final",
+            "mixin",
+            "typedef",
+            "var",
+            "void",
         ] {
             Self::add_keyword(out, k);
         }
@@ -233,7 +265,8 @@ impl KeywordHelper {
             });
             if last_non_synthetic == initializer
                 || last_non_synthetic.is_none_or(|l| {
-                    !ast.is::<SuperConstructorInvocation>(l) && !ast.is::<RedirectingConstructorInvocation>(l)
+                    !ast.is::<SuperConstructorInvocation>(l)
+                        && !ast.is::<RedirectingConstructorInvocation>(l)
                 })
             {
                 let in_extension_type = ast
@@ -245,7 +278,8 @@ impl KeywordHelper {
                 }
                 Self::add_keyword(out, "this");
             }
-        } else if let Some(f) = initializer.and_then(|i| ast.cast::<ConstructorFieldInitializer>(i)) {
+        } else if let Some(f) = initializer.and_then(|i| ast.cast::<ConstructorFieldInitializer>(i))
+        {
             let equals = ast[f].equals;
             if ast.t_end(equals) <= q.offset && q.offset <= ast.t_offset(ast.t_next(equals)) {
                 Self::add_keyword(out, "this");
@@ -254,7 +288,12 @@ impl KeywordHelper {
     }
 
     /// Dart `addDirectiveKeywords`.
-    pub fn add_directive_keywords(q: &Request<'_, '_>, out: &mut Out, unit: Id<CompilationUnit>, before: Option<NodeId>) {
+    pub fn add_directive_keywords(
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        unit: Id<CompilationUnit>,
+        before: Option<NodeId>,
+    ) {
         let ast = q.ast;
         let directives = ast.list_raw(ast[unit].directives);
         if before.is_none() && !directives.iter().any(|d| ast.is::<LibraryDirective>(*d)) {
@@ -269,12 +308,21 @@ impl KeywordHelper {
     }
 
     /// Dart `addEnumDeclarationKeywords`.
-    pub fn add_enum_declaration_keywords(q: &Request<'_, '_>, out: &mut Out, node: Id<EnumDeclaration>) {
+    pub fn add_enum_declaration_keywords(
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        node: Id<EnumDeclaration>,
+    ) {
         let ast = q.ast;
         if Self::absent_or_in(q, ast[node].with_clause.map(|c| ast[c].with_keyword)) {
             Self::add_keyword(out, "with");
         }
-        if Self::absent_or_in(q, ast[node].implements_clause.map(|c| ast[c].implements_keyword)) {
+        if Self::absent_or_in(
+            q,
+            ast[node]
+                .implements_clause
+                .map(|c| ast[c].implements_keyword),
+        ) {
             Self::add_keyword(out, "implements");
         }
     }
@@ -284,7 +332,9 @@ impl KeywordHelper {
         for k in ["const", "dynamic", "final", "get", "late"] {
             Self::add_keyword(out, k);
         }
-        if q.feature_enabled(dartr_parser::experimental_flags::ExperimentalFlag::PrimaryConstructors) {
+        if q.feature_enabled(
+            dartr_parser::experimental_flags::ExperimentalFlag::PrimaryConstructors,
+        ) {
             Self::add_keyword(out, "new");
         }
         for k in ["operator", "set", "static", "var", "void"] {
@@ -305,7 +355,8 @@ impl KeywordHelper {
         must_be_static: bool,
     ) {
         let ast = q.ast;
-        let patterns = q.feature_enabled(dartr_parser::experimental_flags::ExperimentalFlag::Patterns);
+        let patterns =
+            q.feature_enabled(dartr_parser::experimental_flags::ExperimentalFlag::Patterns);
         if can_be_bool {
             Self::add_keyword(out, "false");
         }
@@ -391,13 +442,19 @@ impl KeywordHelper {
     }
 
     /// Dart `addExtensionDeclarationKeywords`.
-    pub fn add_extension_declaration_keywords(q: &Request<'_, '_>, out: &mut Out, node: Id<ExtensionDeclaration>) {
+    pub fn add_extension_declaration_keywords(
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        node: Id<ExtensionDeclaration>,
+    ) {
         let ast = q.ast;
         let on = ast[node].on_clause;
         if on.is_none_or(|c| ast.t_synthetic(ast[c].on_keyword)) {
             Self::add_keyword(out, "on");
             if ast[node].name.is_none()
-                && q.feature_enabled(dartr_parser::experimental_flags::ExperimentalFlag::InlineClass)
+                && q.feature_enabled(
+                    dartr_parser::experimental_flags::ExperimentalFlag::InlineClass,
+                )
             {
                 Self::add_text(out, "type");
             }
@@ -425,7 +482,9 @@ impl KeywordHelper {
         for k in ["const", "dynamic", "final", "get"] {
             Self::add_keyword(out, k);
         }
-        if q.feature_enabled(dartr_parser::experimental_flags::ExperimentalFlag::PrimaryConstructors) {
+        if q.feature_enabled(
+            dartr_parser::experimental_flags::ExperimentalFlag::PrimaryConstructors,
+        ) {
             Self::add_keyword(out, "new");
         }
         if !is_static {
@@ -517,7 +576,9 @@ impl KeywordHelper {
             if suggest_this {
                 Self::add_keyword(out, "this");
             }
-        } else if parent.is_some_and(|p| ast.is::<PrimaryConstructorDeclaration>(p)) && suggest_final_or_var {
+        } else if parent.is_some_and(|p| ast.is::<PrimaryConstructorDeclaration>(p))
+            && suggest_final_or_var
+        {
             if q.feature_enabled(F::SuperParameters) {
                 Self::add_keyword(out, "super");
             }
@@ -541,7 +602,11 @@ impl KeywordHelper {
     }
 
     /// Dart `addImportDirectiveKeywords`.
-    pub fn add_import_directive_keywords(q: &Request<'_, '_>, out: &mut Out, node: Id<ImportDirective>) {
+    pub fn add_import_directive_keywords(
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        node: Id<ImportDirective>,
+    ) {
         let ast = q.ast;
         let n = &ast[node];
         let first_combinator = ast.list_raw(n.combinators).first().copied();
@@ -579,12 +644,21 @@ impl KeywordHelper {
     }
 
     /// Dart `addMixinDeclarationKeywords`.
-    pub fn add_mixin_declaration_keywords(q: &Request<'_, '_>, out: &mut Out, node: Id<MixinDeclaration>) {
+    pub fn add_mixin_declaration_keywords(
+        q: &Request<'_, '_>,
+        out: &mut Out,
+        node: Id<MixinDeclaration>,
+    ) {
         let ast = q.ast;
         if Self::absent_or_in(q, ast[node].on_clause.map(|c| ast[c].on_keyword)) {
             Self::add_keyword(out, "on");
         }
-        if Self::absent_or_in(q, ast[node].implements_clause.map(|c| ast[c].implements_keyword)) {
+        if Self::absent_or_in(
+            q,
+            ast[node]
+                .implements_clause
+                .map(|c| ast[c].implements_keyword),
+        ) {
             Self::add_keyword(out, "implements");
         }
     }
@@ -592,7 +666,17 @@ impl KeywordHelper {
     /// Dart `addMixinMemberKeywords`.
     pub fn add_mixin_member_keywords(out: &mut Out) {
         for k in [
-            "const", "covariant", "dynamic", "final", "get", "operator", "set", "static", "var", "void", "late",
+            "const",
+            "covariant",
+            "dynamic",
+            "final",
+            "get",
+            "operator",
+            "set",
+            "static",
+            "var",
+            "void",
+            "late",
         ] {
             Self::add_keyword(out, k);
         }
@@ -616,12 +700,17 @@ impl KeywordHelper {
         let ast = q.ast;
         let in_loop = ast.this_or_ancestor_of_type::<DoStatement>(node).is_some()
             || ast.this_or_ancestor_of_type::<ForStatement>(node).is_some()
-            || ast.this_or_ancestor_of_type::<WhileStatement>(node).is_some();
+            || ast
+                .this_or_ancestor_of_type::<WhileStatement>(node)
+                .is_some();
         if in_loop {
             Self::add_keyword(out, "break");
             Self::add_keyword(out, "continue");
         }
-        if ast.this_or_ancestor_of_type::<SwitchStatement>(node).is_some() {
+        if ast
+            .this_or_ancestor_of_type::<SwitchStatement>(node)
+            .is_some()
+        {
             Self::add_keyword(out, "break");
         }
         for k in ["assert", "do", "dynamic", "final", "for", "if"] {
@@ -695,7 +784,8 @@ pub(crate) fn in_async_star_or_sync_star(ast: &Ast, node: NodeId) -> bool {
     let Some(body) = ast.this_or_ancestor_of_type::<FunctionBody>(node) else {
         return false;
     };
-    function_body_keyword(ast, body.raw()).is_some() && function_body_star(ast, body.raw()).is_some()
+    function_body_keyword(ast, body.raw()).is_some()
+        && function_body_star(ast, body.raw()).is_some()
 }
 
 /// Dart `NodeList.elementBefore(offset)`.
@@ -752,12 +842,16 @@ pub(crate) fn variable_declaration_is_const(ast: &Ast, node: NodeId) -> bool {
 
 /// Dart `VariableDeclarationList.isConst`.
 pub(crate) fn variable_list_is_const(ast: &Ast, list: Id<VariableDeclarationList>) -> bool {
-    ast[list].keyword.is_some_and(|k| ast.t_lexeme(k) == "const")
+    ast[list]
+        .keyword
+        .is_some_and(|k| ast.t_lexeme(k) == "const")
 }
 
 /// Dart `VariableDeclarationList.isFinal`.
 pub(crate) fn variable_list_is_final(ast: &Ast, list: Id<VariableDeclarationList>) -> bool {
-    ast[list].keyword.is_some_and(|k| ast.t_lexeme(k) == "final")
+    ast[list]
+        .keyword
+        .is_some_and(|k| ast.t_lexeme(k) == "final")
 }
 
 // ---------------------------------------------------------------------------
@@ -883,7 +977,10 @@ impl IdentifierHelper {
             .chain(l.top_level_variables.iter().map(|e| e.raw()))
             .chain(l.type_aliases.iter().map(|e| e.raw()))
             .collect();
-        if children.iter().any(|c| ctx.element_name(*c) == Some(candidate.as_str())) {
+        if children
+            .iter()
+            .any(|c| ctx.element_name(*c) == Some(candidate.as_str()))
+        {
             return;
         }
         let score = out.score(&candidate);
@@ -967,10 +1064,19 @@ pub fn compute_overrides_for(
     let library = elem::library_of(ctx, interface.raw());
     let data = ctx.instance(interface.raw().cast().unwrap());
     let declared_name = |text: &str| -> bool {
-        let getter = data.getters.iter().any(|g| ctx.element_name(g.raw()) == Some(text));
-        let method = data.methods.iter().any(|m| ctx.element_name(m.raw()) == Some(text));
+        let getter = data
+            .getters
+            .iter()
+            .any(|g| ctx.element_name(g.raw()) == Some(text));
+        let method = data
+            .methods
+            .iter()
+            .any(|m| ctx.element_name(m.raw()) == Some(text));
         let setter_name = text.strip_suffix('=').unwrap_or(text);
-        let setter = data.setters.iter().any(|s| ctx.element_name(s.raw()) == Some(setter_name));
+        let setter = data
+            .setters
+            .iter()
+            .any(|s| ctx.element_name(s.raw()) == Some(setter_name));
         getter || method || setter
     };
     let mut names: Vec<Name> = Vec::new();

@@ -3,10 +3,10 @@
 //! Element predicates that completion reads (Dart `isStatic`, `isConst`,
 //! `isOriginDeclaration`, `isVisibleIn`, ...).
 
-#[allow(unused_imports)]
-use dartr_typesystem::TypeExt;
 use dartr_element::{Ctx, EId, ElemRef, ElementId, FragmentFlags, LibraryElement, Tag};
 use dartr_resolver::error::support;
+#[allow(unused_imports)]
+use dartr_typesystem::TypeExt;
 use dartr_typesystem::member;
 
 fn first_fragment_flags(ctx: &Ctx<'_>, e: ElementId) -> FragmentFlags {
@@ -23,7 +23,9 @@ fn has(ctx: &Ctx<'_>, e: ElementId, flag: FragmentFlags) -> bool {
 /// Dart `isStatic` of a member, field or variable.
 pub fn is_static(ctx: &Ctx<'_>, e: ElementId) -> bool {
     match e.tag() {
-        Tag::Field | Tag::TopLevelVariable => has(ctx, e, FragmentFlags::VARIABLE_FRAGMENT_IS_STATIC),
+        Tag::Field | Tag::TopLevelVariable => {
+            has(ctx, e, FragmentFlags::VARIABLE_FRAGMENT_IS_STATIC)
+        }
         Tag::Method | Tag::Getter | Tag::Setter | Tag::Constructor | Tag::TopLevelFunction => {
             has(ctx, e, FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC)
         }
@@ -87,23 +89,37 @@ pub fn is_operator(ctx: &Ctx<'_>, e: ElementId) -> bool {
 /// Dart `PropertyAccessorElement.isOriginVariable`.
 pub fn is_origin_variable(ctx: &Ctx<'_>, e: ElementId) -> bool {
     matches!(e.tag(), Tag::Getter | Tag::Setter)
-        && has(ctx, e, FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_VARIABLE)
+        && has(
+            ctx,
+            e,
+            FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_VARIABLE,
+        )
 }
 
 /// Dart `isOriginDeclaration` of accessors, fields and variables.
 pub fn is_origin_declaration(ctx: &Ctx<'_>, e: ElementId) -> bool {
     match e.tag() {
-        Tag::Getter | Tag::Setter => {
-            has(ctx, e, FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_DECLARATION)
-        }
-        Tag::Field | Tag::TopLevelVariable => {
-            has(ctx, e, FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_DECLARATION)
-        }
+        Tag::Getter | Tag::Setter => has(
+            ctx,
+            e,
+            FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_DECLARATION,
+        ),
+        Tag::Field | Tag::TopLevelVariable => has(
+            ctx,
+            e,
+            FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_DECLARATION,
+        ),
         Tag::Method => has(ctx, e, FragmentFlags::METHOD_FRAGMENT_IS_ORIGIN_DECLARATION),
-        Tag::TopLevelFunction => {
-            has(ctx, e, FragmentFlags::TOP_LEVEL_FUNCTION_FRAGMENT_IS_ORIGIN_DECLARATION)
-        }
-        Tag::Constructor => has(ctx, e, FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_DECLARATION),
+        Tag::TopLevelFunction => has(
+            ctx,
+            e,
+            FragmentFlags::TOP_LEVEL_FUNCTION_FRAGMENT_IS_ORIGIN_DECLARATION,
+        ),
+        Tag::Constructor => has(
+            ctx,
+            e,
+            FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_DECLARATION,
+        ),
         _ => true,
     }
 }
@@ -111,7 +127,11 @@ pub fn is_origin_declaration(ctx: &Ctx<'_>, e: ElementId) -> bool {
 /// Dart `FieldElement.isOriginGetterSetter`.
 pub fn is_origin_getter_setter(ctx: &Ctx<'_>, e: ElementId) -> bool {
     matches!(e.tag(), Tag::Field | Tag::TopLevelVariable)
-        && has(ctx, e, FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_GETTER_SETTER)
+        && has(
+            ctx,
+            e,
+            FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_GETTER_SETTER,
+        )
 }
 
 /// Dart `FieldElement.isOriginEnumValues`.
@@ -131,7 +151,11 @@ pub fn is_origin_declaring_formal_parameter(ctx: &Ctx<'_>, e: ElementId) -> bool
 
 /// Dart `FieldElement.hasInitializer`.
 pub fn has_initializer(ctx: &Ctx<'_>, e: ElementId) -> bool {
-    has(ctx, e, FragmentFlags::NON_PARAMETER_VARIABLE_FRAGMENT_HAS_INITIALIZER)
+    has(
+        ctx,
+        e,
+        FragmentFlags::NON_PARAMETER_VARIABLE_FRAGMENT_HAS_INITIALIZER,
+    )
 }
 
 /// Dart `Element.library`.
