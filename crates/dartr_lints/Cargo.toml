@@ -15,4 +15,5 @@ dartr_link.workspace = true
 dartr_typesystem.workspace = true
 dartr_constant.workspace = true
 indexmap.workspace = true
+regress.workspace = true
 serde_json.workspace = true

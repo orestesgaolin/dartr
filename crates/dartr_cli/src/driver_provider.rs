@@ -590,7 +590,11 @@ fn library_outcomes(
             &file.path,
             &parsed.ast.tokens.source,
             parsed,
-            std::mem::take(&mut unit.diagnostics),
+            [
+                std::mem::take(&mut unit.diagnostics),
+                std::mem::take(&mut unit.ignored_diagnostics),
+            ]
+            .concat(),
             lints.get(index).cloned().unwrap_or_default(),
             settings,
         )));

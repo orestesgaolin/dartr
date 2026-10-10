@@ -324,6 +324,26 @@ pub fn find_dependencies(
     finder.dependencies
 }
 
+/// [`find_dependencies`] of the subtree [root] of the unit (Dart
+/// `node.accept(ConstantExpressionsDependenciesFinder())`).
+pub fn find_dependencies_in(
+    engine: &ConstantEvaluationEngine<'_>,
+    unit_index: u32,
+    root: NodeId,
+) -> IndexSet<ConstantTarget> {
+    let unit = engine.unit(unit_index);
+    let ctx = engine.ctx(&unit);
+    let mut finder = DependenciesFinder {
+        engine,
+        ctx: &ctx,
+        unit: &unit,
+        unit_index,
+        dependencies: IndexSet::new(),
+    };
+    unit.ast.accept(root, &mut finder);
+    finder.dependencies
+}
+
 struct DependenciesFinder<'r, 'a> {
     engine: &'r ConstantEvaluationEngine<'a>,
     ctx: &'r Ctx<'r>,

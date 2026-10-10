@@ -54,6 +54,18 @@ pub struct ScopeContext<'a> {
     enclosing_instance_element: Option<EId<InstanceElement>>,
     /// Dart `_isInStaticMember`.
     is_in_static_member: bool,
+    /// A serial id of each frame of [Self::frames] (same length).
+    frame_ids: Vec<u32>,
+    next_frame_id: u32,
+    /// The frames that a recorded lookup needs after they are popped.
+    kept_frames: indexmap::IndexSet<u32>,
+    /// The popped frames of [Self::kept_frames], complete (Dart keeps the
+    /// scope objects on nodes; a `LocalScope` gets all the locals of its
+    /// block).
+    archived_frames: indexmap::IndexMap<u32, EnclosedScope<'a>>,
+    /// The lookups that [Self::record_lookup] defers to
+    /// [Self::finish_recorded_lookups].
+    recorded_lookups: Vec<(NodeId, String, Vec<u32>)>,
 }
 
 impl<'a> ScopeContext<'a> {
@@ -81,6 +93,11 @@ impl<'a> ScopeContext<'a> {
             frames: Vec::new(),
             enclosing_instance_element: None,
             is_in_static_member: false,
+            frame_ids: Vec::new(),
+            next_frame_id: 0,
+            kept_frames: indexmap::IndexSet::new(),
+            archived_frames: indexmap::IndexMap::new(),
+            recorded_lookups: Vec::new(),
         }
     }
 
@@ -116,13 +133,78 @@ impl<'a> ScopeContext<'a> {
     /// scope. Returns its index in the stack (for [Self::add_local]).
     pub fn push(&mut self, scope: EnclosedScope<'a>) -> usize {
         self.frames.push(scope);
+        self.frame_ids.push(self.next_frame_id);
+        self.next_frame_id += 1;
         self.frames.len() - 1
     }
 
     /// Dart `withScope(scope, ...)`, the end: the enclosing scope becomes
     /// the current scope again.
     pub fn pop(&mut self) {
-        self.frames.pop();
+        let frame = self.frames.pop();
+        if let (Some(frame), Some(id)) = (frame, self.frame_ids.pop())
+            && self.kept_frames.contains(&id)
+        {
+            self.archived_frames.insert(id, frame);
+        }
+    }
+
+    /// Records the lookup of [id] in the current scope for [node], done in
+    /// [Self::finish_recorded_lookups] when the scopes are complete. This
+    /// stands for Dart `ScopeResolverVisitor.getNodeNameScope(node)
+    /// .lookup(id)` after resolution (the linter `resolveNameInScope`).
+    pub fn record_lookup(&mut self, node: NodeId, id: &str) {
+        self.kept_frames.extend(self.frame_ids.iter().copied());
+        self.recorded_lookups
+            .push((node, id.to_string(), self.frame_ids.clone()));
+    }
+
+    /// The results of the lookups of [Self::record_lookup].
+    pub fn finish_recorded_lookups(&mut self) -> Vec<(NodeId, ScopeLookupResult)> {
+        let lookups = std::mem::take(&mut self.recorded_lookups);
+        let mut results = Vec::with_capacity(lookups.len());
+        for (node, id, chain) in lookups {
+            let frames: Vec<&EnclosedScope<'a>> = chain
+                .iter()
+                .filter_map(|frame_id| {
+                    self.archived_frames.get(frame_id).or_else(|| {
+                        let index = self.frame_ids.iter().position(|i| i == frame_id)?;
+                        self.frames.get(index)
+                    })
+                })
+                .collect();
+            if frames.len() != chain.len() {
+                continue;
+            }
+            results.push((node, self.lookup_in_frames(&frames, frames.len(), &id)));
+        }
+        self.archived_frames.clear();
+        self.kept_frames.clear();
+        results
+    }
+
+    /// [Self::lookup_below] over a recorded chain of frames.
+    fn lookup_in_frames(
+        &self,
+        frames: &[&EnclosedScope<'a>],
+        top: usize,
+        id: &str,
+    ) -> ScopeLookupResult {
+        let ctx = &self.ctx;
+        for i in (0..top).rev() {
+            let frame = frames[i];
+            if frame.kind == EnclosedScopeKind::DocumentationComment {
+                let result = self.lookup_in_frames(frames, i, id);
+                if result.getter.is_some() || result.setter.is_some() {
+                    return result;
+                }
+                return self.scopes.doc_import_lookup(id);
+            }
+            if let EnclosedLookup::Found(r) = frame.lookup_here(ctx, id) {
+                return r;
+            }
+        }
+        self.scopes.fragment_lookup(ctx, self.library_fragment, id)
     }
 
     /// The number of enclosed scopes (to check that pushes and pops match).

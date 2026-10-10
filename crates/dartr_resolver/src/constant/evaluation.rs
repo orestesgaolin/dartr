@@ -598,6 +598,19 @@ impl<'a> ConstantEvaluationEngine<'a> {
         }
     }
 
+    /// Dart `hasConstantError(node)` of the linter (`ast.dart`):
+    /// `node.computeConstantValue()?.diagnostics.isNotEmpty ?? true`, where
+    /// the result is `null` when an `INVALID_CONSTANT` is reported.
+    pub fn expression_has_constant_error(&self, node: NodeRef) -> bool {
+        let mut dependencies = Vec::new();
+        crate::constant::utilities::find_references(self, node, &mut |t| dependencies.push(t));
+        crate::constant::compute::compute_constants(self, &dependencies);
+        let diagnostics = RefCell::new(Vec::new());
+        let visitor = ConstantVisitor::new(self, self.unit_library(node.unit), Some(&diagnostics));
+        visitor.evaluate_and_report_invalid_constant(node);
+        !diagnostics.borrow().is_empty()
+    }
+
     /// Dart `computeConstantValue()` of a variable: computes the constants
     /// that [e] depends on and [e], then returns its value.
     pub fn compute_constant_value_of(&self, e: ElementId) -> Option<DartObjectImpl> {
@@ -3588,17 +3601,20 @@ enum Entity {
 
 /// Dart `ListLiteralImpl.isConst`.
 pub fn list_literal_is_const(ast: &Ast, node: Id<ListLiteral>) -> bool {
-    ast[node].const_keyword.is_some() || ast_ext::in_constant_context(ast, node.raw())
+    ast_ext::has_const_keyword(ast, node.raw(), ast[node].const_keyword)
+        || ast_ext::in_constant_context(ast, node.raw())
 }
 
 /// Dart `SetOrMapLiteralImpl.isConst`.
 pub fn set_or_map_literal_is_const(ast: &Ast, node: Id<SetOrMapLiteral>) -> bool {
-    ast[node].const_keyword.is_some() || ast_ext::in_constant_context(ast, node.raw())
+    ast_ext::has_const_keyword(ast, node.raw(), ast[node].const_keyword)
+        || ast_ext::in_constant_context(ast, node.raw())
 }
 
 /// Dart `RecordLiteralImpl.isConst`.
 pub fn record_literal_is_const(ast: &Ast, node: Id<RecordLiteral>) -> bool {
-    ast[node].const_keyword.is_some() || ast_ext::in_constant_context(ast, node.raw())
+    ast_ext::has_const_keyword(ast, node.raw(), ast[node].const_keyword)
+        || ast_ext::in_constant_context(ast, node.raw())
 }
 
 /// Dart `DotShorthandConstructorInvocationImpl.isConst`.
@@ -3606,7 +3622,8 @@ pub fn dot_shorthand_constructor_invocation_is_const(
     ast: &Ast,
     node: Id<DotShorthandConstructorInvocation>,
 ) -> bool {
-    ast[node].const_keyword.is_some() || ast_ext::in_constant_context(ast, node.raw())
+    ast_ext::has_const_keyword(ast, node.raw(), ast[node].const_keyword)
+        || ast_ext::in_constant_context(ast, node.raw())
 }
 
 /// Dart `SetOrMapLiteral.isSet` / `isMap` (from the resolved type).

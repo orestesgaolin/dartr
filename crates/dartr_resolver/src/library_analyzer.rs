@@ -91,6 +91,10 @@ pub struct ResolvedUnit {
     pub local: LocalArena,
     /// The parse diagnostics followed by the resolution diagnostics.
     pub diagnostics: Vec<Diagnostic>,
+    /// The diagnostics that an ignore comment removed from [Self::diagnostics]
+    /// (Dart `IgnoreValidator` runs on the diagnostics before the filtering,
+    /// in `dartr_cli`).
+    pub ignored_diagnostics: Vec<Diagnostic>,
     /// The panic message, when resolution of the unit panicked.
     pub panic: Option<String>,
 }
@@ -188,12 +192,16 @@ fn filter_ignored_diagnostics(
     if !ignore_info.has_ignores() {
         return;
     }
-    unit.diagnostics.retain(|d| {
-        unignorable_names
-            .iter()
-            .any(|n| n == d.code.lower_case_name())
-            || !ignore_info.ignored(d, &parsed.line_info)
-    });
+    let (kept, ignored) = std::mem::take(&mut unit.diagnostics)
+        .into_iter()
+        .partition(|d| {
+            unignorable_names
+                .iter()
+                .any(|n| n == d.code.lower_case_name())
+                || !ignore_info.ignored(d, &parsed.line_info)
+        });
+    unit.diagnostics = kept;
+    unit.ignored_diagnostics = ignored;
 }
 
 /// Dart `_resolveDirectives`: the directive elements are in the linked
@@ -707,6 +715,7 @@ fn resolve_file(
         rt,
         local,
         diagnostics,
+        ignored_diagnostics: Vec::new(),
         panic,
     }
 }

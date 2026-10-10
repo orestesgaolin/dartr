@@ -18,6 +18,14 @@ use crate::scope::ScopeLookupResult;
 /// Per-node resolver data of one unit.
 #[derive(Debug, Default)]
 pub struct ResolverTables {
+    /// The lookup of the name of the property or method of `this.name` in
+    /// the scope of each `ThisExpression` target (Dart
+    /// `resolveNameInScope` of the linter, read by `unnecessary_this`):
+    /// the getter and the setter.
+    pub this_scope_lookup: NodeMap<(
+        Option<dartr_element::ElementId>,
+        Option<dartr_element::ElementId>,
+    )>,
     /// `SimpleIdentifierImpl.scopeLookupResult`: the lexical lookup of the
     /// identifier, set by the resolution visitor
     /// (`ResolutionVisitor.visitSimpleIdentifier`), read by the identifier

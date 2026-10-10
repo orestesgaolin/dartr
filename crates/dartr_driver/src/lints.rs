@@ -52,6 +52,16 @@ impl ElementMetadata for EngineMetadata<'_> {
         .flatten()
     }
 
+    fn default_value_code(&self, element: dartr_element::ElementId) -> Option<String> {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let node = self.0.constant_initializer(element)?;
+            let unit = self.0.unit(node.unit);
+            Some(dartr_ast::to_source::to_source(&unit.ast, node.node))
+        }))
+        .ok()
+        .flatten()
+    }
+
     fn expression_constant_value(
         &self,
         unit: u32,
@@ -64,13 +74,58 @@ impl ElementMetadata for EngineMetadata<'_> {
         .ok()
         .flatten()
     }
+
+    fn has_constant_verifier_error(&self, unit: u32, node: dartr_ast::NodeId) -> bool {
+        let node = NodeRef::new(unit, node);
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            dartr_resolver::constant::constant_verifier::has_constant_verifier_error(&self.0, node)
+        }))
+        .unwrap_or(false)
+    }
+
+    fn expression_has_constant_error(&self, unit: u32, node: dartr_ast::NodeId) -> bool {
+        let node = NodeRef::new(unit, node);
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.0.expression_has_constant_error(node)
+        }))
+        .unwrap_or(true)
+    }
+
+    fn can_be_const(&self, unit: u32, node: dartr_ast::NodeId) -> bool {
+        let node = NodeRef::new(unit, node);
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            dartr_resolver::constant::constant_verifier::can_be_const(&self.0, node)
+        }))
+        .unwrap_or(false)
+    }
 }
 
 /// Defining unit first, followed by parts. Each unit reads its own local arena.
+/// The lints that an ignore comment suppresses are removed.
 pub fn compute_lints(
     input: &LibraryAnalysisInput<'_>,
     library: &ResolvedLibrary,
     enabled: &[&str],
+) -> Vec<Vec<dartr_lints::LintDiagnostic>> {
+    compute_lints_with(input, library, enabled, true)
+}
+
+/// [compute_lints] without the ignore filtering, for callers that validate
+/// the ignore comments (Dart `IgnoreValidator` needs the ignored
+/// diagnostics) and filter the diagnostics of the file together.
+pub fn compute_lints_unfiltered(
+    input: &LibraryAnalysisInput<'_>,
+    library: &ResolvedLibrary,
+    enabled: &[&str],
+) -> Vec<Vec<dartr_lints::LintDiagnostic>> {
+    compute_lints_with(input, library, enabled, false)
+}
+
+fn compute_lints_with(
+    input: &LibraryAnalysisInput<'_>,
+    library: &ResolvedLibrary,
+    enabled: &[&str],
+    filter_ignored: bool,
 ) -> Vec<Vec<dartr_lints::LintDiagnostic>> {
     if enabled.is_empty() {
         return vec![vec![]; library.units.len()];
@@ -97,31 +152,82 @@ pub fn compute_lints(
     );
     *engine.values.borrow_mut() = library.constants.clone();
     let metadata = EngineMetadata(engine);
+    let body_contexts: Vec<dartr_ast::NodeMap<dartr_lints::BodyContext>> = library
+        .units
+        .iter()
+        .map(|unit| {
+            let mut map = dartr_ast::NodeMap::new();
+            for (node, context) in unit.rt.body_context.iter() {
+                map.insert(
+                    node,
+                    dartr_lints::BodyContext {
+                        imposed_type: context.imposed_type,
+                        may_complete_normally: context.may_complete_normally,
+                    },
+                );
+            }
+            map
+        })
+        .collect();
+    let exit_detectors: Vec<Box<dyn Fn(dartr_ast::NodeId) -> bool + '_>> = library
+        .units
+        .iter()
+        .map(|unit| {
+            let ctx = Ctx {
+                local: Some(&unit.local),
+                features,
+                ..global
+            };
+            Box::new(move |node: dartr_ast::NodeId| {
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    dartr_resolver::exit_detector::exits_resolved(
+                        &unit.ast,
+                        &unit.tables,
+                        &unit.rt,
+                        ctx,
+                        node,
+                    )
+                }))
+                .unwrap_or(false)
+            }) as Box<dyn Fn(dartr_ast::NodeId) -> bool + '_>
+        })
+        .collect();
     let units: Vec<_> = input
         .units
         .iter()
         .zip(&library.units)
-        .map(|(original, resolved)| ResolvedRuleContextUnit {
-            parsed: &original.parsed,
-            ast: &resolved.ast,
-            unit: resolved.unit.raw(),
-            source: &original.parsed.ast.tokens.source,
-            path: &resolved.path,
-            resolved: resolved.panic.is_none().then_some(ResolvedLintContext {
-                ctx: Ctx {
-                    local: Some(&resolved.local),
-                    features,
-                    ..global
-                },
-                tables: &resolved.tables,
-                potentially_mutated_in_scope: &resolved.rt.potentially_mutated_in_scope,
-                corresponding_parameter_type: &resolved.rt.corresponding_parameter_type,
-                library: library.library,
-                metadata: Some(&metadata),
-            }),
-        })
+        .zip(&body_contexts)
+        .zip(&exit_detectors)
+        .map(
+            |(((original, resolved), body_context), exits)| ResolvedRuleContextUnit {
+                parsed: &original.parsed,
+                ast: &resolved.ast,
+                unit: resolved.unit.raw(),
+                source: &original.parsed.ast.tokens.source,
+                path: &resolved.path,
+                resolved: resolved.panic.is_none().then_some(ResolvedLintContext {
+                    ctx: Ctx {
+                        local: Some(&resolved.local),
+                        features,
+                        ..global
+                    },
+                    tables: &resolved.tables,
+                    potentially_mutated_in_scope: &resolved.rt.potentially_mutated_in_scope,
+                    corresponding_parameter_type: &resolved.rt.corresponding_parameter_type,
+                    body_context,
+                    this_scope_lookup: &resolved.rt.this_scope_lookup,
+                    exits: Some(exits.as_ref()),
+                    library: library.library,
+                    metadata: Some(&metadata),
+                }),
+            },
+        )
         .collect();
-    let mut diagnostics = lint_resolved_library(&units, enabled);
+    let mut diagnostics = if filter_ignored {
+        lint_resolved_library(&units, enabled)
+    } else {
+        dartr_lints::lint_resolved_library_unfiltered(&units, enabled)
+    };
     for (unit, output) in library.units.iter().zip(&mut diagnostics) {
         if unit.panic.is_some() {
             output.clear();

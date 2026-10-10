@@ -38,10 +38,32 @@ pub struct ResolvedLintContext<'a> {
     /// Resolver `corresponding_parameter_type`: argument expression → Dart
     /// `correspondingParameter.type`.
     pub corresponding_parameter_type: &'a dartr_ast::NodeMap<dartr_element::TypeId>,
+    /// Resolver `FunctionBodyImpl.bodyContext` of the function bodies.
+    pub body_context: &'a dartr_ast::NodeMap<BodyContext>,
+    /// Resolver `this_scope_lookup`: the getter and the setter that the
+    /// name of `this.name` resolves to in the scope of the `ThisExpression`
+    /// (the linter `resolveNameInScope`).
+    pub this_scope_lookup: &'a dartr_ast::NodeMap<(
+        Option<dartr_element::ElementId>,
+        Option<dartr_element::ElementId>,
+    )>,
+    /// Dart `node.accept(ExitDetector())` of a node of the unit (the
+    /// resolved exit detector of the analyzer).
+    pub exits: Option<&'a dyn Fn(NodeId) -> bool>,
     pub library: dartr_element::EId<dartr_element::LibraryElement>,
     /// Dart `Element.metadata` of elements of any library, with the
     /// annotation values (`None`: no metadata access).
     pub metadata: Option<&'a dyn ElementMetadata>,
+}
+
+/// Dart `BodyInferenceContext` facts of a function body
+/// (`FunctionBodyImpl.bodyContext`).
+#[derive(Clone, Copy, Debug)]
+pub struct BodyContext {
+    /// Dart `imposedType`.
+    pub imposed_type: Option<dartr_element::TypeId>,
+    /// Dart `mayCompleteNormally`.
+    pub may_complete_normally: bool,
 }
 
 /// An `Annotation` node of a resolved unit of the analyzed library or of
@@ -76,6 +98,21 @@ pub trait ElementMetadata {
         unit: u32,
         node: NodeId,
     ) -> Option<dartr_constant::DartObjectImpl>;
+    /// Dart `AstNodeExtension.hasConstantVerifierError` of [node] in the unit
+    /// with the index [unit].
+    fn has_constant_verifier_error(&self, unit: u32, node: NodeId) -> bool;
+    /// Dart `hasConstantError(node)` (linter `ast.dart`) of [node] in the
+    /// unit with the index [unit].
+    fn expression_has_constant_error(&self, unit: u32, node: NodeId) -> bool;
+    /// Dart `canBeConst` of [node] (an instance creation, a typed or record
+    /// literal, a dot shorthand constructor invocation or a constructor
+    /// declaration) in the unit with the index [unit].
+    fn can_be_const(&self, unit: u32, node: NodeId) -> bool;
+    /// Dart `FormalParameterElement.defaultValueCode`: the source of the
+    /// constant initializer of [element].
+    fn default_value_code(&self, _element: dartr_element::ElementId) -> Option<String> {
+        None
+    }
 }
 /// A resolved AST and its original parse metadata. Resolution can rewrite nodes.
 #[derive(Clone, Copy)]
@@ -296,6 +333,28 @@ impl<'a> LinterContext<'a> {
                         })
             })
         })
+    }
+    /// Dart `FormalParameterElement.defaultValueCode`.
+    pub fn default_value_code(&self, element: dartr_element::ElementId) -> Option<String> {
+        self.resolved?.metadata?.default_value_code(element)
+    }
+    /// Dart `canBeConst` (`analyzer/src/lint/constants.dart`, `ast.dart`).
+    pub fn can_be_const(&self, node: impl Into<NodeId>) -> bool {
+        self.resolved
+            .and_then(|r| r.metadata)
+            .is_some_and(|m| m.can_be_const(self.current_unit as u32, node.into()))
+    }
+    /// Dart `hasConstantError(node)` of the linter `ast.dart`.
+    pub fn has_constant_error(&self, node: impl Into<NodeId>) -> bool {
+        self.resolved
+            .and_then(|r| r.metadata)
+            .is_none_or(|m| m.expression_has_constant_error(self.current_unit as u32, node.into()))
+    }
+    /// Dart `AstNodeExtension.hasConstantVerifierError`.
+    pub fn has_constant_verifier_error(&self, node: impl Into<NodeId>) -> bool {
+        self.resolved
+            .and_then(|r| r.metadata)
+            .is_some_and(|m| m.has_constant_verifier_error(self.current_unit as u32, node.into()))
     }
     pub fn static_type(&self, node: impl Into<NodeId>) -> Option<dartr_element::TypeId> {
         self.resolved?.tables.static_type.get(node.into()).copied()
