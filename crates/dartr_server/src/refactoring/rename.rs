@@ -54,21 +54,21 @@ pub struct ResolvedUnitRefClone {
 }
 
 impl ResolvedUnitRefClone {
-    fn of(r: &ResolvedUnitRef) -> Self {
+    pub fn of(r: &ResolvedUnitRef) -> Self {
         ResolvedUnitRefClone {
             library: r.library.clone(),
             index: r.index,
         }
     }
 
-    fn unit_ref(&self) -> ResolvedUnitRef {
+    pub fn unit_ref(&self) -> ResolvedUnitRef {
         ResolvedUnitRef {
             library: self.library.clone(),
             index: self.index,
         }
     }
 
-    fn path(&self) -> String {
+    pub fn path(&self) -> String {
         self.library.inputs[self.index].path.to_string()
     }
 }
@@ -339,294 +339,299 @@ impl Engine<'_> {
         resolved: &ResolvedUnitRef,
         offset: u32,
     ) -> Option<(Target, u32, u32)> {
-        let sink = NoopSink;
-        let ctx = resolved.ctx(&sink);
-        let unit = resolved.unit();
-        let ast = &unit.ast;
-        let u = crate::element_locator::Unit {
-            ctx: &ctx,
-            ast,
-            tables: &unit.tables,
-        };
-        let mut node = ast.node_covering(unit.unit, offset, 0)?;
-        // `getElement(useMockForImport: true)`.
-        let mut import_index: Option<usize> = None;
-        let mut element: Option<ElementId> = None;
-        if let Some(i) = ast.cast::<ImportDirective>(node) {
-            import_index = import_index_of(ast, unit.unit, i);
-        } else {
-            element = crate::element_locator::get_element(&u, node);
-        }
-        if let (Some(s), Some(e)) = (ast.cast::<SimpleIdentifier>(node), element)
-            && e.tag() == Tag::Prefix
-        {
-            element = None;
-            import_index = prefixed_import_index(&ctx, ast, unit, resolved, s);
-            import_index?;
-        }
-        if element.is_none() && import_index.is_none() {
-            return None;
-        }
-        // `getElementToRename`.
-        if let (Some(s), Some(e)) = (ast.cast::<SimpleIdentifier>(node), element)
-            && ast.parent(s).is_some_and(|p| ast.is::<Annotation>(p))
-            && e.tag() == Tag::Constructor
-            && let Some(type_element) = support::element_of(&ctx, &unit.tables, s)
-            && type_element
-                .cast::<dartr_element::InstanceElement>()
-                .is_some()
-        {
-            element = Some(type_element);
-        }
-        if ast.is::<ClassNamePart>(node) {
-            node = ast.parent(node)?;
-        }
-        let token_range = |t: dartr_syntax::TokenId| {
-            let t = ast.tokens.get(t);
-            (t.offset, t.end() - t.offset)
-        };
-        let node_range = |n: NodeId| (ast.offset(n), ast.length(n));
-        let range: Option<(u32, u32)> = match ast.kind(node) {
-            NodeKind::AssignedVariablePattern => Some(token_range(
-                ast[ast.cast::<AssignedVariablePattern>(node)?].name,
-            )),
-            NodeKind::ConstructorDeclaration
-            | NodeKind::ConstructorSelector
-            | NodeKind::DottedName => Some(node_range(node)),
-            NodeKind::DeclaredIdentifier => {
-                Some(token_range(ast[ast.cast::<DeclaredIdentifier>(node)?].name))
-            }
-            NodeKind::DeclaredVariablePattern => Some(token_range(
-                ast[ast.cast::<DeclaredVariablePattern>(node)?].name,
-            )),
-            NodeKind::EnumConstantDeclaration => Some(token_range(
-                ast[ast.cast::<EnumConstantDeclaration>(node)?].name,
-            )),
-            NodeKind::ExtensionDeclaration => {
-                let e = ast.cast::<ExtensionDeclaration>(node)?;
-                ast[e].name.map(token_range)
-            }
-            NodeKind::ExtensionOverride => {
-                Some(token_range(ast[ast.cast::<ExtensionOverride>(node)?].name))
-            }
-            NodeKind::FieldFormalParameter => Some(token_range(
-                ast[ast.cast::<FieldFormalParameter>(node)?].name,
-            )),
-            NodeKind::ImportDirective
-            | NodeKind::ImportPrefixReference
-            | NodeKind::InstanceCreationExpression => Some(node_range(node)),
-            NodeKind::Label => Some(token_range(ast[ast.cast::<Label>(node)?].name)),
-            NodeKind::LabelReference => {
-                Some(token_range(ast[ast.cast::<LabelReference>(node)?].name))
-            }
-            NodeKind::LibraryDirective => Some(node_range(node)),
-            NodeKind::MethodDeclaration => {
-                Some(token_range(ast[ast.cast::<MethodDeclaration>(node)?].name))
-            }
-            NodeKind::ClassDeclaration => {
-                let c = ast.cast::<ClassDeclaration>(node)?;
-                Some(token_range(support::class_name_token(
-                    ast,
-                    ast[c].name_part,
-                )))
-            }
-            NodeKind::EnumDeclaration => {
-                let c = ast.cast::<EnumDeclaration>(node)?;
-                Some(token_range(support::class_name_token(
-                    ast,
-                    ast[c].name_part,
-                )))
-            }
-            NodeKind::ExtensionTypeDeclaration => {
-                let c = ast.cast::<ExtensionTypeDeclaration>(node)?;
-                Some(token_range(support::class_name_token(
-                    ast,
-                    ast[c].name_part,
-                )))
-            }
-            NodeKind::FunctionDeclaration => Some(token_range(
-                ast[ast.cast::<FunctionDeclaration>(node)?].name,
-            )),
-            NodeKind::MixinDeclaration => {
-                Some(token_range(ast[ast.cast::<MixinDeclaration>(node)?].name))
-            }
-            NodeKind::FunctionTypeAlias => {
-                Some(token_range(ast[ast.cast::<FunctionTypeAlias>(node)?].name))
-            }
-            NodeKind::GenericTypeAlias => {
-                Some(token_range(ast[ast.cast::<GenericTypeAlias>(node)?].name))
-            }
-            NodeKind::ClassTypeAlias => {
-                Some(token_range(ast[ast.cast::<ClassTypeAlias>(node)?].name))
-            }
-            NodeKind::NamedType => Some(token_range(ast[ast.cast::<NamedType>(node)?].name)),
-            NodeKind::NamedArgument => {
-                Some(token_range(ast[ast.cast::<NamedArgument>(node)?].name))
-            }
-            NodeKind::PrimaryConstructorName => Some(token_range(
-                ast[ast.cast::<PrimaryConstructorName>(node)?].name,
-            )),
-            NodeKind::SimpleIdentifier => {
-                Some(token_range(ast[ast.cast::<SimpleIdentifier>(node)?].token))
-            }
-            NodeKind::TypeParameter => {
-                Some(token_range(ast[ast.cast::<TypeParameter>(node)?].name))
-            }
-            NodeKind::VariableDeclaration => Some(token_range(
-                ast[ast.cast::<VariableDeclaration>(node)?].name,
-            )),
-            _ if ast.is::<FormalParameter>(node) => {
-                let p = ast.cast::<FormalParameter>(node)?;
-                formal_parameter_name(ast, p).map(token_range)
-            }
-            _ => None,
-        };
-        let (mut name_offset, mut name_length) = range?;
-        if import_index.is_some() {
-            if let Some(i) = ast.cast::<ImportDirective>(node) {
-                match ast[i].prefix {
-                    Some(p) => {
-                        name_offset = ast.offset(p);
-                        name_length = ast.length(p);
-                    }
-                    None => {
-                        name_offset = u32::MAX;
-                        name_length = 0;
-                    }
-                }
-            }
-        }
-        if let Some(i) = ast.cast::<InstanceCreationExpression>(node) {
-            let named_type = ast[ast[i].constructor_name].type_;
-            element = support::element_of(&ctx, &unit.tables, named_type);
-            (name_offset, name_length) = token_range(ast[named_type].name);
-        }
-        let target = match import_index {
-            Some(index)
-                if element.is_none()
-                    || ast.is::<ImportDirective>(node)
-                    || ast.is::<SimpleIdentifier>(node) =>
-            {
-                Target::Import {
-                    unit: ResolvedUnitRefClone::of(resolved),
-                    index,
-                }
-            }
-            _ => Target::Element(SElem {
-                lib: resolved.library.clone(),
-                unit: resolved.index,
-                id: element?,
-            }),
-        };
-        Some((target, name_offset, name_length))
+        element_to_rename_in_unit(resolved, offset)
     }
 
     /// Dart `RenameRefactoring.create`.
-    pub fn create_rename(&mut self, _resolved: &ResolvedUnitRef, target: Target) -> Option<Rename> {
-        let new = |kind: Kind, target: Target, old_name: String| Rename {
-            kind,
-            target,
-            old_name,
-            new_name: String::new(),
-            flutter_state: None,
-            class_elements: Vec::new(),
-            class_references: Vec::new(),
-            class_unshadowed: Vec::new(),
-            parameters: Vec::new(),
-            rename_all_positional: false,
-            extension_references: Vec::new(),
-        };
-        let element = match target {
-            Target::Import { unit, index } => {
-                let old_name = import_prefix_name(&unit, index);
-                return Some(new(Kind::Import, Target::Import { unit, index }, old_name));
-            }
-            Target::Element(e) => e,
-        };
-        let id = element.with(|ctx| {
-            let mut id = element.id;
-            if matches!(id.tag(), Tag::Getter | Tag::Setter)
-                && let Some(v) = dartr_resolver::element_metadata::accessor_variable_any(ctx, id)
-            {
-                id = v;
-            }
-            id
-        });
-        let element = element.same(id);
-        let old_name = element.with(|ctx| old_name_of(ctx, id));
-        let kind = element.with(|ctx| -> Option<Kind> {
-            let mut enclosing = enclosing(ctx, id);
-            if id.tag() == Tag::Prefix {
-                enclosing = support::library_of(ctx, id).map(|l| l.raw());
-            }
-            if enclosing.is_some_and(|e| e.tag() == Tag::Library) {
-                return Some(Kind::UnitMember);
-            }
-            match id.tag() {
-                Tag::Constructor => return Some(Kind::Constructor),
-                Tag::Label => return Some(Kind::Label),
-                Tag::Library => return Some(Kind::Library),
-                _ => {}
-            }
-            // `enclosingElement?.thisOrAncestorOfType<InterfaceElement>()`.
-            let mut ancestor = enclosing;
-            let mut interface = None;
-            while let Some(a) = ancestor {
-                if is_interface(a) {
-                    interface = Some(a);
-                    break;
-                }
-                ancestor = self::enclosing(ctx, a);
-            }
-            if interface.is_some() && id.tag() == Tag::FieldFormalParameter {
-                if let dartr_element::AnyElement::FormalParameter(p) = ctx.any(id)
-                    && p.field.get().is_some()
-                {
-                    return Some(Kind::ClassMember {
-                        interface: interface.unwrap(),
-                    });
-                }
-            }
-            if is_parameter(id) {
-                return Some(Kind::Parameter);
-            }
-            if is_local(id) {
-                return Some(Kind::Local);
-            }
-            if id.tag() == Tag::TypeParameter {
-                return Some(Kind::TypeParameter);
-            }
-            if let Some(e) = enclosing.filter(|e| is_interface(*e)) {
-                return Some(Kind::ClassMember { interface: e });
-            }
-            if let Some(e) = enclosing.filter(|e| e.tag() == Tag::Extension) {
-                return Some(Kind::ExtensionMember { extension: e });
-            }
-            None
-        })?;
-        // A field formal parameter of a field renames the field.
-        let element = if let Kind::ClassMember { .. } = kind
-            && id.tag() == Tag::FieldFormalParameter
-        {
-            let field = element.with(|ctx| match ctx.any(id) {
-                dartr_element::AnyElement::FormalParameter(p) => p.field.get().map(|f| f.raw()),
-                _ => None,
-            });
-            match field {
-                Some(f) => element.same(f),
-                None => element,
-            }
-        } else {
-            element
-        };
-        let old_name = if element.id != id {
-            element.with(|ctx| old_name_of(ctx, element.id))
-        } else {
-            old_name
-        };
-        Some(new(kind, Target::Element(element), old_name))
+    pub fn create_rename(&mut self, resolved: &ResolvedUnitRef, target: Target) -> Option<Rename> {
+        create_rename_for_target(resolved, target)
     }
+}
 
+pub fn element_to_rename_in_unit(
+    resolved: &ResolvedUnitRef,
+    offset: u32,
+) -> Option<(Target, u32, u32)> {
+    let sink = NoopSink;
+    let ctx = resolved.ctx(&sink);
+    let unit = resolved.unit();
+    let ast = &unit.ast;
+    let u = crate::element_locator::Unit {
+        ctx: &ctx,
+        ast,
+        tables: &unit.tables,
+    };
+    let mut node = ast.node_covering(unit.unit, offset, 0)?;
+    // `getElement(useMockForImport: true)`.
+    let mut import_index: Option<usize> = None;
+    let mut element: Option<ElementId> = None;
+    if let Some(i) = ast.cast::<ImportDirective>(node) {
+        import_index = import_index_of(ast, unit.unit, i);
+    } else {
+        element = crate::element_locator::get_element(&u, node);
+    }
+    if let (Some(s), Some(e)) = (ast.cast::<SimpleIdentifier>(node), element)
+        && e.tag() == Tag::Prefix
+    {
+        element = None;
+        import_index = prefixed_import_index(&ctx, ast, unit, resolved, s);
+        import_index?;
+    }
+    if element.is_none() && import_index.is_none() {
+        return None;
+    }
+    // `getElementToRename`.
+    if let (Some(s), Some(e)) = (ast.cast::<SimpleIdentifier>(node), element)
+        && ast.parent(s).is_some_and(|p| ast.is::<Annotation>(p))
+        && e.tag() == Tag::Constructor
+        && let Some(type_element) = support::element_of(&ctx, &unit.tables, s)
+        && type_element
+            .cast::<dartr_element::InstanceElement>()
+            .is_some()
+    {
+        element = Some(type_element);
+    }
+    if ast.is::<ClassNamePart>(node) {
+        node = ast.parent(node)?;
+    }
+    let token_range = |t: dartr_syntax::TokenId| {
+        let t = ast.tokens.get(t);
+        (t.offset, t.end() - t.offset)
+    };
+    let node_range = |n: NodeId| (ast.offset(n), ast.length(n));
+    let range: Option<(u32, u32)> = match ast.kind(node) {
+        NodeKind::AssignedVariablePattern => Some(token_range(
+            ast[ast.cast::<AssignedVariablePattern>(node)?].name,
+        )),
+        NodeKind::ConstructorDeclaration | NodeKind::ConstructorSelector | NodeKind::DottedName => {
+            Some(node_range(node))
+        }
+        NodeKind::DeclaredIdentifier => {
+            Some(token_range(ast[ast.cast::<DeclaredIdentifier>(node)?].name))
+        }
+        NodeKind::DeclaredVariablePattern => Some(token_range(
+            ast[ast.cast::<DeclaredVariablePattern>(node)?].name,
+        )),
+        NodeKind::EnumConstantDeclaration => Some(token_range(
+            ast[ast.cast::<EnumConstantDeclaration>(node)?].name,
+        )),
+        NodeKind::ExtensionDeclaration => {
+            let e = ast.cast::<ExtensionDeclaration>(node)?;
+            ast[e].name.map(token_range)
+        }
+        NodeKind::ExtensionOverride => {
+            Some(token_range(ast[ast.cast::<ExtensionOverride>(node)?].name))
+        }
+        NodeKind::FieldFormalParameter => Some(token_range(
+            ast[ast.cast::<FieldFormalParameter>(node)?].name,
+        )),
+        NodeKind::ImportDirective
+        | NodeKind::ImportPrefixReference
+        | NodeKind::InstanceCreationExpression => Some(node_range(node)),
+        NodeKind::Label => Some(token_range(ast[ast.cast::<Label>(node)?].name)),
+        NodeKind::LabelReference => Some(token_range(ast[ast.cast::<LabelReference>(node)?].name)),
+        NodeKind::LibraryDirective => Some(node_range(node)),
+        NodeKind::MethodDeclaration => {
+            Some(token_range(ast[ast.cast::<MethodDeclaration>(node)?].name))
+        }
+        NodeKind::ClassDeclaration => {
+            let c = ast.cast::<ClassDeclaration>(node)?;
+            Some(token_range(support::class_name_token(
+                ast,
+                ast[c].name_part,
+            )))
+        }
+        NodeKind::EnumDeclaration => {
+            let c = ast.cast::<EnumDeclaration>(node)?;
+            Some(token_range(support::class_name_token(
+                ast,
+                ast[c].name_part,
+            )))
+        }
+        NodeKind::ExtensionTypeDeclaration => {
+            let c = ast.cast::<ExtensionTypeDeclaration>(node)?;
+            Some(token_range(support::class_name_token(
+                ast,
+                ast[c].name_part,
+            )))
+        }
+        NodeKind::FunctionDeclaration => Some(token_range(
+            ast[ast.cast::<FunctionDeclaration>(node)?].name,
+        )),
+        NodeKind::MixinDeclaration => {
+            Some(token_range(ast[ast.cast::<MixinDeclaration>(node)?].name))
+        }
+        NodeKind::FunctionTypeAlias => {
+            Some(token_range(ast[ast.cast::<FunctionTypeAlias>(node)?].name))
+        }
+        NodeKind::GenericTypeAlias => {
+            Some(token_range(ast[ast.cast::<GenericTypeAlias>(node)?].name))
+        }
+        NodeKind::ClassTypeAlias => Some(token_range(ast[ast.cast::<ClassTypeAlias>(node)?].name)),
+        NodeKind::NamedType => Some(token_range(ast[ast.cast::<NamedType>(node)?].name)),
+        NodeKind::NamedArgument => Some(token_range(ast[ast.cast::<NamedArgument>(node)?].name)),
+        NodeKind::PrimaryConstructorName => Some(token_range(
+            ast[ast.cast::<PrimaryConstructorName>(node)?].name,
+        )),
+        NodeKind::SimpleIdentifier => {
+            Some(token_range(ast[ast.cast::<SimpleIdentifier>(node)?].token))
+        }
+        NodeKind::TypeParameter => Some(token_range(ast[ast.cast::<TypeParameter>(node)?].name)),
+        NodeKind::VariableDeclaration => Some(token_range(
+            ast[ast.cast::<VariableDeclaration>(node)?].name,
+        )),
+        _ if ast.is::<FormalParameter>(node) => {
+            let p = ast.cast::<FormalParameter>(node)?;
+            formal_parameter_name(ast, p).map(token_range)
+        }
+        _ => None,
+    };
+    let (mut name_offset, mut name_length) = range?;
+    if import_index.is_some() {
+        if let Some(i) = ast.cast::<ImportDirective>(node) {
+            match ast[i].prefix {
+                Some(p) => {
+                    name_offset = ast.offset(p);
+                    name_length = ast.length(p);
+                }
+                None => {
+                    name_offset = u32::MAX;
+                    name_length = 0;
+                }
+            }
+        }
+    }
+    if let Some(i) = ast.cast::<InstanceCreationExpression>(node) {
+        let named_type = ast[ast[i].constructor_name].type_;
+        element = support::element_of(&ctx, &unit.tables, named_type);
+        (name_offset, name_length) = token_range(ast[named_type].name);
+    }
+    let target = match import_index {
+        Some(index)
+            if element.is_none()
+                || ast.is::<ImportDirective>(node)
+                || ast.is::<SimpleIdentifier>(node) =>
+        {
+            Target::Import {
+                unit: ResolvedUnitRefClone::of(resolved),
+                index,
+            }
+        }
+        _ => Target::Element(SElem {
+            lib: resolved.library.clone(),
+            unit: resolved.index,
+            id: element?,
+        }),
+    };
+    Some((target, name_offset, name_length))
+}
+
+pub fn create_rename_for_target(_resolved: &ResolvedUnitRef, target: Target) -> Option<Rename> {
+    let new = |kind: Kind, target: Target, old_name: String| Rename {
+        kind,
+        target,
+        old_name,
+        new_name: String::new(),
+        flutter_state: None,
+        class_elements: Vec::new(),
+        class_references: Vec::new(),
+        class_unshadowed: Vec::new(),
+        parameters: Vec::new(),
+        rename_all_positional: false,
+        extension_references: Vec::new(),
+    };
+    let element = match target {
+        Target::Import { unit, index } => {
+            let old_name = import_prefix_name(&unit, index);
+            return Some(new(Kind::Import, Target::Import { unit, index }, old_name));
+        }
+        Target::Element(e) => e,
+    };
+    let id = element.with(|ctx| {
+        let mut id = element.id;
+        if matches!(id.tag(), Tag::Getter | Tag::Setter)
+            && let Some(v) = dartr_resolver::element_metadata::accessor_variable_any(ctx, id)
+        {
+            id = v;
+        }
+        id
+    });
+    let element = element.same(id);
+    let old_name = element.with(|ctx| old_name_of(ctx, id));
+    let kind = element.with(|ctx| -> Option<Kind> {
+        let mut enclosing = enclosing(ctx, id);
+        if id.tag() == Tag::Prefix {
+            enclosing = support::library_of(ctx, id).map(|l| l.raw());
+        }
+        if enclosing.is_some_and(|e| e.tag() == Tag::Library) {
+            return Some(Kind::UnitMember);
+        }
+        match id.tag() {
+            Tag::Constructor => return Some(Kind::Constructor),
+            Tag::Label => return Some(Kind::Label),
+            Tag::Library => return Some(Kind::Library),
+            _ => {}
+        }
+        // `enclosingElement?.thisOrAncestorOfType<InterfaceElement>()`.
+        let mut ancestor = enclosing;
+        let mut interface = None;
+        while let Some(a) = ancestor {
+            if is_interface(a) {
+                interface = Some(a);
+                break;
+            }
+            ancestor = self::enclosing(ctx, a);
+        }
+        if interface.is_some() && id.tag() == Tag::FieldFormalParameter {
+            if let dartr_element::AnyElement::FormalParameter(p) = ctx.any(id)
+                && p.field.get().is_some()
+            {
+                return Some(Kind::ClassMember {
+                    interface: interface.unwrap(),
+                });
+            }
+        }
+        if is_parameter(id) {
+            return Some(Kind::Parameter);
+        }
+        if is_local(id) {
+            return Some(Kind::Local);
+        }
+        if id.tag() == Tag::TypeParameter {
+            return Some(Kind::TypeParameter);
+        }
+        if let Some(e) = enclosing.filter(|e| is_interface(*e)) {
+            return Some(Kind::ClassMember { interface: e });
+        }
+        if let Some(e) = enclosing.filter(|e| e.tag() == Tag::Extension) {
+            return Some(Kind::ExtensionMember { extension: e });
+        }
+        None
+    })?;
+    // A field formal parameter of a field renames the field.
+    let element = if let Kind::ClassMember { .. } = kind
+        && id.tag() == Tag::FieldFormalParameter
+    {
+        let field = element.with(|ctx| match ctx.any(id) {
+            dartr_element::AnyElement::FormalParameter(p) => p.field.get().map(|f| f.raw()),
+            _ => None,
+        });
+        match field {
+            Some(f) => element.same(f),
+            None => element,
+        }
+    } else {
+        element
+    };
+    let old_name = if element.id != id {
+        element.with(|ctx| old_name_of(ctx, element.id))
+    } else {
+        old_name
+    };
+    Some(new(kind, Target::Element(element), old_name))
+}
+
+impl Engine<'_> {
     // ---------------------------------------------------------------------
     // Conditions.
 
@@ -1022,7 +1027,7 @@ fn nth_import(ast: &Ast, unit: Id<CompilationUnit>, index: usize) -> Option<Id<I
         .nth(index)
 }
 
-fn import_index_of(
+pub(crate) fn import_index_of(
     ast: &Ast,
     unit: Id<CompilationUnit>,
     import: Id<ImportDirective>,

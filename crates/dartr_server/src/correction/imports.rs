@@ -276,6 +276,22 @@ impl<'c, 'w> FileEditBuilder<'c, 'w> {
     /// Facts about the resolved unit: the library, its URI and path, the
     /// unit URI and the existing imports.
     fn library_facts(&self) -> LibraryFacts {
+        if let Some(new_uri) = self
+            .data()
+            .dart
+            .as_ref()
+            .and_then(|d| d.new_file_uri.clone())
+        {
+            let resolved = self.resolved();
+            let library = resolved.library.library.library;
+            return LibraryFacts {
+                library,
+                library_uri: new_uri.clone(),
+                library_path: self.path.clone(),
+                unit_uri: new_uri,
+                imports: Vec::new(),
+            };
+        }
         let resolved = self.resolved();
         let sink = NoopSink;
         let ctx = resolved.ctx(&sink);
@@ -560,6 +576,7 @@ fn directive_uri(ast: &Ast, directive: NodeId) -> Option<String> {
 
 /// Dart `_addLibraryImports`.
 pub fn add_library_imports(builder: &mut FileEditBuilder<'_, '_>, imports: Vec<LibraryImport>) {
+    let is_new_file = builder.data().file_edit.file_stamp == -1;
     let resolved = builder.resolved();
     let unit_ref = resolved.unit();
     let ast = &unit_ref.ast;
@@ -569,7 +586,11 @@ pub fn add_library_imports(builder: &mut FileEditBuilder<'_, '_>, imports: Vec<L
     let mut import_directives: Vec<NodeId> = Vec::new();
     let mut first_export: Option<NodeId> = None;
     let mut first_part: Option<NodeId> = None;
-    let directives: Vec<NodeId> = ast.list_raw(ast[unit].directives).to_vec();
+    let directives: Vec<NodeId> = if is_new_file {
+        Vec::new()
+    } else {
+        ast.list_raw(ast[unit].directives).to_vec()
+    };
     for &d in &directives {
         if ast.is::<LibraryDirective>(d) {
             library_directive = Some(d);
@@ -889,12 +910,18 @@ pub fn add_library_imports(builder: &mut FileEditBuilder<'_, '_>, imports: Vec<L
 
     // If still at the beginning of the file, add before the first
     // declaration.
-    let declarations = ast.list_raw(ast[unit].declarations);
+    let declarations: &[NodeId] = if is_new_file {
+        &[]
+    } else {
+        ast.list_raw(ast[unit].declarations)
+    };
     let (offset, insert_empty_line_after) = if let Some(&first) = declarations.first() {
         (ast.offset(first), true)
     } else if let Some(last) = builder.data().file_edit.edits.last() {
         // Edits are sorted by decreasing offset: the last has the lowest.
         (last.offset, true)
+    } else if is_new_file {
+        (0, false)
     } else {
         (ast.end(unit), false)
     };

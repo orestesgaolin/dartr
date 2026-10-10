@@ -1,22 +1,4 @@
 dart-code static command dart.edit.codeAction.apply
-dart-code static command dart.refactor.add_constructor_name
-dart-code static command dart.refactor.convert_all_formal_parameters_to_named
-dart-code static command dart.refactor.convert_selected_formal_parameters_to_named
-dart-code static command dart.refactor.move_selected_formal_parameters_left
-dart-code static command dart.refactor.move_top_level_to_file
-dart-code static command dart.refactor.remove_constructor_name
-dart-code static command dart.refactor.remove_import_prefix
-dart-code static command dart.refactor_add.import_prefix
 dart-code static experimental.interactiveResolveProvider.kinds
-dart-code dynamic workspace/willRenameFiles
 static static command dart.edit.codeAction.apply
-static static command dart.refactor.add_constructor_name
-static static command dart.refactor.convert_all_formal_parameters_to_named
-static static command dart.refactor.convert_selected_formal_parameters_to_named
-static static command dart.refactor.move_selected_formal_parameters_left
-static static command dart.refactor.move_top_level_to_file
-static static command dart.refactor.remove_constructor_name
-static static command dart.refactor.remove_import_prefix
-static static command dart.refactor_add.import_prefix
 static static experimental.interactiveResolveProvider.kinds
-static static workspace.fileOperations.willRename.filters
