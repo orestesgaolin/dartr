@@ -65,7 +65,15 @@ struct Results {
     assists: Vec<Value>,
     source_actions: Vec<Value>,
     commands: Vec<(Value, Option<Value>)>,
+    /// The workspace commands (`WORKSPACE_COMMANDS`).
+    workspace_commands: Vec<(Value, Option<Value>)>,
 }
+
+/// The commands executed once for the workspace.
+const WORKSPACE_COMMANDS: [&str; 2] = [
+    "dart.edit.fixAllInWorkspace.preview",
+    "dart.edit.fixAllInWorkspace",
+];
 
 fn start(program: &str, root: &Path, files: &[OpenFile]) -> LspClient {
     let mut c = LspClient::spawn(program, &session_args(), &[]);
@@ -196,6 +204,18 @@ fn run(
             results.commands.push((response, edit));
         }
     }
+    for command in WORKSPACE_COMMANDS {
+        let before = c.server_requests.len();
+        let response = c.request(
+            "workspace/executeCommand",
+            json!({"command": command, "arguments": []}),
+        );
+        let edit = c.server_requests[before..]
+            .iter()
+            .find(|(m, _)| m == "workspace/applyEdit")
+            .map(|(_, p)| p.clone());
+        results.workspace_commands.push((response, edit));
+    }
     results
 }
 
@@ -323,6 +343,27 @@ fn compare(
             t.differing += 1;
             problems.push(format!(
                 "command {name} {i}: dart {} {} dartr {} {}",
+                truncate(&d.0),
+                d.1.as_ref().map(truncate).unwrap_or_default(),
+                truncate(&x.0),
+                x.1.as_ref().map(truncate).unwrap_or_default()
+            ));
+        }
+    }
+    for (i, (d, x)) in dart
+        .workspace_commands
+        .iter()
+        .zip(&dartr.workspace_commands)
+        .enumerate()
+    {
+        let name = WORKSPACE_COMMANDS[i].trim_start_matches("dart.edit.");
+        let t = tally.entry(format!("command {name}")).or_default();
+        if d == x {
+            t.identical += 1;
+        } else {
+            t.differing += 1;
+            problems.push(format!(
+                "command {name}: dart {} {} dartr {} {}",
                 truncate(&d.0),
                 d.1.as_ref().map(truncate).unwrap_or_default(),
                 truncate(&x.0),

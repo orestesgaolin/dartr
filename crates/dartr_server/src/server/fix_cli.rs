@@ -399,103 +399,123 @@ impl Fixer {
         }
     }
 
-    /// The diagnostics of [path] (default severities; Dart
-    /// `unitResult.diagnostics`).
-    fn diagnostics(&mut self, path: &str, context: usize) -> Vec<Diagnostic> {
-        let files = [AnalyzedFile {
-            path: path.to_string(),
-            context,
-        }];
-        let results = self.session.diagnostics(&self.collection, &files);
-        let mut out = Vec::new();
-        let mut lints = Vec::new();
-        for file in &results {
-            if file.path != path {
-                continue;
-            }
-            for (d, _) in processed_diagnostics(&self.collection, file) {
-                let mut d = d.clone();
-                d.severity = d.code.severity();
-                if d.code.diagnostic_type == dartr_diagnostics::DiagnosticType::Lint {
-                    lints.push(d);
-                } else {
-                    out.push(d);
-                }
-            }
-        }
-        lints.sort_by(|a, b| a.offset.cmp(&b.offset).then(a.code.name.cmp(b.code.name)));
-        out.extend(lints);
-        out
-    }
-
-    /// Dart `BulkFixProcessor.fixErrors`: one pass over the analyzed files.
     fn fix_errors(&mut self, codes: Option<&[String]>) -> (Vec<SourceFileEdit>, ChangeMap) {
-        // The files with fixable diagnostics, and their diagnostics.
-        let mut files: Vec<(String, Vec<Diagnostic>)> = Vec::new();
-        let contexts: Vec<(usize, Vec<String>)> = self
-            .collection
-            .contexts
-            .iter()
-            .enumerate()
-            .map(|(i, c)| (i, c.root.analyzed_files()))
-            .collect();
-        for (index, paths) in contexts {
-            for path in paths {
-                if !path.ends_with(".dart") || is_generated(&path) {
-                    continue;
-                }
-                let diagnostics = self.diagnostics(&path, index);
-                files.push((path, diagnostics));
-            }
-        }
-        let mut workspace = ServerWorkspace {
-            session: &mut self.session,
-            collection: &self.collection,
-            overlays: &self.overlays,
-        };
-        let mut builder = ChangeBuilder::new(&mut workspace, None);
-        let mut change_map = ChangeMap::default();
-        for (path, diagnostics) in &files {
-            let filtered =
-                crate::correction::bulk_fix_processor::filter_diagnostics(diagnostics, codes);
-            if filtered.is_empty() {
-                continue;
-            }
-            let Some(resolved) = builder.workspace.resolved_unit(path) else {
-                continue;
-            };
-            let resolved = Rc::new(ResolvedUnitRef {
-                library: resolved.library.clone(),
-                index: resolved.index,
-            });
-            let options = options_for(&self.collection, path);
-            let line_info = resolved.line_info().clone();
-            let sink = NoopSink;
-            let ctx = resolved.ctx(&sink);
-            let unit = resolved.unit();
-            let utils = CorrectionUtils::new(&unit.ast, &line_info);
-            let fix_unit = FixUnit {
-                resolved: &resolved,
-                ctx: &ctx,
-                utils: &utils,
-                path,
-                options: &options,
-                diagnostics,
-            };
-            if !filtered.iter().any(|d| is_fixable(&fix_unit, d)) {
-                continue;
-            }
-            builder.default_eol = utils.end_of_line.clone();
-            let mut fixer = BulkFixer {
-                builder: &mut builder,
-                change_map: std::mem::take(&mut change_map),
-                codes: codes.map(<[String]>::to_vec),
-                auto_triggered: false,
-            };
-            fixer.fix_errors_in_unit(&fix_unit, resolved.index == 0);
-            change_map = std::mem::take(&mut fixer.change_map);
-        }
-        let change = builder.source_change();
-        (change.edits, change_map)
+        fix_errors(
+            &mut self.session,
+            &self.collection,
+            &self.overlays,
+            codes,
+            &|_| true,
+        )
     }
+}
+
+/// The diagnostics of [path] with their default severities (Dart
+/// `unitResult.diagnostics`), the lints last.
+fn unit_diagnostics(
+    session: &mut DriverSession,
+    collection: &AnalysisContextCollection,
+    path: &str,
+    context: usize,
+) -> Vec<Diagnostic> {
+    let files = [AnalyzedFile {
+        path: path.to_string(),
+        context,
+    }];
+    let results = session.diagnostics(collection, &files);
+    let mut out = Vec::new();
+    let mut lints = Vec::new();
+    for file in &results {
+        if file.path != path {
+            continue;
+        }
+        for (d, _) in processed_diagnostics(collection, file) {
+            let mut d = d.clone();
+            d.severity = d.code.severity();
+            if d.code.diagnostic_type == dartr_diagnostics::DiagnosticType::Lint {
+                lints.push(d);
+            } else {
+                out.push(d);
+            }
+        }
+    }
+    lints.sort_by(|a, b| a.offset.cmp(&b.offset).then(a.code.name.cmp(b.code.name)));
+    out.extend(lints);
+    out
+}
+
+/// Dart `BulkFixProcessor.fixErrors`: one pass over the analyzed files of
+/// [collection] that [include] accepts, with one change builder.
+pub(crate) fn fix_errors(
+    session: &mut DriverSession,
+    collection: &AnalysisContextCollection,
+    overlays: &HashMap<String, Document>,
+    codes: Option<&[String]>,
+    include: &dyn Fn(&str) -> bool,
+) -> (Vec<SourceFileEdit>, ChangeMap) {
+    let mut files: Vec<(String, Vec<Diagnostic>)> = Vec::new();
+    let contexts: Vec<(usize, Vec<String>)> = collection
+        .contexts
+        .iter()
+        .enumerate()
+        .map(|(i, c)| (i, c.root.analyzed_files()))
+        .collect();
+    for (index, paths) in contexts {
+        for path in paths {
+            if !path.ends_with(".dart") || is_generated(&path) || !include(&path) {
+                continue;
+            }
+            let diagnostics = unit_diagnostics(session, collection, &path, index);
+            files.push((path, diagnostics));
+        }
+    }
+    let mut workspace = ServerWorkspace {
+        session,
+        collection,
+        overlays,
+    };
+    let mut builder = ChangeBuilder::new(&mut workspace, None);
+    let mut change_map = ChangeMap::default();
+    for (path, diagnostics) in &files {
+        let filtered =
+            crate::correction::bulk_fix_processor::filter_diagnostics(diagnostics, codes);
+        if filtered.is_empty() {
+            continue;
+        }
+        let Some(resolved) = builder.workspace.resolved_unit(path) else {
+            continue;
+        };
+        let resolved = Rc::new(ResolvedUnitRef {
+            library: resolved.library.clone(),
+            index: resolved.index,
+        });
+        let options = options_for(collection, path);
+        let line_info = resolved.line_info().clone();
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let unit = resolved.unit();
+        let utils = CorrectionUtils::new(&unit.ast, &line_info);
+        let fix_unit = FixUnit {
+            resolved: &resolved,
+            ctx: &ctx,
+            utils: &utils,
+            path,
+            options: &options,
+            diagnostics,
+        };
+        if !filtered.iter().any(|d| is_fixable(&fix_unit, d)) {
+            continue;
+        }
+        builder.default_eol = utils.end_of_line.clone();
+        let mut fixer = BulkFixer {
+            builder: &mut builder,
+            change_map: std::mem::take(&mut change_map),
+            codes: codes.map(<[String]>::to_vec),
+            auto_triggered: false,
+        };
+        fixer.fix_errors_in_unit(&fix_unit, resolved.index == 0);
+        change_map = std::mem::take(&mut fixer.change_map);
+    }
+    let change = builder.source_change();
+    (change.edits, change_map)
 }

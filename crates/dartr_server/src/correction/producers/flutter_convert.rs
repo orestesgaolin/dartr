@@ -189,12 +189,14 @@ assist!(
                     });
                 if interpolation_identifier {
                     edits.push(SourceEdit {
+                        description: None,
                         offset,
                         length: 0,
                         replacement: format!("{{{qualifier}."),
                         id: 0,
                     });
                     edits.push(SourceEdit {
+                        description: None,
                         offset: offset + ast.length(id),
                         length: 0,
                         replacement: "}".to_string(),
@@ -202,6 +204,7 @@ assist!(
                     });
                 } else {
                     edits.push(SourceEdit {
+                        description: None,
                         offset,
                         length: 0,
                         replacement: format!("{qualifier}."),

@@ -183,7 +183,10 @@ pub struct BulkFixer<'b, 'w> {
 impl BulkFixer<'_, '_> {
     /// Dart `_applyProducer`.
     fn apply_producer(&mut self, c: &ProducerContext<'_>, producer: &mut dyn CorrectionProducer) {
+        self.builder.current_change_description =
+            producer.fix_kind().map(|k| k.message.to_string());
         producer.compute(c, self.builder);
+        self.builder.current_change_description = None;
         if self.builder.conflict {
             self.builder.conflict = false;
             self.builder.revert();
@@ -361,6 +364,7 @@ fn reorder(edits: &mut [SourceEdit]) {
         {
             let d = delta(&edits[j as usize]);
             current = SourceEdit {
+                description: None,
                 offset: (current.offset as i64 - d) as u32,
                 length: current.length,
                 replacement: current.replacement.clone(),
@@ -407,6 +411,7 @@ fn merge_edits(first: &SourceEdit, second: &SourceEdit) -> SourceEdit {
     text.push_str(&second.replacement);
     text.push_str(&String::from_utf16_lossy(&suffix));
     SourceEdit {
+        description: None,
         offset: actual_start as u32,
         length: length as u32,
         replacement: text,

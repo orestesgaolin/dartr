@@ -41,6 +41,8 @@ pub mod commands {
     pub const SORT_MEMBERS: &str = "dart.edit.sortMembers";
     pub const ORGANIZE_IMPORTS: &str = "dart.edit.organizeImports";
     pub const FIX_ALL: &str = "dart.edit.fixAll";
+    pub const FIX_ALL_IN_WORKSPACE: &str = "dart.edit.fixAllInWorkspace";
+    pub const PREVIEW_FIX_ALL_IN_WORKSPACE: &str = "dart.edit.fixAllInWorkspace.preview";
     pub const SEND_WORKSPACE_EDIT: &str = "dart.edit.sendWorkspaceEdit";
     pub const LOG_ACTION: &str = "dart.logAction";
 
@@ -50,6 +52,8 @@ pub mod commands {
         SORT_MEMBERS,
         ORGANIZE_IMPORTS,
         FIX_ALL,
+        PREVIEW_FIX_ALL_IN_WORKSPACE,
+        FIX_ALL_IN_WORKSPACE,
         SEND_WORKSPACE_EDIT,
         LOG_ACTION,
     ];
@@ -954,6 +958,12 @@ impl Server {
             commands::ORGANIZE_IMPORTS => self.organize_imports_command(id, &parameters),
             commands::SORT_MEMBERS => self.sort_members_command(id, &parameters),
             commands::FIX_ALL => self.fix_all_command(id, &parameters),
+            commands::FIX_ALL_IN_WORKSPACE => {
+                self.fix_all_in_workspace_command(id, "Apply All Fixes in Workspace", false)
+            }
+            commands::PREVIEW_FIX_ALL_IN_WORKSPACE => {
+                self.fix_all_in_workspace_command(id, "Preview All Fixes in Workspace", true)
+            }
             commands::SEND_WORKSPACE_EDIT => {
                 let Some(edit) = parameters.get("edit").filter(|e| e.is_object()).cloned() else {
                     return Some(Err(ResponseError::new(
@@ -1121,6 +1131,106 @@ impl Server {
         };
         let edit = self.create_plain_workspace_edit(&edits, &path, &line_info);
         self.send_workspace_edit_to_client(id, NAME, edit)
+    }
+
+    /// Dart `AbstractFixAllInWorkspaceCommandHandler.handle`.
+    fn fix_all_in_workspace_command(
+        &mut self,
+        id: &Value,
+        name: &str,
+        require_confirmation: bool,
+    ) -> Option<ErrorOr<Value>> {
+        if !self.editor_supports_apply_edit() {
+            return Some(Err(ResponseError::new(
+                codes::FEATURE_DISABLED,
+                format!(
+                    "\"{name}\" is only available for clients that support workspace/applyEdit"
+                ),
+            )));
+        }
+        if self
+            .client
+            .raw
+            .pointer("/workspace/workspaceEdit/changeAnnotationSupport")
+            .is_none_or(Value::is_null)
+        {
+            return Some(Err(ResponseError::new(
+                codes::FEATURE_DISABLED,
+                format!("\"{name}\" is only available for clients that support change annotations"),
+            )));
+        }
+        let Some(collection) = &self.collection else {
+            return Some(Ok(Value::Null));
+        };
+        let excluded = self.excluded.clone();
+        let include = |path: &str| {
+            !excluded
+                .iter()
+                .any(|e| path == e || path.starts_with(&format!("{e}/")))
+        };
+        let (edits, _) = super::fix_cli::fix_errors(
+            &mut self.session,
+            collection,
+            &self.overlays,
+            None,
+            &include,
+        );
+        if edits.is_empty() {
+            return Some(Ok(Value::Null));
+        }
+        let edit = self.create_annotated_workspace_edit(&edits, require_confirmation);
+        self.send_workspace_edit_to_client(id, name, edit)
+    }
+
+    /// Dart `createWorkspaceEdit` with `annotateChanges`: each edit has the
+    /// annotation of its description.
+    fn create_annotated_workspace_edit(
+        &self,
+        edits: &[SourceFileEdit],
+        needs_confirmation: bool,
+    ) -> Value {
+        let document_changes = self.client_flag("/workspace/workspaceEdit/documentChanges");
+        let mut annotations = Map::new();
+        let mut text_edits = |e: &SourceFileEdit| -> Vec<Value> {
+            let li = self
+                .line_info_of(&e.file)
+                .unwrap_or_else(|| LineInfo::from_content(""));
+            e.edits
+                .iter()
+                .rev()
+                .map(|edit| {
+                    // Dart `recordEditAnnotation`.
+                    let label = edit
+                        .description
+                        .clone()
+                        .unwrap_or_else(|| e.file.rsplit('/').next().unwrap_or("").to_string());
+                    annotations.entry(label.clone()).or_insert_with(
+                        || json!({"label": label, "needsConfirmation": needs_confirmation}),
+                    );
+                    json!({
+                        "range": mapping::to_range(&li, edit.offset, edit.length),
+                        "newText": edit.replacement,
+                        "annotationId": label,
+                    })
+                })
+                .collect()
+        };
+        if document_changes {
+            let mut changes = Vec::new();
+            for e in edits {
+                let edits = text_edits(e);
+                changes.push(
+                    json!({"textDocument": self.versioned_document(&e.file), "edits": edits}),
+                );
+            }
+            json!({"documentChanges": changes, "changeAnnotations": annotations})
+        } else {
+            let mut map = Map::new();
+            for e in edits {
+                map.insert(path_to_uri(&e.file), Value::Array(text_edits(e)));
+            }
+            json!({"changes": map, "changeAnnotations": annotations})
+        }
     }
 
     /// The resolved unit of [path] for `Fix All`: `None` for a file that is
