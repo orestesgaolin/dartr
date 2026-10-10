@@ -58,6 +58,8 @@ use crate::source_edits::apply_changes;
 use crate::transport::{Channel, read_message};
 use crate::uri::{UriError, normalize, path_to_uri, uri_to_path};
 
+mod nav;
+
 /// The progress token of analysis (Dart `analyzingProgressToken`).
 const ANALYZING_TOKEN: &str = "ANALYZING";
 
@@ -438,6 +440,10 @@ impl Server {
                     .ok_or_else(|| invalid_params(method))?;
                 features::selection_ranges(&file, positions)
             }
+            "textDocument/definition" => self.definition(&params),
+            "textDocument/typeDefinition" => self.type_definition(&params),
+            "textDocument/hover" => self.hover(&params),
+            "textDocument/documentHighlight" => self.document_highlights(&params),
             "textDocument/formatting" => self.format_request(&params, FormatKind::Document),
             "textDocument/rangeFormatting" => {
                 let range = params

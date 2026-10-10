@@ -630,7 +630,7 @@ impl<'a> Computer<'a> {
 
 /// Dart `AnnotatedNode.firstTokenAfterCommentAndMetadata`: the first child
 /// token or node that is not the documentation comment or an annotation.
-fn first_token_after_comment_and_metadata(ast: &Ast, node: NodeId) -> Option<TokenId> {
+pub(crate) fn first_token_after_comment_and_metadata(ast: &Ast, node: NodeId) -> Option<TokenId> {
     if !ast.is::<AnnotatedNode>(node) {
         return None;
     }
