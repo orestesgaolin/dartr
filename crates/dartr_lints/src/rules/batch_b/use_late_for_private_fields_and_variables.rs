@@ -83,14 +83,14 @@ fn walk(c: &LinterContext<'_>, node: NodeId, unit: usize, state: &mut State) {
             if let Some(element) = element {
                 let assignee = n.left_hand_side.raw();
                 let rhs_type = c.static_type(n.right_hand_side);
-                if kind(c, assignee) == NodeKind::SimpleIdentifier
-                    && in_declaration_context(c, assignee)
-                {
-                } else if lexeme(c, n.operator) == "="
+                // Dart: a declaration context or a non-null `=` assignment is
+                // OK; anything else is a nullable access.
+                let declaration_context = kind(c, assignee) == NodeKind::SimpleIdentifier
+                    && in_declaration_context(c, assignee);
+                let non_null_assignment = lexeme(c, n.operator) == "="
                     && rhs_type
-                        .is_some_and(|t| c.type_system().is_some_and(|ts| ts.is_non_nullable(t)))
-                {
-                } else {
+                        .is_some_and(|t| c.type_system().is_some_and(|ts| ts.is_non_nullable(t)));
+                if !declaration_context && !non_null_assignment {
                     state.nullable_access.insert(element);
                 }
             }

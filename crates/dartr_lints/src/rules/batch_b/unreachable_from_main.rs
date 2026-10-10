@@ -134,7 +134,7 @@ fn add_members(
     }
 }
 
-fn unit_context<'c, 'a>(c: &'c LinterContext<'a>, unit: usize) -> Option<LinterContext<'a>> {
+fn unit_context<'a>(c: &LinterContext<'a>, unit: usize) -> Option<LinterContext<'a>> {
     c.resolved_unit(unit)
 }
 
@@ -617,12 +617,11 @@ impl ReferenceVisitor<'_, '_> {
         if is_private(c, enclosing_element) {
             return;
         }
-        if enclosing_element.cast::<InterfaceElement>().is_some()
-            || matches!(enclosing_element.tag(), Tag::Extension | Tag::ExtensionType)
+        if (enclosing_element.cast::<InterfaceElement>().is_some()
+            || matches!(enclosing_element.tag(), Tag::Extension | Tag::ExtensionType))
+            && let Some(&declaration) = self.declaration_map.get(&element)
         {
-            if let Some(&declaration) = self.declaration_map.get(&element) {
-                self.declarations.insert(declaration);
-            }
+            self.declarations.insert(declaration);
         }
     }
 

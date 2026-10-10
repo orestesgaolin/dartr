@@ -45,11 +45,9 @@ fn verify_element(
             {
                 continue;
             }
-            NodeKind::SimpleIdentifier => {
-                if is_self_reference(c, n, element) {
-                    let name = simple_name(c, Id::from_raw(n));
-                    c.report_node(out, &diag::RECURSIVE_GETTERS, n, &[name]);
-                }
+            NodeKind::SimpleIdentifier if is_self_reference(c, n, element) => {
+                let name = simple_name(c, Id::from_raw(n));
+                c.report_node(out, &diag::RECURSIVE_GETTERS, n, &[name]);
             }
             _ => {}
         }

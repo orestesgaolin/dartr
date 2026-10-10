@@ -68,11 +68,14 @@ fn check_types(
     {
         return;
     }
-    if expected_void && !acceptable_void(c, ty) {
-        c.report_node(out, &diag::VOID_CHECKS, node, &[]);
-    } else if ctx.is_dart_async_future_or(expected)
-        && first_type_argument(c, expected).is_some_and(|a| matches!(*ctx.ty(a), TypeKind::Void))
-        && !acceptable_future_or_void(c, ty)
+    // Dart reports in both branches: a `void` expected type, then a
+    // `FutureOr<void>` expected type.
+    if (expected_void && !acceptable_void(c, ty))
+        || (!expected_void
+            && ctx.is_dart_async_future_or(expected)
+            && first_type_argument(c, expected)
+                .is_some_and(|a| matches!(*ctx.ty(a), TypeKind::Void))
+            && !acceptable_future_or_void(c, ty))
     {
         c.report_node(out, &diag::VOID_CHECKS, node, &[]);
     } else if let Some(checked) = checked_node

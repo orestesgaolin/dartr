@@ -191,10 +191,8 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                     return;
                 }
             }
-            NodeKind::InstanceCreationExpression => {
-                if invokes_generative_constructor(c, n, class) {
-                    return;
-                }
+            NodeKind::InstanceCreationExpression if invokes_generative_constructor(c, n, class) => {
+                return;
             }
             _ => {}
         }
