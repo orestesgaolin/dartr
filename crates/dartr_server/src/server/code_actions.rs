@@ -557,7 +557,7 @@ impl Server {
         let (Some(start), Some(end)) = (start, end) else {
             return Ok(json!([]));
         };
-        let (Ok(_start_offset), Ok(_end_offset)) = (
+        let (Ok(start_offset), Ok(end_offset)) = (
             mapping::to_offset(&line_info, start.0, start.1, false),
             mapping::to_offset(&line_info, end.0, end.1, false),
         ) else {
@@ -598,6 +598,18 @@ impl Server {
         if filter.include_any_of_kind("quickfix") {
             let fixes = self.fix_actions(&path, &resolved, &range, &filter, literal);
             actions.extend(sort_actions(fixes, &range));
+        }
+        if filter.include_any_of_kind("refactor") {
+            let assists = self.assist_actions(
+                &path,
+                &resolved,
+                &range,
+                start_offset,
+                end_offset.saturating_sub(start_offset),
+                &filter,
+                literal,
+            );
+            actions.extend(sort_actions(assists, &range));
         }
         Ok(Value::Array(actions))
     }
@@ -688,39 +700,129 @@ impl Server {
                 if !filter.include_kind(&kind) {
                     continue;
                 }
-                let action = if literal {
-                    let mut m = Map::new();
-                    m.insert("title".into(), json!(change.message));
-                    m.insert("kind".into(), json!(kind));
-                    m.insert("diagnostics".into(), json!([lsp_diagnostic.clone()]));
-                    if let Some(id) = &change.id {
-                        m.insert(
-                            "command".into(),
-                            json!({"command": commands::LOG_ACTION, "title": "Log Action", "arguments": [{"action": id}]}),
-                        );
-                    }
-                    m.insert(
-                        "edit".into(),
-                        self.create_workspace_edit(change, true, path, &line_info),
-                    );
-                    Value::Object(m)
-                } else {
-                    json!({
-                        "title": change.message,
-                        "command": commands::APPLY_CODE_ACTION,
-                        "arguments": [{
-                            "textDocument": self.versioned_document(path),
-                            "range": range,
-                            "kind": kind,
-                            "loggedAction": change.id,
-                        }],
-                    })
-                };
+                let action = self.change_action(
+                    change,
+                    &kind,
+                    path,
+                    range,
+                    &line_info,
+                    literal,
+                    Some(lsp_diagnostic.clone()),
+                );
                 actions.push(ActionWithPriority {
                     action,
                     priority: fix.kind.priority,
                 });
             }
+        }
+        actions
+    }
+
+    /// Dart `createCodeActionLiteralOrApplyCommand`.
+    #[allow(clippy::too_many_arguments)]
+    fn change_action(
+        &self,
+        change: &crate::correction::change::SourceChange,
+        kind: &str,
+        path: &str,
+        range: &Value,
+        line_info: &LineInfo,
+        literal: bool,
+        diagnostic: Option<Value>,
+    ) -> Value {
+        if literal {
+            let mut m = Map::new();
+            m.insert("title".into(), json!(change.message));
+            m.insert("kind".into(), json!(kind));
+            // Dart `createCodeActionLiteral`: `diagnostics: [?diagnostic]`.
+            m.insert(
+                "diagnostics".into(),
+                json!(diagnostic.map(|d| vec![d]).unwrap_or_default()),
+            );
+            if let Some(id) = &change.id {
+                m.insert(
+                    "command".into(),
+                    json!({"command": commands::LOG_ACTION, "title": "Log Action", "arguments": [{"action": id}]}),
+                );
+            }
+            m.insert(
+                "edit".into(),
+                self.create_workspace_edit(change, true, path, line_info),
+            );
+            Value::Object(m)
+        } else {
+            json!({
+                "title": change.message,
+                "command": commands::APPLY_CODE_ACTION,
+                "arguments": [{
+                    "textDocument": self.versioned_document(path),
+                    "range": range,
+                    "kind": kind,
+                    "loggedAction": change.id,
+                }],
+            })
+        }
+    }
+
+    /// Dart `DartCodeActionsProducer.getAssistActions`.
+    #[allow(clippy::too_many_arguments)]
+    fn assist_actions(
+        &mut self,
+        path: &str,
+        resolved: &ResolvedUnitRef,
+        range: &Value,
+        offset: u32,
+        length: u32,
+        filter: &KindFilter,
+        literal: bool,
+    ) -> Vec<ActionWithPriority> {
+        let diagnostics = self.unit_diagnostics(path);
+        let Some(collection) = &self.collection else {
+            return Vec::new();
+        };
+        let options = options_for(collection, path);
+        let resolved = Rc::new(ResolvedUnitRef {
+            library: resolved.library.clone(),
+            index: resolved.index,
+        });
+        let line_info = resolved.line_info().clone();
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let unit = resolved.unit();
+        let utils = CorrectionUtils::new(&unit.ast, &line_info);
+        let fix_unit = FixUnit {
+            resolved: &resolved,
+            ctx: &ctx,
+            utils: &utils,
+            path,
+            options: &options,
+            diagnostics: &diagnostics,
+        };
+        let overlays = &self.overlays;
+        let mut workspace = ServerWorkspace {
+            session: &mut self.session,
+            collection,
+            overlays,
+        };
+        let assists = crate::correction::assist_processor::compute_assists(
+            &fix_unit,
+            offset,
+            length,
+            &mut workspace,
+        );
+        drop(workspace);
+        let mut actions = Vec::new();
+        for assist in assists {
+            let change = &assist.change;
+            let kind = to_code_action_kind(change.id.as_deref(), "refactor");
+            if !filter.include_kind(&kind) {
+                continue;
+            }
+            let action = self.change_action(change, &kind, path, range, &line_info, literal, None);
+            actions.push(ActionWithPriority {
+                action,
+                priority: assist.kind.priority,
+            });
         }
         actions
     }

@@ -14,6 +14,7 @@
 //!   the ignore fixes ([`ignore`], [`yaml_edit`]).
 //! - [`organize_imports`], [`sort_members`]: the source actions.
 
+pub mod assist_processor;
 pub mod change;
 pub mod change_builder;
 pub mod code_style;

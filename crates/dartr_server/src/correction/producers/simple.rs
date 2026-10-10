@@ -23,10 +23,16 @@ use super::super::producer::*;
 /// applicability and the body of `compute`.
 macro_rules! producer {
     ($name:ident, $kind:expr, $multi:expr, $app:ident, |$c:ident, $b:ident| $body:block) => {
+        producer!($name, $kind, $multi, $app, assist: None, |$c, $b| $body);
+    };
+    ($name:ident, $kind:expr, $multi:expr, $app:ident, assist: $assist:expr, |$c:ident, $b:ident| $body:block) => {
         pub struct $name;
         impl CorrectionProducer for $name {
             fn fix_kind(&self) -> Option<&'static $crate::correction::fix_kind::FixKind> {
                 Some(&$kind)
+            }
+            fn assist_kind(&self) -> Option<&'static $crate::correction::fix_kind::FixKind> {
+                $assist
             }
             fn multi_fix_kind(&self) -> Option<&'static $crate::correction::fix_kind::FixKind> {
                 $multi
@@ -39,6 +45,26 @@ macro_rules! producer {
     };
 }
 pub(crate) use producer;
+
+/// A producer that is only an assist (Dart `assistKind` without `fixKind`).
+macro_rules! assist {
+    ($name:ident, $kind:expr, |$c:ident, $b:ident| $body:block) => {
+        pub struct $name;
+        impl CorrectionProducer for $name {
+            fn fix_kind(&self) -> Option<&'static $crate::correction::fix_kind::FixKind> {
+                None
+            }
+            fn assist_kind(&self) -> Option<&'static $crate::correction::fix_kind::FixKind> {
+                Some(&$kind)
+            }
+            fn applicability(&self) -> Applicability {
+                Applicability::SingleLocation
+            }
+            fn compute(&mut self, $c: &ProducerContext<'_>, $b: &mut ChangeBuilder<'_>) $body
+        }
+    };
+}
+pub(crate) use assist;
 
 /// The first token of [node] after its documentation comment (Dart:
 /// `beginToken`, or the parent of a comment token).

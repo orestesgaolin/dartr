@@ -56,6 +56,7 @@ producer!(
     k::CONVERT_TO_SUPER_PARAMETERS,
     Some(&k::CONVERT_TO_SUPER_PARAMETERS_MULTI),
     Automatically,
+    assist: Some(&crate::correction::generated::assist_kinds::CONVERT_TO_SUPER_PARAMETERS),
     |c, builder| {
         let ast = c.ast;
         let ctx = c.ctx;

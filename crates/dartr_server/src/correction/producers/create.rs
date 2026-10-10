@@ -918,6 +918,7 @@ producer!(
     k::ADD_RETURN_TYPE,
     Some(&k::ADD_RETURN_TYPE_MULTI),
     Automatically,
+    assist: Some(&crate::correction::generated::assist_kinds::ADD_RETURN_TYPE),
     |c, builder| {
         let ast = c.ast;
         let ctx = c.ctx;

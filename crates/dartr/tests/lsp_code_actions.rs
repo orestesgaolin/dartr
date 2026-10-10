@@ -7,6 +7,9 @@
 //!   `lsp_fixtures/fixes_project` and (with `DARTR_LSP_FIX_CORPUS=<folder>
 //!   [:<max files>]`) on a sample of real files, opened with their first
 //!   `package:` import removed (so that names are unresolved).
+//! - Assists: one request per word start of each file (empty range,
+//!   `only: ["refactor"]`); the actions with a `dart.assist.*` id are
+//!   compared (the refactorings are not).
 //! - Source actions: `only: ["source"]`, then the `Organize Imports` and
 //!   `Sort Members` commands; the `workspace/applyEdit` of each command is
 //!   compared.
@@ -59,6 +62,7 @@ struct FixRequest {
 #[derive(Default)]
 struct Results {
     fixes: Vec<Value>,
+    assists: Vec<Value>,
     source_actions: Vec<Value>,
     commands: Vec<(Value, Option<Value>)>,
 }
@@ -107,8 +111,56 @@ fn fix_requests(c: &LspClient, files: &[OpenFile]) -> Vec<FixRequest> {
     out
 }
 
-fn run(c: &mut LspClient, requests: &[FixRequest], files: &[OpenFile]) -> Results {
+/// The assist requests: an empty range at each word start of [files].
+fn assist_requests(files: &[OpenFile]) -> Vec<FixRequest> {
+    let mut out = Vec::new();
+    for f in files {
+        let uri = file_uri(&f.path);
+        let name = f.path.file_name().unwrap().to_string_lossy().to_string();
+        for (line, text) in f.content.lines().enumerate() {
+            let mut previous: Option<char> = None;
+            for (column, ch) in text.encode_utf16().enumerate() {
+                let ch = char::from_u32(ch as u32).unwrap_or('?');
+                let word = ch.is_alphanumeric() || ch == '_' || ch == '\'' || ch == '"';
+                let after_word = previous.is_some_and(|p| p.is_alphanumeric() || p == '_');
+                if word && !after_word {
+                    let position = json!({"line": line, "character": column});
+                    out.push(FixRequest {
+                        uri: uri.clone(),
+                        label: format!("{name}:{line}:{column} assist"),
+                        range: json!({"start": position, "end": position}),
+                        diagnostic: Value::Null,
+                    });
+                }
+                previous = Some(ch);
+            }
+        }
+    }
+    out
+}
+
+fn run(
+    c: &mut LspClient,
+    requests: &[FixRequest],
+    assists: &[FixRequest],
+    files: &[OpenFile],
+) -> Results {
     let mut results = Results::default();
+    for r in assists {
+        let response = c.request(
+            "textDocument/codeAction",
+            json!({
+                "textDocument": {"uri": r.uri},
+                "range": r.range,
+                "context": {"diagnostics": [], "only": ["refactor"]},
+            }),
+        );
+        let mut response = response;
+        if let Some(actions) = response["result"].as_array_mut() {
+            actions.retain(|a| action_id(a).starts_with("dart.assist"));
+        }
+        results.assists.push(response);
+    }
     for r in requests {
         let response = c.request(
             "textDocument/codeAction",
@@ -170,17 +222,22 @@ struct Tally {
 fn compare(
     label: &str,
     requests: &[FixRequest],
+    assists: &[FixRequest],
     dart: &Results,
     dartr: &Results,
 ) -> (BTreeMap<String, Tally>, Vec<String>) {
     let mut tally: BTreeMap<String, Tally> = BTreeMap::new();
     let mut problems = Vec::new();
-    for (i, r) in requests.iter().enumerate() {
-        let d = dart.fixes[i]["result"]
+    let pairs = requests
+        .iter()
+        .zip(dart.fixes.iter().zip(&dartr.fixes))
+        .chain(assists.iter().zip(dart.assists.iter().zip(&dartr.assists)));
+    for (r, (dart_response, dartr_response)) in pairs {
+        let d = dart_response["result"]
             .as_array()
             .cloned()
             .unwrap_or_default();
-        let x = dartr.fixes[i]["result"]
+        let x = dartr_response["result"]
             .as_array()
             .cloned()
             .unwrap_or_default();
@@ -188,7 +245,16 @@ fn compare(
             let title = a["title"].as_str().unwrap_or("");
             let t = tally.entry(action_id(a)).or_default();
             match x.iter().find(|b| b["title"].as_str() == Some(title)) {
-                None => t.missing += 1,
+                None => {
+                    t.missing += 1;
+                    if std::env::var_os("DARTR_LSP_FIX_MISSING").is_some() {
+                        problems.push(format!(
+                            "{} missing: {title}\n  dart:  {}",
+                            r.label,
+                            truncate(a)
+                        ));
+                    }
+                }
                 Some(b) if b == a => t.identical += 1,
                 Some(b) => {
                     t.differing += 1;
@@ -261,7 +327,11 @@ fn compare(
             ));
         }
     }
-    eprintln!("== {label}: {} diagnostics", requests.len());
+    eprintln!(
+        "== {label}: {} diagnostics, {} assist positions",
+        requests.len(),
+        assists.len()
+    );
     eprintln!(
         "{:<52} {:>6} {:>6} {:>6} {:>6}",
         "fix kind", "same", "diff", "miss", "extra"
@@ -296,12 +366,17 @@ fn run_both(
 ) -> (BTreeMap<String, Tally>, Vec<String>) {
     let mut dart = start("dart", root, files);
     let requests = fix_requests(&dart, files);
-    let dart_results = run(&mut dart, &requests, files);
+    let assists = if std::env::var_os("DARTR_LSP_FIX_NO_ASSISTS").is_some() {
+        Vec::new()
+    } else {
+        assist_requests(files)
+    };
+    let dart_results = run(&mut dart, &requests, &assists, files);
     let _ = dart.shutdown_and_exit();
     let mut dartr = start(dartr_bin(), root, files);
-    let dartr_results = run(&mut dartr, &requests, files);
+    let dartr_results = run(&mut dartr, &requests, &assists, files);
     let _ = dartr.shutdown_and_exit();
-    compare(label, &requests, &dart_results, &dartr_results)
+    compare(label, &requests, &assists, &dart_results, &dartr_results)
 }
 
 #[test]
@@ -317,6 +392,8 @@ fn code_actions_match_dart_language_server() {
         "creates.dart",
         "lints.dart",
         "warnings.dart",
+        "data_driven.dart",
+        "assists.dart",
     ] {
         let path = root.join("lib").join(name);
         let content = std::fs::read_to_string(&path).unwrap();

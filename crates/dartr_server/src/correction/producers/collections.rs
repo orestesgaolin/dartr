@@ -143,6 +143,7 @@ producer!(
     k::CONVERT_TO_MAP_LITERAL,
     Some(&k::CONVERT_TO_MAP_LITERAL_MULTI),
     Automatically,
+    assist: Some(&crate::correction::generated::assist_kinds::CONVERT_TO_MAP_LITERAL),
     |c, builder| {
         let ast = c.ast;
         let ctx = c.ctx;

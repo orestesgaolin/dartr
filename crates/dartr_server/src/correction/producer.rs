@@ -190,6 +190,16 @@ pub trait CorrectionProducer {
         None
     }
 
+    /// Dart `assistKind`; `None` when the producer is not an assist.
+    fn assist_kind(&self) -> Option<&'static FixKind> {
+        None
+    }
+
+    /// Dart `assistArguments`.
+    fn assist_arguments(&self) -> Vec<String> {
+        Vec::new()
+    }
+
     /// Dart `fixArguments`.
     fn fix_arguments(&self) -> Vec<String> {
         Vec::new()

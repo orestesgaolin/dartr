@@ -86,6 +86,10 @@ impl CorrectionProducer for AddLate {
         Some(&k::ADD_LATE)
     }
 
+    fn assist_kind(&self) -> Option<&'static FixKind> {
+        Some(&crate::correction::generated::assist_kinds::ADD_LATE)
+    }
+
     fn applicability(&self) -> Applicability {
         Applicability::SingleLocation
     }

@@ -306,6 +306,15 @@ impl CorrectionProducer for ConvertQuotes {
         })
     }
 
+    fn assist_kind(&self) -> Option<&'static FixKind> {
+        use crate::correction::generated::assist_kinds as a;
+        match self.kind {
+            QuotesKind::Swap => None,
+            QuotesKind::ToSingle => Some(&a::CONVERT_TO_SINGLE_QUOTED_STRING),
+            QuotesKind::ToDouble => Some(&a::CONVERT_TO_DOUBLE_QUOTED_STRING),
+        }
+    }
+
     fn multi_fix_kind(&self) -> Option<&'static FixKind> {
         Some(match self.kind {
             QuotesKind::Swap => &k::CONVERT_QUOTES_MULTI,

@@ -1,6 +1,7 @@
 //! The correction producers (Dart `services/correction/dart/*.dart`), by
 //! the name of the Dart generator in the fix registry.
 
+pub mod assists;
 pub mod collections;
 pub mod convert_quotes;
 pub mod create;
@@ -66,6 +67,43 @@ pub fn generator(name: &str) -> Option<ProducerGenerator> {
         "CreateParameter.new" => |_: C| boxed(create::CreateParameter::new()),
         "CreateLocalVariable.new" => |_: C| boxed(create::CreateLocalVariable::new()),
         "CreateMethod.method" => |_: C| boxed(create::CreateMethod::new()),
+        "ConvertToExpressionFunctionBody.new" => {
+            |_: C| boxed(assists::ConvertToExpressionFunctionBody)
+        }
+        "ConvertIntoBlockBody.missingBody" => |_: C| boxed(assists::ConvertIntoBlockBody),
+        "ExchangeOperands.new" => |_: C| boxed(assists::ExchangeOperands),
+        "SplitVariableDeclaration.new" => |_: C| boxed(assists::SplitVariableDeclaration),
+        "ConvertToPackageImport.new" => |_: C| boxed(assists::ConvertToPackageImport),
+        "ConvertToRelativeImport.new" => |_: C| boxed(assists::ConvertToRelativeImport),
+        "RemoveDigitSeparators.new" => |_: C| boxed(assists::RemoveDigitSeparators),
+        "AddTypeAnnotation.new" => |_: C| {
+            boxed(assists::AddTypeAnnotation {
+                applicability: Applicability::SingleLocation,
+                for_representation_field: false,
+            })
+        },
+        "AddTypeAnnotation.bulkFixable" => |_: C| {
+            boxed(assists::AddTypeAnnotation {
+                applicability: Applicability::Automatically,
+                for_representation_field: false,
+            })
+        },
+        "AddTypeAnnotation.forRepresentationField" => |_: C| {
+            boxed(assists::AddTypeAnnotation {
+                applicability: Applicability::SingleLocation,
+                for_representation_field: true,
+            })
+        },
+        "UseCurlyBraces.new" => |_: C| {
+            boxed(assists::UseCurlyBraces {
+                applicability: Applicability::AcrossFiles,
+            })
+        },
+        "UseCurlyBraces.nonBulk" => |_: C| {
+            boxed(assists::UseCurlyBraces {
+                applicability: Applicability::AcrossSingleFile,
+            })
+        },
         "MakeFinal.new" => |_: C| boxed(MakeFinal),
         "MakeVariableNullable.new" => |_: C| boxed(MakeVariableNullable::new()),
         "RemoveAnnotation.new" => |_: C| boxed(small::RemoveAnnotation::new()),
