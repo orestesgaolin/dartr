@@ -75,6 +75,7 @@ at each merge; the final process report is written from it.
 | 10-10 02:40 | 4b3741a | directive checks (URI_DOES_NOT_EXIST etc.), shouldIgnoreUndefined | Opus | analyzer-9.0.0: 27,067 matched, 0 extra; flutter and flutter_tools exact |
 | 10-10 07:10 | 27e128d | lint batch A fixed (82/83 rules exact), resolved lints in `dartr analyze`, doc-import scope | Opus (fixing Codex's branch) | analyzer-9.0.0: **27,272/27,278 matched**, 1 extra; visible-app only plugin lints missing; flutter, flutter_tools exact |
 | 10-10 08:40 | 1235fe5 | analyzer plugins in `dartr analyze` (dartr_plugins + Dart bridge) | Opus | **visible-app 20/20 exact vs `dart analyze`** (incl. jaspr_lints plugin), 5,574 tests |
+| 10-10 09:40 | 4a6bf13 | LSP navigation: definition, typeDefinition, hover, references, documentHighlight, implementation, search index | Opus | 333 fixture positions identical for 4 methods; references/implementation same locations (order differs where Dart's order depends on earlier requests); 5,578 tests |
 | 10-10 07:20 | 260fd05 | lint batch B (82 rules), unnecessary_ignore / removed_lint_use / replaced_lint_use | Opus | analyzer-9.0.0: **27,278/27,278 matched**, 5 extra (4 unnecessary_ignore, 1 analyzer_public_api); visible-app 20/20; flutter, flutter_tools exact |
 
 ## Incidents and lessons
@@ -165,3 +166,4 @@ at each merge; the final process report is written from it.
   the optimization phase.
 - **Flaky LSP step:** `lsp_session_parity_with_dart_language_server` failed once at "didChangeConfiguration:
   server requests" under load, then passed 2/2. Timing of server requests; to fix later.
+- **Cold search speed:** a first references search over the SDK takes 5.7 s (`String`), and 130 s for `runtimeType` on flutter; Dart has a warm disk index. Optimization target (persistent index).
