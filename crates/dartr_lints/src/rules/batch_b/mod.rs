@@ -11,7 +11,7 @@ pub(crate) mod util;
 
 macro_rules! rules {
     ($($rule:ident),* $(,)?) => {
-        $(#[allow(non_snake_case)] mod $rule;)*
+        $(mod $rule;)*
         pub const RULES: &[&str] = &[$(stringify!($rule)),*];
         pub fn register(
             name: &str,
@@ -54,7 +54,7 @@ rules!(
     sized_box_for_whitespace,
     use_colored_box,
     prefer_is_not_empty,
-    prefer_iterable_whereType,
+    prefer_iterable_wheretype,
     use_setters_to_change_properties,
     use_to_and_as_if_applicable,
     prefer_conditional_assignment,
@@ -69,7 +69,7 @@ rules!(
     prefer_final_parameters,
     prefer_const_literals_to_create_immutables,
     sized_box_shrink_expand,
-    prefer_for_elements_to_map_fromIterable,
+    prefer_for_elements_to_map_fromiterable,
     unrelated_type_equality_checks,
     prefer_int_literals,
     unnecessary_nullable_for_final_variable_declarations,
@@ -95,4 +95,7 @@ rules!(
     prefer_final_fields,
     unnecessary_statements,
     unnecessary_null_checks,
+    prefer_final_locals,
+    prefer_is_empty,
+    use_enums,
 );

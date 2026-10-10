@@ -45,7 +45,7 @@ fn collect_references(c: &LinterContext<'_>, body: Option<NodeId>, comment: Opti
 fn parameters_check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let mut just_underscores = Vec::new();
     for parameter in c.ast.list_raw(c.ast[Id::<FormalParameterList>::from_raw(node)].parameters).to_vec() {
-        if super::prefer_iterable_whereType::parameter_name(c, parameter).is_none() {
+        if super::prefer_iterable_wheretype::parameter_name(c, parameter).is_none() {
             continue;
         }
         let element = c.declared_element(parameter);

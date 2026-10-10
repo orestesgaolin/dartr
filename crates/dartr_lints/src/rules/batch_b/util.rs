@@ -675,21 +675,64 @@ pub fn is_augmentation(c: &LinterContext<'_>, node: NodeId) -> bool {
 
 /// Dart `getIntValue(expression, context)` (linter `ast.dart`).
 pub fn get_int_value(c: &LinterContext<'_>, expression: NodeId) -> Option<i64> {
+    get_int_value_with(c, expression, true)
+}
+
+/// [`get_int_value`] with `context == null` when [with_context] is false
+/// (only integer literals).
+pub fn get_int_value_with(c: &LinterContext<'_>, expression: NodeId, with_context: bool) -> Option<i64> {
     if let Some(prefix) = c.ast.cast::<PrefixExpression>(expression) {
         if lexeme(c, c.ast[prefix].operator) != "-" {
             return None;
         }
-        return get_int_value_inner(c, c.ast[prefix].operand.raw()).map(|v| v.wrapping_neg());
+        return get_int_value_inner(c, c.ast[prefix].operand.raw(), with_context).map(|v| v.wrapping_neg());
     }
-    get_int_value_inner(c, expression)
+    get_int_value_inner(c, expression, with_context)
 }
 
-fn get_int_value_inner(c: &LinterContext<'_>, expression: NodeId) -> Option<i64> {
+fn get_int_value_inner(c: &LinterContext<'_>, expression: NodeId, with_context: bool) -> Option<i64> {
     if let Some(literal) = c.ast.cast::<IntegerLiteral>(expression) {
         c.ast[literal].value
-    } else if kind(c, expression) == NodeKind::SimpleIdentifier {
+    } else if with_context && kind(c, expression) == NodeKind::SimpleIdentifier {
         c.constant_value(expression).and_then(|v| v.to_int_value())
     } else {
         None
     }
+}
+
+/// Dart `BindPatternVariableElement.join` and `JoinPatternVariableElement
+/// .variables`: the join variable of a bind pattern variable and the
+/// elements of its variables.
+pub fn pattern_variable_join(c: &LinterContext<'_>, element: ElementId) -> Option<(ElementId, Vec<ElementId>)> {
+    let ctx = rctx(c)?;
+    if element.tag() != Tag::BindPatternVariable {
+        return None;
+    }
+    let first = ctx.element_data(element)?.first_fragment;
+    let fragment = first.cast::<dartr_element::LocalVariableFragment>()?;
+    let join = ctx.fragment(fragment).pattern.join.get()?;
+    let join_element = *ctx.fragment_data(join.raw())?.element.try_get()?;
+    let join_fragment = ctx.fragment(join.raw().cast::<dartr_element::LocalVariableFragment>()?);
+    let variables = join_fragment
+        .pattern
+        .variables
+        .iter()
+        .filter_map(|v| ctx.fragment_data(v.raw())?.element.try_get().copied())
+        .collect();
+    Some((join_element, variables))
+}
+
+/// Dart `_hasFieldOrMethod(member, name)` (linter `ast.dart`).
+pub fn has_field_or_method(c: &LinterContext<'_>, member: NodeId, name: &str) -> bool {
+    if let Some(m) = c.ast.cast::<MethodDeclaration>(member) {
+        return lexeme(c, c.ast[m].name) == name;
+    }
+    if let Some(f) = c.ast.cast::<FieldDeclaration>(member) {
+        return c
+            .ast
+            .list(c.ast[c.ast[f].fields].variables)
+            .iter()
+            .any(|&v| lexeme(c, c.ast[v].name) == name);
+    }
+    false
 }

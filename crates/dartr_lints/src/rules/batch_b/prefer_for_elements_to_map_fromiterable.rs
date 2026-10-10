@@ -7,7 +7,7 @@ use dartr_diagnostics::{Diagnostic, diag};
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
     r.add(
         NodeKind::InstanceCreationExpression,
-        "prefer_for_elements_to_map_fromIterable",
+        "prefer_for_elements_to_map_fromiterable",
         check,
     );
 }

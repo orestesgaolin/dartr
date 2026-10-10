@@ -47,7 +47,7 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             && !is_wildcard_variable(c, element)
             && !resolved.potentially_mutated_in_scope.contains(&element)
         {
-            let name = super::prefer_iterable_whereType::parameter_name(c, parameter).unwrap_or("");
+            let name = super::prefer_iterable_wheretype::parameter_name(c, parameter).unwrap_or("");
             c.report_node(out, &diag::PREFER_FINAL_PARAMETERS, parameter, &[name]);
         }
     }

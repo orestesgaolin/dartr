@@ -47,6 +47,8 @@ fn helper(c: &LinterContext<'_>, root: NodeId, out: &mut Vec<Diagnostic>) {
                 {
                     c.report_node(out, &diag::TYPE_ANNOTATE_PUBLIC_APIS, n, &[]);
                 }
+                // The override does not visit the children.
+                continue;
             }
             NodeKind::VariableDeclaration => {
                 let v = &c.ast[Id::<VariableDeclaration>::from_raw(n)];
@@ -62,6 +64,7 @@ fn helper(c: &LinterContext<'_>, root: NodeId, out: &mut Vec<Diagnostic>) {
                 if !is_private(c, v.name) && keyword != Some("const") && !(keyword == Some("final") && has_inferred_type) {
                     c.report_token(out, &diag::TYPE_ANNOTATE_PUBLIC_APIS, v.name, &[]);
                 }
+                continue;
             }
             _ => {}
         }
