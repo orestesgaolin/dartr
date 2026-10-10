@@ -509,6 +509,7 @@ dependencies = [
  "dartr_resolver",
  "dartr_syntax",
  "dartr_typesystem",
+ "dartr_yaml",
  "indexmap",
  "pretty_assertions",
  "rayon",

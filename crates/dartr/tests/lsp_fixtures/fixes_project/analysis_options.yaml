@@ -1,0 +1,30 @@
+linter:
+  rules:
+    - prefer_const_constructors
+    - prefer_const_declarations
+    - prefer_const_literals_to_create_immutables
+    - unnecessary_this
+    - unnecessary_new
+    - unnecessary_const
+    - prefer_final_fields
+    - prefer_final_locals
+    - prefer_single_quotes
+    - annotate_overrides
+    - use_super_parameters
+    - unnecessary_late
+    - prefer_is_empty
+    - unnecessary_brace_in_string_interps
+    - empty_constructor_bodies
+    - avoid_init_to_null
+    - prefer_collection_literals
+    - unnecessary_string_interpolations
+    - unnecessary_overrides
+    - unnecessary_null_comparison
+    - avoid_unnecessary_containers
+    - sort_child_properties_last
+    - always_declare_return_types
+    - prefer_conditional_assignment
+    - unnecessary_parenthesis
+    - curly_braces_in_flow_control_structures
+    - prefer_if_null_operators
+    - directives_ordering
