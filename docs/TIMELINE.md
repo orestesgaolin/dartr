@@ -72,6 +72,8 @@ at each merge; the final process report is written from it.
 | 10-09 22:55 | 27d71ac | driver-backed diagnostics for `dartr analyze` and LSP (invalidation v1) | Opus | flutter_tools (unseen) 0/0 exact; visible-app extras 73 → 36 after the primary-constructor merge |
 | 10-10 00:05 | 871b43a | @optionalTypeArgs in strict inference; primary-constructor parameters in field initializers | Sonnet | visible-app `dartr analyze`: 36 → 0 false positives |
 | 10-10 01:30 | d019285 | **error verifier + all error/* verifiers integrated** (wave D4–D12) | Opus | 5,571 tests; `dartr analyze` vs `dart analyze`: visible-app 0 extra, flutter_tools exact, analyzer-9.0.0 25,595/27,278 matched, 30 extra (both unseen) |
+| 10-10 02:40 | 4b3741a | directive checks (URI_DOES_NOT_EXIST etc.), shouldIgnoreUndefined | Opus | analyzer-9.0.0: 27,067 matched, 0 extra; flutter and flutter_tools exact |
+| 10-10 07:10 | 27e128d | lint batch A fixed (82/83 rules exact), resolved lints in `dartr analyze`, doc-import scope | Opus (fixing Codex's branch) | analyzer-9.0.0: **27,272/27,278 matched**, 1 extra; visible-app only plugin lints missing; flutter, flutter_tools exact |
 
 ## Incidents and lessons
 
@@ -156,3 +158,8 @@ at each merge; the final process report is written from it.
 - **Quiet mode (10-09 23:30):** the operator asked for quiet fans. All heavy commands now take one shared
   `lockf` lock (2 build jobs, nice 15). Agents may not run scripts from the coordinator's scratchpad
   (the permission classifier blocked `heavy.sh`), so the lock is written inline.
+- **Slower with resolved lints (10-10 07:10):** `dartr analyze` on flutter_tools went from 0.7 s to 3.5 s
+  (dart: 2.6 s) and on flutter from 3.2 s to 5.9 s after the resolved lints were added. First target for
+  the optimization phase.
+- **Flaky LSP step:** `lsp_session_parity_with_dart_language_server` failed once at "didChangeConfiguration:
+  server requests" under load, then passed 2/2. Timing of server requests; to fix later.
