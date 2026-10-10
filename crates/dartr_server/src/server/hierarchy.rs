@@ -605,9 +605,17 @@ fn range_for_node(ast: &Ast, node: NodeId) -> (u32, u32) {
 fn enclosing_element(unit: &crate::element_locator::Unit<'_, '_>, root: NodeId, offset: u32) -> Option<ElementId> {
     let ast = unit.ast;
     let mut node = ast.node_covering(root, offset, 0);
+    // Only the declarations of fragments that are children of the library
+    // or of a type (not local functions and variables).
+    let top_level = |n: NodeId| ast.parent(n).is_some_and(|p| ast.is::<CompilationUnit>(p));
+    let member_variable = |n: NodeId| {
+        ast.parent(n)
+            .and_then(|list| ast.parent(list))
+            .is_some_and(|d| ast.is::<FieldDeclaration>(d) || ast.is::<TopLevelVariableDeclaration>(d))
+    };
     while let Some(n) = node {
         if ast.is::<ConstructorDeclaration>(n)
-            || ast.is::<FunctionDeclaration>(n)
+            || (ast.is::<FunctionDeclaration>(n) && top_level(n))
             || ast.is::<MethodDeclaration>(n)
             || ast.is::<ClassDeclaration>(n)
             || ast.is::<ClassTypeAlias>(n)
@@ -615,8 +623,7 @@ fn enclosing_element(unit: &crate::element_locator::Unit<'_, '_>, root: NodeId, 
             || ast.is::<ExtensionDeclaration>(n)
             || ast.is::<ExtensionTypeDeclaration>(n)
             || ast.is::<MixinDeclaration>(n)
-            || ast.is::<VariableDeclaration>(n)
-            || ast.is::<TopLevelVariableDeclaration>(n)
+            || (ast.is::<VariableDeclaration>(n) && member_variable(n))
         {
             if let Some(e) = unit.declared_element(n) {
                 return Some(e);

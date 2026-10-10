@@ -312,8 +312,15 @@ impl AstVisitor for Computer<'_, '_, '_> {
     fn visit_argument_list(&mut self, ast: &Ast, node: Id<ArgumentList>) {
         // Dart: the parameters of a member instantiated with type arguments
         // are new elements without a fragment (no location).
-        let (member, type_arguments) = crate::signature::invocation_substitution(self.unit, node.raw());
-        let substituted = member && type_arguments;
+        // (A constructor member keeps the parameters of the declaration.)
+        let (member, _) = crate::signature::invocation_substitution(self.unit, node.raw());
+        let creation = ast.parent(node.raw()).is_some_and(|p| {
+            ast.is::<InstanceCreationExpression>(p)
+                || ast.is::<SuperConstructorInvocation>(p)
+                || ast.is::<RedirectingConstructorInvocation>(p)
+                || ast.is::<DotShorthandConstructorInvocation>(p)
+        });
+        let substituted = member && !creation;
         for &argument in ast.list_raw(ast[node].arguments) {
             if ast.is::<NamedArgument>(argument) {
                 continue;
