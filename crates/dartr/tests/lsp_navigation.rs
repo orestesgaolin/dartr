@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use lsp_support::*;
 use serde_json::{Value, json};
 
-/// The methods compared, with the extra parameters of each.
+/// The navigation methods compared (at identifier positions).
 const METHODS: &[&str] = &[
     "textDocument/definition",
     "textDocument/typeDefinition",
@@ -22,6 +22,25 @@ const METHODS: &[&str] = &[
     "textDocument/references",
     "textDocument/documentHighlight",
     "textDocument/implementation",
+];
+
+/// The editor methods compared: `textDocument/signatureHelp` (at
+/// identifiers and after `(`, `,` and `<`), the hierarchies (prepare at
+/// identifiers, then the calls or types of the first item of each server),
+/// the semantic tokens and inlay hints of each file, and `workspace/symbol`
+/// for some identifiers of each file.
+const EDITOR_METHODS: &[&str] = &[
+    "textDocument/signatureHelp",
+    "textDocument/prepareCallHierarchy",
+    "callHierarchy/incomingCalls",
+    "callHierarchy/outgoingCalls",
+    "textDocument/prepareTypeHierarchy",
+    "typeHierarchy/supertypes",
+    "typeHierarchy/subtypes",
+    "textDocument/semanticTokens/full",
+    "textDocument/semanticTokens/range",
+    "textDocument/inlayHint",
+    "workspace/symbol",
 ];
 
 /// The `dartr` binary of the build, or `DARTR_LSP_NAV_BIN` (for example a
@@ -113,7 +132,83 @@ fn params_for(method: &str, uri: &str, (line, character): (u32, u32)) -> Value {
 /// (file, position) request.
 type Responses = BTreeMap<&'static str, Vec<(String, (u32, u32), Value)>>;
 
-fn run_requests(program: &str, root: &Path, files: &[PathBuf], every: usize) -> Responses {
+/// The positions just after each `(`, `,` and `<` outside of comments and
+/// strings (signature help positions); every [every]-th is kept.
+fn punctuation_positions(text: &str, every: usize) -> Vec<(u32, u32)> {
+    let mut out = Vec::new();
+    let mut count = 0usize;
+    for (line_no, line) in text.lines().enumerate() {
+        let mut in_string: Option<char> = None;
+        let mut col16 = 0u32;
+        let mut escaped = false;
+        let mut previous = ' ';
+        for c in line.chars() {
+            col16 += c.len_utf16() as u32;
+            if let Some(q) = in_string {
+                if escaped {
+                    escaped = false;
+                } else if c == '\\' {
+                    escaped = true;
+                } else if c == q {
+                    in_string = None;
+                }
+                previous = c;
+                continue;
+            }
+            if c == '/' && previous == '/' {
+                break;
+            }
+            if c == '\'' || c == '"' {
+                in_string = Some(c);
+            } else if c == '(' || c == ',' || c == '<' {
+                count += 1;
+                if count % every == 0 {
+                    out.push((line_no as u32, col16));
+                }
+            }
+            previous = c;
+        }
+    }
+    out
+}
+
+/// The text of the identifiers at [positions] (`workspace/symbol` queries).
+fn words_at(text: &str, positions: &[(u32, u32)]) -> Vec<String> {
+    let lines: Vec<Vec<u16>> = text.lines().map(|l| l.encode_utf16().collect()).collect();
+    let is_word = |c: u16| {
+        char::from_u32(c as u32).is_some_and(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
+    };
+    let mut out = Vec::new();
+    for &(line, col) in positions {
+        let l = &lines[line as usize];
+        let mut start = col as usize;
+        while start > 0 && is_word(l[start - 1]) {
+            start -= 1;
+        }
+        let mut end = col as usize;
+        while end < l.len() && is_word(l[end]) {
+            end += 1;
+        }
+        out.push(String::from_utf16_lossy(&l[start..end]));
+    }
+    out
+}
+
+/// The whole document as a range, and the middle third of its lines.
+fn file_ranges(text: &str) -> (Value, Value) {
+    let lines = text.lines().count() as u32;
+    let whole = json!({"start": {"line": 0, "character": 0}, "end": {"line": lines + 1, "character": 0}});
+    let middle = json!({"start": {"line": lines / 3, "character": 0}, "end": {"line": 2 * lines / 3, "character": 0}});
+    (whole, middle)
+}
+
+fn run_requests(
+    program: &str,
+    root: &Path,
+    files: &[PathBuf],
+    every: usize,
+    methods: &[&'static str],
+) -> Responses {
     let mut c = LspClient::spawn(program, &session_args(), &[]);
     // A search that indexes large SDK libraries for the first time takes
     // minutes in a debug build.
@@ -135,15 +230,76 @@ fn run_requests(program: &str, root: &Path, files: &[PathBuf], every: usize) -> 
             "textDocument/didOpen",
             json!({"textDocument": {"uri": uri, "languageId": "dart", "version": 1, "text": text}}),
         );
-        for position in identifier_positions(&text, every) {
-            for &method in METHODS {
-                let mut response = c.request(method, params_for(method, &uri, position));
-                if let Some(o) = response.as_object_mut() {
-                    o.remove("jsonrpc");
+        let mut record = |method: &'static str, position: (u32, u32), mut response: Value| {
+            if let Some(o) = response.as_object_mut() {
+                o.remove("jsonrpc");
+            }
+            out.entry(method)
+                .or_default()
+                .push((uri.clone(), position, response.clone()));
+            response
+        };
+        let positions = identifier_positions(&text, every);
+        let wants = |m: &str| methods.contains(&m);
+        for &position in &positions {
+            for &method in methods.iter().filter(|m| METHODS.contains(m)) {
+                let response = c.request(method, params_for(method, &uri, position));
+                record(method, position, response);
+            }
+            for (prepare, follow) in [
+                (
+                    "textDocument/prepareCallHierarchy",
+                    ["callHierarchy/incomingCalls", "callHierarchy/outgoingCalls"],
+                ),
+                (
+                    "textDocument/prepareTypeHierarchy",
+                    ["typeHierarchy/supertypes", "typeHierarchy/subtypes"],
+                ),
+            ] {
+                if !wants(prepare) {
+                    continue;
                 }
-                out.entry(method)
-                    .or_default()
-                    .push((uri.clone(), position, response));
+                let response = c.request(prepare, params_for(prepare, &uri, position));
+                let response = record(prepare, position, response);
+                if let Some(item) = response["result"].as_array().and_then(|a| a.first()) {
+                    for method in follow {
+                        let r = c.request(method, json!({"item": item}));
+                        record(method, position, r);
+                    }
+                }
+            }
+        }
+        if wants("textDocument/signatureHelp") {
+            let mut signature_positions = positions.clone();
+            signature_positions.extend(punctuation_positions(&text, every));
+            for position in signature_positions {
+                let method = "textDocument/signatureHelp";
+                let response = c.request(method, params_for(method, &uri, position));
+                record(method, position, response);
+            }
+        }
+        let (whole, middle) = file_ranges(&text);
+        let document = json!({"uri": uri});
+        if wants("textDocument/semanticTokens/full") {
+            let r = c.request("textDocument/semanticTokens/full", json!({"textDocument": document}));
+            record("textDocument/semanticTokens/full", (0, 0), r);
+        }
+        if wants("textDocument/semanticTokens/range") {
+            let r = c.request(
+                "textDocument/semanticTokens/range",
+                json!({"textDocument": document, "range": middle}),
+            );
+            record("textDocument/semanticTokens/range", (0, 0), r);
+        }
+        if wants("textDocument/inlayHint") {
+            let r = c.request("textDocument/inlayHint", json!({"textDocument": document, "range": whole}));
+            record("textDocument/inlayHint", (0, 0), r);
+        }
+        if wants("workspace/symbol") {
+            let sample: Vec<(u32, u32)> = positions.iter().step_by(7).copied().take(5).collect();
+            for (query, position) in words_at(&text, &sample).into_iter().zip(sample) {
+                let r = c.request("workspace/symbol", json!({"query": query}));
+                record("workspace/symbol", position, r);
             }
         }
         c.notify(
@@ -159,6 +315,7 @@ fn run_requests(program: &str, root: &Path, files: &[PathBuf], every: usize) -> 
 /// `<folder>/<label>.<server>.json`. With `DARTR_LSP_NAV_REUSE_DART=1`, the
 /// `dart` responses are read from that file when it exists.
 fn run_or_reuse(
+    methods: &[&'static str],
     program: &str,
     label: &str,
     root: &Path,
@@ -174,7 +331,7 @@ fn run_or_reuse(
         if let Some(text) = path.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
             let value: Value = serde_json::from_str(&text).unwrap();
             let mut out: Responses = BTreeMap::new();
-            for &method in METHODS {
+            for &method in methods {
                 for item in value[method].as_array().into_iter().flatten() {
                     out.entry(method).or_default().push((
                         item[0].as_str().unwrap().to_string(),
@@ -189,7 +346,7 @@ fn run_or_reuse(
             return out;
         }
     }
-    let out = run_requests(program, root, files, every);
+    let out = run_requests(program, root, files, every, methods);
     if let Some(path) = path {
         let _ = std::fs::create_dir_all(path.parent().unwrap());
         let value: serde_json::Map<String, Value> = out
@@ -214,13 +371,14 @@ fn run_or_reuse(
 /// Prints per method the number of identical responses and the first
 /// differences. Returns the counts (identical, total) by method.
 fn compare(
+    methods: &[&'static str],
     label: &str,
     dart: &Responses,
     dartr: &Responses,
 ) -> BTreeMap<&'static str, (usize, usize)> {
     println!("== {label}");
     let mut counts = BTreeMap::new();
-    for &method in METHODS {
+    for &method in methods {
         let (Some(a), Some(b)) = (dart.get(method), dartr.get(method)) else {
             continue;
         };
@@ -230,7 +388,7 @@ fn compare(
         for ((uri, pos, ra), (_, _, rb)) in a.iter().zip(b) {
             if ra == rb {
                 same += 1;
-            } else if sorted_result(ra) == sorted_result(rb) {
+            } else if sorted_result(ra).is_some() && sorted_result(ra) == sorted_result(rb) {
                 // The same locations in another order (Dart: the order of
                 // the files of a search depends on the earlier requests).
                 same_set += 1;
@@ -288,8 +446,8 @@ fn truncate(s: &str) -> String {
 
 /// The fixture: package `pkg` (classes, mixins, extensions, generics,
 /// enums, typedefs, a part) and package `app` that imports it.
-fn write_project() -> PathBuf {
-    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("lsp_navigation");
+fn write_project(name: &str) -> PathBuf {
+    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
     let root = root.canonicalize().unwrap();
@@ -490,11 +648,11 @@ fn lsp_navigation_parity() {
         eprintln!("skipped: `dart` is not on PATH");
         return;
     }
-    let root = write_project();
+    let root = write_project("lsp_navigation");
     let files = dart_files(&root);
-    let dart = run_or_reuse("dart", "fixture", &root, &files, 1);
-    let dartr = run_or_reuse(dartr_bin(), "fixture", &root, &files, 1);
-    let counts = compare("fixture project", &dart, &dartr);
+    let dart = run_or_reuse(METHODS, "dart", "fixture", &root, &files, 1);
+    let dartr = run_or_reuse(METHODS, dartr_bin(), "fixture", &root, &files, 1);
+    let counts = compare(METHODS, "fixture project", &dart, &dartr);
     // The methods that must be at parity on the fixture.
     let required: Vec<&str> = std::env::var("DARTR_LSP_NAV_REQUIRED")
         .map(|s| {
@@ -506,6 +664,33 @@ fn lsp_navigation_parity() {
     for m in required {
         let (same, total) = counts.get(m).copied().unwrap_or((0, 0));
         assert_eq!(same, total, "{m}: {same} of {total} identical");
+    }
+}
+
+/// The editor methods on the fixture project (`DARTR_LSP_NAV_REQUIRED`
+/// gives the methods that must be at parity).
+#[test]
+fn lsp_editor_parity() {
+    if !dart_available() {
+        eprintln!("skipped: `dart` is not on PATH");
+        return;
+    }
+    let root = write_project("lsp_editor");
+    let files = dart_files(&root);
+    let dart = run_or_reuse(EDITOR_METHODS, "dart", "fixture-editor", &root, &files, 1);
+    let dartr = run_or_reuse(EDITOR_METHODS, dartr_bin(), "fixture-editor", &root, &files, 1);
+    let counts = compare(EDITOR_METHODS, "fixture project (editor)", &dart, &dartr);
+    let required: Vec<&str> = std::env::var("DARTR_LSP_NAV_REQUIRED")
+        .map(|s| {
+            s.split(',')
+                .map(|m| -> &'static str { Box::leak(m.to_string().into_boxed_str()) })
+                .collect()
+        })
+        .unwrap_or_default();
+    for m in required {
+        if let Some(&(same, total)) = counts.get(m) {
+            assert_eq!(same, total, "{m}: {same} of {total} identical");
+        }
     }
 }
 
@@ -538,7 +723,13 @@ fn lsp_navigation_corpus() {
         "{}-{every}-{max_files}",
         root.file_name().unwrap().to_string_lossy()
     );
-    let dart = run_or_reuse("dart", &label, &root, &files, every);
-    let dartr = run_or_reuse(dartr_bin(), &label, &root, &files, every);
-    compare(&format!("corpus {}", root.display()), &dart, &dartr);
+    let methods: &[&'static str] = if std::env::var_os("DARTR_LSP_NAV_EDITOR").is_some() {
+        EDITOR_METHODS
+    } else {
+        METHODS
+    };
+    let label = if methods == EDITOR_METHODS { format!("{label}-editor") } else { label };
+    let dart = run_or_reuse(methods, "dart", &label, &root, &files, every);
+    let dartr = run_or_reuse(methods, dartr_bin(), &label, &root, &files, every);
+    compare(methods, &format!("corpus {}", root.display()), &dart, &dartr);
 }

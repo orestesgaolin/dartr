@@ -35,7 +35,7 @@ pub(crate) struct SElem {
 }
 
 impl SElem {
-    fn with<R>(&self, f: impl FnOnce(&Ctx<'_>) -> R) -> R {
+    pub(crate) fn with<R>(&self, f: impl FnOnce(&Ctx<'_>) -> R) -> R {
         let sink = NoopSink;
         let ctx = self.lib.ctx(self.unit, &sink);
         f(&ctx)
@@ -47,7 +47,7 @@ impl SElem {
 
     /// The identity of the element in Dart: the same element of the same
     /// driver (each driver has its own element model).
-    fn identity(&self) -> Option<(usize, ElementKey)> {
+    pub(crate) fn identity(&self) -> Option<(usize, ElementKey)> {
         self.key().map(|k| (self.lib.context, k))
     }
 
@@ -68,6 +68,8 @@ pub(crate) struct Match {
     pub length: u32,
     /// The context of the driver that found the match.
     pub context: usize,
+    /// The relation of an index match (`IsReferencedBy` for other matches).
+    pub kind: RelationKind,
 }
 
 const REFERENCES: &[RelationKind] = &[
@@ -257,7 +259,7 @@ impl Server {
     /// append-only), so the files of a search depend on the earlier
     /// requests, as in Dart. The drivers are in the order of the
     /// `HashMap<Folder, AnalysisDriver>` of the context manager.
-    fn search_scope(&mut self) -> Arc<SearchScope> {
+    pub(crate) fn search_scope(&mut self) -> Arc<SearchScope> {
         if let Some(scope) = &self.search_scope {
             return scope.clone();
         }
@@ -434,6 +436,19 @@ impl Server {
                     reference_names.push(class_name);
                 }
                 library_files.push(library_files_of(class));
+                // Dart `_getTypeAliasesOfInterface`: the type aliases of the
+                // class can denote the unnamed constructor too.
+                for alias in self.type_aliases_of_interface(&element.same(class)) {
+                    if let Some(name) = alias.with(|ctx| {
+                        ctx.element_data(alias.id)
+                            .and_then(|d| d.name)
+                            .map(|n| ctx.name_str(n).to_string())
+                    }) && !reference_names.contains(&name)
+                    {
+                        reference_names.push(name);
+                    }
+                    library_files.push(library_file_paths(&alias, alias.id));
+                }
             }
         }
         let mut results = Vec::new();
@@ -469,11 +484,104 @@ impl Server {
                         offset: r.offset,
                         length: r.length,
                         context: *context,
+                        kind: r.kind,
                     });
                 }
             }
         }
         results
+    }
+
+    /// Dart `ElementReferencesComputer.compute(element, false)`: the
+    /// references to [element] and to the elements of its hierarchy.
+    pub(crate) fn element_references(&mut self, element: &SElem) -> Vec<Match> {
+        // Dart `_getRefElements`.
+        let is_named_parameter = matches!(
+            element.id.tag(),
+            Tag::FormalParameter | Tag::FieldFormalParameter | Tag::SuperFormalParameter
+        ) && element.with(|ctx| {
+            ctx.get(
+                dartr_element::EId::<dartr_element::FormalParameterElement>::from_raw(element.id),
+            )
+            .kind
+            .is_named()
+        });
+        let ref_elements: Vec<SElem> = if is_named_parameter {
+            self.hierarchy_named_parameters(&element)
+        } else if matches!(
+            element.id.tag(),
+            Tag::Method | Tag::Field | Tag::Constructor
+        ) {
+            let (mut members, parameters) = self.hierarchy_members_and_parameters(&element);
+            members.extend(parameters);
+            members
+        } else {
+            vec![element.clone()]
+        };
+        let mut matches = Vec::new();
+        for e in &ref_elements {
+            matches.extend(self.search_references(e));
+        }
+        matches
+    }
+
+    /// Dart `_getTypeAliasesOfInterface`: the type aliases whose aliased
+    /// type is [interface] (also through other aliases), found from the
+    /// references to the interface and to each alias.
+    fn type_aliases_of_interface(&mut self, interface: &SElem) -> Vec<SElem> {
+        let Some(interface_key) = interface.key() else {
+            return Vec::new();
+        };
+        let mut result: Vec<SElem> = Vec::new();
+        let mut seen: Vec<(usize, ElementKey)> = interface.identity().into_iter().collect();
+        let mut pending = vec![interface.clone()];
+        while let Some(element) = pending.pop() {
+            for m in self.search_index(&element, REFERENCES) {
+                let Ok(resolved) = self.require_resolved_unit_in(&m.path, Some(m.context)) else {
+                    continue;
+                };
+                let unit = resolved.unit();
+                let ast = &unit.ast;
+                let mut node = ast.node_covering(unit.unit.raw(), m.offset, 0);
+                let mut alias_node = None;
+                while let Some(n) = node {
+                    if ast.is::<GenericTypeAlias>(n) || ast.is::<FunctionTypeAlias>(n) {
+                        alias_node = Some(n);
+                        break;
+                    }
+                    node = ast.parent(n);
+                }
+                let Some(alias_node) = alias_node else { continue };
+                let sink = NoopSink;
+                let ctx = resolved.ctx(&sink);
+                let Some(alias) = support::declared_element(&ctx, &unit.tables, alias_node) else {
+                    continue;
+                };
+                let Some(alias_eid) = alias.cast::<dartr_element::TypeAliasElement>() else {
+                    continue;
+                };
+                let aliases_interface = ctx.get(alias_eid).aliased_type.get().is_some_and(|t| {
+                    matches!(*ctx.ty(t), TypeKind::Interface { element, .. }
+                        if crate::index::element_key(&ctx, element.raw()).as_ref() == Some(&interface_key))
+                });
+                if !aliases_interface {
+                    continue;
+                }
+                let alias = SElem {
+                    lib: resolved.library.clone(),
+                    unit: resolved.index,
+                    id: alias,
+                };
+                let Some(identity) = alias.identity() else { continue };
+                if seen.contains(&identity) {
+                    continue;
+                }
+                seen.push(identity);
+                result.push(alias.clone());
+                pending.push(alias);
+            }
+        }
+        result
     }
 
     /// Dart `Search.references(element)` over all drivers.
@@ -630,6 +738,7 @@ impl Server {
                 offset,
                 length,
                 context: resolved.library.context,
+                kind: RelationKind::IsReferencedBy,
             })
             .collect()
     }
@@ -739,6 +848,7 @@ impl Server {
                             offset: ast.offset(t),
                             length: ast.length(t),
                             context: owner,
+                            kind: RelationKind::IsReferencedBy,
                         });
                     }
                 }
@@ -750,6 +860,12 @@ impl Server {
     /// Dart `directSubtypeReferences` over all drivers: the classes whose
     /// declarations extend, mix in, implement or constrain [class].
     fn direct_subtypes(&mut self, class: &SElem) -> Vec<SElem> {
+        self.direct_subtypes_with_kinds(class).into_iter().map(|(e, _)| e).collect()
+    }
+
+    /// Dart `searchSubtypes`: the matches of [direct_subtypes] with the
+    /// relation of each (extends, implements, with, on).
+    pub(crate) fn direct_subtypes_with_kinds(&mut self, class: &SElem) -> Vec<(SElem, RelationKind)> {
         let matches = self.search_index(class, SUBTYPES);
         let mut out = Vec::new();
         for m in matches {
@@ -777,11 +893,14 @@ impl Server {
             let sink = NoopSink;
             let ctx = resolved.ctx(&sink);
             if let Some(e) = support::declared_element(&ctx, &unit.tables, declaration) {
-                out.push(SElem {
-                    lib: resolved.library.clone(),
-                    unit: resolved.index,
-                    id: e,
-                });
+                out.push((
+                    SElem {
+                        lib: resolved.library.clone(),
+                        unit: resolved.index,
+                        id: e,
+                    },
+                    m.kind,
+                ));
             }
         }
         out
@@ -1011,38 +1130,14 @@ impl Server {
             unit: resolved.index,
             id: element,
         };
-        // Dart `_getRefElements`.
-        let is_named_parameter = matches!(
-            element.id.tag(),
-            Tag::FormalParameter | Tag::FieldFormalParameter | Tag::SuperFormalParameter
-        ) && element.with(|ctx| {
-            ctx.get(
-                dartr_element::EId::<dartr_element::FormalParameterElement>::from_raw(element.id),
-            )
-            .kind
-            .is_named()
-        });
-        let ref_elements: Vec<SElem> = if is_named_parameter {
-            self.hierarchy_named_parameters(&element)
-        } else if matches!(
-            element.id.tag(),
-            Tag::Method | Tag::Field | Tag::Constructor
-        ) {
-            let (mut members, parameters) = self.hierarchy_members_and_parameters(&element);
-            members.extend(parameters);
-            members
-        } else {
-            vec![element.clone()]
-        };
+        let matches = self.element_references(&element);
         let mut locations = Vec::new();
-        for e in &ref_elements {
-            for m in self.search_references(e) {
-                if let Some(lines) = self.line_info_of(&m.path) {
-                    locations.push(json!({
-                        "uri": path_to_uri(&m.path),
-                        "range": mapping::to_range(&lines, m.offset, m.length),
-                    }));
-                }
+        for m in matches {
+            if let Some(lines) = self.line_info_of(&m.path) {
+                locations.push(json!({
+                    "uri": path_to_uri(&m.path),
+                    "range": mapping::to_range(&lines, m.offset, m.length),
+                }));
             }
         }
         let include_declaration = params

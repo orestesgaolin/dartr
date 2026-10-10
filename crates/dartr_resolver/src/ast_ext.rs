@@ -378,7 +378,7 @@ pub fn property_access_is_cascaded(ast: &Ast, node: Id<PropertyAccess>) -> bool 
 
 /// Dart `_ancestorCascade.target` of a cascaded node: the target of the
 /// nearest enclosing `CascadeExpression`.
-fn ancestor_cascade_target(ast: &Ast, node: NodeId) -> Option<Id<Expression>> {
+pub fn ancestor_cascade_target(ast: &Ast, node: NodeId) -> Option<Id<Expression>> {
     let mut current = ast.parent(node);
     while let Some(p) = current {
         if let Some(c) = ast.cast::<CascadeExpression>(p) {

@@ -168,6 +168,35 @@ impl ResolvedLibraryResult {
     }
 }
 
+/// A linked library (Dart `LibraryElementResult`): the element model of
+/// the driver after linking the library.
+pub struct LinkedLibraryResult {
+    pub context: usize,
+    pub world: dartr_element::WorldSnapshot,
+    pub type_provider: dartr_element::TypeProvider,
+    /// The path of the defining unit of the library.
+    pub library_path: String,
+    pub uri: String,
+}
+
+impl LinkedLibraryResult {
+    /// A lookup context without a unit.
+    pub fn ctx<'a>(
+        &'a self,
+        sink: &'a dartr_element::NoopSink,
+        features: &'a dartr_element::FeatureSet,
+    ) -> dartr_element::Ctx<'a> {
+        dartr_element::Ctx {
+            world: &self.world,
+            current: None,
+            local: None,
+            tp: &self.type_provider,
+            features,
+            req: sink,
+        }
+    }
+}
+
 /// What the analysis of one context gives for one requested file.
 enum Outcome {
     Done(FileDiagnostics),
@@ -373,6 +402,57 @@ impl DriverSession {
                 Some((f.path.clone(), content.parsed.clone()))
             })
             .collect()
+    }
+
+    /// Dart `AnalysisDriver.getLibraryByUri` for the library of [path] in
+    /// the driver of [context]: the linked element model (no resolution of
+    /// the bodies) and the URI of the library; `None` when the file does
+    /// not exist or linking panics.
+    pub fn linked_library_in(
+        &mut self,
+        collection: &AnalysisContextCollection,
+        context: usize,
+        path: &str,
+    ) -> Option<LinkedLibraryResult> {
+        if context >= collection.contexts.len() {
+            return None;
+        }
+        let generation = self
+            .generation
+            .get_or_insert_with(|| Arc::new(Generation::new(0)))
+            .clone();
+        let mut driver = self.drivers.shift_remove(&context).unwrap_or_else(|| {
+            dartr_driver::project::context_driver(collection, context, generation.clone())
+        });
+        let result = pool().install(|| {
+            catch_unwind(AssertUnwindSafe(|| {
+                let id = driver.fs.get_file_for_path(path);
+                driver.fs.discover();
+                if !driver.fs.file(id).exists() {
+                    return None;
+                }
+                let library = driver.fs.library_of(id)?;
+                let library_path = driver.fs.file(library).path.to_string();
+                let uri = driver.fs.file(library).uri_str.to_string();
+                driver.link_libraries(&[library]);
+                let world = driver.state.world.clone();
+                let type_provider = dartr_link::types_builder::world_type_provider(&world);
+                Some(LinkedLibraryResult {
+                    context,
+                    world,
+                    type_provider,
+                    library_path,
+                    uri,
+                })
+            }))
+        });
+        match result {
+            Ok(r) => {
+                self.drivers.insert(context, driver);
+                r
+            }
+            Err(_) => None,
+        }
     }
 
     /// The existing Dart files that the driver of [context] knows (Dart

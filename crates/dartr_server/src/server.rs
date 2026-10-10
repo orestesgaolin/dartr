@@ -58,8 +58,11 @@ use crate::source_edits::apply_changes;
 use crate::transport::{Channel, read_message};
 use crate::uri::{UriError, normalize, path_to_uri, uri_to_path};
 
+mod editor;
+mod hierarchy;
 mod nav;
 mod search;
+mod symbols;
 
 /// The progress token of analysis (Dart `analyzingProgressToken`).
 const ANALYZING_TOKEN: &str = "ANALYZING";
@@ -462,6 +465,25 @@ impl Server {
             }
             "textDocument/references" => self.catching(method, |s| s.references(&params)),
             "textDocument/implementation" => self.catching(method, |s| s.implementation(&params)),
+            "textDocument/signatureHelp" => self.catching(method, |s| s.signature_help(&params)),
+            "textDocument/semanticTokens/full" => {
+                self.catching(method, |s| s.semantic_tokens(&params, false))
+            }
+            "textDocument/semanticTokens/range" => {
+                self.catching(method, |s| s.semantic_tokens(&params, true))
+            }
+            "textDocument/inlayHint" => self.catching(method, |s| s.inlay_hints(&params)),
+            "textDocument/prepareTypeHierarchy" => {
+                self.catching(method, |s| s.prepare_type_hierarchy(&params))
+            }
+            "typeHierarchy/supertypes" => self.catching(method, |s| s.type_hierarchy_supertypes(&params)),
+            "typeHierarchy/subtypes" => self.catching(method, |s| s.type_hierarchy_subtypes(&params)),
+            "textDocument/prepareCallHierarchy" => {
+                self.catching(method, |s| s.prepare_call_hierarchy(&params))
+            }
+            "callHierarchy/incomingCalls" => self.catching(method, |s| s.call_hierarchy_incoming(&params)),
+            "callHierarchy/outgoingCalls" => self.catching(method, |s| s.call_hierarchy_outgoing(&params)),
+            "workspace/symbol" => self.catching(method, |s| s.workspace_symbol(&params)),
             "textDocument/formatting" => self.format_request(&params, FormatKind::Document),
             "textDocument/rangeFormatting" => {
                 let range = params
@@ -836,6 +858,11 @@ impl Server {
                 "Document URI was not supplied",
             ));
         };
+        self.path_of_uri(uri)
+    }
+
+    /// Dart `pathOfUri`.
+    fn path_of_uri(&self, uri: &str) -> ErrorOr<String> {
         uri_to_path(uri).map_err(|e| match e {
             UriError::NoScheme => ResponseError::with_data(
                 codes::INVALID_FILE_PATH,

@@ -57,6 +57,81 @@ impl LspResourceClientConfiguration<'_> {
     }
 }
 
+/// Dart `InlayHintsParameterNamesMode`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InlayHintsParameterNamesMode {
+    None,
+    Literal,
+    All,
+}
+
+/// Dart `LspClientInlayHintsConfiguration`: the `dart.inlayHints` setting
+/// (`true`, `false` or a map of the kinds).
+#[derive(Clone, Copy, Debug)]
+pub struct InlayHintsConfiguration {
+    pub dot_shorthand_types: bool,
+    pub parameter_names: InlayHintsParameterNamesMode,
+    pub parameter_types: bool,
+    pub return_types: bool,
+    pub type_arguments: bool,
+    pub variable_types: bool,
+}
+
+impl InlayHintsConfiguration {
+    pub fn new(user_preference: Option<&Value>) -> Self {
+        let map = user_preference.and_then(Value::as_object);
+        let boolean = user_preference.and_then(Value::as_bool);
+        let default = boolean.unwrap_or(true);
+        let enabled = |key: &str| match map.and_then(|m| m.get(key)) {
+            Some(Value::Bool(b)) => *b,
+            Some(Value::Object(o)) => o.get("enabled").and_then(Value::as_bool).unwrap_or(default),
+            _ => default,
+        };
+        let default_mode = if default {
+            InlayHintsParameterNamesMode::All
+        } else {
+            InlayHintsParameterNamesMode::None
+        };
+        let mode_of = |s: &str| match s {
+            "none" => InlayHintsParameterNamesMode::None,
+            "literal" => InlayHintsParameterNamesMode::Literal,
+            _ => InlayHintsParameterNamesMode::All,
+        };
+        let from_bool = |b: bool| {
+            if b {
+                InlayHintsParameterNamesMode::All
+            } else {
+                InlayHintsParameterNamesMode::None
+            }
+        };
+        let parameter_names = match map.and_then(|m| m.get("parameterNames")) {
+            Some(Value::Bool(b)) => from_bool(*b),
+            Some(Value::String(s)) => mode_of(s),
+            Some(Value::Object(o)) => match o.get("enabled") {
+                Some(Value::Bool(b)) => from_bool(*b),
+                Some(Value::String(s)) => mode_of(s),
+                _ => default_mode,
+            },
+            _ => default_mode,
+        };
+        InlayHintsConfiguration {
+            dot_shorthand_types: enabled("dotShorthandTypes"),
+            parameter_names,
+            parameter_types: enabled("parameterTypes"),
+            return_types: enabled("returnTypes"),
+            type_arguments: enabled("typeArguments"),
+            variable_types: enabled("variableTypes"),
+        }
+    }
+}
+
+impl LspResourceClientConfiguration<'_> {
+    /// Dart `inlayHints` (of the settings, not of the fallback).
+    pub fn inlay_hints(&self) -> InlayHintsConfiguration {
+        InlayHintsConfiguration::new(self.setting("inlayHints"))
+    }
+}
+
 /// Dart `_normaliseFolderPath`: without trailing path separators.
 fn normalise_folder_path(path: &str) -> String {
     path.trim_end_matches('/').to_string()

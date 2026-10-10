@@ -126,7 +126,7 @@ pub const DART_FEATURES: &[Feature] = &[
     feature(
         "CallHierarchyRegistrations",
         Some("callHierarchyProvider"),
-        false,
+        true,
     ),
     feature("ChangeWorkspaceFoldersRegistrations", None, true),
     feature("CodeActionRegistrations", Some("codeActionProvider"), false),
@@ -176,7 +176,7 @@ pub const DART_FEATURES: &[Feature] = &[
         Some("implementationProvider"),
         true,
     ),
-    feature("InlayHintRegistrations", Some("inlayHintProvider"), false),
+    feature("InlayHintRegistrations", Some("inlayHintProvider"), true),
     feature(
         "InlineValueRegistrations",
         Some("inlineValueProvider"),
@@ -192,12 +192,12 @@ pub const DART_FEATURES: &[Feature] = &[
     feature(
         "SemanticTokensRegistrations",
         Some("semanticTokensProvider"),
-        false,
+        true,
     ),
     feature(
         "SignatureHelpRegistrations",
         Some("signatureHelpProvider"),
-        false,
+        true,
     ),
     feature("TextDocumentRegistrations", Some("textDocumentSync"), true),
     feature(
@@ -208,14 +208,14 @@ pub const DART_FEATURES: &[Feature] = &[
     feature(
         "TypeHierarchyRegistrations",
         Some("typeHierarchyProvider"),
-        false,
+        true,
     ),
     feature("WillRenameFilesRegistrations", None, false),
     feature("WorkspaceDidChangeConfigurationRegistrations", None, true),
     feature(
         "WorkspaceSymbolRegistrations",
         Some("workspaceSymbolProvider"),
-        false,
+        true,
     ),
 ];
 
@@ -233,6 +233,18 @@ const fn feature(
 
 /// Dart `RegistrationContext.dartFilters` (only `file`: dartr has no
 /// custom URI schemes).
+/// Dart `SemanticTokensOptions` (the legend, full without delta, range).
+fn semantic_tokens_options() -> Value {
+    json!({
+        "legend": {
+            "tokenTypes": crate::semantic_tokens::TOKEN_TYPES,
+            "tokenModifiers": crate::semantic_tokens::TOKEN_MODIFIERS,
+        },
+        "full": {"delta": false},
+        "range": true,
+    })
+}
+
 fn dart_files() -> Value {
     json!([{"language": "dart", "scheme": "file"}])
 }
@@ -268,6 +280,26 @@ fn on_type_formatting_options() -> Map<String, Value> {
 pub fn server_capabilities(client: &ClientCapabilities, config: &LspClientConfiguration) -> Value {
     let enable_formatter = config.global().enable_sdk_formatter();
     let mut c = Map::new();
+    if !client.text_document_dynamic("callHierarchy") {
+        c.insert("callHierarchyProvider".into(), json!(true));
+    }
+    if !client.text_document_dynamic("inlayHint") {
+        c.insert("inlayHintProvider".into(), json!({"resolveProvider": false}));
+    }
+    if !client.text_document_dynamic("semanticTokens") {
+        c.insert("semanticTokensProvider".into(), semantic_tokens_options());
+    }
+    if !client.text_document_dynamic("signatureHelp") {
+        c.insert(
+            "signatureHelpProvider".into(),
+            json!({"triggerCharacters": ["("], "retriggerCharacters": [","]}),
+        );
+    }
+    if !client.text_document_dynamic("typeHierarchy") {
+        c.insert("typeHierarchyProvider".into(), json!(true));
+    }
+    // Dart `WorkspaceSymbolRegistrations`: static only.
+    c.insert("workspaceSymbolProvider".into(), json!(true));
     for (feature, key) in [
         ("definition", "definitionProvider"),
         ("documentHighlight", "documentHighlightProvider"),
@@ -339,6 +371,12 @@ pub fn dynamic_registrations(
     };
     // Dart `fullySupportedTypes`: the Dart files and the types of plugins
     // (the language server of dartr has no plugins).
+    if client.text_document_dynamic("callHierarchy") {
+        out.push(reg(
+            "textDocument/prepareCallHierarchy",
+            json!({"documentSelector": dart_files()}),
+        ));
+    }
     if client.text_document_dynamic("definition") {
         out.push(reg(
             "textDocument/definition",
@@ -385,16 +423,43 @@ pub fn dynamic_registrations(
     for (feature, method) in [
         ("hover", "textDocument/hover"),
         ("implementation", "textDocument/implementation"),
-        ("references", "textDocument/references"),
     ] {
         if client.text_document_dynamic(feature) {
             out.push(reg(method, json!({"documentSelector": dart_files()})));
         }
     }
+    if client.text_document_dynamic("inlayHint") {
+        out.push(reg(
+            "textDocument/inlayHint",
+            json!({"documentSelector": dart_files(), "resolveProvider": false}),
+        ));
+    }
+    if client.text_document_dynamic("references") {
+        out.push(reg(
+            "textDocument/references",
+            json!({"documentSelector": dart_files()}),
+        ));
+    }
     if client.text_document_dynamic("selectionRange") {
         out.push(reg(
             "textDocument/selectionRange",
             json!({"documentSelector": dart_files()}),
+        ));
+    }
+    if client.text_document_dynamic("semanticTokens") {
+        let mut options = semantic_tokens_options();
+        options["documentSelector"] = dart_files();
+        // Dart `CustomMethods.semanticTokenDynamicRegistration`.
+        out.push(reg("textDocument/semanticTokens", options));
+    }
+    if client.text_document_dynamic("signatureHelp") {
+        out.push(reg(
+            "textDocument/signatureHelp",
+            json!({
+                "documentSelector": dart_files(),
+                "triggerCharacters": ["("],
+                "retriggerCharacters": [","],
+            }),
         ));
     }
     if client.text_document_dynamic("synchronization") {
@@ -414,6 +479,12 @@ pub fn dynamic_registrations(
     if client.text_document_dynamic("typeDefinition") {
         out.push(reg(
             "textDocument/typeDefinition",
+            json!({"documentSelector": dart_files()}),
+        ));
+    }
+    if client.text_document_dynamic("typeHierarchy") {
+        out.push(reg(
+            "textDocument/prepareTypeHierarchy",
             json!({"documentSelector": dart_files()}),
         ));
     }
