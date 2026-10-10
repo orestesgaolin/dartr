@@ -204,17 +204,19 @@ fn run(
             results.commands.push((response, edit));
         }
     }
-    for command in WORKSPACE_COMMANDS {
-        let before = c.server_requests.len();
-        let response = c.request(
-            "workspace/executeCommand",
-            json!({"command": command, "arguments": []}),
-        );
-        let edit = c.server_requests[before..]
-            .iter()
-            .find(|(m, _)| m == "workspace/applyEdit")
-            .map(|(_, p)| p.clone());
-        results.workspace_commands.push((response, edit));
+    if std::env::var_os("DARTR_LSP_FIX_CORPUS").is_none() {
+        for command in WORKSPACE_COMMANDS {
+            let before = c.server_requests.len();
+            let response = c.request(
+                "workspace/executeCommand",
+                json!({"command": command, "arguments": []}),
+            );
+            let edit = c.server_requests[before..]
+                .iter()
+                .find(|(m, _)| m == "workspace/applyEdit")
+                .map(|(_, p)| p.clone());
+            results.workspace_commands.push((response, edit));
+        }
     }
     results
 }

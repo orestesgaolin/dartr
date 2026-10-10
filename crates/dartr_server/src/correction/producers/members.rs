@@ -469,7 +469,7 @@ pub(crate) fn write_setter(
 }
 
 /// Dart `writeFieldDeclaration`.
-fn write_field(
+pub(crate) fn write_field(
     ctx: &dartr_element::Ctx<'_>,
     e: &mut super::super::change_builder::EditBuilder<'_, '_, '_>,
     name: &str,

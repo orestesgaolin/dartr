@@ -27,3 +27,17 @@ class Box {
   @Deprecated('Use resize2')
   void resize(int width, {int? height}) {}
 }
+
+@Deprecated('Use paintFilled or paintColored')
+void paint({String? color, bool? fill}) {}
+
+void paintFilled({String? color}) {}
+
+void paintColored({String? color, bool? fill}) {}
+
+@Deprecated('Add mode')
+void configure({bool? enabled, String? mode}) {}
+
+@Deprecated('Non-null label')
+void setLabel([String? label, int? count]) {}
+

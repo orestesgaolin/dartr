@@ -491,3 +491,54 @@ pub fn flutter_wrap_builders_producers(
         ),
     ]
 }
+
+super::simple::assist!(FlutterWrapGeneric, a::FLUTTER_WRAP_GENERIC, |c, builder| {
+    let ast = c.ast;
+    let Some(list) = ast.cast::<ListLiteral>(c.node) else {
+        return;
+    };
+    let elements = ast.list_raw(ast[list].elements);
+    if elements.iter().any(|&el| {
+        ast.cast::<InstanceCreationExpression>(el)
+            .is_none_or(|ic| !is_widget_creation(c, ic))
+    }) {
+        return;
+    }
+    let eol = c.eol();
+    let literal_src = c.utils.get_node_text(list);
+    let Some(newline_idx) = literal_src.rfind(eol) else {
+        return;
+    };
+    if newline_idx == literal_src.len() - 1 {
+        return;
+    }
+    let indent_old = c
+        .utils
+        .get_line_prefix(ast.offset(list) + eol.len() as u32 + newline_idx as u32);
+    let indent_arg = format!("{indent_old}{}", c.utils.one_indent());
+    let indent_list = format!("{indent_old}{}", c.utils.two_indents());
+    let replaced =
+        c.utils
+            .replace_source_indent(&literal_src, &indent_old, &indent_list, false, false);
+    let r = c.range().node(list);
+    builder.add_dart_file_edit(c.path, |b| {
+        b.add_replacement(r.offset, r.length, |e| {
+            e.write("[");
+            e.write(eol);
+            e.write(&indent_arg);
+            e.add_simple_linked_edit("WIDGET", "widget", None);
+            e.write("(");
+            e.write(eol);
+            e.write(&indent_list);
+            e.write("children: ");
+            e.write(&replaced);
+            e.write(",");
+            e.write(eol);
+            e.write(&indent_arg);
+            e.write("),");
+            e.write(eol);
+            e.write(&indent_old);
+            e.write("]");
+        });
+    });
+});

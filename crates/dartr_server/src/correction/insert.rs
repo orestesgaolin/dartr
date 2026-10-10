@@ -390,4 +390,46 @@ impl FileEditBuilder<'_, '_> {
         };
         self.insert_into_unit_member(member, Some(&filter), true, build);
     }
+
+    /// Dart `deleteClassMember`.
+    pub fn delete_class_member(&mut self, member: NodeId) {
+        let resolved = self.resolved();
+        let ast = &resolved.unit().ast;
+        let range = super::utils::RangeFactory::new(ast);
+        let Some(body) = ast.parent(member) else {
+            return;
+        };
+        if let Some(bcb) = ast.cast::<BlockClassBody>(body) {
+            let members = ast.list_raw(ast[bcb].members);
+            if members.len() == 1 {
+                let prev = ast.tokens.previous(ast[bcb].left_bracket);
+                let r = range.token_end_end(prev, ast[bcb].right_bracket);
+                self.add_simple_replacement(r.offset, r.length, ";");
+            } else if members.first().copied() == Some(member) {
+                let r = range.start_start(member, members[1]);
+                self.add_deletion(r.offset, r.length);
+            } else if let Some(idx) = members.iter().position(|&m| m == member) {
+                let r = range.end_end(members[idx - 1], member);
+                self.add_deletion(r.offset, r.length);
+            }
+        } else if let Some(beb) = ast.cast::<BlockEnumBody>(body) {
+            let members = ast.list_raw(ast[beb].members);
+            if members.len() == 1 {
+                if let Some(semicolon) = ast[beb].semicolon {
+                    let r = range.token_start_node_end(semicolon, member);
+                    self.add_deletion(r.offset, r.length);
+                } else {
+                    let prev = ast.tokens.previous(ast[beb].left_bracket);
+                    let r = range.token_end_end(prev, ast[beb].right_bracket);
+                    self.add_simple_replacement(r.offset, r.length, ";");
+                }
+            } else if members.first().copied() == Some(member) {
+                let r = range.start_start(member, members[1]);
+                self.add_deletion(r.offset, r.length);
+            } else if let Some(idx) = members.iter().position(|&m| m == member) {
+                let r = range.end_end(members[idx - 1], member);
+                self.add_deletion(r.offset, r.length);
+            }
+        }
+    }
 }
