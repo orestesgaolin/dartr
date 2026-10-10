@@ -130,6 +130,7 @@ impl ChangeAcc {
             length,
             replacement: replacement.to_string(),
             id: self.next_id,
+            description: None,
         };
         // Dart throws a `ConflictingEditException`; the same edit twice is
         // kept once.

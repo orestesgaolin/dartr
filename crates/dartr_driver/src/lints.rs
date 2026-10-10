@@ -98,6 +98,82 @@ impl ElementMetadata for EngineMetadata<'_> {
         }))
         .unwrap_or(false)
     }
+
+    fn has_immutable(&self, element: dartr_element::ElementId) -> Option<bool> {
+        if element.store().is_local() {
+            return None;
+        }
+        let ctx = self.0.global_ctx();
+        Some(dartr_resolver::element_metadata::element_has(
+            &ctx,
+            element,
+            dartr_resolver::element_metadata::flags::IMMUTABLE,
+            None,
+        ))
+    }
+
+    fn has_top_getter_annotation(
+        &self,
+        element: dartr_element::ElementId,
+        library_name: &str,
+        name: &str,
+    ) -> Option<bool> {
+        if element.store().is_local() {
+            return None;
+        }
+        use dartr_resolver::element_metadata::flags;
+        let flag = match (library_name, name) {
+            ("dart.core", "override") => flags::OVERRIDE,
+            ("meta", "alwaysThrows") => flags::ALWAYS_THROWS,
+            ("meta", "awaitNotRequired") => flags::AWAIT_NOT_REQUIRED,
+            ("meta", "doNotStore") => flags::DO_NOT_STORE,
+            ("meta", "doNotSubmit") => flags::DO_NOT_SUBMIT,
+            ("meta", "experimental") => flags::EXPERIMENTAL,
+            ("meta", "factory") => flags::FACTORY,
+            ("meta", "internal") => flags::INTERNAL,
+            ("meta", "isTest") => flags::IS_TEST,
+            ("meta", "isTestGroup") => flags::IS_TEST_GROUP,
+            ("meta", "literal") => flags::LITERAL,
+            ("meta", "mustBeConst") => flags::MUST_BE_CONST,
+            ("meta", "mustBeOverridden") => flags::MUST_BE_OVERRIDDEN,
+            ("meta", "mustCallSuper") => flags::MUST_CALL_SUPER,
+            ("meta", "nonVirtual") => flags::NON_VIRTUAL,
+            ("meta", "optionalTypeArgs") => flags::OPTIONAL_TYPE_ARGS,
+            ("meta", "protected") => flags::PROTECTED,
+            ("meta", "redeclare") => flags::REDECLARE,
+            ("meta", "reopen") => flags::REOPEN,
+            ("meta", "sealed") => flags::SEALED,
+            ("meta", "visibleForOverriding") => flags::VISIBLE_FOR_OVERRIDING,
+            ("meta", "visibleForTesting") => flags::VISIBLE_FOR_TESTING,
+            ("angular.meta", "visibleForTemplate") => flags::VISIBLE_FOR_TEMPLATE,
+            ("angular.meta", "visibleOutsideTemplate") => flags::VISIBLE_OUTSIDE_TEMPLATE,
+            _ => return None,
+        };
+        let ctx = self.0.global_ctx();
+        Some(dartr_resolver::element_metadata::element_has(
+            &ctx, element, flag, None,
+        ))
+    }
+
+    fn has_constructor_annotation(
+        &self,
+        element: dartr_element::ElementId,
+        library_name: &str,
+        class_name: &str,
+    ) -> Option<bool> {
+        if element.store().is_local() {
+            return None;
+        }
+        use dartr_resolver::element_metadata::flags;
+        let flag = match (library_name, class_name) {
+            ("meta_meta", "Target") => flags::TARGET,
+            _ => return None,
+        };
+        let ctx = self.0.global_ctx();
+        Some(dartr_resolver::element_metadata::element_has(
+            &ctx, element, flag, None,
+        ))
+    }
 }
 
 /// Defining unit first, followed by parts. Each unit reads its own local arena.

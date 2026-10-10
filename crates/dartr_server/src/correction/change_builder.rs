@@ -149,6 +149,8 @@ pub struct ChangeBuilder<'w> {
     /// Set when an edit overlaps an existing edit (Dart throws a
     /// `ConflictingEditException`); the edit is dropped.
     pub conflict: bool,
+    /// Dart `currentChangeDescription`: the description of the edits.
+    pub current_change_description: Option<String>,
 }
 
 /// Dart `String.endOfLine`: the first line terminator of [content].
@@ -170,6 +172,7 @@ impl<'w> ChangeBuilder<'w> {
             default_eol: default_eol.unwrap_or("\n").to_string(),
             next_edit_id: 1,
             conflict: false,
+            current_change_description: None,
         }
     }
 
@@ -602,6 +605,7 @@ impl<'c, 'w> FileEditBuilder<'c, 'w> {
             length: parts.length,
             replacement: parts.buffer,
             id,
+            description: self.change.current_change_description.clone(),
         };
         let delta = edit.delta();
         let edit_offset = edit.offset;

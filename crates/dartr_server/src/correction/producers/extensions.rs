@@ -315,3 +315,79 @@ impl CorrectionProducer for CreateExtensionMethod {
         add_member(c, builder, ty, false, &write);
     }
 }
+
+/// Dart `SimpleIdentifier.inSetterContext` of the climbed node [climbed].
+fn in_setter_context(c: &ProducerContext<'_>, climbed: NodeId) -> bool {
+    let ast = c.ast;
+    let Some(parent) = ast.parent(climbed) else {
+        return false;
+    };
+    if let Some(a) = ast.cast::<AssignmentExpression>(parent) {
+        return ast[a].left_hand_side.raw() == climbed;
+    }
+    if let Some(p) = ast.cast::<PrefixExpression>(parent) {
+        return matches!(c.lexeme(ast[p].operator), "++" | "--");
+    }
+    if let Some(p) = ast.cast::<PostfixExpression>(parent) {
+        return matches!(c.lexeme(ast[p].operator), "++" | "--");
+    }
+    false
+}
+
+/// Dart `CreateExtensionSetter`.
+pub struct CreateExtensionSetter {
+    name: String,
+}
+
+impl CreateExtensionSetter {
+    pub fn new() -> Self {
+        CreateExtensionSetter {
+            name: String::new(),
+        }
+    }
+}
+
+impl CorrectionProducer for CreateExtensionSetter {
+    fn fix_kind(&self) -> Option<&'static FixKind> {
+        Some(&k::CREATE_EXTENSION_SETTER)
+    }
+
+    fn fix_arguments(&self) -> Vec<String> {
+        vec![self.name.clone()]
+    }
+
+    fn applicability(&self) -> Applicability {
+        Applicability::SingleLocation
+    }
+
+    fn compute(&mut self, c: &ProducerContext<'_>, builder: &mut ChangeBuilder<'_>) {
+        let ast = c.ast;
+        let ctx = c.ctx;
+        let mut add_static = in_static_context(c);
+        let Some(id) = ast.cast::<SimpleIdentifier>(c.node) else {
+            return;
+        };
+        let climbed = climb_property_access(ast, c.node);
+        if !in_setter_context(c, climbed) {
+            return;
+        }
+        self.name = c.lexeme(ast[id].token).to_string();
+        let target = property_target(ast, c.node);
+        let Some((ty, _)) = target_type(c, target, &mut add_static) else {
+            return;
+        };
+        let field_type = match infer_undefined_expression_type(c, climbed) {
+            Inferred::Invalid => return,
+            Inferred::Type(t) => Some(t),
+            Inferred::Unknown => None,
+        };
+        if has_type_parameters(ctx, ty) || field_type.is_some_and(|t| has_type_parameters(ctx, t)) {
+            return;
+        }
+        let name = self.name.clone();
+        let write = move |e: &mut EditBuilder<'_, '_, '_>| {
+            super::members::write_setter(ctx, e, &name, add_static, field_type, false);
+        };
+        add_member(c, builder, ty, true, &write);
+    }
+}

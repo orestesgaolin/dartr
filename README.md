@@ -8,6 +8,7 @@ Dart SDK **3.13.3**. It is one native binary with these commands:
 - `dartr analyze`: the same diagnostics as `dart analyze` (errors, warnings,
   lints, analyzer plugins), with the same options, output formats and exit codes.
 - `dartr format`: a port of `dart_style` (`dart format`).
+- `dartr fix`: the bulk fixes of `dart fix` (`--dry-run`, `--apply`, `--code`).
 - `dartr language-server`: an LSP server. Dart-Code (VS Code) starts it through a
   small shim; other editors can start it directly.
 - `dartr analysis-server` or `--protocol=analyzer`: the legacy analysis server
@@ -27,7 +28,8 @@ SDK tests, Flutter, `analyzer`, a 1.5 million line application).
 | Lints | All rules ported; compared with `dart analyze` on the corpora |
 | `dartr analyze` | Same options, formats and exit codes as `dart analyze` |
 | `dartr format` | Same output as `dart format` on the `dart_style` test data and corpora |
-| `dartr language-server` | Diagnostics, outline, closing labels, folding, selection ranges, document symbols, formatting; navigation (definition, type definition, implementation, references, document highlight), hover, signature help, semantic tokens, inlay hints, call and type hierarchy, workspace symbols. completion; code actions (quick fixes, assists, organize imports, sort members). **Missing:** fix all, some fixes and assists, rename |
+| `dartr fix` | Same output, exit codes and edits as `dart fix` on the fixture and on copies of the corpora; the pubspec fixes (`missing_dependency`) are not ported yet |
+| `dartr language-server` | Diagnostics, outline, closing labels, folding, selection ranges, document symbols, formatting; navigation (definition, type definition, implementation, references, document highlight), hover, signature help, semantic tokens, inlay hints, call and type hierarchy, workspace symbols. completion; code actions (quick fixes, assists, fix all, organize imports, sort members); rename; convert getter/method; document colors, document links, code lens, inline values; Flutter outline; files changed on disk are re-analyzed. **Missing:** extract and inline refactorings, move file, some fixes and assists. **Known issue:** an API change in an open file does not update dependent files yet |
 | Legacy protocol | 56 of 59 requests and 22 of 22 notifications, including errors, hover, navigation, search, completion, quick fixes, assists, refactorings, bulk fixes, Flutter outline and `lsp.handle`. Some refactorings are checked only on a small fixture (see `docs/legacy-protocol.md`) |
 
 `docs/PLAN.md` has the plan and `docs/TIMELINE.md` the project history. This is
@@ -75,6 +77,7 @@ dartr analyze lib test/foo_test.dart
 dartr analyze --format=json --fatal-infos
 dartr format lib                    # like `dart format`
 dartr format --output=none --set-exit-if-changed .
+dartr fix --dry-run                 # like `dart fix`
 ```
 
 Options, output and exit codes are those of `dart analyze` and `dart format`
@@ -119,8 +122,10 @@ Open an issue at <https://github.com/orestesgaolin/dartr/issues> with:
 
 ## Known limitations
 
-- Language server: no fix all, no rename, and some quick fixes and assists are missing. Files that change
-  on disk are not watched yet.
+- Language server: an API change in an open file (for example renaming a public method) does not
+  update the diagnostics of dependent files yet. Extract/inline refactorings and move file are missing.
+  Hover and completion are slower than in Dart (tens to hundreds of ms), and the first references
+  search on a large package is slow.
 - Legacy analysis server protocol: partial.
 - Cold analysis of a large package can be slower than `dart analyze` today (resolved
   lints, search index). See the benchmarks.

@@ -101,6 +101,24 @@ pub struct ResolvedUnit {
     pub ignored_diagnostics: Vec<Diagnostic>,
     /// The panic message, when resolution of the unit panicked.
     pub panic: Option<String>,
+    /// Cached declaration node of each declared fragment in [`Self::tables`].
+    pub declarations: std::sync::OnceLock<IndexMap<dartr_element::FragmentId, dartr_ast::NodeId>>,
+}
+
+impl ResolvedUnit {
+    /// The first declaration node of `fragment` in [`Self::tables`].
+    pub fn declaration_of(&self, fragment: dartr_element::FragmentId) -> Option<dartr_ast::NodeId> {
+        self.declarations
+            .get_or_init(|| {
+                let mut map = IndexMap::new();
+                for (node, &f) in self.tables.declared_fragment.iter() {
+                    map.entry(f).or_insert(node);
+                }
+                map
+            })
+            .get(&fragment)
+            .copied()
+    }
 }
 
 /// The analysis result of a library.
@@ -722,6 +740,7 @@ fn resolve_file(
         diagnostics,
         ignored_diagnostics: Vec::new(),
         panic,
+        declarations: std::sync::OnceLock::new(),
     }
 }
 

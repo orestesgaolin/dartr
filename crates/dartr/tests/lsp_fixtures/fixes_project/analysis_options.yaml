@@ -28,3 +28,5 @@ linter:
     - curly_braces_in_flow_control_structures
     - prefer_if_null_operators
     - directives_ordering
+    - deprecated_member_use_from_same_package
+    - unnecessary_ignore

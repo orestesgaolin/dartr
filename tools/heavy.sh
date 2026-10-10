@@ -31,10 +31,12 @@ while [ "$i" -ge 1 ]; do
 done
 
 # All slots are busy: poll every slot until one is free, so a command never waits behind a
-# long build while another slot is idle.
+# long build while another slot is idle. Read the slot count again on every poll, so a change of
+# heavy.slots also reaches commands that are already waiting.
 echo "heavy.sh: all $slots build slots busy, waiting" >&2
 while :; do
   sleep 5
+  slots=${DARTR_HEAVY_SLOTS:-$(cat "$dir/heavy.slots" 2>/dev/null || echo 2)}
   i=$slots
   while [ "$i" -ge 1 ]; do
     /usr/bin/lockf -s -t 0 "$(lock_for "$i")" nice -n 10 "$@"

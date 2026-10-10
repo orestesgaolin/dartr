@@ -88,6 +88,11 @@ at each merge; the final process report is written from it.
 | 10-10 17:45 | 12b87a9 | legacy protocol: flutter domain (outline, widget descriptions), lsp.handle, clippy cleanup (43/59 requests, 21/22 notifications) | Gemini 4 (Antigravity) | 126 steps identical to `dart language-server --protocol=analyzer`, including a Flutter project; 5,586 tests |
 | 10-10 18:40 | 1c2ab18 | completion part 2: Dart driver file order, Flutter widget snippets, import edits from resolve, package: URIs, color constants | Opus | fixture 153/153, visible-app 130/130 completion lists identical; flutter_tools (unseen) 568/577; analyze on flutter_tools + analyzer-9.0.0 unchanged (27,278/27,278); 5,587 tests |
 | 10-10 19:40 | acce9e9 | legacy protocol: completion and edit domains (fixes, assists, refactorings, postfix/statement completion, bulk fixes), lsp.handle completion and code actions (56/59 requests, 22/22 notifications) | Gemini 4 (Antigravity) | 138 + 15 steps identical to `dart language-server --protocol=analyzer`; coordinator fixed API drift after the completion merge and an outdated transport test; 5,587 tests |
+| 10-10 20:20 | ddffeb7 | fix all (BulkFixProcessor), `dartr fix`, more fix producers and assists (Flutter wrap/move/swap), fix_data.yaml changes | Opus | `dartr fix` output, exit codes and edits = `dart fix` on 12 option combinations and on copies of visible-app (58,407 fixes); assists on flutter_tools (unseen) 24,869 same / 0 differing; analyze on unseen corpora unchanged (27,278/27,278); 5,587 tests |
+| 10-10 22:15 | af89afd | LSP: document colors, document links, code lens, inline values, super/augmentation, Flutter outline | Gemini 4 (Antigravity) | every feature compared with `dart language-server` on a Flutter fixture |
+| 10-10 22:15 | 482bb4e | least upper bound without typedef alias, Dart import order for fixes, pubspec fix pass, analyzer gaps | Opus (F) | import-fix order differences on visible-app 111 -> 0; `dartr fix` = `dart fix` on pubspec and analyzer-shaped fixtures |
+| 10-10 22:15 | fbe66f3 | rename (prepareRename, rename), file watching, one refactoring engine for LSP and legacy, convert getter/method | Opus (A) | rename 59/59 fixture probes; flutter_tools (unseen) 361/362 up to file order |
+| 10-10 22:15 | 301067e | `dartr analyze` optimization round 1: package config and pubspec lookups cached, cheap checks first | Gemini 4 (Antigravity) | system CPU on flutter 38.8 s -> 1.4 s; flutter_tools (unseen) 3.53 s -> 0.90 s; output identical on all 4 corpora; 5,590 tests |
 
 ## Incidents and lessons
 
@@ -194,3 +199,13 @@ at each merge; the final process report is written from it.
 - **API drift between parallel branches (10-10 19:20):** the legacy branch was built against the completion
   API before the second completion merge and did not compile after merging main. Merge checks build the
   merged tree, so this was found before the push.
+- **Stale Dart cache as reference (10-10 21:55):** `analyze_compare` reported one diagnostic that dartr missed
+  on flutter_tools. `dart analyze` with an empty cache did not report it: the shared `~/.dartServer` cache was
+  stale, probably from many Dart processes of agents and tests using it at once. `analyze_compare` now gives
+  `dart analyze` its own cache directory.
+- **agy ends sessions on long background tasks (10-10 21:10 and 22:00):** Gemini's agy runtime ends the session
+  when a background task runs longer than 30 minutes; builds waiting for a build slot did. Gemini task files
+  now require foreground commands.
+- **LSP benchmark (10-10 22:00):** `bench/lsp_bench.py` found that an API change in an open file does not update
+  dependent files, a late progress `begin`, and published TODO diagnostics; hover and completion are slower than
+  Dart's, and memory is about 3x. Gemini works on the bugs.

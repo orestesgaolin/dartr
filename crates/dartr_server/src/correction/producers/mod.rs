@@ -2,18 +2,27 @@
 //! the name of the Dart generator in the fix registry.
 
 pub mod assists;
+pub mod assists2;
 pub mod collections;
 pub mod convert_quotes;
 pub mod create;
 pub mod create_types;
 pub mod data_driven;
+pub mod data_driven_changes;
+pub mod dead_code;
 pub mod extensions;
+pub mod flutter_convert;
+pub mod flutter_edit;
+pub mod flutter_wrap;
 pub mod import_library;
 pub mod members;
 pub mod modifiers;
+pub mod more;
+pub mod more2;
 pub mod simple;
 pub mod small;
 pub mod super_parameters;
+pub mod types;
 pub mod variables;
 
 use super::change_builder::ChangeWorkspace;
@@ -104,6 +113,50 @@ pub fn generator(name: &str) -> Option<ProducerGenerator> {
                 applicability: Applicability::AcrossSingleFile,
             })
         },
+        "MakeClassAbstract.new" => |_: C| boxed(more::MakeClassAbstract::new()),
+        "ConvertToMultilineString.new" => |_: C| boxed(more::ConvertToMultilineString),
+        "ConvertDocumentationIntoBlock.new" => |_: C| boxed(more::ConvertDocumentationIntoBlock),
+        "ConvertIntoAsyncBody.new" => |_: C| boxed(more::ConvertIntoAsyncBody),
+        "CreateNoSuchMethod.new" => |_: C| boxed(more::CreateNoSuchMethod),
+        "ReplaceFinalWithVar.new" => |c: C| boxed(types::ReplaceFinalWithVar::new(c)),
+        "RemoveUnnecessaryFinal.new" => |_: C| boxed(types::RemoveUnnecessaryFinal),
+        "RemoveVar.new" => |_: C| boxed(types::RemoveVar),
+        "RemoveTypeAnnotation.other" => |_: C| {
+            boxed(types::RemoveTypeAnnotation {
+                var_and_type: false,
+            })
+        },
+        "RemoveTypeAnnotation.fixVarAndType" => {
+            |_: C| boxed(types::RemoveTypeAnnotation { var_and_type: true })
+        }
+        "ReplaceWithVar.new" => |_: C| boxed(types::ReplaceWithVar),
+        "RemoveNonNullAssertion.new" => |_: C| boxed(types::RemoveNonNullAssertion),
+        "ReplaceCascadeWithDot.new" => |_: C| boxed(types::ReplaceCascadeWithDot),
+        "ReplaceWithIdentifier.new" => |_: C| boxed(types::ReplaceWithIdentifier),
+        "RemoveDeadCode.new" => |_: C| boxed(dead_code::RemoveDeadCode),
+        "ImportAddShow.new" => |_: C| boxed(more::ImportAddShow),
+        "CreateExtensionSetter.new" => |_: C| boxed(extensions::CreateExtensionSetter::new()),
+        "CreateMissingOverrides.new" => |_: C| boxed(more::CreateMissingOverrides::new()),
+        "FlutterMoveUp.new" => |_: C| boxed(flutter_edit::FlutterMoveUp),
+        "FlutterMoveDown.new" => |_: C| boxed(flutter_edit::FlutterMoveDown),
+        "FlutterConvertToChildren.new" => |_: C| boxed(flutter_edit::FlutterConvertToChildren),
+        "FlutterSwapWithChild.new" => |_: C| boxed(flutter_edit::FlutterSwapWithChild),
+        "FlutterSwapWithParent.new" => |_: C| boxed(flutter_edit::FlutterSwapWithParent),
+        "FlutterConvertToStatefulWidget.new" => {
+            |_: C| boxed(flutter_convert::FlutterConvertToStatefulWidget)
+        }
+        "FlutterRemoveWidget.new" => |_: C| boxed(flutter_edit::FlutterRemoveWidget),
+        "InvertIfStatement.new" => |_: C| boxed(assists2::InvertIfStatement),
+        "InvertConditionalExpression.new" => |_: C| boxed(assists2::InvertConditionalExpression),
+        "ConvertToIntLiteral.new" => |_: C| boxed(assists2::ConvertToIntLiteral),
+        "ReplaceConditionalWithIfElse.new" => |_: C| boxed(assists2::ReplaceConditionalWithIfElse),
+        "AssignToLocalVariable.new" => |_: C| boxed(assists2::AssignToLocalVariable),
+        "ConvertIntoFinalField.new" => |_: C| boxed(assists2::ConvertIntoFinalField),
+        "ConvertIntoGetter.new" => |_: C| boxed(assists2::ConvertIntoGetter::new(false)),
+        "ConvertIntoGetter.this_" => |_: C| boxed(assists2::ConvertIntoGetter::new(true)),
+        "AddReturnNull.new" => |_: C| boxed(more2::AddReturnNull),
+        "RemoveComment.ignore" => |_: C| boxed(more2::RemoveIgnoreComment),
+        "RemoveIgnoredDiagnostic.new" => |_: C| boxed(more2::RemoveIgnoredDiagnostic::new()),
         "MakeFinal.new" => |_: C| boxed(MakeFinal),
         "MakeVariableNullable.new" => |_: C| boxed(MakeVariableNullable::new()),
         "RemoveAnnotation.new" => |_: C| boxed(small::RemoveAnnotation::new()),
@@ -155,6 +208,8 @@ pub fn multi_generator(name: &str) -> Option<MultiProducerGenerator> {
         "CreateClass.new" => return Some(create_types::create_class_producers),
         "CreateMixin.new" => return Some(create_types::create_mixin_producers),
         "DataDriven.new" => return Some(data_driven::data_driven_producers),
+        "FlutterWrap.new" => return Some(flutter_wrap::flutter_wrap_producers),
+        "FlutterWrapBuilders.new" => return Some(flutter_wrap::flutter_wrap_builders_producers),
         _ => {}
     }
     let g: MultiProducerGenerator = match ImportKind::from_name(name)? {

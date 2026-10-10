@@ -1429,7 +1429,7 @@ pub fn to_protocol_source_change(
                     length: e.length as i64,
                     replacement: e.replacement,
                     id: None,
-                    description: None,
+                    description: e.description,
                 })
                 .collect(),
         })

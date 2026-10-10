@@ -19,6 +19,7 @@ pub mod codes {
     pub const INVALID_PARAMS: i64 = -32602;
     pub const INTERNAL_ERROR: i64 = -32603;
     pub const SERVER_NOT_INITIALIZED: i64 = -32002;
+    pub const FEATURE_DISABLED: i64 = -32012;
     pub const REQUEST_CANCELLED: i64 = -32800;
     pub const CONTENT_MODIFIED: i64 = -32801;
     // ServerErrorCodes.

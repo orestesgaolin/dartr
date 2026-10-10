@@ -2664,13 +2664,6 @@ impl<W: Write> Server<W> {
         };
         let options = collection.options_for(context, path);
         let has = |name: &str| options.lint_rules.iter().any(|r| r == name);
-        let quote = if has("prefer_single_quotes") {
-            '\''
-        } else if has("prefer_double_quotes") {
-            '"'
-        } else {
-            '\''
-        };
         let lint_quote = if has("prefer_single_quotes") {
             Some('\'')
         } else if has("prefer_double_quotes") {
@@ -2678,11 +2671,12 @@ impl<W: Write> Server<W> {
         } else {
             None
         };
+        let quote = lint_quote.unwrap_or('\'');
         dartr_server::completion::CodeStyle {
+            lint_quote,
             specify_types: has("always_specify_types"),
             make_locals_final: has("prefer_final_locals"),
             quote,
-            lint_quote,
         }
     }
 
@@ -3282,147 +3276,62 @@ impl<W: Write> Server<W> {
         &mut self,
         included: &[String],
         _in_test_mode: Option<bool>,
-        _update_pubspec: Option<bool>,
+        update_pubspec: Option<bool>,
         codes: Option<&[String]>,
     ) -> Result<protocol::EditBulkFixesResult> {
         if self.roots_dirty {
             self.refresh_roots();
         }
-        let collection = AnalysisContextCollection::new(
-            included,
-            &CollectionOptions {
-                sdk_path: self.options.dart_sdk.clone(),
-                package_config_file: self.options.packages.clone(),
-                enabled_experiments: self.options.enabled_experiments.clone(),
-                ..Default::default()
-            },
-        );
-        let code_filter: Option<HashSet<String>> =
+        let codes: Option<Vec<String>> =
             codes.map(|c| c.iter().map(|s| s.to_lowercase()).collect());
-        let mut session = DriverSession::default();
-        let mut edits = Vec::new();
-        let mut details = Vec::new();
-
-        for (ctx_idx, context) in collection.contexts.iter().enumerate() {
-            for file in context.root.analyzed_files() {
-                if !file.ends_with(".dart") || self.is_excluded(&file) {
-                    continue;
-                }
-                let diag_files = session.diagnostics(
-                    &collection,
-                    &[AnalyzedFile {
-                        path: file.clone(),
-                        context: ctx_idx,
-                    }],
-                );
-                let Some(file_diags) = diag_files.into_iter().next() else {
-                    continue;
+        let options = CollectionOptions {
+            sdk_path: self.options.dart_sdk.clone(),
+            package_config_file: self.options.packages.clone(),
+            enabled_experiments: self.options.enabled_experiments.clone(),
+            ..Default::default()
+        };
+        // The bulk fix processor of dartr_server (`BulkFixProcessor.fixErrors`
+        // and `fixPubspec`).
+        let result = if update_pubspec == Some(true) {
+            Ok(dartr_server::server::fix_cli::bulk_fixes_pubspec(
+                included, &options,
+            ))
+        } else {
+            dartr_server::server::fix_cli::bulk_fixes(included, &options, codes.as_deref())
+        };
+        match result {
+            Err(message) => Ok(protocol::EditBulkFixesResult {
+                message,
+                edits: Vec::new(),
+                details: Vec::new(),
+            }),
+            Ok((edits, change_map)) => {
+                let change = dartr_server::correction::change::SourceChange {
+                    edits,
+                    ..Default::default()
                 };
-                if file_diags.diagnostics.is_empty() {
-                    continue;
-                }
-                let Some(library) = session.resolved_library(&collection, &file) else {
-                    continue;
-                };
-                let Some(u_idx) = library.unit_index(&file) else {
-                    continue;
-                };
-                let resolved_rc = std::rc::Rc::new(dartr_server::server::ResolvedUnitRef {
-                    library: library.clone(),
-                    index: u_idx,
-                });
-                let line_info = resolved_rc.line_info().clone();
-                let options = collection.options_for(context, &file).clone();
-                let sink = NoopSink;
-                let ctx = resolved_rc.ctx(&sink);
-                let unit = resolved_rc.unit();
-                let utils =
-                    dartr_server::correction::utils::CorrectionUtils::new(&unit.ast, &line_info);
-                let engine_diags: Vec<dartr_diagnostics::Diagnostic> = file_diags
-                    .diagnostics
-                    .iter()
-                    .map(|d| {
-                        let mut d = d.clone();
-                        d.severity = d.code.severity();
-                        d
-                    })
-                    .collect();
-                let fix_unit = dartr_server::correction::fix_processor::FixUnit {
-                    resolved: &resolved_rc,
-                    ctx: &ctx,
-                    utils: &utils,
-                    path: &file,
-                    options: &options,
-                    diagnostics: &engine_diags,
-                };
-                let mut workspace = crate::edit::LegacyWorkspace {
-                    session: &mut session,
-                    collection: &collection,
-                };
-                let mut file_fixes_map: IndexMap<String, i64> = IndexMap::new();
-                let mut file_edits: Vec<protocol::SourceEdit> = Vec::new();
-                for diag in &engine_diags {
-                    let code_lower = diag.code.lower_case_name().to_string();
-                    if let Some(filter) = &code_filter
-                        && !filter.contains(&code_lower)
-                    {
-                        continue;
-                    }
-                    let fixes = dartr_server::correction::fix_processor::compute_fixes(
-                        &fix_unit,
-                        diag,
-                        &mut workspace,
-                        None,
-                    );
-                    if let Some(first_fix) = fixes.into_iter().find(|f| {
-                        !f.change
-                            .id
-                            .as_deref()
-                            .unwrap_or_default()
-                            .starts_with("dart.fix.ignore")
-                    }) {
-                        let proto_change = crate::edit::to_protocol_source_change(first_fix.change);
-                        let desc = if proto_change.message.is_empty() {
-                            None
-                        } else {
-                            Some(proto_change.message.clone())
-                        };
-                        for fe in proto_change.edits {
-                            if fe.file == file {
-                                for mut e in fe.edits {
-                                    e.description = desc.clone();
-                                    file_edits.push(e);
-                                }
-                                *file_fixes_map.entry(code_lower.clone()).or_insert(0) += 1;
-                            }
-                        }
-                    }
-                }
-                if !file_edits.is_empty() {
-                    file_edits.sort_by(|a, b| b.offset.cmp(&a.offset));
-                    edits.push(protocol::SourceFileEdit {
-                        file: file.clone(),
-                        file_stamp: 0,
-                        edits: file_edits,
-                    });
-                    details.push(protocol::BulkFix {
-                        path: file,
-                        fixes: file_fixes_map
+                let edits = crate::edit::to_protocol_source_change(change).edits;
+                let details = change_map
+                    .library_map
+                    .into_iter()
+                    .map(|(path, fixes)| protocol::BulkFix {
+                        path,
+                        fixes: fixes
                             .into_iter()
                             .map(|(code, occurrences)| protocol::BulkFixDetail {
                                 code,
-                                occurrences,
+                                occurrences: occurrences as i64,
                             })
                             .collect(),
-                    });
-                }
+                    })
+                    .collect();
+                Ok(protocol::EditBulkFixesResult {
+                    message: String::new(),
+                    edits,
+                    details,
+                })
             }
         }
-        Ok(protocol::EditBulkFixesResult {
-            message: String::new(),
-            edits,
-            details,
-        })
     }
 
     #[allow(dead_code)]

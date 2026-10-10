@@ -184,11 +184,18 @@ fn check(ctx: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(block_body) = ctx.ast.cast::<BlockFunctionBody>(body.raw()) else {
         return;
     };
+    let statements = ctx.ast.list(ctx.ast[ctx.ast[block_body].block].statements);
+    if statements
+        .first()
+        .is_none_or(|&s| ctx.ast.kind(s) != NodeKind::AssertStatement)
+    {
+        return;
+    }
     let class_element = last_visited_class(ctx, node)
         .and_then(|class| ctx.declared_element(class))
         .and_then(|e| e.cast::<ClassElement>());
     let classes = class_and_super_classes(ctx, class_element);
-    for statement in ctx.ast.list(ctx.ast[ctx.ast[block_body].block].statements) {
+    for statement in statements {
         if ctx.ast.kind(*statement) != NodeKind::AssertStatement {
             break;
         }

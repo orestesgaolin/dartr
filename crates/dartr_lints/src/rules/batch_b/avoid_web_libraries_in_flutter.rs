@@ -16,10 +16,26 @@ pub fn register(r: &mut RuleVisitorRegistry, c: &LinterContext<'_>) {
 
 /// Dart `AvoidWebLibrariesInFlutter.hasFlutterDep`.
 fn has_flutter_dep(c: &LinterContext<'_>) -> bool {
+    static CACHE: std::sync::OnceLock<
+        std::sync::RwLock<std::collections::HashMap<std::path::PathBuf, bool>>,
+    > = std::sync::OnceLock::new();
     let Some(root) = c.package_root() else {
         return false;
     };
     let pubspec_path = root.join("pubspec.yaml");
+    if !dartr_project::fs::has_overlays() {
+        let cache = CACHE.get_or_init(Default::default);
+        if let Some(&cached) = cache.read().unwrap().get(&pubspec_path) {
+            return cached;
+        }
+        let result = compute_has_flutter_dep(&pubspec_path);
+        cache.write().unwrap().insert(pubspec_path, result);
+        return result;
+    }
+    compute_has_flutter_dep(&pubspec_path)
+}
+
+fn compute_has_flutter_dep(pubspec_path: &std::path::Path) -> bool {
     let Some(content) = pubspec_path
         .to_str()
         .and_then(dartr_project::fs::read_string_strict)

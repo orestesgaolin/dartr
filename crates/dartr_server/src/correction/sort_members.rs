@@ -131,6 +131,7 @@ impl<'a> MemberSorter<'a> {
         if self.code != self.initial {
             let (offset, length, replacement) = compute_simple_diff(&self.initial, &self.code);
             edits.push(SourceEdit {
+                description: None,
                 offset: offset as u32,
                 length: length as u32,
                 replacement: String::from_utf16_lossy(&replacement),
