@@ -82,7 +82,7 @@
       <article class="card">
         <h3>dartr language-server <span class="pill part">partial</span></h3>
         <p>An LSP server. Has diagnostics, outline, closing labels, folding, selection ranges, document symbols, formatting, navigation, references, hover, signature help, semantic tokens, inlay hints, call and type hierarchy and workspace symbols. Completion and code actions (quick fixes, assists, organize imports, sort members). <b>Missing:</b> fix all, some fixes and assists, rename.</p>
-        <p>The legacy analysis server protocol (<code>--protocol=analyzer</code>) is partial: 39 of 59 requests and 19 of 22 notifications. Its completion, quick fixes and refactorings are not done yet.</p>
+        <p>The legacy analysis server protocol (<code>--protocol=analyzer</code>) is partial: 43 of 59 requests and 21 of 22 notifications. Its completion, quick fixes and refactorings are not done yet.</p>
       </article>
     </div>
 
@@ -213,7 +213,7 @@ port of the Dart SDK 3.13.3 analyzer (pinned reference version)</span></pre>
       <div class="stat"><div class="n">8,702</div><p><code>dart_style</code> tests byte-exact. Also <code>flutter_tools</code> 366/366 and <code>analyzer</code> 9.0.0 456/456 (unseen).</p></div>
       <div class="stat"><div class="n">1,488<small> / 1,488</small></div><p>diagnostic codes, with messages equal to Dart.</p></div>
       <div class="stat"><div class="n">31<small> / 31</small></div><p>LSP session steps identical to <code>dart language-server</code> (first LSP milestone). Later LSP features compared on fixtures.</p></div>
-      <div class="stat"><div class="n">78</div><p>legacy protocol steps identical to <code>dart language-server --protocol=analyzer</code> (39 of 59 requests implemented).</p></div>
+      <div class="stat"><div class="n">126</div><p>legacy protocol steps identical to <code>dart language-server --protocol=analyzer</code> (43 of 59 requests implemented).</p></div>
       <div class="stat"><div class="n">5,581</div><p>workspace tests at the last merge.</p></div>
     </div>
 
