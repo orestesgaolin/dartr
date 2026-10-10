@@ -16,15 +16,22 @@ impl Server {
     /// The client formats of `textDocument.<feature>....` at [pointer]
     /// (Dart `_listToNullableSet`): `None` when the client sends no list.
     pub(crate) fn client_formats(&self, pointer: &str) -> Option<Vec<String>> {
-        self.client.raw.pointer(pointer).and_then(Value::as_array).map(|a| {
-            a.iter()
-                .filter_map(|v| v.as_str().map(str::to_string))
-                .collect()
-        })
+        self.client
+            .raw
+            .pointer(pointer)
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
     }
 
     /// Dart `asMarkupContentOrString(preferredFormats, content)`.
-    pub(crate) fn markup_content_or_string(formats: &Option<Vec<String>>, content: String) -> Value {
+    pub(crate) fn markup_content_or_string(
+        formats: &Option<Vec<String>>,
+        content: String,
+    ) -> Value {
         match formats {
             None => Value::String(content),
             Some(formats) => {
@@ -45,15 +52,20 @@ impl Server {
         if !super::is_dart_document(params) {
             return Ok(Value::Null);
         }
-        let auto_triggered = params.pointer("/context/triggerKind").and_then(Value::as_i64)
+        let auto_triggered = params
+            .pointer("/context/triggerKind")
+            .and_then(Value::as_i64)
             == Some(2)
-            && params.pointer("/context/isRetrigger").and_then(Value::as_bool) == Some(false);
+            && params
+                .pointer("/context/isRetrigger")
+                .and_then(Value::as_bool)
+                == Some(false);
         let path = self.path_of_doc(params)?;
         let resolved = self.require_resolved_unit(&path)?;
         let line_info = resolved.line_info().clone();
         let offset = self.position_offset(&line_info, params)?;
-        let formats =
-            self.client_formats("/textDocument/signatureHelp/signatureInformation/documentationFormat");
+        let formats = self
+            .client_formats("/textDocument/signatureHelp/signatureInformation/documentationFormat");
         let null_active = self
             .client
             .raw
@@ -85,7 +97,8 @@ impl Server {
                 return Ok(help);
             }
         }
-        let Some(signature) = crate::signature::compute_signature(&u, unit.unit, offset, &templates)
+        let Some(signature) =
+            crate::signature::compute_signature(&u, unit.unit, offset, &templates)
         else {
             return Ok(Value::Null);
         };
@@ -116,11 +129,21 @@ impl Server {
             let start = range
                 .get("start")
                 .and_then(crate::mapping::read_position)
-                .ok_or_else(|| crate::mapping::ResponseError::new(crate::mapping::codes::INVALID_PARAMS, "Invalid params"))?;
+                .ok_or_else(|| {
+                    crate::mapping::ResponseError::new(
+                        crate::mapping::codes::INVALID_PARAMS,
+                        "Invalid params",
+                    )
+                })?;
             let end = range
                 .get("end")
                 .and_then(crate::mapping::read_position)
-                .ok_or_else(|| crate::mapping::ResponseError::new(crate::mapping::codes::INVALID_PARAMS, "Invalid params"))?;
+                .ok_or_else(|| {
+                    crate::mapping::ResponseError::new(
+                        crate::mapping::codes::INVALID_PARAMS,
+                        "Invalid params",
+                    )
+                })?;
             let start = crate::mapping::to_offset(&line_info, start.0, start.1, false)?;
             let end = crate::mapping::to_offset(&line_info, end.0, end.1, false)?;
             Some((start, end))

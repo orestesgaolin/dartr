@@ -10,10 +10,10 @@ use std::collections::HashMap;
 
 use dartr_ast::*;
 use dartr_element::display_string::{
-    DisplayOptions, default_value_code, element_display_string_with,
-    type_display_string_with, type_parameter_display_string,
+    DisplayOptions, default_value_code, element_display_string_with, type_display_string_with,
+    type_parameter_display_string,
 };
-use dartr_element::{Ctx, ElemRef, ElementId, EId, FormalParameterElement, Tag, TypeId, TypeKind};
+use dartr_element::{Ctx, EId, ElemRef, ElementId, FormalParameterElement, Tag, TypeId, TypeKind};
 use dartr_typesystem::member;
 
 use crate::element_locator::Unit;
@@ -111,8 +111,7 @@ pub fn compute_signature(
     if let Some(m) = ast.cast::<MethodInvocation>(parent) {
         let method_name = ast[m].method_name;
         name = Some(ast.tokens.lexeme(ast[method_name].token).to_string());
-        element = element_ref(method_name.raw())
-            .or_else(|| unit.locate(parent).map(ElemRef::Base));
+        element = element_ref(method_name.raw()).or_else(|| unit.locate(parent).map(ElemRef::Base));
         parameters = element
             .filter(|e| is_function_typed(member::base_element(ctx, *e)))
             .map(|e| element_parameters(ctx, e));
@@ -124,8 +123,8 @@ pub fn compute_signature(
             n = format!("{n}.{}", ast.tokens.lexeme(ast[c].token));
         }
         name = Some(n);
-        element = element_ref(constructor_name.raw())
-            .or_else(|| unit.locate(parent).map(ElemRef::Base));
+        element =
+            element_ref(constructor_name.raw()).or_else(|| unit.locate(parent).map(ElemRef::Base));
         parameters = element
             .filter(|e| is_function_typed(member::base_element(ctx, *e)))
             .map(|e| element_parameters(ctx, e));
@@ -137,8 +136,8 @@ pub fn compute_signature(
             if let Some(t) = static_type.filter(|t| matches!(ctx.ty(*t), TypeKind::Function(_))) {
                 element = identifier_element(unit, function);
                 parameters = function_type_parameters(ctx, t);
-            } else if let Some(e) = element_ref(parent)
-                .filter(|e| is_executable(member::base_element(ctx, *e)))
+            } else if let Some(e) =
+                element_ref(parent).filter(|e| is_executable(member::base_element(ctx, *e)))
             {
                 element = Some(e);
                 parameters = Some(element_parameters(ctx, e));
@@ -154,7 +153,9 @@ pub fn compute_signature(
         // Dart `parameters.indexOf(correspondingParameter)`: a substituted
         // parameter is a new element in Dart, never in the list (-1).
         active = match p {
-            ElemRef::Base(base) if !invocation_parameters_substituted(unit, argument_list.raw()) => {
+            ElemRef::Base(base)
+                if !invocation_parameters_substituted(unit, argument_list.raw()) =>
+            {
                 parameters.iter().position(|q| q.element == Some(base))
             }
             _ => None,
@@ -216,11 +217,17 @@ pub fn invocation_substitution(unit: &Unit<'_, '_>, argument_list: NodeId) -> (b
     let element = if let Some(m) = ast.cast::<MethodInvocation>(invocation) {
         unit.tables.element.get(ast[m].method_name.raw()).copied()
     } else if let Some(i) = ast.cast::<InstanceCreationExpression>(invocation) {
-        unit.tables.element.get(ast[i].constructor_name.raw()).copied()
+        unit.tables
+            .element
+            .get(ast[i].constructor_name.raw())
+            .copied()
     } else {
         unit.tables.element.get(invocation).copied()
     };
-    (matches!(element, Some(ElemRef::Member(_))), has_type_arguments)
+    (
+        matches!(element, Some(ElemRef::Member(_))),
+        has_type_arguments,
+    )
 }
 
 /// The parameter of the static invoke type of the invocation for
@@ -228,10 +235,15 @@ pub fn invocation_substitution(unit: &Unit<'_, '_>, argument_list: NodeId) -> (b
 /// no declaration with parameters, such as a function-typed variable): the
 /// positional parameter at the index of the argument, or the named
 /// parameter with its name.
-pub fn invoke_type_parameter(unit: &Unit<'_, '_>, argument: NodeId) -> Option<dartr_element::FnParam> {
+pub fn invoke_type_parameter(
+    unit: &Unit<'_, '_>,
+    argument: NodeId,
+) -> Option<dartr_element::FnParam> {
     let ast = unit.ast;
     let ctx = unit.ctx;
-    let list = ast.parent(argument).and_then(|l| ast.cast::<ArgumentList>(l))?;
+    let list = ast
+        .parent(argument)
+        .and_then(|l| ast.cast::<ArgumentList>(l))?;
     let invocation = ast.parent(list.raw())?;
     let invoke_type = unit.tables.invoke_type.get(invocation).copied()?;
     let TypeKind::Function(f) = *ctx.ty(invoke_type) else {
@@ -250,7 +262,11 @@ pub fn invoke_type_parameter(unit: &Unit<'_, '_>, argument: NodeId) -> Option<da
         .iter()
         .filter(|a| !ast.is::<NamedArgument>(**a))
         .position(|a| *a == argument)?;
-    params.iter().filter(|p| p.kind.is_positional()).nth(index).copied()
+    params
+        .iter()
+        .filter(|p| p.kind.is_positional())
+        .nth(index)
+        .copied()
 }
 
 /// Dart `Argument.correspondingParameter`.
@@ -261,7 +277,11 @@ fn corresponding_parameter(unit: &Unit<'_, '_>, argument: NodeId) -> Option<Elem
             .tables
             .param_element
             .get(n.raw())
-            .or_else(|| unit.tables.param_element.get(ast[n].argument_expression.raw()))
+            .or_else(|| {
+                unit.tables
+                    .param_element
+                    .get(ast[n].argument_expression.raw())
+            })
             .copied();
     }
     unit.tables.param_element.get(argument).copied()
@@ -327,8 +347,16 @@ fn find_argument_and_list(ast: &Ast, node: NodeId) -> Option<(Id<ArgumentList>, 
 
 /// Dart `getParamLabel`: `required int a = 1`.
 fn parameter_label(ctx: &Ctx<'_>, p: &SignatureParameter) -> String {
-    let default = p.default_code.as_ref().map(|c| format!(" = {c}")).unwrap_or_default();
-    let prefix = if p.kind.is_required_named() { "required " } else { "" };
+    let default = p
+        .default_code
+        .as_ref()
+        .map(|c| format!(" = {c}"))
+        .unwrap_or_default();
+    let prefix = if p.kind.is_required_named() {
+        "required "
+    } else {
+        ""
+    };
     let ty = type_display_string_with(ctx, p.ty, DisplayOptions::default());
     format!("{prefix}{ty} {}{default}", p.name)
 }
@@ -342,7 +370,10 @@ pub fn to_signature_help(
 ) -> serde_json::Value {
     let ps = &signature.parameters;
     let labels = |filter: &dyn Fn(&SignatureParameter) -> bool| -> Vec<String> {
-        ps.iter().filter(|p| filter(p)).map(|p| parameter_label(ctx, p)).collect()
+        ps.iter()
+            .filter(|p| filter(p))
+            .map(|p| parameter_label(ctx, p))
+            .collect()
     };
     let required = labels(&|p| p.kind.is_required_positional());
     let optional = labels(&|p| p.kind.is_optional_positional());
@@ -360,7 +391,11 @@ pub fn to_signature_help(
     let label = format!("{}({})", signature.name, groups.join(", "));
     let mut info = serde_json::Map::new();
     info.insert("label".into(), label.into());
-    if let Some(doc) = signature.dartdoc.as_deref().map(crate::hover::clean_dartdoc) {
+    if let Some(doc) = signature
+        .dartdoc
+        .as_deref()
+        .map(crate::hover::clean_dartdoc)
+    {
         info.insert("documentation".into(), documentation(doc));
     }
     info.insert(
@@ -378,7 +413,10 @@ pub fn to_signature_help(
         None => serde_json::json!(ps.len()),
     };
     let mut help = serde_json::Map::new();
-    help.insert("signatures".into(), serde_json::Value::Array(vec![info.into()]));
+    help.insert(
+        "signatures".into(),
+        serde_json::Value::Array(vec![info.into()]),
+    );
     help.insert("activeSignature".into(), serde_json::json!(0));
     if !active.is_null() {
         help.insert("activeParameter".into(), active);
@@ -412,7 +450,10 @@ pub fn compute_type_arguments_signature(
     };
     let parent = ast.parent(list.raw())?;
     let element = if ast.is::<NamedType>(parent) {
-        unit.tables.element.get(parent).map(|&e| member::base_element(ctx, e))
+        unit.tables
+            .element
+            .get(parent)
+            .map(|&e| member::base_element(ctx, e))
     } else if let Some(m) = ast.cast::<MethodInvocation>(parent) {
         unit.locate(ast[m].method_name.raw())
     } else {
@@ -436,7 +477,10 @@ pub fn compute_type_arguments_signature(
     let count = parameters.len();
     info.insert("parameters".into(), parameters.into());
     let mut help = serde_json::Map::new();
-    help.insert("signatures".into(), serde_json::Value::Array(vec![info.into()]));
+    help.insert(
+        "signatures".into(),
+        serde_json::Value::Array(vec![info.into()]),
+    );
     help.insert("activeSignature".into(), serde_json::json!(0));
     if !null_active_parameter {
         help.insert("activeParameter".into(), serde_json::json!(count));

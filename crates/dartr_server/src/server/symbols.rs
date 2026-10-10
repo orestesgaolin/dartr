@@ -92,7 +92,9 @@ fn search_element_kind(ctx: &Ctx<'_>, e: ElementId) -> Option<DeclarationKind> {
         Tag::Getter => DeclarationKind::Getter,
         Tag::Setter => DeclarationKind::Setter,
         Tag::TypeAlias => DeclarationKind::TypeAlias,
-        Tag::TopLevelVariable | Tag::LocalVariable | Tag::FormalParameter => DeclarationKind::Variable,
+        Tag::TopLevelVariable | Tag::LocalVariable | Tag::FormalParameter => {
+            DeclarationKind::Variable
+        }
         _ => return None,
     })
 }
@@ -141,8 +143,14 @@ impl LibraryDeclarations<'_, '_> {
         }
         let filtered = if e.tag() == Tag::Constructor {
             // Dart `ConstructorElement.displayName`.
-            let class = enclosing.and_then(|x| Self::name(ctx, x)).unwrap_or_else(|| "<null>".into());
-            if name == "new" { class } else { format!("{class}.{name}") }
+            let class = enclosing
+                .and_then(|x| Self::name(ctx, x))
+                .unwrap_or_else(|| "<null>".into());
+            if name == "new" {
+                class
+            } else {
+                format!("{class}.{name}")
+            }
         } else {
             name.clone()
         };
@@ -194,7 +202,9 @@ impl LibraryDeclarations<'_, '_> {
     fn origin(ctx: &Ctx<'_>, e: ElementId) -> bool {
         let f = first_flags(ctx, e);
         match e.tag() {
-            Tag::Constructor => f.contains(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_DECLARATION),
+            Tag::Constructor => {
+                f.contains(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_DECLARATION)
+            }
             Tag::Field | Tag::TopLevelVariable => {
                 f.contains(FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_DECLARATION)
             }
@@ -205,7 +215,13 @@ impl LibraryDeclarations<'_, '_> {
         }
     }
 
-    fn named(&mut self, ctx: &Ctx<'_>, elements: &[ElementId], check_origin: bool, display: bool) -> Result<(), Full> {
+    fn named(
+        &mut self,
+        ctx: &Ctx<'_>,
+        elements: &[ElementId],
+        check_origin: bool,
+        display: bool,
+    ) -> Result<(), Full> {
         for &e in elements {
             if check_origin && !Self::origin(ctx, e) {
                 continue;
@@ -222,7 +238,12 @@ impl LibraryDeclarations<'_, '_> {
         Ok(())
     }
 
-    fn members(&mut self, ctx: &Ctx<'_>, e: ElementId, with_constructors: bool) -> Result<(), Full> {
+    fn members(
+        &mut self,
+        ctx: &Ctx<'_>,
+        e: ElementId,
+        with_constructors: bool,
+    ) -> Result<(), Full> {
         let Some(instance) = e.cast::<dartr_element::InstanceElement>() else {
             return Ok(());
         };
@@ -234,8 +255,12 @@ impl LibraryDeclarations<'_, '_> {
         if with_constructors {
             self.named(ctx, &getters, true, true)?;
             if let Some(interface) = e.cast::<dartr_element::InterfaceElement>() {
-                let constructors: Vec<ElementId> =
-                    ctx.interface(interface).constructors.iter().map(|x| x.raw()).collect();
+                let constructors: Vec<ElementId> = ctx
+                    .interface(interface)
+                    .constructors
+                    .iter()
+                    .map(|x| x.raw())
+                    .collect();
                 self.named(ctx, &constructors, true, false)?;
             }
             self.named(ctx, &fields, true, false)?;
@@ -262,14 +287,23 @@ impl LibraryDeclarations<'_, '_> {
     }
 
     /// Dart `_FindLibraryDeclarations.compute`.
-    fn compute(&mut self, ctx: &Ctx<'_>, library: dartr_element::EId<dartr_element::LibraryElement>) -> Result<(), Full> {
+    fn compute(
+        &mut self,
+        ctx: &Ctx<'_>,
+        library: dartr_element::EId<dartr_element::LibraryElement>,
+    ) -> Result<(), Full> {
         if self.out.len() >= self.max {
             return Err(Full);
         }
         let l = ctx.get(library);
         let ids = |v: Vec<ElementId>| v;
         self.classes(ctx, &ids(l.classes.iter().map(|x| x.raw()).collect()))?;
-        self.named(ctx, &ids(l.getters.iter().map(|x| x.raw()).collect()), true, true)?;
+        self.named(
+            ctx,
+            &ids(l.getters.iter().map(|x| x.raw()).collect()),
+            true,
+            true,
+        )?;
         self.classes(ctx, &ids(l.enums.iter().map(|x| x.raw()).collect()))?;
         self.classes(ctx, &ids(l.mixins.iter().map(|x| x.raw()).collect()))?;
         for &e in &l.extensions {
@@ -279,11 +313,34 @@ impl LibraryDeclarations<'_, '_> {
             }
             self.members(ctx, e, false)?;
         }
-        self.classes(ctx, &ids(l.extension_types.iter().map(|x| x.raw()).collect()))?;
-        self.named(ctx, &ids(l.setters.iter().map(|x| x.raw()).collect()), true, true)?;
-        self.named(ctx, &ids(l.top_level_functions.iter().map(|x| x.raw()).collect()), false, false)?;
-        self.named(ctx, &ids(l.top_level_variables.iter().map(|x| x.raw()).collect()), true, false)?;
-        self.named(ctx, &ids(l.type_aliases.iter().map(|x| x.raw()).collect()), false, false)?;
+        self.classes(
+            ctx,
+            &ids(l.extension_types.iter().map(|x| x.raw()).collect()),
+        )?;
+        self.named(
+            ctx,
+            &ids(l.setters.iter().map(|x| x.raw()).collect()),
+            true,
+            true,
+        )?;
+        self.named(
+            ctx,
+            &ids(l.top_level_functions.iter().map(|x| x.raw()).collect()),
+            false,
+            false,
+        )?;
+        self.named(
+            ctx,
+            &ids(l.top_level_variables.iter().map(|x| x.raw()).collect()),
+            true,
+            false,
+        )?;
+        self.named(
+            ctx,
+            &ids(l.type_aliases.iter().map(|x| x.raw()).collect()),
+            false,
+            false,
+        )?;
         Ok(())
     }
 }
@@ -291,7 +348,11 @@ impl LibraryDeclarations<'_, '_> {
 impl Server {
     /// Dart `WorkspaceSymbolHandler.handle`.
     pub(crate) fn workspace_symbol(&mut self, params: &Value) -> ErrorOr<Value> {
-        let query = params.get("query").and_then(Value::as_str).unwrap_or_default().to_string();
+        let query = params
+            .get("query")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
         if query.is_empty() {
             return Ok(json!([]));
         }
@@ -313,8 +374,12 @@ impl Server {
         // Dart `FindDeclarations.compute`: the added files, then the known
         // files (after `discoverAvailableFiles`).
         self.search_scope();
-        let mut entries: Vec<(String, usize)> =
-            self.owned.added.iter().map(|(f, c)| (f.clone(), *c)).collect();
+        let mut entries: Vec<(String, usize)> = self
+            .owned
+            .added
+            .iter()
+            .map(|(f, c)| (f.clone(), *c))
+            .collect();
         if include_dependencies {
             entries.extend(self.owned.known.iter().map(|(f, c)| (f.clone(), *c)));
         }
@@ -351,11 +416,17 @@ impl Server {
         self.collection = Some(collection);
         let mut out = Vec::new();
         for d in declarations {
-            let Some(lines) = self.line_info_of(&d.file) else { continue };
+            let Some(lines) = self.line_info_of(&d.file) else {
+                continue;
+            };
             let container = d.class_name.clone().or(d.mixin_name.clone());
             let full_name = if d.kind == DeclarationKind::Constructor {
                 let c = container.clone().unwrap_or_else(|| "null".to_string());
-                if d.name == "new" { c } else { format!("{c}.{}", d.name) }
+                if d.name == "new" {
+                    c
+                } else {
+                    format!("{c}.{}", d.name)
+                }
             } else {
                 d.name.clone()
             };

@@ -476,13 +476,21 @@ impl Server {
             "textDocument/prepareTypeHierarchy" => {
                 self.catching(method, |s| s.prepare_type_hierarchy(&params))
             }
-            "typeHierarchy/supertypes" => self.catching(method, |s| s.type_hierarchy_supertypes(&params)),
-            "typeHierarchy/subtypes" => self.catching(method, |s| s.type_hierarchy_subtypes(&params)),
+            "typeHierarchy/supertypes" => {
+                self.catching(method, |s| s.type_hierarchy_supertypes(&params))
+            }
+            "typeHierarchy/subtypes" => {
+                self.catching(method, |s| s.type_hierarchy_subtypes(&params))
+            }
             "textDocument/prepareCallHierarchy" => {
                 self.catching(method, |s| s.prepare_call_hierarchy(&params))
             }
-            "callHierarchy/incomingCalls" => self.catching(method, |s| s.call_hierarchy_incoming(&params)),
-            "callHierarchy/outgoingCalls" => self.catching(method, |s| s.call_hierarchy_outgoing(&params)),
+            "callHierarchy/incomingCalls" => {
+                self.catching(method, |s| s.call_hierarchy_incoming(&params))
+            }
+            "callHierarchy/outgoingCalls" => {
+                self.catching(method, |s| s.call_hierarchy_outgoing(&params))
+            }
             "workspace/symbol" => self.catching(method, |s| s.workspace_symbol(&params)),
             "textDocument/formatting" => self.format_request(&params, FormatKind::Document),
             "textDocument/rangeFormatting" => {

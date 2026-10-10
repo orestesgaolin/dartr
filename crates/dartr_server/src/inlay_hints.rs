@@ -38,7 +38,11 @@ pub struct Computer<'u, 'c, 'a> {
 }
 
 impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
-    pub fn new(unit: &'u Unit<'c, 'a>, lines: &'u LineInfo, config: InlayHintsConfiguration) -> Self {
+    pub fn new(
+        unit: &'u Unit<'c, 'a>,
+        lines: &'u LineInfo,
+        config: InlayHintsConfiguration,
+    ) -> Self {
         Computer {
             unit,
             lines,
@@ -164,7 +168,9 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
                     TypeKind::Never(_) => Some("Never".to_string()),
                     _ => element.and_then(|e| element_name(&ctx, e).map(str::to_string)),
                 };
-                let value = name.unwrap_or_else(|| type_display_string_with(&ctx, ty, DisplayOptions::default()));
+                let value = name.unwrap_or_else(|| {
+                    type_display_string_with(&ctx, ty, DisplayOptions::default())
+                });
                 parts.push(Self::part(value, self.location(element)));
                 if let TypeKind::Interface { args, .. } = kind {
                     let args = ctx.list(args).to_vec();
@@ -232,7 +238,13 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
     }
 
     /// Dart `addParameterNamePrefix`.
-    fn parameter_name(&mut self, offset: u32, parameter: ElemRef, literal: bool, substituted: bool) {
+    fn parameter_name(
+        &mut self,
+        offset: u32,
+        parameter: ElemRef,
+        literal: bool,
+        substituted: bool,
+    ) {
         let ctx = *self.ctx();
         let base = member::base_element(&ctx, parameter);
         let Some(name) = element_name(&ctx, base).filter(|n| !n.is_empty()) else {
@@ -331,7 +343,10 @@ impl AstVisitor for Computer<'_, '_, '_> {
             } else if let Some(p) = crate::signature::invoke_type_parameter(self.unit, argument) {
                 // A parameter of a function type without a declaration (a
                 // new element in Dart, without a location).
-                let name = p.name.map(|n| self.ctx().name_str(n).to_string()).unwrap_or_default();
+                let name = p
+                    .name
+                    .map(|n| self.ctx().name_str(n).to_string())
+                    .unwrap_or_default();
                 if !name.is_empty() {
                     let hint = json!({
                         "label": [Self::part(format!("{name}:"), None)],
@@ -356,7 +371,11 @@ impl AstVisitor for Computer<'_, '_, '_> {
         if ast[node].type_.is_some() {
             return;
         }
-        if let Some(e) = self.unit.declared_element(node.raw()).filter(|e| e.tag() == Tag::LocalVariable) {
+        if let Some(e) = self
+            .unit
+            .declared_element(node.raw())
+            .filter(|e| e.tag() == Tag::LocalVariable)
+        {
             let offset = self.token_offset(ast[node].name);
             self.type_prefix(offset, self.element_type(e), Kind::VariableType, true);
         }
@@ -387,14 +406,22 @@ impl AstVisitor for Computer<'_, '_, '_> {
 
     fn visit_dot_shorthand_invocation(&mut self, ast: &Ast, node: Id<DotShorthandInvocation>) {
         ast.visit_children(node.raw(), self);
-        self.invocation(node.raw(), ast[node].type_arguments.is_some(), ast[node].argument_list);
+        self.invocation(
+            node.raw(),
+            ast[node].type_arguments.is_some(),
+            ast[node].argument_list,
+        );
         if let Some(t) = self.static_type(node.raw()) {
             let offset = self.token_offset(ast[node].period);
             self.type_prefix(offset, t, Kind::DotShorthandType, false);
         }
     }
 
-    fn visit_dot_shorthand_property_access(&mut self, ast: &Ast, node: Id<DotShorthandPropertyAccess>) {
+    fn visit_dot_shorthand_property_access(
+        &mut self,
+        ast: &Ast,
+        node: Id<DotShorthandPropertyAccess>,
+    ) {
         ast.visit_children(node.raw(), self);
         if let Some(t) = self.static_type(node.raw()) {
             let offset = self.token_offset(ast[node].period);
@@ -418,14 +445,26 @@ impl AstVisitor for Computer<'_, '_, '_> {
         }
     }
 
-    fn visit_function_expression_invocation(&mut self, ast: &Ast, node: Id<FunctionExpressionInvocation>) {
+    fn visit_function_expression_invocation(
+        &mut self,
+        ast: &Ast,
+        node: Id<FunctionExpressionInvocation>,
+    ) {
         ast.visit_children(node.raw(), self);
-        self.invocation(node.raw(), ast[node].type_arguments.is_some(), ast[node].argument_list);
+        self.invocation(
+            node.raw(),
+            ast[node].type_arguments.is_some(),
+            ast[node].argument_list,
+        );
     }
 
     fn visit_method_invocation(&mut self, ast: &Ast, node: Id<MethodInvocation>) {
         ast.visit_children(node.raw(), self);
-        self.invocation(node.raw(), ast[node].type_arguments.is_some(), ast[node].argument_list);
+        self.invocation(
+            node.raw(),
+            ast[node].type_arguments.is_some(),
+            ast[node].argument_list,
+        );
     }
 
     fn visit_list_literal(&mut self, ast: &Ast, node: Id<ListLiteral>) {
@@ -493,7 +532,10 @@ impl AstVisitor for Computer<'_, '_, '_> {
 
     fn visit_variable_declaration(&mut self, ast: &Ast, node: Id<VariableDeclaration>) {
         ast.visit_children(node.raw(), self);
-        let Some(parent) = ast.parent(node.raw()).and_then(|p| ast.cast::<VariableDeclarationList>(p)) else {
+        let Some(parent) = ast
+            .parent(node.raw())
+            .and_then(|p| ast.cast::<VariableDeclarationList>(p))
+        else {
             return;
         };
         if ast[parent].type_.is_some() {

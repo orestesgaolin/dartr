@@ -284,7 +284,10 @@ pub fn server_capabilities(client: &ClientCapabilities, config: &LspClientConfig
         c.insert("callHierarchyProvider".into(), json!(true));
     }
     if !client.text_document_dynamic("inlayHint") {
-        c.insert("inlayHintProvider".into(), json!({"resolveProvider": false}));
+        c.insert(
+            "inlayHintProvider".into(),
+            json!({"resolveProvider": false}),
+        );
     }
     if !client.text_document_dynamic("semanticTokens") {
         c.insert("semanticTokensProvider".into(), semantic_tokens_options());

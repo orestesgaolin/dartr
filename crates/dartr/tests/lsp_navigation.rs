@@ -197,7 +197,8 @@ fn words_at(text: &str, positions: &[(u32, u32)]) -> Vec<String> {
 /// The whole document as a range, and the middle third of its lines.
 fn file_ranges(text: &str) -> (Value, Value) {
     let lines = text.lines().count() as u32;
-    let whole = json!({"start": {"line": 0, "character": 0}, "end": {"line": lines + 1, "character": 0}});
+    let whole =
+        json!({"start": {"line": 0, "character": 0}, "end": {"line": lines + 1, "character": 0}});
     let middle = json!({"start": {"line": lines / 3, "character": 0}, "end": {"line": 2 * lines / 3, "character": 0}});
     (whole, middle)
 }
@@ -281,7 +282,10 @@ fn run_requests(
         let (whole, middle) = file_ranges(&text);
         let document = json!({"uri": uri});
         if wants("textDocument/semanticTokens/full") {
-            let r = c.request("textDocument/semanticTokens/full", json!({"textDocument": document}));
+            let r = c.request(
+                "textDocument/semanticTokens/full",
+                json!({"textDocument": document}),
+            );
             record("textDocument/semanticTokens/full", (0, 0), r);
         }
         if wants("textDocument/semanticTokens/range") {
@@ -292,7 +296,10 @@ fn run_requests(
             record("textDocument/semanticTokens/range", (0, 0), r);
         }
         if wants("textDocument/inlayHint") {
-            let r = c.request("textDocument/inlayHint", json!({"textDocument": document, "range": whole}));
+            let r = c.request(
+                "textDocument/inlayHint",
+                json!({"textDocument": document, "range": whole}),
+            );
             record("textDocument/inlayHint", (0, 0), r);
         }
         if wants("workspace/symbol") {
@@ -678,7 +685,14 @@ fn lsp_editor_parity() {
     let root = write_project("lsp_editor");
     let files = dart_files(&root);
     let dart = run_or_reuse(EDITOR_METHODS, "dart", "fixture-editor", &root, &files, 1);
-    let dartr = run_or_reuse(EDITOR_METHODS, dartr_bin(), "fixture-editor", &root, &files, 1);
+    let dartr = run_or_reuse(
+        EDITOR_METHODS,
+        dartr_bin(),
+        "fixture-editor",
+        &root,
+        &files,
+        1,
+    );
     let counts = compare(EDITOR_METHODS, "fixture project (editor)", &dart, &dartr);
     let required: Vec<&str> = std::env::var("DARTR_LSP_NAV_REQUIRED")
         .map(|s| {
@@ -728,8 +742,17 @@ fn lsp_navigation_corpus() {
     } else {
         METHODS
     };
-    let label = if methods == EDITOR_METHODS { format!("{label}-editor") } else { label };
+    let label = if methods == EDITOR_METHODS {
+        format!("{label}-editor")
+    } else {
+        label
+    };
     let dart = run_or_reuse(methods, "dart", &label, &root, &files, every);
     let dartr = run_or_reuse(methods, dartr_bin(), &label, &root, &files, every);
-    compare(methods, &format!("corpus {}", root.display()), &dart, &dartr);
+    compare(
+        methods,
+        &format!("corpus {}", root.display()),
+        &dart,
+        &dartr,
+    );
 }

@@ -27,7 +27,10 @@ const MIN_SCORE: i64 = -10000;
 const TYPES: &[u8] = b"00000000000000000000000000000000100000000000001122222222221000000333333333333333333333333330000002222222222222222222222222200000";
 
 fn lower(units: &[u16]) -> Vec<u16> {
-    String::from_utf16_lossy(units).to_lowercase().encode_utf16().collect()
+    String::from_utf16_lossy(units)
+        .to_lowercase()
+        .encode_utf16()
+        .collect()
 }
 
 /// Dart `FuzzyMatcher` with `MatchStyle.TEXT`.
@@ -110,7 +113,11 @@ impl FuzzyMatcher {
     }
 
     fn best_layer_index_at(&self, i: usize, j: usize) -> usize {
-        if self.score_at(i, j, 0) < self.score_at(i, j, 1) { 1 } else { 0 }
+        if self.score_at(i, j, 0) < self.score_at(i, j, 1) {
+            1
+        } else {
+            0
+        }
     }
 
     fn prev_k(&self, i: usize, j: usize, k: usize) -> usize {
@@ -159,7 +166,9 @@ impl FuzzyMatcher {
                     continue;
                 }
                 let mut char_score = segment_score;
-                if self.candidate_roles[i - 1] == CharRole::Tail && self.pattern_roles[j - 1] == CharRole::Head {
+                if self.candidate_roles[i - 1] == CharRole::Tail
+                    && self.pattern_roles[j - 1] == CharRole::Head
+                {
                     if j > 1 {
                         continue;
                     }
@@ -170,7 +179,8 @@ impl FuzzyMatcher {
                     char_score -= 4;
                 }
                 if candidate[i - 1] == self.pattern[j - 1]
-                    || (is_head && (!self.case_sensitive || self.pattern_roles[j - 1] == CharRole::Head))
+                    || (is_head
+                        && (!self.case_sensitive || self.pattern_roles[j - 1] == CharRole::Head))
                 {
                     char_score += 1;
                 }

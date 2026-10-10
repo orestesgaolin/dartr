@@ -381,7 +381,9 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
     /// Dart `_additionalModifiersForElement`.
     fn wildcard(&self, element: Option<ElementId>) -> Option<Vec<&'static str>> {
         element
-            .filter(|&e| dartr_resolver::error::correct_override::is_wildcard_variable(self.ctx(), e))
+            .filter(|&e| {
+                dartr_resolver::error::correct_override::is_wildcard_variable(self.ctx(), e)
+            })
             .map(|_| vec!["wildcard"])
     }
 
@@ -399,7 +401,9 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
 
     fn annotation_additional(&self, parent: NodeId) -> Opts {
         Opts {
-            additional: self.is_annotation_identifier(parent).then(|| vec!["annotation"]),
+            additional: self
+                .is_annotation_identifier(parent)
+                .then(|| vec!["annotation"]),
             ..Opts::default()
         }
     }
@@ -434,9 +438,17 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
         false
     }
 
-    fn identifier_class(&mut self, parent: NodeId, name: TokenId, element: Option<ElementId>) -> bool {
+    fn identifier_class(
+        &mut self,
+        parent: NodeId,
+        name: TokenId,
+        element: Option<ElementId>,
+    ) -> bool {
         let Some(e) = element else { return false };
-        if !matches!(e.tag(), Tag::Class | Tag::Enum | Tag::Mixin | Tag::ExtensionType) {
+        if !matches!(
+            e.tag(),
+            Tag::Class | Tag::Enum | Tag::Mixin | Tag::ExtensionType
+        ) {
             return false;
         }
         let ast = self.ast();
@@ -464,11 +476,18 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
                 opts.modifiers = Some(vec!["constructor", "declaration"]);
             }
         }
-        opts.additional = self.is_annotation_identifier(parent).then(|| vec!["annotation"]);
+        opts.additional = self
+            .is_annotation_identifier(parent)
+            .then(|| vec!["annotation"]);
         self.token(Some(name), h, opts)
     }
 
-    fn identifier_constructor(&mut self, parent: NodeId, name: TokenId, element: Option<ElementId>) -> bool {
+    fn identifier_constructor(
+        &mut self,
+        parent: NodeId,
+        name: TokenId,
+        element: Option<ElementId>,
+    ) -> bool {
         if element.map(|e| e.tag()) != Some(Tag::Constructor) {
             return false;
         }
@@ -499,7 +518,12 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
         dartr_resolver::element_metadata::accessor_variable_any(self.ctx(), e)
     }
 
-    fn identifier_field(&mut self, parent: NodeId, name: TokenId, element: Option<ElementId>) -> bool {
+    fn identifier_field(
+        &mut self,
+        parent: NodeId,
+        name: TokenId,
+        element: Option<ElementId>,
+    ) -> bool {
         let ctx = *self.ctx();
         let ast = self.ast();
         let mut h = None;
@@ -517,27 +541,30 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
             Some((e, Tag::Getter)) | Some((e, Tag::Setter)) => {
                 let getter = e.tag() == Tag::Getter;
                 let variable = self.accessor_variable(e);
-                h = Some(if variable.is_some_and(|v| v.tag() == Tag::TopLevelVariable) {
-                    if getter {
-                        H::TOP_LEVEL_GETTER_REFERENCE
+                h = Some(
+                    if variable.is_some_and(|v| v.tag() == Tag::TopLevelVariable) {
+                        if getter {
+                            H::TOP_LEVEL_GETTER_REFERENCE
+                        } else {
+                            H::TOP_LEVEL_SETTER_REFERENCE
+                        }
+                    } else if variable.is_some_and(|v| {
+                        v.tag() == Tag::Field
+                            && dartr_resolver::element_ext::is_enum_constant(&ctx, v)
+                    }) {
+                        H::ENUM_CONSTANT
+                    } else if self.is_static(e) {
+                        if getter {
+                            H::STATIC_GETTER_REFERENCE
+                        } else {
+                            H::STATIC_SETTER_REFERENCE
+                        }
+                    } else if getter {
+                        H::INSTANCE_GETTER_REFERENCE
                     } else {
-                        H::TOP_LEVEL_SETTER_REFERENCE
-                    }
-                } else if variable.is_some_and(|v| {
-                    v.tag() == Tag::Field && dartr_resolver::element_ext::is_enum_constant(&ctx, v)
-                }) {
-                    H::ENUM_CONSTANT
-                } else if self.is_static(e) {
-                    if getter {
-                        H::STATIC_GETTER_REFERENCE
-                    } else {
-                        H::STATIC_SETTER_REFERENCE
-                    }
-                } else if getter {
-                    H::INSTANCE_GETTER_REFERENCE
-                } else {
-                    H::INSTANCE_SETTER_REFERENCE
-                });
+                        H::INSTANCE_SETTER_REFERENCE
+                    },
+                );
             }
             Some(_) => {}
             None => {
@@ -553,7 +580,9 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
                     static_type = Some(extended);
                 }
                 if let Some(t) = static_type
-                    && let TypeKind::Record { positional, named, .. } = ctx.ty(t)
+                    && let TypeKind::Record {
+                        positional, named, ..
+                    } = ctx.ty(t)
                 {
                     let lexeme = ast.tokens.lexeme(name);
                     let positional_count = ctx.list(*positional).len();
@@ -561,7 +590,10 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
                         .strip_prefix('$')
                         .and_then(|n| n.parse::<usize>().ok())
                         .is_some_and(|i| i >= 1 && i <= positional_count)
-                        || ctx.list(*named).iter().any(|f| ctx.name_str(f.name) == lexeme);
+                        || ctx
+                            .list(*named)
+                            .iter()
+                            .any(|f| ctx.name_str(f.name) == lexeme);
                     h = Some(if has {
                         H::INSTANCE_GETTER_REFERENCE
                     } else {
@@ -600,7 +632,12 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
         None
     }
 
-    fn identifier_function(&mut self, parent: NodeId, name: TokenId, element: Option<ElementId>) -> bool {
+    fn identifier_function(
+        &mut self,
+        parent: NodeId,
+        name: TokenId,
+        element: Option<ElementId>,
+    ) -> bool {
         let Some(e) = element else { return false };
         if !matches!(e.tag(), Tag::TopLevelFunction | Tag::LocalFunction) {
             return false;
@@ -628,7 +665,9 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
         if !(ast.is::<MethodDeclaration>(parent) || ast.is::<FunctionDeclaration>(parent)) {
             return false;
         }
-        let top = ast.parent(parent).is_some_and(|p| ast.is::<CompilationUnit>(p));
+        let top = ast
+            .parent(parent)
+            .is_some_and(|p| ast.is::<CompilationUnit>(p));
         let h = match element.map(|e| (e, e.tag())) {
             Some((e, Tag::Getter)) => {
                 if top {
@@ -660,7 +699,12 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
         self.token(Some(name), H::IMPORT_PREFIX, Opts::default())
     }
 
-    fn identifier_label(&mut self, parent: NodeId, name: TokenId, element: Option<ElementId>) -> bool {
+    fn identifier_label(
+        &mut self,
+        parent: NodeId,
+        name: TokenId,
+        element: Option<ElementId>,
+    ) -> bool {
         if element.map(|e| e.tag()) != Some(Tag::Label) {
             return false;
         }
@@ -676,7 +720,10 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
         let Some(e) = element else { return false };
         if !matches!(
             e.tag(),
-            Tag::LocalVariable | Tag::PatternVariable | Tag::BindPatternVariable | Tag::JoinPatternVariable
+            Tag::LocalVariable
+                | Tag::PatternVariable
+                | Tag::BindPatternVariable
+                | Tag::JoinPatternVariable
         ) {
             return false;
         }
@@ -688,7 +735,12 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
         self.token(Some(name), h, Opts::default())
     }
 
-    fn identifier_method(&mut self, parent: NodeId, name: TokenId, element: Option<ElementId>) -> bool {
+    fn identifier_method(
+        &mut self,
+        parent: NodeId,
+        name: TokenId,
+        element: Option<ElementId>,
+    ) -> bool {
         let ast = self.ast();
         let invocation = ast
             .cast::<MethodInvocation>(parent)
@@ -716,7 +768,12 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
         self.token(Some(name), h, Opts::default())
     }
 
-    fn identifier_parameter(&mut self, parent: NodeId, name: TokenId, element: Option<ElementId>) -> bool {
+    fn identifier_parameter(
+        &mut self,
+        parent: NodeId,
+        name: TokenId,
+        element: Option<ElementId>,
+    ) -> bool {
         let Some(e) = element else { return false };
         if !matches!(
             e.tag(),
@@ -790,7 +847,11 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
             decorate = ast[ast[p].property_name].token == name;
         }
         if decorate {
-            self.token(Some(name), H::UNRESOLVED_INSTANCE_MEMBER_REFERENCE, Opts::default());
+            self.token(
+                Some(name),
+                H::UNRESOLVED_INSTANCE_MEMBER_REFERENCE,
+                Opts::default(),
+            );
             return true;
         }
         false
@@ -813,7 +874,12 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
             TypeKind::Interface { element, .. } => {
                 element_name(&ctx, element.raw()) == Some("Function")
                     && dartr_resolver::error::support::library_of(ctx, element.raw())
-                        .map(|l| ctx.fragment(ctx.get(l).first_fragment()).source.uri.to_string())
+                        .map(|l| {
+                            ctx.fragment(ctx.get(l).first_fragment())
+                                .source
+                                .uri
+                                .to_string()
+                        })
                         .as_deref()
                         == Some("dart:core")
             }
@@ -861,7 +927,8 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
             return true;
         }
         // The special cases of extension methods.
-        let expression: Option<NodeId> = if let Some(b) = ast.cast::<ExpressionFunctionBody>(parent) {
+        let expression: Option<NodeId> = if let Some(b) = ast.cast::<ExpressionFunctionBody>(parent)
+        {
             Some(ast[b].expression.raw())
         } else if let Some(s) = ast.cast::<ExpressionStatement>(parent) {
             Some(ast[s].expression.raw())
@@ -875,7 +942,8 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
                     None => a,
                 })
                 .find(|&a| {
-                    ast.cast::<SimpleIdentifier>(a).is_some_and(|s| ast[s].token == name)
+                    ast.cast::<SimpleIdentifier>(a)
+                        .is_some_and(|s| ast[s].token == name)
                 })
         } else if let Some(a) = ast.cast::<AssignmentExpression>(parent) {
             Some(ast[a].right_hand_side.raw())
@@ -884,14 +952,18 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
         } else {
             None
         };
-        expression.is_some_and(|e| ast.is::<SimpleIdentifier>(e)) && lexeme == "call" && enclosing_function()
+        expression.is_some_and(|e| ast.is::<SimpleIdentifier>(e))
+            && lexeme == "call"
+            && enclosing_function()
     }
 
     fn function_body_keyword(&mut self, keyword: Option<TokenId>, star: Option<TokenId>) {
         if let Some(k) = keyword {
             let ast = self.ast();
             let offset = ast.tokens.get(k).offset;
-            let end = star.map(|s| ast.tokens.get(s).end()).unwrap_or(ast.tokens.get(k).end());
+            let end = star
+                .map(|s| ast.tokens.get(s).end())
+                .unwrap_or(ast.tokens.get(k).end());
             self.add_region(offset, end - offset, H::KEYWORD, control());
         }
     }
@@ -904,10 +976,20 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
     }
 
     /// Dart `_addRegions_stringEscapes`.
-    fn string_escapes(&mut self, string: &[u16], quote: Quote, node_offset: u32, start: usize, end: usize) {
+    fn string_escapes(
+        &mut self,
+        string: &[u16],
+        quote: Quote,
+        node_offset: u32,
+        start: usize,
+        end: usize,
+    ) {
         if matches!(
             quote,
-            Quote::RawSingle | Quote::RawDouble | Quote::RawMultiLineSingle | Quote::RawMultiLineDouble
+            Quote::RawSingle
+                | Quote::RawDouble
+                | Quote::RawMultiLineSingle
+                | Quote::RawMultiLineDouble
         ) {
             return;
         }
@@ -1033,7 +1115,11 @@ impl AstVisitor for Computer<'_, '_, '_> {
                 let offset = ast.offset(node.raw());
                 let begin = ast.tokens.get(ast[arguments].left_parenthesis).end();
                 self.add_region(offset, begin - offset, H::ANNOTATION, Opts::default());
-                self.token(Some(ast[arguments].right_parenthesis), H::ANNOTATION, Opts::default());
+                self.token(
+                    Some(ast[arguments].right_parenthesis),
+                    H::ANNOTATION,
+                    Opts::default(),
+                );
             }
         }
         ast.visit_children(node.raw(), self);
@@ -1050,7 +1136,11 @@ impl AstVisitor for Computer<'_, '_, '_> {
     }
 
     fn visit_assigned_variable_pattern(&mut self, ast: &Ast, node: Id<AssignedVariablePattern>) {
-        self.token(Some(ast[node].name), H::LOCAL_VARIABLE_REFERENCE, Opts::default());
+        self.token(
+            Some(ast[node].name),
+            H::LOCAL_VARIABLE_REFERENCE,
+            Opts::default(),
+        );
         ast.visit_children(node.raw(), self);
     }
 
@@ -1088,9 +1178,12 @@ impl AstVisitor for Computer<'_, '_, '_> {
     fn visit_catch_clause(&mut self, ast: &Ast, node: Id<CatchClause>) {
         self.token(ast[node].catch_keyword, H::KEYWORD, control());
         self.token(ast[node].on_keyword, H::KEYWORD, control());
-        for p in [ast[node].exception_parameter, ast[node].stack_trace_parameter]
-            .into_iter()
-            .flatten()
+        for p in [
+            ast[node].exception_parameter,
+            ast[node].stack_trace_parameter,
+        ]
+        .into_iter()
+        .flatten()
         {
             let additional = self.wildcard(self.declared(p.raw()));
             self.token(
@@ -1170,7 +1263,11 @@ impl AstVisitor for Computer<'_, '_, '_> {
         };
         self.token(ast[node].factory_keyword, H::KEYWORD, factory_opts);
         kw!(self, ast, node, const_keyword);
-        self.token(ast[node].new_keyword, H::KEYWORD, m(&["constructor", "declaration"]));
+        self.token(
+            ast[node].new_keyword,
+            H::KEYWORD,
+            m(&["constructor", "declaration"]),
+        );
         self.token(
             ast[node].name,
             H::CONSTRUCTOR,
@@ -1216,7 +1313,11 @@ impl AstVisitor for Computer<'_, '_, '_> {
 
     fn visit_declared_variable_pattern(&mut self, ast: &Ast, node: Id<DeclaredVariablePattern>) {
         kw!(self, ast, node, keyword);
-        self.token(Some(ast[node].name), H::LOCAL_VARIABLE_DECLARATION, Opts::default());
+        self.token(
+            Some(ast[node].name),
+            H::LOCAL_VARIABLE_DECLARATION,
+            Opts::default(),
+        );
         ast.visit_children(node.raw(), self);
     }
 
@@ -1226,7 +1327,11 @@ impl AstVisitor for Computer<'_, '_, '_> {
         ast.visit_children(node.raw(), self);
     }
 
-    fn visit_dot_shorthand_property_access(&mut self, ast: &Ast, node: Id<DotShorthandPropertyAccess>) {
+    fn visit_dot_shorthand_property_access(
+        &mut self,
+        ast: &Ast,
+        node: Id<DotShorthandPropertyAccess>,
+    ) {
         let property = ast[node].property_name;
         let element = self.element_of(property.raw());
         if element.is_some_and(|e| e.tag() == Tag::Constructor) {
@@ -1237,7 +1342,10 @@ impl AstVisitor for Computer<'_, '_, '_> {
     }
 
     fn visit_dotted_name(&mut self, ast: &Ast, node: Id<DottedName>) {
-        if ast.parent(node.raw()).is_some_and(|p| ast.is::<Configuration>(p)) {
+        if ast
+            .parent(node.raw())
+            .is_some_and(|p| ast.is::<Configuration>(p))
+        {
             for &t in ast.token_list(ast[node].tokens) {
                 if ast.tokens.ty(t) != TokenType::PERIOD {
                     self.token(Some(t), H::IDENTIFIER_DEFAULT, Opts::default());
@@ -1306,12 +1414,26 @@ impl AstVisitor for Computer<'_, '_, '_> {
     }
 
     fn visit_field_declaration(&mut self, ast: &Ast, node: Id<FieldDeclaration>) {
-        kw!(self, ast, node, abstract_keyword, external_keyword, static_keyword);
+        kw!(
+            self,
+            ast,
+            node,
+            abstract_keyword,
+            external_keyword,
+            static_keyword
+        );
         ast.visit_children(node.raw(), self);
     }
 
     fn visit_field_formal_parameter(&mut self, ast: &Ast, node: Id<FieldFormalParameter>) {
-        kw!(self, ast, node, required_keyword, const_final_or_var_keyword, this_keyword);
+        kw!(
+            self,
+            ast,
+            node,
+            required_keyword,
+            const_final_or_var_keyword,
+            this_keyword
+        );
         let additional = self.wildcard(self.declared(node.raw()));
         self.token(
             Some(ast[node].name),
@@ -1324,12 +1446,20 @@ impl AstVisitor for Computer<'_, '_, '_> {
         ast.visit_children(node.raw(), self);
     }
 
-    fn visit_for_each_parts_with_declaration(&mut self, ast: &Ast, node: Id<ForEachPartsWithDeclaration>) {
+    fn visit_for_each_parts_with_declaration(
+        &mut self,
+        ast: &Ast,
+        node: Id<ForEachPartsWithDeclaration>,
+    ) {
         self.token(Some(ast[node].in_keyword), H::KEYWORD, control());
         ast.visit_children(node.raw(), self);
     }
 
-    fn visit_for_each_parts_with_identifier(&mut self, ast: &Ast, node: Id<ForEachPartsWithIdentifier>) {
+    fn visit_for_each_parts_with_identifier(
+        &mut self,
+        ast: &Ast,
+        node: Id<ForEachPartsWithIdentifier>,
+    ) {
         self.token(Some(ast[node].in_keyword), H::KEYWORD, control());
         ast.visit_children(node.raw(), self);
     }
@@ -1352,13 +1482,23 @@ impl AstVisitor for Computer<'_, '_, '_> {
     }
 
     fn visit_function_declaration(&mut self, ast: &Ast, node: Id<FunctionDeclaration>) {
-        kw!(self, ast, node, augment_keyword, external_keyword, property_keyword);
+        kw!(
+            self,
+            ast,
+            node,
+            augment_keyword,
+            external_keyword,
+            property_keyword
+        );
         let property = ast[node].property_keyword.map(|t| ast.tokens.lexeme(t));
         let h = if property == Some("get") {
             H::TOP_LEVEL_GETTER_DECLARATION
         } else if property == Some("set") {
             H::TOP_LEVEL_SETTER_DECLARATION
-        } else if ast.parent(node.raw()).is_some_and(|p| ast.is::<CompilationUnit>(p)) {
+        } else if ast
+            .parent(node.raw())
+            .is_some_and(|p| ast.is::<CompilationUnit>(p))
+        {
             H::TOP_LEVEL_FUNCTION_DECLARATION
         } else {
             H::LOCAL_FUNCTION_DECLARATION
@@ -1369,7 +1509,11 @@ impl AstVisitor for Computer<'_, '_, '_> {
 
     fn visit_function_type_alias(&mut self, ast: &Ast, node: Id<FunctionTypeAlias>) {
         kw!(self, ast, node, typedef_keyword);
-        self.token(Some(ast[node].name), H::FUNCTION_TYPE_ALIAS, Opts::default());
+        self.token(
+            Some(ast[node].name),
+            H::FUNCTION_TYPE_ALIAS,
+            Opts::default(),
+        );
         ast.visit_children(node.raw(), self);
     }
 
@@ -1412,7 +1556,14 @@ impl AstVisitor for Computer<'_, '_, '_> {
     }
 
     fn visit_import_directive(&mut self, ast: &Ast, node: Id<ImportDirective>) {
-        kw!(self, ast, node, import_keyword, deferred_keyword, as_keyword);
+        kw!(
+            self,
+            ast,
+            node,
+            import_keyword,
+            deferred_keyword,
+            as_keyword
+        );
         self.configurations(ast[node].configurations);
         ast.visit_children(node.raw(), self);
     }
@@ -1421,7 +1572,11 @@ impl AstVisitor for Computer<'_, '_, '_> {
         self.token(Some(ast[node].name), H::IMPORT_PREFIX, Opts::default());
     }
 
-    fn visit_instance_creation_expression(&mut self, ast: &Ast, node: Id<InstanceCreationExpression>) {
+    fn visit_instance_creation_expression(
+        &mut self,
+        ast: &Ast,
+        node: Id<InstanceCreationExpression>,
+    ) {
         kw!(self, ast, node, keyword);
         ast.visit_children(node.raw(), self);
     }
@@ -1446,7 +1601,11 @@ impl AstVisitor for Computer<'_, '_, '_> {
 
     fn visit_interpolation_string(&mut self, ast: &Ast, node: Id<InterpolationString>) {
         self.node(node.raw(), H::LITERAL_STRING, Opts::default());
-        let string: Vec<u16> = ast.tokens.lexeme(ast[node].contents).encode_utf16().collect();
+        let string: Vec<u16> = ast
+            .tokens
+            .lexeme(ast[node].contents)
+            .encode_utf16()
+            .collect();
         let quote = ast
             .parent(node.raw())
             .and_then(|p| ast.cast::<StringInterpolation>(p))
@@ -1509,7 +1668,14 @@ impl AstVisitor for Computer<'_, '_, '_> {
     }
 
     fn visit_mixin_declaration(&mut self, ast: &Ast, node: Id<MixinDeclaration>) {
-        kw!(self, ast, node, augment_keyword, base_keyword, mixin_keyword);
+        kw!(
+            self,
+            ast,
+            node,
+            augment_keyword,
+            base_keyword,
+            mixin_keyword
+        );
         self.token(Some(ast[node].name), H::MIXIN, Opts::default());
         ast.visit_children(node.raw(), self);
     }
@@ -1525,7 +1691,12 @@ impl AstVisitor for Computer<'_, '_, '_> {
             .tables
             .param_element
             .get(node.raw())
-            .or_else(|| self.unit.tables.param_element.get(ast[node].argument_expression.raw()))
+            .or_else(|| {
+                self.unit
+                    .tables
+                    .param_element
+                    .get(ast[node].argument_expression.raw())
+            })
             .copied();
         match parameter {
             Some(p) => {
@@ -1559,11 +1730,15 @@ impl AstVisitor for Computer<'_, '_, '_> {
         }
         if let Some(t) = self.unit.tables.annotation_type.get(node.raw()).copied() {
             let name = ast[node].name;
-            let is_dynamic =
-                matches!(self.ctx().ty(t), TypeKind::Dynamic) && ast.tokens.lexeme(name) == "dynamic";
+            let is_dynamic = matches!(self.ctx().ty(t), TypeKind::Dynamic)
+                && ast.tokens.lexeme(name) == "dynamic";
             let is_never = matches!(self.ctx().ty(t), TypeKind::Never(_));
             if is_dynamic || is_never {
-                let h = if is_dynamic { H::TYPE_NAME_DYNAMIC } else { H::CLASS };
+                let h = if is_dynamic {
+                    H::TYPE_NAME_DYNAMIC
+                } else {
+                    H::CLASS
+                };
                 self.token(
                     Some(name),
                     h,
@@ -1611,7 +1786,10 @@ impl AstVisitor for Computer<'_, '_, '_> {
 
     fn visit_pattern_field(&mut self, ast: &Ast, node: Id<PatternField>) {
         if let Some(name) = ast[node].name.and_then(|n| ast[n].name) {
-            let h = if self.element_of(node.raw()).is_some_and(|e| e.tag() == Tag::Method) {
+            let h = if self
+                .element_of(node.raw())
+                .is_some_and(|e| e.tag() == Tag::Method)
+            {
                 H::INSTANCE_METHOD_TEAR_OFF
             } else {
                 H::INSTANCE_GETTER_REFERENCE
@@ -1621,7 +1799,11 @@ impl AstVisitor for Computer<'_, '_, '_> {
         ast.visit_children(node.raw(), self);
     }
 
-    fn visit_pattern_variable_declaration(&mut self, ast: &Ast, node: Id<PatternVariableDeclaration>) {
+    fn visit_pattern_variable_declaration(
+        &mut self,
+        ast: &Ast,
+        node: Id<PatternVariableDeclaration>,
+    ) {
         kw!(self, ast, node, keyword);
         ast.visit_children(node.raw(), self);
     }
@@ -1631,7 +1813,11 @@ impl AstVisitor for Computer<'_, '_, '_> {
         ast.visit_children(node.raw(), self);
     }
 
-    fn visit_primary_constructor_declaration(&mut self, ast: &Ast, node: Id<PrimaryConstructorDeclaration>) {
+    fn visit_primary_constructor_declaration(
+        &mut self,
+        ast: &Ast,
+        node: Id<PrimaryConstructorDeclaration>,
+    ) {
         kw!(self, ast, node, const_keyword);
         ast.visit_children(node.raw(), self);
     }
@@ -1645,7 +1831,11 @@ impl AstVisitor for Computer<'_, '_, '_> {
         kw!(self, ast, node, const_keyword);
         for &field in ast.list_raw(ast[node].fields) {
             if let Some(named) = ast.cast::<RecordLiteralNamedField>(field) {
-                self.token(Some(ast[named].name), H::PARAMETER_REFERENCE, Opts::default());
+                self.token(
+                    Some(ast[named].name),
+                    H::PARAMETER_REFERENCE,
+                    Opts::default(),
+                );
                 ast.accept(ast[named].field_expression.raw(), self);
             } else {
                 ast.accept(field, self);
@@ -1654,7 +1844,14 @@ impl AstVisitor for Computer<'_, '_, '_> {
     }
 
     fn visit_regular_formal_parameter(&mut self, ast: &Ast, node: Id<RegularFormalParameter>) {
-        kw!(self, ast, node, required_keyword, covariant_keyword, const_final_or_var_keyword);
+        kw!(
+            self,
+            ast,
+            node,
+            required_keyword,
+            covariant_keyword,
+            const_final_or_var_keyword
+        );
         let declared = self.declared(node.raw());
         let h = if declared.is_some_and(|e| self.is_dynamic(self.type_of(e))) {
             H::DYNAMIC_PARAMETER_DECLARATION
@@ -1713,7 +1910,11 @@ impl AstVisitor for Computer<'_, '_, '_> {
         ast.visit_children(node.raw(), self);
     }
 
-    fn visit_super_constructor_invocation(&mut self, ast: &Ast, node: Id<SuperConstructorInvocation>) {
+    fn visit_super_constructor_invocation(
+        &mut self,
+        ast: &Ast,
+        node: Id<SuperConstructorInvocation>,
+    ) {
         kw!(self, ast, node, super_keyword);
         ast.visit_children(node.raw(), self);
     }
@@ -1724,7 +1925,14 @@ impl AstVisitor for Computer<'_, '_, '_> {
     }
 
     fn visit_super_formal_parameter(&mut self, ast: &Ast, node: Id<SuperFormalParameter>) {
-        kw!(self, ast, node, required_keyword, const_final_or_var_keyword, super_keyword);
+        kw!(
+            self,
+            ast,
+            node,
+            required_keyword,
+            const_final_or_var_keyword,
+            super_keyword
+        );
         let declared = self.declared(node.raw());
         let h = if declared.is_some_and(|e| self.is_dynamic(self.type_of(e))) {
             H::DYNAMIC_PARAMETER_DECLARATION
@@ -1770,7 +1978,11 @@ impl AstVisitor for Computer<'_, '_, '_> {
         ast.visit_children(node.raw(), self);
     }
 
-    fn visit_top_level_variable_declaration(&mut self, ast: &Ast, node: Id<TopLevelVariableDeclaration>) {
+    fn visit_top_level_variable_declaration(
+        &mut self,
+        ast: &Ast,
+        node: Id<TopLevelVariableDeclaration>,
+    ) {
         kw!(self, ast, node, augment_keyword, external_keyword);
         ast.visit_children(node.raw(), self);
     }
@@ -1823,7 +2035,11 @@ impl AstVisitor for Computer<'_, '_, '_> {
                 );
             }
             Some((_, Tag::TopLevelVariable)) => {
-                self.token(Some(ast[node].name), H::TOP_LEVEL_VARIABLE_DECLARATION, Opts::default());
+                self.token(
+                    Some(ast[node].name),
+                    H::TOP_LEVEL_VARIABLE_DECLARATION,
+                    Opts::default(),
+                );
             }
             _ => {}
         }
@@ -1880,7 +2096,8 @@ fn class_name_part_type_name(ast: &Ast, part: NodeId) -> Option<TokenId> {
     if let Some(n) = ast.cast::<NameWithTypeParameters>(part) {
         return Some(ast[n].type_name);
     }
-    ast.cast::<PrimaryConstructorDeclaration>(part).map(|p| ast[p].type_name)
+    ast.cast::<PrimaryConstructorDeclaration>(part)
+        .map(|p| ast[p].type_name)
 }
 
 /// The quote of a string interpolation (Dart `StringInterpolation.quote`):
@@ -1959,11 +2176,18 @@ fn split_multiline(token: SemanticTokenInfo, lines: &LineInfo) -> Vec<SemanticTo
     let mut out = Vec::new();
     for line in start.line_number..=end.line_number {
         let line_offset = lines.get_offset_of_line((line - 1) as usize).unwrap_or(0);
-        let start_offset = if line == start.line_number { start.column_number - 1 } else { 0 };
+        let start_offset = if line == start.line_number {
+            start.column_number - 1
+        } else {
+            0
+        };
         let end_offset = if line == end.line_number {
             end.column_number - 1
         } else {
-            lines.get_offset_of_line(line as usize).unwrap_or(line_offset) - line_offset
+            lines
+                .get_offset_of_line(line as usize)
+                .unwrap_or(line_offset)
+                - line_offset
         };
         out.push(SemanticTokenInfo {
             offset: line_offset + start_offset,
@@ -1977,7 +2201,11 @@ fn split_multiline(token: SemanticTokenInfo, lines: &LineInfo) -> Vec<SemanticTo
 
 /// The handler pipeline (Dart `_handleImpl`): sort, split overlapping and
 /// multiline tokens, filter by [range], encode.
-pub fn encode(mut tokens: Vec<SemanticTokenInfo>, lines: &LineInfo, range: Option<(u32, u32)>) -> Vec<u32> {
+pub fn encode(
+    mut tokens: Vec<SemanticTokenInfo>,
+    lines: &LineInfo,
+    range: Option<(u32, u32)>,
+) -> Vec<u32> {
     sort_tokens(&mut tokens);
     let tokens = split_overlapping(tokens);
     let tokens: Vec<SemanticTokenInfo> = tokens
@@ -1995,7 +2223,11 @@ pub fn encode(mut tokens: Vec<SemanticTokenInfo>, lines: &LineInfo, range: Optio
         let line = location.line_number - 1;
         let column = location.column_number - 1;
         let relative_line = line - last_line;
-        let relative_column = if relative_line == 0 { column - last_column } else { column };
+        let relative_column = if relative_line == 0 {
+            column - last_column
+        } else {
+            column
+        };
         let ty = TOKEN_TYPES.iter().position(|x| *x == t.ty).unwrap_or(0) as u32;
         let mask = t.modifiers.as_ref().map_or(0, |ms| {
             ms.iter()

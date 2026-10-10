@@ -23,9 +23,14 @@ const SYMBOL_KIND_CLASS: i64 = 5;
 /// Dart `ElementLocation.forElement(element)?.encoding`.
 pub(crate) fn element_location(ctx: &Ctx<'_>, element: ElementId) -> Option<String> {
     let library = support::library_of(ctx, element)?;
-    let library_uri = ctx.fragment(ctx.get(library).first_fragment()).source.uri.to_string();
+    let library_uri = ctx
+        .fragment(ctx.get(library).first_fragment())
+        .source
+        .uri
+        .to_string();
     let enclosing = ctx.element_data(element)?.enclosing;
-    let lookup = |e: ElementId| dartr_typesystem::member::lookup_name(ctx, dartr_element::ElemRef::Base(e));
+    let lookup =
+        |e: ElementId| dartr_typesystem::member::lookup_name(ctx, dartr_element::ElemRef::Base(e));
     if enclosing == Some(library.raw()) {
         let top = lookup(element)?;
         return Some(format!("{library_uri};{top}"));
@@ -40,7 +45,10 @@ pub(crate) fn element_location(ctx: &Ctx<'_>, element: ElementId) -> Option<Stri
 }
 
 /// Dart `LibraryElement.children` (the top-level elements).
-pub(crate) fn library_children(ctx: &Ctx<'_>, library: dartr_element::EId<dartr_element::LibraryElement>) -> Vec<ElementId> {
+pub(crate) fn library_children(
+    ctx: &Ctx<'_>,
+    library: dartr_element::EId<dartr_element::LibraryElement>,
+) -> Vec<ElementId> {
     let l = ctx.get(library);
     let mut out: Vec<ElementId> = Vec::new();
     out.extend(l.classes.iter().map(|e| e.raw()));
@@ -64,7 +72,12 @@ pub(crate) fn element_children(ctx: &Ctx<'_>, element: ElementId) -> Vec<Element
     let data = ctx.instance(instance);
     let mut out: Vec<ElementId> = Vec::new();
     if let Some(interface) = element.cast::<dartr_element::InterfaceElement>() {
-        out.extend(ctx.interface(interface).constructors.iter().map(|e| e.raw()));
+        out.extend(
+            ctx.interface(interface)
+                .constructors
+                .iter()
+                .map(|e| e.raw()),
+        );
     }
     out.extend(data.fields.iter().map(|e| e.raw()));
     out.extend(data.getters.iter().map(|e| e.raw()));
@@ -84,7 +97,8 @@ pub(crate) fn locate_element(ctx: &Ctx<'_>, encoded: &str) -> Option<ElementId> 
         _ => return None,
     };
     let library = ctx.world.libraries.get(uri).copied()?;
-    let lookup = |e: ElementId| dartr_typesystem::member::lookup_name(ctx, dartr_element::ElemRef::Base(e));
+    let lookup =
+        |e: ElementId| dartr_typesystem::member::lookup_name(ctx, dartr_element::ElemRef::Base(e));
     let top = library_children(ctx, library)
         .into_iter()
         .find(|&e| lookup(e).as_deref() == Some(top))?;
@@ -97,7 +111,10 @@ pub(crate) fn locate_element(ctx: &Ctx<'_>, encoded: &str) -> Option<ElementId> 
 }
 
 fn is_interface(e: ElementId) -> bool {
-    matches!(e.tag(), Tag::Class | Tag::Enum | Tag::Mixin | Tag::ExtensionType)
+    matches!(
+        e.tag(),
+        Tag::Class | Tag::Enum | Tag::Mixin | Tag::ExtensionType
+    )
 }
 
 /// Dart `TypeHierarchyItem.forElement` as an LSP item.
@@ -246,7 +263,9 @@ impl Server {
             types
                 .into_iter()
                 .filter_map(|t| match *ctx.ty(t) {
-                    TypeKind::Interface { element, .. } => type_hierarchy_item(self, ctx, element.raw()),
+                    TypeKind::Interface { element, .. } => {
+                        type_hierarchy_item(self, ctx, element.raw())
+                    }
                     _ => None,
                 })
                 .collect::<Vec<Value>>()
@@ -263,7 +282,9 @@ impl Server {
         let mut seen = Vec::new();
         let mut items = Vec::new();
         for (sub, _) in matches {
-            let Some(identity) = sub.identity() else { continue };
+            let Some(identity) = sub.identity() else {
+                continue;
+            };
             if seen.contains(&identity) {
                 continue;
             }
@@ -372,7 +393,11 @@ fn call_display_name(ctx: &Ctx<'_>, e: ElementId) -> String {
     match e.tag() {
         Tag::Library => {
             let library = e.cast::<dartr_element::LibraryElement>().unwrap();
-            let path = ctx.fragment(ctx.get(library).first_fragment()).source.path.to_string();
+            let path = ctx
+                .fragment(ctx.get(library).first_fragment())
+                .source
+                .path
+                .to_string();
             path.rsplit('/').next().unwrap_or_default().to_string()
         }
         Tag::Getter => format!("get {}", support::display_name(ctx, e)),
@@ -417,11 +442,14 @@ fn call_item(ctx: &Ctx<'_>, element: ElementId) -> Option<CallItem> {
         }
     };
     let file = crate::navigation::fragment_path(ctx, ctx.element_data(element)?.first_fragment)?;
-    let enclosing = ctx.element_data(element).and_then(|d| d.enclosing).or_else(|| {
-        let first = ctx.element_data(element)?.first_fragment;
-        let enclosing = ctx.fragment_data(first)?.enclosing_fragment?;
-        ctx.fragment_data(enclosing)?.element.try_get().copied()
-    });
+    let enclosing = ctx
+        .element_data(element)
+        .and_then(|d| d.enclosing)
+        .or_else(|| {
+            let first = ctx.element_data(element)?.first_fragment;
+            let enclosing = ctx.fragment_data(first)?.enclosing_fragment?;
+            ctx.fragment_data(enclosing)?.element.try_get().copied()
+        });
     let container_name = enclosing
         .and_then(|e| container_of(ctx, e))
         .map(|c| call_display_name(ctx, c));
@@ -437,7 +465,10 @@ fn call_item(ctx: &Ctx<'_>, element: ElementId) -> Option<CallItem> {
 
 /// Dart `ElementLocator.locate` with the call hierarchy adjustments
 /// (`_getElementOfNode`).
-fn call_element_of_node(unit: &crate::element_locator::Unit<'_, '_>, node: NodeId) -> Option<ElementId> {
+fn call_element_of_node(
+    unit: &crate::element_locator::Unit<'_, '_>,
+    node: NodeId,
+) -> Option<ElementId> {
     let ast = unit.ast;
     let ctx = unit.ctx;
     let parent = ast.parent(node);
@@ -457,7 +488,8 @@ fn call_element_of_node(unit: &crate::element_locator::Unit<'_, '_>, node: NodeI
     }
     let mut element = unit.locate(node)?;
     if element.tag() == Tag::Class && ast.is::<PrimaryConstructorDeclaration>(node) {
-        element = dartr_resolver::scope_context::primary_constructor_of(ctx, element.cast()?)?.raw();
+        element =
+            dartr_resolver::scope_context::primary_constructor_of(ctx, element.cast()?)?.raw();
     }
     if matches!(element.tag(), Tag::Getter | Tag::Setter)
         && dartr_resolver::element_metadata::is_origin_variable(ctx, element)
@@ -534,7 +566,11 @@ impl AstVisitor for OutboundCalls<'_, '_, '_> {
         ast.visit_children(node.raw(), self);
     }
 
-    fn visit_dot_shorthand_property_access(&mut self, ast: &Ast, node: Id<DotShorthandPropertyAccess>) {
+    fn visit_dot_shorthand_property_access(
+        &mut self,
+        ast: &Ast,
+        node: Id<DotShorthandPropertyAccess>,
+    ) {
         self.collect(ast[node].property_name.raw());
         ast.visit_children(node.raw(), self);
     }
@@ -556,7 +592,10 @@ impl AstVisitor for OutboundCalls<'_, '_, '_> {
     }
 
     fn visit_prefixed_identifier(&mut self, ast: &Ast, node: Id<PrefixedIdentifier>) {
-        if !ast.parent(node.raw()).is_some_and(|p| ast.is::<NamedType>(p)) {
+        if !ast
+            .parent(node.raw())
+            .is_some_and(|p| ast.is::<NamedType>(p))
+        {
             self.collect(ast[node].identifier.raw());
         }
         ast.visit_children(node.raw(), self);
@@ -602,7 +641,11 @@ fn range_for_node(ast: &Ast, node: NodeId) -> (u32, u32) {
 
 /// The innermost element whose declaration contains [offset] (Dart
 /// `_getEnclosingFragment(...).element` of a search result).
-fn enclosing_element(unit: &crate::element_locator::Unit<'_, '_>, root: NodeId, offset: u32) -> Option<ElementId> {
+fn enclosing_element(
+    unit: &crate::element_locator::Unit<'_, '_>,
+    root: NodeId,
+    offset: u32,
+) -> Option<ElementId> {
     let ast = unit.ast;
     let mut node = ast.node_covering(root, offset, 0);
     // Only the declarations of fragments that are children of the library
@@ -611,7 +654,9 @@ fn enclosing_element(unit: &crate::element_locator::Unit<'_, '_>, root: NodeId, 
     let member_variable = |n: NodeId| {
         ast.parent(n)
             .and_then(|list| ast.parent(list))
-            .is_some_and(|d| ast.is::<FieldDeclaration>(d) || ast.is::<TopLevelVariableDeclaration>(d))
+            .is_some_and(|d| {
+                ast.is::<FieldDeclaration>(d) || ast.is::<TopLevelVariableDeclaration>(d)
+            })
     };
     while let Some(n) = node {
         if ast.is::<ConstructorDeclaration>(n)
@@ -698,15 +743,22 @@ impl Server {
     /// Dart `toServerItem` and the target element of the item
     /// (`findIncomingCalls`/`findOutgoingCalls`): the node at the name and its
     /// element, when the name still matches.
-    fn call_target(&mut self, params: &Value) -> ErrorOr<Option<(super::nav::ResolvedUnitRef, NodeId, ElementId, CallKind)>> {
+    fn call_target(
+        &mut self,
+        params: &Value,
+    ) -> ErrorOr<Option<(super::nav::ResolvedUnitRef, NodeId, ElementId, CallKind)>> {
         let item = params.get("item").cloned().unwrap_or(Value::Null);
         let uri = item.get("uri").and_then(Value::as_str).unwrap_or_default();
         let path = self.path_of_uri(uri)?;
         let resolved = self.require_resolved_unit(&path)?;
         let line_info = resolved.line_info().clone();
         let read = |key: &str| -> Option<(u32, u32)> {
-            let start = item.pointer(&format!("/{key}/start")).and_then(mapping::read_position)?;
-            let end = item.pointer(&format!("/{key}/end")).and_then(mapping::read_position)?;
+            let start = item
+                .pointer(&format!("/{key}/start"))
+                .and_then(mapping::read_position)?;
+            let end = item
+                .pointer(&format!("/{key}/end"))
+                .and_then(mapping::read_position)?;
             let s = mapping::to_offset(&line_info, start.0, start.1, false).ok()?;
             let e = mapping::to_offset(&line_info, end.0, end.1, false).ok()?;
             Some((s, e.saturating_sub(s)))
@@ -717,8 +769,13 @@ impl Server {
                 "Content was modified since Call Hierarchy node was produced",
             ));
         };
-        let name = item.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
-        let kind = CallKind::from_symbol_kind(item.get("kind").and_then(Value::as_i64).unwrap_or(0));
+        let name = item
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        let kind =
+            CallKind::from_symbol_kind(item.get("kind").and_then(Value::as_i64).unwrap_or(0));
         let found = {
             let sink = NoopSink;
             let ctx = resolved.ctx(&sink);
@@ -749,7 +806,14 @@ impl Server {
                     .constructors
                     .iter()
                     .map(|c| c.raw())
-                    .find(|&c| support::display_name(&ctx, c).is_empty() || ctx.element_data(c).and_then(|d| d.name).map(|n| ctx.name_str(n) == "new").unwrap_or(false))
+                    .find(|&c| {
+                        support::display_name(&ctx, c).is_empty()
+                            || ctx
+                                .element_data(c)
+                                .and_then(|d| d.name)
+                                .map(|n| ctx.name_str(n) == "new")
+                                .unwrap_or(false)
+                    })
             };
             match unnamed {
                 Some(c) => element = c,
@@ -766,7 +830,8 @@ impl Server {
         };
         let matches = self.element_references(&target);
         // Group by container (Dart: a map by element identity).
-        let mut groups: Vec<((usize, crate::index::ElementKey), CallItem, Vec<(u32, u32)>)> = Vec::new();
+        let mut groups: Vec<((usize, crate::index::ElementKey), CallItem, Vec<(u32, u32)>)> =
+            Vec::new();
         for m in matches {
             let Ok(r) = self.require_resolved_unit_in(&m.path, Some(m.context)) else {
                 continue;
@@ -806,17 +871,25 @@ impl Server {
             match groups.iter_mut().find(|g| g.0 == identity) {
                 Some(g) => g.2.push(range),
                 None => {
-                    let Some(item) = call_item(&ctx, container) else { continue };
+                    let Some(item) = call_item(&ctx, container) else {
+                        continue;
+                    };
                     groups.push((identity, item, vec![range]));
                 }
             }
         }
         let mut out = Vec::new();
         for (_, item, ranges) in groups {
-            let Some(lines) = self.line_info_of(&item.file) else { continue };
-            let Some(from) = self.call_item_json(&item) else { continue };
-            let from_ranges: Vec<Value> =
-                ranges.iter().map(|r| mapping::to_range(&lines, r.0, r.1)).collect();
+            let Some(lines) = self.line_info_of(&item.file) else {
+                continue;
+            };
+            let Some(from) = self.call_item_json(&item) else {
+                continue;
+            };
+            let from_ranges: Vec<Value> = ranges
+                .iter()
+                .map(|r| mapping::to_range(&lines, r.0, r.1))
+                .collect();
             out.push(json!({"from": from, "fromRanges": from_ranges}));
         }
         Ok(Value::Array(out))
@@ -857,12 +930,16 @@ impl Server {
         ast.accept(node, &mut visitor);
         let mut groups: Vec<(ElementId, CallItem, Vec<(u32, u32)>)> = Vec::new();
         for n in visitor.nodes {
-            let Some(target) = call_element_of_node(&u, n) else { continue };
+            let Some(target) = call_element_of_node(&u, n) else {
+                continue;
+            };
             let range = range_for_node(ast, n);
             match groups.iter_mut().find(|g| g.0 == target) {
                 Some(g) => g.2.push(range),
                 None => {
-                    let Some(item) = call_item(&ctx, target) else { continue };
+                    let Some(item) = call_item(&ctx, target) else {
+                        continue;
+                    };
                     groups.push((target, item, vec![range]));
                 }
             }
@@ -872,7 +949,9 @@ impl Server {
             if self.line_info_of(&item.file).is_none() {
                 continue;
             }
-            let Some(to) = self.call_item_json(&item) else { continue };
+            let Some(to) = self.call_item_json(&item) else {
+                continue;
+            };
             let from_ranges: Vec<Value> = ranges
                 .iter()
                 .map(|r| mapping::to_range(&local_lines, r.0, r.1))

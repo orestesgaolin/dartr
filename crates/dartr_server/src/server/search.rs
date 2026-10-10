@@ -551,7 +551,9 @@ impl Server {
                     }
                     node = ast.parent(n);
                 }
-                let Some(alias_node) = alias_node else { continue };
+                let Some(alias_node) = alias_node else {
+                    continue;
+                };
                 let sink = NoopSink;
                 let ctx = resolved.ctx(&sink);
                 let Some(alias) = support::declared_element(&ctx, &unit.tables, alias_node) else {
@@ -572,7 +574,9 @@ impl Server {
                     unit: resolved.index,
                     id: alias,
                 };
-                let Some(identity) = alias.identity() else { continue };
+                let Some(identity) = alias.identity() else {
+                    continue;
+                };
                 if seen.contains(&identity) {
                     continue;
                 }
@@ -860,12 +864,18 @@ impl Server {
     /// Dart `directSubtypeReferences` over all drivers: the classes whose
     /// declarations extend, mix in, implement or constrain [class].
     fn direct_subtypes(&mut self, class: &SElem) -> Vec<SElem> {
-        self.direct_subtypes_with_kinds(class).into_iter().map(|(e, _)| e).collect()
+        self.direct_subtypes_with_kinds(class)
+            .into_iter()
+            .map(|(e, _)| e)
+            .collect()
     }
 
     /// Dart `searchSubtypes`: the matches of [direct_subtypes] with the
     /// relation of each (extends, implements, with, on).
-    pub(crate) fn direct_subtypes_with_kinds(&mut self, class: &SElem) -> Vec<(SElem, RelationKind)> {
+    pub(crate) fn direct_subtypes_with_kinds(
+        &mut self,
+        class: &SElem,
+    ) -> Vec<(SElem, RelationKind)> {
         let matches = self.search_index(class, SUBTYPES);
         let mut out = Vec::new();
         for m in matches {
