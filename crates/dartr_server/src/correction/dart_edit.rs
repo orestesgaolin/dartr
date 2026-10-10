@@ -43,22 +43,22 @@ fn enclosing_elements(
     let mut class = None;
     let mut executable = None;
     let mut node = ast.node_covering(unit.unit, b.offset, 0);
+    // A node that ends at the offset does not enclose it.
     while let Some(n) = node {
-        if executable.is_none()
-            && (ast.is::<MethodDeclaration>(n)
-                || ast.is::<FunctionDeclaration>(n)
-                || ast.is::<ConstructorDeclaration>(n))
+        if ast.end(n) != b.offset {
+            break;
+        }
+        node = ast.parent(n);
+    }
+    // The outermost declarations win (Dart assigns on the way up).
+    while let Some(n) = node {
+        if ast.is::<ClassDeclaration>(n) {
+            class = locator.declared_element(n);
+        } else if ast.is::<ConstructorDeclaration>(n)
+            || ast.is::<MethodDeclaration>(n)
+            || ast.is::<FunctionDeclaration>(n)
         {
             executable = locator.declared_element(n);
-        }
-        if class.is_none()
-            && (ast.is::<ClassDeclaration>(n)
-                || ast.is::<MixinDeclaration>(n)
-                || ast.is::<EnumDeclaration>(n)
-                || ast.is::<ExtensionDeclaration>(n)
-                || ast.is::<ExtensionTypeDeclaration>(n))
-        {
-            class = locator.declared_element(n);
         }
         node = ast.parent(n);
     }
@@ -490,17 +490,28 @@ impl EditBuilder<'_, '_, '_> {
                         }
                         _ => {}
                     }
+                    // Dart `writeFormalParameter` (no default values, no
+                    // generated names).
+                    if p.covariant {
+                        self.write("covariant ");
+                    }
                     if p.kind == K::NamedRequired {
                         self.write("required ");
                     }
-                    let had_type =
-                        self.write_type_if_can(ctx, p.ty, &scope, true, write_type_arguments, None);
-                    if matches!(p.kind, K::Named | K::NamedRequired) {
-                        if let Some(n) = p.name {
+                    let had_type = self.write_type_if_can(
+                        ctx,
+                        p.ty,
+                        &scope,
+                        false,
+                        write_type_arguments,
+                        None,
+                    );
+                    if let Some(n) = p.name {
+                        let n = ctx.name_str(n).to_string();
+                        if !n.is_empty() {
                             if had_type {
                                 self.write(" ");
                             }
-                            let n = ctx.name_str(n).to_string();
                             self.write(&n);
                         }
                     }

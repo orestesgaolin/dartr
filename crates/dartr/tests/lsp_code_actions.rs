@@ -304,13 +304,6 @@ fn run_both(
     compare(label, &requests, &dart_results, &dartr_results)
 }
 
-/// The fix kinds whose actions must be identical on the fixture project.
-const IDENTICAL: &[&str] = &[
-    "dart.fix.ignore.analysis",
-    "dart.fix.ignore.file",
-    "dart.fix.ignore.line",
-];
-
 #[test]
 fn code_actions_match_dart_language_server() {
     if !dart_available() {
@@ -330,15 +323,20 @@ fn code_actions_match_dart_language_server() {
         files.push(OpenFile { path, content });
     }
     let (tally, problems) = run_both("fixes_project", &root, &files);
+    // Every action that dartr returns must be identical (dartr does not
+    // implement every producer: missing actions are allowed). The source
+    // actions differ by `Fix All` (the `dart.edit.fixAll` command is not
+    // implemented).
     let mut failures = Vec::new();
-    for id in IDENTICAL {
-        if let Some(t) = tally.get(*id) {
-            if t.differing + t.missing + t.extra > 0 {
-                failures.push(format!(
-                    "{id}: {} differing, {} missing, {} extra",
-                    t.differing, t.missing, t.extra
-                ));
-            }
+    for (id, t) in &tally {
+        if id == "source actions" {
+            continue;
+        }
+        if t.differing + t.extra > 0 {
+            failures.push(format!(
+                "{id}: {} differing, {} extra",
+                t.differing, t.extra
+            ));
         }
     }
     if !failures.is_empty() {

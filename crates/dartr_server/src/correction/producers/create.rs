@@ -65,7 +65,11 @@ pub fn infer_undefined_expression_type(c: &ProducerContext<'_>, expression: Node
     let Some(parent) = ast.parent(expression) else {
         return Inferred::Unknown;
     };
-    let opt = |t: Option<TypeId>| t.map(Inferred::Type).unwrap_or(Inferred::Unknown);
+    let opt = |t: Option<TypeId>| match t {
+        Some(t) if matches!(ctx.ty(t), TypeKind::Invalid) => Inferred::Invalid,
+        Some(t) => Inferred::Type(t),
+        None => Inferred::Unknown,
+    };
     if let Some(n) = ast.cast::<NamedArgument>(parent) {
         if ast[n].argument_expression.raw() == expression {
             return opt(corresponding_parameter_type(c, parent)
@@ -93,6 +97,11 @@ pub fn infer_undefined_expression_type(c: &ProducerContext<'_>, expression: Node
             return Inferred::Type(bool_type(ctx));
         }
         return opt(corresponding_parameter_type(c, parent));
+    }
+    if ast.is::<ExpressionFunctionBody>(parent) || ast.is::<ReturnStatement>(parent) {
+        if let Some(t) = executable_return_type(c, expression) {
+            return opt(Some(t));
+        }
     }
     if let Some(v) = ast.cast::<VariableDeclaration>(parent) {
         if ast[v].initializer.map(|i| i.raw()) == Some(expression) {
@@ -161,6 +170,40 @@ pub fn infer_undefined_expression_type(c: &ProducerContext<'_>, expression: Node
         }
     }
     Inferred::Unknown
+}
+
+/// Dart `_executableReturnType`: the return type of the closure or of the
+/// executable that contains [expression].
+fn executable_return_type(c: &ProducerContext<'_>, expression: NodeId) -> Option<TypeId> {
+    let ast = c.ast;
+    let ctx = c.ctx;
+    let mut node = ast.parent(expression);
+    while let Some(n) = node {
+        if let Some(f) = ast.cast::<FunctionExpression>(n) {
+            let is_closure = ast
+                .parent(f)
+                .is_none_or(|p| !ast.is::<FunctionDeclaration>(p));
+            if is_closure {
+                let ty = static_type(c, n)?;
+                return match *ctx.ty(ty) {
+                    TypeKind::Function(data) => Some(data.ret),
+                    _ => None,
+                };
+            }
+        }
+        if ast.is::<MethodDeclaration>(n)
+            || ast.is::<FunctionDeclaration>(n)
+            || ast.is::<ConstructorDeclaration>(n)
+        {
+            let element = c.locator().declared_element(n)?;
+            return Some(dartr_typesystem::member::return_type(
+                ctx,
+                ElemRef::Base(element),
+            ));
+        }
+        node = ast.parent(n);
+    }
+    None
 }
 
 /// An argument for the parameters of a new method (Dart
@@ -382,6 +425,8 @@ pub fn argument_infos(c: &ProducerContext<'_>, list: Id<ArgumentList>) -> Vec<Ar
     infos
 }
 
+/// Dart `type.nullabilitySuffix == NullabilitySuffix.none` (also for
+/// `dynamic`, `void` and invalid types).
 fn nullability_none(ctx: &Ctx<'_>, ty: TypeId) -> bool {
     match *ctx.ty(ty) {
         TypeKind::Interface { nullability, .. }
@@ -389,7 +434,7 @@ fn nullability_none(ctx: &Ctx<'_>, ty: TypeId) -> bool {
         | TypeKind::TypeParameter { nullability, .. }
         | TypeKind::Never(nullability) => nullability == Nullability::None,
         TypeKind::Function(f) => f.nullability == Nullability::None,
-        _ => false,
+        _ => true,
     }
 }
 

@@ -902,7 +902,14 @@ impl Server {
             .get("autoTriggered")
             .and_then(Value::as_bool)
             .unwrap_or(false);
-        let file = if path.ends_with(".dart") && self.is_analyzed(&path) {
+        // Dart `getAnalysisSession(path)`: the context whose root contains
+        // the file (also an excluded file).
+        let in_context = self.collection.as_ref().is_some_and(|c| {
+            c.contexts
+                .iter()
+                .any(|x| dartr_project::paths::is_within(&x.root.root, &path))
+        });
+        let file = if path.ends_with(".dart") && in_context {
             self.parsed_unit(&path)
         } else {
             None
