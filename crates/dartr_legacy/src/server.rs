@@ -2677,7 +2677,6 @@ impl<W: Write> Server<W> {
             specify_types: has("always_specify_types"),
             make_locals_final: has("prefer_final_locals"),
             quote,
-            lint_quote,
         }
     }
 
