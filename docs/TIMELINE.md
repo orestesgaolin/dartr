@@ -75,6 +75,7 @@ at each merge; the final process report is written from it.
 | 10-10 02:40 | 4b3741a | directive checks (URI_DOES_NOT_EXIST etc.), shouldIgnoreUndefined | Opus | analyzer-9.0.0: 27,067 matched, 0 extra; flutter and flutter_tools exact |
 | 10-10 07:10 | 27e128d | lint batch A fixed (82/83 rules exact), resolved lints in `dartr analyze`, doc-import scope | Opus (fixing Codex's branch) | analyzer-9.0.0: **27,272/27,278 matched**, 1 extra; visible-app only plugin lints missing; flutter, flutter_tools exact |
 | 10-10 08:40 | 1235fe5 | analyzer plugins in `dartr analyze` (dartr_plugins + Dart bridge) | Opus | **visible-app 20/20 exact vs `dart analyze`** (incl. jaspr_lints plugin), 5,574 tests |
+| 10-10 07:20 | 260fd05 | lint batch B (82 rules), unnecessary_ignore / removed_lint_use / replaced_lint_use | Opus | analyzer-9.0.0: **27,278/27,278 matched**, 5 extra (4 unnecessary_ignore, 1 analyzer_public_api); visible-app 20/20; flutter, flutter_tools exact |
 
 ## Incidents and lessons
 
