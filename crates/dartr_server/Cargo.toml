@@ -20,6 +20,7 @@ dartr_element.workspace = true
 dartr_resolver.workspace = true
 dartr_typesystem.workspace = true
 dartr_driver.workspace = true
+dartr_yaml.workspace = true
 indexmap.workspace = true
 
 [dev-dependencies]
