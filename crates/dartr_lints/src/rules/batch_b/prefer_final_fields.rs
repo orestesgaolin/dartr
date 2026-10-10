@@ -93,6 +93,9 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         }
         stack.extend(c.ast.children(n).into_iter().rev());
     }
+    if fields.is_empty() && fields_from_parameters.is_empty() {
+        return;
+    }
     // Dart `_FieldMutationFinder` over all units of the library.
     for index in 0..c.resolved_units.len() {
         let Some(unit) = c.resolved_unit(index) else {

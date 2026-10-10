@@ -291,9 +291,6 @@ fn visit(
     is_interesting: IsInteresting,
     code: &'static dartr_diagnostics::DiagnosticCode,
 ) {
-    if is_await_not_required(context, expression) {
-        return;
-    }
     let Some(resolved) = context.resolved else {
         return;
     };
@@ -310,6 +307,7 @@ fn visit(
     if is_future
         && is_interesting(context, expression)
         && context.ast.kind(expression) != NodeKind::AssignmentExpression
+        && !is_await_not_required(context, expression)
     {
         report(context, expression, out, code);
     }

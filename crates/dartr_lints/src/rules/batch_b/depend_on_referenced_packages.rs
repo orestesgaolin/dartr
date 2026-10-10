@@ -5,7 +5,7 @@ use dartr_diagnostics::{Diagnostic, diag};
 use dartr_project::yaml::{NodeKind as YamlNodeKind, Scalar, YamlNode};
 
 pub fn register(r: &mut RuleVisitorRegistry, c: &LinterContext<'_>) {
-    if available_deps(c).is_some() {
+    if pubspec_deps(c).is_some() {
         r.add(
             NodeKind::ImportDirective,
             "depend_on_referenced_packages",
@@ -34,9 +34,13 @@ fn process_dependencies(node: &YamlNode) -> Option<Vec<String>> {
     Some(entries.iter().filter_map(|(k, _)| scalar_text(k)).collect())
 }
 
-fn available_deps(c: &LinterContext<'_>) -> Option<Vec<String>> {
-    let root = c.pub_package_root()?;
-    let pubspec_path = root.join("pubspec.yaml");
+struct PubspecDeps {
+    name: String,
+    dependencies: Vec<String>,
+    dev_dependencies: Vec<String>,
+}
+
+fn parse_pubspec_deps(pubspec_path: &std::path::Path) -> Option<std::sync::Arc<PubspecDeps>> {
     let content = dartr_project::fs::read_string_strict(pubspec_path.to_str()?)?;
     let yaml = dartr_project::yaml::load_yaml_node(&content).ok()?;
     let YamlNodeKind::Map(entries) = &yaml.kind else {
@@ -56,17 +60,31 @@ fn available_deps(c: &LinterContext<'_>) -> Option<Vec<String>> {
             _ => {}
         }
     }
-    let name = name?;
-    let mut available = vec![name];
-    if let Some(deps) = dependencies {
-        available.extend(deps);
+    Some(std::sync::Arc::new(PubspecDeps {
+        name: name?,
+        dependencies: dependencies.unwrap_or_default(),
+        dev_dependencies: dev_dependencies.unwrap_or_default(),
+    }))
+}
+
+fn pubspec_deps(c: &LinterContext<'_>) -> Option<std::sync::Arc<PubspecDeps>> {
+    static CACHE: std::sync::OnceLock<
+        std::sync::RwLock<
+            std::collections::HashMap<std::path::PathBuf, Option<std::sync::Arc<PubspecDeps>>>,
+        >,
+    > = std::sync::OnceLock::new();
+    let root = c.pub_package_root()?;
+    let pubspec_path = root.join("pubspec.yaml");
+    if !dartr_project::fs::has_overlays() {
+        let cache = CACHE.get_or_init(Default::default);
+        if let Some(cached) = cache.read().unwrap().get(&pubspec_path) {
+            return cached.clone();
+        }
+        let parsed = parse_pubspec_deps(&pubspec_path);
+        cache.write().unwrap().insert(pubspec_path, parsed.clone());
+        return parsed;
     }
-    if !c.is_in_public_dir()
-        && let Some(dev_deps) = dev_dependencies
-    {
-        available.extend(dev_deps);
-    }
-    Some(available)
+    parse_pubspec_deps(&pubspec_path)
 }
 
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
@@ -89,10 +107,13 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     if package_name == "flutter_gen" {
         return;
     }
-    let Some(deps) = available_deps(c) else {
+    let Some(deps) = pubspec_deps(c) else {
         return;
     };
-    if deps.iter().any(|d| d == package_name) {
+    if deps.name == package_name
+        || deps.dependencies.iter().any(|d| d == package_name)
+        || (!c.is_in_public_dir() && deps.dev_dependencies.iter().any(|d| d == package_name))
+    {
         return;
     }
     c.report_node(

@@ -10,7 +10,10 @@
 
 use std::collections::HashMap;
 use std::fs;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{OnceLock, RwLock};
+
+static HAS_OVERLAYS: AtomicBool = AtomicBool::new(false);
 
 /// Overlays of the language server (`OverlayResourceProvider`): the content
 /// of open documents, for the files that [read_string], [read_string_strict]
@@ -20,6 +23,12 @@ fn overlays() -> &'static RwLock<HashMap<String, String>> {
     OVERLAYS.get_or_init(Default::default)
 }
 
+/// Returns `true` if any in-memory file overlays are currently active.
+#[inline]
+pub fn has_overlays() -> bool {
+    HAS_OVERLAYS.load(Ordering::Acquire)
+}
+
 /// Sets (or, with `None`, removes) the overlay of [path].
 pub fn set_overlay(path: &str, content: Option<String>) {
     let mut map = overlays().write().unwrap();
@@ -27,9 +36,13 @@ pub fn set_overlay(path: &str, content: Option<String>) {
         Some(content) => map.insert(path.to_string(), content),
         None => map.remove(path),
     };
+    HAS_OVERLAYS.store(!map.is_empty(), Ordering::Release);
 }
 
 fn overlay(path: &str) -> Option<String> {
+    if !has_overlays() {
+        return None;
+    }
     let map = overlays().read().unwrap();
     if map.is_empty() {
         return None;
