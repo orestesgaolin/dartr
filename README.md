@@ -139,12 +139,16 @@ cold every time.
 config:
   xyChart:
     height: 300
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#0175C2, #DEA584"
 ---
 xychart-beta
     title "Large projects: wall time (s), lower is better"
-    x-axis ["app 1.56M lines: dart", "app: dartr", "flutter: dart", "flutter: dartr"]
+    x-axis ["app: dart", "app: dartr", "flutter: dart", "flutter: dartr"]
     y-axis "seconds" 0 --> 80
-    bar [76.8, 22.1, 15.4, 6.2]
+    bar [76.8, 0, 15.4, 0]
+    bar [0, 22.1, 0, 6.2]
 ```
 
 ```mermaid
@@ -152,13 +156,20 @@ xychart-beta
 config:
   xyChart:
     height: 300
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#0175C2, #DEA584"
 ---
 xychart-beta
     title "Smaller packages: wall time (s), lower is better"
     x-axis ["analyzer: dart", "analyzer: dartr", "flutter_tools: dart", "flutter_tools: dartr"]
     y-axis "seconds" 0 --> 4
-    bar [2.5, 1.9, 2.5, 3.5]
+    bar [2.5, 0, 2.5, 0]
+    bar [0, 1.9, 0, 3.5]
 ```
+
+Blue: `dart analyze`. Orange: `dartr analyze`. "app" is a 1.56 million line Flutter
+application (pub workspace with analyzer plugins).
 
 | project | Dart lines | `dart analyze` | `dartr analyze` |
 |---|---|---|---|
