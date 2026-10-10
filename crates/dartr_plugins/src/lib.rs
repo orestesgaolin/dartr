@@ -68,10 +68,15 @@ pub fn plugin_jobs(collection: &AnalysisContextCollection) -> Vec<PluginJob> {
         if options.plugins.configurations.is_empty() {
             continue;
         }
-        let sdk_path = context
+        // Dart `PluginWatcher._getSdkPath` (the folder above the `lib`
+        // folder of `dart:core`). The plugin builds a folder SDK from it
+        // (it reads `<sdk>/version`), so this is the folder SDK, also for a
+        // Flutter context whose `dart:core` comes from the `sky_engine`
+        // embedder.
+        let sdk_path = collection
             .sdk
             .as_ref()
-            .or(collection.sdk.as_ref())
+            .or(context.sdk.as_ref())
             .map(|s| s.path().to_string())
             .unwrap_or_default();
         jobs.push(PluginJob {
@@ -339,6 +344,36 @@ struct Session {
     exited: bool,
 }
 
+/// Appends [line] to the file `$DARTR_PLUGIN_LOG` (the plugin messages,
+/// for debugging; stderr may be locked by the caller).
+fn debug_log(line: &str) {
+    if let Some(path) = std::env::var_os("DARTR_PLUGIN_LOG")
+        && let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+    {
+        let elapsed = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        let text: String = line.chars().take(400).collect();
+        let _ = writeln!(file, "{elapsed} {text}");
+    }
+}
+
+/// The longest time to wait for the plugin to start analyzing after
+/// `analysis.setAnalysisRoots` (a plugin without files to analyze never
+/// reports `isAnalyzing: true`). The first run of a JIT plugin compiles the
+/// analyzer, which takes seconds.
+fn idle_start_timeout() -> Duration {
+    let seconds = std::env::var("DARTR_PLUGIN_START_TIMEOUT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(60);
+    Duration::from_secs(seconds)
+}
+
 /// The longest time to wait for one plugin answer or status change.
 fn timeout() -> Duration {
     let seconds = std::env::var("DARTR_PLUGIN_TIMEOUT")
@@ -413,6 +448,7 @@ impl Session {
         }
         match self.incoming.recv_timeout(wait) {
             Ok(Incoming::Message(v)) => {
+                debug_log(&format!("<== {v}"));
                 if v.get("bridge").and_then(Value::as_str) == Some("exit") {
                     self.exited = true;
                     return Ok(None);
@@ -431,6 +467,7 @@ impl Session {
         let id = self.next_id.to_string();
         self.next_id += 1;
         let request = json!({"id": id, "method": method, "params": params});
+        debug_log(&format!("==> {request}"));
         if let Some(stdin) = &mut self.stdin {
             let _ = writeln!(stdin, "{request}");
             let _ = stdin.flush();
@@ -571,7 +608,7 @@ impl Session {
             let wait = if seen_busy {
                 timeout()
             } else {
-                Duration::from_secs(5).saturating_sub(started.elapsed())
+                idle_start_timeout().saturating_sub(started.elapsed())
             };
             if !seen_busy && wait.is_zero() {
                 break;
