@@ -415,11 +415,9 @@ fn set_extension_identifier_type(rv: &mut ResolverVisitor<'_>, node: Id<SimpleId
 
 /// Dart `libraryFragment.shouldIgnoreUndefinedIdentifier(node)` for a
 /// simple identifier: the name is shown by an import of a library that does
-/// not exist. STUB: the import state is not checked yet (wave D,
-/// diagnostics); nothing is ignored.
+/// not exist.
 fn should_ignore_undefined_identifier(rv: &ResolverVisitor<'_>, name: &str) -> bool {
-    let _ = (rv, name);
-    false
+    crate::method_invocation_resolver::should_ignore_undefined(rv, None, name)
 }
 
 /// `diagnostic.at(node)`.

@@ -5,6 +5,7 @@
 
 pub mod analysis;
 pub mod api_signature;
+pub mod directives;
 pub mod driver;
 pub mod file_state;
 pub mod library_graph;

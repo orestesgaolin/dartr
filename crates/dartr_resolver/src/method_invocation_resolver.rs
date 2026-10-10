@@ -1191,12 +1191,19 @@ fn report_use_of_void_type(rv: &mut ResolverVisitor<'_>, error_node: NodeId) {
 }
 
 /// Dart `libraryFragment.shouldIgnoreUndefined(prefix:, name:)`: the name
-/// may come from an import of a library that does not exist. STUB: the
-/// import state is not checked yet (as in `simple_identifier_resolver`);
-/// nothing is ignored.
-fn should_ignore_undefined(rv: &ResolverVisitor<'_>, prefix: Option<&str>, name: &str) -> bool {
-    let _ = (rv, prefix, name);
-    false
+/// may come from an import of a library that does not exist.
+pub(crate) fn should_ignore_undefined(
+    rv: &ResolverVisitor<'_>,
+    prefix: Option<&str>,
+    name: &str,
+) -> bool {
+    crate::named_type_resolver::should_ignore_undefined(
+        &rv.ctx,
+        rv.unit.scopes,
+        rv.unit.fragment,
+        prefix,
+        name,
+    )
 }
 
 // ------------------------------------------------------------------ super context

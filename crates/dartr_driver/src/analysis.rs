@@ -141,6 +141,8 @@ impl Driver {
             features: &features,
             req: &sink,
         };
+        let mut directive_diagnostics =
+            crate::directives::directive_diagnostics(&self.fs, &ctx, library, file);
         let mut units = Vec::new();
         for fragment in library_fragments(&ctx, library) {
             let source = &ctx.fragment(fragment).source;
@@ -153,6 +155,9 @@ impl Driver {
                 uri: f.uri_str.clone(),
                 parsed: f.c().parsed.clone(),
                 fragment,
+                directive_diagnostics: directive_diagnostics
+                    .shift_remove(&unit_file)
+                    .unwrap_or_default(),
             });
         }
         Some((library, units))

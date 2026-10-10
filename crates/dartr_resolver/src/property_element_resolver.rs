@@ -1255,9 +1255,13 @@ fn resolve_target_prefix_element(
 
     if (has_read && read_element.is_none()) || (has_write && write_element.is_none()) {
         let prefix_name = element_name(rv, target.raw());
-        // Dart `libraryFragment.shouldIgnoreUndefined(prefix:, name:)`: the
-        // import state is not checked yet (wave D).
-        if !for_annotation {
+        if !for_annotation
+            && !crate::method_invocation_resolver::should_ignore_undefined(
+                rv,
+                Some(&prefix_name),
+                &name,
+            )
+        {
             let d = rv.at(
                 diag::undefined_prefixed_name(&name, &prefix_name),
                 identifier,
