@@ -436,6 +436,19 @@ impl Server {
                     reference_names.push(class_name);
                 }
                 library_files.push(library_files_of(class));
+                // Dart `_getTypeAliasesOfInterface`: the type aliases of the
+                // class can denote the unnamed constructor too.
+                for alias in self.type_aliases_of_interface(&element.same(class)) {
+                    if let Some(name) = alias.with(|ctx| {
+                        ctx.element_data(alias.id)
+                            .and_then(|d| d.name)
+                            .map(|n| ctx.name_str(n).to_string())
+                    }) && !reference_names.contains(&name)
+                    {
+                        reference_names.push(name);
+                    }
+                    library_files.push(library_file_paths(&alias, alias.id));
+                }
             }
         }
         let mut results = Vec::new();
@@ -510,6 +523,65 @@ impl Server {
             matches.extend(self.search_references(e));
         }
         matches
+    }
+
+    /// Dart `_getTypeAliasesOfInterface`: the type aliases whose aliased
+    /// type is [interface] (also through other aliases), found from the
+    /// references to the interface and to each alias.
+    fn type_aliases_of_interface(&mut self, interface: &SElem) -> Vec<SElem> {
+        let Some(interface_key) = interface.key() else {
+            return Vec::new();
+        };
+        let mut result: Vec<SElem> = Vec::new();
+        let mut seen: Vec<(usize, ElementKey)> = interface.identity().into_iter().collect();
+        let mut pending = vec![interface.clone()];
+        while let Some(element) = pending.pop() {
+            for m in self.search_index(&element, REFERENCES) {
+                let Ok(resolved) = self.require_resolved_unit_in(&m.path, Some(m.context)) else {
+                    continue;
+                };
+                let unit = resolved.unit();
+                let ast = &unit.ast;
+                let mut node = ast.node_covering(unit.unit.raw(), m.offset, 0);
+                let mut alias_node = None;
+                while let Some(n) = node {
+                    if ast.is::<GenericTypeAlias>(n) || ast.is::<FunctionTypeAlias>(n) {
+                        alias_node = Some(n);
+                        break;
+                    }
+                    node = ast.parent(n);
+                }
+                let Some(alias_node) = alias_node else { continue };
+                let sink = NoopSink;
+                let ctx = resolved.ctx(&sink);
+                let Some(alias) = support::declared_element(&ctx, &unit.tables, alias_node) else {
+                    continue;
+                };
+                let Some(alias_eid) = alias.cast::<dartr_element::TypeAliasElement>() else {
+                    continue;
+                };
+                let aliases_interface = ctx.get(alias_eid).aliased_type.get().is_some_and(|t| {
+                    matches!(*ctx.ty(t), TypeKind::Interface { element, .. }
+                        if crate::index::element_key(&ctx, element.raw()).as_ref() == Some(&interface_key))
+                });
+                if !aliases_interface {
+                    continue;
+                }
+                let alias = SElem {
+                    lib: resolved.library.clone(),
+                    unit: resolved.index,
+                    id: alias,
+                };
+                let Some(identity) = alias.identity() else { continue };
+                if seen.contains(&identity) {
+                    continue;
+                }
+                seen.push(identity);
+                result.push(alias.clone());
+                pending.push(alias);
+            }
+        }
+        result
     }
 
     /// Dart `Search.references(element)` over all drivers.

@@ -223,6 +223,36 @@ pub fn invocation_substitution(unit: &Unit<'_, '_>, argument_list: NodeId) -> (b
     (matches!(element, Some(ElemRef::Member(_))), has_type_arguments)
 }
 
+/// The parameter of the static invoke type of the invocation for
+/// [argument] (Dart `correspondingParameter` when the invoked function has
+/// no declaration with parameters, such as a function-typed variable): the
+/// positional parameter at the index of the argument, or the named
+/// parameter with its name.
+pub fn invoke_type_parameter(unit: &Unit<'_, '_>, argument: NodeId) -> Option<dartr_element::FnParam> {
+    let ast = unit.ast;
+    let ctx = unit.ctx;
+    let list = ast.parent(argument).and_then(|l| ast.cast::<ArgumentList>(l))?;
+    let invocation = ast.parent(list.raw())?;
+    let invoke_type = unit.tables.invoke_type.get(invocation).copied()?;
+    let TypeKind::Function(f) = *ctx.ty(invoke_type) else {
+        return None;
+    };
+    let params = ctx.list(f.params);
+    if let Some(named) = ast.cast::<NamedArgument>(argument) {
+        let name = ast.tokens.lexeme(ast[named].name);
+        return params
+            .iter()
+            .find(|p| p.kind.is_named() && p.name.is_some_and(|n| ctx.name_str(n) == name))
+            .copied();
+    }
+    let index = ast
+        .list_raw(ast[list].arguments)
+        .iter()
+        .filter(|a| !ast.is::<NamedArgument>(**a))
+        .position(|a| *a == argument)?;
+    params.iter().filter(|p| p.kind.is_positional()).nth(index).copied()
+}
+
 /// Dart `Argument.correspondingParameter`.
 fn corresponding_parameter(unit: &Unit<'_, '_>, argument: NodeId) -> Option<ElemRef> {
     let ast = unit.ast;

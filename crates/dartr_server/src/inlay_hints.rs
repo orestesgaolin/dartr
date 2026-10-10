@@ -328,6 +328,24 @@ impl AstVisitor for Computer<'_, '_, '_> {
             if let Some(p) = self.unit.tables.param_element.get(argument).copied() {
                 let offset = ast.offset(argument);
                 self.parameter_name(offset, p, is_literal(ast, argument), substituted);
+            } else if let Some(p) = crate::signature::invoke_type_parameter(self.unit, argument) {
+                // A parameter of a function type without a declaration (a
+                // new element in Dart, without a location).
+                let name = p.name.map(|n| self.ctx().name_str(n).to_string()).unwrap_or_default();
+                if !name.is_empty() {
+                    let hint = json!({
+                        "label": [Self::part(format!("{name}:"), None)],
+                        "position": self.position(ast.offset(argument)),
+                        "kind": PARAMETER,
+                        "paddingRight": true,
+                    });
+                    let kind = if is_literal(ast, argument) {
+                        Kind::ParameterNameLiteral
+                    } else {
+                        Kind::ParameterNameNonLiteral
+                    };
+                    self.add(hint, kind);
+                }
             }
         }
         ast.visit_children(node.raw(), self);

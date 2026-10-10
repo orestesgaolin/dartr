@@ -1537,7 +1537,18 @@ impl AstVisitor for Computer<'_, '_, '_> {
                 };
                 self.token(Some(ast[node].name), h, m(&["label"]));
             }
-            None => self.identifier(node.raw(), ast[node].name, None),
+            None => match crate::signature::invoke_type_parameter(self.unit, node.raw()) {
+                // A parameter of a function type without a declaration.
+                Some(p) => {
+                    let h = if self.is_dynamic(p.ty) {
+                        H::DYNAMIC_PARAMETER_REFERENCE
+                    } else {
+                        H::PARAMETER_REFERENCE
+                    };
+                    self.token(Some(ast[node].name), h, m(&["label"]));
+                }
+                None => self.identifier(node.raw(), ast[node].name, None),
+            },
         }
         ast.accept(ast[node].argument_expression.raw(), self);
     }
