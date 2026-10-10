@@ -20,7 +20,11 @@ pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
     );
 }
 
-fn types_are_unrelated(context: &LinterContext<'_>, left: TypeId, right: TypeId) -> bool {
+pub(crate) fn types_are_unrelated(
+    context: &LinterContext<'_>,
+    left: TypeId,
+    right: TypeId,
+) -> bool {
     types_are_unrelated_inner(context, left, right, &mut IndexSet::new())
 }
 

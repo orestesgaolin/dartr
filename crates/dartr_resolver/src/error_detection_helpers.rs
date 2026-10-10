@@ -720,8 +720,12 @@ impl<'a> ResolverVisitor<'a> {
             return;
         };
         if !flow.is_reachable() {
-            // Dart `bodyContext.mayCompleteNormally = false` (nothing reads
-            // it).
+            // Dart `bodyContext.mayCompleteNormally = false` (read by the
+            // `unnecessary_async` lint).
+            if let Some(mut body_context) = self.rt.body_context.remove(body) {
+                body_context.may_complete_normally = false;
+                self.rt.body_context.insert(body, body_context);
+            }
             return;
         }
 

@@ -4,6 +4,7 @@ pub mod a_f;
 pub mod batch_a1;
 pub mod batch_a2;
 pub mod batch_a3;
+pub mod batch_b;
 pub mod g_p;
 pub mod q_z;
 pub fn register(
@@ -17,6 +18,7 @@ pub fn register(
         || batch_a1::register(name, registry, context)
         || batch_a2::register(name, registry, context)
         || batch_a3::register(name, registry, context)
+        || batch_b::register(name, registry, context)
 }
 pub fn implemented_rules() -> Vec<&'static str> {
     [
@@ -26,6 +28,7 @@ pub fn implemented_rules() -> Vec<&'static str> {
         batch_a1::RULES,
         batch_a2::RULES,
         batch_a3::RULES,
+        batch_b::RULES,
     ]
     .concat()
 }

@@ -10,7 +10,7 @@ pub fn register(registry: &mut RuleVisitorRegistry) {
     registry.add_top_level_variable_declaration("omit_obvious_property_types", check);
 }
 
-pub(super) fn is_obvious(ctx: &LinterContext<'_>, node: NodeId) -> bool {
+pub(crate) fn is_obvious(ctx: &LinterContext<'_>, node: NodeId) -> bool {
     match ctx.ast.kind(node) {
         NodeKind::BooleanLiteral
         | NodeKind::DoubleLiteral

@@ -43,7 +43,12 @@ fn interesting(context: &LinterContext<'_>, expression: NodeId) -> bool {
         && super::helpers::nearest_function_body(context.ast, expression)
             .is_some_and(|body| super::helpers::is_synchronous_body(context.ast, body))
 }
-fn report(context: &LinterContext<'_>, expression: NodeId, out: &mut Vec<Diagnostic>) {
+fn report(
+    context: &LinterContext<'_>,
+    expression: NodeId,
+    out: &mut Vec<Diagnostic>,
+    code: &'static dartr_diagnostics::DiagnosticCode,
+) {
     let report = match context.ast.kind(expression) {
         NodeKind::MethodInvocation => context.ast
             [context.ast.cast::<MethodInvocation>(expression).unwrap()]
@@ -71,7 +76,7 @@ fn report(context: &LinterContext<'_>, expression: NodeId, out: &mut Vec<Diagnos
         .raw(),
         _ => expression,
     };
-    context.report_node(out, &diag::DISCARDED_FUTURES, report, &[]);
+    context.report_node(out, code, report, &[]);
 }
 
 /// Dart `ElementAnnotation.isAwaitNotRequired` (`_isPackageMetaGetter`).
@@ -213,6 +218,26 @@ fn ignored_known_case(context: &LinterContext<'_>, expression: NodeId) -> bool {
     }
 }
 fn check_statement(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
+    unused_futures_statement(context, node, out, interesting, &diag::DISCARDED_FUTURES);
+}
+fn check_cascade(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
+    unused_futures_cascade(context, node, out, interesting, &diag::DISCARDED_FUTURES);
+}
+fn check_interpolation(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
+    unused_futures_interpolation(context, node, out, interesting, &diag::DISCARDED_FUTURES);
+}
+
+/// Dart `IsInterestingFilter`.
+pub(crate) type IsInteresting = fn(&LinterContext<'_>, NodeId) -> bool;
+
+/// Dart `UnusedFuturesVisitor.visitExpressionStatement`.
+pub(crate) fn unused_futures_statement(
+    context: &LinterContext<'_>,
+    node: NodeId,
+    out: &mut Vec<Diagnostic>,
+    is_interesting: IsInteresting,
+    code: &'static dartr_diagnostics::DiagnosticCode,
+) {
     let expression = context.ast[context.ast.cast::<ExpressionStatement>(node).unwrap()]
         .expression
         .raw();
@@ -222,30 +247,70 @@ fn check_statement(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diag
     ) {
         return;
     }
-    if interesting(context, expression)
+    if is_interesting(context, expression)
         && !is_await_not_required(context, expression)
         && !ignored_known_case(context, expression)
     {
-        report(context, expression, out);
+        report(context, expression, out, code);
     }
 }
-fn check_cascade(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
+
+/// Dart `UnusedFuturesVisitor.visitCascadeExpression`.
+pub(crate) fn unused_futures_cascade(
+    context: &LinterContext<'_>,
+    node: NodeId,
+    out: &mut Vec<Diagnostic>,
+    is_interesting: IsInteresting,
+    code: &'static dartr_diagnostics::DiagnosticCode,
+) {
     let n = &context.ast[context.ast.cast::<CascadeExpression>(node).unwrap()];
     for &section in context.ast.list(n.cascade_sections) {
-        let expression = section.raw();
-        if context.ast.kind(expression) != NodeKind::AssignmentExpression
-            && interesting(context, expression)
-            && !is_await_not_required(context, expression)
-        {
-            report(context, expression, out);
-        }
+        visit(context, section.raw(), out, is_interesting, code);
     }
 }
-fn check_interpolation(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
+
+/// Dart `UnusedFuturesVisitor.visitInterpolationExpression`.
+pub(crate) fn unused_futures_interpolation(
+    context: &LinterContext<'_>,
+    node: NodeId,
+    out: &mut Vec<Diagnostic>,
+    is_interesting: IsInteresting,
+    code: &'static dartr_diagnostics::DiagnosticCode,
+) {
     let expression = context.ast[context.ast.cast::<InterpolationExpression>(node).unwrap()]
         .expression
         .raw();
-    if interesting(context, expression) && !is_await_not_required(context, expression) {
-        report(context, expression, out);
+    visit(context, expression, out, is_interesting, code);
+}
+
+/// Dart `UnusedFuturesVisitor._visit`.
+fn visit(
+    context: &LinterContext<'_>,
+    expression: NodeId,
+    out: &mut Vec<Diagnostic>,
+    is_interesting: IsInteresting,
+    code: &'static dartr_diagnostics::DiagnosticCode,
+) {
+    if is_await_not_required(context, expression) {
+        return;
+    }
+    let Some(resolved) = context.resolved else {
+        return;
+    };
+    let is_future = context.static_type(expression).is_some_and(|ty| {
+        resolved
+            .ctx
+            .as_instance_of(ty, resolved.ctx.tp.future_element().upcast())
+            .is_some()
+            || resolved
+                .ctx
+                .as_instance_of(ty, resolved.ctx.tp.future_or_element().upcast())
+                .is_some()
+    });
+    if is_future
+        && is_interesting(context, expression)
+        && context.ast.kind(expression) != NodeKind::AssignmentExpression
+    {
+        report(context, expression, out, code);
     }
 }
