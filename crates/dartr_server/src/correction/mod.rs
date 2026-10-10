@@ -17,11 +17,13 @@
 pub mod change;
 pub mod change_builder;
 pub mod code_style;
+pub mod dart_edit;
 pub mod fix_kind;
 pub mod fix_processor;
 pub mod generated;
 pub mod ignore;
 pub mod imports;
+pub mod insert;
 pub mod organize_imports;
 pub mod producer;
 pub mod producers;

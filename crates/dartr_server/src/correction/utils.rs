@@ -368,30 +368,64 @@ impl<'a> RangeFactory<'a> {
     /// (with a separating comma).
     pub fn node_in_list(&self, list: &[NodeId], item: NodeId) -> Range {
         let ast = self.ast;
-        let Some(index) = list.iter().position(|n| *n == item) else {
-            return self.node(item);
-        };
         if list.len() == 1 {
             let next = ast.tokens.next(ast.end_token(item));
             if ast.tokens.ty(next) == dartr_syntax::TokenType::COMMA {
                 return self.node_start_token_end(item, next);
             }
+            // Dart `list.owner`.
+            let owner = ast.parent(item);
+            if let Some(c) = owner.and_then(|o| ast.cast::<ConstructorDeclaration>(o)) {
+                if let Some(separator) = ast[c].separator {
+                    let previous = ast.tokens.previous(separator);
+                    return self.token_end_node_start(previous, ast[c].body);
+                }
+            } else if let Some(p) = owner.and_then(|o| ast.cast::<PrimaryConstructorBody>(o)) {
+                return self.token_end_node_start(ast[p].this_keyword, ast[p].body);
+            }
             return self.node(item);
         }
-        if index == list.len() - 1 {
-            // Delete the preceding comma.
-            return self.end_end(list[index - 1], item);
+        let Some(index) = list.iter().position(|n| *n == item) else {
+            return self.node(item);
+        };
+        if index == 0 {
+            self.start_start(item, list[1])
+        } else {
+            self.end_end(list[index - 1], item)
         }
-        self.start_start(item, list[index + 1])
     }
 
-    /// Dart `range.deletionRange`: the node with the whitespace after it,
-    /// up to the next token.
+    pub fn token_end_node_start(&self, a: TokenId, b: impl Into<NodeId>) -> Range {
+        self.start_offset_end_offset(self.token_end(a), self.ast.offset(b.into()))
+    }
+
+    /// Dart `range.deletionRange`.
     pub fn deletion_range(&self, node: impl Into<NodeId>) -> Range {
+        let ast = self.ast;
+        let tokens = &ast.tokens;
         let node = node.into();
-        let next = self.ast.tokens.next(self.ast.end_token(node));
-        let next = self.comment_or_token(next);
-        self.start_offset_end_offset(self.ast.offset(node), self.token_offset(next))
+        let begin = ast.begin_token(node);
+        let begin = tokens.get(begin).preceding_comments.get().unwrap_or(begin);
+        let initial_end = ast.end_token(node);
+        let end = tokens.next(initial_end);
+        let end = tokens.get(end).preceding_comments.get().unwrap_or(end);
+        let (start_offset, end_offset);
+        if tokens.get(end).is_eof() {
+            let previous = tokens.previous(begin);
+            if tokens.get(begin).is_comment() {
+                let first = first_token_after_comment_and_metadata(ast, node);
+                start_offset = tokens.get(tokens.previous(first)).end();
+            } else if previous.is_none() || tokens.get(previous).is_eof() {
+                start_offset = tokens.get(begin).offset;
+            } else {
+                start_offset = tokens.get(previous).end();
+            }
+            end_offset = tokens.get(initial_end).end();
+        } else {
+            start_offset = tokens.get(begin).offset;
+            end_offset = tokens.get(end).offset;
+        }
+        self.start_offset_end_offset(start_offset, end_offset)
     }
 
     /// The first comment before [t], or [t].

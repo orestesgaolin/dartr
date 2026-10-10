@@ -30,6 +30,28 @@ pub trait ChangeWorkspace {
 
     /// The content of a file (the overlay or the file on disk).
     fn content(&self, path: &str) -> Option<String>;
+
+    /// Dart `DartFixContext.getTopLevelDeclarations(name)`: each library
+    /// available to [path] that exports a top-level declaration [name]
+    /// (for getters and setters: the variable), in the order of the known
+    /// files of the driver.
+    fn top_level_declarations(&mut self, _path: &str, _name: &str) -> Vec<TopLevelDeclaration> {
+        Vec::new()
+    }
+}
+
+/// A top-level declaration that a library exports.
+#[derive(Clone, Debug)]
+pub struct TopLevelDeclaration {
+    /// The URI of the library (Dart `librarySource.uri`).
+    pub library_uri: String,
+    /// The path of the library (Dart `librarySource.fullName`).
+    pub library_path: String,
+    /// Dart `Element.kind.name`, for example `CLASS`.
+    pub kind: &'static str,
+    /// Whether the library declares the element (Dart
+    /// `declaration.library == libraryElement`).
+    pub declared_in_library: bool,
 }
 
 /// A position of a linked edit group that gets its offset when the change
@@ -441,7 +463,11 @@ impl<'c, 'w> FileEditBuilder<'c, 'w> {
         self.data().has_edits()
     }
 
-    fn create_edit_builder<'f>(&'f mut self, offset: u32, length: u32) -> EditBuilder<'f, 'c, 'w> {
+    pub(crate) fn create_edit_builder<'f>(
+        &'f mut self,
+        offset: u32,
+        length: u32,
+    ) -> EditBuilder<'f, 'c, 'w> {
         EditBuilder {
             file: self,
             offset,

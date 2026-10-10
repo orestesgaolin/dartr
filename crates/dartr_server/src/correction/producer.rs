@@ -23,6 +23,7 @@ pub enum Applicability {
     SingleLocation,
     AcrossSingleFile,
     AcrossFiles,
+    Automatically,
     AutomaticallyButOncePerFile,
 }
 

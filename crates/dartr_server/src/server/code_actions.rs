@@ -26,9 +26,10 @@ use super::{Document, Pending, ResolvedUnitRef, Server};
 use crate::correction::change::{
     LinkedEditGroup, SourceChange, SourceEdit, SourceFileEdit, utf16_len,
 };
-use crate::correction::change_builder::ChangeWorkspace;
+use crate::correction::change_builder::{ChangeWorkspace, TopLevelDeclaration};
 use crate::correction::fix_processor::{FixUnit, compute_fixes};
 use crate::correction::organize_imports::{ImportOrganizer, Resolution};
+use crate::correction::producers::import_library::{element_kind, exported_element};
 use crate::correction::sort_members::MemberSorter;
 use crate::correction::utils::CorrectionUtils;
 use crate::mapping::{self, ErrorOr, ResponseError, codes};
@@ -39,6 +40,7 @@ pub mod commands {
     pub const APPLY_CODE_ACTION: &str = "dart.edit.codeAction.apply";
     pub const SORT_MEMBERS: &str = "dart.edit.sortMembers";
     pub const ORGANIZE_IMPORTS: &str = "dart.edit.organizeImports";
+    #[allow(dead_code)]
     pub const FIX_ALL: &str = "dart.edit.fixAll";
     pub const SEND_WORKSPACE_EDIT: &str = "dart.edit.sendWorkspaceEdit";
     pub const LOG_ACTION: &str = "dart.logAction";
@@ -92,6 +94,246 @@ impl ChangeWorkspace for ServerWorkspace<'_> {
             None => super::read_file(path),
         }
     }
+
+    fn top_level_declarations(&mut self, path: &str, name: &str) -> Vec<TopLevelDeclaration> {
+        let collection = self.collection;
+        let Some(context) = collection.context_for(path) else {
+            return Vec::new();
+        };
+        let index = collection
+            .contexts
+            .iter()
+            .position(|x| std::ptr::eq(x, context))
+            .unwrap_or(0);
+        let filter = FileFilter::new(context, path);
+        let mut seen: HashSet<String> = HashSet::new();
+        let mut result = Vec::new();
+        for candidate in available_files(self.session, context, index) {
+            if !seen.insert(candidate.clone()) {
+                continue;
+            }
+            let Some(uri) = file_uri(context, &candidate) else {
+                continue;
+            };
+            if !filter.should_include(&candidate, &uri) {
+                continue;
+            }
+            // Dart `getLibraryByUri`: only libraries.
+            let Some(linked) = self
+                .session
+                .linked_library_in(collection, index, &candidate)
+            else {
+                continue;
+            };
+            if linked.library_path != candidate {
+                continue;
+            }
+            let sink = NoopSink;
+            let features = dartr_element::FeatureSet::new(Vec::<std::sync::Arc<str>>::new());
+            let ctx = linked.ctx(&sink, &features);
+            let Some(library) = ctx.library_by_uri(&linked.uri) else {
+                continue;
+            };
+            let element = exported_element(&ctx, library, name)
+                .or_else(|| exported_element(&ctx, library, &format!("{name}=")));
+            let Some(mut element) = element else { continue };
+            if matches!(
+                element.tag(),
+                dartr_element::Tag::Getter | dartr_element::Tag::Setter
+            ) {
+                if let Some(v) =
+                    dartr_resolver::element_metadata::accessor_variable_any(&ctx, element)
+                {
+                    element = v;
+                }
+            }
+            let declared_in_library =
+                dartr_resolver::error::support::library_of(&ctx, element) == Some(library);
+            result.push(TopLevelDeclaration {
+                library_uri: linked.uri.clone(),
+                library_path: linked.library_path.clone(),
+                kind: element_kind(element),
+                declared_in_library,
+            });
+        }
+        result
+    }
+}
+
+/// Dart `AnalysisDriver.discoverAvailableFiles` and `knownFiles`: the files
+/// that the driver knows, then the SDK libraries, then the Dart files of
+/// the `lib` folders of the packages.
+fn available_files(
+    session: &DriverSession,
+    context: &dartr_project::AnalysisContext,
+    index: usize,
+) -> Vec<String> {
+    let mut out = session.known_files(index);
+    let added: Vec<String> = context
+        .root
+        .analyzed_files()
+        .into_iter()
+        .filter(|f| f.ends_with(".dart"))
+        .collect();
+    out.extend(added);
+    if let Some(sdk) = context.sdk.as_ref() {
+        out.extend(
+            sdk.libraries()
+                .iter()
+                .filter_map(|l| sdk.map_dart_uri(&l.short_name)),
+        );
+    }
+    for package in context.packages.packages() {
+        dart_files_recursively(&package.lib, &mut out);
+    }
+    out
+}
+
+/// The Dart files under [folder], in directory order.
+fn dart_files_recursively(folder: &str, out: &mut Vec<String>) {
+    let Some(children) = dartr_project::fs::children(folder) else {
+        return;
+    };
+    for child in children {
+        match child.kind {
+            dartr_project::fs::ResourceKind::File => {
+                if child.path.ends_with(".dart") {
+                    out.push(child.path);
+                }
+            }
+            dartr_project::fs::ResourceKind::Folder => dart_files_recursively(&child.path, out),
+        }
+    }
+}
+
+/// The URI of [path] in [context]: `dart:`, `package:` or `file:`.
+fn file_uri(context: &dartr_project::AnalysisContext, path: &str) -> Option<String> {
+    if let Some(sdk) = context.sdk.as_ref() {
+        for library in sdk.libraries() {
+            if sdk.map_dart_uri(&library.short_name).as_deref() == Some(path) {
+                return Some(library.short_name.clone());
+            }
+        }
+    }
+    if let Some(uri) = context.packages.path_to_package_uri(path) {
+        return Some(uri);
+    }
+    Some(path_to_uri(path))
+}
+
+/// Dart `FileStateFilter` (`_PubFilter` for a file in a pub package,
+/// `_AnyFilter` otherwise).
+struct FileFilter {
+    /// The root of the pub package of the target file, its name and
+    /// dependencies; `None` for `_AnyFilter`.
+    package: Option<(String, Option<String>, HashSet<String>)>,
+    in_lib_or_entry_point: bool,
+}
+
+impl FileFilter {
+    fn new(context: &dartr_project::AnalysisContext, path: &str) -> FileFilter {
+        let _ = context;
+        // The nearest folder with a pubspec.yaml.
+        let mut folder = path
+            .rsplit_once('/')
+            .map(|(d, _)| d.to_string())
+            .unwrap_or_default();
+        loop {
+            let pubspec = format!("{folder}/pubspec.yaml");
+            if let Some(text) = super::read_file(&pubspec) {
+                let in_lib = ["lib", "bin", "web"]
+                    .iter()
+                    .any(|f| dartr_project::paths::is_within(&format!("{folder}/{f}"), path));
+                let (name, dependencies) = pubspec_dependencies(&text, in_lib);
+                return FileFilter {
+                    package: Some((folder, name, dependencies)),
+                    in_lib_or_entry_point: in_lib,
+                };
+            }
+            match folder.rsplit_once('/') {
+                Some((parent, _)) if !parent.is_empty() => folder = parent.to_string(),
+                _ => break,
+            }
+        }
+        FileFilter {
+            package: None,
+            in_lib_or_entry_point: false,
+        }
+    }
+
+    /// Dart `shouldInclude`.
+    fn should_include(&self, path: &str, uri: &str) -> bool {
+        if let Some(rest) = uri.strip_prefix("dart:") {
+            // Dart `shouldIncludeSdk`.
+            if rest.starts_with('_') {
+                return false;
+            }
+            return !matches!(
+                uri,
+                "dart:html"
+                    | "dart:indexed_db"
+                    | "dart:js"
+                    | "dart:js_util"
+                    | "dart:svg"
+                    | "dart:web_audio"
+                    | "dart:web_gl"
+            );
+        }
+        let Some((root, name, dependencies)) = &self.package else {
+            return true;
+        };
+        let Some(rest) = uri.strip_prefix("package:") else {
+            if self.in_lib_or_entry_point {
+                return false;
+            }
+            return dartr_project::paths::is_within(root, path);
+        };
+        let package_name = rest.split('/').next().unwrap_or("");
+        if Some(package_name) == name.as_deref() {
+            return true;
+        }
+        let is_src = rest.split('/').nth(1) == Some("src");
+        if is_src {
+            let friend = matches!(name.as_deref(), Some("analysis_server") | Some("linter"));
+            return friend && package_name == "analyzer";
+        }
+        dependencies.contains(package_name)
+    }
+}
+
+/// The name of a pubspec and its dependencies (with dev dependencies
+/// when [in_lib] is false).
+fn pubspec_dependencies(text: &str, in_lib: bool) -> (Option<String>, HashSet<String>) {
+    let mut name = None;
+    let mut dependencies = HashSet::new();
+    let Ok(node) = dartr_project::yaml::load_yaml_node(text) else {
+        return (name, dependencies);
+    };
+    let Some(entries) = node.as_map() else {
+        return (name, dependencies);
+    };
+    for (key, value) in entries {
+        let Some(key) = key.scalar().map(|k| k.to_dart_string()) else {
+            continue;
+        };
+        match key.as_str() {
+            "name" => name = value.scalar().map(|s| s.to_dart_string()),
+            "dependencies" | "dev_dependencies" => {
+                if key == "dev_dependencies" && in_lib {
+                    continue;
+                }
+                if let Some(map) = value.as_map() {
+                    for (k, _) in map {
+                        if let Some(k) = k.scalar() {
+                            dependencies.insert(k.to_dart_string());
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    (name, dependencies)
 }
 
 /// The analysis options of [path].

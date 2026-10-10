@@ -1,21 +1,116 @@
 //! The correction producers (Dart `services/correction/dart/*.dart`), by
 //! the name of the Dart generator in the fix registry.
 
-use super::producer::{MultiProducerGenerator, ProducerGenerator};
+pub mod collections;
+pub mod convert_quotes;
+pub mod create;
+pub mod import_library;
+pub mod modifiers;
+pub mod simple;
+pub mod super_parameters;
+pub mod variables;
+
+use super::change_builder::ChangeWorkspace;
+use super::producer::{
+    Applicability, CorrectionProducer, MultiProducerGenerator, ProducerContext, ProducerGenerator,
+};
+
+fn boxed<P: CorrectionProducer + 'static>(p: P) -> Box<dyn CorrectionProducer> {
+    Box::new(p)
+}
 
 /// The generator of the producer [name] (Dart `ProducerGenerator`), `None`
 /// when dartr does not implement it.
 pub fn generator(name: &str) -> Option<ProducerGenerator> {
-    #[allow(clippy::match_single_binding)]
-    match name {
-        _ => None,
-    }
+    use convert_quotes::{ConvertQuotes, QuotesKind};
+    use modifiers::*;
+    use simple::*;
+    use variables::*;
+    type C<'a, 'b> = &'a ProducerContext<'b>;
+    let g: ProducerGenerator = match name {
+        "AddConst.new" => |_: C| boxed(AddConst),
+        "AddReturnType.new" => |_: C| boxed(create::AddReturnType),
+        "AddLate.new" => |_: C| boxed(AddLate { this_: false }),
+        "AddLate.this_" => |_: C| boxed(AddLate { this_: true }),
+        "AddOverride.new" => |_: C| boxed(AddOverride),
+        "AddRequiredKeyword.new" => |_: C| boxed(AddRequiredKeyword),
+        "ConvertQuotes.new" => |_: C| boxed(ConvertQuotes::new(QuotesKind::Swap)),
+        "ConvertToDoubleQuotes.new" => |_: C| boxed(ConvertQuotes::new(QuotesKind::ToDouble)),
+        "ConvertToSingleQuotes.new" => |_: C| boxed(ConvertQuotes::new(QuotesKind::ToSingle)),
+        "ConvertToWildcardVariable.new" => |_: C| {
+            boxed(ConvertToWildcardVariable {
+                automatically: false,
+            })
+        },
+        "ConvertToWildcardVariable.automatically" => |_: C| {
+            boxed(ConvertToWildcardVariable {
+                automatically: true,
+            })
+        },
+        "ConvertToMapLiteral.new" => |_: C| boxed(collections::ConvertToMapLiteral),
+        "ReplaceWithIsEmpty.new" => |c: C| boxed(collections::ReplaceWithIsEmpty::new(c)),
+        "ConvertToSuperParameters.new" => |_: C| boxed(super_parameters::ConvertToSuperParameters),
+        "CreateFunction.new" => |_: C| boxed(create::CreateFunction::new()),
+        "CreateLocalVariable.new" => |_: C| boxed(create::CreateLocalVariable::new()),
+        "CreateMethod.method" => |_: C| boxed(create::CreateMethod::new()),
+        "MakeFinal.new" => |_: C| boxed(MakeFinal),
+        "MakeVariableNullable.new" => |_: C| boxed(MakeVariableNullable::new()),
+        "RemoveEmptyConstructorBody.new" => |_: C| boxed(RemoveEmptyConstructorBody),
+        "RemoveInitializer.new" => |_: C| {
+            boxed(RemoveInitializer {
+                applicability: Applicability::SingleLocation,
+                remove_late: true,
+            })
+        },
+        "RemoveInitializer.bulkFixable" => |_: C| {
+            boxed(RemoveInitializer {
+                applicability: Applicability::Automatically,
+                remove_late: true,
+            })
+        },
+        "RemoveInitializer.notLate" => |_: C| {
+            boxed(RemoveInitializer {
+                applicability: Applicability::SingleLocation,
+                remove_late: false,
+            })
+        },
+        "RemoveInterpolationBraces.new" => |_: C| boxed(RemoveInterpolationBraces),
+        "RemoveMethodDeclaration.new" => |_: C| boxed(RemoveMethodDeclaration),
+        "RemoveNew.new" => |_: C| boxed(RemoveNew),
+        "RemoveThisExpression.new" => |_: C| boxed(RemoveThisExpression),
+        "RemoveUnnecessaryNew.new" => |_: C| boxed(RemoveUnnecessaryNew),
+        "RemoveUnnecessaryParentheses.new" => |_: C| boxed(RemoveUnnecessaryParentheses),
+        "RemoveUnusedImport.new" => |_: C| boxed(RemoveUnusedImport),
+        "RemoveUnusedLocalVariable.new" => |_: C| boxed(RemoveUnusedLocalVariable),
+        "ReplaceFinalWithConst.new" => |_: C| boxed(ReplaceFinalWithConst),
+        "ReplaceWithConditionalAssignment.new" => |_: C| boxed(ReplaceWithConditionalAssignment),
+        _ => return None,
+    };
+    Some(g)
 }
 
 /// The generator of the multi producer [name].
 pub fn multi_generator(name: &str) -> Option<MultiProducerGenerator> {
-    #[allow(clippy::match_single_binding)]
-    match name {
-        _ => None,
-    }
+    use import_library::{ImportKind, import_library_producers};
+    type C<'a, 'b> = &'a ProducerContext<'b>;
+    type W<'a> = &'a mut dyn ChangeWorkspace;
+    let g: MultiProducerGenerator = match ImportKind::from_name(name)? {
+        ImportKind::ForExtension => {
+            |c: C, w: W| import_library_producers(ImportKind::ForExtension, c, w)
+        }
+        ImportKind::ForExtensionMember => {
+            |c: C, w: W| import_library_producers(ImportKind::ForExtensionMember, c, w)
+        }
+        ImportKind::ForExtensionType => {
+            |c: C, w: W| import_library_producers(ImportKind::ForExtensionType, c, w)
+        }
+        ImportKind::ForFunction => {
+            |c: C, w: W| import_library_producers(ImportKind::ForFunction, c, w)
+        }
+        ImportKind::ForTopLevelVariable => {
+            |c: C, w: W| import_library_producers(ImportKind::ForTopLevelVariable, c, w)
+        }
+        ImportKind::ForType => |c: C, w: W| import_library_producers(ImportKind::ForType, c, w),
+    };
+    Some(g)
 }
