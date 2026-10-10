@@ -69,6 +69,15 @@ fn is_package_self_reference(c: &LinterContext<'_>, node: NodeId) -> bool {
 
 /// The `CompilationUnit` node of the visited unit.
 fn unit_node(c: &LinterContext<'_>) -> Option<NodeId> {
+    if let Some(u) = c.resolved_units.get(c.current_unit)
+        && kind(c, u.unit) == NodeKind::CompilationUnit
+    {
+        return Some(u.unit);
+    }
+    let raw = c.parsed.unit.raw();
+    if kind(c, raw) == NodeKind::CompilationUnit {
+        return Some(raw);
+    }
     (0..c.ast.node_count())
         .map(NodeId::from_index)
         .find(|&n| kind(c, n) == NodeKind::CompilationUnit)

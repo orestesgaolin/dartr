@@ -121,8 +121,6 @@ struct UnitRegistry<'a> {
     by_fragment: IndexMap<FId<LibraryFragment>, Option<u32>>,
     /// The unit of each local store (raw store id).
     by_local_store: IndexMap<u32, u32>,
-    /// Per unit: the declaration node of each declared fragment.
-    declarations: Vec<Option<Arc<IndexMap<FragmentId, NodeId>>>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -313,24 +311,10 @@ impl<'a> ConstantEvaluationEngine<'a> {
 
     /// The declaration node of [fragment] in [unit].
     fn declaration_in(&self, unit: u32, fragment: FragmentId) -> Option<NodeRef> {
-        let index = {
-            let registry = self.units.borrow();
-            registry.declarations[unit as usize].clone()
-        };
-        let index = match index {
-            Some(index) => index,
-            None => {
-                let handle = self.unit(unit);
-                let mut map = IndexMap::new();
-                for (node, &f) in handle.tables.declared_fragment.iter() {
-                    map.entry(f).or_insert(node);
-                }
-                let index = Arc::new(map);
-                self.units.borrow_mut().declarations[unit as usize] = Some(index.clone());
-                index
-            }
-        };
-        index.get(&fragment).map(|&node| NodeRef { unit, node })
+        let handle = self.unit(unit);
+        handle
+            .declaration_of(fragment)
+            .map(|node| NodeRef { unit, node })
     }
 
     /// The declaration node of the fragments of [e], first fragment first
@@ -378,6 +362,9 @@ impl<'a> ConstantEvaluationEngine<'a> {
     pub fn constant_initializer(&self, e: ElementId) -> Option<NodeRef> {
         let ctx = self.global_ctx();
         let is_local = e.store().is_local();
+        if !is_local && !element_has_any_constant_initializer(&ctx, e) {
+            return None;
+        }
         let mut result = None;
         for decl in self.declarations(e) {
             let handle = self.unit(decl.unit);
@@ -418,6 +405,11 @@ impl<'a> ConstantEvaluationEngine<'a> {
 
     /// Dart `ConstructorElementImpl.constantInitializers`.
     pub fn constant_initializers(&self, constructor: ElementId) -> Vec<NodeRef> {
+        if !constructor.store().is_local()
+            && !constructor_has_any_constant_initializers(&self.global_ctx(), constructor)
+        {
+            return Vec::new();
+        }
         let mut result = Vec::new();
         for decl in self.declarations(constructor) {
             let handle = self.unit(decl.unit);
@@ -542,6 +534,9 @@ impl<'a> ConstantEvaluationEngine<'a> {
     /// declaration of a variable, the body of a primary constructor, the
     /// library directive (or the first directive) of a library.
     pub fn metadata_annotations(&self, e: ElementId) -> Vec<NodeRef> {
+        if !e.store().is_local() && !element_has_any_annotations(&self.global_ctx(), e) {
+            return Vec::new();
+        }
         let mut result = Vec::new();
         for decl in self.declarations(e) {
             let handle = self.unit(decl.unit);
@@ -631,20 +626,41 @@ impl<'a> ConstantEvaluationEngine<'a> {
     pub fn compute_constant_value(&self, constant: ConstantTarget) {
         match constant {
             ConstantTarget::Element(e) if is_formal_parameter(e) => {
-                let Some(unit) = self.unit_of_element(e) else {
-                    return;
-                };
-                let library = self.unit_library(unit);
                 match self.constant_initializer(e) {
                     Some(default_value) => {
+                        let Some(unit) = self.unit_of_element(e) else {
+                            return;
+                        };
+                        let library = self.unit_library(unit);
                         let visitor = ConstantVisitor::new(self, library, None);
                         let result = visitor.evaluate_constant(default_value);
                         self.set_evaluation_result(e, result);
                     }
                     None => {
-                        let handle = self.unit(unit);
-                        let ctx = self.ctx(&handle);
-                        let ts = TypeSystem::new(ctx);
+                        if !e.store().is_local() && self.external.is_none() {
+                            let ctx = self.global_ctx();
+                            let in_local_units = ctx
+                                .element_data(e)
+                                .and_then(|d| {
+                                    dartr_element::diagnostics::library_fragment_of(
+                                        &ctx,
+                                        d.first_fragment,
+                                    )
+                                })
+                                .is_some_and(|lf| {
+                                    self.units
+                                        .borrow()
+                                        .by_fragment
+                                        .get(&lf)
+                                        .copied()
+                                        .flatten()
+                                        .is_some()
+                                });
+                            if !in_local_units {
+                                return;
+                            }
+                        }
+                        let ts = TypeSystem::new(self.global_ctx());
                         self.set_evaluation_result(e, Constant::Value(null_object(&ts)));
                     }
                 }
@@ -1157,7 +1173,6 @@ impl<'a> UnitRegistry<'a> {
         self.by_local_store.insert(unit.local.store.id.raw(), index);
         self.units.push(unit);
         self.libraries.push(library);
-        self.declarations.push(None);
         index
     }
 }
@@ -1178,6 +1193,75 @@ fn fragment_has_constant_initializer(ctx: &Ctx<'_>, f: FragmentId) -> bool {
         .variable_fragment(id)
         .constant_initializer
         .is_some()
+}
+
+fn element_has_any_constant_initializer(ctx: &Ctx<'_>, e: ElementId) -> bool {
+    let Some(data) = ctx.element_data(e) else {
+        return false;
+    };
+    let mut fragment = Some(data.first_fragment);
+    while let Some(f) = fragment {
+        if fragment_has_constant_initializer(ctx, f) {
+            return true;
+        }
+        fragment = ctx.fragment_data(f).and_then(|d| d.next_fragment);
+    }
+    false
+}
+
+fn constructor_has_any_constant_initializers(ctx: &Ctx<'_>, e: ElementId) -> bool {
+    let Some(data) = ctx.element_data(e) else {
+        return false;
+    };
+    let mut fragment = Some(data.first_fragment);
+    while let Some(f) = fragment {
+        let Some(fd) = ctx.fragment_data(f) else {
+            return true;
+        };
+        if !fd
+            .flags
+            .get()
+            .contains(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_CONST)
+        {
+            return true;
+        }
+        let Some(cf) = f.cast::<dartr_element::ConstructorFragment>() else {
+            return true;
+        };
+        if ctx
+            .store(f.store())
+            .fragment(cf)
+            .constant_initializers
+            .try_get()
+            .is_some_and(|v| !v.is_empty())
+        {
+            return true;
+        }
+        fragment = fd.next_fragment;
+    }
+    false
+}
+
+fn element_has_any_annotations(ctx: &Ctx<'_>, e: ElementId) -> bool {
+    if e.tag() == Tag::Library {
+        return e
+            .cast::<LibraryElement>()
+            .is_some_and(|lib| !ctx.get(lib).metadata.annotations.is_empty());
+    }
+    let Some(data) = ctx.element_data(e) else {
+        return false;
+    };
+    let mut fragment = Some(data.first_fragment);
+    while let Some(f) = fragment {
+        let Some(fd) = ctx.fragment_data(f) else {
+            break;
+        };
+        if !fd.metadata.annotations.is_empty() {
+            return true;
+        }
+        fragment = fd.next_fragment;
+    }
+    false
 }
 
 fn is_formal_parameter(e: ElementId) -> bool {

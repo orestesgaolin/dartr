@@ -113,6 +113,28 @@ pub trait ElementMetadata {
     fn default_value_code(&self, _element: dartr_element::ElementId) -> Option<String> {
         None
     }
+    /// Fast path for `Metadata.hasImmutable` when implemented by the driver.
+    fn has_immutable(&self, _element: dartr_element::ElementId) -> Option<bool> {
+        None
+    }
+    /// Fast path for `ElementAnnotationImpl._isTopGetter(libraryName:, name:)`.
+    fn has_top_getter_annotation(
+        &self,
+        _element: dartr_element::ElementId,
+        _library_name: &str,
+        _name: &str,
+    ) -> Option<bool> {
+        None
+    }
+    /// Fast path for `ElementAnnotationImpl._isConstructor(libraryName:, className:)`.
+    fn has_constructor_annotation(
+        &self,
+        _element: dartr_element::ElementId,
+        _library_name: &str,
+        _class_name: &str,
+    ) -> Option<bool> {
+        None
+    }
 }
 /// A resolved AST and its original parse metadata. Resolution can rewrite nodes.
 #[derive(Clone, Copy)]
@@ -283,6 +305,13 @@ impl<'a> LinterContext<'a> {
         library_name: &str,
         class_name: &str,
     ) -> bool {
+        if let Some(resolved) = self.resolved
+            && let Some(metadata) = resolved.metadata
+            && let Some(found) =
+                metadata.has_constructor_annotation(element, library_name, class_name)
+        {
+            return found;
+        }
         use dartr_typesystem::TypeExt;
         self.has_annotation_where(element, |ctx, a| {
             a.tag() == dartr_element::Tag::Constructor
@@ -298,6 +327,12 @@ impl<'a> LinterContext<'a> {
     /// Dart `Metadata.hasImmutable` (`isImmutable`: the `immutable` getter or
     /// the `Immutable` constructor of package:meta).
     pub fn has_immutable(&self, element: dartr_element::ElementId) -> bool {
+        if let Some(resolved) = self.resolved
+            && let Some(metadata) = resolved.metadata
+            && let Some(found) = metadata.has_immutable(element)
+        {
+            return found;
+        }
         self.has_package_meta_getter(element, "immutable")
             || self.has_constructor_annotation(element, "meta", "Immutable")
     }
@@ -322,6 +357,9 @@ impl<'a> LinterContext<'a> {
         let Some(metadata) = resolved.metadata else {
             return false;
         };
+        if let Some(found) = metadata.has_top_getter_annotation(element, library_name, name) {
+            return found;
+        }
         let ctx = &resolved.ctx;
         metadata.annotations(element).into_iter().any(|annotation| {
             metadata.annotation_element(annotation).is_some_and(|a| {
@@ -410,8 +448,32 @@ impl<'a> LinterContext<'a> {
     }
     /// Workspace package root for the defining unit, if a pubspec exists.
     pub fn package_root(&self) -> Option<std::path::PathBuf> {
+        static CACHE: std::sync::OnceLock<
+            std::sync::RwLock<
+                std::collections::HashMap<std::path::PathBuf, Option<std::path::PathBuf>>,
+            >,
+        > = std::sync::OnceLock::new();
         let path = self.all_units.first()?.path;
         let parent = std::path::Path::new(path).parent()?;
+        if !dartr_project::fs::has_overlays() {
+            let cache = CACHE.get_or_init(Default::default);
+            if let Some(cached) = cache.read().unwrap().get(parent) {
+                return cached.clone();
+            }
+            let found = parent
+                .ancestors()
+                .find(|root| {
+                    root.join("pubspec.yaml")
+                        .to_str()
+                        .is_some_and(dartr_project::fs::file_exists)
+                })
+                .map(std::path::Path::to_path_buf);
+            cache
+                .write()
+                .unwrap()
+                .insert(parent.to_path_buf(), found.clone());
+            return found;
+        }
         parent
             .ancestors()
             .find(|root| {
@@ -425,7 +487,23 @@ impl<'a> LinterContext<'a> {
     /// analyzer builds a pub workspace only when a
     /// `.dart_tool/package_config.json` exists at or above the package.
     pub fn pub_package_root(&self) -> Option<std::path::PathBuf> {
+        static CACHE: std::sync::OnceLock<
+            std::sync::RwLock<std::collections::HashMap<std::path::PathBuf, bool>>,
+        > = std::sync::OnceLock::new();
         let root = self.package_root()?;
+        if !dartr_project::fs::has_overlays() {
+            let cache = CACHE.get_or_init(Default::default);
+            if let Some(&has_config) = cache.read().unwrap().get(&root) {
+                return has_config.then_some(root);
+            }
+            let has_config = root.ancestors().any(|dir| {
+                dir.join(".dart_tool/package_config.json")
+                    .to_str()
+                    .is_some_and(dartr_project::fs::file_exists)
+            });
+            cache.write().unwrap().insert(root.clone(), has_config);
+            return has_config.then_some(root);
+        }
         let has_config = root.ancestors().any(|dir| {
             dir.join(".dart_tool/package_config.json")
                 .to_str()
@@ -462,48 +540,131 @@ impl<'a> LinterContext<'a> {
     /// The visited unit's source URI. The analyzer uses a
     /// package URI for files mapped by package_config, and a file URI otherwise.
     pub fn source_uri(&self) -> String {
+        type PackageList = std::sync::Arc<Vec<(String, std::path::PathBuf)>>;
+        static URI_CACHE: std::sync::OnceLock<
+            std::sync::RwLock<std::collections::HashMap<String, String>>,
+        > = std::sync::OnceLock::new();
+        static DIR_CACHE: std::sync::OnceLock<
+            std::sync::RwLock<std::collections::HashMap<std::path::PathBuf, Option<PackageList>>>,
+        > = std::sync::OnceLock::new();
+        static CONFIG_CACHE: std::sync::OnceLock<
+            std::sync::RwLock<std::collections::HashMap<std::path::PathBuf, Option<PackageList>>>,
+        > = std::sync::OnceLock::new();
+
+        let use_cache = !dartr_project::fs::has_overlays();
+        if use_cache
+            && let Some(cached) = URI_CACHE
+                .get_or_init(Default::default)
+                .read()
+                .unwrap()
+                .get(self.path)
+        {
+            return cached.clone();
+        }
         let file = std::path::Path::new(self.path);
-        for root in file.ancestors().skip(1) {
-            let config = root.join(".dart_tool/package_config.json");
-            let Ok(content) = std::fs::read_to_string(&config) else {
-                continue;
-            };
-            let Ok(config_value) = serde_json::from_str::<serde_json::Value>(&content) else {
-                break;
-            };
-            if let Some(packages) = config_value["packages"].as_array() {
-                for package in packages {
-                    let (Some(name), Some(root_uri)) =
-                        (package["name"].as_str(), package["rootUri"].as_str())
-                    else {
-                        continue;
-                    };
-                    let package_root = if let Some(path) = root_uri.strip_prefix("file://") {
-                        std::path::PathBuf::from(path)
-                    } else if root_uri.contains(':') {
-                        continue;
-                    } else {
-                        config.parent().unwrap().join(root_uri)
-                    };
-                    let package_dir =
-                        package_root.join(package["packageUri"].as_str().unwrap_or(""));
-                    if let Ok(package_dir) = package_dir.canonicalize()
-                        && let Ok(relative) = file.strip_prefix(&package_dir)
+        let packages = if let Some(dir) = file.parent() {
+            if use_cache
+                && let Some(cached) = DIR_CACHE
+                    .get_or_init(Default::default)
+                    .read()
+                    .unwrap()
+                    .get(dir)
+            {
+                cached.clone()
+            } else {
+                let mut found: Option<PackageList> = None;
+                for root in dir.ancestors() {
+                    let config = root.join(".dart_tool/package_config.json");
+                    if use_cache
+                        && let Some(cached_cfg) = CONFIG_CACHE
+                            .get_or_init(Default::default)
+                            .read()
+                            .unwrap()
+                            .get(&config)
                     {
-                        return format!(
-                            "package:{name}/{}",
-                            relative.to_string_lossy().replace('\\', "/")
-                        );
+                        found = cached_cfg.clone();
+                        break;
                     }
+                    let Ok(content) = std::fs::read_to_string(&config) else {
+                        continue;
+                    };
+                    let parsed = serde_json::from_str::<serde_json::Value>(&content)
+                        .ok()
+                        .map(|config_value| {
+                            let mut list = Vec::new();
+                            if let Some(packages) = config_value["packages"].as_array() {
+                                for package in packages {
+                                    let (Some(name), Some(root_uri)) =
+                                        (package["name"].as_str(), package["rootUri"].as_str())
+                                    else {
+                                        continue;
+                                    };
+                                    let package_root =
+                                        if let Some(path) = root_uri.strip_prefix("file://") {
+                                            std::path::PathBuf::from(path)
+                                        } else if root_uri.contains(':') {
+                                            continue;
+                                        } else {
+                                            config.parent().unwrap().join(root_uri)
+                                        };
+                                    let package_dir = package_root
+                                        .join(package["packageUri"].as_str().unwrap_or(""));
+                                    if let Ok(package_dir) = package_dir.canonicalize() {
+                                        list.push((name.to_owned(), package_dir));
+                                    }
+                                }
+                            }
+                            std::sync::Arc::new(list)
+                        });
+                    if use_cache {
+                        CONFIG_CACHE
+                            .get_or_init(Default::default)
+                            .write()
+                            .unwrap()
+                            .insert(config, parsed.clone());
+                    }
+                    found = parsed;
+                    break;
+                }
+                if use_cache {
+                    DIR_CACHE
+                        .get_or_init(Default::default)
+                        .write()
+                        .unwrap()
+                        .insert(dir.to_path_buf(), found.clone());
+                }
+                found
+            }
+        } else {
+            None
+        };
+        let mut result = None;
+        if let Some(packages) = packages {
+            for (name, package_dir) in packages.iter() {
+                if let Ok(relative) = file.strip_prefix(package_dir) {
+                    result = Some(format!(
+                        "package:{name}/{}",
+                        relative.to_string_lossy().replace('\\', "/")
+                    ));
+                    break;
                 }
             }
-            break;
         }
-        if file.is_absolute() {
-            format!("file://{}", self.path.replace('\\', "/"))
-        } else {
-            self.path.replace('\\', "/")
+        let uri = result.unwrap_or_else(|| {
+            if file.is_absolute() {
+                format!("file://{}", self.path.replace('\\', "/"))
+            } else {
+                self.path.replace('\\', "/")
+            }
+        });
+        if use_cache {
+            URI_CACHE
+                .get_or_init(Default::default)
+                .write()
+                .unwrap()
+                .insert(self.path.to_owned(), uri.clone());
         }
+        uri
     }
     pub fn report_node(
         &self,

@@ -32,6 +32,33 @@ fn is_type_element(element: dartr_element::ElementId) -> bool {
         || element.is::<TypeAliasElement>()
         || element.is::<TypeParameterElement>()
 }
+fn ancestor_may_have_type_param(
+    ctx: &dartr_element::Ctx<'_>,
+    ancestor: dartr_element::ElementId,
+    name: dartr_element::Name,
+) -> bool {
+    use dartr_element::AnyElement;
+    let type_params = match ctx.any(ancestor) {
+        AnyElement::Class(e) => &e.type_params,
+        AnyElement::Enum(e) => &e.type_params,
+        AnyElement::Mixin(e) => &e.type_params,
+        AnyElement::ExtensionType(e) => &e.type_params,
+        AnyElement::Extension(e) => &e.type_params,
+        AnyElement::Method(e) => &e.type_params,
+        AnyElement::TopLevelFunction(e) => &e.type_params,
+        AnyElement::LocalFunction(e) => &e.type_params,
+        AnyElement::Constructor(e) => &e.type_params,
+        AnyElement::Getter(e) => &e.type_params,
+        AnyElement::Setter(e) => &e.type_params,
+        AnyElement::GenericFunctionType(e) => &e.type_params,
+        AnyElement::TypeAlias(e) => &e.type_params,
+        _ => return true,
+    };
+    type_params.iter().any(|&tp| {
+        ctx.element_data(tp.raw())
+            .is_some_and(|d| d.name == Some(name))
+    })
+}
 fn visible_type(
     context: &LinterContext<'_>,
     scope: NodeId,
@@ -46,7 +73,15 @@ fn visible_type(
             .filter_map(|node| context.declared_element(node))
             .collect();
     for &ancestor in &ancestor_elements {
+        if Some(ancestor) == excluded_enclosing
+            || !ancestor_may_have_type_param(&resolved.ctx, ancestor, name)
+        {
+            continue;
+        }
         for candidate in (0..context.ast.node_count()).map(NodeId::from_index) {
+            if context.ast.kind(candidate) != NodeKind::TypeParameter {
+                continue;
+            }
             let Some(element) = context
                 .declared_element(candidate)
                 .filter(|element| element.is::<TypeParameterElement>())
