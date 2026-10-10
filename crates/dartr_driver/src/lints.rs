@@ -169,6 +169,7 @@ pub fn compute_lints(
                 potentially_mutated_in_scope: &resolved.rt.potentially_mutated_in_scope,
                 corresponding_parameter_type: &resolved.rt.corresponding_parameter_type,
                 body_context,
+                this_scope_lookup: &resolved.rt.this_scope_lookup,
                 library: library.library,
                 metadata: Some(&metadata),
             }),

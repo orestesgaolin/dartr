@@ -110,4 +110,5 @@ rules!(
     unnecessary_async,
     unsafe_variance,
     unreachable_from_main,
+    unnecessary_this,
 );

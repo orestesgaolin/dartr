@@ -40,6 +40,11 @@ pub struct ResolvedLintContext<'a> {
     pub corresponding_parameter_type: &'a dartr_ast::NodeMap<dartr_element::TypeId>,
     /// Resolver `FunctionBodyImpl.bodyContext` of the function bodies.
     pub body_context: &'a dartr_ast::NodeMap<BodyContext>,
+    /// Resolver `this_scope_lookup`: the getter and the setter that the
+    /// name of `this.name` resolves to in the scope of the `ThisExpression`
+    /// (the linter `resolveNameInScope`).
+    pub this_scope_lookup:
+        &'a dartr_ast::NodeMap<(Option<dartr_element::ElementId>, Option<dartr_element::ElementId>)>,
     pub library: dartr_element::EId<dartr_element::LibraryElement>,
     /// Dart `Element.metadata` of elements of any library, with the
     /// annotation values (`None`: no metadata access).

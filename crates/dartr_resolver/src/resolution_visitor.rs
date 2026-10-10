@@ -114,6 +114,9 @@ pub fn resolve_unit<'a>(
 ) {
     let mut visitor = ResolutionVisitor::new(*ctx, unit_ctx, tables, rt, diagnostics);
     ast.accept_mut(unit, &mut visitor);
+    for (node, result) in visitor.scope_context.finish_recorded_lookups() {
+        visitor.rt.this_scope_lookup.insert(node, (result.getter, result.setter));
+    }
 }
 
 /// The key of a join of pattern variables (Dart `Object key` of
@@ -1496,6 +1499,24 @@ impl AstVisitorMut for ResolutionVisitor<'_, '_> {
 
     fn visit_primary_constructor_body(&mut self, ast: &mut Ast, node: Id<PrimaryConstructorBody>) {
         self.scope_visit_primary_constructor_body(ast, node);
+    }
+
+    fn visit_this_expression(&mut self, ast: &mut Ast, node: Id<dartr_ast::ThisExpression>) {
+        // For the linter `unnecessary_this` (`resolveNameInScope`).
+        let name = match ast.parent(node) {
+            Some(parent) if ast.kind(parent) == dartr_ast::NodeKind::PropertyAccess => {
+                let name = ast[Id::<PropertyAccess>::from_raw(parent)].property_name;
+                Some(ast.tokens.lexeme(ast[name].token).to_string())
+            }
+            Some(parent) if ast.kind(parent) == dartr_ast::NodeKind::MethodInvocation => {
+                let name = ast[Id::<MethodInvocation>::from_raw(parent)].method_name;
+                Some(ast.tokens.lexeme(ast[name].token).to_string())
+            }
+            _ => None,
+        };
+        if let Some(name) = name {
+            self.scope_context.record_lookup(node.raw(), &name);
+        }
     }
 
     fn visit_property_access(&mut self, ast: &mut Ast, node: Id<PropertyAccess>) {
