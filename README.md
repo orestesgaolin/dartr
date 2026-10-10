@@ -128,66 +128,71 @@ Open an issue at <https://github.com/orestesgaolin/dartr/issues> with:
 
 ## Benchmarks
 
-`dartr analyze` and `dart analyze` (3.13.3) on the same machine, run one after the
-other, with the full pipeline (errors, warnings, lints, analyzer plugins). Both report the
-same diagnostics on all four projects. Wall time in seconds, lower is better.
-`dart` uses its normal disk cache (`~/.dartServer`); dartr has no disk cache and starts
-cold every time.
+`dartr analyze` and `dart analyze` (3.13.3) on the same machine, with the full pipeline (errors,
+warnings, lints, analyzer plugins). Both report the same diagnostics on all four projects. Wall time
+in seconds, mean of 3 runs, lower is better. dartr has no disk cache, so every run starts cold.
+`dart` was measured twice: with its normal disk cache (`~/.dartServer`), warmed by an earlier run,
+and with an empty cache.
 
 ```mermaid
 ---
 config:
   xyChart:
-    height: 300
+    height: 360
   themeVariables:
     xyChart:
-      plotColorPalette: "#0175C2, #DEA584"
+      plotColorPalette: "#0175C2, #9CC8EA, #DEA584"
 ---
-xychart-beta
-    %% -100 = no bar: one series per tool gives each tool its own color
+xychart-beta horizontal
+    %% -100 = no bar: one series per measurement gives each its own color
     title "Large projects: wall time (s), lower is better"
-    x-axis ["app: dart", "app: dartr", "flutter: dart", "flutter: dartr"]
-    y-axis "seconds" 0 --> 80
-    bar [76.8, -100, 15.4, -100]
-    bar [-100, 22.1, -100, 6.2]
+    x-axis ["app, dart warm", "app, dart empty", "app, dartr", "flutter, dart warm", "flutter, dart empty", "flutter, dartr"]
+    y-axis "seconds" 0 --> 100
+    bar [78.8, -100, -100, 4.3, -100, -100]
+    bar [-100, 97.1, -100, -100, 28, -100]
+    bar [-100, -100, 24.9, -100, -100, 7.4]
 ```
 
 ```mermaid
 ---
 config:
   xyChart:
-    height: 300
+    height: 360
   themeVariables:
     xyChart:
-      plotColorPalette: "#0175C2, #DEA584"
+      plotColorPalette: "#0175C2, #9CC8EA, #DEA584"
 ---
-xychart-beta
-    %% -100 = no bar: one series per tool gives each tool its own color
+xychart-beta horizontal
+    %% -100 = no bar: one series per measurement gives each its own color
     title "Smaller packages: wall time (s), lower is better"
-    x-axis ["analyzer: dart", "analyzer: dartr", "flutter_tools: dart", "flutter_tools: dartr"]
-    y-axis "seconds" 0 --> 4
-    bar [2.5, -100, 2.5, -100]
-    bar [-100, 1.9, -100, 3.5]
+    x-axis ["analyzer, dart warm", "analyzer, dart empty", "analyzer, dartr", "flutter_tools, dart warm", "flutter_tools, dart empty", "flutter_tools, dartr"]
+    y-axis "seconds" 0 --> 10
+    bar [3.3, -100, -100, 2.7, -100, -100]
+    bar [-100, 8.7, -100, -100, 9.5, -100]
+    bar [-100, -100, 1.4, -100, -100, 3.7]
 ```
 
-Blue: `dart analyze`. Orange: `dartr analyze`. "app" is a 1.56 million line Flutter
-application (pub workspace with analyzer plugins).
+Dark blue: `dart analyze` with a warm cache. Light blue: `dart analyze` with an empty cache.
+Orange: `dartr analyze`. "app" is a 1.56 million line Flutter application (pub workspace with
+analyzer plugins).
 
-| project | Dart lines | `dart analyze` | `dartr analyze` |
-|---|---|---|---|
-| application (pub workspace, analyzer plugins) | 1,559,637 | 76.8 s | 22.1 s |
-| Flutter `packages/flutter` | 1,309,663 | 15.4 s | 6.2 s |
-| `analyzer` 9.0.0 (pub) | 909,249 | 2.5 s | 1.9 s |
-| `flutter_tools` | 455,099 | 2.5 s | 3.5 s |
+| project | Dart lines | `dart analyze`, warm cache | `dart analyze`, empty cache | `dartr analyze` |
+|---|---|---|---|---|
+| application (pub workspace, analyzer plugins) | 1,559,637 | 78.8 s (57.1 to 93.5) | 97.1 s | 24.9 s |
+| Flutter `packages/flutter` | 1,309,663 | 4.3 s | 28.0 s | 7.4 s |
+| `analyzer` 9.0.0 (pub) | 909,249 | 3.3 s (2.3 to 5.0) | 8.7 s | 1.4 s |
+| `flutter_tools` | 455,099 | 2.7 s | 9.5 s | 3.7 s |
 
-dartr is not faster on `flutter_tools` yet: the resolved lints added most of its time, and
-that is the first optimization target. For reference, `dart analyze` with an empty cache on
-an idle machine took 72.8 s, 19.6 s, 7.1 s and 7.6 s on the same four projects.
+dartr is faster than Dart with an empty cache on all four projects. With a warm Dart cache, dartr
+is faster on the application and on `analyzer`, and slower on Flutter and `flutter_tools`. dartr
+also uses much more CPU time than wall time, mostly system time (39 s on Flutter in a 7.4 s run).
+That is the current optimization target.
 
-**Caveat:** these are single runs from 2026-10-10, made while other processes loaded the
-machine (Apple M5 Pro, 15 cores). The final comparison on an idle machine is still to come,
-so treat the numbers as indicative only. Details and method:
-[docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+**Caveat:** measured on 2026-10-10 between 19:45 and 20:30 with `hyperfine` (1 warm-up run, 3
+measured runs) on an Apple M5 Pro with 15 cores, while build agents used the machine (load average
+8 to 18). Dart's times varied more than dartr's. A comparison on an idle machine is still to come.
+To repeat the measurement: `bench/compare.sh` (`COLD=1` adds the empty-cache runs). Details and
+earlier measurements: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 ## License
 

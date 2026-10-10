@@ -55,9 +55,9 @@
       </div>
       <aside class="hero-stat" aria-label="Headline benchmark">
         <div class="k">1.56 million line Flutter app · wall time</div>
-        <div class="row"><span>dart analyze</span><div class="htrack"><div class="bar dart" style="--w:1"></div><b class="val dart">76.8 s</b></div></div>
-        <div class="row"><span>dartr analyze</span><div class="htrack"><div class="bar dartr" style="--w:.2878"></div><b class="val dartr">22.1 s</b></div></div>
-        <p>Full pipeline: errors, warnings, lints, analyzer plugins. Same 20 diagnostics from both tools. Single run on a busy machine. dartr is slower on one of the four test projects; see <a href="#compare">benchmarks</a>.</p>
+        <div class="row"><span>dart analyze</span><div class="htrack"><div class="bar dart" style="--w:1"></div><b class="val dart">78.8 s</b></div></div>
+        <div class="row"><span>dartr analyze</span><div class="htrack"><div class="bar dartr" style="--w:.3160"></div><b class="val dartr">24.9 s</b></div></div>
+        <p>Full pipeline: errors, warnings, lints, analyzer plugins. Same 20 diagnostics from both tools. Mean of 3 runs on a busy machine; Dart with its warm disk cache. On two of the four test projects dartr is slower than a warm Dart cache; see <a href="#compare">benchmarks</a>.</p>
       </aside>
     </div>
   </div>
@@ -118,82 +118,82 @@ port of the Dart SDK 3.13.3 analyzer (pinned reference version)</span></pre>
   <div class="wrap">
     <p class="eyebrow"><b>02</b></p>
     <h2 id="compare-title">Benchmarks</h2>
-    <p class="section-intro"><code>dartr analyze</code> and <code>dart analyze</code> 3.13.3 on the same machine, run one after the other, with the full pipeline (errors, warnings, lints, analyzer plugins). Both report the same diagnostics on all four projects. dartr is faster on three of the four projects and slower on <code>flutter_tools</code> (3.5 s against 2.5 s). Wall time in seconds, lower is better. <code>dart</code> uses its normal disk cache (<code>~/.dartServer</code>). dartr has no disk cache and starts cold every time.</p>
+    <p class="section-intro"><code>dartr analyze</code> and <code>dart analyze</code> 3.13.3 on the same machine, with the full pipeline (errors, warnings, lints, analyzer plugins). Both report the same diagnostics on all four projects. Wall time in seconds, mean of 3 runs, lower is better. dartr has no disk cache, so every run starts cold. <code>dart</code> was measured twice: with its normal disk cache (<code>~/.dartServer</code>), warmed by an earlier run, and with an empty cache. dartr is faster than Dart with an empty cache on all four projects. With a warm Dart cache, dartr is faster on the application and on <code>analyzer</code>, and slower on Flutter and <code>flutter_tools</code>.</p>
 
     <ul class="legend" aria-label="Chart legend">
       <li><span class="sw dart" aria-hidden="true"></span><span><code>dart analyze</code>, warm disk cache</span></li>
       <li><span class="sw dartr" aria-hidden="true"></span><span><code>dartr analyze</code>, cold (no cache)</span></li>
-      <li><span class="sw ref" aria-hidden="true"></span><span>reference: <code>dart analyze</code>, empty cache, idle machine</span></li>
+      <li><span class="sw ref" aria-hidden="true"></span><span><code>dart analyze</code>, empty cache</span></li>
     </ul>
 
     <div class="charts">
       <figure class="chart" aria-labelledby="c1-t">
         <figcaption><b id="c1-t">Flutter application</b><span>1,559,637 lines · plugins</span></figcaption>
-        <div class="bars" role="img" aria-label="Flutter application: dart analyze 76.8 seconds, dartr analyze 22.1 seconds, reference dart analyze with empty cache on idle machine 72.8 seconds.">
+        <div class="bars" role="img" aria-label="Flutter application: dart analyze with warm cache 78.8 seconds, dartr analyze 24.9 seconds, dart analyze with empty cache 97.1 seconds.">
           <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
-          <div class="bar-row"><span class="lbl">dart</span><div class="track"><div class="fill dart" style="--w:.96"></div><span class="val dart">76.8 s</span></div></div>
-          <div class="bar-row"><span class="lbl">dartr</span><div class="track"><div class="fill dartr" style="--w:.27625"></div><span class="val dartr">22.1 s</span></div></div>
-          <div class="bar-row"><span class="lbl">dart, empty cache</span><div class="track"><div class="fill ref" style="--w:.91"></div><span class="val ref">72.8 s</span></div></div>
-          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">20</span><span style="left:50%">40</span><span style="left:75%">60</span><span style="left:100%">80</span></div><span class="axis-title">seconds</span></div>
+          <div class="bar-row"><span class="lbl">dart, warm cache</span><div class="track"><div class="fill dart" style="--w:0.7880"></div><span class="val dart">78.8 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dartr</span><div class="track"><div class="fill dartr" style="--w:0.2490"></div><span class="val dartr">24.9 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dart, empty cache</span><div class="track"><div class="fill ref" style="--w:0.9710"></div><span class="val ref">97.1 s</span></div></div>
+          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">25</span><span style="left:50%">50</span><span style="left:75%">75</span><span style="left:100%">100</span></div><span class="axis-title">seconds</span></div>
         </div>
-        <p class="verdict">dartr: 22.1 s against 76.8 s.</p>
+        <p class="verdict">dartr: 24.9 s against 78.8 s with a warm Dart cache and 97.1 s with an empty one.</p>
       </figure>
 
       <figure class="chart" aria-labelledby="c2-t">
         <figcaption><b id="c2-t">Flutter <code>packages/flutter</code></b><span>1,309,663 lines</span></figcaption>
-        <div class="bars" role="img" aria-label="Flutter packages/flutter: dart analyze 15.4 seconds, dartr analyze 6.2 seconds, reference dart analyze with empty cache on idle machine 19.6 seconds.">
+        <div class="bars" role="img" aria-label="Flutter packages/flutter: dart analyze with warm cache 4.3 seconds, dartr analyze 7.4 seconds, so dartr is slower than the warm cache here. dart analyze with empty cache 28.0 seconds.">
           <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
-          <div class="bar-row"><span class="lbl">dart</span><div class="track"><div class="fill dart" style="--w:.77"></div><span class="val dart">15.4 s</span></div></div>
-          <div class="bar-row"><span class="lbl">dartr</span><div class="track"><div class="fill dartr" style="--w:.31"></div><span class="val dartr">6.2 s</span></div></div>
-          <div class="bar-row"><span class="lbl">dart, empty cache</span><div class="track"><div class="fill ref" style="--w:.98"></div><span class="val ref">19.6 s</span></div></div>
-          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">5</span><span style="left:50%">10</span><span style="left:75%">15</span><span style="left:100%">20</span></div><span class="axis-title">seconds</span></div>
+          <div class="bar-row"><span class="lbl">dart, warm cache</span><div class="track"><div class="fill dart" style="--w:0.1344"></div><span class="val dart">4.3 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dartr</span><div class="track"><div class="fill dartr" style="--w:0.2313"></div><span class="val dartr">7.4 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dart, empty cache</span><div class="track"><div class="fill ref" style="--w:0.8750"></div><span class="val ref">28.0 s</span></div></div>
+          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">8</span><span style="left:50%">16</span><span style="left:75%">24</span><span style="left:100%">32</span></div><span class="axis-title">seconds</span></div>
         </div>
-        <p class="verdict">dartr: 6.2 s against 15.4 s.</p>
+        <p class="verdict slow">dartr is slower than a warm Dart cache here: 7.4 s against 4.3 s. With an empty cache Dart needs 28.0 s.</p>
       </figure>
 
       <figure class="chart" aria-labelledby="c3-t">
         <figcaption><b id="c3-t"><code>analyzer</code> 9.0.0 (pub)</b><span>909,249 lines</span></figcaption>
-        <div class="bars" role="img" aria-label="analyzer 9.0.0: dart analyze 2.5 seconds, dartr analyze 1.9 seconds, reference dart analyze with empty cache on idle machine 7.1 seconds.">
+        <div class="bars" role="img" aria-label="analyzer 9.0.0: dart analyze with warm cache 3.3 seconds, dartr analyze 1.4 seconds, dart analyze with empty cache 8.7 seconds.">
           <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
-          <div class="bar-row"><span class="lbl">dart</span><div class="track"><div class="fill dart" style="--w:.3125"></div><span class="val dart">2.5 s</span></div></div>
-          <div class="bar-row"><span class="lbl">dartr</span><div class="track"><div class="fill dartr" style="--w:.2375"></div><span class="val dartr">1.9 s</span></div></div>
-          <div class="bar-row"><span class="lbl">dart, empty cache</span><div class="track"><div class="fill ref" style="--w:.8875"></div><span class="val ref">7.1 s</span></div></div>
-          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">2</span><span style="left:50%">4</span><span style="left:75%">6</span><span style="left:100%">8</span></div><span class="axis-title">seconds</span></div>
+          <div class="bar-row"><span class="lbl">dart, warm cache</span><div class="track"><div class="fill dart" style="--w:0.3300"></div><span class="val dart">3.3 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dartr</span><div class="track"><div class="fill dartr" style="--w:0.1400"></div><span class="val dartr">1.4 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dart, empty cache</span><div class="track"><div class="fill ref" style="--w:0.8700"></div><span class="val ref">8.7 s</span></div></div>
+          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">2.5</span><span style="left:50%">5</span><span style="left:75%">7.5</span><span style="left:100%">10</span></div><span class="axis-title">seconds</span></div>
         </div>
-        <p class="verdict">dartr: 1.9 s against 2.5 s.</p>
+        <p class="verdict">dartr: 1.4 s against 3.3 s with a warm Dart cache and 8.7 s with an empty one.</p>
       </figure>
 
       <figure class="chart" aria-labelledby="c4-t">
         <figcaption><b id="c4-t"><code>flutter_tools</code></b><span>455,099 lines</span></figcaption>
-        <div class="bars" role="img" aria-label="flutter_tools: dart analyze 2.5 seconds, dartr analyze 3.5 seconds, so dartr is slower here. Reference dart analyze with empty cache on idle machine 7.6 seconds.">
+        <div class="bars" role="img" aria-label="flutter_tools: dart analyze with warm cache 2.7 seconds, dartr analyze 3.7 seconds, so dartr is slower than the warm cache here. dart analyze with empty cache 9.5 seconds.">
           <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
-          <div class="bar-row"><span class="lbl">dart</span><div class="track"><div class="fill dart" style="--w:.3125"></div><span class="val dart">2.5 s</span></div></div>
-          <div class="bar-row"><span class="lbl">dartr</span><div class="track"><div class="fill dartr" style="--w:.4375"></div><span class="val dartr">3.5 s</span></div></div>
-          <div class="bar-row"><span class="lbl">dart, empty cache</span><div class="track"><div class="fill ref" style="--w:.95"></div><span class="val ref">7.6 s</span></div></div>
-          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">2</span><span style="left:50%">4</span><span style="left:75%">6</span><span style="left:100%">8</span></div><span class="axis-title">seconds</span></div>
+          <div class="bar-row"><span class="lbl">dart, warm cache</span><div class="track"><div class="fill dart" style="--w:0.2700"></div><span class="val dart">2.7 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dartr</span><div class="track"><div class="fill dartr" style="--w:0.3700"></div><span class="val dartr">3.7 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dart, empty cache</span><div class="track"><div class="fill ref" style="--w:0.9500"></div><span class="val ref">9.5 s</span></div></div>
+          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">2.5</span><span style="left:50%">5</span><span style="left:75%">7.5</span><span style="left:100%">10</span></div><span class="axis-title">seconds</span></div>
         </div>
-        <p class="verdict slow">dartr is slower here: 3.5 s against 2.5 s. The resolved lints add most of its time. That is the first optimization target.</p>
+        <p class="verdict slow">dartr is slower than a warm Dart cache here: 3.7 s against 2.7 s. With an empty cache Dart needs 9.5 s.</p>
       </figure>
     </div>
 
     <div class="table-wrap">
       <table>
                 <thead>
-          <tr><th scope="col">project</th><th scope="col" class="num">Dart lines</th><th scope="col" class="num">dart analyze</th><th scope="col" class="num">dartr analyze</th><th scope="col" class="num">dart, empty cache, idle</th></tr>
+          <tr><th scope="col">project</th><th scope="col" class="num">Dart lines</th><th scope="col" class="num">dart, warm cache</th><th scope="col" class="num">dartr</th><th scope="col" class="num">dart, empty cache</th></tr>
         </thead>
         <tbody>
-          <tr><th scope="row">Flutter application (pub workspace, analyzer plugins)</th><td class="num">1,559,637</td><td class="num dart">76.8 s</td><td class="num dartr">22.1 s</td><td class="num">72.8 s</td></tr>
-          <tr><th scope="row">Flutter <code>packages/flutter</code></th><td class="num">1,309,663</td><td class="num dart">15.4 s</td><td class="num dartr">6.2 s</td><td class="num">19.6 s</td></tr>
-          <tr><th scope="row"><code>analyzer</code> 9.0.0 (pub)</th><td class="num">909,249</td><td class="num dart">2.5 s</td><td class="num dartr">1.9 s</td><td class="num">7.1 s</td></tr>
-          <tr><th scope="row"><code>flutter_tools</code></th><td class="num">455,099</td><td class="num dart">2.5 s</td><td class="num dartr">3.5 s</td><td class="num">7.6 s</td></tr>
+          <tr><th scope="row">Flutter application (pub workspace, analyzer plugins)</th><td class="num">1,559,637</td><td class="num dart">78.8 s</td><td class="num dartr">24.9 s</td><td class="num">97.1 s</td></tr>
+          <tr><th scope="row">Flutter <code>packages/flutter</code></th><td class="num">1,309,663</td><td class="num dart">4.3 s</td><td class="num dartr">7.4 s</td><td class="num">28.0 s</td></tr>
+          <tr><th scope="row"><code>analyzer</code> 9.0.0 (pub)</th><td class="num">909,249</td><td class="num dart">3.3 s</td><td class="num dartr">1.4 s</td><td class="num">8.7 s</td></tr>
+          <tr><th scope="row"><code>flutter_tools</code></th><td class="num">455,099</td><td class="num dart">2.7 s</td><td class="num dartr">3.7 s</td><td class="num">9.5 s</td></tr>
         </tbody>
       </table>
     </div>
     <p class="table-note">Each chart has its own scale. Source: <a href="https://github.com/orestesgaolin/dartr#benchmarks">README.md</a> and <a href="https://github.com/orestesgaolin/dartr/blob/main/docs/BENCHMARKS.md">docs/BENCHMARKS.md</a>.</p>
 
     <div class="note">
-      <p><b>Caveat.</b> These are single runs from 2026-10-10, made while other processes loaded the machine (Apple M5 Pro, 15 cores). The final comparison on an idle machine is still to come, so treat the numbers as indicative only.</p>
-      <p>The reference column is a different measurement: <code>hyperfine</code>, mean of 3 runs, isolated <code>--cache</code> directory deleted before each run, on an idle machine on 2026-10-09. It shows what <code>dart analyze</code> costs without its cache. dartr has no cache, so every dartr run is a cold run.</p>
+      <p><b>Caveat.</b> Measured on 2026-10-10 between 19:45 and 20:30 with <code>hyperfine</code> (1 warm-up run, 3 measured runs) on an Apple M5 Pro with 15 cores, while build agents used the machine (load average 8 to 18). Dart's times varied more than dartr's: on the application the three warm runs took 57 s to 94 s. A comparison on an idle machine is still to come. To repeat it: <code>bench/compare.sh</code>.</p>
+      <p>dartr used much more CPU time than wall time, especially system time (39 s on Flutter in a 7.4 s run). This is the current optimization target.</p>
     </div>
   </div>
 </section>
