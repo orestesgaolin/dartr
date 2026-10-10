@@ -115,6 +115,11 @@ type Responses = BTreeMap<&'static str, Vec<(String, (u32, u32), Value)>>;
 
 fn run_requests(program: &str, root: &Path, files: &[PathBuf], every: usize) -> Responses {
     let mut c = LspClient::spawn(program, &session_args(), &[]);
+    // A search that indexes large SDK libraries for the first time takes
+    // minutes in a debug build.
+    if std::env::var_os("DARTR_LSP_STEP_TIMEOUT").is_none() {
+        c.step_timeout = std::time::Duration::from_secs(900);
+    }
     let init = c.request("initialize", dart_code_initialize_params(root));
     assert!(init["result"]["capabilities"].is_object(), "{init}");
     c.notify("initialized", json!({}));

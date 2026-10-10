@@ -176,6 +176,10 @@ pub fn member_display_string_with(
 pub fn default_value_code(ctx: &Ctx<'_>, parameter: EId<FormalParameterElement>) -> Option<String> {
     let first = ctx.element_data(parameter.raw())?.first_fragment;
     let fragment = first.cast::<crate::FormalParameterFragment>()?;
+    // An element without fragments (built in memory) has no source.
+    if first.index() as usize >= ctx.store(first.store()).fragments.params.len() {
+        return None;
+    }
     if let Some(expression) = ctx.fragment(fragment).constant_initializer
         && let Some(const_ast) = ctx.store(first.store()).const_ast.try_get()
     {

@@ -80,6 +80,8 @@ pub struct DocumentState {
 
 /// A running server and the state of the session.
 pub struct LspClient {
+    /// The longest time that one step can take.
+    pub step_timeout: Duration,
     child: Child,
     stdin: Option<ChildStdin>,
     rx: Receiver<Option<Value>>,
@@ -144,6 +146,7 @@ impl LspClient {
             }
         });
         LspClient {
+            step_timeout: step_timeout(),
             child,
             stdin,
             rx,
@@ -196,7 +199,7 @@ impl LspClient {
     }
 
     pub fn wait_for_response(&mut self, id: i64) -> Value {
-        let deadline = Instant::now() + step_timeout();
+        let deadline = Instant::now() + self.step_timeout;
         loop {
             let m = self
                 .next_message(deadline)
@@ -218,7 +221,7 @@ impl LspClient {
     #[track_caller]
     pub fn settle(&mut self, expect_analysis: bool) {
         let ends_before = self.progress_ends;
-        let deadline = Instant::now() + step_timeout();
+        let deadline = Instant::now() + self.step_timeout;
         loop {
             match self.next_message(Instant::now() + QUIET) {
                 Some(_) => {}
