@@ -941,7 +941,10 @@ impl Server {
 
     /// Dart `getHierarchyMembersAndParameters(member,
     /// includeParametersForFields: true)`.
-    pub(crate) fn hierarchy_members_and_parameters(&mut self, member: &SElem) -> (Vec<SElem>, Vec<SElem>) {
+    pub(crate) fn hierarchy_members_and_parameters(
+        &mut self,
+        member: &SElem,
+    ) -> (Vec<SElem>, Vec<SElem>) {
         let id = member.id;
         let mut members = Vec::new();
         let mut parameters = Vec::new();

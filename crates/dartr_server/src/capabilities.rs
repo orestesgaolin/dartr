@@ -210,7 +210,7 @@ pub const DART_FEATURES: &[Feature] = &[
         Some("typeHierarchyProvider"),
         true,
     ),
-    feature("WillRenameFilesRegistrations", None, false),
+    feature("WillRenameFilesRegistrations", None, true),
     feature("WorkspaceDidChangeConfigurationRegistrations", None, true),
     feature(
         "WorkspaceSymbolRegistrations",
@@ -368,10 +368,18 @@ pub fn server_capabilities(client: &ClientCapabilities, config: &LspClientConfig
     }
     // Dart `RenameRegistrations.staticOptions`.
     if !client.text_document_dynamic("rename") {
-        let validation = client.raw.pointer("/textDocument/rename/prepareSupport").and_then(Value::as_bool).unwrap_or(false);
+        let validation = client
+            .raw
+            .pointer("/textDocument/rename/prepareSupport")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         c.insert(
             "renameProvider".into(),
-            if validation { json!({"prepareProvider": true}) } else { json!(true) },
+            if validation {
+                json!({"prepareProvider": true})
+            } else {
+                json!(true)
+            },
         );
     }
     if !client.text_document_dynamic("synchronization") {
@@ -401,13 +409,28 @@ pub fn server_capabilities(client: &ClientCapabilities, config: &LspClientConfig
     if !client.text_document_dynamic("selectionRange") {
         c.insert("selectionRangeProvider".into(), json!(true));
     }
-    // `fileOperations` is only for `willRenameFiles`, which dartr does not
-    // implement.
-    c.insert(
-        "workspace".into(),
-        json!({"workspaceFolders": {"supported": true, "changeNotifications": true}}),
+    let mut workspace = Map::new();
+    workspace.insert(
+        "workspaceFolders".into(),
+        json!({"supported": true, "changeNotifications": true}),
     );
+    if config.global().update_imports_on_rename() && !client.workspace_dynamic("fileOperations") {
+        workspace.insert(
+            "fileOperations".into(),
+            json!({"willRename": file_operation_registration_options()}),
+        );
+    }
+    c.insert("workspace".into(), Value::Object(workspace));
     Value::Object(c)
+}
+
+fn file_operation_registration_options() -> Value {
+    json!({
+        "filters": [
+            {"pattern": {"glob": "**/*.dart", "matches": "file"}, "scheme": "file"},
+            {"pattern": {"glob": "**/", "matches": "folder"}, "scheme": "file"},
+        ]
+    })
 }
 
 /// A dynamic registration: the method and its options.
@@ -582,6 +605,12 @@ pub fn dynamic_registrations(
         out.push(reg(
             "textDocument/prepareTypeHierarchy",
             json!({"documentSelector": dart_files()}),
+        ));
+    }
+    if config.global().update_imports_on_rename() && client.workspace_dynamic("fileOperations") {
+        out.push(reg(
+            "workspace/willRenameFiles",
+            file_operation_registration_options(),
         ));
     }
     if client.workspace_dynamic("didChangeConfiguration") {

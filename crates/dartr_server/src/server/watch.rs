@@ -52,7 +52,8 @@ fn watch_events(known: &mut Known, paths: &[PathBuf]) -> Vec<(PathBuf, &'static 
         if path.is_dir() {
             let mut now = std::collections::HashSet::new();
             list_files(path, &mut now);
-            let mut added: Vec<&PathBuf> = now.iter().filter(|f| !known.files.contains(*f)).collect();
+            let mut added: Vec<&PathBuf> =
+                now.iter().filter(|f| !known.files.contains(*f)).collect();
             added.sort();
             for f in added {
                 out.push((f.clone(), "add"));
@@ -81,8 +82,12 @@ fn watch_events(known: &mut Known, paths: &[PathBuf]) -> Vec<(PathBuf, &'static 
             }
         } else {
             // Removed: the known files at or under the path.
-            let mut removed: Vec<PathBuf> =
-                known.files.iter().filter(|f| f.starts_with(path)).cloned().collect();
+            let mut removed: Vec<PathBuf> = known
+                .files
+                .iter()
+                .filter(|f| f.starts_with(path))
+                .cloned()
+                .collect();
             removed.sort();
             for f in removed {
                 out.push((f, "remove"));
@@ -123,7 +128,9 @@ impl Server {
         }
         self.watcher = None;
         self.watched = roots.clone();
-        let Some(tx) = self.watch_tx.clone() else { return };
+        let Some(tx) = self.watch_tx.clone() else {
+            return;
+        };
         let mut known = Known {
             files: std::collections::HashSet::new(),
             start: std::time::SystemTime::now(),
@@ -174,9 +181,14 @@ impl Server {
 
     /// Dart `ContextManagerImpl._handleWatchEvent`.
     pub(super) fn handle_watch_event(&mut self, params: &Value) {
-        let Some(path) = params.get("path").and_then(Value::as_str) else { return };
+        let Some(path) = params.get("path").and_then(Value::as_str) else {
+            return;
+        };
         let path = self.event_path(path);
-        let kind = params.get("type").and_then(Value::as_str).unwrap_or("modify");
+        let kind = params
+            .get("type")
+            .and_then(Value::as_str)
+            .unwrap_or("modify");
         if std::env::var_os("DARTR_DEBUG_WATCH").is_some() {
             eprintln!("WATCH {kind} {path}");
         }
@@ -187,9 +199,14 @@ impl Server {
             self.roots_dirty = true;
             return;
         }
-        let Some(collection) = &self.collection else { return };
+        let Some(collection) = &self.collection else {
+            return;
+        };
         if path.ends_with(".dart") && !self.overlays.contains_key(&path) {
-            let analyzed_by_context = collection.contexts.iter().any(|c| c.root.is_analyzed(&path));
+            let analyzed_by_context = collection
+                .contexts
+                .iter()
+                .any(|c| c.root.is_analyzed(&path));
             match kind {
                 "add" => {
                     // `driver.addFile` for an analyzed file, else
@@ -211,7 +228,10 @@ impl Server {
             }
         }
         // `_checkForAndroidManifestXmlUpdate`.
-        if kind != "remove" && file_kind == FileKind::AndroidManifest && self.non_dart_analyzed.contains(&path) {
+        if kind != "remove"
+            && file_kind == FileKind::AndroidManifest
+            && self.non_dart_analyzed.contains(&path)
+        {
             let files = self.non_dart_analyzed.clone();
             self.publish_non_dart_diagnostics(files);
         }

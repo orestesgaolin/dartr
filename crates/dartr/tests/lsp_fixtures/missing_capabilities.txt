@@ -2,14 +2,6 @@ dart-code static command dart.edit.codeAction.apply
 dart-code static command dart.edit.fixAll
 dart-code static command dart.edit.fixAllInWorkspace
 dart-code static command dart.edit.fixAllInWorkspace.preview
-dart-code static command dart.refactor.add_constructor_name
-dart-code static command dart.refactor.convert_all_formal_parameters_to_named
-dart-code static command dart.refactor.convert_selected_formal_parameters_to_named
-dart-code static command dart.refactor.move_selected_formal_parameters_left
-dart-code static command dart.refactor.move_top_level_to_file
-dart-code static command dart.refactor.remove_constructor_name
-dart-code static command dart.refactor.remove_import_prefix
-dart-code static command dart.refactor_add.import_prefix
 dart-code static experimental.interactiveResolveProvider.kinds
 dart-code static experimental.textDocument.augmentation
 dart-code static experimental.textDocument.augmented
@@ -19,21 +11,12 @@ dart-code dynamic textDocument/codeLens [dart]
 dart-code dynamic textDocument/documentColor [dart]
 dart-code dynamic textDocument/documentLink [dart,**/pubspec.yaml,**/analysis_options.yaml]
 dart-code dynamic textDocument/inlineValue [dart]
-dart-code dynamic workspace/willRenameFiles
 static static codeLensProvider
 static static colorProvider.documentSelector
 static static command dart.edit.codeAction.apply
 static static command dart.edit.fixAll
 static static command dart.edit.fixAllInWorkspace
 static static command dart.edit.fixAllInWorkspace.preview
-static static command dart.refactor.add_constructor_name
-static static command dart.refactor.convert_all_formal_parameters_to_named
-static static command dart.refactor.convert_selected_formal_parameters_to_named
-static static command dart.refactor.move_selected_formal_parameters_left
-static static command dart.refactor.move_top_level_to_file
-static static command dart.refactor.remove_constructor_name
-static static command dart.refactor.remove_import_prefix
-static static command dart.refactor_add.import_prefix
 static static documentLinkProvider.resolveProvider
 static static experimental.interactiveResolveProvider.kinds
 static static experimental.textDocument.augmentation
@@ -41,4 +24,3 @@ static static experimental.textDocument.augmented
 static static experimental.textDocument.super
 static static experimental.updateDiagnosticInformation
 static static inlineValueProvider
-static static workspace.fileOperations.willRename.filters

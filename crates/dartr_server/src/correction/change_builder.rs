@@ -84,6 +84,7 @@ pub struct DartFileData {
     /// Dart `_elementLibrariesToImport`, by element.
     pub element_libraries_to_import: IndexMap<dartr_element::ElementId, String>,
     pub file_header: Option<String>,
+    pub new_file_uri: Option<String>,
 }
 
 /// The state of one file builder (Dart `FileEditBuilderImpl`).
@@ -219,6 +220,45 @@ impl<'w> ChangeBuilder<'w> {
         true
     }
 
+    /// Dart `addDartFileEdit` for a newly created Dart file (`fileStamp = -1`).
+    pub fn add_new_dart_file_edit(
+        &mut self,
+        path: &str,
+        new_file_uri: &str,
+        fallback_resolved: &ResolvedUnitRef,
+        build: impl FnOnce(&mut FileEditBuilder<'_, 'w>),
+    ) {
+        if !self.data.files.contains_key(path) {
+            let eol = self.default_eol.clone();
+            self.data.files.insert(
+                path.to_string(),
+                FileData {
+                    file_edit: SourceFileEdit::new(path, -1),
+                    eol,
+                    pending_positions: Vec::new(),
+                    dart: Some(DartFileData {
+                        resolved: Rc::new(ResolvedUnitRef {
+                            library: fallback_resolved.library.clone(),
+                            index: fallback_resolved.index,
+                        }),
+                        library_path: None,
+                        create_edits_for_imports: true,
+                        libraries_to_import: IndexMap::new(),
+                        element_libraries_to_import: IndexMap::new(),
+                        file_header: None,
+                        new_file_uri: Some(new_file_uri.to_string()),
+                    }),
+                    content: Some(String::new()),
+                },
+            );
+        }
+        let mut builder = FileEditBuilder {
+            change: self,
+            path: path.to_string(),
+        };
+        build(&mut builder);
+    }
+
     /// Dart `_createDartFileEditBuilder`: creates the builder of [path]
     /// (and of its library, for a part). Returns `false` when the file is
     /// not analyzed.
@@ -258,6 +298,7 @@ impl<'w> ChangeBuilder<'w> {
                     libraries_to_import: IndexMap::new(),
                     element_libraries_to_import: IndexMap::new(),
                     file_header: None,
+                    new_file_uri: None,
                 }),
                 content: Some(content),
             },

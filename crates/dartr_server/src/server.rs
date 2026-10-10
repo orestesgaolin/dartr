@@ -58,7 +58,7 @@ use crate::source_edits::apply_changes;
 use crate::transport::{Channel, read_message};
 use crate::uri::{UriError, normalize, path_to_uri, uri_to_path};
 
-mod code_actions;
+pub(crate) mod code_actions;
 mod completion;
 mod editor;
 mod hierarchy;
@@ -71,9 +71,11 @@ mod watch;
 
 pub(crate) use code_actions::SERVER_SUPPORTED_KINDS as SERVER_SUPPORTED_CODE_ACTION_KINDS;
 pub(crate) use code_actions::commands::SUPPORTED as SUPPORTED_COMMANDS;
-pub use nav::ResolvedUnitRef;
 pub use hierarchy::library_children;
-pub use search::{Match, SElem, SearchScope, children_named, class_members, dart_hash_map_order, dart_string_hash};
+pub use nav::ResolvedUnitRef;
+pub use search::{
+    Match, SElem, SearchScope, children_named, class_members, dart_hash_map_order, dart_string_hash,
+};
 
 /// The progress token of analysis (Dart `analyzingProgressToken`).
 const ANALYZING_TOKEN: &str = "ANALYZING";
@@ -169,9 +171,22 @@ enum Pending {
     },
     /// The prompt of a rename with warnings: the rename request is
     /// answered with the edit when the client chooses "Rename Anyway".
-    RenamePrompt { request_id: Value, edit: Value },
+    RenamePrompt {
+        request_id: Value,
+        edit: Value,
+        class_file_rename: Option<(String, String, Value)>,
+    },
+    /// The prompt of renaming a class file along with the class.
+    RenameClassFile {
+        request_id: Value,
+        edit: Value,
+        rename_op: Value,
+    },
     /// The prompt of `refactor.perform` with problems.
-    RefactorPrompt { request_id: Value, edit: Value },
+    RefactorPrompt {
+        request_id: Value,
+        edit: Value,
+    },
 }
 
 /// Dart `_ServerCreatedProgressReporter` for the analysis token.
@@ -565,6 +580,7 @@ impl Server {
                 self.catching(method, |s| s.call_hierarchy_outgoing(&params))
             }
             "workspace/symbol" => self.catching(method, |s| s.workspace_symbol(&params)),
+            "workspace/willRenameFiles" => self.catching(method, |s| s.will_rename_files(&params)),
             "textDocument/codeAction" => self.catching(method, |s| s.code_action(&params)),
             "textDocument/formatting" => self.format_request(&params, FormatKind::Document),
             "textDocument/rangeFormatting" => {
@@ -726,9 +742,16 @@ impl Server {
                 command_name,
                 edit,
             } => self.apply_edit_response(&request_id, &command_name, &edit, message),
-            Pending::RenamePrompt { request_id, edit } => {
-                self.rename_prompt_response(&request_id, edit, message)
-            }
+            Pending::RenamePrompt {
+                request_id,
+                edit,
+                class_file_rename,
+            } => self.rename_prompt_response(&request_id, edit, class_file_rename, message),
+            Pending::RenameClassFile {
+                request_id,
+                edit,
+                rename_op,
+            } => self.rename_class_file_response(&request_id, edit, rename_op, message),
             Pending::RefactorPrompt { request_id, edit } => {
                 self.refactor_prompt_response(&request_id, edit, message)
             }

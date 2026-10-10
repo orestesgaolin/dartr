@@ -33,7 +33,12 @@ pub trait RefactoringHost {
     fn hierarchy_named_parameters(&mut self, parameter: &SElem) -> Vec<SElem>;
 
     /// Dart `SearchEngine.appendAllSubtypes`.
-    fn append_all_subtypes(&mut self, class: &SElem, all: &mut Vec<SElem>, keys: &mut Vec<(usize, ElementKey)>);
+    fn append_all_subtypes(
+        &mut self,
+        class: &SElem,
+        all: &mut Vec<SElem>,
+        keys: &mut Vec<(usize, ElementKey)>,
+    );
 
     /// The files that a search looks at, by driver.
     fn search_scope(&mut self) -> Arc<SearchScope>;
