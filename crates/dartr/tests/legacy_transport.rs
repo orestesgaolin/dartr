@@ -42,7 +42,7 @@ fn legacy_aliases_recover_after_malformed_lines_and_keep_logs_off_stdout() {
         writeln!(
             input,
             "{}",
-            json!({"id":"unsupported","method":"edit.bulkFixes"})
+            json!({"id":"unsupported","method":"completion.registerLibraryPaths"})
         )
         .unwrap();
         writeln!(input, "{}", json!({"id":"stop","method":"server.shutdown"})).unwrap();
