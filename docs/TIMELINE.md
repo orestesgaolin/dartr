@@ -77,6 +77,9 @@ at each merge; the final process report is written from it.
 | 10-10 08:40 | 1235fe5 | analyzer plugins in `dartr analyze` (dartr_plugins + Dart bridge) | Opus | **visible-app 20/20 exact vs `dart analyze`** (incl. jaspr_lints plugin), 5,574 tests |
 | 10-10 09:40 | 4a6bf13 | LSP navigation: definition, typeDefinition, hover, references, documentHighlight, implementation, search index | Opus | 333 fixture positions identical for 4 methods; references/implementation same locations (order differs where Dart's order depends on earlier requests); 5,578 tests |
 | 10-10 07:20 | 260fd05 | lint batch B (82 rules), unnecessary_ignore / removed_lint_use / replaced_lint_use | Opus | analyzer-9.0.0: **27,278/27,278 matched**, 5 extra (4 unnecessary_ignore, 1 analyzer_public_api); visible-app 20/20; flutter, flutter_tools exact |
+| 10-10 11:20 | 255b94d | last analyzer-9.0.0 differences (unnecessary_ignore, analyzer_public_api, two rules) | Opus | analyzer-9.0.0 **27,278/27,278, 0 extra**; lints 57,211/57,211 (unseen) |
+| 10-10 12:30 | 8790cf2 | LSP: signature help, semantic tokens, inlay hints, call/type hierarchy, workspace symbols | Opus | compared with `dart language-server` on fixtures; 5,580 tests |
+| 10-10 13:00 | 5a40205 | release preparation: LICENSE, notices, README guide, release workflow, Homebrew formula | Opus | `dartr --version` checked; tag `v0.1.0-preview.1` pushed |
 
 ## Incidents and lessons
 
