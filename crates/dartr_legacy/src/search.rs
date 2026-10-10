@@ -2569,4 +2569,528 @@ impl<'a> SearchEngine<'a> {
         }
         Some(members)
     }
+
+    /// Computes `search.getElementDeclarations` (`FindDeclarations`).
+    pub fn get_element_declarations(
+        &mut self,
+        pattern: &str,
+        max_results: Option<i64>,
+        only_for_file: Option<&str>,
+    ) -> protocol::SearchGetElementDeclarationsResult {
+        let max = max_results.map(|m| usize::try_from(m.max(0)).unwrap_or(usize::MAX));
+        if max == Some(0) {
+            return protocol::SearchGetElementDeclarationsResult {
+                declarations: Vec::new(),
+                files: Vec::new(),
+            };
+        }
+        self.search_scope();
+        let mut entries: Vec<(String, usize)> = self
+            .owned
+            .added
+            .iter()
+            .map(|(f, c)| (f.clone(), *c))
+            .collect();
+        entries.extend(self.owned.known.iter().map(|(f, c)| (f.clone(), *c)));
+
+        let mut matcher = dartr_server::fuzzy::FuzzyMatcher::new(pattern);
+        let mut declarations = Vec::new();
+        let mut files = Vec::new();
+        let mut path_to_index: FxHashMap<String, i64> = FxHashMap::default();
+        let mut processed: HashSet<(usize, String)> = HashSet::new();
+
+        for (file, owner) in entries {
+            let Some(linked) = self
+                .session
+                .linked_library_in(self.collection, owner, &file)
+            else {
+                continue;
+            };
+            let key = (owner, linked.library_path.clone());
+            if !processed.insert(key) {
+                continue;
+            }
+            if only_for_file.is_some_and(|only| linked.library_path != only) {
+                continue;
+            }
+            let sink = NoopSink;
+            let features = dartr_element::FeatureSet::default();
+            let ctx = linked.ctx(&sink, &features);
+            let Some(library) = ctx.world.libraries.get(linked.uri.as_str()).copied() else {
+                continue;
+            };
+            let mut finder = LegacyLibraryDeclarations {
+                matcher: &mut matcher,
+                declarations: &mut declarations,
+                files: &mut files,
+                path_to_index: &mut path_to_index,
+                max,
+            };
+            if finder.compute(&ctx, library).is_err() {
+                break;
+            }
+        }
+
+        protocol::SearchGetElementDeclarationsResult {
+            declarations,
+            files,
+        }
+    }
+}
+
+struct FullDeclarations;
+
+struct LegacyLibraryDeclarations<'a> {
+    matcher: &'a mut dartr_server::fuzzy::FuzzyMatcher,
+    declarations: &'a mut Vec<protocol::ElementDeclaration>,
+    files: &'a mut Vec<String>,
+    path_to_index: &'a mut FxHashMap<String, i64>,
+    max: Option<usize>,
+}
+
+impl LegacyLibraryDeclarations<'_> {
+    fn is_full(&self) -> bool {
+        self.max.is_some_and(|m| self.declarations.len() >= m)
+    }
+
+    fn name(ctx: &Ctx<'_>, e: ElementId) -> Option<String> {
+        ctx.element_data(e)
+            .and_then(|d| d.name)
+            .map(|n| ctx.name_str(n).to_string())
+    }
+
+    fn first_flags(ctx: &Ctx<'_>, e: ElementId) -> FragmentFlags {
+        ctx.element_data(e)
+            .and_then(|d| ctx.fragment_data(d.first_fragment))
+            .map(|f| f.flags.get())
+            .unwrap_or_default()
+    }
+
+    fn search_element_kind(ctx: &Ctx<'_>, e: ElementId) -> Option<protocol::ElementKind> {
+        Some(match e.tag() {
+            Tag::Enum => protocol::ElementKind::ENUM,
+            Tag::ExtensionType => protocol::ElementKind::ExtensionType,
+            Tag::Mixin => protocol::ElementKind::MIXIN,
+            Tag::Class => {
+                if Self::first_flags(ctx, e)
+                    .contains(FragmentFlags::CLASS_FRAGMENT_IS_MIXIN_APPLICATION)
+                {
+                    protocol::ElementKind::ClassTypeAlias
+                } else {
+                    protocol::ElementKind::CLASS
+                }
+            }
+            Tag::Constructor => protocol::ElementKind::CONSTRUCTOR,
+            Tag::Extension => protocol::ElementKind::EXTENSION,
+            Tag::Field => {
+                if dartr_resolver::element_ext::is_enum_constant(ctx, e) {
+                    protocol::ElementKind::EnumConstant
+                } else {
+                    protocol::ElementKind::FIELD
+                }
+            }
+            Tag::LocalFunction | Tag::TopLevelFunction => protocol::ElementKind::FUNCTION,
+            Tag::Method => protocol::ElementKind::METHOD,
+            Tag::Getter => protocol::ElementKind::GETTER,
+            Tag::Setter => protocol::ElementKind::SETTER,
+            Tag::TypeAlias => protocol::ElementKind::TypeAlias,
+            Tag::TopLevelVariable | Tag::LocalVariable | Tag::FormalParameter => {
+                protocol::ElementKind::TopLevelVariable
+            }
+            _ => return None,
+        })
+    }
+
+    fn add(&mut self, ctx: &Ctx<'_>, e: ElementId, name: String) -> Result<(), FullDeclarations> {
+        if self.is_full() {
+            return Err(FullDeclarations);
+        }
+        let enclosing = ctx.element_data(e).and_then(|d| d.enclosing);
+        let (mut class_name, mut mixin_name) = (None, None);
+        match enclosing.map(|x| x.tag()) {
+            Some(Tag::Enum) => {}
+            Some(Tag::Mixin) => mixin_name = enclosing.and_then(|x| Self::name(ctx, x)),
+            Some(Tag::Class) | Some(Tag::ExtensionType) => {
+                class_name = enclosing.and_then(|x| Self::name(ctx, x))
+            }
+            _ => {}
+        }
+        let filtered = if e.tag() == Tag::Constructor {
+            let class = enclosing
+                .and_then(|x| Self::name(ctx, x))
+                .unwrap_or_else(|| "<null>".into());
+            if name == "new" {
+                class
+            } else {
+                format!("{class}.{name}")
+            }
+        } else {
+            name.clone()
+        };
+        if self.matcher.score(&filtered) < 0.0 {
+            return Ok(());
+        }
+        let Some(kind) = Self::search_element_kind(ctx, e) else {
+            return Ok(());
+        };
+        let parameters = if dartr_server::element_locator::is_executable(e) {
+            let display = dartr_element::display_string::element_display_string_with(
+                ctx,
+                e,
+                DisplayOptions::default(),
+            );
+            match display.find('(') {
+                Some(i) if i > 0 => Some(display[i..].to_string()),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        let Some(first) = ctx.element_data(e).map(|d| d.first_fragment) else {
+            return Ok(());
+        };
+        let Some(lib_frag_id) = find_library_fragment(ctx, first) else {
+            return Ok(());
+        };
+        let lib_frag = ctx.fragment(lib_frag_id);
+        let file_path = lib_frag.source.path.to_string();
+        let Some(data) = ctx.fragment_data(first) else {
+            return Ok(());
+        };
+        let mut location_offset = data.name_offset;
+        if location_offset.is_none()
+            && let Some(c) = first.cast::<dartr_element::ConstructorFragment>()
+        {
+            location_offset = ctx.fragment(c).type_name_offset;
+        }
+        let Some(location_offset) = location_offset else {
+            return Ok(());
+        };
+        let (line, column) =
+            crate::convert::line_col_from_starts(&lib_frag.line_starts, location_offset);
+        let file_index = match self.path_to_index.get(&file_path) {
+            Some(&idx) => idx,
+            None => {
+                let idx = self.files.len() as i64;
+                self.files.push(file_path.clone());
+                self.path_to_index.insert(file_path, idx);
+                idx
+            }
+        };
+        self.declarations.push(protocol::ElementDeclaration {
+            name,
+            kind,
+            file_index,
+            offset: location_offset as i64,
+            line: line as i64,
+            column: column as i64,
+            code_offset: data.code_offset.unwrap_or(0) as i64,
+            code_length: data.code_length.unwrap_or(0) as i64,
+            class_name,
+            mixin_name,
+            parameters,
+        });
+        Ok(())
+    }
+
+    fn origin(ctx: &Ctx<'_>, e: ElementId) -> bool {
+        let f = Self::first_flags(ctx, e);
+        match e.tag() {
+            Tag::Constructor => {
+                f.contains(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_ORIGIN_DECLARATION)
+            }
+            Tag::Field | Tag::TopLevelVariable => {
+                f.contains(FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_DECLARATION)
+            }
+            Tag::Getter | Tag::Setter => {
+                f.contains(FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_DECLARATION)
+            }
+            _ => true,
+        }
+    }
+
+    fn named(
+        &mut self,
+        ctx: &Ctx<'_>,
+        elements: &[ElementId],
+        check_origin: bool,
+        display: bool,
+    ) -> Result<(), FullDeclarations> {
+        for &e in elements {
+            if check_origin && !Self::origin(ctx, e) {
+                continue;
+            }
+            let name = if display {
+                Some(support::display_name(ctx, e))
+            } else {
+                Self::name(ctx, e)
+            };
+            if let Some(n) = name {
+                self.add(ctx, e, n)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn members(
+        &mut self,
+        ctx: &Ctx<'_>,
+        e: ElementId,
+        with_constructors: bool,
+    ) -> Result<(), FullDeclarations> {
+        let Some(instance) = e.cast::<InstanceElement>() else {
+            return Ok(());
+        };
+        let data = ctx.instance(instance);
+        let getters: Vec<ElementId> = data.getters.iter().map(|x| x.raw()).collect();
+        let fields: Vec<ElementId> = data.fields.iter().map(|x| x.raw()).collect();
+        let methods: Vec<ElementId> = data.methods.iter().map(|x| x.raw()).collect();
+        let setters: Vec<ElementId> = data.setters.iter().map(|x| x.raw()).collect();
+        if with_constructors {
+            self.named(ctx, &getters, true, true)?;
+            if let Some(interface) = e.cast::<InterfaceElement>() {
+                let constructors: Vec<ElementId> = ctx
+                    .interface(interface)
+                    .constructors
+                    .iter()
+                    .map(|x| x.raw())
+                    .collect();
+                self.named(ctx, &constructors, true, false)?;
+            }
+            self.named(ctx, &fields, true, false)?;
+            self.named(ctx, &methods, false, false)?;
+            self.named(ctx, &setters, true, true)?;
+        } else {
+            self.named(ctx, &fields, true, false)?;
+            self.named(ctx, &getters, true, true)?;
+            self.named(ctx, &methods, false, false)?;
+            self.named(ctx, &setters, true, true)?;
+        }
+        Ok(())
+    }
+
+    fn classes(&mut self, ctx: &Ctx<'_>, elements: &[ElementId]) -> Result<(), FullDeclarations> {
+        for &e in elements {
+            if let Some(name) = Self::name(ctx, e) {
+                self.add(ctx, e, name)?;
+                self.members(ctx, e, true)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn compute(
+        &mut self,
+        ctx: &Ctx<'_>,
+        library: EId<LibraryElement>,
+    ) -> Result<(), FullDeclarations> {
+        if self.is_full() {
+            return Err(FullDeclarations);
+        }
+        let l = ctx.get(library);
+        let ids = |v: Vec<ElementId>| v;
+        self.classes(ctx, &ids(l.classes.iter().map(|x| x.raw()).collect()))?;
+        self.named(
+            ctx,
+            &ids(l.getters.iter().map(|x| x.raw()).collect()),
+            true,
+            true,
+        )?;
+        self.classes(ctx, &ids(l.enums.iter().map(|x| x.raw()).collect()))?;
+        self.classes(ctx, &ids(l.mixins.iter().map(|x| x.raw()).collect()))?;
+        for &e in &l.extensions {
+            let e = e.raw();
+            if let Some(name) = Self::name(ctx, e) {
+                self.add(ctx, e, name)?;
+            }
+            self.members(ctx, e, false)?;
+        }
+        self.classes(
+            ctx,
+            &ids(l.extension_types.iter().map(|x| x.raw()).collect()),
+        )?;
+        self.named(
+            ctx,
+            &ids(l.setters.iter().map(|x| x.raw()).collect()),
+            true,
+            true,
+        )?;
+        self.named(
+            ctx,
+            &ids(l.top_level_functions.iter().map(|x| x.raw()).collect()),
+            false,
+            false,
+        )?;
+        self.named(
+            ctx,
+            &ids(l.top_level_variables.iter().map(|x| x.raw()).collect()),
+            true,
+            false,
+        )?;
+        self.named(
+            ctx,
+            &ids(l.type_aliases.iter().map(|x| x.raw()).collect()),
+            false,
+            false,
+        )?;
+        Ok(())
+    }
+}
+
+/// Computes `analysis.getImportedElements` (`ImportedElementsComputer`).
+pub fn compute_imported_elements(
+    ctx: &Ctx<'_>,
+    ast: &Ast,
+    tables: &dartr_element::ResolutionTables,
+    unit: Id<CompilationUnit>,
+    offset: i64,
+    length: i64,
+) -> Vec<protocol::ImportedElements> {
+    let directives = ast.list_raw(ast[unit].directives);
+    if let Some(&last) = directives.last()
+        && offset < ast.end(last) as i64
+    {
+        return Vec::new();
+    }
+    let mut visitor = ImportedElementsVisitor {
+        ctx,
+        tables,
+        start_offset: offset,
+        end_offset: offset.saturating_add(length),
+        imported_elements: IndexMap::new(),
+    };
+    visitor.visit_node(ast, unit.raw());
+    visitor.imported_elements.into_values().collect()
+}
+
+struct ImportedElementsVisitor<'a, 'b> {
+    ctx: &'a Ctx<'b>,
+    tables: &'a dartr_element::ResolutionTables,
+    start_offset: i64,
+    end_offset: i64,
+    imported_elements: IndexMap<String, protocol::ImportedElements>,
+}
+
+impl ImportedElementsVisitor<'_, '_> {
+    fn overlaps(&self, ast: &Ast, node: impl Into<NodeId>) -> bool {
+        let n = node.into();
+        (ast.offset(n) as i64) <= self.end_offset && (ast.end(n) as i64) >= self.start_offset
+    }
+
+    fn element(&self, node: impl Into<NodeId>) -> Option<ElementId> {
+        self.tables
+            .element
+            .get(node.into())
+            .map(|&e| member::base_element(self.ctx, e))
+    }
+
+    fn get_prefix_from(&self, ast: &Ast, identifier: Id<SimpleIdentifier>) -> String {
+        if self.overlaps(ast, identifier)
+            && let Some(el) = self.element(identifier)
+            && el.tag() == Tag::Prefix
+        {
+            return self
+                .ctx
+                .element_data(el)
+                .and_then(|d| d.name)
+                .map(|n| self.ctx.name_str(n).to_string())
+                .unwrap_or_default();
+        }
+        String::new()
+    }
+
+    fn add_element(&mut self, prefix: &str, element: Option<ElementId>) {
+        let Some(element) = element else {
+            return;
+        };
+        if element.tag() == Tag::Prefix {
+            return;
+        }
+        if !self
+            .ctx
+            .element_data(element)
+            .and_then(|d| d.enclosing)
+            .is_some_and(|e| e.tag() == Tag::Library)
+        {
+            return;
+        }
+        let Some(lib) = support::library_of(self.ctx, element) else {
+            return;
+        };
+        let path = self
+            .ctx
+            .fragment(self.ctx.get(lib).first_fragment())
+            .source
+            .path
+            .to_string();
+        let key = format!("{prefix};{path}");
+        let entry =
+            self.imported_elements
+                .entry(key)
+                .or_insert_with(|| protocol::ImportedElements {
+                    path,
+                    prefix: prefix.to_string(),
+                    elements: Vec::new(),
+                });
+        if let Some(element_name) = self
+            .ctx
+            .element_data(element)
+            .and_then(|d| d.name)
+            .map(|n| self.ctx.name_str(n).to_string())
+            && !entry.elements.contains(&element_name)
+        {
+            entry.elements.push(element_name);
+        }
+    }
+
+    fn visit_node(&mut self, ast: &Ast, node: NodeId) {
+        if !self.overlaps(ast, node) {
+            return;
+        }
+        if let Some(named_type) = ast.cast::<NamedType>(node) {
+            let prefix = ast[named_type]
+                .import_prefix
+                .and_then(|p| self.element(p))
+                .and_then(|e| self.ctx.element_data(e)?.name)
+                .map(|n| self.ctx.name_str(n).to_string())
+                .unwrap_or_default();
+            let el = self.element(named_type);
+            self.add_element(&prefix, el);
+            ast.visit_children(node, self);
+        } else if let Some(ident) = ast.cast::<SimpleIdentifier>(node) {
+            let is_ctor_return_type = ast
+                .parent(ident)
+                .and_then(|p| ast.cast::<ConstructorDeclaration>(p))
+                .is_some_and(|c| ast[c].type_name == Some(ident.into()));
+            if !support::in_declaration_context(ast, ident) && !is_ctor_return_type {
+                let node_element =
+                    support::write_or_read_element(self.ctx, ast, self.tables, ident)
+                        .or_else(|| support::read_element(self.ctx, self.tables, ident))
+                        .or_else(|| self.element(ident));
+                let mut prefix = String::new();
+                if let Some(parent) = ast.parent(ident) {
+                    if let Some(prefixed) = ast.cast::<PrefixedIdentifier>(parent)
+                        && ast[prefixed].identifier == ident
+                    {
+                        prefix = self.get_prefix_from(ast, ast[prefixed].prefix);
+                    } else if let Some(inv) = ast.cast::<MethodInvocation>(parent)
+                        && ast[inv].method_name == ident
+                        && let Some(target) = ast[inv].target
+                        && let Some(target_ident) = ast.cast::<SimpleIdentifier>(target)
+                    {
+                        prefix = self.get_prefix_from(ast, target_ident);
+                    }
+                }
+                self.add_element(&prefix, node_element);
+            }
+        } else {
+            ast.visit_children(node, self);
+        }
+    }
+}
+
+impl AstVisitor for ImportedElementsVisitor<'_, '_> {
+    fn visit_node(&mut self, ast: &Ast, node: NodeId) {
+        ImportedElementsVisitor::visit_node(self, ast, node);
+    }
 }

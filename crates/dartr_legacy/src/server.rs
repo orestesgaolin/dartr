@@ -36,38 +36,63 @@ pub const IMPLEMENTED_REQUESTS: &[&str] = &[
     "server.getVersion",
     "server.shutdown",
     "server.setSubscriptions",
-    "analysis.setAnalysisRoots",
-    "analysis.updateContent",
-    "analysis.setPriorityFiles",
-    "analysis.setSubscriptions",
+    "server.cancelRequest",
+    "server.setClientCapabilities",
     "analysis.getErrors",
     "analysis.getHover",
+    "analysis.getImportedElements",
+    "analysis.getLibraryDependencies",
     "analysis.getNavigation",
     "analysis.getReachableSources",
+    "analysis.getSignature",
     "analysis.reanalyze",
+    "analysis.setAnalysisRoots",
+    "analysis.setGeneralSubscriptions",
+    "analysis.setPriorityFiles",
+    "analysis.setSubscriptions",
+    "analysis.updateContent",
+    "analysis.updateOptions",
     "search.findElementReferences",
     "search.findMemberDeclarations",
     "search.findMemberReferences",
     "search.findTopLevelDeclarations",
+    "search.getElementDeclarations",
     "search.getTypeHierarchy",
     "edit.format",
     "edit.sortMembers",
     "edit.organizeDirectives",
+    "execution.createContext",
+    "execution.deleteContext",
+    "execution.getSuggestions",
+    "execution.mapUri",
+    "execution.setSubscriptions",
+    "diagnostic.getDiagnostics",
+    "diagnostic.getServerPort",
+    "analytics.isEnabled",
+    "analytics.enable",
+    "analytics.sendEvent",
+    "analytics.sendTiming",
 ];
 pub const IMPLEMENTED_NOTIFICATIONS: &[&str] = &[
     "server.connected",
-    "server.status",
     "server.error",
+    "server.pluginError",
+    "server.log",
+    "server.status",
+    "analysis.analyzedFiles",
+    "analysis.closingLabels",
     "analysis.errors",
     "analysis.flushResults",
     "analysis.folding",
-    "analysis.navigation",
     "analysis.highlights",
+    "analysis.implemented",
+    "analysis.invalidate",
+    "analysis.navigation",
     "analysis.occurrences",
     "analysis.outline",
-    "analysis.implemented",
     "analysis.overrides",
     "search.results",
+    "execution.launchData",
 ];
 
 #[derive(Debug)]
@@ -169,6 +194,44 @@ fn valid_paths(paths: &[String]) -> Result<()> {
     Ok(())
 }
 
+fn now_millis() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+fn is_client_response(value: &Value) -> bool {
+    let Some(obj) = value.as_object() else {
+        return false;
+    };
+    if obj.contains_key("method") {
+        return false;
+    }
+    if !obj.get("id").is_some_and(Value::is_string) {
+        return false;
+    }
+    if !obj
+        .get("result")
+        .is_none_or(|v| v.is_null() || v.is_object())
+    {
+        return false;
+    }
+    if let Some(err) = obj.get("error")
+        && !err.is_null()
+        && serde_json::from_value::<protocol::RequestError>(err.clone()).is_err()
+    {
+        return false;
+    }
+    true
+}
+
+struct RequestStat {
+    method: String,
+    client_request_time: i64,
+    server_request_time: i64,
+}
+
 struct Server<W: Write> {
     channel: Channel<W>,
     options: ServerOptions,
@@ -178,6 +241,15 @@ struct Server<W: Write> {
     priority: Vec<String>,
     subscriptions: IndexMap<String, Vec<String>>,
     status_subscribed: bool,
+    log_subscribed: bool,
+    general_analyzed_files_subscribed: bool,
+    prev_analyzed_files: Option<IndexSet<String>>,
+    client_requests: Vec<String>,
+    supports_uris: bool,
+    execution_contexts: IndexMap<String, String>,
+    next_execution_context_id: u64,
+    diagnostic_listener: Option<std::net::TcpListener>,
+    request_stats: FxHashMap<String, RequestStat>,
     collection: Option<AnalysisContextCollection>,
     driver_session: DriverSession,
     owned_files: OwnedFiles,
@@ -201,6 +273,15 @@ pub fn run<R: BufRead, W: Write>(options: ServerOptions, input: R, channel: Chan
         priority: Vec::new(),
         subscriptions: IndexMap::new(),
         status_subscribed: false,
+        log_subscribed: false,
+        general_analyzed_files_subscribed: false,
+        prev_analyzed_files: None,
+        client_requests: Vec::new(),
+        supports_uris: false,
+        execution_contexts: IndexMap::new(),
+        next_execution_context_id: 0,
+        diagnostic_listener: None,
+        request_stats: FxHashMap::default(),
         collection: None,
         driver_session: DriverSession::default(),
         owned_files: OwnedFiles::default(),
@@ -249,6 +330,9 @@ pub fn run<R: BufRead, W: Write>(options: ServerOptions, input: R, channel: Chan
             {
                 value
             }
+            Ok(value) if is_client_response(&value) => {
+                continue;
+            }
             _ => {
                 if server
                     .error_response(
@@ -269,6 +353,13 @@ pub fn run<R: BufRead, W: Write>(options: ServerOptions, input: R, channel: Chan
             .get("params")
             .filter(|v| !v.is_null())
             .unwrap_or(&empty);
+        let client_request_time = message.get("clientRequestTime").and_then(Value::as_i64);
+        if server
+            .log_request(id, method, params, client_request_time)
+            .is_err()
+        {
+            return 1;
+        }
         let handled = catch_unwind(AssertUnwindSafe(|| server.handle(id, method, params)));
         match handled {
             Ok(Ok(true)) => return 0,
@@ -316,11 +407,115 @@ pub fn run<R: BufRead, W: Write>(options: ServerOptions, input: R, channel: Chan
 }
 
 impl<W: Write> Server<W> {
+    fn send_log_entry(&mut self, kind: &str, data: Value) -> io::Result<()> {
+        if !self.log_subscribed {
+            return Ok(());
+        }
+        self.channel.send(&json!({
+            "event": "server.log",
+            "params": {
+                "time": now_millis(),
+                "kind": kind,
+                "data": data,
+                "sdkVersion": "3.13.3",
+            }
+        }))
+    }
+    fn log_request(
+        &mut self,
+        id: &str,
+        method: &str,
+        params: &Value,
+        client_request_time: Option<i64>,
+    ) -> io::Result<()> {
+        if self.log_subscribed {
+            let mut map = serde_json::Map::new();
+            map.insert("id".into(), json!(id));
+            map.insert("method".into(), json!(method));
+            if method == "analysis.updateContent" {
+                if let Some(t) = client_request_time {
+                    map.insert("clientRequestTime".into(), json!(t));
+                }
+                if let Some(files) = params.get("files").and_then(Value::as_object) {
+                    let keys: Vec<String> = files.keys().cloned().collect();
+                    map.insert("files".into(), json!(keys));
+                }
+            } else {
+                if let Some(obj) = params.as_object()
+                    && !obj.is_empty()
+                {
+                    map.insert("params".into(), params.clone());
+                }
+                if let Some(t) = client_request_time {
+                    map.insert("clientRequestTime".into(), json!(t));
+                }
+            }
+            self.send_log_entry("REQUEST", Value::Object(map))?;
+        }
+        if let Some(client_ms) = client_request_time {
+            self.request_stats.insert(
+                id.to_owned(),
+                RequestStat {
+                    method: method.to_owned(),
+                    client_request_time: client_ms,
+                    server_request_time: now_millis(),
+                },
+            );
+        }
+        Ok(())
+    }
+    fn log_response(&mut self, id: &str) -> io::Result<()> {
+        let Some(stat) = self.request_stats.remove(id) else {
+            return Ok(());
+        };
+        if !self.log_subscribed {
+            return Ok(());
+        }
+        self.send_log_entry(
+            "RESPONSE",
+            json!({
+                "id": id,
+                "method": stat.method,
+                "clientRequestTime": stat.client_request_time,
+                "serverRequestTime": stat.server_request_time,
+                "responseTime": now_millis(),
+            }),
+        )
+    }
     fn notify(&mut self, event: &str, params: Value) -> io::Result<()> {
         self.channel
-            .send(&json!({"event": event, "params": params}))
+            .send(&json!({"event": event, "params": &params}))?;
+        if self.log_subscribed
+            && event != "server.log"
+            && event != "analysis.errors"
+            && event != "completion.availableSuggestions"
+        {
+            let mut map = serde_json::Map::new();
+            map.insert("event".into(), json!(event));
+            if matches!(
+                event,
+                "analysis.highlights"
+                    | "analysis.implemented"
+                    | "analysis.navigation"
+                    | "analysis.outline"
+                    | "analysis.overrides"
+            ) && let Some(f) = params.get("file")
+            {
+                map.insert("file".into(), f.clone());
+            }
+            if event == "server.status"
+                && let Some(is_analyzing) =
+                    params.get("analysis").and_then(|a| a.get("isAnalyzing"))
+            {
+                map.insert("isAnalyzing".into(), is_analyzing.clone());
+            }
+            self.send_log_entry("NOTIFICATION", Value::Object(map))?;
+        }
+        Ok(())
     }
     fn response(&mut self, id: &str, result: Option<Value>) -> Result<()> {
+        self.log_response(id)
+            .map_err(|e| RequestFailure::new("SERVER_ERROR", e.to_string()))?;
         let mut response = json!({"id": id});
         if let Some(result) = result {
             response["result"] = result;
@@ -330,6 +525,7 @@ impl<W: Write> Server<W> {
             .map_err(|e| RequestFailure::new("SERVER_ERROR", e.to_string()))
     }
     fn error_response(&mut self, id: &str, error: RequestFailure) -> io::Result<()> {
+        self.log_response(id)?;
         let error = protocol::RequestError {
             code: serde_json::from_value(json!(error.code)).expect("known protocol error code"),
             message: error.message,
@@ -387,6 +583,51 @@ impl<W: Write> Server<W> {
                     }
                 }
                 self.status_subscribed = services.iter().any(|s| s == "STATUS");
+                self.log_subscribed = services.iter().any(|s| s == "LOG");
+                self.response(id, None)?;
+            }
+            "server.cancelRequest" => {
+                let _cancel_id = string(field(params, "id")?, "params.id")?;
+                self.response(id, None)?;
+            }
+            "server.setClientCapabilities" => {
+                let requests = strings(field(params, "requests")?, "params.requests")?;
+                let supports_uris = match params.get("supportsUris") {
+                    Some(v) if !v.is_null() => boolean(v, "params.supportsUris")?,
+                    _ => false,
+                };
+                if let Some(lsp_caps) = params.get("lspCapabilities")
+                    && let Some(obj) = lsp_caps.as_object()
+                {
+                    for key in [
+                        "general",
+                        "notebookDocument",
+                        "textDocument",
+                        "window",
+                        "workspace",
+                    ] {
+                        if let Some(val) = obj.get(key)
+                            && !val.is_null()
+                            && !val.is_object()
+                        {
+                            let ty = match val {
+                                Value::Bool(_) => "bool",
+                                Value::Number(_) => "int",
+                                Value::String(_) => "String",
+                                Value::Array(_) => "List",
+                                _ => "Object",
+                            };
+                            return Err(RequestFailure::new(
+                                "INVALID_PARAMETER",
+                                format!(
+                                    "The 'lspCapabilities' parameter was invalid: {key} must be of type {ty}"
+                                ),
+                            ));
+                        }
+                    }
+                }
+                self.client_requests = requests;
+                self.supports_uris = supports_uris;
                 self.response(id, None)?;
             }
             "analysis.setAnalysisRoots" => {
@@ -406,6 +647,28 @@ impl<W: Write> Server<W> {
                 self.dirty = true;
                 self.response(id, None)?;
             }
+            "analysis.setGeneralSubscriptions" => {
+                let services = strings(field(params, "subscriptions")?, "params.subscriptions")?;
+                for (i, service) in services.iter().enumerate() {
+                    if service != "ANALYZED_FILES" {
+                        return Err(RequestFailure::mismatch(
+                            &format!("params.subscriptions[{i}]"),
+                            "GeneralAnalysisService",
+                            &json!(service),
+                        ));
+                    }
+                }
+                let new_subscribed = services.iter().any(|s| s == "ANALYZED_FILES");
+                let old_subscribed = self.general_analyzed_files_subscribed;
+                self.general_analyzed_files_subscribed = new_subscribed;
+                if new_subscribed && !old_subscribed && !self.dirty {
+                    self.send_analyzed_files()
+                        .map_err(|e| RequestFailure::new("SERVER_ERROR", e.to_string()))?;
+                } else if !new_subscribed && old_subscribed {
+                    self.prev_analyzed_files = None;
+                }
+                self.response(id, None)?;
+            }
             "analysis.setPriorityFiles" => {
                 let files = strings(field(params, "files")?, "params.files")?;
                 valid_paths(&files)?;
@@ -421,6 +684,7 @@ impl<W: Write> Server<W> {
                         "FOLDING",
                         "HIGHLIGHTS",
                         "IMPLEMENTED",
+                        "INVALIDATE",
                         "NAVIGATION",
                         "OCCURRENCES",
                         "OUTLINE",
@@ -447,6 +711,25 @@ impl<W: Write> Server<W> {
                 self.update_content(params)?;
                 self.dirty = true;
                 self.response(id, Some(json!({})))?;
+            }
+            "analysis.updateOptions" => {
+                let options = object(field(params, "options")?, "params.options")?;
+                for key in [
+                    "enableAsync",
+                    "enableDeferredLoading",
+                    "enableEnums",
+                    "enableNullAwareOperators",
+                    "generateDart2jsHints",
+                    "generateHints",
+                    "generateLints",
+                ] {
+                    if let Some(v) = options.get(key)
+                        && !v.is_null()
+                    {
+                        boolean(v, &format!("params.options.{key}"))?;
+                    }
+                }
+                self.response(id, None)?;
             }
             "analysis.getErrors" => {
                 let file = string(field(params, "file")?, "params.file")?;
@@ -476,6 +759,25 @@ impl<W: Write> Server<W> {
                 let hovers = self.get_hover(file, offset)?;
                 self.response(id, Some(wire(protocol::AnalysisGetHoverResult { hovers })))?;
             }
+            "analysis.getImportedElements" => {
+                let file = string(field(params, "file")?, "params.file")?;
+                let offset = integer(field(params, "offset")?, "params.offset")?;
+                let length = integer(field(params, "length")?, "params.length")?;
+                valid_path(file)?;
+                let elements = self.get_imported_elements(file, offset, length)?;
+                self.response(
+                    id,
+                    Some(wire(protocol::AnalysisGetImportedElementsResult {
+                        elements,
+                    })),
+                )?;
+            }
+            "analysis.getLibraryDependencies" => {
+                return Err(RequestFailure::new(
+                    "UNSUPPORTED_FEATURE",
+                    "Please contact the Dart analyzer team if you need this request.",
+                ));
+            }
             "analysis.getNavigation" => {
                 let file = string(field(params, "file")?, "params.file")?;
                 let offset = integer(field(params, "offset")?, "params.offset")?;
@@ -489,6 +791,13 @@ impl<W: Write> Server<W> {
                     "UNSUPPORTED_FEATURE",
                     "Please contact the Dart analyzer team if you need this request.",
                 ));
+            }
+            "analysis.getSignature" => {
+                let file = string(field(params, "file")?, "params.file")?;
+                let offset = integer(field(params, "offset")?, "params.offset")?;
+                valid_path(file)?;
+                let result = self.get_signature(file, offset)?;
+                self.response(id, Some(wire(result)))?;
             }
             "analysis.reanalyze" => {
                 self.response(id, None)?;
@@ -516,6 +825,26 @@ impl<W: Write> Server<W> {
             "search.findTopLevelDeclarations" => {
                 let pattern = string(field(params, "pattern")?, "params.pattern")?;
                 self.handle_find_top_level_declarations(id, pattern)?;
+            }
+            "search.getElementDeclarations" => {
+                let file = match params.get("file") {
+                    Some(v) if !v.is_null() => Some(string(v, "params.file")?.to_owned()),
+                    _ => None,
+                };
+                let pattern = match params.get("pattern") {
+                    Some(v) if !v.is_null() => Some(string(v, "params.pattern")?.to_owned()),
+                    _ => None,
+                };
+                let max_results = match params.get("maxResults") {
+                    Some(v) if !v.is_null() => Some(integer(v, "params.maxResults")?),
+                    _ => None,
+                };
+                let result = self.get_element_declarations(
+                    pattern.as_deref().unwrap_or(""),
+                    max_results,
+                    file.as_deref(),
+                );
+                self.response(id, Some(wire(result)))?;
             }
             "search.getTypeHierarchy" => {
                 let file = string(field(params, "file")?, "params.file")?;
@@ -553,6 +882,66 @@ impl<W: Write> Server<W> {
                 valid_path(file)?;
                 let result = self.edit_organize_directives(file)?;
                 self.response(id, Some(wire(result)))?;
+            }
+            "execution.createContext" => {
+                let context_root = string(field(params, "contextRoot")?, "params.contextRoot")?;
+                let context_id = self.next_execution_context_id.to_string();
+                self.next_execution_context_id += 1;
+                self.execution_contexts
+                    .insert(context_id.clone(), context_root.to_owned());
+                self.response(
+                    id,
+                    Some(wire(protocol::ExecutionCreateContextResult {
+                        id: context_id,
+                    })),
+                )?;
+            }
+            "execution.deleteContext" => {
+                let context_id = string(field(params, "id")?, "params.id")?;
+                self.execution_contexts.shift_remove(context_id);
+                self.response(id, None)?;
+            }
+            "execution.getSuggestions" => {
+                self.response(
+                    id,
+                    Some(wire(protocol::ExecutionGetSuggestionsResult {
+                        suggestions: Some(Vec::new()),
+                        expressions: Some(Vec::new()),
+                    })),
+                )?;
+            }
+            "execution.mapUri" => {
+                let context_id = string(field(params, "id")?, "params.id")?;
+                let file = match params.get("file") {
+                    Some(v) if !v.is_null() => Some(string(v, "params.file")?),
+                    _ => None,
+                };
+                let uri = match params.get("uri") {
+                    Some(v) if !v.is_null() => Some(string(v, "params.uri")?),
+                    _ => None,
+                };
+                let result = self.execution_map_uri(context_id, file, uri)?;
+                self.response(id, Some(wire(result)))?;
+            }
+            "execution.setSubscriptions" => {
+                self.response(id, None)?;
+            }
+            "diagnostic.getDiagnostics" => {
+                let result = self.get_diagnostics();
+                self.response(id, Some(wire(result)))?;
+            }
+            "diagnostic.getServerPort" => {
+                let result = self.get_server_port()?;
+                self.response(id, Some(wire(result)))?;
+            }
+            "analytics.isEnabled" => {
+                self.response(
+                    id,
+                    Some(wire(protocol::AnalyticsIsEnabledResult { enabled: false })),
+                )?;
+            }
+            "analytics.enable" | "analytics.sendEvent" | "analytics.sendTiming" => {
+                self.response(id, None)?;
             }
             _ => return Err(RequestFailure::new("UNKNOWN_REQUEST", "Unknown request")),
         }
@@ -1425,7 +1814,314 @@ impl<W: Write> Server<W> {
                 }
             }
         }
+        if let Some(files) = self.subscriptions.get("CLOSING_LABELS").cloned() {
+            for file in files {
+                if let Some(resolved) = self.resolve_unit(&file) {
+                    let unit = resolved.unit();
+                    let line_info = resolved.line_info();
+                    let labels = dartr_server::computer::closing_labels::compute_closing_labels(
+                        &unit.ast, unit.unit, line_info,
+                    )
+                    .into_iter()
+                    .map(|l| protocol::ClosingLabel {
+                        offset: l.offset as i64,
+                        length: l.length as i64,
+                        label: l.label,
+                    })
+                    .collect();
+                    self.notify(
+                        "analysis.closingLabels",
+                        wire(protocol::AnalysisClosingLabelsParams { file, labels }),
+                    )?;
+                }
+            }
+        }
+        if self.general_analyzed_files_subscribed {
+            self.send_analyzed_files()?;
+        }
         self.status(false)
+    }
+
+    fn send_analyzed_files(&mut self) -> io::Result<()> {
+        if !self.general_analyzed_files_subscribed {
+            return Ok(());
+        }
+        let mut analyzed_files = IndexSet::new();
+        if let Some(collection) = &self.collection {
+            for (idx, context) in collection.contexts.iter().enumerate() {
+                for file in self.driver_session.known_files(idx) {
+                    if !file.ends_with(".yaml") {
+                        analyzed_files.insert(file);
+                    }
+                }
+                for file in context.root.analyzed_files() {
+                    if !self.is_excluded(&file) && !file.ends_with(".yaml") {
+                        analyzed_files.insert(file);
+                    }
+                }
+            }
+        }
+        if self.prev_analyzed_files.as_ref() == Some(&analyzed_files) {
+            return Ok(());
+        }
+        self.prev_analyzed_files = Some(analyzed_files.clone());
+        let directories: Vec<String> = analyzed_files.into_iter().collect();
+        self.notify(
+            "analysis.analyzedFiles",
+            wire(protocol::AnalysisAnalyzedFilesParams { directories }),
+        )
+    }
+
+    fn get_imported_elements(
+        &mut self,
+        file: &str,
+        offset: i64,
+        length: i64,
+    ) -> Result<Vec<protocol::ImportedElements>> {
+        // Dart source: pkg/analysis_server/lib/src/domain_analysis_flags.dart
+        const DISABLE_MANAGE_IMPORTS_ON_PASTE: bool = true;
+        let Some(resolved) = self.resolve_unit(file) else {
+            return Err(RequestFailure::new(
+                "GET_IMPORTED_ELEMENTS_INVALID_FILE",
+                "Error during `analysis.getImportedElements`: invalid file.",
+            ));
+        };
+        if DISABLE_MANAGE_IMPORTS_ON_PASTE {
+            return Ok(Vec::new());
+        }
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let unit = resolved.unit();
+        Ok(crate::search::compute_imported_elements(
+            &ctx,
+            &unit.ast,
+            &unit.tables,
+            unit.unit,
+            offset,
+            length,
+        ))
+    }
+
+    fn get_signature(
+        &mut self,
+        file: &str,
+        offset: i64,
+    ) -> Result<protocol::AnalysisGetSignatureResult> {
+        let Some(resolved) = self.resolve_unit(file) else {
+            return Err(RequestFailure::new(
+                "GET_SIGNATURE_INVALID_FILE",
+                "Error during `analysis.getSignature`: invalid file.",
+            ));
+        };
+        let templates = self.dartdoc_templates(file);
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let unit = resolved.unit();
+        let offset_valid = u32::try_from(offset)
+            .ok()
+            .and_then(|o| unit.ast.node_covering(unit.unit, o, 0))
+            .is_some();
+        if !offset_valid {
+            return Err(RequestFailure::new(
+                "GET_SIGNATURE_INVALID_OFFSET",
+                "Error during `analysis.getSignature`: invalid offset.",
+            ));
+        }
+        let u = dartr_server::element_locator::Unit {
+            ctx: &ctx,
+            ast: &unit.ast,
+            tables: &unit.tables,
+        };
+        let Some(sig) =
+            dartr_server::signature::compute_signature(&u, unit.unit, offset as u32, &templates)
+        else {
+            return Err(RequestFailure::new(
+                "GET_SIGNATURE_UNKNOWN_FUNCTION",
+                "Error during `analysis.getSignature`: unknown function.",
+            ));
+        };
+        let parameters = sig
+            .parameters
+            .into_iter()
+            .map(|p| {
+                let kind = match p.kind {
+                    dartr_element::ParameterKind::Named => protocol::ParameterKind::OptionalNamed,
+                    dartr_element::ParameterKind::Positional => {
+                        protocol::ParameterKind::OptionalPositional
+                    }
+                    dartr_element::ParameterKind::NamedRequired => {
+                        protocol::ParameterKind::RequiredNamed
+                    }
+                    dartr_element::ParameterKind::Required => {
+                        protocol::ParameterKind::RequiredPositional
+                    }
+                };
+                let type_ = dartr_element::display_string::type_display_string_with(
+                    &ctx,
+                    p.ty,
+                    dartr_element::display_string::DisplayOptions::default(),
+                );
+                protocol::ParameterInfo {
+                    kind,
+                    name: p.name,
+                    type_,
+                    default_value: p.default_code,
+                }
+            })
+            .collect();
+        Ok(protocol::AnalysisGetSignatureResult {
+            name: sig.name,
+            parameters,
+            dartdoc: sig.dartdoc,
+        })
+    }
+
+    fn get_element_declarations(
+        &mut self,
+        pattern: &str,
+        max_results: Option<i64>,
+        only_for_file: Option<&str>,
+    ) -> protocol::SearchGetElementDeclarationsResult {
+        if self.roots_dirty {
+            self.refresh_roots();
+        }
+        let Some(collection) = &self.collection else {
+            return protocol::SearchGetElementDeclarationsResult {
+                declarations: Vec::new(),
+                files: Vec::new(),
+            };
+        };
+        let mut engine = SearchEngine {
+            collection,
+            excluded: &self.excluded,
+            session: &mut self.driver_session,
+            owned: &mut self.owned_files,
+            search_scope: &mut self.search_scope,
+            search_words: &mut self.search_words,
+            indexes: &mut self.indexes,
+        };
+        engine.get_element_declarations(pattern, max_results, only_for_file)
+    }
+
+    fn execution_map_uri(
+        &mut self,
+        context_id: &str,
+        file: Option<&str>,
+        uri: Option<&str>,
+    ) -> Result<protocol::ExecutionMapUriResult> {
+        let Some(context_path) = self.execution_contexts.get(context_id).cloned() else {
+            return Err(RequestFailure::new(
+                "INVALID_PARAMETER",
+                format!(
+                    "Invalid parameter 'id'. There is no execution context with an id of {context_id}."
+                ),
+            ));
+        };
+        if self.roots_dirty {
+            self.refresh_roots();
+        }
+        let Some(collection) = &self.collection else {
+            return Err(RequestFailure::new(
+                "INVALID_EXECUTION_CONTEXT",
+                format!("Invalid execution context: {context_id}"),
+            ));
+        };
+        let Some(context) = collection
+            .context_for(&context_path)
+            .or_else(|| collection.contexts.first())
+        else {
+            return Err(RequestFailure::new(
+                "INVALID_EXECUTION_CONTEXT",
+                format!("Invalid execution context: {context_id}"),
+            ));
+        };
+        let sdk = context.sdk.as_deref().or(collection.sdk.as_deref());
+        if let Some(file) = file {
+            if uri.is_some() {
+                return Err(RequestFailure::new(
+                    "INVALID_PARAMETER",
+                    "Invalid parameter 'file'. Either file or uri must be provided, but not both.",
+                ));
+            }
+            if fs::folder_exists(file) {
+                return Err(RequestFailure::new(
+                    "INVALID_PARAMETER",
+                    "Invalid parameter 'file'. Must not refer to a directory.",
+                ));
+            }
+            if !fs::file_exists(file) {
+                return Err(RequestFailure::new(
+                    "INVALID_PARAMETER",
+                    "Invalid parameter 'file'. Must exist.",
+                ));
+            }
+            let mapped_uri = context.root.workspace.path_to_uri(file, sdk);
+            Ok(protocol::ExecutionMapUriResult {
+                file: None,
+                uri: Some(mapped_uri),
+            })
+        } else if let Some(uri) = uri {
+            let Some(resolved_file) = context.root.workspace.resolve_uri(uri, sdk) else {
+                return Err(RequestFailure::new(
+                    "INVALID_PARAMETER",
+                    "Invalid parameter 'uri'. Invalid URI.",
+                ));
+            };
+            Ok(protocol::ExecutionMapUriResult {
+                file: Some(resolved_file),
+                uri: None,
+            })
+        } else {
+            Err(RequestFailure::new(
+                "INVALID_PARAMETER",
+                "Invalid parameter 'file'. Either file or uri must be provided.",
+            ))
+        }
+    }
+
+    fn get_diagnostics(&mut self) -> protocol::DiagnosticGetDiagnosticsResult {
+        if self.roots_dirty {
+            self.refresh_roots();
+        }
+        let mut contexts = Vec::new();
+        if let Some(collection) = &self.collection {
+            for (idx, context) in collection.contexts.iter().enumerate() {
+                let explicit_file_count = context
+                    .root
+                    .analyzed_files()
+                    .into_iter()
+                    .filter(|f| f.ends_with(".dart") && !self.is_excluded(f))
+                    .count() as i64;
+                let known_count = self.driver_session.known_files(idx).len() as i64;
+                let implicit_file_count = (known_count - explicit_file_count).max(0);
+                contexts.push(protocol::ContextData {
+                    name: context.root.root.clone(),
+                    explicit_file_count,
+                    implicit_file_count,
+                    work_item_queue_length: 0,
+                    cache_entry_exceptions: Vec::new(),
+                });
+            }
+        }
+        protocol::DiagnosticGetDiagnosticsResult { contexts }
+    }
+
+    fn get_server_port(&mut self) -> Result<protocol::DiagnosticGetServerPortResult> {
+        if self.diagnostic_listener.is_none() {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").map_err(|e| {
+                RequestFailure::new("DEBUG_PORT_COULD_NOT_BE_OPENED", e.to_string())
+            })?;
+            self.diagnostic_listener = Some(listener);
+        }
+        let port = self
+            .diagnostic_listener
+            .as_ref()
+            .and_then(|l| l.local_addr().ok())
+            .map(|a| a.port() as i64)
+            .ok_or_else(|| {
+                RequestFailure::new("DEBUG_PORT_COULD_NOT_BE_OPENED", "Could not get port")
+            })?;
+        Ok(protocol::DiagnosticGetServerPortResult { port })
     }
     fn folding(&self, file: &str) -> Option<Vec<Value>> {
         let collection = self.collection.as_ref()?;
