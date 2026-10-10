@@ -520,3 +520,226 @@ assist!(
         });
     }
 );
+
+assist!(
+    ConvertIntoFinalField,
+    a::CONVERT_INTO_FINAL_FIELD,
+    |c, builder| {
+        let ast = c.ast;
+        let ctx = c.ctx;
+        let mut getter: Option<Id<MethodDeclaration>> = None;
+        let mut current = Some(c.node);
+        while let Some(n) = current {
+            if let Some(m) = ast.cast::<MethodDeclaration>(n) {
+                getter = Some(m);
+                break;
+            }
+            if ast.is::<SimpleIdentifier>(n)
+                || ast.is::<TypeAnnotation>(n)
+                || ast.is::<TypeArgumentList>(n)
+            {
+                current = ast.parent(n);
+                continue;
+            }
+            break;
+        }
+        let Some(getter) = getter else { return };
+        let Some(get_keyword) = ast[getter]
+            .property_keyword
+            .filter(|k| c.lexeme(*k) == "get")
+        else {
+            return;
+        };
+        let Some(element) = c.locator().declared_element(getter) else {
+            return;
+        };
+        if element.tag() != dartr_element::Tag::Getter {
+            return;
+        }
+        let is_static =
+            dartr_typesystem::member::is_static(ctx, dartr_element::ElemRef::Base(element));
+        if !is_static {
+            let enclosing = ctx.element_data(element).and_then(|d| d.enclosing);
+            if enclosing.is_some_and(|e| {
+                matches!(
+                    e.tag(),
+                    dartr_element::Tag::Extension | dartr_element::Tag::ExtensionType
+                )
+            }) {
+                return;
+            }
+        }
+        if dartr_typesystem::member::corresponding_setter(
+            ctx,
+            dartr_element::ElemRef::Base(element),
+        )
+        .is_some()
+        {
+            return;
+        }
+        let body = ast[getter].body.raw();
+        let expression = if let Some(b) = ast.cast::<ExpressionFunctionBody>(body) {
+            Some(ast[b].expression.raw())
+        } else if let Some(b) = ast.cast::<BlockFunctionBody>(body) {
+            let statements = ast.list(ast[ast[b].block].statements);
+            if statements.len() == 1 {
+                ast.cast::<ReturnStatement>(statements[0])
+                    .and_then(|r| ast[r].expression)
+                    .map(|e| e.raw())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let Some(expression) = expression else { return };
+        let return_type = ast[getter].return_type;
+        let mut code = "final".to_string();
+        if let Some(t) = return_type {
+            code.push(' ');
+            code.push_str(&c.utils.get_node_text(t));
+        }
+        code.push(' ');
+        code.push_str(c.lexeme(ast[getter].name));
+        if !ast.is::<NullLiteral>(expression) {
+            code.push_str(" = ");
+            code.push_str(&c.utils.get_node_text(expression));
+        }
+        code.push(';');
+        let range = match return_type {
+            Some(t) => c.range().start_end(t, getter),
+            None => c.range().token_start_node_end(get_keyword, getter),
+        };
+        builder.add_dart_file_edit(c.path, |b| {
+            b.add_simple_replacement(range.offset, range.length, &code)
+        });
+    }
+);
+
+/// Dart `ConvertIntoGetter` (`.new` and `.this_`).
+pub struct ConvertIntoGetter {
+    pub this_: bool,
+    member_name: String,
+}
+
+impl ConvertIntoGetter {
+    pub fn new(this_: bool) -> Self {
+        ConvertIntoGetter {
+            this_,
+            member_name: String::new(),
+        }
+    }
+}
+
+impl CorrectionProducer for ConvertIntoGetter {
+    fn fix_kind(&self) -> Option<&'static super::super::fix_kind::FixKind> {
+        Some(&k::CONVERT_INTO_GETTER)
+    }
+
+    fn fix_arguments(&self) -> Vec<String> {
+        vec![self.member_name.clone()]
+    }
+
+    fn assist_kind(&self) -> Option<&'static super::super::fix_kind::FixKind> {
+        Some(&a::CONVERT_INTO_GETTER)
+    }
+
+    fn assist_arguments(&self) -> Vec<String> {
+        vec![self.member_name.clone()]
+    }
+
+    fn applicability(&self) -> Applicability {
+        Applicability::SingleLocation
+    }
+
+    fn compute(
+        &mut self,
+        c: &ProducerContext<'_>,
+        builder: &mut super::super::change_builder::ChangeBuilder<'_>,
+    ) {
+        let ast = c.ast;
+        let ctx = c.ctx;
+        let declaration = if self.this_ {
+            ast.this_or_ancestor_of_type::<FieldDeclaration>(c.node)
+        } else {
+            let mut found = None;
+            let mut current = Some(c.node);
+            while let Some(n) = current {
+                if let Some(f) = ast.cast::<FieldDeclaration>(n) {
+                    found = Some(f);
+                    break;
+                }
+                if ast.is::<SimpleIdentifier>(n)
+                    || ast.is::<VariableDeclaration>(n)
+                    || ast.is::<VariableDeclarationList>(n)
+                    || ast.is::<TypeAnnotation>(n)
+                    || ast.is::<TypeArgumentList>(n)
+                {
+                    current = ast.parent(n);
+                    continue;
+                }
+                break;
+            }
+            found
+        };
+        let Some(declaration) = declaration else {
+            return;
+        };
+        let list = ast[declaration].fields;
+        let variables = ast.list(ast[list].variables);
+        if variables.len() != 1 {
+            return;
+        }
+        let field = variables[0];
+        self.member_name = c.lexeme(ast[field].name).to_string();
+        if self.member_name.is_empty() {
+            return;
+        }
+        let initializer = ast[field].initializer.map(|i| i.raw());
+        let code = format!("get {} => ", self.member_name);
+        let start = ast[list]
+            .late_keyword
+            .or(ast[list].keyword)
+            .map(|t| c.token_offset(t))
+            .or_else(|| ast[list].type_.map(|t| ast.offset(t)))
+            .unwrap_or_else(|| c.token_offset(ast[field].name));
+        let end = ast.end(declaration);
+        let write_type = c.code_style().specify_return_types();
+        let declared = ast[list]
+            .type_
+            .map(|t| c.tables.annotation_type.get(t.raw()).copied());
+        let initializer_text = initializer.map(|i| c.utils.get_node_text(i));
+        // Dart: `if (fieldList.type?.type case var type)` always matches.
+        let mut ty = declared.flatten();
+        if ty.is_none_or(|t| matches!(ctx.ty(t), TypeKind::Dynamic)) {
+            ty = initializer.and_then(|i| static_type(c, i));
+        }
+        if ty.is_some_and(|t| matches!(ctx.ty(t), TypeKind::Invalid)) {
+            ty = Some(ctx.tp.dynamic_type());
+        }
+        builder.add_dart_file_edit(c.path, |b| {
+            b.add_replacement(start, end - start, |e| {
+                let not_dynamic = ty.is_some_and(|t| !matches!(ctx.ty(t), TypeKind::Dynamic));
+                if not_dynamic || write_type {
+                    e.write_type(
+                        ty,
+                        &WriteType {
+                            should_write_dynamic: write_type,
+                            required: write_type,
+                            ..Default::default()
+                        },
+                    );
+                    e.write(" ");
+                }
+                e.write(&code);
+                match &initializer_text {
+                    None => {
+                        e.add_simple_linked_edit("initializer", "null", None);
+                        e.write(";");
+                    }
+                    Some(t) => e.write(&format!("{t};")),
+                }
+            });
+        });
+    }
+}
