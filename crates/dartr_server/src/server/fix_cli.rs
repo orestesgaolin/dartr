@@ -331,6 +331,22 @@ pub fn bulk_fixes(
     Ok(fixer.fix_errors(codes))
 }
 
+/// Dart `BulkFixProcessor.fixPubspec` (the legacy `edit.bulkFixes` with
+/// `updatePubspec`): the edits of the `pubspec.yaml` files of [included]
+/// and the fixes by path (`missing_dependency`).
+pub fn bulk_fixes_pubspec(
+    included: &[String],
+    options: &CollectionOptions,
+) -> (Vec<SourceFileEdit>, ChangeMap) {
+    let collection = AnalysisContextCollection::new(included, options);
+    let (edits, pubspecs) = crate::correction::pubspec_fix::pubspec_fixes(&collection);
+    let mut details = ChangeMap::default();
+    for pubspec in pubspecs {
+        details.add(&pubspec, "missing_dependency");
+    }
+    (edits, details)
+}
+
 impl Fixer {
     fn with_collection(collection: AnalysisContextCollection) -> Fixer {
         Fixer {
@@ -360,6 +376,7 @@ impl Fixer {
             return Err(message);
         }
         let mut details = ChangeMap::default();
+        let mut last_empty = false;
         for _ in 0..MAX_PASSES {
             let (edits, map) = self.fix_errors(codes);
             for (path, fixes) in map.library_map {
@@ -368,8 +385,21 @@ impl Fixer {
                     *entry.entry(code).or_insert(0) += n;
                 }
             }
+            last_empty = edits.is_empty();
             if edits.is_empty() {
                 break;
+            }
+            self.apply_edits(&edits);
+        }
+        // Dart: the pubspec pass when the last pass had no edits.
+        if last_empty && !details.library_map.is_empty() {
+            let (edits, pubspecs) = crate::correction::pubspec_fix::pubspec_fixes(&self.collection);
+            for pubspec in pubspecs {
+                details
+                    .library_map
+                    .entry(pubspec)
+                    .or_default()
+                    .insert("missing_dependency".to_string(), 1);
             }
             self.apply_edits(&edits);
         }

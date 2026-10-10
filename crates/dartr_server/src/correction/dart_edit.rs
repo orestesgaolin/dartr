@@ -498,21 +498,34 @@ impl EditBuilder<'_, '_, '_> {
                     if p.kind == K::NamedRequired {
                         self.write("required ");
                     }
-                    let had_type = self.write_type_if_can(
-                        ctx,
-                        p.ty,
-                        &scope,
-                        false,
-                        write_type_arguments,
-                        None,
-                    );
+                    // Dart `writeFormalParameter` with the groups `TYPE$i`
+                    // (with the supertypes as suggestions) and, for a
+                    // positional parameter, `PARAM$i`.
+                    let mut had_type = false;
+                    let ty = p.ty;
+                    let scope_ref = &scope;
+                    self.add_linked_edit(&format!("TYPE{i}"), |b| {
+                        had_type = b.write_type_if_can(
+                            ctx,
+                            ty,
+                            scope_ref,
+                            false,
+                            write_type_arguments,
+                            None,
+                        );
+                        b.add_super_types_as_suggestions(ctx, ty);
+                    });
                     if let Some(n) = p.name {
                         let n = ctx.name_str(n).to_string();
                         if !n.is_empty() {
                             if had_type {
                                 self.write(" ");
                             }
-                            self.write(&n);
+                            if matches!(p.kind, K::Named | K::NamedRequired) {
+                                self.write(&n);
+                            } else {
+                                self.add_linked_edit(&format!("PARAM{i}"), |b| b.write(&n));
+                            }
                         }
                     }
                 }
@@ -924,7 +937,12 @@ impl EditBuilder<'_, '_, '_> {
 
     /// Dart `DartLinkedEditBuilder.addSuperTypesAsSuggestions`.
     pub fn add_super_types_as_suggestions(&mut self, ctx: &Ctx<'_>, ty: TypeId) {
-        let TypeKind::Interface { element, .. } = *ctx.ty(ty) else {
+        let TypeKind::Interface {
+            element,
+            nullability,
+            ..
+        } = *ctx.ty(ty)
+        else {
             return;
         };
         let display = dartr_element::type_display_string_with(ctx, ty, Default::default());
@@ -932,7 +950,13 @@ impl EditBuilder<'_, '_, '_> {
         let substitution =
             dartr_typesystem::type_algebra::MapSubstitution::from_interface_type(ctx, ty);
         for &supertype in ctx.element_all_supertypes(element) {
-            let t = substitution.substitute_type(ctx, supertype);
+            // Dart `InterfaceType.allSupertypes` of a nullable type are
+            // nullable.
+            let t = with_nullability(
+                ctx,
+                substitution.substitute_type(ctx, supertype),
+                nullability,
+            );
             let display = dartr_element::type_display_string_with(ctx, t, Default::default());
             self.add_suggestion(LinkedEditSuggestionKind::Type, &display);
         }
