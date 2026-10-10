@@ -2671,10 +2671,18 @@ impl<W: Write> Server<W> {
         } else {
             '\''
         };
+        let lint_quote = if has("prefer_single_quotes") {
+            Some('\'')
+        } else if has("prefer_double_quotes") {
+            Some('"')
+        } else {
+            None
+        };
         dartr_server::completion::CodeStyle {
             specify_types: has("always_specify_types"),
             make_locals_final: has("prefer_final_locals"),
             quote,
+            lint_quote,
         }
     }
 
@@ -3590,6 +3598,9 @@ impl<W: Write> Server<W> {
                 false,
                 resolution,
                 doc,
+                // TODO: color previews (Dart `getColorHexString`) need the driver's constant
+                // values, as the LSP handler in dartr_server/src/server/completion.rs computes them.
+                None,
             ) {
                 items.push(item);
             }
