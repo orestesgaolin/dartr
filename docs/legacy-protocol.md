@@ -26,15 +26,15 @@ Generated types cover every domain; runtime support is the subset below.
 | --- | ---: | ---: |
 | server | 5 / 7 | 5 / 5 |
 | analysis | 14 / 14 | 12 / 12 |
-| completion | 0 / 3 | 0 / 1 |
+| completion | 2 / 3 | 1 / 1 |
 | search | 6 / 6 | 1 / 1 |
-| edit | 3 / 14 | 0 / 0 |
+| edit | 14 / 14 | 0 / 0 |
 | execution | 5 / 5 | 1 / 1 |
 | diagnostic | 2 / 2 | 0 / 0 |
 | analytics | 4 / 4 | 0 / 0 |
 | flutter | 3 / 3 | 1 / 1 |
 | lsp | 1 / 1 | 1 / 1 |
-| Total | 43 / 59 | 21 / 22 |
+| Total | 56 / 59 | 22 / 22 |
 
 Requests: `server.getVersion`, `server.shutdown`, `server.setSubscriptions`,
 `server.cancelRequest`, `server.setClientCapabilities`,
@@ -44,10 +44,16 @@ Requests: `server.getVersion`, `server.shutdown`, `server.setSubscriptions`,
 `analysis.setAnalysisRoots`, `analysis.setGeneralSubscriptions`,
 `analysis.setPriorityFiles`, `analysis.setSubscriptions`,
 `analysis.updateContent`, `analysis.updateOptions`,
+`completion.getSuggestions2`, `completion.getSuggestionDetails2`,
 `search.findElementReferences`, `search.findMemberDeclarations`,
 `search.findMemberReferences`, `search.findTopLevelDeclarations`,
 `search.getElementDeclarations`, `search.getTypeHierarchy`,
-`edit.format`, `edit.sortMembers`, `edit.organizeDirectives`,
+`edit.format`, `edit.getAssists`, `edit.getAvailableRefactorings`,
+`edit.getFixes`, `edit.getPostfixCompletion`, `edit.getRefactoring`,
+`edit.getStatementCompletion`, `edit.importElements`,
+`edit.isPostfixCompletionApplicable`, `edit.listPostfixCompletionTemplates`,
+`edit.organizeDirectives`, `edit.sortMembers`, `edit.formatIfEnabled`,
+`edit.bulkFixes`,
 `execution.createContext`, `execution.deleteContext`,
 `execution.getSuggestions`, `execution.mapUri`, `execution.setSubscriptions`,
 `diagnostic.getDiagnostics`, `diagnostic.getServerPort`,
@@ -60,16 +66,16 @@ Notifications: `server.connected`, `server.error`, `server.pluginError`,
 `analysis.closingLabels`, `analysis.errors`, `analysis.flushResults`,
 `analysis.folding`, `analysis.highlights`, `analysis.implemented`,
 `analysis.invalidate`, `analysis.navigation`, `analysis.occurrences`,
-`analysis.outline`, `analysis.overrides`, `search.results`,
-`execution.launchData`, `flutter.outline`, `lsp.notification`.
+`analysis.outline`, `analysis.overrides`, `completion.existingImports`,
+`search.results`, `execution.launchData`, `flutter.outline`, `lsp.notification`.
 `analysis.flushResults` is a notification, not a request.
 
 Server-initiated requests (`server.openUrlRequest`, `server.showMessageRequest`)
 return `UNKNOWN_REQUEST` if sent by a client as a request; client responses to
 those server-initiated requests (`{"id": "...", "result": ...}`) are accepted
-without emitting `INVALID_REQUEST`. Other unimplemented requests return
-`UNKNOWN_REQUEST` with message `Unknown request`. This includes `edit.bulkFixes`:
-`dart fix` is not functional with this subset. `analysis.getReachableSources`
+without emitting `INVALID_REQUEST`. Deprecated/removed requests
+(`completion.registerLibraryPaths`, `completion.setSubscriptions`, `edit.dartfix`)
+return `UNKNOWN_REQUEST` with message `Unknown request`. `analysis.getReachableSources`
 and `analysis.getLibraryDependencies` return `UNSUPPORTED_FEATURE` matching the
 pinned Dart 3.13.3 `UnsupportedRequestHandler`. Known analysis subscriptions are
 accepted; `FOLDING`, `NAVIGATION`, `HIGHLIGHTS`, `OCCURRENCES`, `OUTLINE`,
@@ -79,8 +85,10 @@ accepted; `FOLDING`, `NAVIGATION`, `HIGHLIGHTS`, `OCCURRENCES`, `OUTLINE`,
 `analysis.analyzedFiles` notifications. `STATUS` emits analysis start and end,
 and `LOG` emits `server.log` request/response/notification statistics entries.
 `lsp.handle` dispatches LSP requests wrapped in the legacy protocol using the
-shared `dartr_server` handlers, and `lsp.notification` wraps server-originated
-LSP notifications when LSP client capabilities have been configured.
+shared `dartr_server` handlers (including `textDocument/completion`,
+`completionItem/resolve`, and `textDocument/codeAction`), and `lsp.notification`
+wraps server-originated LSP notifications when LSP client capabilities have been
+configured.
 
 ## Diagnostics and overlays
 
@@ -115,13 +123,21 @@ The differential tests run the real Dart 3.13.3 server. They compare full
 diagnostic objects, lifecycle responses, UTF-16 overlay edits, invalid requests,
 reanalysis, exclusions, result flushing, folding, hover, navigation, highlights,
 occurrences, outline, implemented, overrides, closing labels, analyzed files,
-imported elements, signatures, search requests (`search.results`,
-`search.getElementDeclarations`, and type hierarchy), edit requests (`edit.format`,
-`edit.sortMembers`, `edit.organizeDirectives`), execution context and URI mapping,
-diagnostic context inspection and server port allocation, analytics handlers,
-Flutter outline and widget property requests (`flutter.setSubscriptions`,
-`flutter.outline`, `flutter.getWidgetDescription`, `flutter.setWidgetPropertyValue`),
-and LSP-over-legacy requests (`lsp.handle`).
+imported elements, signatures, completion (`completion.getSuggestions2` for Dart
+and YAML files, `completion.getSuggestionDetails2`, and `completion.existingImports`),
+search requests (`search.results`, `search.getElementDeclarations`, and type
+hierarchy), edit requests (`edit.format`, `edit.sortMembers`,
+`edit.organizeDirectives`, `edit.getFixes`, `edit.getAssists`,
+`edit.getAvailableRefactorings`, `edit.getRefactoring`,
+`edit.getPostfixCompletion`, `edit.isPostfixCompletionApplicable`,
+`edit.listPostfixCompletionTemplates`, `edit.getStatementCompletion`,
+`edit.importElements`, `edit.formatIfEnabled`, `edit.bulkFixes`), execution
+context and URI mapping, diagnostic context inspection and server port allocation,
+analytics handlers, Flutter outline and widget property requests
+(`flutter.setSubscriptions`, `flutter.outline`, `flutter.getWidgetDescription`,
+`flutter.setWidgetPropertyValue`), and LSP-over-legacy requests (`lsp.handle`,
+including `textDocument/completion`, `completionItem/resolve`, and
+`textDocument/codeAction`).
 They normalize IDs, process IDs, ports, timestamps, and nondeterministic
 notification timing. A missing Dart installation skips the differential tests.
 `DART_BIN` selects a standalone SDK executable. The test helper also detects the
@@ -136,10 +152,9 @@ python3 tools/legacy_parity.py --server target/debug/dartr --output /tmp/dartr-l
 
 ## Remaining work
 
-Completion, quick fixes, assists, refactorings, and bulk fixes are not
-implemented in the legacy protocol yet. No filesystem watcher is installed;
-on-disk changes become visible after a request that triggers analysis, such as
-`analysis.reanalyze`. Analysis currently analyzes the roots synchronously on each
-analysis pass instead of using an asynchronous background scheduler. Notification
-batching and response ordering can therefore differ from Dart, while analysis
-start precedes completion and clients receive the final state.
+No filesystem watcher is installed; on-disk changes become visible after a
+request that triggers analysis, such as `analysis.reanalyze`. Analysis currently
+analyzes the roots synchronously on each analysis pass instead of using an
+asynchronous background scheduler. Notification batching and response ordering
+can therefore differ from Dart, while analysis start precedes completion and
+clients receive the final state.

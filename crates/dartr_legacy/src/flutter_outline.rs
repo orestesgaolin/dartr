@@ -2145,7 +2145,7 @@ fn enclosing_function_body_range(ast: &Ast, mut node: NodeId) -> Option<(u32, u3
     }
 }
 
-fn constructor_of_creation(
+pub(crate) fn constructor_of_creation(
     ctx: &Ctx<'_>,
     ast: &Ast,
     tables: &ResolutionTables,
@@ -2161,7 +2161,7 @@ fn constructor_of_creation(
     el.cast::<ConstructorElement>()
 }
 
-fn find_instance_creation_expression(
+pub(crate) fn find_instance_creation_expression(
     ast: &Ast,
     mut node: NodeId,
 ) -> Option<Id<InstanceCreationExpression>> {

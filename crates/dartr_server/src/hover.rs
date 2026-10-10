@@ -657,6 +657,20 @@ pub fn documentation_comment(ctx: &Ctx<'_>, element: ElementId) -> Option<String
             .as_ref()
             .map(|c| c.to_string());
     }
+    // Dart `FieldElementImpl.documentationComment`: the comment of the
+    // declaring formal parameter for a field of a primary constructor.
+    if element.tag() == Tag::Field {
+        let declaring = ctx.element_data(element).and_then(|d| ctx.fragment_data(d.first_fragment)).is_some_and(|f| {
+            f.flags
+                .get()
+                .contains(dartr_element::FragmentFlags::FIELD_FRAGMENT_IS_ORIGIN_DECLARING_FORMAL_PARAMETER)
+        });
+        if declaring {
+            if let Some(p) = dartr_element::diagnostics::declaring_formal_parameter(ctx, element) {
+                return documentation_comment(ctx, p);
+            }
+        }
+    }
     let mut f = ctx.element_data(element).map(|d| d.first_fragment);
     while let Some(id) = f {
         let data = ctx.fragment_data(id)?;

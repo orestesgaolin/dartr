@@ -260,6 +260,74 @@ impl<'a> CorrectionUtils<'a> {
     pub fn one_indent(&self) -> &'static str {
         "  "
     }
+
+    /// Dart `twoIndents`.
+    pub fn two_indents(&self) -> &'static str {
+        "    "
+    }
+
+    /// Dart `replaceSourceIndent`.
+    pub fn replace_source_indent(
+        &self,
+        source: &str,
+        old_indent: &str,
+        new_indent: &str,
+        include_leading: bool,
+        ensure_trailing_newline: bool,
+    ) -> String {
+        // The ranges of the string tokens (UTF-16 offsets).
+        let mut string_ranges: Vec<(u32, u32)> = Vec::new();
+        let scanned = dartr_syntax::analyzer_scanner::scan_for_analyzer(source);
+        let tokens = &scanned.scan.tokens;
+        let mut t = scanned.first;
+        while t.is_some() {
+            let token = tokens.get(t);
+            if token.is_eof() {
+                break;
+            }
+            if tokens.ty(t) == dartr_syntax::TokenType::STRING {
+                string_ranges.push((token.offset, token.end()));
+            }
+            let next = tokens.next(t);
+            if next == t {
+                break;
+            }
+            t = next;
+        }
+        let eol = self.end_of_line.as_str();
+        let eol_len = eol.encode_utf16().count() as u32;
+        let lines: Vec<&str> = source.split(eol).collect();
+        let mut out = String::new();
+        let mut line_offset: u32 = 0;
+        for (i, line) in lines.iter().enumerate() {
+            if i == lines.len() - 1 && line.is_empty() {
+                break;
+            }
+            let replace_whitespace = i != 0 || include_leading;
+            let append_eol = i != lines.len() - 1 || ensure_trailing_newline;
+            let mut in_string = false;
+            for &(start, end) in &string_ranges {
+                if line_offset > start && line_offset < end {
+                    in_string = true;
+                    break;
+                }
+                if line_offset < end {
+                    break;
+                }
+            }
+            line_offset += line.encode_utf16().count() as u32 + eol_len;
+            if !in_string && replace_whitespace {
+                out.push_str(new_indent);
+                out.push_str(line.strip_prefix(old_indent).unwrap_or(line));
+            } else {
+                out.push_str(line);
+            }
+            if append_eol {
+                out.push_str(eol);
+            }
+        }
+        out
+    }
 }
 
 /// Dart `RangeFactory` (`range`): ranges of nodes and tokens.
@@ -401,12 +469,21 @@ impl<'a> RangeFactory<'a> {
 
     /// Dart `range.deletionRange`.
     pub fn deletion_range(&self, node: impl Into<NodeId>) -> Range {
+        self.deletion_range_with_end(node, None)
+    }
+
+    /// Dart `range.deletionRange(node, overrideEnd: ...)`.
+    pub fn deletion_range_with_end(
+        &self,
+        node: impl Into<NodeId>,
+        override_end: Option<TokenId>,
+    ) -> Range {
         let ast = self.ast;
         let tokens = &ast.tokens;
         let node = node.into();
         let begin = ast.begin_token(node);
         let begin = tokens.get(begin).preceding_comments.get().unwrap_or(begin);
-        let initial_end = ast.end_token(node);
+        let initial_end = override_end.unwrap_or_else(|| ast.end_token(node));
         let end = tokens.next(initial_end);
         let end = tokens.get(end).preceding_comments.get().unwrap_or(end);
         let (start_offset, end_offset);

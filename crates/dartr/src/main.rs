@@ -12,7 +12,7 @@ use clap::{Parser, Subcommand};
 
 /// `dartr --version`: the version, the pinned Dart SDK, and the license notice.
 const VERSION_TEXT: &str = concat!(
-    env!("CARGO_PKG_VERSION"),
+    env!("DARTR_VERSION"),
     "\nport of the Dart SDK 3.13.3 analyzer (pinned reference version)",
     "\nLicense: BSD-3-Clause. Third-party notices: THIRD_PARTY_NOTICES.md",
     " (https://github.com/orestesgaolin/dartr)"
@@ -55,6 +55,13 @@ enum Command {
         /// top-level variables and fields (docs/design/semantics.md §5.1).
         #[arg(long)]
         with_const: bool,
+    },
+    /// Applies automated fixes like `dart fix` (same options, output and
+    /// exit codes).
+    #[command(disable_help_flag = true)]
+    Fix {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
     },
     /// Starts the language server (LSP over stdin and stdout). Accepts the
     /// options of `dart language-server`.
@@ -128,6 +135,14 @@ fn main() -> anyhow::Result<()> {
         };
         std::process::exit(code);
     }
+    // `fix` has the command line of `dart fix`.
+    if argv.first().map(String::as_str) == Some("fix") {
+        let stdout = std::io::stdout();
+        let stderr = std::io::stderr();
+        let code =
+            dartr_server::server::fix_cli::run(&argv[1..], &mut stdout.lock(), &mut stderr.lock());
+        std::process::exit(code);
+    }
     let cli = Cli::parse();
     match cli.command {
         Command::Dump {
@@ -135,7 +150,9 @@ fn main() -> anyhow::Result<()> {
             files,
             with_const,
         } => dump::run(mode, files, with_const),
-        Command::Analyze { .. } | Command::Format { .. } => unreachable!("handled before clap"),
+        Command::Analyze { .. } | Command::Format { .. } | Command::Fix { .. } => {
+            unreachable!("handled before clap")
+        }
         Command::LanguageServer { args } => {
             std::process::exit(dartr_legacy::run_with_args(&args, true))
         }

@@ -438,7 +438,7 @@ fn write_getter(
 }
 
 /// Dart `writeSetterDeclaration` (without body: `{}`).
-fn write_setter(
+pub(crate) fn write_setter(
     ctx: &dartr_element::Ctx<'_>,
     e: &mut super::super::change_builder::EditBuilder<'_, '_, '_>,
     name: &str,

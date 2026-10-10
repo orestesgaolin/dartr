@@ -19,13 +19,15 @@ lock_for() {
   if [ "$1" = 1 ]; then echo "$dir/heavy.lock"; else echo "$dir/heavy.lock.$1"; fi
 }
 
-# Take a free slot without waiting. lockf exits 75 when the lock is busy.
-i=1
-while [ "$i" -le "$slots" ]; do
+# Take a free slot without waiting, highest slot first: the inline lock command that agents use
+# when they cannot run this script takes only slot 1, so keep slot 1 free for them when possible.
+# lockf exits 75 when the lock is busy.
+i=$slots
+while [ "$i" -ge 1 ]; do
   /usr/bin/lockf -s -t 0 "$(lock_for "$i")" nice -n 10 "$@"
   rc=$?
   [ "$rc" -ne 75 ] && exit "$rc"
-  i=$((i + 1))
+  i=$((i - 1))
 done
 
 # All slots are busy: poll every slot until one is free, so a command never waits behind a
@@ -33,11 +35,11 @@ done
 echo "heavy.sh: all $slots build slots busy, waiting" >&2
 while :; do
   sleep 5
-  i=1
-  while [ "$i" -le "$slots" ]; do
+  i=$slots
+  while [ "$i" -ge 1 ]; do
     /usr/bin/lockf -s -t 0 "$(lock_for "$i")" nice -n 10 "$@"
     rc=$?
     [ "$rc" -ne 75 ] && exit "$rc"
-    i=$((i + 1))
+    i=$((i - 1))
   done
 done

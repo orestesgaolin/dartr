@@ -15,12 +15,14 @@
 //! - [`organize_imports`], [`sort_members`]: the source actions.
 
 pub mod assist_processor;
+pub mod bulk_fix_processor;
 pub mod change;
 pub mod change_builder;
 pub mod code_style;
 pub mod dart_edit;
 pub mod fix_kind;
 pub mod fix_processor;
+pub mod flutter;
 pub mod generated;
 pub mod ignore;
 pub mod imports;

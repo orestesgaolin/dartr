@@ -251,6 +251,43 @@ impl AnalysisContextCollection {
         self.options_map(context).options_for(path)
     }
 
+    /// Enables the lint rules [rules] (lower case names) in all options of
+    /// the collection (Dart `BulkFixProcessor._contextWithAdditionalCodes`
+    /// and the `configureAnalysisOptionsBuilder` of `edit.bulkFixes`:
+    /// `lint = true`, the rules added to the enabled rules).
+    pub fn enable_lint_rules(&mut self, rules: &[String]) {
+        let rules: Vec<&String> = rules
+            .iter()
+            .filter(|r| crate::lint_rules::LINT_RULE_NAMES.contains(&r.as_str()))
+            .collect();
+        if rules.is_empty() {
+            return;
+        }
+        let update = |options: &mut Rc<AnalysisOptions>| {
+            let mut o = (**options).clone();
+            o.lint = true;
+            for rule in &rules {
+                if !o.lint_rules.iter().any(|r| r == *rule) {
+                    o.lint_rules.push((*rule).clone());
+                }
+            }
+            o.lint_rules.sort();
+            *options = Rc::new(o);
+        };
+        let update_map = |map: &mut AnalysisOptionsMap| {
+            for (_, options) in map.entries.iter_mut() {
+                update(options);
+            }
+            update(&mut map.default_options);
+        };
+        update_map(&mut self.shared_options);
+        for context in &mut self.contexts {
+            if let Some(map) = context.own_options.as_mut() {
+                update_map(map);
+            }
+        }
+    }
+
     /// The context that analyzes [path] (`contextFor`).
     pub fn context_for(&self, path: &str) -> Option<&AnalysisContext> {
         self.contexts.iter().find(|c| c.root.is_analyzed(path))

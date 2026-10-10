@@ -149,7 +149,10 @@ pub fn import_namespace(
 }
 
 /// The name of the prefix of an import.
-fn import_prefix_name(ctx: &Ctx<'_>, import: &dartr_element::LibraryImport) -> Option<String> {
+pub(crate) fn import_prefix_name(
+    ctx: &Ctx<'_>,
+    import: &dartr_element::LibraryImport,
+) -> Option<String> {
     let prefix = import.prefix?;
     let element = ctx.fragment(prefix).element.try_get().copied()?;
     ctx.element_name(element).map(str::to_string)
@@ -2094,7 +2097,7 @@ impl DeclarationHelper {
     fn matches_context_type(&self, q: &Request<'_, '_>, element: ElemRef) -> bool {
         let ctx = q.ctx;
         match q.context_type {
-            Some(c) => c == member::type_(ctx, element) || ctx.is_dart_core_function(c),
+            Some(c) => ctx.dart_eq(c, member::type_(ctx, element)) || ctx.is_dart_core_function(c),
             None => false,
         }
     }

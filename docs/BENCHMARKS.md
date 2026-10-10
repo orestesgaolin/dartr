@@ -59,3 +59,59 @@ except `.dart_tool` (the provisional table above counted `lib/` only for the fir
 
 These replace the provisional numbers as the baseline for comparisons. Raw log:
 `bench/results/baseline-idle.log` (not committed; results are git-ignored).
+
+## `dartr analyze` against `dart analyze` (2026-10-10 19:45–20:30, busy machine)
+
+Release build of main at db36afb (`dartr` with the full pipeline: errors, warnings, lints, analyzer
+plugins). `bench/compare.sh`: `hyperfine -i -N -w 1 -r 3`, run from the project directory. "dart, warm"
+uses the normal `~/.dartServer` cache, warmed by the warm-up run; "dart, empty" uses an isolated
+`--cache` directory deleted before each run (`COLD=1`). Both tools report the same diagnostics on all
+four projects (checked with `tools/analyze_compare.py`). Build agents used the machine during the runs:
+load average 8 to 18 on 15 cores.
+
+| corpus | dart, warm: mean (min–max) | dart, empty: mean (min–max) | dartr: mean (min–max) |
+|---|---|---|---|
+| visible-app | 78.775 s (57.102–93.537) | 97.083 s (91.528–102.357) | 24.945 s (24.323–25.557) |
+| flutter (packages/flutter) | 4.325 s (3.847–4.848) | 27.990 s (24.857–29.695) | 7.380 s (7.297–7.483) |
+| analyzer-9.0.0 | 3.299 s (2.325–4.959) | 8.710 s (8.529–9.031) | 1.424 s (1.418–1.431) |
+| flutter_tools | 2.673 s (2.466–2.804) | 9.467 s (9.397–9.550) | 3.665 s (3.628–3.698) |
+
+CPU time (user + system, mean per run):
+
+| corpus | dart, warm | dart, empty | dartr |
+|---|---|---|---|
+| visible-app | 76.0 + 15.5 s | 122.0 + 17.7 s | 92.7 + 68.2 s |
+| flutter | 3.8 + 2.2 s | 29.0 + 7.3 s | 26.8 + 38.8 s |
+| analyzer-9.0.0 | 3.0 + 2.0 s | 9.4 + 3.3 s | 6.9 + 1.1 s |
+| flutter_tools | 1.8 + 1.4 s | 10.5 + 3.4 s | 7.4 + 22.5 s |
+
+Notes:
+- The earlier single runs (README until this date) had Flutter at 15.4 s for `dart analyze`; with a
+  properly warmed cache it is 4.3 s, so dartr (7.4 s) is slower there.
+- dartr's system time (38.8 s on flutter, 22.5 s on flutter_tools) is far above its wall time. It
+  points to threads spinning or contending; the optimization work starts there.
+- Raw results: `bench/results/compare-*.json` (git-ignored).
+
+## Thread scaling: `dartr analyze` with 1, 4 and all threads (2026-10-10 20:15–20:55, very busy machine)
+
+Question: is dartr faster because of its code or because it uses many cores? `RAYON_NUM_THREADS` limits
+dartr's thread pool. `hyperfine -i -N -w 1 -r 3`, main at a21465d. The load average was 16 to 53
+(build agents), so wall times are pessimistic; CPU user time is much less sensitive to load and is the
+better measure of the work done. "dart, empty" is from the measurement above (same day, 19:45–20:30).
+
+| corpus | dart, empty: user CPU | dartr 1 thread: wall / user / system | dartr 4 threads: wall / user / system | dartr all cores: wall / user / system |
+|---|---|---|---|---|
+| flutter | 29.0 s | 42.5 s / 27.7 s / 12.7 s | 14.3 s / 28.7 s / 21.6 s | 9.7 s / 30.8 s / 37.0 s |
+| flutter_tools | 10.5 s | 11.9 s / 7.2 s / 4.4 s | 6.1 s / 7.9 s / 11.0 s | 5.1 s / 8.7 s / 18.9 s |
+| analyzer-9.0.0 | 9.4 s | 8.9 s / 7.3 s / 1.0 s | 4.0 s / 7.6 s / 1.0 s | 2.5 s / 8.1 s / 1.2 s |
+| visible-app | 122.0 s | 112.9 s / 114.1 s / 23.7 s | 61.8 s / 119.7 s / 33.4 s | 59.5 s / 120.3 s / 56.3 s |
+
+Findings:
+- On one thread, dartr does about the same amount of work as `dart analyze` with an empty cache
+  (flutter, visible-app) or 20–30% less (flutter_tools, analyzer). The speed of a cold `dartr analyze`
+  comes mostly from analyzing files in parallel; Dart's analysis runs on one thread.
+- System time grows with the number of threads (flutter: 12.7 s on 1 thread, 37.0 s on all cores)
+  while user time stays the same. That is overhead from threads waiting and contending, not work.
+- visible-app does not get faster from 4 threads to all cores in this run (61.8 s and 59.5 s). Part of
+  its time is serial (the analyzer plugin runs in a Dart process), and the load was highest then.
+- With a warm cache, `dart analyze` skips most of the work, which dartr cannot do yet (no disk cache).
