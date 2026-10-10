@@ -1,0 +1,6 @@
+analyzer:
+  exclude:
+    - vendor/**
+linter:
+  rules:
+    - depend_on_referenced_packages

@@ -8,7 +8,7 @@ All 266 are classified below.
 
 - **AST-only**: syntax, tokens, comments, decoded literal text, file path, source text, parsed feature state, or syntax across the library's ordered units. No resolved elements or static types. All 79 are ported.
 - **Needs resolution**: requires elements, static types, resolved targets, constant evaluation, type-system queries, or resolved helper behavior. 83 batch-A rules are ported; 82 remain deferred until their assigned batches.
-- **Non-AST context**: requires pubspec/workspace data, filesystem existence, or the completed diagnostic stream. Eight are deferred; they are not AST visitor rules.
+- **Non-AST context**: requires pubspec/workspace data, filesystem existence, or the completed diagnostic stream. All eight are implemented: four in `dartr_lints` (`avoid_web_libraries_in_flutter`, `conditional_uri_does_not_exist`, `depend_on_referenced_packages`, `remove_deprecations_in_breaking_versions`), three in the pubspec validator (`crates/dartr_project/src/pubspec_validator.rs`: `package_names`, `secure_pubspec_urls`, `sort_pub_dependencies`), and `unnecessary_ignore` in `crates/dartr_cli/src/ignore_validator.rs` (plus the single-unit fallback in `dartr_lints`).
 - **Removed**: 14 upstream `RemovedAnalysisRule` instances remain in the registry as metadata and do not report diagnostics.
 
 `package_prefixed_library_names` is active upstream but its visitor intentionally returns without reporting; the port preserves that behavior.
@@ -79,7 +79,7 @@ reads, not semantic resolution of declarations or expressions.
 | avoid_unstable_final_fields | removed | Upstream RemovedAnalysisRule | removed upstream |
 | avoid_unused_constructor_parameters | needs resolution | Uses constructor/field elements and parameter references | implemented (resolution; measured exact) |
 | avoid_void_async | needs resolution | Uses executable fragments, async state, and resolved return type | implemented (resolution; measured exact) |
-| avoid_web_libraries_in_flutter | non-AST context | Reads package root and pubspec Flutter plugin configuration | deferred |
+| avoid_web_libraries_in_flutter | non-AST context | Reads package root and pubspec Flutter plugin configuration | implemented |
 | await_only_futures | needs resolution | Uses awaited expression static type and type system | implemented (resolution; measured exact) |
 | camel_case_extensions | AST-only | Checks extension declaration name token only | implemented |
 | camel_case_types | AST-only | Checks declaration name tokens only | implemented |
@@ -90,12 +90,12 @@ reads, not semantic resolution of declarations or expressions.
 | collection_methods_unrelated_type | needs resolution | Uses receiver/argument static types, method elements, and type system | implemented (resolution; measured exact) |
 | combinators_ordering | AST-only | Sort-checks show/hide identifier tokens | implemented |
 | comment_references | needs resolution | Checks resolved doc-comment reference elements | implemented (resolution; measured exact except a copy of `dart:core`, see below) |
-| conditional_uri_does_not_exist | non-AST context | Requires URI resolution and source/filesystem existence | deferred |
+| conditional_uri_does_not_exist | non-AST context | Requires URI resolution and source/filesystem existence | implemented (resolution) |
 | constant_identifier_names | AST-only | Checks const declaration syntax and identifier tokens | implemented |
 | control_flow_in_finally | needs resolution | Break/continue target links are populated by resolution | implemented (resolution; measured exact) |
 | curly_braces_in_flow_control_structures | AST-only | Checks statement shape and parsed line information only | implemented |
 | dangling_library_doc_comments | AST-only | Uses declaration/doc-comment attachment and token line positions | implemented |
-| depend_on_referenced_packages | non-AST context | Requires pub package/pubspec dependencies and defining-unit directory context. | deferred |
+| depend_on_referenced_packages | non-AST context | Requires pub package/pubspec dependencies and defining-unit directory context. | implemented |
 | deprecated_consistency | needs resolution | Compares @deprecated annotations on constructor and parameter elements | implemented (resolution; measured exact) |
 | deprecated_member_use_from_same_package | needs resolution | Uses emitted diagnostics, element packages, and workspace data | implemented (resolution; measured exact) |
 | diagnostic_describe_all_properties | needs resolution | Uses Flutter class hierarchy and declared method elements | implemented (resolution; measured exact) |
@@ -158,7 +158,7 @@ reads, not semantic resolution of declarations or expressions.
 | only_throw_errors | needs resolution | Checks the thrown expression static type. | implemented (resolution; measured exact) |
 | overridden_fields | needs resolution | Finds inherited fields through resolved elements. | implemented (resolution; measured exact) |
 | package_api_docs | removed | Upstream is RemovedAnalysisRule. | n/a |
-| package_names | non-AST context | Runs on the parsed pubspec rather than a Dart AST. | deferred |
+| package_names | non-AST context | Runs on the parsed pubspec rather than a Dart AST. | implemented (`crates/dartr_project/src/pubspec_validator.rs`) |
 | package_prefixed_library_names | AST-only | Active upstream rule whose visitor intentionally returns without reporting until project information is restored. | implemented no-op |
 | parameter_assignments | needs resolution | Uses declared parameter elements and write references. | implemented (resolution; measured exact) |
 | prefer_adjacent_string_concatenation | AST-only | Checks binary operator and string-literal node kinds. | implemented |
@@ -205,9 +205,9 @@ reads, not semantic resolution of declarations or expressions.
 | provide_deprecation_message | needs resolution | Uses resolved ElementAnnotation.isDeprecated to distinguish the core annotation. | deferred |
 | public_member_api_docs | needs resolution | Uses resolved public elements, overrides, and documentation inheritance. | deferred |
 | recursive_getters | needs resolution | Compares identifier elements with the enclosing getter element. | deferred |
-| remove_deprecations_in_breaking_version | non-AST context | Reads package workspace and pubspec version information. | deferred |
+| remove_deprecations_in_breaking_versions | non-AST context | Reads package workspace and pubspec version information. | implemented (resolution) |
 | require_trailing_commas | AST-only | Uses tokens, line information, language version, and syntax shapes only. | implemented |
-| secure_pubspec_urls | non-AST context | Runs on pubspec URL and dependency nodes. | deferred |
+| secure_pubspec_urls | non-AST context | Runs on pubspec URL and dependency nodes. | implemented (`crates/dartr_project/src/pubspec_validator.rs`) |
 | simple_directive_paths | AST-only | Uses directive string syntax plus the current source path for relative minimality. | implemented |
 | simplify_variable_pattern | needs resolution | Reads field elements and their types. | deferred |
 | sized_box_for_whitespace | needs resolution | Identifies Flutter Container from the resolved static type and library URI. | deferred |
@@ -215,7 +215,7 @@ reads, not semantic resolution of declarations or expressions.
 | slash_for_doc_comments | AST-only | Checks attached documentation-comment token spelling. | implemented |
 | sort_child_properties_last | needs resolution | Uses resolved Flutter widget types and named parameter elements. | deferred |
 | sort_constructors_first | AST-only | Examines class member order and constructor syntax. | implemented |
-| sort_pub_dependencies | non-AST context | Runs on ordered pubspec dependency nodes and source spans. | deferred |
+| sort_pub_dependencies | non-AST context | Runs on ordered pubspec dependency nodes and source spans. | implemented (`crates/dartr_project/src/pubspec_validator.rs`) |
 | sort_unnamed_constructors_first | needs resolution | Uses declared constructor elements to identify the canonical unnamed name. | deferred |
 | specify_nonobvious_local_variable_types | needs resolution | Uses inferred static types and obvious-type analysis. | deferred |
 | specify_nonobvious_property_types | needs resolution | Uses declared elements and inferred initializer types. | deferred |
@@ -239,7 +239,7 @@ reads, not semantic resolution of declarations or expressions.
 | unnecessary_constructor_name | needs resolution | Uses enclosing constructor elements to suppress duplicate-constructor cases. | deferred |
 | unnecessary_final | AST-only | Checks final tokens on local declarations and parameters. | implemented |
 | unnecessary_getters_setters | needs resolution | Uses declared getter/setter elements and resolved metadata. | deferred |
-| unnecessary_ignore | non-AST context | Runs after all diagnostics through IgnoreValidator rather than an AST visitor. | deferred |
+| unnecessary_ignore | non-AST context | Runs after all diagnostics through IgnoreValidator rather than an AST visitor. | implemented (`crates/dartr_cli/src/ignore_validator.rs`) |
 | unnecessary_lambdas | needs resolution | Compares function and invoked elements and static types. | deferred |
 | unnecessary_late | AST-only | Checks static/top-level variable syntax and initializers. | implemented |
 | unnecessary_library_directive | AST-only | Checks directive siblings, annotations, and documentation comments. | implemented |

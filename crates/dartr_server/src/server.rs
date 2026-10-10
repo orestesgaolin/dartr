@@ -58,6 +58,9 @@ use crate::source_edits::apply_changes;
 use crate::transport::{Channel, read_message};
 use crate::uri::{UriError, normalize, path_to_uri, uri_to_path};
 
+mod nav;
+mod search;
+
 /// The progress token of analysis (Dart `analyzingProgressToken`).
 const ANALYZING_TOKEN: &str = "ANALYZING";
 
@@ -167,6 +170,15 @@ pub struct Server {
     /// The analysis drivers of the contexts of [Self::collection] (full
     /// diagnostics; design §4.2 invalidation on file changes).
     session: DriverSession,
+    /// The search index of each unit (`textDocument/references`), until a
+    /// file changes.
+    indexes: HashMap<(usize, String), std::sync::Arc<crate::index::UnitIndex>>,
+    /// The files of a search by driver, until a file changes.
+    search_scope: Option<std::sync::Arc<search::SearchScope>>,
+    /// The owner of each file of a search, until the roots change.
+    owned: search::OwnedFiles,
+    /// The words of each file of a search, until a file changes.
+    search_words: HashMap<String, std::sync::Arc<HashSet<String>>>,
     /// `DARTR_PARSE_ONLY=1`: the parse-only diagnostics (for comparison).
     parse_only: bool,
     next_request_id: i64,
@@ -267,6 +279,10 @@ impl Server {
             files_with_client_diagnostics: HashSet::new(),
             parsed: HashMap::new(),
             session: DriverSession::default(),
+            indexes: HashMap::new(),
+            search_scope: None,
+            owned: search::OwnedFiles::default(),
+            search_words: HashMap::new(),
             parse_only: std::env::var_os("DARTR_PARSE_ONLY").is_some(),
             next_request_id: 1,
             pending: HashMap::new(),
@@ -438,6 +454,14 @@ impl Server {
                     .ok_or_else(|| invalid_params(method))?;
                 features::selection_ranges(&file, positions)
             }
+            "textDocument/definition" => self.catching(method, |s| s.definition(&params)),
+            "textDocument/typeDefinition" => self.catching(method, |s| s.type_definition(&params)),
+            "textDocument/hover" => self.catching(method, |s| s.hover(&params)),
+            "textDocument/documentHighlight" => {
+                self.catching(method, |s| s.document_highlights(&params))
+            }
+            "textDocument/references" => self.catching(method, |s| s.references(&params)),
+            "textDocument/implementation" => self.catching(method, |s| s.implementation(&params)),
             "textDocument/formatting" => self.format_request(&params, FormatKind::Document),
             "textDocument/rangeFormatting" => {
                 let range = params
@@ -777,6 +801,29 @@ impl Server {
     // ---------------------------------------------------------------------
     // Documents.
 
+    /// Runs a request handler; a panic becomes an error response (Dart
+    /// reports the exception of a handler to the client).
+    fn catching(
+        &mut self,
+        method: &str,
+        f: impl FnOnce(&mut Self) -> ErrorOr<Value>,
+    ) -> ErrorOr<Value> {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(self))) {
+            Ok(r) => r,
+            Err(e) => {
+                let message = e
+                    .downcast_ref::<String>()
+                    .cloned()
+                    .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+                    .unwrap_or_else(|| "panic".to_string());
+                Err(ResponseError::new(
+                    codes::UNHANDLED_ERROR,
+                    format!("An error occurred while handling {method} request: {message}"),
+                ))
+            }
+        }
+    }
+
     /// Dart `pathOfDoc` for `params.textDocument`.
     fn path_of_doc(&self, params: &Value) -> ErrorOr<String> {
         let uri = params
@@ -878,12 +925,18 @@ impl Server {
 
     fn file_changed(&mut self, path: &str) {
         self.parsed.remove(path);
+        // The search data of the file and of the units of the libraries
+        // that the change affects.
+        self.indexes.retain(|(_, p), _| p != path);
+        self.search_scope = None;
+        self.search_words.remove(path);
         if path.ends_with(".dart") && !self.parse_only {
             // Dart `AnalysisDriver.changeFile`: the units of the libraries
             // to analyze again (only the library of the file when only
             // function bodies changed; after an API change the relinked
             // libraries too).
             for affected in self.session.change_file(path) {
+                self.indexes.retain(|(_, p), _| *p != affected);
                 if self.analyzed.contains(&affected) || self.priority.contains(&affected) {
                     self.dirty.insert(affected);
                 }
@@ -1084,6 +1137,10 @@ impl Server {
             .collect();
         // New contexts: new drivers.
         self.session = DriverSession::default();
+        self.indexes.clear();
+        self.search_scope = None;
+        self.search_words.clear();
+        self.owned = search::OwnedFiles::default();
         self.collection = if included.is_empty() {
             None
         } else {

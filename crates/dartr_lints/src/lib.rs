@@ -414,12 +414,38 @@ impl<'a> LinterContext<'a> {
         let parent = std::path::Path::new(path).parent()?;
         parent
             .ancestors()
-            .find(|root| root.join("pubspec.yaml").is_file())
+            .find(|root| {
+                root.join("pubspec.yaml")
+                    .to_str()
+                    .is_some_and(dartr_project::fs::file_exists)
+            })
             .map(std::path::Path::to_path_buf)
+    }
+    /// Package root when the Dart workspace package is a `PubPackage`: the
+    /// analyzer builds a pub workspace only when a
+    /// `.dart_tool/package_config.json` exists at or above the package.
+    pub fn pub_package_root(&self) -> Option<std::path::PathBuf> {
+        let root = self.package_root()?;
+        let has_config = root.ancestors().any(|dir| {
+            dir.join(".dart_tool/package_config.json")
+                .to_str()
+                .is_some_and(dartr_project::fs::file_exists)
+        });
+        has_config.then_some(root)
     }
     pub fn is_in_lib_dir(&self) -> bool {
         self.package_root().is_some_and(|root| {
             std::path::Path::new(self.all_units[0].path).starts_with(root.join("lib"))
+        })
+    }
+    pub fn is_in_public_dir(&self) -> bool {
+        self.package_root().is_some_and(|root| {
+            let cu_path = std::path::Path::new(self.all_units[0].path);
+            let hook = root.join("hook");
+            cu_path.starts_with(root.join("lib"))
+                || cu_path.starts_with(root.join("bin"))
+                || cu_path == hook.join("build.dart")
+                || cu_path == hook.join("link.dart")
         })
     }
     pub fn is_in_test_directory(&self) -> bool {

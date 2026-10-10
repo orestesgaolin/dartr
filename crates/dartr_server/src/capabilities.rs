@@ -132,7 +132,7 @@ pub const DART_FEATURES: &[Feature] = &[
     feature("CodeActionRegistrations", Some("codeActionProvider"), false),
     feature("CodeLensRegistrations", Some("codeLensProvider"), false),
     feature("CompletionRegistrations", Some("completionProvider"), false),
-    feature("DefinitionRegistrations", Some("definitionProvider"), false),
+    feature("DefinitionRegistrations", Some("definitionProvider"), true),
     feature(
         "DocumentLinkRegistrations",
         Some("documentLinkProvider"),
@@ -142,7 +142,7 @@ pub const DART_FEATURES: &[Feature] = &[
     feature(
         "DocumentHighlightsRegistrations",
         Some("documentHighlightProvider"),
-        false,
+        true,
     ),
     feature(
         "DocumentSymbolsRegistrations",
@@ -170,11 +170,11 @@ pub const DART_FEATURES: &[Feature] = &[
         Some("documentFormattingProvider"),
         true,
     ),
-    feature("HoverRegistrations", Some("hoverProvider"), false),
+    feature("HoverRegistrations", Some("hoverProvider"), true),
     feature(
         "ImplementationRegistrations",
         Some("implementationProvider"),
-        false,
+        true,
     ),
     feature("InlayHintRegistrations", Some("inlayHintProvider"), false),
     feature(
@@ -182,7 +182,7 @@ pub const DART_FEATURES: &[Feature] = &[
         Some("inlineValueProvider"),
         false,
     ),
-    feature("ReferencesRegistrations", Some("referencesProvider"), false),
+    feature("ReferencesRegistrations", Some("referencesProvider"), true),
     feature("RenameRegistrations", Some("renameProvider"), false),
     feature(
         "SelectionRangeRegistrations",
@@ -203,7 +203,7 @@ pub const DART_FEATURES: &[Feature] = &[
     feature(
         "TypeDefinitionRegistrations",
         Some("typeDefinitionProvider"),
-        false,
+        true,
     ),
     feature(
         "TypeHierarchyRegistrations",
@@ -268,6 +268,18 @@ fn on_type_formatting_options() -> Map<String, Value> {
 pub fn server_capabilities(client: &ClientCapabilities, config: &LspClientConfiguration) -> Value {
     let enable_formatter = config.global().enable_sdk_formatter();
     let mut c = Map::new();
+    for (feature, key) in [
+        ("definition", "definitionProvider"),
+        ("documentHighlight", "documentHighlightProvider"),
+        ("hover", "hoverProvider"),
+        ("implementation", "implementationProvider"),
+        ("references", "referencesProvider"),
+        ("typeDefinition", "typeDefinitionProvider"),
+    ] {
+        if !client.text_document_dynamic(feature) {
+            c.insert(key.into(), json!(true));
+        }
+    }
     if !client.text_document_dynamic("synchronization") {
         c.insert(
             "textDocumentSync".into(),
@@ -325,6 +337,20 @@ pub fn dynamic_registrations(
         method,
         options: Some(options),
     };
+    // Dart `fullySupportedTypes`: the Dart files and the types of plugins
+    // (the language server of dartr has no plugins).
+    if client.text_document_dynamic("definition") {
+        out.push(reg(
+            "textDocument/definition",
+            json!({"documentSelector": dart_files()}),
+        ));
+    }
+    if client.text_document_dynamic("documentHighlight") {
+        out.push(reg(
+            "textDocument/documentHighlight",
+            json!({"documentSelector": dart_files()}),
+        ));
+    }
     if client.text_document_dynamic("documentSymbol") {
         out.push(reg(
             "textDocument/documentSymbol",
@@ -356,6 +382,15 @@ pub fn dynamic_registrations(
             json!({"documentSelector": dart_files()}),
         ));
     }
+    for (feature, method) in [
+        ("hover", "textDocument/hover"),
+        ("implementation", "textDocument/implementation"),
+        ("references", "textDocument/references"),
+    ] {
+        if client.text_document_dynamic(feature) {
+            out.push(reg(method, json!({"documentSelector": dart_files()})));
+        }
+    }
     if client.text_document_dynamic("selectionRange") {
         out.push(reg(
             "textDocument/selectionRange",
@@ -374,6 +409,12 @@ pub fn dynamic_registrations(
         out.push(reg(
             "textDocument/didChange",
             json!({"documentSelector": synchronised_types(), "syncKind": 2}),
+        ));
+    }
+    if client.text_document_dynamic("typeDefinition") {
+        out.push(reg(
+            "textDocument/typeDefinition",
+            json!({"documentSelector": dart_files()}),
         ));
     }
     if client.workspace_dynamic("didChangeConfiguration") {

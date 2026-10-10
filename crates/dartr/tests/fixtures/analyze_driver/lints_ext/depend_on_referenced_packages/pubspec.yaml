@@ -1,0 +1,7 @@
+name: p
+environment:
+  sdk: ^3.13.0
+dependencies:
+  dep_a: ^1.0.0
+dev_dependencies:
+  dev_b: ^1.0.0

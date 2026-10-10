@@ -436,7 +436,7 @@ impl<'a> InfoBuilder<'a> {
             code_length: ast.end(node) - code_offset,
             first_token_offset: ast.offset(node),
             name_offset: offset_if_not_empty(ast, Some(n.name)),
-            documentation_comment: self.doc(n.documentation_comment),
+            documentation_comment: self.doc(variable_documentation_comment(ast, node)),
         }
     }
 
@@ -971,3 +971,20 @@ coerce_via!(
     dartr_element::VariableFragmentData,
     dartr_element::PropertyInducingFragmentData
 );
+
+/// Dart `VariableDeclarationImpl.documentationComment`: the comment of the
+/// variable, else of the field or top-level variable declaration (the
+/// grandparent).
+fn variable_documentation_comment(ast: &Ast, node: Id<VariableDeclaration>) -> Option<Id<Comment>> {
+    if let Some(c) = ast.get(node).documentation_comment {
+        return Some(c);
+    }
+    let grand = ast.parent(ast.parent(node.raw())?)?;
+    if let Some(t) = ast.cast::<TopLevelVariableDeclaration>(grand) {
+        return ast.get(t).documentation_comment;
+    }
+    if let Some(f) = ast.cast::<FieldDeclaration>(grand) {
+        return ast.get(f).documentation_comment;
+    }
+    None
+}

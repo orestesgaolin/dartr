@@ -657,3 +657,54 @@ fn analyze_parity_driver_pending_verifiers() {
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
+
+/// Non-AST context lint rules (`avoid_web_libraries_in_flutter`,
+/// `conditional_uri_does_not_exist`, `depend_on_referenced_packages`,
+/// `remove_deprecations_in_breaking_versions`), positive and negative
+/// fixture projects.
+#[test]
+fn analyze_parity_lints_ext() {
+    if !dart_available() {
+        eprintln!("skipped: dart 3.13.3 is not on PATH");
+        return;
+    }
+    let source =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/analyze_driver/lints_ext");
+    // Copy the fixtures and write a package config into each project,
+    // except for the `*_no_config` variants: without a package config the
+    // workspace package is not a pub package and the pubspec rules report
+    // nothing.
+    let prepared = scratch().join("lints_ext_src");
+    if prepared.exists() {
+        fs::remove_dir_all(&prepared).unwrap();
+    }
+    copy_dir(&source, &prepared);
+    for entry in fs::read_dir(&prepared).unwrap() {
+        let root = entry.unwrap().path();
+        if root.to_string_lossy().ends_with("_no_config") {
+            continue;
+        }
+        let mut packages = vec![
+            "{\"name\":\"p\",\"rootUri\":\"../\",\"packageUri\":\"lib/\",\"languageVersion\":\"3.13\"}"
+                .to_string(),
+        ];
+        if let Ok(vendor) = fs::read_dir(root.join("vendor")) {
+            let mut names: Vec<String> = vendor
+                .map(|v| v.unwrap().file_name().to_string_lossy().into_owned())
+                .collect();
+            names.sort();
+            for n in names {
+                packages.push(format!(
+                    "{{\"name\":\"{n}\",\"rootUri\":\"../vendor/{n}\",\"packageUri\":\"lib/\",\"languageVersion\":\"3.13\"}}"
+                ));
+            }
+        }
+        let config = format!(
+            "{{\"configVersion\":2,\"packages\":[{}]}}",
+            packages.join(",")
+        );
+        fs::create_dir_all(root.join(".dart_tool")).unwrap();
+        fs::write(root.join(".dart_tool/package_config.json"), config).unwrap();
+    }
+    check_fixture_projects(&prepared, "lints_ext");
+}
