@@ -1112,6 +1112,7 @@ impl InlineMethod {
                     length: range_to_replace.length,
                     replacement: occ_arg_source,
                     id: 0,
+                    description: None,
                 });
             }
         }
@@ -1123,6 +1124,7 @@ impl InlineMethod {
                     length: 0,
                     replacement: format!("{cls_name}."),
                     id: 0,
+                    description: None,
                 });
             }
         }
@@ -1137,6 +1139,7 @@ impl InlineMethod {
                     length: 4,
                     replacement: target_src.to_string(),
                     id: 0,
+                    description: None,
                 });
             }
             let target_dot = format!("{target_src}.");
@@ -1146,6 +1149,7 @@ impl InlineMethod {
                     length: 0,
                     replacement: target_dot.clone(),
                     id: 0,
+                    description: None,
                 });
             }
         }
@@ -1159,6 +1163,7 @@ impl InlineMethod {
                         length: r.length,
                         replacement: unique_name.clone(),
                         id: 0,
+                        description: None,
                     });
                 }
             }

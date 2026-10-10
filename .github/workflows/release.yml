@@ -43,6 +43,7 @@ jobs:
       - name: Build
         env:
           TAG: ${{ github.ref_name }}
+          CARGO_PROFILE_RELEASE_STRIP: debuginfo
         run: DARTR_RELEASE_VERSION="${TAG#v}" cargo build --release --locked -p dartr --target ${{ matrix.target }}
       - name: Smoke test
         run: target/${{ matrix.target }}/release/dartr --version
@@ -54,6 +55,7 @@ jobs:
           version="${TAG#v}"
           name="dartr-${version}-${TARGET}"
           mkdir -p "dist/${name}/bin" "dist/${name}/tools/shim"
+          strip -S "target/${TARGET}/release/dartr"
           cp "target/${TARGET}/release/dartr" "dist/${name}/bin/dartr"
           cp LICENSE THIRD_PARTY_NOTICES.md README.md "dist/${name}/"
           cp tools/shim/dartr_shim.dart "dist/${name}/tools/shim/"
