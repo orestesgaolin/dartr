@@ -10,18 +10,31 @@ pub fn register(r: &mut RuleVisitorRegistry, c: &LinterContext<'_>) {
     if !c.is_feature_enabled(ExperimentalFlag::SuperParameters) {
         return;
     }
-    r.add(NodeKind::ConstructorDeclaration, "use_super_parameters", visit_constructor_declaration);
-    r.add(NodeKind::PrimaryConstructorDeclaration, "use_super_parameters", visit_primary_constructor_declaration);
+    r.add(
+        NodeKind::ConstructorDeclaration,
+        "use_super_parameters",
+        visit_constructor_declaration,
+    );
+    r.add(
+        NodeKind::PrimaryConstructorDeclaration,
+        "use_super_parameters",
+        visit_primary_constructor_declaration,
+    );
 }
 
 fn is_formal_parameter(element: ElementId) -> bool {
-    matches!(element.tag(), Tag::FormalParameter | Tag::FieldFormalParameter | Tag::SuperFormalParameter)
+    matches!(
+        element.tag(),
+        Tag::FormalParameter | Tag::FieldFormalParameter | Tag::SuperFormalParameter
+    )
 }
 
 fn is_named(c: &LinterContext<'_>, parameter: ElemRef) -> bool {
     let Some(ctx) = rctx(c) else { return false };
     let base = dartr_typesystem::member::base_element(&ctx, parameter);
-    ctx.get(EId::<FormalParameterElement>::from_raw(base)).kind.is_named()
+    ctx.get(EId::<FormalParameterElement>::from_raw(base))
+        .kind
+        .is_named()
 }
 
 /// Dart `_referencedParameters`.
@@ -47,7 +60,10 @@ fn visit_constructor_declaration(c: &LinterContext<'_>, node: NodeId, out: &mut 
             // Dart `ConstructorDeclaration.errorRange`.
             let start = n.type_name.map_or_else(
                 || {
-                    let t = c.ast.tokens.get(n.new_keyword.or(n.factory_keyword).unwrap());
+                    let t = c
+                        .ast
+                        .tokens
+                        .get(n.new_keyword.or(n.factory_keyword).unwrap());
                     (t.offset, t.offset + t.length)
                 },
                 |t| (c.ast.offset(t), c.ast.end(t)),
@@ -56,14 +72,26 @@ fn visit_constructor_declaration(c: &LinterContext<'_>, node: NodeId, out: &mut 
                 let t = c.ast.tokens.get(t);
                 t.offset + t.length
             });
-            check(c, (start.0, end - start.0), invocation, n.parameters, Some(n.body.raw()), out);
+            check(
+                c,
+                (start.0, end - start.0),
+                invocation,
+                n.parameters,
+                Some(n.body.raw()),
+                out,
+            );
             return;
         }
     }
 }
 
-fn visit_primary_constructor_declaration(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
-    let Some(body) = super::tighten_type_of_initializing_formals::primary_constructor_body(c, node) else {
+fn visit_primary_constructor_declaration(
+    c: &LinterContext<'_>,
+    node: NodeId,
+    out: &mut Vec<Diagnostic>,
+) {
+    let Some(body) = super::tighten_type_of_initializing_formals::primary_constructor_body(c, node)
+    else {
         return;
     };
     let n = &c.ast[Id::<PrimaryConstructorDeclaration>::from_raw(node)];
@@ -78,7 +106,14 @@ fn visit_primary_constructor_declaration(c: &LinterContext<'_>, node: NodeId, ou
                 },
                 |cn| c.ast.end(cn),
             );
-            check(c, (start, end - start), invocation, n.formal_parameters, Some(c.ast[body].body.raw()), out);
+            check(
+                c,
+                (start, end - start),
+                invocation,
+                n.formal_parameters,
+                Some(c.ast[body].body.raw()),
+                out,
+            );
             return;
         }
     }
@@ -92,7 +127,9 @@ fn check(
     body: Option<NodeId>,
     out: &mut Vec<Diagnostic>,
 ) {
-    let Some(constructor) = c.element(super_invocation) else { return };
+    let Some(constructor) = c.element(super_invocation) else {
+        return;
+    };
     let referenced = referenced_parameters(c, body);
     let parameters = parameters(c, Some(parameter_list));
     let Some(mut identifiers) =
@@ -101,7 +138,9 @@ fn check(
         return;
     };
     for &parameter in &parameters {
-        let Some(element) = c.declared_element(parameter) else { continue };
+        let Some(element) = c.declared_element(parameter) else {
+            continue;
+        };
         if element.tag() == Tag::FieldFormalParameter {
             continue;
         }
@@ -116,7 +155,13 @@ fn check(
     let (offset, length) = (error_range.0 as usize, error_range.1 as usize);
     match identifiers.len() {
         0 => {}
-        1 => c.report_offset(out, &diag::USE_SUPER_PARAMETERS_SINGLE, offset, length, &[&identifiers[0]]),
+        1 => c.report_offset(
+            out,
+            &diag::USE_SUPER_PARAMETERS_SINGLE,
+            offset,
+            length,
+            &[&identifiers[0]],
+        ),
         n => {
             let quoted: Vec<String> = identifiers.iter().map(|s| format!("'{s}'")).collect();
             let message = if n == 2 {
@@ -124,7 +169,13 @@ fn check(
             } else {
                 format!("{}, and {}", quoted[..n - 1].join(", "), quoted[n - 1])
             };
-            c.report_offset(out, &diag::USE_SUPER_PARAMETERS_MULTIPLE, offset, length, &[&message]);
+            c.report_offset(
+                out,
+                &diag::USE_SUPER_PARAMETERS_MULTIPLE,
+                offset,
+                length,
+                &[&message],
+            );
         }
     }
 }
@@ -202,21 +253,29 @@ fn check_named_parameter(
     let super_parameter = dartr_typesystem::member::formal_parameters(&ctx, super_constructor)
         .into_iter()
         .find(|&p| is_named(c, p) && dartr_typesystem::member::name(&ctx, p) == parameter_name);
-    let Some(super_parameter) = super_parameter else { return false };
+    let Some(super_parameter) = super_parameter else {
+        return false;
+    };
     let argument_list = c.ast[super_invocation].argument_list;
-    let matching_argument = c.ast.list_raw(c.ast[argument_list].arguments).iter().any(|&argument| {
-        c.ast.cast::<NamedArgument>(argument).is_some_and(|named| {
-            Some(lexeme(c, c.ast[named].name)) == parameter_name && {
-                let expression = c.ast[named].argument_expression.raw();
-                kind(c, expression) == NodeKind::SimpleIdentifier
-                    && c.element(expression) == Some(ElemRef::Base(parameter))
-            }
-        })
-    });
+    let matching_argument =
+        c.ast
+            .list_raw(c.ast[argument_list].arguments)
+            .iter()
+            .any(|&argument| {
+                c.ast.cast::<NamedArgument>(argument).is_some_and(|named| {
+                    Some(lexeme(c, c.ast[named].name)) == parameter_name && {
+                        let expression = c.ast[named].argument_expression.raw();
+                        kind(c, expression) == NodeKind::SimpleIdentifier
+                            && c.element(expression) == Some(ElemRef::Base(parameter))
+                    }
+                })
+            });
     if !matching_argument {
         return false;
     }
-    let Some(ts) = c.type_system() else { return false };
+    let Some(ts) = c.type_system() else {
+        return false;
+    };
     let super_type = dartr_typesystem::member::type_(&ctx, super_parameter);
     let this_type = dartr_typesystem::member::type_(&ctx, ElemRef::Base(parameter));
     ts.is_assignable_to(super_type, this_type, false)

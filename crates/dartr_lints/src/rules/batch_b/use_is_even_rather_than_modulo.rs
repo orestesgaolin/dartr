@@ -47,7 +47,10 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         return;
     };
     if let Some(assert) = this_or_ancestor_kind(c, node, NodeKind::AssertInitializer)
-        && let Some(constructor) = c.ast.parent(assert).and_then(|p| c.ast.cast::<ConstructorDeclaration>(p))
+        && let Some(constructor) = c
+            .ast
+            .parent(assert)
+            .and_then(|p| c.ast.cast::<ConstructorDeclaration>(p))
         && c.ast[constructor].const_keyword.is_some()
     {
         return;

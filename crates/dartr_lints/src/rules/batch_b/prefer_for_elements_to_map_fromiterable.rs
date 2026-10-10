@@ -56,6 +56,11 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let key = extract_closure(c, "key", args[1]) || extract_closure(c, "key", args[2]);
     let value = extract_closure(c, "value", args[2]) || extract_closure(c, "value", args[1]);
     if key && value {
-        c.report_node(out, &diag::PREFER_FOR_ELEMENTS_TO_MAP_FROMITERABLE, node, &[]);
+        c.report_node(
+            out,
+            &diag::PREFER_FOR_ELEMENTS_TO_MAP_FROMITERABLE,
+            node,
+            &[],
+        );
     }
 }

@@ -43,17 +43,22 @@ fn check(c: &LinterContext<'_>, literal: NodeId, out: &mut Vec<Diagnostic>) {
             break;
         }
     }
-    let Some(creation) = node.filter(|&n| kind(c, n) == NodeKind::InstanceCreationExpression) else {
+    let Some(creation) = node.filter(|&n| kind(c, n) == NodeKind::InstanceCreationExpression)
+    else {
         return;
     };
     // Dart `_hasImmutableAnnotation`.
-    let mut current = c.static_type(creation).filter(|&t| ctx.interface_element(t).is_some());
+    let mut current = c
+        .static_type(creation)
+        .filter(|&t| ctx.interface_element(t).is_some());
     if current.is_none() {
         return;
     }
     let mut immutable = false;
     while let Some(t) = current {
-        let Some(e) = ctx.interface_element(t) else { break };
+        let Some(e) = ctx.interface_element(t) else {
+            break;
+        };
         if c.has_immutable(e.raw()) {
             immutable = true;
             break;
@@ -61,6 +66,11 @@ fn check(c: &LinterContext<'_>, literal: NodeId, out: &mut Vec<Diagnostic>) {
         current = ctx.superclass(t);
     }
     if immutable && c.can_be_const(literal) {
-        c.report_node(out, &diag::PREFER_CONST_LITERALS_TO_CREATE_IMMUTABLES, literal, &[]);
+        c.report_node(
+            out,
+            &diag::PREFER_CONST_LITERALS_TO_CREATE_IMMUTABLES,
+            literal,
+            &[],
+        );
     }
 }

@@ -3,12 +3,16 @@ use super::util::*;
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
-use dartr_typesystem::TypeExt;
 use dartr_element::{ElemRef, FragmentFlags, Tag};
+use dartr_typesystem::TypeExt;
 use dartr_typesystem::member;
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::InstanceCreationExpression, "use_named_constants", check);
+    r.add(
+        NodeKind::InstanceCreationExpression,
+        "use_named_constants",
+        check,
+    );
     r.add(
         NodeKind::DotShorthandConstructorInvocation,
         "use_named_constants",
@@ -18,9 +22,10 @@ pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
 
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let const_keyword = match kind(c, node) {
-        NodeKind::InstanceCreationExpression => c.ast[Id::<InstanceCreationExpression>::from_raw(node)]
-            .keyword
-            .filter(|&k| lexeme(c, k) == "const"),
+        NodeKind::InstanceCreationExpression => c.ast
+            [Id::<InstanceCreationExpression>::from_raw(node)]
+        .keyword
+        .filter(|&k| lexeme(c, k) == "const"),
         _ => c.ast[Id::<DotShorthandConstructorInvocation>::from_raw(node)].const_keyword,
     };
     if const_keyword.is_none() && !in_constant_context(c, node) {
@@ -33,7 +38,9 @@ fn report_when_matching_constant(c: &LinterContext<'_>, node: NodeId, out: &mut 
     let (Some(ctx), Some(resolved)) = (rctx(c), c.resolved) else {
         return;
     };
-    let Some(ty) = c.static_type(node) else { return };
+    let Some(ty) = c.static_type(node) else {
+        return;
+    };
     let Some(element) = ctx.interface_element(ty) else {
         return;
     };

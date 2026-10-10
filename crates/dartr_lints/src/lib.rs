@@ -43,8 +43,10 @@ pub struct ResolvedLintContext<'a> {
     /// Resolver `this_scope_lookup`: the getter and the setter that the
     /// name of `this.name` resolves to in the scope of the `ThisExpression`
     /// (the linter `resolveNameInScope`).
-    pub this_scope_lookup:
-        &'a dartr_ast::NodeMap<(Option<dartr_element::ElementId>, Option<dartr_element::ElementId>)>,
+    pub this_scope_lookup: &'a dartr_ast::NodeMap<(
+        Option<dartr_element::ElementId>,
+        Option<dartr_element::ElementId>,
+    )>,
     /// Dart `node.accept(ExitDetector())` of a node of the unit (the
     /// resolved exit detector of the analyzer).
     pub exits: Option<&'a dyn Fn(NodeId) -> bool>,

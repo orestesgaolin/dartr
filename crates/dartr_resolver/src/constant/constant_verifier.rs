@@ -179,8 +179,8 @@ pub fn can_be_const(engine: &ConstantEvaluationEngine<'_>, node: NodeRef) -> boo
             let constructor_name = match ast.kind(node.node) {
                 NodeKind::InstanceCreationExpression => ast
                     [Id::<dartr_ast::InstanceCreationExpression>::from_raw(node.node)]
-                    .constructor_name
-                    .raw(),
+                .constructor_name
+                .raw(),
                 _ => ast[Id::<dartr_ast::DotShorthandConstructorInvocation>::from_raw(node.node)]
                     .constructor_name
                     .raw(),

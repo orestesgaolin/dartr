@@ -5,7 +5,11 @@ use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::ConstructorDeclaration, "unnecessary_constructor_name", check);
+    r.add(
+        NodeKind::ConstructorDeclaration,
+        "unnecessary_constructor_name",
+        check,
+    );
     r.add(
         NodeKind::PrimaryConstructorDeclaration,
         "unnecessary_constructor_name",
@@ -35,7 +39,11 @@ fn unnamed_constructors(c: &LinterContext<'_>, declaration: NodeId) -> usize {
         .count()
 }
 
-fn check_token(c: &LinterContext<'_>, name: Option<dartr_syntax::TokenId>, out: &mut Vec<Diagnostic>) {
+fn check_token(
+    c: &LinterContext<'_>,
+    name: Option<dartr_syntax::TokenId>,
+    out: &mut Vec<Diagnostic>,
+) {
     if let Some(name) = name
         && lexeme(c, name) == "new"
     {
@@ -51,12 +59,18 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             }
             if let Some(parent) = c.ast.parent(node).and_then(|p| c.ast.parent(p))
                 && let Some(et) = c.ast.cast::<ExtensionTypeDeclaration>(parent)
-                && let Some(primary) = c.ast.cast::<PrimaryConstructorDeclaration>(c.ast[et].name_part)
+                && let Some(primary) = c
+                    .ast
+                    .cast::<PrimaryConstructorDeclaration>(c.ast[et].name_part)
                 && c.ast[primary].constructor_name.is_none()
             {
                 return;
             }
-            check_token(c, c.ast[Id::<ConstructorDeclaration>::from_raw(node)].name, out);
+            check_token(
+                c,
+                c.ast[Id::<ConstructorDeclaration>::from_raw(node)].name,
+                out,
+            );
         }
         NodeKind::PrimaryConstructorDeclaration => {
             if unnamed_constructors(c, node) > 1 {
@@ -68,7 +82,8 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             check_token(c, name, out);
         }
         _ => {
-            let constructor_name = c.ast[Id::<InstanceCreationExpression>::from_raw(node)].constructor_name;
+            let constructor_name =
+                c.ast[Id::<InstanceCreationExpression>::from_raw(node)].constructor_name;
             let name = c.ast[constructor_name].name.map(|n| c.ast[n].token);
             check_token(c, name, out);
         }

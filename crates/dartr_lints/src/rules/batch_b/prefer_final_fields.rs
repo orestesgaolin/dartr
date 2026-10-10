@@ -25,7 +25,9 @@ fn overrides_field(c: &LinterContext<'_>, field: ElementId) -> bool {
 }
 
 fn is_final_or_const(c: &LinterContext<'_>, list: Id<VariableDeclarationList>) -> bool {
-    c.ast[list].keyword.is_some_and(|k| matches!(lexeme(c, k), "final" | "const"))
+    c.ast[list]
+        .keyword
+        .is_some_and(|k| matches!(lexeme(c, k), "final" | "const"))
 }
 
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
@@ -40,7 +42,8 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                 let f = &c.ast[Id::<FieldDeclaration>::from_raw(n)];
                 let declaration = c.ast.parent(n).and_then(|p| c.ast.parent(p));
                 let invalid_extension_type_field = f.static_keyword.is_none()
-                    && declaration.is_some_and(|d| kind(c, d) == NodeKind::ExtensionTypeDeclaration);
+                    && declaration
+                        .is_some_and(|d| kind(c, d) == NodeKind::ExtensionTypeDeclaration);
                 let in_enum = declaration.is_some_and(|d| kind(c, d) == NodeKind::EnumDeclaration);
                 if !invalid_extension_type_field && !in_enum && !is_final_or_const(c, f.fields) {
                     for &variable in c.ast.list(c.ast[f.fields].variables) {
@@ -57,18 +60,28 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             NodeKind::PrimaryConstructorDeclaration => {
                 let declaration = c.ast.parent(n);
                 if !declaration.is_some_and(|d| {
-                    matches!(kind(c, d), NodeKind::EnumDeclaration | NodeKind::ExtensionTypeDeclaration)
+                    matches!(
+                        kind(c, d),
+                        NodeKind::EnumDeclaration | NodeKind::ExtensionTypeDeclaration
+                    )
                 }) {
-                    let list = c.ast[Id::<PrimaryConstructorDeclaration>::from_raw(n)].formal_parameters;
+                    let list =
+                        c.ast[Id::<PrimaryConstructorDeclaration>::from_raw(n)].formal_parameters;
                     for parameter in parameters(c, Some(list)) {
                         let Some(element) = c.declared_element(parameter) else {
                             continue;
                         };
                         if element.tag() == Tag::FieldFormalParameter
-                            && flags(c, element).contains(FragmentFlags::FIELD_FORMAL_PARAMETER_FRAGMENT_IS_DECLARING)
+                            && flags(c, element).contains(
+                                FragmentFlags::FIELD_FORMAL_PARAMETER_FRAGMENT_IS_DECLARING,
+                            )
                             && name(c, element).is_some_and(|n| n.starts_with('_'))
-                            && let Some(field) = ctx.get(EId::<FormalParameterElement>::from_raw(element)).field.get()
-                            && !flags(c, field.raw()).contains(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL)
+                            && let Some(field) = ctx
+                                .get(EId::<FormalParameterElement>::from_raw(element))
+                                .field
+                                .get()
+                            && !flags(c, field.raw())
+                                .contains(FragmentFlags::VARIABLE_FRAGMENT_IS_FINAL)
                             && !overrides_field(c, field.raw())
                         {
                             fields_from_parameters.insert(field.raw(), parameter);
@@ -82,13 +95,19 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     }
     // Dart `_FieldMutationFinder` over all units of the library.
     for index in 0..c.resolved_units.len() {
-        let Some(unit) = c.resolved_unit(index) else { continue };
-        let Some(resolved) = unit.resolved else { continue };
+        let Some(unit) = c.resolved_unit(index) else {
+            continue;
+        };
+        let Some(resolved) = unit.resolved else {
+            continue;
+        };
         for n in (0..unit.ast.node_count()).map(NodeId::from_index) {
             let mutating = match unit.ast.kind(n) {
                 NodeKind::AssignmentExpression | NodeKind::PostfixExpression => true,
                 NodeKind::PrefixExpression => matches!(
-                    unit.ast.tokens.lexeme(unit.ast[Id::<PrefixExpression>::from_raw(n)].operator),
+                    unit.ast
+                        .tokens
+                        .lexeme(unit.ast[Id::<PrefixExpression>::from_raw(n)].operator),
                     "--" | "++"
                 ),
                 _ => false,
@@ -127,13 +146,20 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         let is_set_in = |constructor: Id<ConstructorDeclaration>| {
             let k = &c.ast[constructor];
             c.ast.list_raw(k.initializers).iter().any(|&i| {
-                c.ast.cast::<ConstructorFieldInitializer>(i).is_some_and(|fi| {
-                    canonical_element(c, c.ast[fi].field_name.raw()).map(|e| base(c, e)) == Some(field)
-                })
+                c.ast
+                    .cast::<ConstructorFieldInitializer>(i)
+                    .is_some_and(|fi| {
+                        canonical_element(c, c.ast[fi].field_name.raw()).map(|e| base(c, e))
+                            == Some(field)
+                    })
             }) || parameters(c, Some(k.parameters)).iter().any(|&p| {
                 c.declared_element(p).is_some_and(|e| {
                     e.tag() == Tag::FieldFormalParameter
-                        && ctx.get(EId::<FormalParameterElement>::from_raw(e)).field.get().map(|f| f.raw())
+                        && ctx
+                            .get(EId::<FormalParameterElement>::from_raw(e))
+                            .field
+                            .get()
+                            .map(|f| f.raw())
                             == Some(field)
                 })
             })
@@ -143,7 +169,9 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             if constructors.iter().all(|&k| is_set_in(k)) {
                 c.report_node(out, &diag::PREFER_FINAL_FIELDS, variable, &[name]);
             }
-        } else if flags(c, field).contains(FragmentFlags::NON_PARAMETER_VARIABLE_FRAGMENT_HAS_INITIALIZER) {
+        } else if flags(c, field)
+            .contains(FragmentFlags::NON_PARAMETER_VARIABLE_FRAGMENT_HAS_INITIALIZER)
+        {
             c.report_node(out, &diag::PREFER_FINAL_FIELDS, variable, &[name]);
         }
     }

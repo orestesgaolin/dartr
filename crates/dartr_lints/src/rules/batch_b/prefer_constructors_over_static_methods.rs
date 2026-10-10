@@ -22,7 +22,9 @@ fn has_new_invocation(c: &LinterContext<'_>, return_type: TypeId, body: NodeId) 
     let mut stack = vec![body];
     while let Some(n) = stack.pop() {
         if kind(c, n) == NodeKind::InstanceCreationExpression {
-            found = c.static_type(n).is_some_and(|t| types_equal(c, t, return_type));
+            found = c
+                .static_type(n)
+                .is_some_and(|t| types_equal(c, t, return_type));
             if found {
                 continue;
             }
@@ -49,20 +51,31 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         return;
     };
     let name_part = match kind(c, declaration) {
-        NodeKind::ExtensionTypeDeclaration => c.ast[Id::<ExtensionTypeDeclaration>::from_raw(declaration)].name_part,
-        NodeKind::ClassDeclaration => c.ast[Id::<ClassDeclaration>::from_raw(declaration)].name_part,
+        NodeKind::ExtensionTypeDeclaration => {
+            c.ast[Id::<ExtensionTypeDeclaration>::from_raw(declaration)].name_part
+        }
+        NodeKind::ClassDeclaration => {
+            c.ast[Id::<ClassDeclaration>::from_raw(declaration)].name_part
+        }
         _ => return,
     };
     if class_name_part_type_parameters(c, name_part.raw()) {
         return;
     }
-    let Some(element) = c.declared_element(declaration) else { return };
+    let Some(element) = c.declared_element(declaration) else {
+        return;
+    };
     let this_type = ctx.interface_this_type(dartr_element::EId::from_raw(element));
     if !types_equal(c, this_type, return_type) {
         return;
     }
     if has_new_invocation(c, return_type, n.body.raw()) {
-        c.report_token(out, &diag::PREFER_CONSTRUCTORS_OVER_STATIC_METHODS, n.name, &[]);
+        c.report_token(
+            out,
+            &diag::PREFER_CONSTRUCTORS_OVER_STATIC_METHODS,
+            n.name,
+            &[],
+        );
     }
 }
 

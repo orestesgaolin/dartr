@@ -22,7 +22,11 @@ fn is_double_annotation(c: &LinterContext<'_>, annotation: Option<NodeId>) -> bo
 fn has_return_type_double(c: &LinterContext<'_>, node: Option<NodeId>) -> bool {
     let Some(node) = node else { return false };
     if kind(c, node) == NodeKind::FunctionExpression {
-        if let Some(declaration) = c.ast.parent(node).and_then(|p| c.ast.cast::<FunctionDeclaration>(p)) {
+        if let Some(declaration) = c
+            .ast
+            .parent(node)
+            .and_then(|p| c.ast.cast::<FunctionDeclaration>(p))
+        {
             return is_double_annotation(c, c.ast[declaration].return_type.map(|t| t.raw()));
         }
     } else if let Some(method) = c.ast.cast::<MethodDeclaration>(node) {
@@ -41,10 +45,13 @@ fn has_type_double(c: &LinterContext<'_>, expression: NodeId) -> bool {
         NodeKind::ListLiteral => {
             let type_arguments = c.ast[Id::<ListLiteral>::from_raw(parent)].type_arguments;
             let arguments = type_arguments.map(|t| c.ast.list_raw(c.ast[t].arguments).to_vec());
-            arguments.as_ref().is_some_and(|a| a.len() == 1) && is_double_annotation(c, Some(arguments.unwrap()[0]))
+            arguments.as_ref().is_some_and(|a| a.len() == 1)
+                && is_double_annotation(c, Some(arguments.unwrap()[0]))
         }
         NodeKind::NamedArgument => {
-            c.ast.parent(parent).is_some_and(|p| kind(c, p) == NodeKind::ArgumentList)
+            c.ast
+                .parent(parent)
+                .is_some_and(|p| kind(c, p) == NodeKind::ArgumentList)
                 && is_double(c, c.corresponding_parameter_type(parent))
         }
         NodeKind::ExpressionFunctionBody => has_return_type_double(c, c.ast.parent(parent)),
@@ -66,8 +73,14 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     if !value.is_finite() || value != value.trunc() {
         return;
     }
-    let replaceable = match c.ast.parent(node).and_then(|p| c.ast.cast::<PrefixExpression>(p)) {
-        Some(prefix) => lexeme(c, c.ast[prefix].operator) == "-" && has_type_double(c, prefix.raw()),
+    let replaceable = match c
+        .ast
+        .parent(node)
+        .and_then(|p| c.ast.cast::<PrefixExpression>(p))
+    {
+        Some(prefix) => {
+            lexeme(c, c.ast[prefix].operator) == "-" && has_type_double(c, prefix.raw())
+        }
         None => has_type_double(c, node),
     };
     if replaceable {

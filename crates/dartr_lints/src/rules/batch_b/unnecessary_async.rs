@@ -7,25 +7,45 @@ use dartr_element::{ElemRef, Nullability, TypeId, TypeKind};
 use dartr_typesystem::TypeExt;
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::FunctionDeclaration, "unnecessary_async", visit_function_declaration);
-    r.add(NodeKind::FunctionExpression, "unnecessary_async", visit_function_expression);
-    r.add(NodeKind::MethodDeclaration, "unnecessary_async", visit_method_declaration);
+    r.add(
+        NodeKind::FunctionDeclaration,
+        "unnecessary_async",
+        visit_function_declaration,
+    );
+    r.add(
+        NodeKind::FunctionExpression,
+        "unnecessary_async",
+        visit_function_expression,
+    );
+    r.add(
+        NodeKind::MethodDeclaration,
+        "unnecessary_async",
+        visit_method_declaration,
+    );
 }
 
 fn declared_return_type(c: &LinterContext<'_>, node: NodeId) -> Option<TypeId> {
     let ctx = rctx(c)?;
     let element = c.declared_element(node)?;
-    Some(dartr_typesystem::member::return_type(&ctx, ElemRef::Base(element)))
+    Some(dartr_typesystem::member::return_type(
+        &ctx,
+        ElemRef::Base(element),
+    ))
 }
 
 fn visit_function_declaration(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
-    let Some(return_type) = declared_return_type(c, node) else { return };
+    let Some(return_type) = declared_return_type(c, node) else {
+        return;
+    };
     let function = c.ast[Id::<FunctionDeclaration>::from_raw(node)].function_expression;
     check_body(c, c.ast[function].body.raw(), Some(return_type), out);
 }
 
 fn visit_function_expression(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
-    if c.ast.parent(node).is_some_and(|p| kind(c, p) == NodeKind::FunctionDeclaration) {
+    if c.ast
+        .parent(node)
+        .is_some_and(|p| kind(c, p) == NodeKind::FunctionDeclaration)
+    {
         return;
     }
     let body = c.ast[Id::<FunctionExpression>::from_raw(node)].body.raw();
@@ -34,8 +54,15 @@ fn visit_function_expression(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<
 }
 
 fn visit_method_declaration(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
-    let Some(return_type) = declared_return_type(c, node) else { return };
-    check_body(c, c.ast[Id::<MethodDeclaration>::from_raw(node)].body.raw(), Some(return_type), out);
+    let Some(return_type) = declared_return_type(c, node) else {
+        return;
+    };
+    check_body(
+        c,
+        c.ast[Id::<MethodDeclaration>::from_raw(node)].body.raw(),
+        Some(return_type),
+        out,
+    );
 }
 
 fn rctx_body_context(c: &LinterContext<'_>, body: NodeId) -> Option<crate::BodyContext> {
@@ -54,17 +81,30 @@ impl HasAwait {
         match kind(c, node) {
             NodeKind::AwaitExpression => self.has_await = true,
             NodeKind::ExpressionFunctionBody => {
-                self.update_with_expression(c, c.ast[Id::<ExpressionFunctionBody>::from_raw(node)].expression.raw());
+                self.update_with_expression(
+                    c,
+                    c.ast[Id::<ExpressionFunctionBody>::from_raw(node)]
+                        .expression
+                        .raw(),
+                );
             }
-            NodeKind::ForElement => self.has_await |= c.ast[Id::<ForElement>::from_raw(node)].await_keyword.is_some(),
+            NodeKind::ForElement => {
+                self.has_await |= c.ast[Id::<ForElement>::from_raw(node)]
+                    .await_keyword
+                    .is_some()
+            }
             NodeKind::ForStatement => {
-                self.has_await |= c.ast[Id::<ForStatement>::from_raw(node)].await_keyword.is_some()
+                self.has_await |= c.ast[Id::<ForStatement>::from_raw(node)]
+                    .await_keyword
+                    .is_some()
             }
             NodeKind::FunctionExpression => return,
-            NodeKind::ReturnStatement => match c.ast[Id::<ReturnStatement>::from_raw(node)].expression {
-                Some(expression) => self.update_with_expression(c, expression.raw()),
-                None => self.every_return_has_value = false,
-            },
+            NodeKind::ReturnStatement => {
+                match c.ast[Id::<ReturnStatement>::from_raw(node)].expression {
+                    Some(expression) => self.update_with_expression(c, expression.raw()),
+                    None => self.every_return_has_value = false,
+                }
+            }
             _ => {}
         }
         for child in c.ast.children(node) {
@@ -94,7 +134,12 @@ fn is_dart_async_future_or_subtype(c: &LinterContext<'_>, ty: TypeId) -> bool {
 }
 
 /// Dart `_checkBody`.
-fn check_body(c: &LinterContext<'_>, body: NodeId, return_type: Option<TypeId>, out: &mut Vec<Diagnostic>) {
+fn check_body(
+    c: &LinterContext<'_>,
+    body: NodeId,
+    return_type: Option<TypeId>,
+    out: &mut Vec<Diagnostic>,
+) {
     let Some(ctx) = rctx(c) else { return };
     let (keyword_token, star) = match kind(c, body) {
         NodeKind::BlockFunctionBody => {
@@ -107,17 +152,27 @@ fn check_body(c: &LinterContext<'_>, body: NodeId, return_type: Option<TypeId>, 
         }
         _ => (None, None),
     };
-    let Some(async_keyword) = keyword_token.filter(|&k| lexeme(c, k) == "async") else { return };
+    let Some(async_keyword) = keyword_token.filter(|&k| lexeme(c, k) == "async") else {
+        return;
+    };
     if star.is_some() {
         return;
     }
-    let Some(body_context) = rctx_body_context(c, body) else { return };
-    let mut visitor = HasAwait { has_await: false, every_return_has_value: true, returns_only_future: true };
+    let Some(body_context) = rctx_body_context(c, body) else {
+        return;
+    };
+    let mut visitor = HasAwait {
+        has_await: false,
+        every_return_has_value: true,
+        returns_only_future: true,
+    };
     visitor.visit(c, body);
     if visitor.has_await {
         return;
     }
-    let report = |out: &mut Vec<Diagnostic>| c.report_token(out, &diag::UNNECESSARY_ASYNC, async_keyword, &[]);
+    let report = |out: &mut Vec<Diagnostic>| {
+        c.report_token(out, &diag::UNNECESSARY_ASYNC, async_keyword, &[])
+    };
     let Some(return_type) = return_type else {
         report(out);
         return;
@@ -133,7 +188,9 @@ fn check_body(c: &LinterContext<'_>, body: NodeId, return_type: Option<TypeId>, 
         report(out);
         return;
     }
-    if matches!(*ctx.ty(return_type), TypeKind::Interface { .. }) && ctx.is_dart_core_object(return_type) {
+    if matches!(*ctx.ty(return_type), TypeKind::Interface { .. })
+        && ctx.is_dart_core_object(return_type)
+    {
         report(out);
         return;
     }

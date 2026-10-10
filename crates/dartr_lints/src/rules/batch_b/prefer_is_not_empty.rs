@@ -28,7 +28,8 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     if name(c, property) != Some("isEmpty") {
         return;
     }
-    let Some(target) = enclosing(c, property).and_then(|e| e.cast::<dartr_element::InterfaceElement>())
+    let Some(target) =
+        enclosing(c, property).and_then(|e| e.cast::<dartr_element::InterfaceElement>())
     else {
         return;
     };

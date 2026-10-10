@@ -192,12 +192,14 @@ fn filter_ignored_diagnostics(
     if !ignore_info.has_ignores() {
         return;
     }
-    let (kept, ignored) = std::mem::take(&mut unit.diagnostics).into_iter().partition(|d| {
-        unignorable_names
-            .iter()
-            .any(|n| n == d.code.lower_case_name())
-            || !ignore_info.ignored(d, &parsed.line_info)
-    });
+    let (kept, ignored) = std::mem::take(&mut unit.diagnostics)
+        .into_iter()
+        .partition(|d| {
+            unignorable_names
+                .iter()
+                .any(|n| n == d.code.lower_case_name())
+                || !ignore_info.ignored(d, &parsed.line_info)
+        });
     unit.diagnostics = kept;
     unit.ignored_diagnostics = ignored;
 }

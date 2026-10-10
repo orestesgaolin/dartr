@@ -8,7 +8,11 @@ use dartr_element::{EId, FragmentFlags, Tag};
 use indexmap::IndexMap;
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::ClassDeclaration, "unnecessary_getters_setters", check);
+    r.add(
+        NodeKind::ClassDeclaration,
+        "unnecessary_getters_setters",
+        check,
+    );
     r.add(
         NodeKind::ExtensionTypeDeclaration,
         "unnecessary_getters_setters",
@@ -21,7 +25,9 @@ pub(crate) fn is_simple_getter(c: &LinterContext<'_>, declaration: NodeId) -> bo
     if method_property(c, declaration) != Some("get") {
         return false;
     }
-    let body = c.ast[Id::<MethodDeclaration>::from_raw(declaration)].body.raw();
+    let body = c.ast[Id::<MethodDeclaration>::from_raw(declaration)]
+        .body
+        .raw();
     let expression = if let Some(e) = c.ast.cast::<ExpressionFunctionBody>(body) {
         Some(c.ast[e].expression.raw())
     } else if let Some(b) = c.ast.cast::<BlockFunctionBody>(body) {
@@ -40,8 +46,14 @@ pub(crate) fn is_simple_getter(c: &LinterContext<'_>, declaration: NodeId) -> bo
 }
 
 /// Dart `_checkForSimpleGetter`.
-fn check_for_simple_getter(c: &LinterContext<'_>, getter: NodeId, expression: Option<NodeId>) -> bool {
-    let Some(expression) = expression else { return false };
+fn check_for_simple_getter(
+    c: &LinterContext<'_>,
+    getter: NodeId,
+    expression: Option<NodeId>,
+) -> bool {
+    let Some(expression) = expression else {
+        return false;
+    };
     if kind(c, expression) != NodeKind::SimpleIdentifier {
         return false;
     }
@@ -54,8 +66,8 @@ fn check_for_simple_getter(c: &LinterContext<'_>, getter: NodeId, expression: Op
     let enclosing_element = c.declared_element(getter).and_then(|e| enclosing(c, e));
     if enclosing(c, element) == enclosing_element {
         let ctx = rctx(c).unwrap();
-        let is_origin_variable =
-            flags(c, element).contains(FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_VARIABLE);
+        let is_origin_variable = flags(c, element)
+            .contains(FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_VARIABLE);
         let variable = ctx
             .property_accessor(EId::from_raw(element))
             .variable
@@ -95,11 +107,17 @@ fn check_for_simple_setter(c: &LinterContext<'_>, setter: NodeId, expression: No
     let (lhs, rhs) = (a.left_hand_side.raw(), a.right_hand_side.raw());
     if kind(c, lhs) == NodeKind::SimpleIdentifier && kind(c, rhs) == NodeKind::SimpleIdentifier {
         let resolved = c.resolved.unwrap();
-        let Some(left) = resolved.tables.write_element.get(expression).map(|&e| base(c, e)) else {
+        let Some(left) = resolved
+            .tables
+            .write_element
+            .get(expression)
+            .map(|&e| base(c, e))
+        else {
             return false;
         };
         if left.tag() != Tag::Setter
-            || flags(c, left).contains(FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_DECLARATION)
+            || flags(c, left)
+                .contains(FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_DECLARATION)
         {
             return false;
         }
@@ -122,7 +140,10 @@ fn check_for_simple_setter(c: &LinterContext<'_>, setter: NodeId, expression: No
         ) {
             return false;
         }
-        let parameters = parameters(c, c.ast[Id::<MethodDeclaration>::from_raw(setter)].parameters);
+        let parameters = parameters(
+            c,
+            c.ast[Id::<MethodDeclaration>::from_raw(setter)].parameters,
+        );
         if parameters.len() == 1 {
             return Some(right) == c.declared_element(parameters[0]);
         }
@@ -164,7 +185,11 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         else {
             continue;
         };
-        let no_metadata = |e| c.resolved.and_then(|r| r.metadata).is_none_or(|m| m.annotations(e).is_empty());
+        let no_metadata = |e| {
+            c.resolved
+                .and_then(|r| r.metadata)
+                .is_none_or(|m| m.annotations(e).is_empty())
+        };
         if is_simple_setter(c, setter)
             && is_simple_getter(c, getter)
             && no_metadata(getter_element)

@@ -58,10 +58,16 @@ fn helper(c: &LinterContext<'_>, root: NodeId, out: &mut Vec<Diagnostic>) {
                     .and_then(|l| c.ast.cast::<VariableDeclarationList>(l))
                     .and_then(|l| c.ast[l].keyword)
                     .map(|k| lexeme(c, k));
-                let has_inferred_type = v.initializer.and_then(|i| c.static_type(i)).is_some_and(|t| {
-                    !matches!(*ctx.ty(t), TypeKind::Dynamic) && !ctx.is_dart_core_null(t)
-                });
-                if !is_private(c, v.name) && keyword != Some("const") && !(keyword == Some("final") && has_inferred_type) {
+                let has_inferred_type =
+                    v.initializer
+                        .and_then(|i| c.static_type(i))
+                        .is_some_and(|t| {
+                            !matches!(*ctx.ty(t), TypeKind::Dynamic) && !ctx.is_dart_core_null(t)
+                        });
+                if !is_private(c, v.name)
+                    && keyword != Some("const")
+                    && !(keyword == Some("final") && has_inferred_type)
+                {
                     c.report_token(out, &diag::TYPE_ANNOTATE_PUBLIC_APIS, v.name, &[]);
                 }
                 continue;
@@ -81,14 +87,26 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             if let Some(element) = c.declared_element(node)
                 && is_public_constructor(c, element)
             {
-                helper(c, c.ast[Id::<ConstructorDeclaration>::from_raw(node)].parameters.raw(), out);
+                helper(
+                    c,
+                    c.ast[Id::<ConstructorDeclaration>::from_raw(node)]
+                        .parameters
+                        .raw(),
+                    out,
+                );
             }
         }
         NodeKind::PrimaryConstructorDeclaration => {
             if let Some(element) = c.declared_element(node)
                 && is_public_constructor(c, element)
             {
-                helper(c, c.ast[Id::<PrimaryConstructorDeclaration>::from_raw(node)].formal_parameters.raw(), out);
+                helper(
+                    c,
+                    c.ast[Id::<PrimaryConstructorDeclaration>::from_raw(node)]
+                        .formal_parameters
+                        .raw(),
+                    out,
+                );
             }
         }
         NodeKind::FieldDeclaration => {
@@ -105,7 +123,11 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         }
         NodeKind::FunctionDeclaration => {
             let n = &c.ast[Id::<FunctionDeclaration>::from_raw(node)];
-            if !is_private(c, n.name) && c.ast.parent(node).is_some_and(|p| kind(c, p) == NodeKind::CompilationUnit) {
+            if !is_private(c, n.name)
+                && c.ast
+                    .parent(node)
+                    .is_some_and(|p| kind(c, p) == NodeKind::CompilationUnit)
+            {
                 let is_setter = n.property_keyword.is_some_and(|k| lexeme(c, k) == "set");
                 if n.return_type.is_none() && !is_setter {
                     c.report_token(out, &diag::TYPE_ANNOTATE_PUBLIC_APIS, n.name, &[]);

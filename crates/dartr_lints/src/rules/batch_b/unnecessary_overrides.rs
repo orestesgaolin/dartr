@@ -9,7 +9,11 @@ use dartr_typesystem::inheritance_manager3::{GetMemberOptions, InheritanceManage
 use dartr_typesystem::member;
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::MethodDeclaration, "unnecessary_overrides", visit_method_declaration);
+    r.add(
+        NodeKind::MethodDeclaration,
+        "unnecessary_overrides",
+        visit_method_declaration,
+    );
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -46,9 +50,19 @@ fn visit_method_declaration(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<D
     if lexeme(c, n.name) == "noSuchMethod" || n.documentation_comment.is_some() {
         return;
     }
-    let Some(inherited_method) = get_inherited_element(c, visitor, node) else { return };
-    let state = State { c, visitor, inherited_method, declaration: Id::from_raw(node) };
-    if state.adds_metadata() || !state.have_same_declaration() || state.makes_public_from_protected() {
+    let Some(inherited_method) = get_inherited_element(c, visitor, node) else {
+        return;
+    };
+    let state = State {
+        c,
+        visitor,
+        inherited_method,
+        declaration: Id::from_raw(node),
+    };
+    if state.adds_metadata()
+        || !state.have_same_declaration()
+        || state.makes_public_from_protected()
+    {
         return;
     }
     state.accept(n.body.raw(), out);
@@ -63,14 +77,22 @@ fn get_inherited_element(c: &LinterContext<'_>, visitor: Visitor, node: NodeId) 
     let library = member::library(&ctx, ElemRef::Base(element))?;
     let name = match visitor {
         Visitor::Getter | Visitor::Operator => name(c, element)?.to_string(),
-        Visitor::Method => lexeme(c, c.ast[Id::<MethodDeclaration>::from_raw(node)].name).to_string(),
-        Visitor::Setter => format!("{}=", lexeme(c, c.ast[Id::<MethodDeclaration>::from_raw(node)].name)),
+        Visitor::Method => {
+            lexeme(c, c.ast[Id::<MethodDeclaration>::from_raw(node)].name).to_string()
+        }
+        Visitor::Setter => format!(
+            "{}=",
+            lexeme(c, c.ast[Id::<MethodDeclaration>::from_raw(node)].name)
+        ),
     };
     let this_type = ctx.interface_this_type(enclosing);
     let result = InheritanceManager3::new(ctx).get_member3(
         this_type,
         Name::new(&ctx, Some(library), &name),
-        GetMemberOptions { for_super: true, ..GetMemberOptions::default() },
+        GetMemberOptions {
+            for_super: true,
+            ..GetMemberOptions::default()
+        },
     )?;
     let tag = member::base_element(&ctx, result).tag();
     let expected = match visitor {
@@ -97,7 +119,9 @@ impl State<'_, '_> {
         let (Some(element), Some(resolved)) = (self.declared_element(), c.resolved.as_ref()) else {
             return false;
         };
-        let Some(metadata) = resolved.metadata else { return false };
+        let Some(metadata) = resolved.metadata else {
+            return false;
+        };
         let ctx = &resolved.ctx;
         let is_top_getter = |a: Option<ElementId>, library_name: &str, name: &str| {
             a.is_some_and(|a| {
@@ -124,9 +148,15 @@ impl State<'_, '_> {
     fn have_same_declaration(&self) -> bool {
         let c = self.c;
         let Some(ctx) = rctx(c) else { return false };
-        let Some(declared) = self.declared_element() else { return false };
+        let Some(declared) = self.declared_element() else {
+            return false;
+        };
         let declared = ElemRef::Base(declared);
-        if !types_equal(c, member::return_type(&ctx, declared), member::return_type(&ctx, self.inherited_method)) {
+        if !types_equal(
+            c,
+            member::return_type(&ctx, declared),
+            member::return_type(&ctx, self.inherited_method),
+        ) {
             return false;
         }
         let params = member::formal_parameters(&ctx, declared);
@@ -134,9 +164,18 @@ impl State<'_, '_> {
         if params.len() != super_params.len() {
             return false;
         }
-        let kind = |p: ElemRef| ctx.get(EId::<FormalParameterElement>::from_raw(member::base_element(&ctx, p))).kind;
+        let kind = |p: ElemRef| {
+            ctx.get(EId::<FormalParameterElement>::from_raw(
+                member::base_element(&ctx, p),
+            ))
+            .kind
+        };
         for (&param, &super_param) in params.iter().zip(&super_params) {
-            if !types_equal(c, member::type_(&ctx, param), member::type_(&ctx, super_param)) {
+            if !types_equal(
+                c,
+                member::type_(&ctx, param),
+                member::type_(&ctx, super_param),
+            ) {
                 return false;
             }
             if member::name(&ctx, param) != member::name(&ctx, super_param) {
@@ -166,7 +205,9 @@ impl State<'_, '_> {
 
     /// Dart `_makesPublicFromProtected`.
     fn makes_public_from_protected(&self) -> bool {
-        let Some(declared) = self.declared_element() else { return false };
+        let Some(declared) = self.declared_element() else {
+            return false;
+        };
         if self.c.has_package_meta_getter(declared, "protected") {
             return false;
         }
@@ -185,22 +226,38 @@ impl State<'_, '_> {
     /// The visitor `accept` of [node].
     fn accept(&self, node: NodeId, out: &mut Vec<Diagnostic>) {
         let c = self.c;
-        let preceded_by_comments =
-            |n: NodeId| c.ast.tokens.get(c.ast.begin_token(n)).preceding_comments.is_some();
+        let preceded_by_comments = |n: NodeId| {
+            c.ast
+                .tokens
+                .get(c.ast.begin_token(n))
+                .preceding_comments
+                .is_some()
+        };
         match kind(c, node) {
             NodeKind::Block => {
-                let statements = c.ast.list_raw(c.ast[Id::<Block>::from_raw(node)].statements);
+                let statements = c
+                    .ast
+                    .list_raw(c.ast[Id::<Block>::from_raw(node)].statements);
                 if statements.len() == 1 {
                     self.accept(statements[0], out);
                 }
             }
-            NodeKind::BlockFunctionBody => self.accept(c.ast[Id::<BlockFunctionBody>::from_raw(node)].block.raw(), out),
-            NodeKind::ExpressionFunctionBody => {
-                self.accept(c.ast[Id::<ExpressionFunctionBody>::from_raw(node)].expression.raw(), out)
-            }
-            NodeKind::ExpressionStatement => {
-                self.accept(c.ast[Id::<ExpressionStatement>::from_raw(node)].expression.raw(), out)
-            }
+            NodeKind::BlockFunctionBody => self.accept(
+                c.ast[Id::<BlockFunctionBody>::from_raw(node)].block.raw(),
+                out,
+            ),
+            NodeKind::ExpressionFunctionBody => self.accept(
+                c.ast[Id::<ExpressionFunctionBody>::from_raw(node)]
+                    .expression
+                    .raw(),
+                out,
+            ),
+            NodeKind::ExpressionStatement => self.accept(
+                c.ast[Id::<ExpressionStatement>::from_raw(node)]
+                    .expression
+                    .raw(),
+                out,
+            ),
             NodeKind::ParenthesizedExpression => self.accept(unparenthesized(c, node), out),
             NodeKind::ReturnStatement => {
                 if preceded_by_comments(node) {
@@ -223,7 +280,11 @@ impl State<'_, '_> {
                 let n = &c.ast[Id::<MethodInvocation>::from_raw(node)];
                 if let Some(parameters) = self.declaration_parameters()
                     && Some(simple_name(c, n.method_name)) == self.inherited_name()
-                    && arguments_match_parameters(c, c.ast.list_raw(c.ast[n.argument_list].arguments), &parameters)
+                    && arguments_match_parameters(
+                        c,
+                        c.ast.list_raw(c.ast[n.argument_list].arguments),
+                        &parameters,
+                    )
                     && let Some(target) = n.target
                 {
                     self.accept(target.raw(), out);
@@ -269,7 +330,8 @@ impl State<'_, '_> {
                             .as_ref()
                             .and_then(|r| r.tables.write_element.get(node).copied())
                             .and_then(|e| member::name(&rctx(c).unwrap(), e));
-                        if write_name.is_some() && write_name == self.inherited_name()
+                        if write_name.is_some()
+                            && write_name == self.inherited_name()
                             && let Some(target) = c.ast[access].target
                         {
                             self.accept(target.raw(), out);
@@ -283,10 +345,20 @@ impl State<'_, '_> {
 
     fn visit_super_expression(&self, node: NodeId, out: &mut Vec<Diagnostic>) {
         let c = self.c;
-        if c.ast.tokens.get(c.ast.begin_token(node)).preceding_comments.is_some() {
+        if c.ast
+            .tokens
+            .get(c.ast.begin_token(node))
+            .preceding_comments
+            .is_some()
+        {
             return;
         }
-        c.report_token(out, &diag::UNNECESSARY_OVERRIDES, c.ast[self.declaration].name, &[]);
+        c.report_token(
+            out,
+            &diag::UNNECESSARY_OVERRIDES,
+            c.ast[self.declaration].name,
+            &[],
+        );
     }
 }
 
@@ -296,6 +368,10 @@ fn canonical(c: &LinterContext<'_>, expression: NodeId) -> Option<ElementId> {
 }
 
 /// Dart `argumentsMatchParameters`.
-fn arguments_match_parameters(c: &LinterContext<'_>, arguments: &[NodeId], parameters: &[NodeId]) -> bool {
+fn arguments_match_parameters(
+    c: &LinterContext<'_>,
+    arguments: &[NodeId],
+    parameters: &[NodeId],
+) -> bool {
     super::unnecessary_lambdas::arguments_match_parameters(c, arguments, parameters)
 }

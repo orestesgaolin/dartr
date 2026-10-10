@@ -92,7 +92,9 @@ fn creation(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
 /// Dart `PrefixElement.isDeferred` (any fragment of the prefix is deferred).
 pub(crate) fn prefix_is_deferred(c: &LinterContext<'_>, prefix: dartr_element::ElementId) -> bool {
     let Some(ctx) = rctx(c) else { return false };
-    let Some(data) = ctx.element_data(prefix) else { return false };
+    let Some(data) = ctx.element_data(prefix) else {
+        return false;
+    };
     let mut fragment = Some(data.first_fragment);
     while let Some(f) = fragment {
         if let Some(pf) = f.cast::<dartr_element::PrefixFragment>()

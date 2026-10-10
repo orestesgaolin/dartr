@@ -198,28 +198,30 @@ fn compute_lints_with(
         .zip(&library.units)
         .zip(&body_contexts)
         .zip(&exit_detectors)
-        .map(|(((original, resolved), body_context), exits)| ResolvedRuleContextUnit {
-            parsed: &original.parsed,
-            ast: &resolved.ast,
-            unit: resolved.unit.raw(),
-            source: &original.parsed.ast.tokens.source,
-            path: &resolved.path,
-            resolved: resolved.panic.is_none().then_some(ResolvedLintContext {
-                ctx: Ctx {
-                    local: Some(&resolved.local),
-                    features,
-                    ..global
-                },
-                tables: &resolved.tables,
-                potentially_mutated_in_scope: &resolved.rt.potentially_mutated_in_scope,
-                corresponding_parameter_type: &resolved.rt.corresponding_parameter_type,
-                body_context,
-                this_scope_lookup: &resolved.rt.this_scope_lookup,
-                exits: Some(exits.as_ref()),
-                library: library.library,
-                metadata: Some(&metadata),
-            }),
-        })
+        .map(
+            |(((original, resolved), body_context), exits)| ResolvedRuleContextUnit {
+                parsed: &original.parsed,
+                ast: &resolved.ast,
+                unit: resolved.unit.raw(),
+                source: &original.parsed.ast.tokens.source,
+                path: &resolved.path,
+                resolved: resolved.panic.is_none().then_some(ResolvedLintContext {
+                    ctx: Ctx {
+                        local: Some(&resolved.local),
+                        features,
+                        ..global
+                    },
+                    tables: &resolved.tables,
+                    potentially_mutated_in_scope: &resolved.rt.potentially_mutated_in_scope,
+                    corresponding_parameter_type: &resolved.rt.corresponding_parameter_type,
+                    body_context,
+                    this_scope_lookup: &resolved.rt.this_scope_lookup,
+                    exits: Some(exits.as_ref()),
+                    library: library.library,
+                    metadata: Some(&metadata),
+                }),
+            },
+        )
         .collect();
     let mut diagnostics = if filter_ignored {
         lint_resolved_library(&units, enabled)

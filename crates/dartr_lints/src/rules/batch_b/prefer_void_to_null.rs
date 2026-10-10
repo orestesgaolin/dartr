@@ -28,7 +28,10 @@ fn is_void_incompatible_override(c: &LinterContext<'_>, parent: NodeId, node: No
     if return_type.map(|t| c.ast.offset(t)) != Some(c.ast.offset(node)) {
         return false;
     }
-    let Some(member_element) = c.declared_element(parent).and_then(|e| overridden_member(c, e)) else {
+    let Some(member_element) = c
+        .declared_element(parent)
+        .and_then(|e| overridden_member(c, e))
+    else {
         return false;
     };
     let return_type = member::return_type(&ctx, member_element);
@@ -37,7 +40,9 @@ fn is_void_incompatible_override(c: &LinterContext<'_>, parent: NodeId, node: No
 
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(ctx) = rctx(c) else { return };
-    let Some(ty) = annotation_type(c, node) else { return };
+    let Some(ty) = annotation_type(c, node) else {
+        return;
+    };
     if !ctx.is_dart_core_null(ty) {
         return;
     }
@@ -60,8 +65,11 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         if owner.is_some_and(|o| kind(c, o) == NodeKind::GenericFunctionType) {
             return;
         }
-        if let Some(primary) = owner.filter(|&o| kind(c, o) == NodeKind::PrimaryConstructorDeclaration)
-            && c.ast.parent(primary).is_some_and(|p| kind(c, p) == NodeKind::ExtensionTypeDeclaration)
+        if let Some(primary) =
+            owner.filter(|&o| kind(c, o) == NodeKind::PrimaryConstructorDeclaration)
+            && c.ast
+                .parent(primary)
+                .is_some_and(|p| kind(c, p) == NodeKind::ExtensionTypeDeclaration)
         {
             return;
         }
@@ -86,7 +94,9 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             return;
         }
     }
-    if kind(c, parent) == NodeKind::MethodDeclaration && is_void_incompatible_override(c, parent, node) {
+    if kind(c, parent) == NodeKind::MethodDeclaration
+        && is_void_incompatible_override(c, parent, node)
+    {
         return;
     }
     let declaration = this_or_ancestor(c, parent, |n| ClassMember::test(kind(c, n)))
@@ -94,5 +104,10 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     if declaration.is_some_and(|d| is_augmentation(c, d)) {
         return;
     }
-    c.report_token(out, &diag::PREFER_VOID_TO_NULL, c.ast[Id::<NamedType>::from_raw(node)].name, &[]);
+    c.report_token(
+        out,
+        &diag::PREFER_VOID_TO_NULL,
+        c.ast[Id::<NamedType>::from_raw(node)].name,
+        &[],
+    );
 }

@@ -5,8 +5,16 @@ use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::ClassDeclaration, "sort_unnamed_constructors_first", check);
-    r.add(NodeKind::EnumDeclaration, "sort_unnamed_constructors_first", check);
+    r.add(
+        NodeKind::ClassDeclaration,
+        "sort_unnamed_constructors_first",
+        check,
+    );
+    r.add(
+        NodeKind::EnumDeclaration,
+        "sort_unnamed_constructors_first",
+        check,
+    );
     r.add(
         NodeKind::ExtensionTypeDeclaration,
         "sort_unnamed_constructors_first",
@@ -19,9 +27,9 @@ pub(crate) fn body_members(c: &LinterContext<'_>, node: NodeId) -> Vec<NodeId> {
     let body = match kind(c, node) {
         NodeKind::ClassDeclaration => c.ast[Id::<ClassDeclaration>::from_raw(node)].body.raw(),
         NodeKind::EnumDeclaration => c.ast[Id::<EnumDeclaration>::from_raw(node)].body.raw(),
-        NodeKind::ExtensionTypeDeclaration => {
-            c.ast[Id::<ExtensionTypeDeclaration>::from_raw(node)].body.raw()
-        }
+        NodeKind::ExtensionTypeDeclaration => c.ast[Id::<ExtensionTypeDeclaration>::from_raw(node)]
+            .body
+            .raw(),
         NodeKind::MixinDeclaration => c.ast[Id::<MixinDeclaration>::from_raw(node)].body.raw(),
         NodeKind::ExtensionDeclaration => {
             c.ast[Id::<ExtensionDeclaration>::from_raw(node)].body.raw()
@@ -67,12 +75,21 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                     None => match n.type_name {
                         Some(t) => c.ast.end(t) as usize,
                         None => {
-                            let k = c.ast.tokens.get(n.new_keyword.or(n.factory_keyword).unwrap());
+                            let k = c
+                                .ast
+                                .tokens
+                                .get(n.new_keyword.or(n.factory_keyword).unwrap());
                             k.offset as usize + k.length as usize
                         }
                     },
                 };
-                c.report_offset(out, &diag::SORT_UNNAMED_CONSTRUCTORS_FIRST, start, end - start, &[]);
+                c.report_offset(
+                    out,
+                    &diag::SORT_UNNAMED_CONSTRUCTORS_FIRST,
+                    start,
+                    end - start,
+                    &[],
+                );
             }
         } else {
             seen_named_constructor = true;

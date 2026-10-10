@@ -18,7 +18,9 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         NodeKind::ForStatement => c.ast[Id::<ForStatement>::from_raw(node)].body.raw(),
         _ => c.ast[Id::<WhileStatement>::from_raw(node)].body.raw(),
     };
-    let mut visitor = UseStringBuffer { local_elements: Vec::new() };
+    let mut visitor = UseStringBuffer {
+        local_elements: Vec::new(),
+    };
     visitor.visit(c, body, out);
 }
 
@@ -32,12 +34,17 @@ impl UseStringBuffer {
         match kind(c, node) {
             NodeKind::AssignmentExpression => self.assignment(c, node, out),
             NodeKind::Block => {
-                for &s in c.ast.list_raw(c.ast[Id::<Block>::from_raw(node)].statements) {
+                for &s in c
+                    .ast
+                    .list_raw(c.ast[Id::<Block>::from_raw(node)].statements)
+                {
                     self.visit(c, s, out);
                 }
             }
             NodeKind::ExpressionStatement => {
-                let e = c.ast[Id::<ExpressionStatement>::from_raw(node)].expression.raw();
+                let e = c.ast[Id::<ExpressionStatement>::from_raw(node)]
+                    .expression
+                    .raw();
                 self.visit(c, e, out);
             }
             NodeKind::ParenthesizedExpression => {
@@ -82,7 +89,12 @@ impl UseStringBuffer {
 }
 
 /// Dart `_IdentifierIsPrefixVisitor`.
-fn identifier_is_prefix(c: &LinterContext<'_>, identifier: NodeId, node: NodeId, out: &mut Vec<Diagnostic>) {
+fn identifier_is_prefix(
+    c: &LinterContext<'_>,
+    identifier: NodeId,
+    node: NodeId,
+    out: &mut Vec<Diagnostic>,
+) {
     match kind(c, node) {
         NodeKind::BinaryExpression => {
             let b = &c.ast[Id::<BinaryExpression>::from_raw(node)];
@@ -91,7 +103,9 @@ fn identifier_is_prefix(c: &LinterContext<'_>, identifier: NodeId, node: NodeId,
             }
         }
         NodeKind::InterpolationExpression => {
-            let e = c.ast[Id::<InterpolationExpression>::from_raw(node)].expression.raw();
+            let e = c.ast[Id::<InterpolationExpression>::from_raw(node)]
+                .expression
+                .raw();
             identifier_is_prefix(c, identifier, e, out);
         }
         NodeKind::ParenthesizedExpression => {
@@ -105,9 +119,13 @@ fn identifier_is_prefix(c: &LinterContext<'_>, identifier: NodeId, node: NodeId,
             }
         }
         NodeKind::StringInterpolation => {
-            let elements = c.ast.list_raw(c.ast[Id::<StringInterpolation>::from_raw(node)].elements);
+            let elements = c
+                .ast
+                .list_raw(c.ast[Id::<StringInterpolation>::from_raw(node)].elements);
             if elements.len() >= 2
-                && c.ast.cast::<InterpolationString>(elements[0]).is_some_and(|s| c.ast[s].value.is_empty())
+                && c.ast
+                    .cast::<InterpolationString>(elements[0])
+                    .is_some_and(|s| c.ast[s].value.is_empty())
             {
                 identifier_is_prefix(c, identifier, elements[1], out);
             }

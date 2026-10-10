@@ -15,8 +15,12 @@ pub fn register(r: &mut RuleVisitorRegistry, c: &LinterContext<'_>) {
 
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let expression = match kind(c, node) {
-        NodeKind::SwitchExpression => c.ast[Id::<SwitchExpression>::from_raw(node)].expression.raw(),
-        _ => c.ast[Id::<SwitchStatement>::from_raw(node)].expression.raw(),
+        NodeKind::SwitchExpression => c.ast[Id::<SwitchExpression>::from_raw(node)]
+            .expression
+            .raw(),
+        _ => c.ast[Id::<SwitchStatement>::from_raw(node)]
+            .expression
+            .raw(),
     };
     process_expression(c, expression, expression, out);
 }
@@ -33,7 +37,12 @@ fn is_assignable_to_type(c: &LinterContext<'_>, ty: Option<TypeId>) -> bool {
 }
 
 /// Dart `_processExpression`.
-fn process_expression(c: &LinterContext<'_>, expression: NodeId, error_node: NodeId, out: &mut Vec<Diagnostic>) -> bool {
+fn process_expression(
+    c: &LinterContext<'_>,
+    expression: NodeId,
+    error_node: NodeId,
+    out: &mut Vec<Diagnostic>,
+) -> bool {
     if let Some(interpolation) = c.ast.cast::<StringInterpolation>(expression) {
         for &element in c.ast.list_raw(c.ast[interpolation].elements) {
             if let Some(e) = c.ast.cast::<InterpolationExpression>(element)
@@ -80,7 +89,11 @@ fn process_expression(c: &LinterContext<'_>, expression: NodeId, error_node: Nod
                         let e = base(c, e);
                         e.tag() == dartr_element::Tag::Method && name(c, e) == Some("toString")
                     });
-                    if is_to_string { c.static_type(target) } else { None }
+                    if is_to_string {
+                        c.static_type(target)
+                    } else {
+                        None
+                    }
                 }
                 None => None,
             }

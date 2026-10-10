@@ -32,17 +32,29 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     if n.augment_keyword.is_some() || n.abstract_keyword.is_some() {
         return;
     }
-    let Some(class) = c.declared_element(node) else { return };
+    let Some(class) = c.declared_element(node) else {
+        return;
+    };
     let interface = dartr_element::EId::<dartr_element::InterfaceElement>::from_raw(class);
-    if ctx.element_supertype(interface).is_some_and(|t| !ctx.is_dart_core_object(t)) {
+    if ctx
+        .element_supertype(interface)
+        .is_some_and(|t| !ctx.is_dart_core_object(t))
+    {
         return;
     }
-    if let Some(primary) = c.ast.cast::<PrimaryConstructorDeclaration>(n.name_part.raw()) {
-        let Some(constructor) = c.declared_element(primary) else { return };
+    if let Some(primary) = c
+        .ast
+        .cast::<PrimaryConstructorDeclaration>(n.name_part.raw())
+    {
+        let Some(constructor) = c.declared_element(primary) else {
+            return;
+        };
         if !flags(c, constructor).contains(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_CONST) {
             return;
         }
-        let name = c.ast[primary].constructor_name.map(|cn| lexeme(c, c.ast[cn].name));
+        let name = c.ast[primary]
+            .constructor_name
+            .map(|cn| lexeme(c, c.ast[cn].name));
         if is_public(c, class) && name.is_none_or(|n| !n.starts_with('_')) {
             return;
         }
@@ -62,7 +74,9 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     for member in super::sort_unnamed_constructors_first::body_members(c, node) {
         if has_field_or_method(c, member, "hashCode")
             || has_field_or_method(c, member, "index")
-            || c.ast.cast::<MethodDeclaration>(member).is_some_and(|m| lexeme(c, c.ast[m].name) == "==")
+            || c.ast
+                .cast::<MethodDeclaration>(member)
+                .is_some_and(|m| lexeme(c, c.ast[m].name) == "==")
             || has_field_or_method(c, member, "values")
         {
             return;
@@ -72,20 +86,30 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             if f.static_keyword.is_none() {
                 continue;
             }
-            let is_const = c.ast[f.fields].keyword.is_some_and(|k| lexeme(c, k) == "const");
+            let is_const = c.ast[f.fields]
+                .keyword
+                .is_some_and(|k| lexeme(c, k) == "const");
             for &variable in c.ast.list(c.ast[f.fields].variables) {
-                let Some(field_element) = c.declared_element(variable) else { continue };
+                let Some(field_element) = c.declared_element(variable) else {
+                    continue;
+                };
                 if field_element.tag() != Tag::Field {
                     continue;
                 }
                 if c.ast.tokens.get(c.ast[variable].name).is_synthetic() || !is_const {
                     continue;
                 }
-                let Some(initializer) = c.ast[variable].initializer else { continue };
-                let Some(creation) = c.ast.cast::<InstanceCreationExpression>(initializer.raw()) else {
+                let Some(initializer) = c.ast[variable].initializer else {
                     continue;
                 };
-                let Some(constructor) = c.element(c.ast[creation].constructor_name).map(|e| base(c, e)) else {
+                let Some(creation) = c.ast.cast::<InstanceCreationExpression>(initializer.raw())
+                else {
+                    continue;
+                };
+                let Some(constructor) = c
+                    .element(c.ast[creation].constructor_name)
+                    .map(|e| base(c, e))
+                else {
                     continue;
                 };
                 if is_factory(c, constructor) || enclosing(c, constructor) != Some(class) {
@@ -98,8 +122,12 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             }
         }
         if let Some(constructor) = c.ast.cast::<ConstructorDeclaration>(member) {
-            let Some(element) = c.declared_element(member) else { return };
-            if !is_factory(c, element) && !flags(c, element).contains(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_CONST) {
+            let Some(element) = c.declared_element(member) else {
+                return;
+            };
+            if !is_factory(c, element)
+                && !flags(c, element).contains(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_CONST)
+            {
                 return;
             }
             let name = c.ast[constructor].name.map(|t| lexeme(c, t));
@@ -146,12 +174,16 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     while let Some(n) = stack.pop() {
         match kind(c, n) {
             NodeKind::ClassDeclaration => {
-                let Some(element) = c.declared_element(n) else { return };
+                let Some(element) = c.declared_element(n) else {
+                    return;
+                };
                 if element == class {
                     continue;
                 }
                 let e = dartr_element::EId::<dartr_element::InterfaceElement>::from_raw(element);
-                let is_class = |t: dartr_element::TypeId| ctx.interface_element(t).map(|i| i.raw()) == Some(class);
+                let is_class = |t: dartr_element::TypeId| {
+                    ctx.interface_element(t).map(|i| i.raw()) == Some(class)
+                };
                 if ctx.element_supertype(e).is_some_and(is_class)
                     || ctx.element_interfaces(e).iter().any(|&t| is_class(t))
                     || ctx.element_mixins(e).iter().any(|&t| is_class(t))

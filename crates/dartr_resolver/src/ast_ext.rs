@@ -509,8 +509,11 @@ pub fn in_constant_context(ast: &Ast, node: NodeId) -> bool {
                 }
             }
             NodeKind::SetOrMapLiteral => {
-                if has_const_keyword(ast, p, ast[Id::<SetOrMapLiteral>::from_raw(p)].const_keyword)
-                {
+                if has_const_keyword(
+                    ast,
+                    p,
+                    ast[Id::<SetOrMapLiteral>::from_raw(p)].const_keyword,
+                ) {
                     return true;
                 }
             }

@@ -6,7 +6,11 @@ use dartr_diagnostics::{Diagnostic, diag};
 use dartr_typesystem::TypeExt;
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::FieldDeclaration, "specify_nonobvious_property_types", check);
+    r.add(
+        NodeKind::FieldDeclaration,
+        "specify_nonobvious_property_types",
+        check,
+    );
     r.add(
         NodeKind::TopLevelVariableDeclaration,
         "specify_nonobvious_property_types",
@@ -21,7 +25,10 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             let n = &c.ast[Id::<FieldDeclaration>::from_raw(node)];
             (n.fields, n.static_keyword.is_none())
         }
-        _ => (c.ast[Id::<TopLevelVariableDeclaration>::from_raw(node)].variables, false),
+        _ => (
+            c.ast[Id::<TopLevelVariableDeclaration>::from_raw(node)].variables,
+            false,
+        ),
     };
     if let Some(ty) = c.ast[list].type_.and_then(|t| annotation_type(c, t))
         && !ctx.is_dart_core_null(ty)
@@ -41,11 +48,15 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                         | NodeKind::MixinDeclaration
                         | NodeKind::EnumDeclaration
                         | NodeKind::ExtensionTypeDeclaration
-                ) && let Some(element) = c.declared_element(o).and_then(|e| e.cast::<dartr_element::InterfaceElement>())
+                ) && let Some(element) = c
+                    .declared_element(o)
+                    .and_then(|e| e.cast::<dartr_element::InterfaceElement>())
                 {
                     for &t in ctx.element_all_supertypes(element) {
-                        if dartr_typesystem::lookup::type_get_getter(&ctx, t, variable_name).is_some()
-                            || dartr_typesystem::lookup::type_get_setter(&ctx, t, variable_name).is_some()
+                        if dartr_typesystem::lookup::type_get_getter(&ctx, t, variable_name)
+                            .is_some()
+                            || dartr_typesystem::lookup::type_get_setter(&ctx, t, variable_name)
+                                .is_some()
                         {
                             ignore = true;
                         }

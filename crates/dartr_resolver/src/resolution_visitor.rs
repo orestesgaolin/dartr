@@ -115,7 +115,10 @@ pub fn resolve_unit<'a>(
     let mut visitor = ResolutionVisitor::new(*ctx, unit_ctx, tables, rt, diagnostics);
     ast.accept_mut(unit, &mut visitor);
     for (node, result) in visitor.scope_context.finish_recorded_lookups() {
-        visitor.rt.this_scope_lookup.insert(node, (result.getter, result.setter));
+        visitor
+            .rt
+            .this_scope_lookup
+            .insert(node, (result.getter, result.setter));
     }
 }
 

@@ -6,9 +6,21 @@ use dartr_diagnostics::{Diagnostic, diag};
 use dartr_element::{FragmentFlags, Tag, TypeKind};
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::ExpressionStatement, "unnecessary_statements", statement);
-    r.add(NodeKind::ForStatement, "unnecessary_statements", for_statement);
-    r.add(NodeKind::CascadeExpression, "unnecessary_statements", cascade);
+    r.add(
+        NodeKind::ExpressionStatement,
+        "unnecessary_statements",
+        statement,
+    );
+    r.add(
+        NodeKind::ForStatement,
+        "unnecessary_statements",
+        for_statement,
+    );
+    r.add(
+        NodeKind::CascadeExpression,
+        "unnecessary_statements",
+        cascade,
+    );
 }
 
 fn report(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
@@ -20,7 +32,8 @@ fn report(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
 fn is_declared_getter(c: &LinterContext<'_>, element: Option<dartr_element::ElemRef>) -> bool {
     element.is_some_and(|e| {
         let e = base(c, e);
-        e.tag() == Tag::Getter && flags(c, e).contains(FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_DECLARATION)
+        e.tag() == Tag::Getter
+            && flags(c, e).contains(FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_DECLARATION)
     })
 }
 
@@ -80,15 +93,22 @@ fn report_no_clear_effect(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Dia
 }
 
 fn statement(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
-    if c.ast.parent(node).is_some_and(|p| FunctionBody::test(kind(c, p))) {
+    if c.ast
+        .parent(node)
+        .is_some_and(|p| FunctionBody::test(kind(c, p)))
+    {
         return;
     }
-    let expression = c.ast[Id::<ExpressionStatement>::from_raw(node)].expression.raw();
+    let expression = c.ast[Id::<ExpressionStatement>::from_raw(node)]
+        .expression
+        .raw();
     report_no_clear_effect(c, expression, out);
 }
 
 fn for_statement(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
-    let parts = c.ast[Id::<ForStatement>::from_raw(node)].for_loop_parts.raw();
+    let parts = c.ast[Id::<ForStatement>::from_raw(node)]
+        .for_loop_parts
+        .raw();
     if let Some(p) = c.ast.cast::<ForPartsWithExpression>(parts) {
         let p = &c.ast[p];
         if let Some(initialization) = p.initialization {
@@ -102,9 +122,13 @@ fn for_statement(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>)
 
 fn cascade(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(ctx) = rctx(c) else { return };
-    for &section in c.ast.list_raw(c.ast[Id::<CascadeExpression>::from_raw(node)].cascade_sections) {
+    for &section in c
+        .ast
+        .list_raw(c.ast[Id::<CascadeExpression>::from_raw(node)].cascade_sections)
+    {
         if kind(c, section) == NodeKind::PropertyAccess
-            && c.static_type(section).is_some_and(|t| matches!(*ctx.ty(t), TypeKind::Function(_)))
+            && c.static_type(section)
+                .is_some_and(|t| matches!(*ctx.ty(t), TypeKind::Function(_)))
         {
             report(c, section, out);
         }

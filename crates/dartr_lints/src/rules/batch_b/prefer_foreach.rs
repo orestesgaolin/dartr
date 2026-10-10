@@ -10,14 +10,19 @@ pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
 }
 
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
-    let parts = c.ast[Id::<ForStatement>::from_raw(node)].for_loop_parts.raw();
+    let parts = c.ast[Id::<ForStatement>::from_raw(node)]
+        .for_loop_parts
+        .raw();
     if matches!(
         kind(c, parts),
         NodeKind::ForEachPartsWithDeclaration
             | NodeKind::ForEachPartsWithIdentifier
             | NodeKind::ForEachPartsWithPattern
     ) {
-        let mut visitor = PreferForEach { element: None, for_each_statement: None };
+        let mut visitor = PreferForEach {
+            element: None,
+            for_each_statement: None,
+        };
         visitor.visit(c, node, out);
     }
 }
@@ -32,18 +37,24 @@ impl PreferForEach {
     fn visit(&mut self, c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         match kind(c, node) {
             NodeKind::Block => {
-                let statements = c.ast.list_raw(c.ast[Id::<Block>::from_raw(node)].statements);
+                let statements = c
+                    .ast
+                    .list_raw(c.ast[Id::<Block>::from_raw(node)].statements);
                 if statements.len() == 1 {
                     self.visit(c, statements[0], out);
                 }
             }
             NodeKind::ExpressionStatement => {
-                let e = c.ast[Id::<ExpressionStatement>::from_raw(node)].expression.raw();
+                let e = c.ast[Id::<ExpressionStatement>::from_raw(node)]
+                    .expression
+                    .raw();
                 self.visit(c, e, out);
             }
             NodeKind::ForStatement => {
                 let n = &c.ast[Id::<ForStatement>::from_raw(node)];
-                if let Some(parts) = c.ast.cast::<ForEachPartsWithDeclaration>(n.for_loop_parts.raw())
+                if let Some(parts) = c
+                    .ast
+                    .cast::<ForEachPartsWithDeclaration>(n.for_loop_parts.raw())
                     && let Some(element) = c.declared_element(c.ast[parts].loop_variable)
                 {
                     self.for_each_statement = Some(node);
@@ -52,7 +63,10 @@ impl PreferForEach {
                 }
             }
             NodeKind::FunctionExpressionInvocation => {
-                let args = arguments(c, c.ast[Id::<FunctionExpressionInvocation>::from_raw(node)].argument_list);
+                let args = arguments(
+                    c,
+                    c.ast[Id::<FunctionExpressionInvocation>::from_raw(node)].argument_list,
+                );
                 if args.len() == 1 && canonical_element(c, args[0]) == self.element {
                     self.report(c, out);
                 }

@@ -5,7 +5,11 @@ use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::FieldDeclaration, "prefer_const_declarations", check);
+    r.add(
+        NodeKind::FieldDeclaration,
+        "prefer_const_declarations",
+        check,
+    );
     r.add(
         NodeKind::TopLevelVariableDeclaration,
         "prefer_const_declarations",

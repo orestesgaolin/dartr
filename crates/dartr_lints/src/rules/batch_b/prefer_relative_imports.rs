@@ -3,8 +3,8 @@ use super::util::*;
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
-use dartr_typesystem::TypeExt;
 use dartr_element::DirectiveUri;
+use dartr_typesystem::TypeExt;
 
 pub fn register(r: &mut RuleVisitorRegistry, c: &LinterContext<'_>) {
     if !c.is_in_lib_dir() {
@@ -21,7 +21,9 @@ fn package_of(uri: &str) -> Option<&str> {
 /// Dart `isPackageSelfReference`.
 fn is_package_self_reference(c: &LinterContext<'_>, node: NodeId) -> bool {
     let Some(ctx) = rctx(c) else { return false };
-    let Some(resolved) = c.resolved else { return false };
+    let Some(resolved) = c.resolved else {
+        return false;
+    };
     // Dart `context.libraryElement?.uri`.
     let source_uri = ctx.library_uri(resolved.library);
     let keyword = c.ast[Id::<ImportDirective>::from_raw(node)].import_keyword;

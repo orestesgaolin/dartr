@@ -6,13 +6,26 @@ use dartr_diagnostics::{Diagnostic, diag};
 use dartr_element::ElementId;
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::DeclaredVariablePattern, "prefer_final_locals", declared_pattern);
-    r.add(NodeKind::PatternVariableDeclaration, "prefer_final_locals", pattern_declaration);
-    r.add(NodeKind::VariableDeclarationList, "prefer_final_locals", list);
+    r.add(
+        NodeKind::DeclaredVariablePattern,
+        "prefer_final_locals",
+        declared_pattern,
+    );
+    r.add(
+        NodeKind::PatternVariableDeclaration,
+        "prefer_final_locals",
+        pattern_declaration,
+    );
+    r.add(
+        NodeKind::VariableDeclarationList,
+        "prefer_final_locals",
+        list,
+    );
 }
 
 fn mutated(c: &LinterContext<'_>, element: ElementId) -> bool {
-    c.resolved.is_some_and(|r| r.potentially_mutated_in_scope.contains(&element))
+    c.resolved
+        .is_some_and(|r| r.potentially_mutated_in_scope.contains(&element))
 }
 
 /// Dart `isPotentiallyMutated(pattern, function)`.
@@ -53,11 +66,15 @@ fn has_potentially_mutated_declared_variable(c: &LinterContext<'_>, node: NodeId
 
 /// Dart `isDeclaredFinal` of a `DeclaredVariablePattern`.
 fn is_declared_final(c: &LinterContext<'_>, node: NodeId) -> bool {
-    if c.ast[Id::<DeclaredVariablePattern>::from_raw(node)].keyword.is_some_and(|k| lexeme(c, k) == "final") {
+    if c.ast[Id::<DeclaredVariablePattern>::from_raw(node)]
+        .keyword
+        .is_some_and(|k| lexeme(c, k) == "final")
+    {
         return true;
     }
-    this_or_ancestor_kind(c, node, NodeKind::ForEachPartsWithPattern)
-        .is_some_and(|p| lexeme(c, c.ast[Id::<ForEachPartsWithPattern>::from_raw(p)].keyword) == "final")
+    this_or_ancestor_kind(c, node, NodeKind::ForEachPartsWithPattern).is_some_and(|p| {
+        lexeme(c, c.ast[Id::<ForEachPartsWithPattern>::from_raw(p)].keyword) == "final"
+    })
 }
 
 fn function_body(c: &LinterContext<'_>, node: NodeId) -> Option<NodeId> {
@@ -65,7 +82,9 @@ fn function_body(c: &LinterContext<'_>, node: NodeId) -> Option<NodeId> {
 }
 
 fn declared_pattern(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
-    if this_or_ancestor_kind(c, node, NodeKind::PatternVariableDeclaration).is_some() || is_declared_final(c, node) {
+    if this_or_ancestor_kind(c, node, NodeKind::PatternVariableDeclaration).is_some()
+        || is_declared_final(c, node)
+    {
         return;
     }
     if function_body(c, node).is_none() {
@@ -110,9 +129,12 @@ fn contains_just_wildcards(c: &LinterContext<'_>, pattern: NodeId) -> bool {
             .list(c.ast[Id::<ObjectPattern>::from_raw(pattern)].fields)
             .iter()
             .all(|&f| contains_just_wildcards(c, c.ast[f].pattern.raw())),
-        NodeKind::ParenthesizedPattern => {
-            contains_just_wildcards(c, c.ast[Id::<ParenthesizedPattern>::from_raw(pattern)].pattern.raw())
-        }
+        NodeKind::ParenthesizedPattern => contains_just_wildcards(
+            c,
+            c.ast[Id::<ParenthesizedPattern>::from_raw(pattern)]
+                .pattern
+                .raw(),
+        ),
         NodeKind::RecordPattern => c
             .ast
             .list(c.ast[Id::<RecordPattern>::from_raw(pattern)].fields)
@@ -146,7 +168,9 @@ fn pattern_declaration(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagno
 
 fn list(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let n = &c.ast[Id::<VariableDeclarationList>::from_raw(node)];
-    if n.keyword.is_some_and(|k| matches!(lexeme(c, k), "const" | "final")) {
+    if n.keyword
+        .is_some_and(|k| matches!(lexeme(c, k), "const" | "final"))
+    {
         return;
     }
     if function_body(c, node).is_none() {

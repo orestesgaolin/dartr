@@ -5,7 +5,11 @@ use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::MethodInvocation, "prefer_iterable_wheretype", check);
+    r.add(
+        NodeKind::MethodInvocation,
+        "prefer_iterable_wheretype",
+        check,
+    );
 }
 
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
@@ -13,7 +17,9 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     if simple_name(c, n.method_name) != "where" {
         return;
     }
-    let Some(target) = real_target(c, node) else { return };
+    let Some(target) = real_target(c, node) else {
+        return;
+    };
     if !implements_interface(c, c.static_type(target), "Iterable", "dart.core") {
         return;
     }
@@ -25,7 +31,9 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         return;
     };
     let f = &c.ast[function];
-    let parameters = f.parameters.map(|p| c.ast.list_raw(c.ast[p].parameters).to_vec());
+    let parameters = f
+        .parameters
+        .map(|p| c.ast.list_raw(c.ast[p].parameters).to_vec());
     if parameters.as_ref().map(|p| p.len()) != Some(1) {
         return;
     }
@@ -59,9 +67,15 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
 /// Dart `FormalParameter.name?.lexeme`.
 pub(crate) fn parameter_name<'a>(c: &'a LinterContext<'_>, parameter: NodeId) -> Option<&'a str> {
     let token = match kind(c, parameter) {
-        NodeKind::RegularFormalParameter => c.ast[Id::<RegularFormalParameter>::from_raw(parameter)].name,
-        NodeKind::FieldFormalParameter => Some(c.ast[Id::<FieldFormalParameter>::from_raw(parameter)].name),
-        NodeKind::SuperFormalParameter => Some(c.ast[Id::<SuperFormalParameter>::from_raw(parameter)].name),
+        NodeKind::RegularFormalParameter => {
+            c.ast[Id::<RegularFormalParameter>::from_raw(parameter)].name
+        }
+        NodeKind::FieldFormalParameter => {
+            Some(c.ast[Id::<FieldFormalParameter>::from_raw(parameter)].name)
+        }
+        NodeKind::SuperFormalParameter => {
+            Some(c.ast[Id::<SuperFormalParameter>::from_raw(parameter)].name)
+        }
         _ => None,
     };
     token.map(|t| lexeme(c, t))

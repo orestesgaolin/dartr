@@ -11,12 +11,17 @@ pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
 /// Dart `StringLiteral.stringValue`.
 pub(crate) fn string_value(c: &LinterContext<'_>, node: NodeId) -> Option<String> {
     match kind(c, node) {
-        NodeKind::SimpleStringLiteral => {
-            Some(c.ast[Id::<SimpleStringLiteral>::from_raw(node)].value.to_string())
-        }
+        NodeKind::SimpleStringLiteral => Some(
+            c.ast[Id::<SimpleStringLiteral>::from_raw(node)]
+                .value
+                .to_string(),
+        ),
         NodeKind::AdjacentStrings => {
             let mut value = String::new();
-            for &s in c.ast.list_raw(c.ast[Id::<AdjacentStrings>::from_raw(node)].strings) {
+            for &s in c
+                .ast
+                .list_raw(c.ast[Id::<AdjacentStrings>::from_raw(node)].strings)
+            {
                 value.push_str(&string_value(c, s)?);
             }
             Some(value)

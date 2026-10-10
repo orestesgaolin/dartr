@@ -27,7 +27,9 @@ impl<F: FnMut(Variance, TypeId, NodeId)> VarianceChecker<'_, '_, F> {
     /// Dart `check`.
     pub fn check(&mut self, variance: Variance, type_annotation: Option<NodeId>) {
         let c = self.c;
-        let Some(type_annotation) = type_annotation else { return };
+        let Some(type_annotation) = type_annotation else {
+            return;
+        };
         if c.is_synthetic(type_annotation) {
             return;
         }
@@ -36,16 +38,26 @@ impl<F: FnMut(Variance, TypeId, NodeId)> VarianceChecker<'_, '_, F> {
                 let n = &c.ast[Id::<NamedType>::from_raw(type_annotation)];
                 if let Some(type_arguments) = n.type_arguments {
                     let arguments = c.ast.list_raw(c.ast[type_arguments].arguments).to_vec();
-                    let type_parameters = c.element(type_annotation).map(|e| base(c, e)).and_then(|element| {
-                        let ctx = rctx(c)?;
-                        match element.tag() {
-                            Tag::Class | Tag::Mixin | Tag::Enum => Some(
-                                ctx.interface_type_parameters(EId::<InterfaceElement>::from_raw(element)).to_vec(),
-                            ),
-                            Tag::TypeAlias => Some(ctx.get(EId::<TypeAliasElement>::from_raw(element)).type_params.clone()),
-                            _ => None,
-                        }
-                    });
+                    let type_parameters =
+                        c.element(type_annotation)
+                            .map(|e| base(c, e))
+                            .and_then(|element| {
+                                let ctx = rctx(c)?;
+                                match element.tag() {
+                                    Tag::Class | Tag::Mixin | Tag::Enum => Some(
+                                        ctx.interface_type_parameters(
+                                            EId::<InterfaceElement>::from_raw(element),
+                                        )
+                                        .to_vec(),
+                                    ),
+                                    Tag::TypeAlias => Some(
+                                        ctx.get(EId::<TypeAliasElement>::from_raw(element))
+                                            .type_params
+                                            .clone(),
+                                    ),
+                                    _ => None,
+                                }
+                            });
                     match type_parameters {
                         Some(parameters) if parameters.len() == arguments.len() => {
                             let ctx = rctx(c).unwrap();
@@ -70,7 +82,9 @@ impl<F: FnMut(Variance, TypeId, NodeId)> VarianceChecker<'_, '_, F> {
                         }
                     }
                 }
-                let Some(static_type) = annotation_type(c, type_annotation) else { return };
+                let Some(static_type) = annotation_type(c, type_annotation) else {
+                    return;
+                };
                 (self.check_named_type)(variance, static_type, type_annotation);
             }
             NodeKind::GenericFunctionType => {

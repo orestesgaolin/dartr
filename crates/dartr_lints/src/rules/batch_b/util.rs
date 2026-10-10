@@ -29,11 +29,17 @@ pub fn this_or_ancestor(
     node: NodeId,
     mut f: impl FnMut(NodeId) -> bool,
 ) -> Option<NodeId> {
-    std::iter::once(node).chain(ancestors(c, node)).find(|&n| f(n))
+    std::iter::once(node)
+        .chain(ancestors(c, node))
+        .find(|&n| f(n))
 }
 
 /// Dart `thisOrAncestorOfType<T>()` for a node kind.
-pub fn this_or_ancestor_kind(c: &LinterContext<'_>, node: NodeId, kind: NodeKind) -> Option<NodeId> {
+pub fn this_or_ancestor_kind(
+    c: &LinterContext<'_>,
+    node: NodeId,
+    kind: NodeKind,
+) -> Option<NodeId> {
     this_or_ancestor(c, node, |n| c.ast.kind(n) == kind)
 }
 
@@ -120,8 +126,7 @@ pub fn type_for_interface_check(c: &LinterContext<'_>, ty: TypeId) -> TypeId {
 pub fn is_same_as(c: &LinterContext<'_>, ty: TypeId, interface: &str, library: &str) -> bool {
     let Some(ctx) = rctx(c) else { return false };
     ctx.interface_element(ty).is_some_and(|e| {
-        ctx.element_name(e.raw()) == Some(interface)
-            && library_name(c, e.raw()) == Some(library)
+        ctx.element_name(e.raw()) == Some(interface) && library_name(c, e.raw()) == Some(library)
     })
 }
 
@@ -204,9 +209,7 @@ pub fn is_deprecated_annotation_element(c: &LinterContext<'_>, element: ElementI
         return false;
     }
     match element.tag() {
-        Tag::Constructor => {
-            enclosing(c, element).and_then(|e| name(c, e)) == Some("Deprecated")
-        }
+        Tag::Constructor => enclosing(c, element).and_then(|e| name(c, e)) == Some("Deprecated"),
         Tag::Getter | Tag::Setter => name(c, element) == Some("deprecated"),
         _ => false,
     }
@@ -230,7 +233,9 @@ pub fn super_constructor_parameter(c: &LinterContext<'_>, parameter: ElementId) 
     if enclosing.tag() != Tag::Constructor {
         return None;
     }
-    let constructor = ctx.get(EId::<dartr_element::ConstructorElement>::from_raw(enclosing));
+    let constructor = ctx.get(EId::<dartr_element::ConstructorElement>::from_raw(
+        enclosing,
+    ));
     let super_constructor = constructor.super_constructor.get()?;
     let super_parameters = member::formal_parameters(&ctx, super_constructor);
     let kind = |e: ElemRef| {
@@ -241,9 +246,9 @@ pub fn super_constructor_parameter(c: &LinterContext<'_>, parameter: ElementId) 
     };
     if kind(ElemRef::Base(parameter)).is_named() {
         let name = ctx.element_name(parameter);
-        super_parameters
-            .into_iter()
-            .find(|&p| kind(p).is_named() && ctx.element_name(member::base_element(&ctx, p)) == name)
+        super_parameters.into_iter().find(|&p| {
+            kind(p).is_named() && ctx.element_name(member::base_element(&ctx, p)) == name
+        })
     } else {
         let index = ctx
             .executable(EId::<dartr_element::ExecutableElement>::from_raw(enclosing))
@@ -278,9 +283,15 @@ pub fn annotation_type(c: &LinterContext<'_>, node: impl Into<NodeId>) -> Option
 /// cascade.
 pub fn real_target(c: &LinterContext<'_>, node: NodeId) -> Option<NodeId> {
     let target = match kind(c, node) {
-        NodeKind::MethodInvocation => c.ast[Id::<MethodInvocation>::from_raw(node)].target.map(|t| t.raw()),
-        NodeKind::PropertyAccess => c.ast[Id::<PropertyAccess>::from_raw(node)].target.map(|t| t.raw()),
-        NodeKind::IndexExpression => c.ast[Id::<IndexExpression>::from_raw(node)].target.map(|t| t.raw()),
+        NodeKind::MethodInvocation => c.ast[Id::<MethodInvocation>::from_raw(node)]
+            .target
+            .map(|t| t.raw()),
+        NodeKind::PropertyAccess => c.ast[Id::<PropertyAccess>::from_raw(node)]
+            .target
+            .map(|t| t.raw()),
+        NodeKind::IndexExpression => c.ast[Id::<IndexExpression>::from_raw(node)]
+            .target
+            .map(|t| t.raw()),
         _ => None,
     };
     if target.is_some() {
@@ -323,7 +334,10 @@ pub fn canonical_elements_from_identifiers_are_equal(
     let e1 = unparenthesized(c, e1);
     let e2 = unparenthesized(c, e2);
     // Dart `canonicalElementsAreEqual` of `writeOrReadElement`s.
-    let wr = |n: NodeId| c.write_or_read_element(n).and_then(|e| c.canonical_element2(e));
+    let wr = |n: NodeId| {
+        c.write_or_read_element(n)
+            .and_then(|e| c.canonical_element2(e))
+    };
     let el = |n: NodeId| c.element(n).and_then(|e| c.canonical_element2(e));
     match (kind(c, e1), kind(c, e2)) {
         (NodeKind::SimpleIdentifier, k) => k == NodeKind::SimpleIdentifier && wr(e1) == wr(e2),
@@ -333,7 +347,8 @@ pub fn canonical_elements_from_identifiers_are_equal(
             }
             let a = &c.ast[Id::<PrefixedIdentifier>::from_raw(e1)];
             let b = &c.ast[Id::<PrefixedIdentifier>::from_raw(e2)];
-            el(a.prefix.raw()) == el(b.prefix.raw()) && wr(a.identifier.raw()) == wr(b.identifier.raw())
+            el(a.prefix.raw()) == el(b.prefix.raw())
+                && wr(a.identifier.raw()) == wr(b.identifier.raw())
         }
         (NodeKind::PropertyAccess, NodeKind::PropertyAccess) => {
             let a = &c.ast[Id::<PropertyAccess>::from_raw(e1)];
@@ -366,11 +381,20 @@ pub fn method_is_override(c: &LinterContext<'_>, node: NodeId) -> bool {
     let n = &c.ast[Id::<MethodDeclaration>::from_raw(node)];
     let property = n.property_keyword.map(|k| lexeme(c, k));
     let options = dartr_typesystem::lookup::LookUpOptions::default();
-    ctx.element_all_supertypes(parent).iter().any(|&t| match property {
-        Some("get") => dartr_typesystem::lookup::type_look_up_getter(&ctx, t, name, library, options).is_some(),
-        Some("set") => dartr_typesystem::lookup::type_look_up_setter(&ctx, t, name, library, options).is_some(),
-        _ => dartr_typesystem::lookup::type_look_up_method(&ctx, t, name, library, options).is_some(),
-    })
+    ctx.element_all_supertypes(parent)
+        .iter()
+        .any(|&t| match property {
+            Some("get") => {
+                dartr_typesystem::lookup::type_look_up_getter(&ctx, t, name, library, options)
+                    .is_some()
+            }
+            Some("set") => {
+                dartr_typesystem::lookup::type_look_up_setter(&ctx, t, name, library, options)
+                    .is_some()
+            }
+            _ => dartr_typesystem::lookup::type_look_up_method(&ctx, t, name, library, options)
+                .is_some(),
+        })
 }
 
 /// Dart `MethodDeclarationExtension.lookUpInheritedMethod`.
@@ -378,7 +402,8 @@ pub fn look_up_inherited_method(c: &LinterContext<'_>, node: NodeId) -> Option<E
     let ctx = rctx(c)?;
     let element = c.declared_element(node)?;
     let parent = enclosing(c, element)?.cast::<InterfaceElement>()?;
-    let name = dartr_typesystem::inheritance_manager3::Name::for_element(&ctx, ElemRef::Base(element))?;
+    let name =
+        dartr_typesystem::inheritance_manager3::Name::for_element(&ctx, ElemRef::Base(element))?;
     let inherited = dartr_typesystem::inheritance_manager3::InheritanceManager3::new(ctx)
         .get_inherited(parent, name)?;
     (member::base_element(&ctx, inherited).tag() == Tag::Method).then_some(inherited)
@@ -412,9 +437,7 @@ pub fn constant_values_equal(
 ) -> bool {
     match (a, b) {
         (None, None) => true,
-        (Some(a), Some(b)) => c
-            .constant_type_system()
-            .is_some_and(|ts| a.dart_eq(b, &ts)),
+        (Some(a), Some(b)) => c.constant_type_system().is_some_and(|ts| a.dart_eq(b, &ts)),
         _ => false,
     }
 }
@@ -470,7 +493,10 @@ pub fn parameters(c: &LinterContext<'_>, list: Option<Id<FormalParameterList>>) 
 pub fn is_local_variable(element: ElementId) -> bool {
     matches!(
         element.tag(),
-        Tag::LocalVariable | Tag::PatternVariable | Tag::BindPatternVariable | Tag::JoinPatternVariable
+        Tag::LocalVariable
+            | Tag::PatternVariable
+            | Tag::BindPatternVariable
+            | Tag::JoinPatternVariable
     )
 }
 
@@ -478,9 +504,15 @@ pub fn is_local_variable(element: ElementId) -> bool {
 /// named).
 pub fn parameter_is_required(c: &LinterContext<'_>, parameter: NodeId) -> bool {
     let kind = match self::kind(c, parameter) {
-        NodeKind::RegularFormalParameter => c.ast[Id::<RegularFormalParameter>::from_raw(parameter)].kind,
-        NodeKind::FieldFormalParameter => c.ast[Id::<FieldFormalParameter>::from_raw(parameter)].kind,
-        NodeKind::SuperFormalParameter => c.ast[Id::<SuperFormalParameter>::from_raw(parameter)].kind,
+        NodeKind::RegularFormalParameter => {
+            c.ast[Id::<RegularFormalParameter>::from_raw(parameter)].kind
+        }
+        NodeKind::FieldFormalParameter => {
+            c.ast[Id::<FieldFormalParameter>::from_raw(parameter)].kind
+        }
+        NodeKind::SuperFormalParameter => {
+            c.ast[Id::<SuperFormalParameter>::from_raw(parameter)].kind
+        }
         _ => return false,
     };
     kind.is_required()
@@ -504,9 +536,12 @@ pub fn node_to_annotate(c: &LinterContext<'_>, node: NodeId) -> (usize, usize) {
         }
     };
     match kind(c, node) {
-        NodeKind::ClassDeclaration => {
-            type_name(c.ast[Id::<ClassDeclaration>::from_raw(node)].name_part.raw()).map_or(whole(node), token)
-        }
+        NodeKind::ClassDeclaration => type_name(
+            c.ast[Id::<ClassDeclaration>::from_raw(node)]
+                .name_part
+                .raw(),
+        )
+        .map_or(whole(node), token),
         NodeKind::ClassTypeAlias => token(c.ast[Id::<ClassTypeAlias>::from_raw(node)].name),
         NodeKind::ConstructorDeclaration => {
             let n = &c.ast[Id::<ConstructorDeclaration>::from_raw(node)];
@@ -518,32 +553,52 @@ pub fn node_to_annotate(c: &LinterContext<'_>, node: NodeId) -> (usize, usize) {
                 token(n.new_keyword.or(n.factory_keyword).unwrap())
             }
         }
-        NodeKind::EnumConstantDeclaration => token(c.ast[Id::<EnumConstantDeclaration>::from_raw(node)].name),
+        NodeKind::EnumConstantDeclaration => {
+            token(c.ast[Id::<EnumConstantDeclaration>::from_raw(node)].name)
+        }
         NodeKind::EnumDeclaration => {
-            type_name(c.ast[Id::<EnumDeclaration>::from_raw(node)].name_part.raw()).map_or(whole(node), token)
+            type_name(c.ast[Id::<EnumDeclaration>::from_raw(node)].name_part.raw())
+                .map_or(whole(node), token)
         }
         NodeKind::ExtensionDeclaration => c.ast[Id::<ExtensionDeclaration>::from_raw(node)]
             .name
             .map_or(whole(node), token),
-        NodeKind::FieldDeclaration => whole(c.ast[Id::<FieldDeclaration>::from_raw(node)].fields.raw()),
-        NodeKind::FunctionDeclaration => token(c.ast[Id::<FunctionDeclaration>::from_raw(node)].name),
+        NodeKind::FieldDeclaration => {
+            whole(c.ast[Id::<FieldDeclaration>::from_raw(node)].fields.raw())
+        }
+        NodeKind::FunctionDeclaration => {
+            token(c.ast[Id::<FunctionDeclaration>::from_raw(node)].name)
+        }
         NodeKind::FunctionTypeAlias => token(c.ast[Id::<FunctionTypeAlias>::from_raw(node)].name),
         NodeKind::GenericTypeAlias => token(c.ast[Id::<GenericTypeAlias>::from_raw(node)].name),
         NodeKind::MethodDeclaration => token(c.ast[Id::<MethodDeclaration>::from_raw(node)].name),
         NodeKind::MixinDeclaration => token(c.ast[Id::<MixinDeclaration>::from_raw(node)].name),
-        NodeKind::PrimaryConstructorBody => token(c.ast[Id::<PrimaryConstructorBody>::from_raw(node)].this_keyword),
+        NodeKind::PrimaryConstructorBody => {
+            token(c.ast[Id::<PrimaryConstructorBody>::from_raw(node)].this_keyword)
+        }
         NodeKind::PrimaryConstructorDeclaration => {
             let n = &c.ast[Id::<PrimaryConstructorDeclaration>::from_raw(node)];
-            token(n.constructor_name.map(|cn| c.ast[cn].name).unwrap_or(n.type_name))
+            token(
+                n.constructor_name
+                    .map(|cn| c.ast[cn].name)
+                    .unwrap_or(n.type_name),
+            )
         }
-        NodeKind::TopLevelVariableDeclaration => {
-            whole(c.ast[Id::<TopLevelVariableDeclaration>::from_raw(node)].variables.raw())
-        }
+        NodeKind::TopLevelVariableDeclaration => whole(
+            c.ast[Id::<TopLevelVariableDeclaration>::from_raw(node)]
+                .variables
+                .raw(),
+        ),
         NodeKind::TypeParameter => token(c.ast[Id::<TypeParameter>::from_raw(node)].name),
-        NodeKind::VariableDeclaration => token(c.ast[Id::<VariableDeclaration>::from_raw(node)].name),
-        NodeKind::ExtensionTypeDeclaration => {
-            type_name(c.ast[Id::<ExtensionTypeDeclaration>::from_raw(node)].name_part.raw()).map_or(whole(node), token)
+        NodeKind::VariableDeclaration => {
+            token(c.ast[Id::<VariableDeclaration>::from_raw(node)].name)
         }
+        NodeKind::ExtensionTypeDeclaration => type_name(
+            c.ast[Id::<ExtensionTypeDeclaration>::from_raw(node)]
+                .name_part
+                .raw(),
+        )
+        .map_or(whole(node), token),
         _ => whole(node),
     }
 }
@@ -575,8 +630,10 @@ pub fn overridden_member(c: &LinterContext<'_>, element: ElementId) -> Option<El
         _ => return None,
     };
     let interface = enclosing(c, member)?.cast::<InterfaceElement>()?;
-    let name = dartr_typesystem::inheritance_manager3::Name::for_element(&ctx, ElemRef::Base(member))?;
-    dartr_typesystem::inheritance_manager3::InheritanceManager3::new(ctx).get_inherited(interface, name)
+    let name =
+        dartr_typesystem::inheritance_manager3::Name::for_element(&ctx, ElemRef::Base(member))?;
+    dartr_typesystem::inheritance_manager3::InheritanceManager3::new(ctx)
+        .get_inherited(interface, name)
 }
 
 /// Dart `PromotableElementImpl`: local variables and formal parameters.
@@ -628,17 +685,26 @@ pub fn get_int_value(c: &LinterContext<'_>, expression: NodeId) -> Option<i64> {
 
 /// [`get_int_value`] with `context == null` when [with_context] is false
 /// (only integer literals).
-pub fn get_int_value_with(c: &LinterContext<'_>, expression: NodeId, with_context: bool) -> Option<i64> {
+pub fn get_int_value_with(
+    c: &LinterContext<'_>,
+    expression: NodeId,
+    with_context: bool,
+) -> Option<i64> {
     if let Some(prefix) = c.ast.cast::<PrefixExpression>(expression) {
         if lexeme(c, c.ast[prefix].operator) != "-" {
             return None;
         }
-        return get_int_value_inner(c, c.ast[prefix].operand.raw(), with_context).map(|v| v.wrapping_neg());
+        return get_int_value_inner(c, c.ast[prefix].operand.raw(), with_context)
+            .map(|v| v.wrapping_neg());
     }
     get_int_value_inner(c, expression, with_context)
 }
 
-fn get_int_value_inner(c: &LinterContext<'_>, expression: NodeId, with_context: bool) -> Option<i64> {
+fn get_int_value_inner(
+    c: &LinterContext<'_>,
+    expression: NodeId,
+    with_context: bool,
+) -> Option<i64> {
     if let Some(literal) = c.ast.cast::<IntegerLiteral>(expression) {
         c.ast[literal].value
     } else if with_context && kind(c, expression) == NodeKind::SimpleIdentifier {
@@ -651,7 +717,10 @@ fn get_int_value_inner(c: &LinterContext<'_>, expression: NodeId, with_context: 
 /// Dart `BindPatternVariableElement.join` and `JoinPatternVariableElement
 /// .variables`: the join variable of a bind pattern variable and the
 /// elements of its variables.
-pub fn pattern_variable_join(c: &LinterContext<'_>, element: ElementId) -> Option<(ElementId, Vec<ElementId>)> {
+pub fn pattern_variable_join(
+    c: &LinterContext<'_>,
+    element: ElementId,
+) -> Option<(ElementId, Vec<ElementId>)> {
     let ctx = rctx(c)?;
     if element.tag() != Tag::BindPatternVariable {
         return None;

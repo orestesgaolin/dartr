@@ -16,10 +16,15 @@ pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
 
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(ctx) = rctx(c) else { return };
-    if c.ast.parent(node).is_some_and(|p| kind(c, p) == NodeKind::AdjacentStrings) {
+    if c.ast
+        .parent(node)
+        .is_some_and(|p| kind(c, p) == NodeKind::AdjacentStrings)
+    {
         return;
     }
-    let elements = c.ast.list_raw(c.ast[Id::<StringInterpolation>::from_raw(node)].elements);
+    let elements = c
+        .ast
+        .list_raw(c.ast[Id::<StringInterpolation>::from_raw(node)].elements);
     if elements.len() != 3 {
         return;
     }

@@ -11,7 +11,12 @@ const URI_CONTAINER: &str = "package:flutter/src/widgets/container.dart";
 const URI_FRAMEWORK: &str = "package:flutter/src/widgets/framework.dart";
 
 /// Dart `InterfaceElementExtension._isExactly(type, uri)`.
-pub fn is_exactly(c: &LinterContext<'_>, element: EId<InterfaceElement>, ty: &str, uri: &str) -> bool {
+pub fn is_exactly(
+    c: &LinterContext<'_>,
+    element: EId<InterfaceElement>,
+    ty: &str,
+    uri: &str,
+) -> bool {
     name(c, element.raw()) == Some(ty) && library_uri(c, element.raw()) == Some(uri)
 }
 
@@ -27,9 +32,10 @@ fn any_supertype(
     uri: &str,
 ) -> bool {
     let Some(ctx) = rctx(c) else { return false };
-    ctx.element_all_supertypes(element)
-        .iter()
-        .any(|&t| ctx.interface_element(t).is_some_and(|e| is_exactly(c, e, ty, uri)))
+    ctx.element_all_supertypes(element).iter().any(|&t| {
+        ctx.interface_element(t)
+            .is_some_and(|e| is_exactly(c, e, ty, uri))
+    })
 }
 
 /// Dart `InterfaceElementExtension.isWidget`.
@@ -39,7 +45,8 @@ pub fn is_widget(c: &LinterContext<'_>, element: EId<InterfaceElement>) -> bool 
 
 /// Dart `InterfaceElementExtension.isState`.
 pub fn is_state(c: &LinterContext<'_>, element: EId<InterfaceElement>) -> bool {
-    is_exactly(c, element, "State", URI_FRAMEWORK) || any_supertype(c, element, "State", URI_FRAMEWORK)
+    is_exactly(c, element, "State", URI_FRAMEWORK)
+        || any_supertype(c, element, "State", URI_FRAMEWORK)
 }
 
 /// Dart `InterfaceElementExtension.extendsWidget`.
@@ -54,7 +61,9 @@ pub fn extends_widget(c: &LinterContext<'_>, element: EId<InterfaceElement>) -> 
         if !seen.insert(e) {
             return false;
         }
-        current = ctx.element_supertype(e).and_then(|t| ctx.interface_element(t));
+        current = ctx
+            .element_supertype(e)
+            .and_then(|t| ctx.interface_element(t));
     }
     false
 }

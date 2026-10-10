@@ -146,7 +146,8 @@ pub(crate) fn get_expected_type(
                         && r.element_data(element)
                             .and_then(|d| r.fragment_data(d.first_fragment))
                             .is_some_and(|f| {
-                                f.flags.has(dartr_element::FragmentFlags::FIELD_FRAGMENT_IS_PROMOTABLE)
+                                f.flags
+                                    .has(dartr_element::FragmentFlags::FIELD_FRAGMENT_IS_PROMOTABLE)
                             })
                     {
                         return None;

@@ -35,7 +35,9 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         return;
     }
     let lexeme_text = lexeme(c, name);
-    let Some(parent) = c.ast.parent(node) else { return };
+    let Some(parent) = c.ast.parent(node) else {
+        return;
+    };
     let accessor = if kind(c, parent) == NodeKind::ObjectPattern {
         match c.element(node).map(|e| base(c, e).tag()) {
             Some(Tag::Method) => "method",
@@ -46,7 +48,11 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         "field"
     };
     if kind(c, parent) == NodeKind::RecordPattern {
-        let matched = resolved.tables.pattern_info.get(parent).and_then(|i| i.matched_value_type);
+        let matched = resolved
+            .tables
+            .pattern_info
+            .get(parent)
+            .and_then(|i| i.matched_value_type);
         report_if_needed(c, name, matched, lexeme_text, accessor, out);
     } else if let Some(object) = c.ast.cast::<ObjectPattern>(parent) {
         let named_type = c.ast[object].type_;
@@ -67,7 +73,9 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                 element = aliased_element;
             } else if element.tag() == Tag::TypeParameter {
                 let bound = ctx
-                    .get(EId::<dartr_element::TypeParameterElement>::from_raw(element))
+                    .get(EId::<dartr_element::TypeParameterElement>::from_raw(
+                        element,
+                    ))
                     .bound
                     .get()
                     .unwrap_or(ctx.tp.object_question_type());
@@ -109,16 +117,30 @@ fn report_if_needed(
         let element = ty.and_then(|t| type_element(c, t));
         if let Some(element) = element.and_then(|e| e.cast::<InstanceElement>()) {
             let data = ctx.instance(element);
-            let mut methods: Vec<&str> = data.methods.iter().filter_map(|m| self::name(c, m.raw())).collect();
-            if self::name(c, element.raw()) == Some("Function") && library_uri(c, element.raw()) == Some("dart:core") {
+            let mut methods: Vec<&str> = data
+                .methods
+                .iter()
+                .filter_map(|m| self::name(c, m.raw()))
+                .collect();
+            if self::name(c, element.raw()) == Some("Function")
+                && library_uri(c, element.raw()) == Some("dart:core")
+            {
                 methods.push("call");
             }
-            let getters: Vec<&str> = data.getters.iter().filter_map(|g| self::name(c, g.raw())).collect();
+            let getters: Vec<&str> = data
+                .getters
+                .iter()
+                .filter_map(|g| self::name(c, g.raw()))
+                .collect();
             if !getters.contains(&lexeme_text) && !methods.contains(&lexeme_text) {
                 return;
             }
         } else if let Some(TypeKind::Record { named, .. }) = ty.map(|t| *ctx.ty(t)) {
-            if !ctx.list(named).iter().any(|f| ctx.name_str(f.name) == lexeme_text) {
+            if !ctx
+                .list(named)
+                .iter()
+                .any(|f| ctx.name_str(f.name) == lexeme_text)
+            {
                 return;
             }
         } else if let Some(TypeKind::Function(_)) = ty.map(|t| *ctx.ty(t)) {
@@ -129,5 +151,10 @@ fn report_if_needed(
             return;
         }
     }
-    c.report_token(out, &diag::SIMPLIFY_VARIABLE_PATTERN, name, &[lexeme_text, accessor]);
+    c.report_token(
+        out,
+        &diag::SIMPLIFY_VARIABLE_PATTERN,
+        name,
+        &[lexeme_text, accessor],
+    );
 }

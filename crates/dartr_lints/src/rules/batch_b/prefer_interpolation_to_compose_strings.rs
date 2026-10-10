@@ -67,10 +67,18 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             i += 1;
             continue;
         }
-        if c.static_type(left).is_some_and(|t| ctx.is_dart_core_string(t)) {
+        if c.static_type(left)
+            .is_some_and(|t| ctx.is_dart_core_string(t))
+        {
             let offset = c.ast.offset(left) as usize;
             let end = c.ast.end(right) as usize;
-            c.report_offset(out, &diag::PREFER_INTERPOLATION_TO_COMPOSE_STRINGS, offset, end - offset, &[]);
+            c.report_offset(
+                out,
+                &diag::PREFER_INTERPOLATION_TO_COMPOSE_STRINGS,
+                offset,
+                end - offset,
+                &[],
+            );
             i += 1;
         }
         i += 1;

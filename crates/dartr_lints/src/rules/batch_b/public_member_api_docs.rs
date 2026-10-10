@@ -16,18 +16,46 @@ pub fn register(r: &mut RuleVisitorRegistry, c: &LinterContext<'_>) {
     r.add(NodeKind::ClassDeclaration, NAME, visit_class_declaration);
     r.add(NodeKind::ClassTypeAlias, NAME, visit_named);
     r.add(NodeKind::CompilationUnit, NAME, visit_compilation_unit);
-    r.add(NodeKind::ConstructorDeclaration, NAME, visit_constructor_declaration);
-    r.add(NodeKind::EnumConstantDeclaration, NAME, visit_enum_constant_declaration);
+    r.add(
+        NodeKind::ConstructorDeclaration,
+        NAME,
+        visit_constructor_declaration,
+    );
+    r.add(
+        NodeKind::EnumConstantDeclaration,
+        NAME,
+        visit_enum_constant_declaration,
+    );
     r.add(NodeKind::EnumDeclaration, NAME, visit_enum_declaration);
-    r.add(NodeKind::ExtensionDeclaration, NAME, visit_extension_declaration);
-    r.add(NodeKind::ExtensionTypeDeclaration, NAME, visit_extension_type_declaration);
+    r.add(
+        NodeKind::ExtensionDeclaration,
+        NAME,
+        visit_extension_declaration,
+    );
+    r.add(
+        NodeKind::ExtensionTypeDeclaration,
+        NAME,
+        visit_extension_type_declaration,
+    );
     r.add(NodeKind::FieldDeclaration, NAME, visit_field_declaration);
     r.add(NodeKind::FunctionTypeAlias, NAME, visit_named);
     r.add(NodeKind::GenericTypeAlias, NAME, visit_named);
     r.add(NodeKind::MixinDeclaration, NAME, visit_mixin_declaration);
-    r.add(NodeKind::PrimaryConstructorBody, NAME, visit_primary_constructor_body);
-    r.add(NodeKind::PrimaryConstructorDeclaration, NAME, visit_primary_constructor_declaration);
-    r.add(NodeKind::TopLevelVariableDeclaration, NAME, visit_top_level_variable_declaration);
+    r.add(
+        NodeKind::PrimaryConstructorBody,
+        NAME,
+        visit_primary_constructor_body,
+    );
+    r.add(
+        NodeKind::PrimaryConstructorDeclaration,
+        NAME,
+        visit_primary_constructor_declaration,
+    );
+    r.add(
+        NodeKind::TopLevelVariableDeclaration,
+        NAME,
+        visit_top_level_variable_declaration,
+    );
 }
 
 fn is_private(c: &LinterContext<'_>, token: dartr_syntax::TokenId) -> bool {
@@ -65,7 +93,10 @@ fn documentation_comment(c: &LinterContext<'_>, node: NodeId) -> Option<NodeId> 
     );
     if comment.is_none() && kind(c, node) == NodeKind::VariableDeclaration {
         let grandparent = c.ast.parent(node).and_then(|p| c.ast.parent(p))?;
-        if matches!(kind(c, grandparent), NodeKind::FieldDeclaration | NodeKind::TopLevelVariableDeclaration) {
+        if matches!(
+            kind(c, grandparent),
+            NodeKind::FieldDeclaration | NodeKind::TopLevelVariableDeclaration
+        ) {
             return documentation_comment(c, grandparent);
         }
     }
@@ -80,13 +111,15 @@ fn is_internal(c: &LinterContext<'_>, node: NodeId) -> bool {
     {
         return c.has_package_meta_getter(element, "internal");
     }
-    let Some(parent) = this_or_ancestor(c, node, |n| CompilationUnitMember::test(kind(c, n))) else {
+    let Some(parent) = this_or_ancestor(c, node, |n| CompilationUnitMember::test(kind(c, n)))
+    else {
         return false;
     };
     if kind(c, parent) == NodeKind::TopLevelVariableDeclaration {
         return false;
     }
-    c.declared_element(parent).is_some_and(|e| c.has_package_meta_getter(e, "internal"))
+    c.declared_element(parent)
+        .is_some_and(|e| c.has_package_meta_getter(e, "internal"))
 }
 
 /// Dart `AstNodeExtension.inPrivateMember`.
@@ -95,13 +128,17 @@ fn in_private_member(c: &LinterContext<'_>, node: NodeId) -> bool {
         return false;
     };
     match kind(c, parent) {
-        NodeKind::ClassDeclaration | NodeKind::EnumDeclaration | NodeKind::ExtensionTypeDeclaration => {
+        NodeKind::ClassDeclaration
+        | NodeKind::EnumDeclaration
+        | NodeKind::ExtensionTypeDeclaration => {
             type_name(c, parent).is_some_and(|t| is_private(c, t))
         }
-        NodeKind::ExtensionDeclaration => {
-            c.ast[Id::<ExtensionDeclaration>::from_raw(parent)].name.is_none_or(|t| is_private(c, t))
+        NodeKind::ExtensionDeclaration => c.ast[Id::<ExtensionDeclaration>::from_raw(parent)]
+            .name
+            .is_none_or(|t| is_private(c, t)),
+        NodeKind::MixinDeclaration => {
+            is_private(c, c.ast[Id::<MixinDeclaration>::from_raw(parent)].name)
         }
-        NodeKind::MixinDeclaration => is_private(c, c.ast[Id::<MixinDeclaration>::from_raw(parent)].name),
         _ => false,
     }
 }
@@ -133,21 +170,28 @@ fn is_effectively_private(c: &LinterContext<'_>, node: NodeId) -> bool {
 /// `namePart.typeName` of a class, enum or extension type declaration.
 fn type_name(c: &LinterContext<'_>, node: NodeId) -> Option<dartr_syntax::TokenId> {
     let name_part = match kind(c, node) {
-        NodeKind::ClassDeclaration => c.ast[Id::<ClassDeclaration>::from_raw(node)].name_part.raw(),
+        NodeKind::ClassDeclaration => c.ast[Id::<ClassDeclaration>::from_raw(node)]
+            .name_part
+            .raw(),
         NodeKind::EnumDeclaration => c.ast[Id::<EnumDeclaration>::from_raw(node)].name_part.raw(),
-        NodeKind::ExtensionTypeDeclaration => c.ast[Id::<ExtensionTypeDeclaration>::from_raw(node)].name_part.raw(),
+        NodeKind::ExtensionTypeDeclaration => c.ast[Id::<ExtensionTypeDeclaration>::from_raw(node)]
+            .name_part
+            .raw(),
         _ => return None,
     };
     if let Some(n) = c.ast.cast::<NameWithTypeParameters>(name_part) {
         Some(c.ast[n].type_name)
     } else {
-        c.ast.cast::<PrimaryConstructorDeclaration>(name_part).map(|p| c.ast[p].type_name)
+        c.ast
+            .cast::<PrimaryConstructorDeclaration>(name_part)
+            .map(|p| c.ast[p].type_name)
     }
 }
 
 /// Dart `_Visitor.isOverridingMember`.
 fn is_overriding_member(c: &LinterContext<'_>, node: NodeId) -> bool {
-    c.declared_element(node).is_some_and(|e| overridden_member(c, e).is_some())
+    c.declared_element(node)
+        .is_some_and(|e| overridden_member(c, e).is_some())
 }
 
 /// Dart `_Visitor.check`.
@@ -165,8 +209,12 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) -> bool
 
 fn property_keyword<'a>(c: &'a LinterContext<'a>, node: NodeId) -> Option<&'a str> {
     match kind(c, node) {
-        NodeKind::MethodDeclaration => c.ast[Id::<MethodDeclaration>::from_raw(node)].property_keyword,
-        NodeKind::FunctionDeclaration => c.ast[Id::<FunctionDeclaration>::from_raw(node)].property_keyword,
+        NodeKind::MethodDeclaration => {
+            c.ast[Id::<MethodDeclaration>::from_raw(node)].property_keyword
+        }
+        NodeKind::FunctionDeclaration => {
+            c.ast[Id::<FunctionDeclaration>::from_raw(node)].property_keyword
+        }
         _ => None,
     }
     .map(|k| lexeme(c, k))
@@ -219,13 +267,20 @@ fn check_methods(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>)
     let members = super::sort_unnamed_constructors_first::body_members(c, node)
         .into_iter()
         .filter(|&m| {
-            c.ast.cast::<MethodDeclaration>(m).is_some_and(|m| !is_private(c, c.ast[m].name))
+            c.ast
+                .cast::<MethodDeclaration>(m)
+                .is_some_and(|m| !is_private(c, c.ast[m].name))
         })
         .collect();
     check_accessor_groups(c, members, out);
 }
 
-fn visit_members(c: &LinterContext<'_>, node: NodeId, name: dartr_syntax::TokenId, out: &mut Vec<Diagnostic>) {
+fn visit_members(
+    c: &LinterContext<'_>,
+    node: NodeId,
+    name: dartr_syntax::TokenId,
+    out: &mut Vec<Diagnostic>,
+) {
     if is_private(c, name) || is_internal(c, node) {
         return;
     }
@@ -237,11 +292,17 @@ fn visit_class_declaration(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Di
     if c.declared_element(node).is_none() {
         return;
     }
-    let Some(name) = type_name(c, node) else { return };
+    let Some(name) = type_name(c, node) else {
+        return;
+    };
     visit_members(c, node, name, out);
 }
 
-fn visit_extension_type_declaration(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
+fn visit_extension_type_declaration(
+    c: &LinterContext<'_>,
+    node: NodeId,
+    out: &mut Vec<Diagnostic>,
+) {
     visit_class_declaration(c, node, out);
 }
 
@@ -347,7 +408,11 @@ fn visit_primary_constructor_body(c: &LinterContext<'_>, node: NodeId, out: &mut
     check(c, node, out);
 }
 
-fn visit_primary_constructor_declaration(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
+fn visit_primary_constructor_declaration(
+    c: &LinterContext<'_>,
+    node: NodeId,
+    out: &mut Vec<Diagnostic>,
+) {
     if super::tighten_type_of_initializing_formals::primary_constructor_body(c, node).is_some() {
         return;
     }
@@ -359,13 +424,26 @@ fn visit_primary_constructor_declaration(c: &LinterContext<'_>, node: NodeId, ou
     if constructor_name.is_some_and(|t| is_private(c, t)) {
         return;
     }
-    if !c.ast.parent(node).is_some_and(|p| kind(c, p) == NodeKind::ClassDeclaration) {
+    if !c
+        .ast
+        .parent(node)
+        .is_some_and(|p| kind(c, p) == NodeKind::ClassDeclaration)
+    {
         return;
     }
-    c.report_token(out, &diag::PUBLIC_MEMBER_API_DOCS, constructor_name.unwrap_or(n.type_name), &[]);
+    c.report_token(
+        out,
+        &diag::PUBLIC_MEMBER_API_DOCS,
+        constructor_name.unwrap_or(n.type_name),
+        &[],
+    );
 }
 
-fn visit_top_level_variable_declaration(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
+fn visit_top_level_variable_declaration(
+    c: &LinterContext<'_>,
+    node: NodeId,
+    out: &mut Vec<Diagnostic>,
+) {
     let variables = c.ast[Id::<TopLevelVariableDeclaration>::from_raw(node)].variables;
     for &variable in c.ast.list(c.ast[variables].variables) {
         if !is_private(c, c.ast[variable].name) {

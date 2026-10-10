@@ -22,22 +22,40 @@ fn check_pattern(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>)
     let Some(pattern) = c.ast.cast::<DeclaredVariablePattern>(node) else {
         return;
     };
-    let Some(ty) = c.declared_element(node).and_then(|e| element_type(c, ElemRef::Base(e))) else {
+    let Some(ty) = c
+        .declared_element(node)
+        .and_then(|e| element_type(c, ElemRef::Base(e)))
+    else {
         return;
     };
     if matches!(*ctx.ty(ty), TypeKind::Dynamic) {
         return;
     }
-    let Some(value) = resolved.tables.pattern_info.get(node).and_then(|i| i.matched_value_type) else {
+    let Some(value) = resolved
+        .tables
+        .pattern_info
+        .get(node)
+        .and_then(|i| i.matched_value_type)
+    else {
         return;
     };
     if ts.is_nullable(ty) && ts.is_non_nullable(value) {
-        c.report_token(out, &diag::UNNECESSARY_NULLABLE_FOR_FINAL_VARIABLE_DECLARATIONS, c.ast[pattern].name, &[]);
+        c.report_token(
+            out,
+            &diag::UNNECESSARY_NULLABLE_FOR_FINAL_VARIABLE_DECLARATIONS,
+            c.ast[pattern].name,
+            &[],
+        );
     }
 }
 
 /// Dart `_Visitor._visit`.
-fn visit_variable(c: &LinterContext<'_>, list: Id<VariableDeclarationList>, variable: Id<VariableDeclaration>, out: &mut Vec<Diagnostic>) {
+fn visit_variable(
+    c: &LinterContext<'_>,
+    list: Id<VariableDeclarationList>,
+    variable: Id<VariableDeclaration>,
+    out: &mut Vec<Diagnostic>,
+) {
     let (Some(ctx), Some(ts)) = (rctx(c), c.type_system()) else {
         return;
     };
@@ -52,14 +70,22 @@ fn visit_variable(c: &LinterContext<'_>, list: Id<VariableDeclarationList>, vari
     let Some(initializer_type) = c.ast[variable].initializer.and_then(|i| c.static_type(i)) else {
         return;
     };
-    let Some(ty) = c.declared_element(variable).and_then(|e| element_type(c, ElemRef::Base(e))) else {
+    let Some(ty) = c
+        .declared_element(variable)
+        .and_then(|e| element_type(c, ElemRef::Base(e)))
+    else {
         return;
     };
     if matches!(*ctx.ty(ty), TypeKind::Dynamic) {
         return;
     }
     if ts.is_nullable(ty) && ts.is_non_nullable(initializer_type) {
-        c.report_token(out, &diag::UNNECESSARY_NULLABLE_FOR_FINAL_VARIABLE_DECLARATIONS, name, &[]);
+        c.report_token(
+            out,
+            &diag::UNNECESSARY_NULLABLE_FOR_FINAL_VARIABLE_DECLARATIONS,
+            name,
+            &[],
+        );
     }
 }
 

@@ -5,12 +5,21 @@ use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::ForEachPartsWithDeclaration, "prefer_final_in_for_each", declaration);
-    r.add(NodeKind::ForEachPartsWithPattern, "prefer_final_in_for_each", pattern);
+    r.add(
+        NodeKind::ForEachPartsWithDeclaration,
+        "prefer_final_in_for_each",
+        declaration,
+    );
+    r.add(
+        NodeKind::ForEachPartsWithPattern,
+        "prefer_final_in_for_each",
+        pattern,
+    );
 }
 
 fn mutated(c: &LinterContext<'_>, element: dartr_element::ElementId) -> bool {
-    c.resolved.is_some_and(|r| r.potentially_mutated_in_scope.contains(&element))
+    c.resolved
+        .is_some_and(|r| r.potentially_mutated_in_scope.contains(&element))
 }
 
 fn declaration(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
@@ -25,7 +34,12 @@ fn declaration(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         && !mutated(c, element)
     {
         let name = lexeme(c, v.name);
-        c.report_token(out, &diag::PREFER_FINAL_IN_FOR_EACH_VARIABLE, v.name, &[name]);
+        c.report_token(
+            out,
+            &diag::PREFER_FINAL_IN_FOR_EACH_VARIABLE,
+            v.name,
+            &[name],
+        );
     }
 }
 
@@ -50,18 +64,26 @@ fn pattern(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     }
     let pattern = n.pattern.raw();
     let fields_mutated = |fields: NodeList<PatternField>| {
-        c.ast.list(fields).iter().any(|&f| potentially_mutates(c, c.ast[f].pattern.raw()))
+        c.ast
+            .list(fields)
+            .iter()
+            .any(|&f| potentially_mutates(c, c.ast[f].pattern.raw()))
     };
     let report = if let Some(record) = c.ast.cast::<RecordPattern>(pattern) {
         !fields_mutated(c.ast[record].fields)
     } else if let Some(object) = c.ast.cast::<ObjectPattern>(pattern) {
         !fields_mutated(c.ast[object].fields)
     } else if let Some(list) = c.ast.cast::<ListPattern>(pattern) {
-        !c.ast.list_raw(c.ast[list].elements).iter().any(|&e| potentially_mutates(c, e))
+        !c.ast
+            .list_raw(c.ast[list].elements)
+            .iter()
+            .any(|&e| potentially_mutates(c, e))
     } else if let Some(map) = c.ast.cast::<MapPattern>(pattern) {
-        !c.ast.list_raw(c.ast[map].elements).iter().any(|&e| match c.ast.cast::<MapPatternEntry>(e) {
-            None => true,
-            Some(entry) => potentially_mutates(c, c.ast[entry].value.raw()),
+        !c.ast.list_raw(c.ast[map].elements).iter().any(|&e| {
+            match c.ast.cast::<MapPatternEntry>(e) {
+                None => true,
+                Some(entry) => potentially_mutates(c, c.ast[entry].value.raw()),
+            }
         })
     } else {
         false

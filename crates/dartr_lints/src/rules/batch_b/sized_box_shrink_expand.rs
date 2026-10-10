@@ -6,13 +6,19 @@ use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::InstanceCreationExpression, "sized_box_shrink_expand", check);
+    r.add(
+        NodeKind::InstanceCreationExpression,
+        "sized_box_shrink_expand",
+        check,
+    );
 }
 
 /// Dart `argumentValue`.
 fn argument_value(c: &LinterContext<'_>, e: NodeId) -> Option<f64> {
     match kind(c, e) {
-        NodeKind::IntegerLiteral => c.ast[Id::<IntegerLiteral>::from_raw(e)].value.map(|v| v as f64),
+        NodeKind::IntegerLiteral => c.ast[Id::<IntegerLiteral>::from_raw(e)]
+            .value
+            .map(|v| v as f64),
         NodeKind::DoubleLiteral => Some(c.ast[Id::<DoubleLiteral>::from_raw(e)].value),
         NodeKind::PrefixedIdentifier => {
             let p = &c.ast[Id::<PrefixedIdentifier>::from_raw(e)];
@@ -38,8 +44,18 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         }
     }
     if width == Some(0.0) && height == Some(0.0) {
-        c.report_node(out, &diag::SIZED_BOX_SHRINK_EXPAND, n.constructor_name, &["shrink"]);
+        c.report_node(
+            out,
+            &diag::SIZED_BOX_SHRINK_EXPAND,
+            n.constructor_name,
+            &["shrink"],
+        );
     } else if width == Some(f64::INFINITY) && height == Some(f64::INFINITY) {
-        c.report_node(out, &diag::SIZED_BOX_SHRINK_EXPAND, n.constructor_name, &["expand"]);
+        c.report_node(
+            out,
+            &diag::SIZED_BOX_SHRINK_EXPAND,
+            n.constructor_name,
+            &["expand"],
+        );
     }
 }

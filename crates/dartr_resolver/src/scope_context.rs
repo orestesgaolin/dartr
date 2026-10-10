@@ -155,7 +155,8 @@ impl<'a> ScopeContext<'a> {
     /// .lookup(id)` after resolution (the linter `resolveNameInScope`).
     pub fn record_lookup(&mut self, node: NodeId, id: &str) {
         self.kept_frames.extend(self.frame_ids.iter().copied());
-        self.recorded_lookups.push((node, id.to_string(), self.frame_ids.clone()));
+        self.recorded_lookups
+            .push((node, id.to_string(), self.frame_ids.clone()));
     }
 
     /// The results of the lookups of [Self::record_lookup].
@@ -183,7 +184,12 @@ impl<'a> ScopeContext<'a> {
     }
 
     /// [Self::lookup_below] over a recorded chain of frames.
-    fn lookup_in_frames(&self, frames: &[&EnclosedScope<'a>], top: usize, id: &str) -> ScopeLookupResult {
+    fn lookup_in_frames(
+        &self,
+        frames: &[&EnclosedScope<'a>],
+        top: usize,
+        id: &str,
+    ) -> ScopeLookupResult {
         let ctx = &self.ctx;
         for i in (0..top).rev() {
             let frame = frames[i];

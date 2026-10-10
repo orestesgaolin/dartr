@@ -8,13 +8,19 @@ pub fn register(r: &mut RuleVisitorRegistry, c: &LinterContext<'_>) {
     if !c.is_feature_enabled(ExperimentalFlag::PrimaryConstructors) {
         return;
     }
-    r.add(NodeKind::ClassDeclaration, "use_primary_constructors", check);
+    r.add(
+        NodeKind::ClassDeclaration,
+        "use_primary_constructors",
+        check,
+    );
     r.add(NodeKind::EnumDeclaration, "use_primary_constructors", check);
 }
 
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let name_part = match kind(c, node) {
-        NodeKind::ClassDeclaration => c.ast[Id::<ClassDeclaration>::from_raw(node)].name_part.raw(),
+        NodeKind::ClassDeclaration => c.ast[Id::<ClassDeclaration>::from_raw(node)]
+            .name_part
+            .raw(),
         _ => c.ast[Id::<EnumDeclaration>::from_raw(node)].name_part.raw(),
     };
     let Some(name_with_type_parameters) = c.ast.cast::<NameWithTypeParameters>(name_part) else {

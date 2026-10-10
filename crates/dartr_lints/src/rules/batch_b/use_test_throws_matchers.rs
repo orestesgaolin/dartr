@@ -14,7 +14,9 @@ fn is_test_invocation(c: &LinterContext<'_>, statement: NodeId, function_name: &
     let Some(statement) = c.ast.cast::<ExpressionStatement>(statement) else {
         return false;
     };
-    let Some(invocation) = c.ast.cast::<MethodInvocation>(c.ast[statement].expression.raw())
+    let Some(invocation) = c
+        .ast
+        .cast::<MethodInvocation>(c.ast[statement].expression.raw())
     else {
         return false;
     };

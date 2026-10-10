@@ -20,7 +20,10 @@ pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
 
 /// Dart `PrimaryConstructorDeclaration.body` (the `this : ...` body of the
 /// enclosing type declaration).
-pub(crate) fn primary_constructor_body(c: &LinterContext<'_>, node: NodeId) -> Option<Id<PrimaryConstructorBody>> {
+pub(crate) fn primary_constructor_body(
+    c: &LinterContext<'_>,
+    node: NodeId,
+) -> Option<Id<PrimaryConstructorBody>> {
     let declaration = c.ast.parent(node)?;
     super::sort_unnamed_constructors_first::body_members(c, declaration)
         .into_iter()
@@ -31,10 +34,15 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let (parameters, initializers) = match kind(c, node) {
         NodeKind::ConstructorDeclaration => {
             let n = &c.ast[Id::<ConstructorDeclaration>::from_raw(node)];
-            (parameters(c, Some(n.parameters)), c.ast.list_raw(n.initializers).to_vec())
+            (
+                parameters(c, Some(n.parameters)),
+                c.ast.list_raw(n.initializers).to_vec(),
+            )
         }
         _ => {
-            let Some(body) = primary_constructor_body(c, node) else { return };
+            let Some(body) = primary_constructor_body(c, node) else {
+                return;
+            };
             let n = &c.ast[Id::<PrimaryConstructorDeclaration>::from_raw(node)];
             (
                 parameters(c, Some(n.formal_parameters)),
@@ -47,7 +55,10 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         let Some(assert) = c.ast.cast::<AssertInitializer>(initializer) else {
             continue;
         };
-        let Some(condition) = c.ast.cast::<BinaryExpression>(c.ast[assert].condition.raw()) else {
+        let Some(condition) = c
+            .ast
+            .cast::<BinaryExpression>(c.ast[assert].condition.raw())
+        else {
             continue;
         };
         let b = &c.ast[condition];
@@ -72,9 +83,8 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             continue;
         };
         let report = match element.tag() {
-            Tag::FieldFormalParameter => {
-                !flags(c, element).contains(FragmentFlags::FIELD_FORMAL_PARAMETER_FRAGMENT_IS_DECLARING)
-            }
+            Tag::FieldFormalParameter => !flags(c, element)
+                .contains(FragmentFlags::FIELD_FORMAL_PARAMETER_FRAGMENT_IS_DECLARING),
             Tag::SuperFormalParameter => true,
             _ => false,
         };
@@ -83,7 +93,12 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                 .iter()
                 .find(|&&p| c.declared_element(p) == Some(element))
         {
-            c.report_node(out, &diag::TIGHTEN_TYPE_OF_INITIALIZING_FORMALS, parameter, &[]);
+            c.report_node(
+                out,
+                &diag::TIGHTEN_TYPE_OF_INITIALIZING_FORMALS,
+                parameter,
+                &[],
+            );
         }
     }
 }

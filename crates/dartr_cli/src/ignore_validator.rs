@@ -59,8 +59,11 @@ pub fn validate_ignores(
         }
     }
     report(&unignorable, &duplicated, &mut reported);
-    let removed_for_file: Vec<IgnoredElement> =
-        unignorable.iter().chain(&duplicated).map(|e| (*e).clone()).collect();
+    let removed_for_file: Vec<IgnoredElement> = unignorable
+        .iter()
+        .chain(&duplicated)
+        .map(|e| (*e).clone())
+        .collect();
     remove_elements(&mut ignored_for_file, &removed_for_file);
     for elements in ignored_on_line_map.values_mut() {
         let mut names_on_line = HashSet::new();
@@ -85,8 +88,11 @@ pub fn validate_ignores(
             }
         }
         report(&unignorable, &duplicated, &mut reported);
-        let removed: Vec<IgnoredElement> =
-            unignorable.iter().chain(&duplicated).map(|e| (*e).clone()).collect();
+        let removed: Vec<IgnoredElement> = unignorable
+            .iter()
+            .chain(&duplicated)
+            .map(|e| (*e).clone())
+            .collect();
         remove_elements(elements, &removed);
     }
 
@@ -104,9 +110,21 @@ pub fn validate_ignores(
         for elements in ignored_on_line_map.values_mut() {
             remove_unknown_names(elements, unknown_names);
         }
-        report_unnecessary_or_removed_ignores(ignore_info, line_info, &ignored_for_file, true, &mut reported);
+        report_unnecessary_or_removed_ignores(
+            ignore_info,
+            line_info,
+            &ignored_for_file,
+            true,
+            &mut reported,
+        );
         for elements in ignored_on_line_map.values() {
-            report_unnecessary_or_removed_ignores(ignore_info, line_info, elements, false, &mut reported);
+            report_unnecessary_or_removed_ignores(
+                ignore_info,
+                line_info,
+                elements,
+                false,
+                &mut reported,
+            );
         }
     }
     reported
@@ -124,7 +142,9 @@ fn remove_elements(list: &mut Vec<IgnoredElement>, removed: &[IgnoredElement]) {
 /// Removes the names of the lint rules that dartr does not implement (not
 /// in Dart: the analyzer knows every diagnostic of the file).
 fn remove_unknown_names(list: &mut Vec<IgnoredElement>, unknown_names: &HashSet<String>) {
-    list.retain(|e| !matches!(e, IgnoredElement::Name { name, .. } if unknown_names.contains(name)));
+    list.retain(
+        |e| !matches!(e, IgnoredElement::Name { name, .. } if unknown_names.contains(name)),
+    );
 }
 
 /// Dart `List<IgnoredElement>.removeByName`.
@@ -142,11 +162,20 @@ fn report_unnecessary_or_removed_ignores(
 ) {
     use dartr_lints::RuleStateType;
     // Dart `_validDiagnosticCodeNames`.
-    let valid_names = || dartr_diagnostics::all_codes().iter().map(|c| c.lower_case_name());
+    let valid_names = || {
+        dartr_diagnostics::all_codes()
+            .iter()
+            .map(|c| c.lower_case_name())
+    };
     for element in ignored_names {
-        let IgnoredElement::Name { name, offset, .. } = element else { continue };
+        let IgnoredElement::Name { name, offset, .. } = element else {
+            continue;
+        };
         let length = utf16_len(name);
-        match dartr_lints::ALL_RULES.iter().find(|r| r.name == name.as_str()) {
+        match dartr_lints::ALL_RULES
+            .iter()
+            .find(|r| r.name == name.as_str())
+        {
             None => {
                 let lower = name.to_lowercase();
                 if !valid_names().any(|n| n == lower) {
@@ -164,7 +193,11 @@ fn report_unnecessary_or_removed_ignores(
                         Some(replacement) => diag::replaced_lint_use(name, &since, replacement),
                         None => diag::removed_lint_use(name, &since),
                     };
-                    reported.push(diagnostic.at_offset(*offset as usize, length).into_diagnostic());
+                    reported.push(
+                        diagnostic
+                            .at_offset(*offset as usize, length)
+                            .into_diagnostic(),
+                    );
                     continue;
                 }
             }
@@ -188,7 +221,9 @@ fn report_unnecessary_or_removed_ignores(
         let diagnostics_on_line = ignored_elements
             .iter()
             .filter(|e| match e {
-                IgnoredElement::Name { offset, .. } => line_info.get_location(*offset).line_number == current_line,
+                IgnoredElement::Name { offset, .. } => {
+                    line_info.get_location(*offset).line_number == current_line
+                }
                 _ => false,
             })
             .count();
@@ -198,7 +233,11 @@ fn report_unnecessary_or_removed_ignores(
             (false, true) => diag::unnecessary_ignore_name(name),
             (false, false) => diag::unnecessary_ignore(name),
         };
-        reported.push(diagnostic.at_offset(*offset as usize, length).into_diagnostic());
+        reported.push(
+            diagnostic
+                .at_offset(*offset as usize, length)
+                .into_diagnostic(),
+        );
     }
 }
 

@@ -7,9 +7,17 @@ use dartr_element::{ElemRef, TypeId, TypeKind};
 use dartr_typesystem::{TypeExt, member};
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::AssignedVariablePattern, "void_checks", assigned_pattern);
+    r.add(
+        NodeKind::AssignedVariablePattern,
+        "void_checks",
+        assigned_pattern,
+    );
     r.add(NodeKind::AssignmentExpression, "void_checks", assignment);
-    r.add(NodeKind::InstanceCreationExpression, "void_checks", creation);
+    r.add(
+        NodeKind::InstanceCreationExpression,
+        "void_checks",
+        creation,
+    );
     r.add(NodeKind::MethodInvocation, "void_checks", invocation);
     r.add(NodeKind::ReturnStatement, "void_checks", return_statement);
 }
@@ -36,7 +44,8 @@ fn acceptable_void(c: &LinterContext<'_>, ty: TypeId) -> bool {
     let Some(ctx) = rctx(c) else { return false };
     matches!(*ctx.ty(ty), TypeKind::Void | TypeKind::Never(_))
         || ctx.is_dart_core_null(ty)
-        || (ctx.is_dart_async_future(ty) && first_type_argument(c, ty).is_some_and(|a| acceptable_void(c, a)))
+        || (ctx.is_dart_async_future(ty)
+            && first_type_argument(c, ty).is_some_and(|a| acceptable_void(c, a)))
 }
 
 /// Dart `_check`.
@@ -53,7 +62,10 @@ fn check_types(
         return;
     };
     let expected_void = matches!(*ctx.ty(expected), TypeKind::Void);
-    if expected_void && !matches!(*ctx.ty(ty), TypeKind::Dynamic) && kind(c, node) == NodeKind::ReturnStatement {
+    if expected_void
+        && !matches!(*ctx.ty(ty), TypeKind::Dynamic)
+        && kind(c, node) == NodeKind::ReturnStatement
+    {
         return;
     }
     if expected_void && !acceptable_void(c, ty) {
@@ -77,15 +89,28 @@ fn check_args(c: &LinterContext<'_>, args: Vec<NodeId>, out: &mut Vec<Diagnostic
     for arg in args {
         let expression = argument_expression(c, arg);
         if let Some(ty) = c.corresponding_parameter_type(expression) {
-            check_types(c, Some(ty), c.static_type(expression), expression, None, out);
+            check_types(
+                c,
+                Some(ty),
+                c.static_type(expression),
+                expression,
+                None,
+                out,
+            );
         }
     }
 }
 
 fn assigned_pattern(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(resolved) = c.resolved else { return };
-    let value_type = resolved.tables.pattern_info.get(node).and_then(|i| i.matched_value_type);
-    let Some(element) = c.element(node) else { return };
+    let value_type = resolved
+        .tables
+        .pattern_info
+        .get(node)
+        .and_then(|i| i.matched_value_type);
+    let Some(element) = c.element(node) else {
+        return;
+    };
     let tag = base(c, element).tag();
     if !(is_local_variable(base(c, element))
         || matches!(
@@ -118,7 +143,9 @@ fn creation(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
 }
 
 fn invocation(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
-    let (Some(ctx), Some(resolved)) = (rctx(c), c.resolved) else { return };
+    let (Some(ctx), Some(resolved)) = (rctx(c), c.resolved) else {
+        return;
+    };
     let Some(&ty) = resolved.tables.invoke_type.get(node) else {
         return;
     };
@@ -130,12 +157,16 @@ fn invocation(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
 
 fn return_statement(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(ctx) = rctx(c) else { return };
-    let expression = c.ast[Id::<ReturnStatement>::from_raw(node)].expression.map(|e| e.raw());
+    let expression = c.ast[Id::<ReturnStatement>::from_raw(node)]
+        .expression
+        .map(|e| e.raw());
     let ty = expression.and_then(|e| c.static_type(e));
     let Some(parent) = this_or_ancestor(c, node, |e| {
         matches!(
             kind(c, e),
-            NodeKind::FunctionExpression | NodeKind::MethodDeclaration | NodeKind::FunctionDeclaration
+            NodeKind::FunctionExpression
+                | NodeKind::MethodDeclaration
+                | NodeKind::FunctionDeclaration
         )
     }) else {
         return;
@@ -150,7 +181,8 @@ fn return_statement(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnosti
             .map(|e| member::return_type(&ctx, ElemRef::Base(e))),
     };
     if kind(c, parent) == NodeKind::FunctionExpression
-        && c.static_type(parent).is_none_or(|t| !matches!(*ctx.ty(t), TypeKind::Function(_)))
+        && c.static_type(parent)
+            .is_none_or(|t| !matches!(*ctx.ty(t), TypeKind::Function(_)))
     {
         return;
     }

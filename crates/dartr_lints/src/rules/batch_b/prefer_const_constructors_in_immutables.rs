@@ -30,22 +30,34 @@ fn has_immutable_annotation(c: &LinterContext<'_>, element: EId<InterfaceElement
         if c.has_immutable(e.raw()) {
             return true;
         }
-        current = ctx.element_supertype(e).and_then(|t| ctx.interface_element(t));
+        current = ctx
+            .element_supertype(e)
+            .and_then(|t| ctx.interface_element(t));
     }
     false
 }
 
 /// Dart `_hasConstConstructorInvocation`.
-fn has_const_constructor_invocation(c: &LinterContext<'_>, element: ElementId, initializers: &[NodeId]) -> bool {
+fn has_const_constructor_invocation(
+    c: &LinterContext<'_>,
+    element: ElementId,
+    initializers: &[NodeId],
+) -> bool {
     let Some(ctx) = rctx(c) else { return false };
     let Some(interface) = enclosing(c, element).and_then(|e| e.cast::<InterfaceElement>()) else {
         return false;
     };
     let element_is_const = |n: NodeId| c.element(n).is_some_and(|e| is_const(c, base(c, e)));
-    if let Some(&s) = initializers.iter().find(|&&i| kind(c, i) == NodeKind::SuperConstructorInvocation) {
+    if let Some(&s) = initializers
+        .iter()
+        .find(|&&i| kind(c, i) == NodeKind::SuperConstructorInvocation)
+    {
         return element_is_const(s);
     }
-    if let Some(&r) = initializers.iter().find(|&&i| kind(c, i) == NodeKind::RedirectingConstructorInvocation) {
+    if let Some(&r) = initializers
+        .iter()
+        .find(|&&i| kind(c, i) == NodeKind::RedirectingConstructorInvocation)
+    {
         return element_is_const(r);
     }
     if interface.raw().tag() == Tag::ExtensionType {
@@ -56,7 +68,10 @@ fn has_const_constructor_invocation(c: &LinterContext<'_>, element: ElementId, i
             .find(|k| flags(c, k.raw()).contains(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_PRIMARY))
             .is_some_and(|k| is_const(c, k.raw()));
     }
-    let Some(supertype) = ctx.element_supertype(interface).and_then(|t| ctx.interface_element(t)) else {
+    let Some(supertype) = ctx
+        .element_supertype(interface)
+        .and_then(|t| ctx.interface_element(t))
+    else {
         return false;
     };
     ctx.interface(supertype)
@@ -81,7 +96,9 @@ fn redirected_const(c: &LinterContext<'_>, element: ElementId) -> Option<bool> {
 
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(ctx) = rctx(c) else { return };
-    let Some(element) = c.declared_element(node) else { return };
+    let Some(element) = c.declared_element(node) else {
+        return;
+    };
     if is_const(c, element) {
         return;
     }
@@ -112,7 +129,8 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             )
         }
         _ => {
-            let body = super::tighten_type_of_initializing_formals::primary_constructor_body(c, node);
+            let body =
+                super::tighten_type_of_initializing_formals::primary_constructor_body(c, node);
             if let Some(body) = body
                 && kind(c, c.ast[body].body) != NodeKind::EmptyFunctionBody
             {
@@ -126,7 +144,8 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                 None => begin.offset as usize + begin.length as usize,
             };
             (
-                body.map(|b| c.ast.list_raw(c.ast[b].initializers).to_vec()).unwrap_or_default(),
+                body.map(|b| c.ast.list_raw(c.ast[b].initializers).to_vec())
+                    .unwrap_or_default(),
                 (begin.offset as usize, end - begin.offset as usize),
             )
         }
@@ -137,8 +156,16 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     if !ctx.element_mixins(interface).is_empty() || !has_immutable_annotation(c, interface) {
         return;
     }
-    if kind(c, node) == NodeKind::PrimaryConstructorDeclaration && interface.raw().tag() == Tag::ExtensionType {
-        c.report_offset(out, &diag::PREFER_CONST_CONSTRUCTORS_IN_IMMUTABLES, range.0, range.1, &[]);
+    if kind(c, node) == NodeKind::PrimaryConstructorDeclaration
+        && interface.raw().tag() == Tag::ExtensionType
+    {
+        c.report_offset(
+            out,
+            &diag::PREFER_CONST_CONSTRUCTORS_IN_IMMUTABLES,
+            range.0,
+            range.1,
+            &[],
+        );
         return;
     }
     let report = match redirected_const(c, element) {
@@ -146,6 +173,12 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         None => has_const_constructor_invocation(c, element, &initializers) && c.can_be_const(node),
     };
     if report {
-        c.report_offset(out, &diag::PREFER_CONST_CONSTRUCTORS_IN_IMMUTABLES, range.0, range.1, &[]);
+        c.report_offset(
+            out,
+            &diag::PREFER_CONST_CONSTRUCTORS_IN_IMMUTABLES,
+            range.0,
+            range.1,
+            &[],
+        );
     }
 }

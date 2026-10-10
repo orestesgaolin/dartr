@@ -8,8 +8,16 @@ use dartr_element::{EId, ElemRef, FragmentFlags, InterfaceElement, Tag};
 use dartr_typesystem::{TypeExt, member};
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::ClassDeclaration, "use_key_in_widget_constructors", class);
-    r.add(NodeKind::ConstructorDeclaration, "use_key_in_widget_constructors", constructor);
+    r.add(
+        NodeKind::ClassDeclaration,
+        "use_key_in_widget_constructors",
+        class,
+    );
+    r.add(
+        NodeKind::ConstructorDeclaration,
+        "use_key_in_widget_constructors",
+        constructor,
+    );
     r.add(
         NodeKind::PrimaryConstructorDeclaration,
         "use_key_in_widget_constructors",
@@ -19,7 +27,10 @@ pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
 
 fn class(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(ctx) = rctx(c) else { return };
-    let Some(element) = c.declared_element(node).and_then(|e| e.cast::<InterfaceElement>()) else {
+    let Some(element) = c
+        .declared_element(node)
+        .and_then(|e| e.cast::<InterfaceElement>())
+    else {
         return;
     };
     let no_origin_declaration = ctx.interface(element).constructors.iter().all(|k| {
@@ -31,7 +42,13 @@ fn class(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         && no_origin_declaration
     {
         let (offset, length) = node_to_annotate(c, node);
-        c.report_offset(out, &diag::USE_KEY_IN_WIDGET_CONSTRUCTORS, offset, length, &[]);
+        c.report_offset(
+            out,
+            &diag::USE_KEY_IN_WIDGET_CONSTRUCTORS,
+            offset,
+            length,
+            &[],
+        );
     }
 }
 
@@ -46,20 +63,25 @@ fn constructor(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         }
         _ => {
             let n = &c.ast[Id::<PrimaryConstructorDeclaration>::from_raw(node)];
-            let initializers = super::tighten_type_of_initializing_formals::primary_constructor_body(c, node)
-                .map(|b| c.ast.list_raw(c.ast[b].initializers).to_vec())
-                .unwrap_or_default();
+            let initializers =
+                super::tighten_type_of_initializing_formals::primary_constructor_body(c, node)
+                    .map(|b| c.ast.list_raw(c.ast[b].initializers).to_vec())
+                    .unwrap_or_default();
             (n.formal_parameters, initializers)
         }
     };
-    let Some(element) = c.declared_element(node) else { return };
+    let Some(element) = c.declared_element(node) else {
+        return;
+    };
     if !is_public(c, element)
         || flags(c, element).contains(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_FACTORY)
         || has_visible_for_testing(c, element)
     {
         return;
     }
-    let Some(class) = enclosing(c, element) else { return };
+    let Some(class) = enclosing(c, element) else {
+        return;
+    };
     if !is_public(c, class) || class.tag() != Tag::Class || has_visible_for_testing(c, class) {
         return;
     }
@@ -76,7 +98,13 @@ fn constructor(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     }
     if !initializers.iter().any(|&i| is_missing_key(c, i)) {
         let (offset, length) = node_to_annotate(c, node);
-        c.report_offset(out, &diag::USE_KEY_IN_WIDGET_CONSTRUCTORS, offset, length, &[]);
+        c.report_offset(
+            out,
+            &diag::USE_KEY_IN_WIDGET_CONSTRUCTORS,
+            offset,
+            length,
+            &[],
+        );
     }
 }
 
@@ -104,9 +132,9 @@ fn is_missing_key(c: &LinterContext<'_>, initializer: NodeId) -> bool {
 /// Dart `ConstructorElement.definesKeyParameter`.
 fn defines_key_parameter(c: &LinterContext<'_>, element: ElemRef) -> bool {
     let Some(ctx) = rctx(c) else { return false };
-    member::formal_parameters(&ctx, element).into_iter().any(|p| {
-        name(c, base(c, p)) == Some("key") && implements_key(c, element_type(c, p))
-    })
+    member::formal_parameters(&ctx, element)
+        .into_iter()
+        .any(|p| name(c, base(c, p)) == Some("key") && implements_key(c, element_type(c, p)))
 }
 
 /// Dart `type.implementsInterface('Key', '')`.

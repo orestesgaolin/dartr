@@ -48,7 +48,10 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     });
     if !only_closures_after_child {
         let argument = *arguments.iter().find(|&&a| is_child_arg(c, a)).unwrap();
-        let name = lexeme(c, c.ast[c.ast.cast::<NamedArgument>(argument).unwrap()].name);
+        let name = lexeme(
+            c,
+            c.ast[c.ast.cast::<NamedArgument>(argument).unwrap()].name,
+        );
         c.report_node(out, &diag::SORT_CHILD_PROPERTIES_LAST, argument, &[name]);
     }
 }

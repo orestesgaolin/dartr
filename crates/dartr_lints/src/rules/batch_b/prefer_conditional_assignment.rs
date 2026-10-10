@@ -5,19 +5,26 @@ use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::IfStatement, "prefer_conditional_assignment", check);
+    r.add(
+        NodeKind::IfStatement,
+        "prefer_conditional_assignment",
+        check,
+    );
 }
 
 fn check_statement(c: &LinterContext<'_>, statement: NodeId, condition: NodeId) -> bool {
     if let Some(s) = c.ast.cast::<ExpressionStatement>(statement) {
         let expression = c.ast[s].expression.raw();
-        return c.ast.cast::<AssignmentExpression>(expression).is_some_and(|a| {
-            canonical_elements_from_identifiers_are_equal(
-                c,
-                Some(c.ast[a].left_hand_side.raw()),
-                Some(condition),
-            )
-        });
+        return c
+            .ast
+            .cast::<AssignmentExpression>(expression)
+            .is_some_and(|a| {
+                canonical_elements_from_identifiers_are_equal(
+                    c,
+                    Some(c.ast[a].left_hand_side.raw()),
+                    Some(condition),
+                )
+            });
     }
     if let Some(block) = c.ast.cast::<Block>(statement) {
         let statements = c.ast.list_raw(c.ast[block].statements);

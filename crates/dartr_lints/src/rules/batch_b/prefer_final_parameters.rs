@@ -9,9 +9,21 @@ pub fn register(r: &mut RuleVisitorRegistry, c: &LinterContext<'_>) {
     if c.is_feature_enabled(ExperimentalFlag::PrimaryConstructors) {
         return;
     }
-    r.add(NodeKind::ConstructorDeclaration, "prefer_final_parameters", check);
-    r.add(NodeKind::FunctionExpression, "prefer_final_parameters", check);
-    r.add(NodeKind::MethodDeclaration, "prefer_final_parameters", check);
+    r.add(
+        NodeKind::ConstructorDeclaration,
+        "prefer_final_parameters",
+        check,
+    );
+    r.add(
+        NodeKind::FunctionExpression,
+        "prefer_final_parameters",
+        check,
+    );
+    r.add(
+        NodeKind::MethodDeclaration,
+        "prefer_final_parameters",
+        check,
+    );
 }
 
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {

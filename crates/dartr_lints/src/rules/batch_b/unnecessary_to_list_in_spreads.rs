@@ -5,7 +5,11 @@ use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::SpreadElement, "unnecessary_to_list_in_spreads", check);
+    r.add(
+        NodeKind::SpreadElement,
+        "unnecessary_to_list_in_spreads",
+        check,
+    );
 }
 
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
@@ -18,6 +22,11 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         && let Some(target) = n.target
         && implements_interface(c, c.static_type(target), "Iterable", "dart.core")
     {
-        c.report_node(out, &diag::UNNECESSARY_TO_LIST_IN_SPREADS, n.method_name, &[]);
+        c.report_node(
+            out,
+            &diag::UNNECESSARY_TO_LIST_IN_SPREADS,
+            n.method_name,
+            &[],
+        );
     }
 }

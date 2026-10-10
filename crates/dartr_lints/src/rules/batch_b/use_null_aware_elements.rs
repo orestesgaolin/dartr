@@ -31,7 +31,9 @@ fn bang_reference(c: &LinterContext<'_>, node: NodeId) -> Option<Option<ElementI
 }
 
 fn spread_expression(c: &LinterContext<'_>, node: NodeId) -> Option<NodeId> {
-    c.ast.cast::<SpreadElement>(node).map(|s| c.ast[s].expression.raw())
+    c.ast
+        .cast::<SpreadElement>(node)
+        .map(|s| c.ast[s].expression.raw())
 }
 
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
@@ -72,8 +74,10 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             matched = Some(target) == reference;
         } else if let Some(entry) = c.ast.cast::<MapLiteralEntry>(then_element) {
             let (key, value) = (c.ast[entry].key.raw(), c.ast[entry].value.raw());
-            matched = (kind(c, key) == NodeKind::SimpleIdentifier && Some(target) == canonical_base(c, key))
-                || (kind(c, value) == NodeKind::SimpleIdentifier && Some(target) == canonical_base(c, value));
+            matched = (kind(c, key) == NodeKind::SimpleIdentifier
+                && Some(target) == canonical_base(c, key))
+                || (kind(c, value) == NodeKind::SimpleIdentifier
+                    && Some(target) == canonical_base(c, value));
         }
     } else if getter {
         let reference = bang_reference(c, then_element)
@@ -82,7 +86,8 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             matched = Some(target) == reference;
         } else if let Some(entry) = c.ast.cast::<MapLiteralEntry>(then_element) {
             let (key, value) = (c.ast[entry].key.raw(), c.ast[entry].value.raw());
-            matched = bang_reference(c, key) == Some(Some(target)) || bang_reference(c, value) == Some(Some(target));
+            matched = bang_reference(c, key) == Some(Some(target))
+                || bang_reference(c, value) == Some(Some(target));
         }
     }
     if matched {

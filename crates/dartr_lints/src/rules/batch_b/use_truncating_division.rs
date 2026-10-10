@@ -19,11 +19,15 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     if !is_int(n.left_operand) || !is_int(n.right_operand) {
         return;
     }
-    let Some(method) = c.element(node) else { return };
+    let Some(method) = c.element(node) else {
+        return;
+    };
     if library_uri(c, base(c, method)) != Some("dart:core") {
         return;
     }
-    let Some(parent) = c.ast.parent(node) else { return };
+    let Some(parent) = c.ast.parent(node) else {
+        return;
+    };
     if kind(c, parent) != NodeKind::ParenthesizedExpression {
         return;
     }

@@ -6,7 +6,11 @@ use dartr_diagnostics::{Diagnostic, diag};
 use dartr_element::TypeKind;
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::MethodDeclaration, "use_to_and_as_if_applicable", check);
+    r.add(
+        NodeKind::MethodDeclaration,
+        "use_to_and_as_if_applicable",
+        check,
+    );
 }
 
 /// Dart `_beginsWithAsOrTo`: `RegExp(r'(to|as|_to|_as)[A-Z]').matchAsPrefix(name)`.
@@ -47,9 +51,9 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     } else if let Some(b) = c.ast.cast::<BlockFunctionBody>(body) {
         let statements = c.ast.list_raw(c.ast[c.ast[b].block].statements);
         statements.len() == 1
-            && c.ast.cast::<ReturnStatement>(statements[0]).is_some_and(|r| {
-                check_expression(c, c.ast[r].expression.map(|e| e.raw()))
-            })
+            && c.ast
+                .cast::<ReturnStatement>(statements[0])
+                .is_some_and(|r| check_expression(c, c.ast[r].expression.map(|e| e.raw())))
     } else {
         false
     };

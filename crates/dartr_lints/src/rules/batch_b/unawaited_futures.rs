@@ -9,9 +9,17 @@ use dartr_diagnostics::{Diagnostic, diag};
 use dartr_typesystem::TypeExt;
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::ExpressionStatement, "unawaited_futures", statement);
+    r.add(
+        NodeKind::ExpressionStatement,
+        "unawaited_futures",
+        statement,
+    );
     r.add(NodeKind::CascadeExpression, "unawaited_futures", cascade);
-    r.add(NodeKind::InterpolationExpression, "unawaited_futures", interpolation);
+    r.add(
+        NodeKind::InterpolationExpression,
+        "unawaited_futures",
+        interpolation,
+    );
 }
 
 fn statement(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {

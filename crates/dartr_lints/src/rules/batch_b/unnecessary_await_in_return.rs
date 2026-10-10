@@ -12,15 +12,23 @@ pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
         "unnecessary_await_in_return",
         check,
     );
-    r.add(NodeKind::ReturnStatement, "unnecessary_await_in_return", check);
+    r.add(
+        NodeKind::ReturnStatement,
+        "unnecessary_await_in_return",
+        check,
+    );
 }
 
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let expression = match kind(c, node) {
-        NodeKind::ExpressionFunctionBody => {
-            Some(c.ast[Id::<ExpressionFunctionBody>::from_raw(node)].expression.raw())
-        }
-        _ => c.ast[Id::<ReturnStatement>::from_raw(node)].expression.map(|e| e.raw()),
+        NodeKind::ExpressionFunctionBody => Some(
+            c.ast[Id::<ExpressionFunctionBody>::from_raw(node)]
+                .expression
+                .raw(),
+        ),
+        _ => c.ast[Id::<ReturnStatement>::from_raw(node)]
+            .expression
+            .map(|e| e.raw()),
     };
     let Some(expression) = expression.map(|e| unparenthesized(c, e)) else {
         return;
@@ -43,7 +51,10 @@ fn visit(c: &LinterContext<'_>, node: NodeId, expression: NodeId, out: &mut Vec<
     }
     let Some(parent) = this_or_ancestor(c, node, |e| match kind(c, e) {
         NodeKind::FunctionExpression | NodeKind::MethodDeclaration => true,
-        NodeKind::Block => c.ast.parent(e).is_some_and(|p| kind(c, p) == NodeKind::TryStatement),
+        NodeKind::Block => c
+            .ast
+            .parent(e)
+            .is_some_and(|p| kind(c, p) == NodeKind::TryStatement),
         _ => false,
     }) else {
         return;

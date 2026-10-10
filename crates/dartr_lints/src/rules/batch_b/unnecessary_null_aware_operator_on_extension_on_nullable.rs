@@ -59,7 +59,10 @@ fn index(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     // Dart `inSetterContext()`.
     let in_setter_context = c.ast.parent(node).is_some_and(|p| match kind(c, p) {
         NodeKind::AssignmentExpression => {
-            c.ast[Id::<AssignmentExpression>::from_raw(p)].left_hand_side.raw() == node
+            c.ast[Id::<AssignmentExpression>::from_raw(p)]
+                .left_hand_side
+                .raw()
+                == node
         }
         NodeKind::PrefixExpression => {
             let pe = &c.ast[Id::<PrefixExpression>::from_raw(p)];
@@ -72,12 +75,18 @@ fn index(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         _ => false,
     });
     let enclosing_element = if in_setter_context {
-        this_or_ancestor_kind(c, node, NodeKind::AssignmentExpression).and_then(|a| write_enclosing(c, a))
+        this_or_ancestor_kind(c, node, NodeKind::AssignmentExpression)
+            .and_then(|a| write_enclosing(c, a))
     } else {
         c.element(node).and_then(|e| enclosing(c, base(c, e)))
     };
     if is_extension_on_nullable_type(c, enclosing_element) {
-        c.report_token(out, &diag::UNNECESSARY_NULL_AWARE_OPERATOR_ON_EXTENSION_ON_NULLABLE, question, &[]);
+        c.report_token(
+            out,
+            &diag::UNNECESSARY_NULL_AWARE_OPERATOR_ON_EXTENSION_ON_NULLABLE,
+            question,
+            &[],
+        );
     }
 }
 
@@ -87,9 +96,16 @@ fn method(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     if !matches!(lexeme(c, operator), "?." | "?..") || !target_is_override_or_nullable(c, node) {
         return;
     }
-    let enclosing_element = c.element(n.method_name).and_then(|e| enclosing(c, base(c, e)));
+    let enclosing_element = c
+        .element(n.method_name)
+        .and_then(|e| enclosing(c, base(c, e)));
     if is_extension_on_nullable_type(c, enclosing_element) {
-        c.report_token(out, &diag::UNNECESSARY_NULL_AWARE_OPERATOR_ON_EXTENSION_ON_NULLABLE, operator, &[]);
+        c.report_token(
+            out,
+            &diag::UNNECESSARY_NULL_AWARE_OPERATOR_ON_EXTENSION_ON_NULLABLE,
+            operator,
+            &[],
+        );
     }
 }
 
@@ -101,9 +117,16 @@ fn property(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let real_parent = ancestors(c, node).find(|&p| kind(c, p) != NodeKind::ParenthesizedExpression);
     let enclosing_element = match real_parent {
         Some(p) if kind(c, p) == NodeKind::AssignmentExpression => write_enclosing(c, p),
-        _ => c.element(n.property_name).and_then(|e| enclosing(c, base(c, e))),
+        _ => c
+            .element(n.property_name)
+            .and_then(|e| enclosing(c, base(c, e))),
     };
     if is_extension_on_nullable_type(c, enclosing_element) {
-        c.report_token(out, &diag::UNNECESSARY_NULL_AWARE_OPERATOR_ON_EXTENSION_ON_NULLABLE, n.operator, &[]);
+        c.report_token(
+            out,
+            &diag::UNNECESSARY_NULL_AWARE_OPERATOR_ON_EXTENSION_ON_NULLABLE,
+            n.operator,
+            &[],
+        );
     }
 }

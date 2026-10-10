@@ -38,7 +38,13 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
 }
 
 /// Dart `_checkConstant`.
-fn check_constant(c: &LinterContext<'_>, node: NodeId, value: i64, operator: &str, out: &mut Vec<Diagnostic>) {
+fn check_constant(
+    c: &LinterContext<'_>,
+    node: NodeId,
+    value: i64,
+    operator: &str,
+    out: &mut Vec<Diagnostic>,
+) {
     let code = if value == -1 {
         match operator {
             "==" | "!=" | "<=" | ">" => Some(&diag::PREFER_CONTAINS_USE_CONTAINS),
@@ -72,7 +78,10 @@ fn is_unassigned_index_of(c: &LinterContext<'_>, expression: NodeId) -> bool {
     let Some(m) = c.ast.cast::<MethodInvocation>(invocation) else {
         return false;
     };
-    if c.ast.parent(invocation).is_some_and(|p| kind(c, p) == NodeKind::AssignmentExpression) {
+    if c.ast
+        .parent(invocation)
+        .is_some_and(|p| kind(c, p) == NodeKind::AssignmentExpression)
+    {
         return false;
     }
     let n = &c.ast[m];
@@ -82,7 +91,11 @@ fn is_unassigned_index_of(c: &LinterContext<'_>, expression: NodeId) -> bool {
     let Some(parent_type) = n.target.and_then(|t| c.static_type(t)) else {
         return false;
     };
-    if !implements_any_interface(c, Some(parent_type), &[("Iterable", "dart.core"), ("String", "dart.core")]) {
+    if !implements_any_interface(
+        c,
+        Some(parent_type),
+        &[("Iterable", "dart.core"), ("String", "dart.core")],
+    ) {
         return false;
     }
     let args = arguments(c, n.argument_list);

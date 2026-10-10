@@ -21,7 +21,10 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let is_nullable_bool = c
         .static_type(n.left_operand)
         .is_some_and(|t| ctx.is_dart_core_bool(t) && ts.is_nullable(t));
-    let right = c.ast.cast::<BooleanLiteral>(n.right_operand.raw()).map(|b| c.ast[b].value);
+    let right = c
+        .ast
+        .cast::<BooleanLiteral>(n.right_operand.raw())
+        .map(|b| c.ast[b].value);
     let operator = lexeme(c, n.operator);
     if operator == "==" && is_nullable_bool && right == Some(true) {
         c.report_node(out, &diag::USE_IF_NULL_TO_CONVERT_NULLS_TO_BOOLS, node, &[]);

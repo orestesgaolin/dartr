@@ -10,8 +10,16 @@ pub fn register(r: &mut RuleVisitorRegistry, c: &LinterContext<'_>) {
     if !c.is_feature_enabled(ExperimentalFlag::WildcardVariables) {
         return;
     }
-    r.add(NodeKind::FormalParameterList, "unnecessary_underscores", parameters_check);
-    r.add(NodeKind::VariableDeclaration, "unnecessary_underscores", variable);
+    r.add(
+        NodeKind::FormalParameterList,
+        "unnecessary_underscores",
+        parameters_check,
+    );
+    r.add(
+        NodeKind::VariableDeclaration,
+        "unnecessary_underscores",
+        variable,
+    );
 }
 
 /// Dart `isJustUnderscores` of the rule (`length > 1`).
@@ -21,7 +29,11 @@ fn is_just_underscores_name(name: Option<&str>) -> bool {
 
 /// Dart `collectReferences`: the elements of the simple identifiers of
 /// [body] and [comment].
-fn collect_references(c: &LinterContext<'_>, body: Option<NodeId>, comment: Option<NodeId>) -> IndexSet<ElementId> {
+fn collect_references(
+    c: &LinterContext<'_>,
+    body: Option<NodeId>,
+    comment: Option<NodeId>,
+) -> IndexSet<ElementId> {
     let mut result = IndexSet::new();
     let Some(body) = body else { return result };
     let mut stack = vec![body];
@@ -44,7 +56,11 @@ fn collect_references(c: &LinterContext<'_>, body: Option<NodeId>, comment: Opti
 
 fn parameters_check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let mut just_underscores = Vec::new();
-    for parameter in c.ast.list_raw(c.ast[Id::<FormalParameterList>::from_raw(node)].parameters).to_vec() {
+    for parameter in c
+        .ast
+        .list_raw(c.ast[Id::<FormalParameterList>::from_raw(node)].parameters)
+        .to_vec()
+    {
         if super::prefer_iterable_wheretype::parameter_name(c, parameter).is_none() {
             continue;
         }
@@ -71,7 +87,11 @@ fn parameters_check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnosti
     let references = match function_declaration {
         Some(f) if kind(c, f) == NodeKind::ConstructorDeclaration => {
             let n = &c.ast[Id::<ConstructorDeclaration>::from_raw(f)];
-            collect_references(c, Some(n.body.raw()), n.documentation_comment.map(|d| d.raw()))
+            collect_references(
+                c,
+                Some(n.body.raw()),
+                n.documentation_comment.map(|d| d.raw()),
+            )
         }
         Some(f) if kind(c, f) == NodeKind::FunctionDeclaration => {
             let n = &c.ast[Id::<FunctionDeclaration>::from_raw(f)];
@@ -83,7 +103,11 @@ fn parameters_check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnosti
         }
         Some(f) if kind(c, f) == NodeKind::MethodDeclaration => {
             let n = &c.ast[Id::<MethodDeclaration>::from_raw(f)];
-            collect_references(c, Some(n.body.raw()), n.documentation_comment.map(|d| d.raw()))
+            collect_references(
+                c,
+                Some(n.body.raw()),
+                n.documentation_comment.map(|d| d.raw()),
+            )
         }
         Some(f) if kind(c, f) == NodeKind::PrimaryConstructorDeclaration => {
             match super::tighten_type_of_initializing_formals::primary_constructor_body(c, f) {
@@ -101,9 +125,15 @@ fn parameters_check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnosti
         let element = c.declared_element(parameter);
         if element.is_none_or(|e| !references.contains(&e)) {
             let token = match kind(c, parameter) {
-                NodeKind::RegularFormalParameter => c.ast[Id::<RegularFormalParameter>::from_raw(parameter)].name,
-                NodeKind::FieldFormalParameter => Some(c.ast[Id::<FieldFormalParameter>::from_raw(parameter)].name),
-                NodeKind::SuperFormalParameter => Some(c.ast[Id::<SuperFormalParameter>::from_raw(parameter)].name),
+                NodeKind::RegularFormalParameter => {
+                    c.ast[Id::<RegularFormalParameter>::from_raw(parameter)].name
+                }
+                NodeKind::FieldFormalParameter => {
+                    Some(c.ast[Id::<FieldFormalParameter>::from_raw(parameter)].name)
+                }
+                NodeKind::SuperFormalParameter => {
+                    Some(c.ast[Id::<SuperFormalParameter>::from_raw(parameter)].name)
+                }
                 _ => None,
             };
             if let Some(token) = token {

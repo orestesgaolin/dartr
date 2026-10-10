@@ -23,9 +23,20 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
 }
 
 /// Dart `_check`.
-fn check_value(c: &LinterContext<'_>, node: NodeId, value: i64, constant_on_right: bool, out: &mut Vec<Diagnostic>) {
-    if let Some(initializer) = this_or_ancestor(c, node, |n| ConstructorInitializer::test(kind(c, n))) {
-        let declaration = c.ast.parent(initializer).and_then(|p| c.ast.cast::<ConstructorDeclaration>(p));
+fn check_value(
+    c: &LinterContext<'_>,
+    node: NodeId,
+    value: i64,
+    constant_on_right: bool,
+    out: &mut Vec<Diagnostic>,
+) {
+    if let Some(initializer) =
+        this_or_ancestor(c, node, |n| ConstructorInitializer::test(kind(c, n)))
+    {
+        let declaration = c
+            .ast
+            .parent(initializer)
+            .and_then(|p| c.ast.cast::<ConstructorDeclaration>(p));
         match declaration {
             Some(d) if c.ast[d].const_keyword.is_none() => {}
             _ => return,
@@ -89,7 +100,10 @@ fn is_length_access(c: &LinterContext<'_>, operand: NodeId) -> bool {
     let (identifier, ty) = if let Some(p) = c.ast.cast::<PrefixedIdentifier>(node) {
         (c.ast[p].identifier, c.static_type(c.ast[p].prefix))
     } else if let Some(p) = c.ast.cast::<PropertyAccess>(node) {
-        (c.ast[p].property_name, c.ast[p].target.and_then(|t| c.static_type(t)))
+        (
+            c.ast[p].property_name,
+            c.ast[p].target.and_then(|t| c.static_type(t)),
+        )
     } else {
         return false;
     };

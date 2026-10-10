@@ -8,8 +8,16 @@ use dartr_element::{ElementId, ExecutableElement, Tag, TypeId, TypeKind, Varianc
 use dartr_typesystem::TypeExt;
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::MethodDeclaration, "unsafe_variance", visit_method_declaration);
-    r.add(NodeKind::VariableDeclarationList, "unsafe_variance", visit_variable_declaration_list);
+    r.add(
+        NodeKind::MethodDeclaration,
+        "unsafe_variance",
+        visit_method_declaration,
+    );
+    r.add(
+        NodeKind::VariableDeclarationList,
+        "unsafe_variance",
+        visit_variable_declaration_list,
+    );
 }
 
 /// Dart `_UnsafeVarianceChecker.owningDeclarationSupportsVariance`.
@@ -28,7 +36,13 @@ fn owning_declaration_supports_variance(c: &LinterContext<'_>, element: ElementI
 }
 
 /// Dart `_UnsafeVarianceChecker.checkNamedType`.
-fn check_named_type(c: &LinterContext<'_>, variance: Variance, static_type: TypeId, type_annotation: NodeId, out: &mut Vec<Diagnostic>) {
+fn check_named_type(
+    c: &LinterContext<'_>,
+    variance: Variance,
+    static_type: TypeId,
+    type_annotation: NodeId,
+    out: &mut Vec<Diagnostic>,
+) {
     let Some(ctx) = rctx(c) else { return };
     if let TypeKind::TypeParameter { param, .. } = *ctx.ty(static_type) {
         if !owning_declaration_supports_variance(c, param.raw()) {
@@ -44,7 +58,10 @@ fn checker<'c, 'a>(
     c: &'c LinterContext<'a>,
     reports: &'c mut Vec<(Variance, TypeId, NodeId)>,
 ) -> VarianceChecker<'c, 'a, impl FnMut(Variance, TypeId, NodeId) + 'c> {
-    VarianceChecker { c, check_named_type: move |v, t, n| reports.push((v, t, n)) }
+    VarianceChecker {
+        c,
+        check_named_type: move |v, t, n| reports.push((v, t, n)),
+    }
 }
 
 fn visit_method_declaration(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
@@ -69,7 +86,11 @@ fn visit_method_declaration(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<D
 
 fn visit_variable_declaration_list(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let mut reports = Vec::new();
-    checker(c, &mut reports).check_out(c.ast[Id::<VariableDeclarationList>::from_raw(node)].type_.map(|t| t.raw()));
+    checker(c, &mut reports).check_out(
+        c.ast[Id::<VariableDeclarationList>::from_raw(node)]
+            .type_
+            .map(|t| t.raw()),
+    );
     for (variance, ty, annotation) in reports {
         check_named_type(c, variance, ty, annotation, out);
     }

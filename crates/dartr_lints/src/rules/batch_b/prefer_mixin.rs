@@ -3,8 +3,8 @@ use super::util::*;
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
-use dartr_typesystem::TypeExt;
 use dartr_element::{FragmentFlags, Tag};
+use dartr_typesystem::TypeExt;
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
     r.add(NodeKind::WithClause, "prefer_mixin", check);
@@ -12,8 +12,18 @@ pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
 
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(ctx) = rctx(c) else { return };
-    for &mixin in c.ast.list(c.ast[Id::<WithClause>::from_raw(node)].mixin_types) {
-        let Some(ty) = c.resolved.unwrap().tables.annotation_type.get(mixin.raw()).copied() else {
+    for &mixin in c
+        .ast
+        .list(c.ast[Id::<WithClause>::from_raw(node)].mixin_types)
+    {
+        let Some(ty) = c
+            .resolved
+            .unwrap()
+            .tables
+            .annotation_type
+            .get(mixin.raw())
+            .copied()
+        else {
             continue;
         };
         let Some(element) = ctx.interface_element(ty) else {

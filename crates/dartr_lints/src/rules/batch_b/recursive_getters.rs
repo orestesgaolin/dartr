@@ -30,7 +30,12 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
 }
 
 /// Dart `_BodyVisitor`.
-fn verify_element(c: &LinterContext<'_>, root: NodeId, element: Option<ElementId>, out: &mut Vec<Diagnostic>) {
+fn verify_element(
+    c: &LinterContext<'_>,
+    root: NodeId,
+    element: Option<ElementId>,
+    out: &mut Vec<Diagnostic>,
+) {
     let Some(element) = element else { return };
     let mut stack = vec![root];
     while let Some(n) = stack.pop() {
@@ -68,9 +73,10 @@ fn is_self_reference(c: &LinterContext<'_>, node: NodeId, element: ElementId) ->
     }
     match c.ast.parent(node) {
         Some(p) if kind(c, p) == NodeKind::PrefixedIdentifier => false,
-        Some(p) if kind(c, p) == NodeKind::PropertyAccess => c.ast[Id::<PropertyAccess>::from_raw(p)]
-            .target
-            .is_some_and(|t| kind(c, t) == NodeKind::ThisExpression),
+        Some(p) if kind(c, p) == NodeKind::PropertyAccess => c.ast
+            [Id::<PropertyAccess>::from_raw(p)]
+        .target
+        .is_some_and(|t| kind(c, t) == NodeKind::ThisExpression),
         _ => true,
     }
 }

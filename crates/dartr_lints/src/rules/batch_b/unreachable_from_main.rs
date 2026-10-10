@@ -9,7 +9,11 @@ use dartr_typesystem::inheritance_manager3::{InheritanceManager3, Name};
 use indexmap::{IndexMap, IndexSet};
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::CompilationUnit, "unreachable_from_main", visit_compilation_unit);
+    r.add(
+        NodeKind::CompilationUnit,
+        "unreachable_from_main",
+        visit_compilation_unit,
+    );
 }
 
 /// A declaration: the index of its unit and its node.
@@ -24,8 +28,16 @@ fn is_private(c: &LinterContext<'_>, element: ElementId) -> bool {
 }
 
 /// Dart `_DeclarationGatherer.addDeclarations`.
-fn add_declarations(c: &LinterContext<'_>, unit: usize, root: NodeId, declarations: &mut IndexSet<Decl>) {
-    for &declaration in c.ast.list_raw(c.ast[Id::<CompilationUnit>::from_raw(root)].declarations) {
+fn add_declarations(
+    c: &LinterContext<'_>,
+    unit: usize,
+    root: NodeId,
+    declarations: &mut IndexSet<Decl>,
+) {
+    for &declaration in c
+        .ast
+        .list_raw(c.ast[Id::<CompilationUnit>::from_raw(root)].declarations)
+    {
         if let Some(variables) = c.ast.cast::<TopLevelVariableDeclaration>(declaration) {
             let list = c.ast[variables].variables;
             for &variable in c.ast.list_raw(c.ast[list].variables) {
@@ -34,12 +46,16 @@ fn add_declarations(c: &LinterContext<'_>, unit: usize, root: NodeId, declaratio
             continue;
         }
         declarations.insert((unit, declaration));
-        let Some(element) = c.declared_element(declaration) else { continue };
+        let Some(element) = c.declared_element(declaration) else {
+            continue;
+        };
         if is_private(c, element) {
             continue;
         }
         let container = match kind(c, declaration) {
-            NodeKind::ClassDeclaration | NodeKind::EnumDeclaration | NodeKind::MixinDeclaration => Some(element),
+            NodeKind::ClassDeclaration | NodeKind::EnumDeclaration | NodeKind::MixinDeclaration => {
+                Some(element)
+            }
             NodeKind::ExtensionDeclaration | NodeKind::ExtensionTypeDeclaration => None,
             _ => continue,
         };
@@ -57,11 +73,17 @@ fn add_members(
     declarations: &mut IndexSet<Decl>,
 ) {
     let is_override = |element: Option<ElementId>| -> bool {
-        let Some(container) = container.and_then(|e| e.cast::<InterfaceElement>()) else { return false };
+        let Some(container) = container.and_then(|e| e.cast::<InterfaceElement>()) else {
+            return false;
+        };
         let Some(element) = element else { return false };
         let Some(ctx) = rctx(c) else { return false };
-        let Some(name) = Name::for_element(&ctx, ElemRef::Base(element)) else { return false };
-        InheritanceManager3::new(ctx).get_overridden(container, name).is_some()
+        let Some(name) = Name::for_element(&ctx, ElemRef::Base(element)) else {
+            return false;
+        };
+        InheritanceManager3::new(ctx)
+            .get_overridden(container, name)
+            .is_some()
     };
     for member in members {
         match kind(c, member) {
@@ -77,7 +99,9 @@ fn add_members(
             NodeKind::FieldDeclaration => {
                 let fields = c.ast[Id::<FieldDeclaration>::from_raw(member)].fields;
                 for &field in c.ast.list_raw(c.ast[fields].variables) {
-                    let Some(element) = c.declared_element(field) else { continue };
+                    let Some(element) = c.declared_element(field) else {
+                        continue;
+                    };
                     if element.tag() == Tag::Field && !is_private(c, element) {
                         let getter = rctx(c).and_then(|ctx| match ctx.any(element) {
                             dartr_element::AnyElement::Field(f) => f.getter.map(|g| g.raw()),
@@ -96,7 +120,10 @@ fn add_members(
                     let raw_name = lexeme(c, c.ast[Id::<MethodDeclaration>::from_raw(member)].name);
                     let is_test_method = raw_name.starts_with("test_")
                         || raw_name.starts_with("solo_test_")
-                        || matches!(raw_name, "setUp" | "tearDown" | "setUpClass" | "tearDownClass");
+                        || matches!(
+                            raw_name,
+                            "setUp" | "tearDown" | "setUpClass" | "tearDownClass"
+                        );
                     if !is_override(Some(element)) && !is_test_method {
                         declarations.insert((unit, member));
                     }
@@ -115,7 +142,9 @@ fn visit_compilation_unit(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Dia
     if c.resolved.is_none() {
         return;
     }
-    let units: Vec<LinterContext<'_>> = (0..c.resolved_units.len()).filter_map(|i| unit_context(c, i)).collect();
+    let units: Vec<LinterContext<'_>> = (0..c.resolved_units.len())
+        .filter_map(|i| unit_context(c, i))
+        .collect();
     if units.len() != c.resolved_units.len() {
         return;
     }
@@ -123,8 +152,11 @@ fn visit_compilation_unit(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Dia
     for (index, unit) in units.iter().enumerate() {
         add_declarations(unit, index, c.resolved_units[index].unit, &mut declarations);
     }
-    let entry_points: Vec<Decl> =
-        declarations.iter().copied().filter(|&(u, d)| is_entry_point(&units[u], u, d)).collect();
+    let entry_points: Vec<Decl> = declarations
+        .iter()
+        .copied()
+        .filter(|&(u, d)| is_entry_point(&units[u], u, d))
+        .collect();
     if entry_points.is_empty() {
         return;
     }
@@ -132,12 +164,18 @@ fn visit_compilation_unit(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Dia
     let mut declaration_by_element: IndexMap<ElementId, Decl> = IndexMap::new();
     for &(u, d) in &declarations {
         let uc = &units[u];
-        let Some(element) = uc.declared_element(d) else { continue };
+        let Some(element) = uc.declared_element(d) else {
+            continue;
+        };
         declaration_by_element.insert(element, (u, d));
         if let Some(ctx) = rctx(uc) {
             let (getter, setter) = match ctx.any(element) {
-                dartr_element::AnyElement::TopLevelVariable(v) => (v.getter.map(|g| g.raw()), v.setter.map(|s| s.raw())),
-                dartr_element::AnyElement::Field(f) => (f.getter.map(|g| g.raw()), f.setter.map(|s| s.raw())),
+                dartr_element::AnyElement::TopLevelVariable(v) => {
+                    (v.getter.map(|g| g.raw()), v.setter.map(|s| s.raw()))
+                }
+                dartr_element::AnyElement::Field(f) => {
+                    (f.getter.map(|g| g.raw()), f.setter.map(|s| s.raw()))
+                }
                 _ => (None, None),
             };
             if let Some(getter) = getter {
@@ -173,11 +211,19 @@ fn visit_compilation_unit(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Dia
 
     let mut unit_declarations = IndexSet::new();
     add_declarations(c, c.current_unit, node, &mut unit_declarations);
-    let unused_declarations: IndexSet<Decl> =
-        unit_declarations.iter().copied().filter(|d| !used_members.contains(d)).collect();
+    let unused_declarations: IndexSet<Decl> = unit_declarations
+        .iter()
+        .copied()
+        .filter(|d| !used_members.contains(d))
+        .collect();
     for &(_, member) in &unused_declarations {
-        let Some(element) = c.declared_element(member) else { continue };
-        if is_private(c, element) || has_visible_for_testing(c, element) || has_widget_preview(c, element) {
+        let Some(element) = c.declared_element(member) else {
+            continue;
+        };
+        if is_private(c, element)
+            || has_visible_for_testing(c, element)
+            || has_widget_preview(c, element)
+        {
             continue;
         }
         let enclosing_declaration = c
@@ -197,25 +243,45 @@ fn visit_compilation_unit(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Dia
 
 /// Dart `_Visitor._isEntryPoint`.
 fn is_entry_point(c: &LinterContext<'_>, unit: usize, node: NodeId) -> bool {
-    let Some(function) = c.ast.cast::<FunctionDeclaration>(node) else { return false };
+    let Some(function) = c.ast.cast::<FunctionDeclaration>(node) else {
+        return false;
+    };
     let f = &c.ast[function];
-    lexeme(c, f.name) == "main" || c.ast.list(f.metadata).iter().any(|&a| is_exempting_annotation(c, unit, a))
+    lexeme(c, f.name) == "main"
+        || c.ast
+            .list(f.metadata)
+            .iter()
+            .any(|&a| is_exempting_annotation(c, unit, a))
 }
 
 /// Dart `Annotation._elementType`.
-fn annotation_element_type(c: &LinterContext<'_>, annotation: Id<Annotation>) -> Option<dartr_element::TypeId> {
+fn annotation_element_type(
+    c: &LinterContext<'_>,
+    annotation: Id<Annotation>,
+) -> Option<dartr_element::TypeId> {
     let ctx = rctx(c)?;
     let element = c.element(annotation)?;
     match base(c, element).tag() {
-        Tag::Constructor | Tag::Getter => Some(dartr_typesystem::member::return_type(&ctx, element)),
+        Tag::Constructor | Tag::Getter => {
+            Some(dartr_typesystem::member::return_type(&ctx, element))
+        }
         _ => None,
     }
 }
 
-fn annotation_type_is(c: &LinterContext<'_>, annotation: Id<Annotation>, library: &str, type_name: &str) -> bool {
+fn annotation_type_is(
+    c: &LinterContext<'_>,
+    annotation: Id<Annotation>,
+    library: &str,
+    type_name: &str,
+) -> bool {
     let Some(ctx) = rctx(c) else { return false };
-    let Some(ty) = annotation_element_type(c, annotation) else { return false };
-    let Some(element) = ctx.interface_element(ty) else { return false };
+    let Some(ty) = annotation_element_type(c, annotation) else {
+        return false;
+    };
+    let Some(element) = ctx.interface_element(ty) else {
+        return false;
+    };
     name(c, element.raw()) == Some(type_name) && library_uri(c, element.raw()) == Some(library)
 }
 
@@ -223,11 +289,18 @@ fn annotation_type_is(c: &LinterContext<'_>, annotation: Id<Annotation>, library
 fn is_exempting_annotation(c: &LinterContext<'_>, unit: usize, annotation: Id<Annotation>) -> bool {
     if annotation_type_is(c, annotation, "dart:core", "pragma") {
         // Dart `_isValidVmEntryPoint`.
-        let Some(metadata) = c.resolved.and_then(|r| r.metadata) else { return false };
-        let Some(value) = metadata.annotation_value(AnnotationRef { unit: unit as u32, node: annotation.raw() }) else {
+        let Some(metadata) = c.resolved.and_then(|r| r.metadata) else {
             return false;
         };
-        let Some(name) = value.get_field("name") else { return false };
+        let Some(value) = metadata.annotation_value(AnnotationRef {
+            unit: unit as u32,
+            node: annotation.raw(),
+        }) else {
+            return false;
+        };
+        let Some(name) = value.get_field("name") else {
+            return false;
+        };
         return name.has_known_value() && name.to_string_value() == Some("vm:entry-point");
     }
     annotation_type_is(c, annotation, WIDGET_PREVIEWS_URI, "Preview")
@@ -243,7 +316,11 @@ fn has_widget_preview(c: &LinterContext<'_>, element: ElementId) -> bool {
         && !is_private(c, element)
         && c.has_annotation_where(element, |ctx, a| {
             a.tag() == Tag::Constructor
-                && ctx.element_data(a).and_then(|d| d.enclosing).and_then(|e| ctx.element_name(e)) == Some("Preview")
+                && ctx
+                    .element_data(a)
+                    .and_then(|d| d.enclosing)
+                    .and_then(|e| ctx.element_name(e))
+                    == Some("Preview")
                 && dartr_typesystem::member::library(ctx, ElemRef::Base(a))
                     .is_some_and(|l| ctx.library_uri(l) == WIDGET_PREVIEWS_URI)
         })
@@ -253,11 +330,19 @@ fn has_widget_preview(c: &LinterContext<'_>, element: ElementId) -> bool {
 fn name_for_error(c: &LinterContext<'_>, node: NodeId) -> String {
     let token = |t| lexeme(c, t).to_string();
     match kind(c, node) {
-        NodeKind::ClassDeclaration | NodeKind::EnumDeclaration | NodeKind::ExtensionTypeDeclaration => {
+        NodeKind::ClassDeclaration
+        | NodeKind::EnumDeclaration
+        | NodeKind::ExtensionTypeDeclaration => {
             let name_part = match kind(c, node) {
-                NodeKind::ClassDeclaration => c.ast[Id::<ClassDeclaration>::from_raw(node)].name_part.raw(),
-                NodeKind::EnumDeclaration => c.ast[Id::<EnumDeclaration>::from_raw(node)].name_part.raw(),
-                _ => c.ast[Id::<ExtensionTypeDeclaration>::from_raw(node)].name_part.raw(),
+                NodeKind::ClassDeclaration => c.ast[Id::<ClassDeclaration>::from_raw(node)]
+                    .name_part
+                    .raw(),
+                NodeKind::EnumDeclaration => {
+                    c.ast[Id::<EnumDeclaration>::from_raw(node)].name_part.raw()
+                }
+                _ => c.ast[Id::<ExtensionTypeDeclaration>::from_raw(node)]
+                    .name_part
+                    .raw(),
             };
             if let Some(n) = c.ast.cast::<NameWithTypeParameters>(name_part) {
                 token(c.ast[n].type_name)
@@ -282,17 +367,23 @@ fn name_for_error(c: &LinterContext<'_>, node: NodeId) -> String {
                 .unwrap_or_else(|| "unknown".to_string());
             format!("{type_name}.{name}")
         }
-        NodeKind::EnumConstantDeclaration => token(c.ast[Id::<EnumConstantDeclaration>::from_raw(node)].name),
+        NodeKind::EnumConstantDeclaration => {
+            token(c.ast[Id::<EnumConstantDeclaration>::from_raw(node)].name)
+        }
         NodeKind::ExtensionDeclaration => c.ast[Id::<ExtensionDeclaration>::from_raw(node)]
             .name
             .map_or("the unnamed extension".to_string(), token),
-        NodeKind::FunctionDeclaration => token(c.ast[Id::<FunctionDeclaration>::from_raw(node)].name),
+        NodeKind::FunctionDeclaration => {
+            token(c.ast[Id::<FunctionDeclaration>::from_raw(node)].name)
+        }
         NodeKind::MethodDeclaration => token(c.ast[Id::<MethodDeclaration>::from_raw(node)].name),
         NodeKind::MixinDeclaration => token(c.ast[Id::<MixinDeclaration>::from_raw(node)].name),
         NodeKind::ClassTypeAlias => token(c.ast[Id::<ClassTypeAlias>::from_raw(node)].name),
         NodeKind::FunctionTypeAlias => token(c.ast[Id::<FunctionTypeAlias>::from_raw(node)].name),
         NodeKind::GenericTypeAlias => token(c.ast[Id::<GenericTypeAlias>::from_raw(node)].name),
-        NodeKind::VariableDeclaration => token(c.ast[Id::<VariableDeclaration>::from_raw(node)].name),
+        NodeKind::VariableDeclaration => {
+            token(c.ast[Id::<VariableDeclaration>::from_raw(node)].name)
+        }
         _ => String::new(),
     }
 }
@@ -369,7 +460,9 @@ impl ReferenceVisitor<'_, '_> {
                 }
             }
             NodeKind::ExtensionTypeDeclaration => {
-                if let Some(clause) = c.ast[Id::<ExtensionTypeDeclaration>::from_raw(node)].implements_clause {
+                if let Some(clause) =
+                    c.ast[Id::<ExtensionTypeDeclaration>::from_raw(node)].implements_clause
+                {
                     for &t in c.ast.list(c.ast[clause].interfaces) {
                         self.add_named_type(t.raw());
                     }
@@ -396,7 +489,10 @@ impl ReferenceVisitor<'_, '_> {
                 }
             }
             NodeKind::VariableDeclaration => {
-                if let Some(list) = c.ast.parent(node).and_then(|p| c.ast.cast::<VariableDeclarationList>(p))
+                if let Some(list) = c
+                    .ast
+                    .parent(node)
+                    .and_then(|p| c.ast.cast::<VariableDeclarationList>(p))
                     && let Some(ty) = c.ast[list].type_
                 {
                     self.visit(ty.raw());
@@ -423,27 +519,38 @@ impl ReferenceVisitor<'_, '_> {
                 self.add_named_type(t.raw());
             }
         }
-        let Some(element) = c.declared_element(node) else { return };
+        let Some(element) = c.declared_element(node) else {
+            return;
+        };
         let has_constructors = c.ast.cast::<BlockClassBody>(n.body.raw()).is_some_and(|b| {
-            c.ast.list_raw(c.ast[b].members).iter().any(|&m| kind(c, m) == NodeKind::ConstructorDeclaration)
+            c.ast
+                .list_raw(c.ast[b].members)
+                .iter()
+                .any(|&m| kind(c, m) == NodeKind::ConstructorDeclaration)
         });
         if !has_constructors {
             self.add_default_super_constructor_declaration(node);
         }
         let Some(ctx) = rctx(c) else { return };
-        let Some(metadata) = c.resolved.and_then(|r| r.metadata) else { return };
+        let Some(metadata) = c.resolved.and_then(|r| r.metadata) else {
+            return;
+        };
         for annotation in metadata.annotations(element) {
             let is_reflective_test = metadata.annotation_element(annotation).is_some_and(|a| {
                 a.tag() == Tag::Getter
                     && ctx.element_name(a) == Some("reflectiveTest")
                     && dartr_typesystem::member::library(&ctx, ElemRef::Base(a)).is_some_and(|l| {
-                        ctx.library_uri(l) == "package:test_reflective_loader/test_reflective_loader.dart"
+                        ctx.library_uri(l)
+                            == "package:test_reflective_loader/test_reflective_loader.dart"
                     })
             });
             if is_reflective_test
                 && let Some(interface) = element.cast::<InterfaceElement>()
-                && let Some(&constructor) =
-                    ctx.interface(interface).constructors.iter().find(|k| name(c, k.raw()) == Some("new"))
+                && let Some(&constructor) = ctx
+                    .interface(interface)
+                    .constructors
+                    .iter()
+                    .find(|k| name(c, k.raw()) == Some("new"))
             {
                 self.add_declaration(ElemRef::Base(constructor.raw()));
             }
@@ -452,19 +559,26 @@ impl ReferenceVisitor<'_, '_> {
 
     fn visit_named_type(&mut self, node: NodeId) {
         let c = self.c;
-        let Some(element) = self.element(node) else { return };
+        let Some(element) = self.element(node) else {
+            return;
+        };
         let n = &c.ast[Id::<NamedType>::from_raw(node)];
         let ty = annotation_type(c, node);
         let ctx = rctx(c);
-        let has_alias = ty.zip(ctx).is_some_and(|(t, ctx)| ctx.type_alias(t).is_some());
+        let has_alias = ty
+            .zip(ctx)
+            .is_some_and(|(t, ctx)| ctx.type_alias(t).is_some());
         let is_extension_type = ty
             .zip(ctx)
             .and_then(|(t, ctx)| ctx.interface_element(t))
             .is_some_and(|e| e.raw().tag() == Tag::ExtensionType);
-        let in_type_argument = this_or_ancestor(c, node, |a| kind(c, a) == NodeKind::TypeArgumentList).is_some();
+        let in_type_argument =
+            this_or_ancestor(c, node, |a| kind(c, a) == NodeKind::TypeArgumentList).is_some();
         if has_alias
             || is_extension_type
-            || c.ast.parent(node).is_some_and(|p| kind(c, p) == NodeKind::TypeLiteral)
+            || c.ast
+                .parent(node)
+                .is_some_and(|p| kind(c, p) == NodeKind::TypeLiteral)
             || in_type_argument
             || is_in_external_variable_type_or_function_return_type(c, node)
         {
@@ -497,7 +611,9 @@ impl ReferenceVisitor<'_, '_> {
         if is_private(c, element) {
             return;
         }
-        let Some(enclosing_element) = enclosing(c, element) else { return };
+        let Some(enclosing_element) = enclosing(c, element) else {
+            return;
+        };
         if is_private(c, enclosing_element) {
             return;
         }
@@ -514,10 +630,24 @@ impl ReferenceVisitor<'_, '_> {
     fn add_default_super_constructor_declaration(&mut self, class: NodeId) {
         let c = self.c;
         let Some(ctx) = rctx(c) else { return };
-        let Some(element) = c.declared_element(class).and_then(|e| e.cast::<InterfaceElement>()) else { return };
-        let Some(supertype) = ctx.element_supertype(element) else { return };
-        let Some(super_element) = ctx.interface_element(supertype) else { return };
-        let constructor = ctx.interface(super_element).constructors.iter().find(|k| name(c, k.raw()) == Some("new")).copied();
+        let Some(element) = c
+            .declared_element(class)
+            .and_then(|e| e.cast::<InterfaceElement>())
+        else {
+            return;
+        };
+        let Some(supertype) = ctx.element_supertype(element) else {
+            return;
+        };
+        let Some(super_element) = ctx.interface_element(supertype) else {
+            return;
+        };
+        let constructor = ctx
+            .interface(super_element)
+            .constructors
+            .iter()
+            .find(|k| name(c, k.raw()) == Some("new"))
+            .copied();
         if let Some(constructor) = constructor {
             self.add_declaration(ElemRef::Base(constructor.raw()));
         }
@@ -525,7 +655,9 @@ impl ReferenceVisitor<'_, '_> {
 
     /// Dart `_addNamedType`.
     fn add_named_type(&mut self, node: NodeId) {
-        let Some(element) = self.element(node) else { return };
+        let Some(element) = self.element(node) else {
+            return;
+        };
         if let Some(&declaration) = self.declaration_map.get(&base(self.c, element)) {
             self.declarations.insert(declaration);
         }
@@ -533,7 +665,9 @@ impl ReferenceVisitor<'_, '_> {
 
     /// Dart `_visitCompoundAssignmentExpression`.
     fn visit_compound_assignment_expression(&mut self, node: NodeId) {
-        let Some(resolved) = self.c.resolved else { return };
+        let Some(resolved) = self.c.resolved else {
+            return;
+        };
         if let Some(&read) = resolved.tables.read_element.get(node) {
             self.add_declaration(read);
         }
@@ -545,19 +679,29 @@ impl ReferenceVisitor<'_, '_> {
 
 /// Dart `SimpleIdentifier.inDeclarationContext()`.
 fn in_declaration_context(c: &LinterContext<'_>, node: NodeId) -> bool {
-    let Some(parent) = c.ast.parent(node) else { return false };
+    let Some(parent) = c.ast.parent(node) else {
+        return false;
+    };
     match kind(c, parent) {
-        NodeKind::ImportDirective => c.ast[Id::<ImportDirective>::from_raw(parent)].prefix.is_some_and(|p| p.raw() == node),
+        NodeKind::ImportDirective => c.ast[Id::<ImportDirective>::from_raw(parent)]
+            .prefix
+            .is_some_and(|p| p.raw() == node),
         NodeKind::Label => c.ast.parent(parent).is_some_and(|g| {
             Statement::test(kind(c, g))
-                || matches!(kind(c, g), NodeKind::SwitchCase | NodeKind::SwitchDefault | NodeKind::SwitchPatternCase)
+                || matches!(
+                    kind(c, g),
+                    NodeKind::SwitchCase | NodeKind::SwitchDefault | NodeKind::SwitchPatternCase
+                )
         }),
         _ => false,
     }
 }
 
 /// Dart `NamedType.isInExternalVariableTypeOrFunctionReturnType`.
-fn is_in_external_variable_type_or_function_return_type(c: &LinterContext<'_>, node: NodeId) -> bool {
+fn is_in_external_variable_type_or_function_return_type(
+    c: &LinterContext<'_>,
+    node: NodeId,
+) -> bool {
     let mut top = node;
     let mut parent = c.ast.parent(node);
     while let Some(p) = parent

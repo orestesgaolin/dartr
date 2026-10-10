@@ -37,9 +37,16 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         return;
     };
     if let Some(literal) = c.ast.cast::<IntegerLiteral>(argument) {
-        let value = lexeme(c, c.ast[literal].literal).to_lowercase().replace('_', "");
+        let value = lexeme(c, c.ast[literal].literal)
+            .to_lowercase()
+            .replace('_', "");
         if !value.starts_with("0x") || value.chars().count() != 10 {
-            c.report_node(out, &diag::USE_FULL_HEX_VALUES_FOR_FLUTTER_COLORS, argument, &[]);
+            c.report_node(
+                out,
+                &diag::USE_FULL_HEX_VALUES_FOR_FLUTTER_COLORS,
+                argument,
+                &[],
+            );
         }
     }
 }

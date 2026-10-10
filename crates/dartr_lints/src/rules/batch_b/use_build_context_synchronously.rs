@@ -17,9 +17,21 @@ pub fn register(r: &mut RuleVisitorRegistry, c: &LinterContext<'_>) {
     }
     const NAME: &str = "use_build_context_synchronously";
     r.add(NodeKind::MethodInvocation, NAME, visit_method_invocation);
-    r.add(NodeKind::InstanceCreationExpression, NAME, visit_instance_creation_expression);
-    r.add(NodeKind::FunctionExpressionInvocation, NAME, visit_function_expression_invocation);
-    r.add(NodeKind::PrefixedIdentifier, NAME, visit_prefixed_identifier);
+    r.add(
+        NodeKind::InstanceCreationExpression,
+        NAME,
+        visit_instance_creation_expression,
+    );
+    r.add(
+        NodeKind::FunctionExpressionInvocation,
+        NAME,
+        visit_function_expression_invocation,
+    );
+    r.add(
+        NodeKind::PrefixedIdentifier,
+        NAME,
+        visit_prefixed_identifier,
+    );
 }
 
 /// Dart `AsyncState`.
@@ -53,7 +65,11 @@ struct AsyncStateVisitor<'c, 'a> {
 
 impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
     /// Dart `AsyncStateTracker.asyncStateFor`.
-    fn async_state_for(&mut self, reference: NodeId, mounted_element: ElementId) -> Option<AsyncState> {
+    fn async_state_for(
+        &mut self,
+        reference: NodeId,
+        mounted_element: ElementId,
+    ) -> Option<AsyncState> {
         self.reference = reference;
         self.mounted_element = mounted_element;
         let parent = self.c.ast.parent(reference)?;
@@ -77,7 +93,12 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
         }
         match kind(c, node) {
             NodeKind::AdjacentStrings => {
-                let strings = c.ast.list_raw(n!(AdjacentStrings).strings).iter().map(|&s| Some(s)).collect();
+                let strings = c
+                    .ast
+                    .list_raw(n!(AdjacentStrings).strings)
+                    .iter()
+                    .map(|&s| Some(s))
+                    .collect();
                 self.asynchronous_if_any_is_async(strings)
             }
             NodeKind::AsExpression => {
@@ -86,13 +107,20 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
             }
             NodeKind::AssignmentExpression => {
                 let a = n!(AssignmentExpression);
-                self.in_order_async_state(vec![(Some(a.left_hand_side.raw()), false), (Some(a.right_hand_side.raw()), true)])
+                self.in_order_async_state(vec![
+                    (Some(a.left_hand_side.raw()), false),
+                    (Some(a.right_hand_side.raw()), true),
+                ])
             }
             NodeKind::AwaitExpression => {
                 if let Some(&state) = self.state_cache.get(&node) {
                     return state;
                 }
-                if self.is_reference(Some(n!(AwaitExpression).expression.raw())) { None } else { Some(Asynchronous) }
+                if self.is_reference(Some(n!(AwaitExpression).expression.raw())) {
+                    None
+                } else {
+                    Some(Asynchronous)
+                }
             }
             NodeKind::BinaryExpression => self.visit_binary_expression(node),
             NodeKind::Block => {
@@ -116,7 +144,11 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
             }
             NodeKind::ConditionalExpression => {
                 let e = n!(ConditionalExpression);
-                let (cond, then, els) = (e.condition.raw(), e.then_expression.raw(), e.else_expression.raw());
+                let (cond, then, els) = (
+                    e.condition.raw(),
+                    e.then_expression.raw(),
+                    e.else_expression.raw(),
+                );
                 self.visit_if_like(cond, None, then, Some(els))
             }
             NodeKind::DoStatement => {
@@ -127,12 +159,17 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
                 } else if self.is_reference(Some(condition)) {
                     asynchronous_or_null(self.accept(Some(body)))
                 } else {
-                    asynchronous_or_null(self.accept(Some(condition))).or_else(|| asynchronous_or_null(self.accept(Some(body))))
+                    asynchronous_or_null(self.accept(Some(condition)))
+                        .or_else(|| asynchronous_or_null(self.accept(Some(body))))
                 }
             }
             NodeKind::ExpressionStatement => {
                 let e = n!(ExpressionStatement).expression.raw();
-                if self.is_reference(Some(e)) { None } else { asynchronous_or_null(self.accept(Some(e))) }
+                if self.is_reference(Some(e)) {
+                    None
+                } else {
+                    asynchronous_or_null(self.accept(Some(e)))
+                }
             }
             NodeKind::ExtensionOverride => {
                 let args = self.arguments(n!(ExtensionOverride).argument_list);
@@ -158,12 +195,22 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
             }
             NodeKind::IfElement => {
                 let e = n!(IfElement);
-                let (x, cc, t, el) = (e.expression.raw(), e.case_clause.map(|c| c.raw()), e.then_element.raw(), e.else_element.map(|e| e.raw()));
+                let (x, cc, t, el) = (
+                    e.expression.raw(),
+                    e.case_clause.map(|c| c.raw()),
+                    e.then_element.raw(),
+                    e.else_element.map(|e| e.raw()),
+                );
                 self.visit_if_like(x, cc, t, el)
             }
             NodeKind::IfStatement => {
                 let s = n!(IfStatement);
-                let (x, cc, t, el) = (s.expression.raw(), s.case_clause.map(|c| c.raw()), s.then_statement.raw(), s.else_statement.map(|e| e.raw()));
+                let (x, cc, t, el) = (
+                    s.expression.raw(),
+                    s.case_clause.map(|c| c.raw()),
+                    s.then_statement.raw(),
+                    s.else_statement.map(|e| e.raw()),
+                );
                 self.visit_if_like(x, cc, t, el)
             }
             NodeKind::IndexExpression => {
@@ -188,7 +235,12 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
                 self.accept(Some(s))
             }
             NodeKind::ListLiteral => {
-                let elements = c.ast.list_raw(n!(ListLiteral).elements).iter().map(|&e| Some(e)).collect();
+                let elements = c
+                    .ast
+                    .list_raw(n!(ListLiteral).elements)
+                    .iter()
+                    .map(|&e| Some(e))
+                    .collect();
                 self.asynchronous_if_any_is_async(elements)
             }
             NodeKind::MapLiteralEntry => {
@@ -239,13 +291,19 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
                 let e = n!(PropertyAccess);
                 let (target, property_name) = (e.target.map(|t| t.raw()), e.property_name);
                 if simple_name(c, property_name) == MOUNTED_NAME {
-                    asynchronous_or_null(self.accept(target)).or_else(|| self.visit_identifier(property_name))
+                    asynchronous_or_null(self.accept(target))
+                        .or_else(|| self.visit_identifier(property_name))
                 } else {
                     asynchronous_or_null(self.accept(target))
                 }
             }
             NodeKind::RecordLiteral => {
-                let fields = c.ast.list_raw(n!(RecordLiteral).fields).iter().map(|&f| Some(f)).collect();
+                let fields = c
+                    .ast
+                    .list_raw(n!(RecordLiteral).fields)
+                    .iter()
+                    .map(|&f| Some(f))
+                    .collect();
                 self.asynchronous_if_any_is_async(fields)
             }
             NodeKind::RecordLiteralNamedField => {
@@ -253,7 +311,12 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
                 asynchronous_or_null(self.accept(Some(e)))
             }
             NodeKind::SetOrMapLiteral => {
-                let elements = c.ast.list_raw(n!(SetOrMapLiteral).elements).iter().map(|&e| Some(e)).collect();
+                let elements = c
+                    .ast
+                    .list_raw(n!(SetOrMapLiteral).elements)
+                    .iter()
+                    .map(|&e| Some(e))
+                    .collect();
                 self.asynchronous_if_any_is_async(elements)
             }
             NodeKind::SimpleIdentifier => self.visit_identifier(Id::from_raw(node)),
@@ -262,7 +325,12 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
                 asynchronous_or_null(self.accept(Some(e)))
             }
             NodeKind::StringInterpolation => {
-                let elements = c.ast.list_raw(n!(StringInterpolation).elements).iter().map(|&e| Some(e)).collect();
+                let elements = c
+                    .ast
+                    .list_raw(n!(StringInterpolation).elements)
+                    .iter()
+                    .map(|&e| Some(e))
+                    .collect();
                 self.asynchronous_if_any_is_async(elements)
             }
             NodeKind::SwitchCase => {
@@ -272,7 +340,12 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
                 self.in_order_async_state_guardable(nodes)
             }
             NodeKind::SwitchDefault => {
-                let nodes = c.ast.list_raw(n!(SwitchDefault).statements).iter().map(|&s| Some(s)).collect();
+                let nodes = c
+                    .ast
+                    .list_raw(n!(SwitchDefault).statements)
+                    .iter()
+                    .map(|&s| Some(s))
+                    .collect();
                 self.in_order_async_state_guardable(nodes)
             }
             NodeKind::SwitchExpression => {
@@ -295,7 +368,8 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
                     }
                     return None;
                 }
-                asynchronous_or_null(when_state).or_else(|| asynchronous_or_null(self.accept(Some(expression))))
+                asynchronous_or_null(when_state)
+                    .or_else(|| asynchronous_or_null(self.accept(Some(expression))))
             }
             NodeKind::SwitchPatternCase => {
                 let s = n!(SwitchPatternCase);
@@ -341,15 +415,28 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
             }
             NodeKind::VariableDeclaration => {
                 let initializer = n!(VariableDeclaration).initializer.map(|i| i.raw());
-                if self.is_reference(initializer) { None } else { asynchronous_or_null(self.accept(initializer)) }
+                if self.is_reference(initializer) {
+                    None
+                } else {
+                    asynchronous_or_null(self.accept(initializer))
+                }
             }
             NodeKind::VariableDeclarationList => {
-                let variables = c.ast.list_raw(n!(VariableDeclarationList).variables).iter().map(|&v| Some(v)).collect();
+                let variables = c
+                    .ast
+                    .list_raw(n!(VariableDeclarationList).variables)
+                    .iter()
+                    .map(|&v| Some(v))
+                    .collect();
                 self.asynchronous_if_any_is_async(variables)
             }
             NodeKind::VariableDeclarationStatement => {
                 let variables = n!(VariableDeclarationStatement).variables.raw();
-                if self.is_reference(Some(variables)) { None } else { asynchronous_or_null(self.accept(Some(variables))) }
+                if self.is_reference(Some(variables)) {
+                    None
+                } else {
+                    asynchronous_or_null(self.accept(Some(variables)))
+                }
             }
             NodeKind::WhenClause => {
                 let e = n!(WhenClause).expression.raw();
@@ -358,7 +445,8 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
             NodeKind::WhileStatement => {
                 let s = n!(WhileStatement);
                 let (condition, body) = (s.condition.raw(), s.body.raw());
-                asynchronous_or_null(self.accept(Some(condition))).or_else(|| asynchronous_or_null(self.accept(Some(body))))
+                asynchronous_or_null(self.accept(Some(condition)))
+                    .or_else(|| asynchronous_or_null(self.accept(Some(body))))
             }
             NodeKind::YieldStatement => {
                 let e = n!(YieldStatement).expression.raw();
@@ -369,7 +457,12 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
     }
 
     fn arguments(&self, list: Id<ArgumentList>) -> Vec<Option<NodeId>> {
-        self.c.ast.list_raw(self.c.ast[list].arguments).iter().map(|&a| Some(a)).collect()
+        self.c
+            .ast
+            .list_raw(self.c.ast[list].arguments)
+            .iter()
+            .map(|&a| Some(a))
+            .collect()
     }
 
     fn visit_binary_expression(&mut self, node: NodeId) -> Option<AsyncState> {
@@ -431,7 +524,8 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
             }
             return None;
         }
-        asynchronous_or_null(self.accept(Some(left))).or_else(|| asynchronous_or_null(self.accept(Some(right))))
+        asynchronous_or_null(self.accept(Some(left)))
+            .or_else(|| asynchronous_or_null(self.accept(Some(right))))
     }
 
     fn visit_for(&mut self, parts: NodeId, body: NodeId) -> Option<AsyncState> {
@@ -440,8 +534,12 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
         match kind(c, parts) {
             NodeKind::ForPartsWithDeclarations => {
                 let p = &c.ast[Id::<ForPartsWithDeclarations>::from_raw(parts)];
-                let mut nodes: Vec<(Option<NodeId>, bool)> =
-                    c.ast.list_raw(c.ast[p.variables].variables).iter().map(|&v| (Some(v), false)).collect();
+                let mut nodes: Vec<(Option<NodeId>, bool)> = c
+                    .ast
+                    .list_raw(c.ast[p.variables].variables)
+                    .iter()
+                    .map(|&v| (Some(v), false))
+                    .collect();
                 nodes.push((p.condition.map(|c| c.raw()), reference_is_body));
                 nodes.extend(c.ast.list_raw(p.updaters).iter().map(|&u| (Some(u), false)));
                 nodes.push((Some(body), false));
@@ -449,21 +547,30 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
             }
             NodeKind::ForPartsWithExpression => {
                 let p = &c.ast[Id::<ForPartsWithExpression>::from_raw(parts)];
-                let mut nodes = vec![(p.initialization.map(|i| i.raw()), false), (p.condition.map(|c| c.raw()), reference_is_body)];
+                let mut nodes = vec![
+                    (p.initialization.map(|i| i.raw()), false),
+                    (p.condition.map(|c| c.raw()), reference_is_body),
+                ];
                 nodes.extend(c.ast.list_raw(p.updaters).iter().map(|&u| (Some(u), false)));
                 nodes.push((Some(body), false));
                 self.in_order_async_state(nodes)
             }
             NodeKind::ForEachPartsWithDeclaration => {
-                let iterable = c.ast[Id::<ForEachPartsWithDeclaration>::from_raw(parts)].iterable.raw();
+                let iterable = c.ast[Id::<ForEachPartsWithDeclaration>::from_raw(parts)]
+                    .iterable
+                    .raw();
                 self.in_order_async_state(vec![(Some(iterable), false), (Some(body), false)])
             }
             NodeKind::ForEachPartsWithIdentifier => {
-                let iterable = c.ast[Id::<ForEachPartsWithIdentifier>::from_raw(parts)].iterable.raw();
+                let iterable = c.ast[Id::<ForEachPartsWithIdentifier>::from_raw(parts)]
+                    .iterable
+                    .raw();
                 self.in_order_async_state(vec![(Some(iterable), false), (Some(body), false)])
             }
             NodeKind::ForEachPartsWithPattern => {
-                let iterable = c.ast[Id::<ForEachPartsWithPattern>::from_raw(parts)].iterable.raw();
+                let iterable = c.ast[Id::<ForEachPartsWithPattern>::from_raw(parts)]
+                    .iterable
+                    .raw();
                 self.in_order_async_state(vec![(Some(iterable), false), (Some(body), false)])
             }
             _ => None,
@@ -484,14 +591,19 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
             let mut checked_cases_fall_through = true;
             let mut checked_cases_are_all_mounted_checks = true;
             for i in (0..=index).rev() {
-                let Some(case) = c.ast.cast::<SwitchPatternCase>(members[i]) else { continue };
-                let when = c.ast[c.ast[case].guarded_pattern].when_clause.map(|w| w.raw());
+                let Some(case) = c.ast.cast::<SwitchPatternCase>(members[i]) else {
+                    continue;
+                };
+                let when = c.ast[c.ast[case].guarded_pattern]
+                    .when_clause
+                    .map(|w| w.raw());
                 let when_state = self.accept(when);
                 if when_state == Some(Asynchronous) {
                     return Some(Asynchronous);
                 }
                 if checked_cases_fall_through {
-                    let case_is_fall_through = i == index || c.ast.list_raw(c.ast[case].statements).is_empty();
+                    let case_is_fall_through =
+                        i == index || c.ast.list_raw(c.ast[case].statements).is_empty();
                     if case_is_fall_through {
                         checked_cases_are_all_mounted_checks &= when_state == Some(MountedCheck);
                     } else if checked_cases_are_all_mounted_checks {
@@ -505,13 +617,17 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
             }
             None
         } else {
-            asynchronous_or_null(self.accept(Some(expression))).or_else(|| self.asynchronous_if_any_is_async(all(&members)))
+            asynchronous_or_null(self.accept(Some(expression)))
+                .or_else(|| self.asynchronous_if_any_is_async(all(&members)))
         }
     }
 
     /// Dart `_asynchronousIfAnyIsAsync`.
     fn asynchronous_if_any_is_async(&mut self, nodes: Vec<Option<NodeId>>) -> Option<AsyncState> {
-        let end = nodes.iter().position(|&n| n == Some(self.reference)).unwrap_or(nodes.len());
+        let end = nodes
+            .iter()
+            .position(|&n| n == Some(self.reference))
+            .unwrap_or(nodes.len());
         for &node in &nodes[..end] {
             if node.is_some() && self.accept(node) == Some(Asynchronous) {
                 return Some(Asynchronous);
@@ -553,17 +669,25 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
     }
 
     /// Dart `_visitBlockLike`.
-    fn visit_block_like(&mut self, statements: Vec<NodeId>, parent: Option<NodeId>) -> Option<AsyncState> {
+    fn visit_block_like(
+        &mut self,
+        statements: Vec<NodeId>,
+        parent: Option<NodeId>,
+    ) -> Option<AsyncState> {
         let c = self.c;
         if Statement::test(kind(c, self.reference))
             && let Some(index) = statements.iter().position(|&s| s == self.reference)
         {
-            let preceding = self.in_order_async_state_guardable(statements.iter().map(|&s| Some(s)).collect());
+            let preceding =
+                self.in_order_async_state_guardable(statements.iter().map(|&s| Some(s)).collect());
             if preceding.is_some() {
                 return preceding;
             }
             if parent.is_some_and(|p| {
-                matches!(kind(c, p), NodeKind::DoStatement | NodeKind::ForStatement | NodeKind::WhileStatement)
+                matches!(
+                    kind(c, p),
+                    NodeKind::DoStatement | NodeKind::ForStatement | NodeKind::WhileStatement
+                )
             }) {
                 let following = statements[index + 1..].iter().map(|&s| Some(s)).collect();
                 return asynchronous_or_null(self.in_order_async_state_guardable(following));
@@ -637,7 +761,9 @@ impl<'c, 'a> AsyncStateVisitor<'c, 'a> {
             let else_state = self.accept(else_branch);
             let then_terminates = terminates_control(self.c, then_branch);
             let else_terminates = else_branch.is_some_and(|e| terminates_control(self.c, e));
-            if then_state == Some(NotMountedCheck) && (else_state == Some(NotMountedCheck) || else_terminates) {
+            if then_state == Some(NotMountedCheck)
+                && (else_state == Some(NotMountedCheck) || else_terminates)
+            {
                 return Some(NotMountedCheck);
             }
             if else_state == Some(NotMountedCheck) && then_terminates {
@@ -682,12 +808,22 @@ fn constant_bool_value(c: &LinterContext<'_>, node: NodeId) -> Option<bool> {
 /// Dart `AstNode.terminatesControl` / `Statement.terminatesControl`.
 fn terminates_control(c: &LinterContext<'_>, node: NodeId) -> bool {
     if let Some(block) = c.ast.cast::<Block>(node) {
-        return c.ast.list_raw(c.ast[block].statements).last().is_some_and(|&s| terminates_control(c, s));
+        return c
+            .ast
+            .list_raw(c.ast[block].statements)
+            .last()
+            .is_some_and(|&s| terminates_control(c, s));
     }
-    if matches!(kind(c, node), NodeKind::ReturnStatement | NodeKind::BreakStatement | NodeKind::ContinueStatement) {
+    if matches!(
+        kind(c, node),
+        NodeKind::ReturnStatement | NodeKind::BreakStatement | NodeKind::ContinueStatement
+    ) {
         return true;
     }
-    c.resolved.as_ref().and_then(|r| r.exits).is_some_and(|exits| exits(node))
+    c.resolved
+        .as_ref()
+        .and_then(|r| r.exits)
+        .is_some_and(|exits| exits(node))
 }
 
 /// Dart `ProtectedFunction`.
@@ -706,7 +842,13 @@ const fn protected(
     positional: &'static [usize],
     named: &'static [&'static str],
 ) -> ProtectedFunction {
-    ProtectedFunction { library, type_, name, positional, named }
+    ProtectedFunction {
+        library,
+        type_,
+        name,
+        positional,
+        named,
+    }
 }
 
 const ASYNC: &str = "dart.async";
@@ -719,9 +861,27 @@ const PROTECTED_CONSTRUCTORS: &[ProtectedFunction] = &[
     protected(ASYNC, "Stream", Some("eventTransformed"), &[1], &[]),
     protected(ASYNC, "Stream", Some("multi"), &[0], &[]),
     protected(ASYNC, "Stream", Some("periodic"), &[1], &[]),
-    protected(ASYNC, "StreamController", None, &[], &["onListen", "onPause", "onResume", "onCancel"]),
-    protected(ASYNC, "StreamController", Some("new"), &[], &["onListen", "onPause", "onResume", "onCancel"]),
-    protected(ASYNC, "StreamController", Some("broadcast"), &[], &["onListen", "onCancel"]),
+    protected(
+        ASYNC,
+        "StreamController",
+        None,
+        &[],
+        &["onListen", "onPause", "onResume", "onCancel"],
+    ),
+    protected(
+        ASYNC,
+        "StreamController",
+        Some("new"),
+        &[],
+        &["onListen", "onPause", "onResume", "onCancel"],
+    ),
+    protected(
+        ASYNC,
+        "StreamController",
+        Some("broadcast"),
+        &[],
+        &["onListen", "onCancel"],
+    ),
 ];
 
 const PROTECTED_INSTANCE_METHODS: &[ProtectedFunction] = &[
@@ -731,7 +891,13 @@ const PROTECTED_INSTANCE_METHODS: &[ProtectedFunction] = &[
     protected(ASYNC, "Future", Some("timeout"), &[], &["onTimeout"]),
     protected(ASYNC, "Future", Some("whenComplete"), &[0], &[]),
     protected(ASYNC, "Stream", Some("any"), &[0], &[]),
-    protected(ASYNC, "Stream", Some("asBroadcastStream"), &[], &["onListen", "onCancel"]),
+    protected(
+        ASYNC,
+        "Stream",
+        Some("asBroadcastStream"),
+        &[],
+        &["onListen", "onCancel"],
+    ),
     protected(ASYNC, "Stream", Some("asyncExpand"), &[0], &[]),
     protected(ASYNC, "Stream", Some("asyncMap"), &[0], &[]),
     protected(ASYNC, "Stream", Some("distinct"), &[0], &[]),
@@ -741,7 +907,13 @@ const PROTECTED_INSTANCE_METHODS: &[ProtectedFunction] = &[
     protected(ASYNC, "Stream", Some("forEach"), &[0], &[]),
     protected(ASYNC, "Stream", Some("handleError"), &[0], &["test"]),
     protected(ASYNC, "Stream", Some("lastWhere"), &[0], &["orElse"]),
-    protected(ASYNC, "Stream", Some("listen"), &[0], &["onError", "onDone"]),
+    protected(
+        ASYNC,
+        "Stream",
+        Some("listen"),
+        &[0],
+        &["onError", "onDone"],
+    ),
     protected(ASYNC, "Stream", Some("map"), &[0], &[]),
     protected(ASYNC, "Stream", Some("reduce"), &[0], &[]),
     protected(ASYNC, "Stream", Some("singleWhere"), &[0], &["orElse"]),
@@ -761,7 +933,12 @@ const PROTECTED_STATIC_METHODS: &[ProtectedFunction] = &[
 ];
 
 /// Dart `_Visitor.check`.
-fn check(c: &LinterContext<'_>, node: NodeId, mounted_element: ElementId, out: &mut Vec<Diagnostic>) {
+fn check(
+    c: &LinterContext<'_>,
+    node: NodeId,
+    mounted_element: ElementId,
+    out: &mut Vec<Diagnostic>,
+) {
     let mut child = node;
     let mut tracker = AsyncStateVisitor {
         c,
@@ -771,7 +948,9 @@ fn check(c: &LinterContext<'_>, node: NodeId, mounted_element: ElementId, out: &
         has_unrelated_mounted_check: false,
     };
     while !FunctionBody::test(kind(c, child)) {
-        let Some(parent) = c.ast.parent(child) else { break };
+        let Some(parent) = c.ast.parent(child) else {
+            break;
+        };
         let state = tracker.async_state_for(child, mounted_element);
         if is_guarded(state) {
             return;
@@ -788,7 +967,11 @@ fn check(c: &LinterContext<'_>, node: NodeId, mounted_element: ElementId, out: &
         child = parent;
     }
     if FunctionBody::test(kind(c, child)) {
-        let Some(parent) = c.ast.parent(child).filter(|&p| kind(c, p) == NodeKind::FunctionExpression) else {
+        let Some(parent) = c
+            .ast
+            .parent(child)
+            .filter(|&p| kind(c, p) == NodeKind::FunctionExpression)
+        else {
             return;
         };
         let mut grandparent = c.ast.parent(parent);
@@ -811,29 +994,62 @@ fn check(c: &LinterContext<'_>, node: NodeId, mounted_element: ElementId, out: &
     }
 }
 
-fn split_arguments(c: &LinterContext<'_>, list: Id<ArgumentList>) -> (Vec<NodeId>, Vec<Id<NamedArgument>>) {
+fn split_arguments(
+    c: &LinterContext<'_>,
+    list: Id<ArgumentList>,
+) -> (Vec<NodeId>, Vec<Id<NamedArgument>>) {
     let arguments = c.ast.list_raw(c.ast[list].arguments);
-    let positional = arguments.iter().copied().filter(|&a| kind(c, a) != NodeKind::NamedArgument).collect();
-    let named = arguments.iter().filter_map(|&a| c.ast.cast::<NamedArgument>(a)).collect();
+    let positional = arguments
+        .iter()
+        .copied()
+        .filter(|&a| kind(c, a) != NodeKind::NamedArgument)
+        .collect();
+    let named = arguments
+        .iter()
+        .filter_map(|&a| c.ast.cast::<NamedArgument>(a))
+        .collect();
     (positional, named)
 }
 
 /// Dart `checkConstructorCallback`.
-fn check_constructor_callback(c: &LinterContext<'_>, invocation: NodeId, callback: NodeId, error_node: NodeId, out: &mut Vec<Diagnostic>) {
-    let Some(static_type) = c.static_type(invocation) else { return };
+fn check_constructor_callback(
+    c: &LinterContext<'_>,
+    invocation: NodeId,
+    callback: NodeId,
+    error_node: NodeId,
+    out: &mut Vec<Diagnostic>,
+) {
+    let Some(static_type) = c.static_type(invocation) else {
+        return;
+    };
     let i = &c.ast[Id::<InstanceCreationExpression>::from_raw(invocation)];
     let (positional, named) = split_arguments(c, i.argument_list);
     let constructor_name = c.ast[i.constructor_name].name.map(|n| simple_name(c, n));
     for constructor in PROTECTED_CONSTRUCTORS {
-        if constructor_name == constructor.name && is_same_as(c, static_type, constructor.type_, constructor.library) {
-            check_positional_arguments(c, constructor.positional, &positional, callback, error_node, out);
+        if constructor_name == constructor.name
+            && is_same_as(c, static_type, constructor.type_, constructor.library)
+        {
+            check_positional_arguments(
+                c,
+                constructor.positional,
+                &positional,
+                callback,
+                error_node,
+                out,
+            );
             check_named_arguments(c, constructor.named, &named, callback, error_node, out);
         }
     }
 }
 
 /// Dart `checkMethodCallback`.
-fn check_method_callback(c: &LinterContext<'_>, invocation: NodeId, callback: NodeId, error_node: NodeId, out: &mut Vec<Diagnostic>) {
+fn check_method_callback(
+    c: &LinterContext<'_>,
+    invocation: NodeId,
+    callback: NodeId,
+    error_node: NodeId,
+    out: &mut Vec<Diagnostic>,
+) {
     let i = &c.ast[Id::<MethodInvocation>::from_raw(invocation)];
     let (positional, named) = split_arguments(c, i.argument_list);
     let method_name = simple_name(c, i.method_name);
@@ -845,16 +1061,32 @@ fn check_method_callback(c: &LinterContext<'_>, invocation: NodeId, callback: No
     if let Some(class) = target_element.filter(|e| e.tag() == Tag::Class) {
         for method in PROTECTED_STATIC_METHODS {
             if Some(method_name) == method.name && name(c, class) == Some(method.type_) {
-                check_positional_arguments(c, method.positional, &positional, callback, error_node, out);
+                check_positional_arguments(
+                    c,
+                    method.positional,
+                    &positional,
+                    callback,
+                    error_node,
+                    out,
+                );
                 check_named_arguments(c, method.named, &named, callback, error_node, out);
             }
         }
     } else {
-        let Some(static_type) = target.and_then(|t| c.static_type(t)) else { return };
+        let Some(static_type) = target.and_then(|t| c.static_type(t)) else {
+            return;
+        };
         let type_element_name = rctx(c).and_then(|ctx| type_element_name(c, &ctx, static_type));
         for method in PROTECTED_INSTANCE_METHODS {
             if Some(method_name) == method.name && type_element_name == Some(method.type_) {
-                check_positional_arguments(c, method.positional, &positional, callback, error_node, out);
+                check_positional_arguments(
+                    c,
+                    method.positional,
+                    &positional,
+                    callback,
+                    error_node,
+                    out,
+                );
                 check_named_arguments(c, method.named, &named, callback, error_node, out);
             }
         }
@@ -862,7 +1094,11 @@ fn check_method_callback(c: &LinterContext<'_>, invocation: NodeId, callback: No
 }
 
 /// Dart `DartType.element?.name`.
-fn type_element_name<'a>(c: &LinterContext<'a>, ctx: &dartr_element::Ctx<'a>, ty: TypeId) -> Option<&'a str> {
+fn type_element_name<'a>(
+    c: &LinterContext<'a>,
+    ctx: &dartr_element::Ctx<'a>,
+    ty: TypeId,
+) -> Option<&'a str> {
     let element = match *ctx.ty(ty) {
         dartr_element::TypeKind::Interface { element, .. } => element.raw(),
         dartr_element::TypeKind::TypeParameter { param, .. } => param.raw(),
@@ -881,9 +1117,19 @@ fn check_named_arguments(
     out: &mut Vec<Diagnostic>,
 ) {
     for &named in names {
-        let Some(&argument) = named_arguments.iter().find(|&&a| lexeme(c, c.ast[a].name) == named) else { continue };
+        let Some(&argument) = named_arguments
+            .iter()
+            .find(|&&a| lexeme(c, c.ast[a].name) == named)
+        else {
+            continue;
+        };
         if c.ast[argument].argument_expression.raw() == callback {
-            c.report_node(out, &diag::USE_BUILD_CONTEXT_SYNCHRONOUSLY_ASYNC_USE, error_node, &[]);
+            c.report_node(
+                out,
+                &diag::USE_BUILD_CONTEXT_SYNCHRONOUSLY_ASYNC_USE,
+                error_node,
+                &[],
+            );
         }
     }
 }
@@ -898,18 +1144,41 @@ fn check_positional_arguments(
     out: &mut Vec<Diagnostic>,
 ) {
     for &position in positions {
-        if positional_arguments.len() > position && argument_expression(c, positional_arguments[position]) == callback {
-            c.report_node(out, &diag::USE_BUILD_CONTEXT_SYNCHRONOUSLY_ASYNC_USE, error_node, &[]);
+        if positional_arguments.len() > position
+            && argument_expression(c, positional_arguments[position]) == callback
+        {
+            c.report_node(
+                out,
+                &diag::USE_BUILD_CONTEXT_SYNCHRONOUSLY_ASYNC_USE,
+                error_node,
+                &[],
+            );
         }
     }
 }
 
-fn visit_function_expression_invocation(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
-    visit_argument_list(c, c.ast[Id::<FunctionExpressionInvocation>::from_raw(node)].argument_list, out);
+fn visit_function_expression_invocation(
+    c: &LinterContext<'_>,
+    node: NodeId,
+    out: &mut Vec<Diagnostic>,
+) {
+    visit_argument_list(
+        c,
+        c.ast[Id::<FunctionExpressionInvocation>::from_raw(node)].argument_list,
+        out,
+    );
 }
 
-fn visit_instance_creation_expression(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
-    visit_argument_list(c, c.ast[Id::<InstanceCreationExpression>::from_raw(node)].argument_list, out);
+fn visit_instance_creation_expression(
+    c: &LinterContext<'_>,
+    node: NodeId,
+    out: &mut Vec<Diagnostic>,
+) {
+    visit_argument_list(
+        c,
+        c.ast[Id::<InstanceCreationExpression>::from_raw(node)].argument_list,
+        out,
+    );
 }
 
 fn visit_method_invocation(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
@@ -954,7 +1223,10 @@ fn visit_argument_list(c: &LinterContext<'_>, list: Id<ArgumentList>, out: &mut 
 fn declared_type(c: &LinterContext<'_>, element: ElementId) -> Option<TypeId> {
     let ctx = rctx(c)?;
     if element.cast::<dartr_element::ExecutableElement>().is_some() {
-        Some(dartr_typesystem::member::return_type(&ctx, ElemRef::Base(element)))
+        Some(dartr_typesystem::member::return_type(
+            &ctx,
+            ElemRef::Base(element),
+        ))
     } else if matches!(
         element.tag(),
         Tag::Field
@@ -967,7 +1239,10 @@ fn declared_type(c: &LinterContext<'_>, element: ElementId) -> Option<TypeId> {
             | Tag::FieldFormalParameter
             | Tag::SuperFormalParameter
     ) {
-        Some(dartr_typesystem::member::type_(&ctx, ElemRef::Base(element)))
+        Some(dartr_typesystem::member::type_(
+            &ctx,
+            ElemRef::Base(element),
+        ))
     } else {
         None
     }
@@ -1012,9 +1287,13 @@ fn associated_mounted_getter(c: &LinterContext<'_>, element: ElementId) -> Optio
 }
 
 /// Dart `_InterfaceElementExtension.mountedGetter`.
-fn mounted_getter(c: &LinterContext<'_>, element: dartr_element::EId<InterfaceElement>) -> Option<ElementId> {
+fn mounted_getter(
+    c: &LinterContext<'_>,
+    element: dartr_element::EId<InterfaceElement>,
+) -> Option<ElementId> {
     let ctx = rctx(c)?;
-    let result = InheritanceManager3::new(ctx).get_member(element, Name::new(&ctx, None, MOUNTED_NAME))?;
+    let result =
+        InheritanceManager3::new(ctx).get_member(element, Name::new(&ctx, None, MOUNTED_NAME))?;
     let result = dartr_typesystem::member::base_element(&ctx, result);
     (result.tag() == Tag::Getter).then_some(result)
 }

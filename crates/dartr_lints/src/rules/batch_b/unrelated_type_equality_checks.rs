@@ -8,8 +8,16 @@ use dartr_element::TypeId;
 use dartr_typesystem::TypeExt;
 
 pub fn register(r: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
-    r.add(NodeKind::BinaryExpression, "unrelated_type_equality_checks", binary);
-    r.add(NodeKind::RelationalPattern, "unrelated_type_equality_checks", relational);
+    r.add(
+        NodeKind::BinaryExpression,
+        "unrelated_type_equality_checks",
+        binary,
+    );
+    r.add(
+        NodeKind::RelationalPattern,
+        "unrelated_type_equality_checks",
+        relational,
+    );
 }
 
 /// Dart `isFixnumIntX`.
@@ -28,7 +36,8 @@ fn is_fixnum_int_x(c: &LinterContext<'_>, ty: TypeId) -> bool {
 
 fn comparable(c: &LinterContext<'_>, left: TypeId, right: TypeId) -> bool {
     let Some(ctx) = rctx(c) else { return true };
-    (is_fixnum_int_x(c, left) && ctx.is_dart_core_int(right)) || !types_are_unrelated(c, left, right)
+    (is_fixnum_int_x(c, left) && ctx.is_dart_core_int(right))
+        || !types_are_unrelated(c, left, right)
 }
 
 fn display(c: &LinterContext<'_>, ty: TypeId) -> String {
@@ -38,26 +47,43 @@ fn display(c: &LinterContext<'_>, ty: TypeId) -> String {
 fn binary(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(ctx) = rctx(c) else { return };
     let n = &c.ast[Id::<BinaryExpression>::from_raw(node)];
-    let is_bool = c.static_type(node).is_some_and(|t| ctx.is_dart_core_bool(t));
+    let is_bool = c
+        .static_type(node)
+        .is_some_and(|t| ctx.is_dart_core_bool(t));
     if !is_bool || !matches!(lexeme(c, n.operator), "==" | "!=") {
         return;
     }
-    if kind(c, n.left_operand) == NodeKind::NullLiteral || kind(c, n.right_operand) == NodeKind::NullLiteral {
+    if kind(c, n.left_operand) == NodeKind::NullLiteral
+        || kind(c, n.right_operand) == NodeKind::NullLiteral
+    {
         return;
     }
-    let (Some(left), Some(right)) = (c.static_type(n.left_operand), c.static_type(n.right_operand)) else {
+    let (Some(left), Some(right)) = (
+        c.static_type(n.left_operand),
+        c.static_type(n.right_operand),
+    ) else {
         return;
     };
     if comparable(c, left, right) {
         return;
     }
     let (r, l) = (display(c, right), display(c, left));
-    c.report_token(out, &diag::UNRELATED_TYPE_EQUALITY_CHECKS_IN_EXPRESSION, n.operator, &[&r, &l]);
+    c.report_token(
+        out,
+        &diag::UNRELATED_TYPE_EQUALITY_CHECKS_IN_EXPRESSION,
+        n.operator,
+        &[&r, &l],
+    );
 }
 
 fn relational(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(resolved) = c.resolved else { return };
-    let Some(value_type) = resolved.tables.pattern_info.get(node).and_then(|i| i.matched_value_type) else {
+    let Some(value_type) = resolved
+        .tables
+        .pattern_info
+        .get(node)
+        .and_then(|i| i.matched_value_type)
+    else {
         return;
     };
     let n = &c.ast[Id::<RelationalPattern>::from_raw(node)];
@@ -71,5 +97,10 @@ fn relational(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         return;
     }
     let (o, v) = (display(c, operand_type), display(c, value_type));
-    c.report_node(out, &diag::UNRELATED_TYPE_EQUALITY_CHECKS_IN_PATTERN, node, &[&o, &v]);
+    c.report_node(
+        out,
+        &diag::UNRELATED_TYPE_EQUALITY_CHECKS_IN_PATTERN,
+        node,
+        &[&o, &v],
+    );
 }
