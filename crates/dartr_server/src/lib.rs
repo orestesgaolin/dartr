@@ -43,6 +43,7 @@ pub mod features;
 pub mod formatting;
 pub mod highlights;
 pub mod hover;
+pub mod index;
 pub mod mapping;
 pub mod navigation;
 pub mod server;

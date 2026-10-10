@@ -59,6 +59,7 @@ use crate::transport::{Channel, read_message};
 use crate::uri::{UriError, normalize, path_to_uri, uri_to_path};
 
 mod nav;
+mod search;
 
 /// The progress token of analysis (Dart `analyzingProgressToken`).
 const ANALYZING_TOKEN: &str = "ANALYZING";
@@ -169,6 +170,9 @@ pub struct Server {
     /// The analysis drivers of the contexts of [Self::collection] (full
     /// diagnostics; design §4.2 invalidation on file changes).
     session: DriverSession,
+    /// The search index of each unit (`textDocument/references`), until a
+    /// file changes.
+    indexes: HashMap<String, std::sync::Arc<crate::index::UnitIndex>>,
     /// `DARTR_PARSE_ONLY=1`: the parse-only diagnostics (for comparison).
     parse_only: bool,
     next_request_id: i64,
@@ -269,6 +273,7 @@ impl Server {
             files_with_client_diagnostics: HashSet::new(),
             parsed: HashMap::new(),
             session: DriverSession::default(),
+            indexes: HashMap::new(),
             parse_only: std::env::var_os("DARTR_PARSE_ONLY").is_some(),
             next_request_id: 1,
             pending: HashMap::new(),
@@ -440,10 +445,14 @@ impl Server {
                     .ok_or_else(|| invalid_params(method))?;
                 features::selection_ranges(&file, positions)
             }
-            "textDocument/definition" => self.definition(&params),
-            "textDocument/typeDefinition" => self.type_definition(&params),
-            "textDocument/hover" => self.hover(&params),
-            "textDocument/documentHighlight" => self.document_highlights(&params),
+            "textDocument/definition" => self.catching(method, |s| s.definition(&params)),
+            "textDocument/typeDefinition" => self.catching(method, |s| s.type_definition(&params)),
+            "textDocument/hover" => self.catching(method, |s| s.hover(&params)),
+            "textDocument/documentHighlight" => {
+                self.catching(method, |s| s.document_highlights(&params))
+            }
+            "textDocument/references" => self.catching(method, |s| s.references(&params)),
+            "textDocument/implementation" => self.catching(method, |s| s.implementation(&params)),
             "textDocument/formatting" => self.format_request(&params, FormatKind::Document),
             "textDocument/rangeFormatting" => {
                 let range = params
@@ -783,6 +792,25 @@ impl Server {
     // ---------------------------------------------------------------------
     // Documents.
 
+    /// Runs a request handler; a panic becomes an error response (Dart
+    /// reports the exception of a handler to the client).
+    fn catching(&mut self, method: &str, f: impl FnOnce(&mut Self) -> ErrorOr<Value>) -> ErrorOr<Value> {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(self))) {
+            Ok(r) => r,
+            Err(e) => {
+                let message = e
+                    .downcast_ref::<String>()
+                    .cloned()
+                    .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+                    .unwrap_or_else(|| "panic".to_string());
+                Err(ResponseError::new(
+                    codes::UNHANDLED_ERROR,
+                    format!("An error occurred while handling {method} request: {message}"),
+                ))
+            }
+        }
+    }
+
     /// Dart `pathOfDoc` for `params.textDocument`.
     fn path_of_doc(&self, params: &Value) -> ErrorOr<String> {
         let uri = params
@@ -884,6 +912,7 @@ impl Server {
 
     fn file_changed(&mut self, path: &str) {
         self.parsed.remove(path);
+        self.indexes.clear();
         if path.ends_with(".dart") && !self.parse_only {
             // Dart `AnalysisDriver.changeFile`: the units of the libraries
             // to analyze again (only the library of the file when only
@@ -1090,6 +1119,7 @@ impl Server {
             .collect();
         // New contexts: new drivers.
         self.session = DriverSession::default();
+        self.indexes.clear();
         self.collection = if included.is_empty() {
             None
         } else {
