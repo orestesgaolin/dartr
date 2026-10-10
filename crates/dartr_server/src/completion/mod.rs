@@ -28,6 +28,7 @@ mod relevance_tables;
 pub mod snippets;
 pub mod target;
 pub mod uri;
+pub mod yaml;
 
 use std::time::Instant;
 

@@ -3,6 +3,9 @@
 
 pub mod assists;
 pub mod assists2;
+pub mod assists3;
+pub mod assists4;
+pub mod assists5;
 pub mod collections;
 pub mod convert_quotes;
 pub mod create;
@@ -145,7 +148,11 @@ pub fn generator(name: &str) -> Option<ProducerGenerator> {
         "FlutterConvertToStatefulWidget.new" => {
             |_: C| boxed(flutter_convert::FlutterConvertToStatefulWidget)
         }
+        "FlutterConvertToStatelessWidget.new" => {
+            |_: C| boxed(flutter_convert::FlutterConvertToStatelessWidget)
+        }
         "FlutterRemoveWidget.new" => |_: C| boxed(flutter_edit::FlutterRemoveWidget),
+        "FlutterWrapGeneric.new" => |_: C| boxed(flutter_wrap::FlutterWrapGeneric),
         "InvertIfStatement.new" => |_: C| boxed(assists2::InvertIfStatement),
         "InvertConditionalExpression.new" => |_: C| boxed(assists2::InvertConditionalExpression),
         "ConvertToIntLiteral.new" => |_: C| boxed(assists2::ConvertToIntLiteral),
@@ -154,6 +161,73 @@ pub fn generator(name: &str) -> Option<ProducerGenerator> {
         "ConvertIntoFinalField.new" => |_: C| boxed(assists2::ConvertIntoFinalField),
         "ConvertIntoGetter.new" => |_: C| boxed(assists2::ConvertIntoGetter::new(false)),
         "ConvertIntoGetter.this_" => |_: C| boxed(assists2::ConvertIntoGetter::new(true)),
+        "AddTypeName.new" => |_: C| boxed(assists3::AddTypeName),
+        "BindAllToFields.new" => |_: C| boxed(assists3::BindAllToFields),
+        "BindToField.new" => |_: C| boxed(assists3::BindToField),
+        "ConvertFieldFormalToNormal.new" => |_: C| boxed(assists3::ConvertFieldFormalToNormal),
+        "ConvertToDeclaringParameter.new" => |_: C| boxed(assists3::ConvertToDeclaringParameter),
+        "ConvertToDotShorthand.new" => |_: C| boxed(assists3::ConvertToDotShorthand),
+        "ConvertToInBodyConstructor.new" => |_: C| boxed(assists3::ConvertToInBodyConstructor),
+        "ConvertToInitializingFormal.new" => |_: C| boxed(assists3::ConvertToInitializingFormal),
+        "ConvertToPrimaryConstructor.new" => |_: C| boxed(assists3::ConvertToPrimaryConstructor),
+        "EncapsulateField.new" => |_: C| boxed(assists3::EncapsulateField),
+        "MoveInitializationToFieldDeclaration.new" => {
+            |_: C| boxed(assists3::MoveInitializationToFieldDeclaration)
+        }
+        "ConvertIfStatementToSwitchStatement.new" => {
+            |_: C| boxed(assists4::ConvertIfStatementToSwitchStatement)
+        }
+        "ConvertSwitchExpressionToSwitchStatement.new" => {
+            |_: C| boxed(assists4::ConvertSwitchExpressionToSwitchStatement)
+        }
+        "ConvertToIfCaseStatement.new" => |_: C| boxed(assists4::ConvertToIfCaseStatement),
+        "ConvertToIfCaseStatementChain.new" => {
+            |_: C| boxed(assists4::ConvertToIfCaseStatementChain)
+        }
+        "ConvertToSwitchExpression.new" => |_: C| boxed(assists4::ConvertToSwitchExpression),
+        "JoinElseWithIf.new" => |_: C| boxed(assists4::JoinElseWithIf),
+        "JoinIfWithElse.new" => |_: C| boxed(assists4::JoinIfWithElse),
+        "JoinIfWithInner.new" => |_: C| boxed(assists4::JoinIfWithInner),
+        "JoinIfWithOuter.new" => |_: C| boxed(assists4::JoinIfWithOuter),
+        "ReplaceIfElseWithConditional.new" => |_: C| boxed(assists4::ReplaceIfElseWithConditional),
+        "SplitAndCondition.new" => |_: C| boxed(assists4::SplitAndCondition),
+        "AddDiagnosticPropertyReference.new" => {
+            |_: C| boxed(assists5::AddDiagnosticPropertyReference)
+        }
+        "AddDigitSeparatorEveryThreeDigits.new" => {
+            |_: C| boxed(assists5::AddDigitSeparatorEveryThreeDigits)
+        }
+        "AddDigitSeparatorEveryTwoDigits.new" => {
+            |_: C| boxed(assists5::AddDigitSeparatorEveryTwoDigits)
+        }
+        "ConvertAddAllToSpread.new" => |_: C| boxed(assists5::ConvertAddAllToSpread::new()),
+        "ConvertClassToEnum.new" => |_: C| boxed(assists5::ConvertClassToEnum),
+        "ConvertClassToMixin.new" => |_: C| boxed(assists5::ConvertClassToMixin),
+        "ConvertConditionalExpressionToIfElement.new" => {
+            |_: C| boxed(assists5::ConvertConditionalExpressionToIfElement)
+        }
+        "ConvertDocumentationIntoLine.new" => |_: C| boxed(assists5::ConvertDocumentationIntoLine),
+        "ConvertIntoForIndex.new" => |_: C| boxed(assists5::ConvertIntoForIndex),
+        "ConvertIntoIsNot.new" => |_: C| boxed(assists5::ConvertIntoIsNot),
+        "ConvertIntoIsNotEmpty.new" => |_: C| boxed(assists5::ConvertIntoIsNotEmpty),
+        "ConvertMapFromIterableToForLiteral.new" => {
+            |_: C| boxed(assists5::ConvertMapFromIterableToForLiteral)
+        }
+        "ConvertPartOfToUri.new" => |_: C| boxed(assists5::ConvertPartOfToUri),
+        "ConvertToGenericFunctionSyntax.new" => {
+            |_: C| boxed(assists5::ConvertToGenericFunctionSyntax)
+        }
+        "ConvertToNullAware.new" => |_: C| boxed(assists5::ConvertToNullAware),
+        "ConvertToSetLiteral.new" => |_: C| boxed(assists5::ConvertToSetLiteral),
+        "DestructureLocalVariableAssignment.new" => {
+            |_: C| boxed(assists5::DestructureLocalVariableAssignment)
+        }
+        "InlineInvocation.new" => |_: C| boxed(assists5::InlineInvocation),
+        "JoinVariableDeclaration.new" => |_: C| boxed(assists5::JoinVariableDeclaration),
+        "RemoveAsync.new" => |_: C| boxed(assists5::RemoveAsync),
+        "RemoveUnnecessaryName.new" => |_: C| boxed(assists5::RemoveUnnecessaryName),
+        "ShadowField.new" => |_: C| boxed(assists5::ShadowField),
+        "SortChildPropertyLast.new" => |_: C| boxed(assists5::SortChildPropertyLast),
         "AddReturnNull.new" => |_: C| boxed(more2::AddReturnNull),
         "RemoveComment.ignore" => |_: C| boxed(more2::RemoveIgnoreComment),
         "RemoveIgnoredDiagnostic.new" => |_: C| boxed(more2::RemoveIgnoredDiagnostic::new()),
@@ -210,6 +284,7 @@ pub fn multi_generator(name: &str) -> Option<MultiProducerGenerator> {
         "DataDriven.new" => return Some(data_driven::data_driven_producers),
         "FlutterWrap.new" => return Some(flutter_wrap::flutter_wrap_producers),
         "FlutterWrapBuilders.new" => return Some(flutter_wrap::flutter_wrap_builders_producers),
+        "SurroundWith.new" => return Some(assists4::surround_with_producers),
         _ => {}
     }
     let g: MultiProducerGenerator = match ImportKind::from_name(name)? {

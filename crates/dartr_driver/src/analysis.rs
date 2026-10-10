@@ -43,8 +43,8 @@ impl Driver {
         enabled: &[&str],
     ) -> Option<ResolvedLibrary> {
         let world = &self.state.world;
-        let (library, units) = self.library_units(file)?;
         let tp = dartr_link::types_builder::world_type_provider(world);
+        let (library, units) = self.library_units_with_tp(file, &tp)?;
         let external = ExternalUnitCache::new(world, &tp, options, self.unit_sources());
         let input = LibraryAnalysisInput {
             world,
@@ -55,8 +55,11 @@ impl Driver {
             external: Some(&external),
             doc_import_libraries: self.doc_import_libraries(file),
         };
+        let pkg_info = (!enabled.is_empty())
+            .then(|| dartr_lints::LintPackageInfo::for_defining_path(&self.fs.file(file).path));
         let mut library = analyze_library(&input);
-        let diagnostics = crate::lints::compute_lints(&input, &library, enabled);
+        let diagnostics =
+            crate::lints::compute_lints_with_package(&input, &library, enabled, pkg_info.as_ref());
         for (unit, lints) in library.units.iter_mut().zip(diagnostics) {
             unit.diagnostics.extend(lints);
         }
@@ -107,13 +110,17 @@ impl Driver {
         let tp = dartr_link::types_builder::world_type_provider(world);
         let external =
             ExternalUnitCache::new(world, &tp, AnalysisOptions::default(), self.unit_sources());
+        let mut pkg_cache = dartr_lints::LintPackageCache::default();
         let jobs: Vec<_> = libraries
             .iter()
             .map(|job| {
+                let pkg_info = (!job.3.is_empty())
+                    .then(|| pkg_cache.for_defining_path(&self.fs.file(job.0).path));
                 (
                     job,
-                    self.library_units(job.0),
+                    self.library_units_with_tp(job.0, &tp),
                     self.doc_import_libraries(job.0),
+                    pkg_info,
                 )
             })
             .collect();
@@ -124,40 +131,47 @@ impl Driver {
                 .unwrap_or_else(|| "panic".to_string())
         };
         jobs.par_iter()
-            .map(|((file, options, unignorable, rules), job, doc_imports)| {
-                let Some((library, units)) = job else {
-                    return f(
-                        *file,
-                        &[],
-                        Err("library is not linked".to_string()),
-                        Vec::new(),
-                    );
-                };
-                let input = LibraryAnalysisInput {
-                    world,
-                    type_provider: &tp,
-                    library: *library,
-                    units: units.clone(),
-                    options: *options,
-                    external: Some(&external),
-                    doc_import_libraries: doc_imports.clone(),
-                };
-                let result = catch_unwind(AssertUnwindSafe(|| {
-                    analyze_library_with_unignorable(&input, unignorable)
-                }))
-                .map_err(panic_message);
-                let lints = match &result {
-                    Ok(resolved) if !rules.is_empty() => {
-                        let enabled: Vec<&str> = rules.iter().map(String::as_str).collect();
-                        catch_unwind(AssertUnwindSafe(|| {
-                            crate::lints::compute_lints_unfiltered(&input, resolved, &enabled)
-                        }))
-                        .unwrap_or_default()
-                    }
-                    _ => Vec::new(),
-                };
-                f(*file, units, result, lints)
-            })
+            .map(
+                |((file, options, unignorable, rules), job, doc_imports, pkg_info)| {
+                    let Some((library, units)) = job else {
+                        return f(
+                            *file,
+                            &[],
+                            Err("library is not linked".to_string()),
+                            Vec::new(),
+                        );
+                    };
+                    let input = LibraryAnalysisInput {
+                        world,
+                        type_provider: &tp,
+                        library: *library,
+                        units: units.clone(),
+                        options: *options,
+                        external: Some(&external),
+                        doc_import_libraries: doc_imports.clone(),
+                    };
+                    let result = catch_unwind(AssertUnwindSafe(|| {
+                        analyze_library_with_unignorable(&input, unignorable)
+                    }))
+                    .map_err(panic_message);
+                    let lints = match &result {
+                        Ok(resolved) if !rules.is_empty() => {
+                            let enabled: Vec<&str> = rules.iter().map(String::as_str).collect();
+                            catch_unwind(AssertUnwindSafe(|| {
+                                crate::lints::compute_lints_unfiltered_with_package(
+                                    &input,
+                                    resolved,
+                                    &enabled,
+                                    pkg_info.as_deref(),
+                                )
+                            }))
+                            .unwrap_or_default()
+                        }
+                        _ => Vec::new(),
+                    };
+                    f(*file, units, result, lints)
+                },
+            )
             .collect()
     }
 
@@ -213,17 +227,25 @@ impl Driver {
     /// not linked. Use it to analyze many libraries in parallel: the driver
     /// is not `Sync`, but the world snapshot and the unit inputs are.
     pub fn library_units(&self, file: FileId) -> Option<LibraryUnits> {
+        let tp = dartr_link::types_builder::world_type_provider(&self.state.world);
+        self.library_units_with_tp(file, &tp)
+    }
+
+    fn library_units_with_tp(
+        &self,
+        file: FileId,
+        tp: &dartr_element::TypeProvider,
+    ) -> Option<LibraryUnits> {
         let world = &self.state.world;
         let uri = &self.fs.file(file).uri_str;
         let library = *world.libraries.get(uri)?;
-        let tp = dartr_link::types_builder::world_type_provider(world);
         let features = FeatureSet::default();
         let sink = NoopSink;
         let ctx = Ctx {
             world,
             current: None,
             local: None,
-            tp: &tp,
+            tp,
             features: &features,
             req: &sink,
         };

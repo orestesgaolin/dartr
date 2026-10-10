@@ -117,6 +117,32 @@ impl Server {
     pub(crate) fn completion(&mut self, params: &Value) -> ErrorOr<Value> {
         let path = self.path_of_doc(params)?;
         if !path.ends_with(".dart") {
+            let Some(content) = self.content(&path) else {
+                return Err(crate::mapping::ResponseError::with_data(
+                    crate::mapping::codes::FILE_NOT_ANALYZED,
+                    "File is not being analyzed",
+                    &path,
+                ));
+            };
+            let line_info = dartr_syntax::LineInfo::from_content(&content);
+            let offset = self.position_offset(&line_info, params)?;
+            if path.ends_with(".yaml")
+                && let Some(kind) = c::yaml::YamlFileKind::from_path(&path)
+            {
+                let caps = self.completion_capabilities();
+                let preferred_documentation =
+                    self.client_configuration.global().preferred_documentation();
+                let items = c::yaml::yaml_completion_items(
+                    kind,
+                    &path,
+                    &content,
+                    &line_info,
+                    offset as usize,
+                    &caps,
+                    preferred_documentation,
+                );
+                return Ok(json!({"isIncomplete": false, "items": items}));
+            }
             return Ok(json!({"isIncomplete": false, "items": []}));
         }
         let resolved = match self.require_resolved_unit(&path) {

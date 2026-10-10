@@ -14,9 +14,7 @@ use dartr_element::{
     AnyElement, Ctx, EId, ElemRef, ElementId, FormalParameterElement, ParameterKind, Tag,
     TypeAliasElement, TypeId, TypeKind,
 };
-use dartr_parser::ExperimentalFlag;
 use dartr_project::fs;
-use dartr_project::yaml::{NodeKind as YamlNodeKind, Scalar, YamlNode, load_yaml_node};
 use dartr_server::completion::candidate::{Candidate, Kind, SuggestionKind, display_name};
 use dartr_server::completion::lsp::type_display;
 use dartr_server::completion::{self as c, elem};
@@ -804,435 +802,10 @@ fn create_local_suggestion_element(
 // YAML Completion (analysis_options.yaml, fix_data.yaml, pubspec.yaml)
 // ---------------------------------------------------------------------------
 
-#[derive(Clone)]
-enum YamlProducer {
-    Empty,
-    Boolean,
-    Enum(&'static [&'static str]),
-    FilePath,
-    LintRules,
-    Experiment,
-    List(Box<YamlProducer>),
-    Map(Vec<(&'static str, YamlProducer)>),
-}
-
-impl YamlProducer {
-    fn producer_for_key(&self, key: &str) -> Option<&YamlProducer> {
-        match self {
-            YamlProducer::Map(entries) => entries.iter().find(|(k, _)| *k == key).map(|(_, v)| v),
-            YamlProducer::List(elem) => Some(elem),
-            _ => None,
-        }
-    }
-
-    fn suggestions(&self, file_path: &str) -> Vec<CompletionSuggestion> {
-        match self {
-            YamlProducer::Empty => Vec::new(),
-            YamlProducer::Boolean => vec![
-                yaml_identifier("true", 1000, None),
-                yaml_identifier("false", 1000, None),
-            ],
-            YamlProducer::Enum(values) => values
-                .iter()
-                .map(|v| yaml_identifier(v, 1000, None))
-                .collect(),
-            YamlProducer::FilePath => file_path_suggestions(file_path),
-            YamlProducer::LintRules => dartr_project::lint_rules::LINT_RULE_NAMES
-                .iter()
-                .copied()
-                .filter(|name| {
-                    !matches!(
-                        *name,
-                        "always_require_non_null_named_parameters"
-                            | "avoid_as"
-                            | "avoid_returning_null"
-                            | "avoid_returning_null_for_future"
-                            | "avoid_unstable_final_fields"
-                            | "enable_null_safety"
-                            | "invariant_booleans"
-                            | "iterable_contains_unrelated_type"
-                            | "list_remove_unrelated_type"
-                            | "package_api_docs"
-                            | "prefer_bool_in_asserts"
-                            | "prefer_equal_for_default_values"
-                            | "super_goes_last"
-                            | "unsafe_html"
-                    )
-                })
-                .map(|name| yaml_identifier(name, 1000, None))
-                .collect(),
-            YamlProducer::Experiment => ExperimentalFlag::VALUES
-                .iter()
-                .copied()
-                .filter(|f| !f.is_enabled_by_default())
-                .map(|f| {
-                    yaml_identifier(f.name(), 1000, experimental_flag_doc(f).map(str::to_string))
-                })
-                .collect(),
-            YamlProducer::List(element) => element.suggestions(file_path),
-            YamlProducer::Map(children) => children
-                .iter()
-                .map(|(k, v)| {
-                    let text = if matches!(v, YamlProducer::List(_)) {
-                        format!("{k}:")
-                    } else {
-                        format!("{k}: ")
-                    };
-                    yaml_identifier(&text, 1000, None)
-                })
-                .collect(),
-        }
-    }
-}
-
-fn yaml_identifier(
-    identifier: &str,
-    relevance: i64,
-    doc_complete: Option<String>,
-) -> CompletionSuggestion {
-    CompletionSuggestion {
-        kind: CompletionSuggestionKind::IDENTIFIER,
-        relevance,
-        completion: identifier.to_string(),
-        display_text: None,
-        replacement_offset: None,
-        replacement_length: None,
-        selection_offset: utf16_len(identifier) as i64,
-        selection_length: 0,
-        is_deprecated: false,
-        is_potential: false,
-        doc_summary: None,
-        doc_complete,
-        declaring_type: None,
-        default_argument_list_string: None,
-        default_argument_list_text_ranges: None,
-        element: None,
-        return_type: None,
-        parameter_names: None,
-        parameter_types: None,
-        required_parameter_count: None,
-        has_named_parameters: None,
-        parameter_name: None,
-        parameter_type: None,
-        library_uri: None,
-        is_not_imported: None,
-    }
-}
-
-fn file_path_suggestions(_file_path: &str) -> Vec<CompletionSuggestion> {
-    Vec::new()
-}
-
-fn experimental_flag_doc(flag: ExperimentalFlag) -> Option<&'static str> {
-    Some(match flag {
-        ExperimentalFlag::AnonymousMethods => "Anonymous methods.",
-        ExperimentalFlag::Augmentations => "Augmentations - enhancing declarations from outside",
-        ExperimentalFlag::ClassModifiers => "Class modifiers",
-        ExperimentalFlag::ConstFunctions => {
-            "Allow more of the Dart language to be executed in const expressions."
-        }
-        ExperimentalFlag::ConstantUpdate2018 => "Enhanced constant expressions",
-        ExperimentalFlag::ConstructorTearoffs => {
-            "Allow constructor tear-offs and explicit generic instantiations."
-        }
-        ExperimentalFlag::ControlFlowCollections => "Control Flow Collections",
-        ExperimentalFlag::DataAssets => "Enable data assets in hooks.",
-        ExperimentalFlag::DigitSeparators => "Number literals with digit separators.",
-        ExperimentalFlag::DotShorthands => "Shorter dot syntax for static accesses.",
-        ExperimentalFlag::EnhancedEnums => "Enhanced Enums",
-        ExperimentalFlag::EnhancedParts => {
-            "Generalize parts to be nested and have exports/imports."
-        }
-        ExperimentalFlag::ExtensionMethods => "Extension Methods",
-        ExperimentalFlag::GenericMetadata => {
-            "Allow annotations to accept type arguments; also allow generic function types as type arguments."
-        }
-        ExperimentalFlag::GetterSetterError => {
-            "Stop reporting errors about mismatching types in a getter/setter pair."
-        }
-        ExperimentalFlag::InferenceUpdate1 => {
-            "Horizontal type inference for function expressions passed to generic invocations."
-        }
-        ExperimentalFlag::InferenceUpdate2 => "Type promotion for fields",
-        ExperimentalFlag::InferenceUpdate3 => {
-            "Better handling of conditional expressions, and switch expressions."
-        }
-        ExperimentalFlag::InferenceUpdate4 => "A bundle of updates to type inference.",
-        ExperimentalFlag::InferenceUsingBounds => {
-            "Use type parameter bounds more extensively in type inference."
-        }
-        ExperimentalFlag::InlineClass => "Extension Types",
-        ExperimentalFlag::Macros => "Static meta-programming",
-        ExperimentalFlag::NamedArgumentsAnywhere => "Named Arguments Anywhere",
-        ExperimentalFlag::NativeAssets => "Compile and bundle native assets.",
-        ExperimentalFlag::NonNullable => "Non Nullable by default",
-        ExperimentalFlag::NonfunctionTypeAliases => {
-            "Type aliases define a <type>, not just a <functionType>"
-        }
-        ExperimentalFlag::NullAwareElements => {
-            "Null-aware elements and map entries in collections."
-        }
-        ExperimentalFlag::Patterns => "Patterns",
-        ExperimentalFlag::PrimaryConstructors => "Less verbose constructors.",
-        ExperimentalFlag::PrivateNamedParameters => {
-            "Allow named parameters with private names that refer to fields."
-        }
-        ExperimentalFlag::RecordUse => "Output arguments used by static functions.",
-        ExperimentalFlag::Records => "Records",
-        ExperimentalFlag::SealedClass => "Sealed class",
-        ExperimentalFlag::SetLiterals => "Set Literals",
-        ExperimentalFlag::SoundFlowAnalysis => {
-            "Assume sound null safety when computing type promotion, reachability, and definite assignment."
-        }
-        ExperimentalFlag::SpreadCollections => "Spread Collections",
-        ExperimentalFlag::StaticExtensions => "Extensions with static capabilities.",
-        ExperimentalFlag::SuperParameters => "Super-Initializer Parameters",
-        ExperimentalFlag::TestExperiment => {
-            "Has no effect. Can be used for testing the --enable-experiment command line functionality."
-        }
-        ExperimentalFlag::ThisPromotion => "Type promotion for `this`.",
-        ExperimentalFlag::TripleShift => "Triple-shift operator",
-        ExperimentalFlag::UnnamedLibraries => "Unnamed libraries",
-        ExperimentalFlag::UnquotedImports => "Shorter import syntax.",
-        ExperimentalFlag::Variance => "Sound variance",
-        ExperimentalFlag::WildcardVariables => {
-            "Local declarations and parameters named `_` are non-binding."
-        }
-    })
-}
-
-fn analysis_options_producer() -> YamlProducer {
-    YamlProducer::Map(vec![
-        ("include", YamlProducer::FilePath),
-        (
-            "analyzer",
-            YamlProducer::Map(vec![
-                (
-                    "enable-experiment",
-                    YamlProducer::List(Box::new(YamlProducer::Experiment)),
-                ),
-                ("errors", YamlProducer::Empty),
-                ("exclude", YamlProducer::Empty),
-                (
-                    "language",
-                    YamlProducer::Map(vec![
-                        ("strict-casts", YamlProducer::Boolean),
-                        ("strict-inference", YamlProducer::Boolean),
-                        ("strict-raw-types", YamlProducer::Boolean),
-                    ]),
-                ),
-                (
-                    "optional-checks",
-                    YamlProducer::Map(vec![("chrome-os-manifest-checks", YamlProducer::Boolean)]),
-                ),
-                ("plugins", YamlProducer::Empty),
-                ("propagate-linter-exceptions", YamlProducer::Empty),
-            ]),
-        ),
-        (
-            "code-style",
-            YamlProducer::Map(vec![("format", YamlProducer::Boolean)]),
-        ),
-        (
-            "formatter",
-            YamlProducer::Map(vec![
-                ("page_width", YamlProducer::Empty),
-                (
-                    "trailing_commas",
-                    YamlProducer::Enum(&["automate", "preserve"]),
-                ),
-            ]),
-        ),
-        (
-            "linter",
-            YamlProducer::Map(vec![(
-                "rules",
-                YamlProducer::List(Box::new(YamlProducer::LintRules)),
-            )]),
-        ),
-        ("plugins", YamlProducer::Empty),
-    ])
-}
-
-fn fix_data_producer() -> YamlProducer {
-    let element_producer = YamlProducer::Map(vec![
-        ("uris", YamlProducer::List(Box::new(YamlProducer::Empty))),
-        ("class", YamlProducer::Empty),
-        ("constant", YamlProducer::Empty),
-        ("constructor", YamlProducer::Empty),
-        ("enum", YamlProducer::Empty),
-        ("extension", YamlProducer::Empty),
-        ("field", YamlProducer::Empty),
-        ("function", YamlProducer::Empty),
-        ("getter", YamlProducer::Empty),
-        ("method", YamlProducer::Empty),
-        ("mixin", YamlProducer::Empty),
-        ("setter", YamlProducer::Empty),
-        ("typedef", YamlProducer::Empty),
-        ("variable", YamlProducer::Empty),
-        ("inClass", YamlProducer::Empty),
-        ("inEnum", YamlProducer::Empty),
-        ("inExtension", YamlProducer::Empty),
-        ("inMixin", YamlProducer::Empty),
-    ]);
-    let changes_producer = YamlProducer::List(Box::new(YamlProducer::Map(vec![
-        (
-            "kind",
-            YamlProducer::Enum(&[
-                "addParameter",
-                "addTypeParameter",
-                "removeParameter",
-                "rename",
-                "renameParameter",
-                "replacedBy",
-            ]),
-        ),
-        ("index", YamlProducer::Empty),
-        ("name", YamlProducer::Empty),
-        (
-            "style",
-            YamlProducer::Enum(&[
-                "optional_named",
-                "optional_positional",
-                "required_named",
-                "required_positional",
-            ]),
-        ),
-        (
-            "argumentValue",
-            YamlProducer::Map(vec![
-                ("expression", YamlProducer::Empty),
-                ("requiredIf", YamlProducer::Empty),
-            ]),
-        ),
-        ("extends", YamlProducer::Empty),
-        ("newName", YamlProducer::Empty),
-        ("oldName", YamlProducer::Empty),
-        ("newElement", element_producer.clone()),
-    ])));
-    YamlProducer::Map(vec![
-        ("version", YamlProducer::Empty),
-        (
-            "transforms",
-            YamlProducer::List(Box::new(YamlProducer::Map(vec![
-                ("title", YamlProducer::Empty),
-                ("date", YamlProducer::Empty),
-                ("bulkApply", YamlProducer::Boolean),
-                ("element", element_producer),
-                ("changes", changes_producer.clone()),
-                (
-                    "oneOf",
-                    YamlProducer::List(Box::new(YamlProducer::Map(vec![
-                        ("if", YamlProducer::Empty),
-                        ("changes", changes_producer),
-                    ]))),
-                ),
-                ("variables", YamlProducer::Empty),
-            ]))),
-        ),
-    ])
-}
-
-fn pubspec_producer() -> YamlProducer {
-    YamlProducer::Map(vec![
-        ("name", YamlProducer::Empty),
-        ("version", YamlProducer::Empty),
-        ("description", YamlProducer::Empty),
-        ("homepage", YamlProducer::Empty),
-        ("repository", YamlProducer::Empty),
-        ("issue_tracker", YamlProducer::Empty),
-        ("documentation", YamlProducer::Empty),
-        ("executables", YamlProducer::Empty),
-        ("publish_to", YamlProducer::Empty),
-        (
-            "screenshots",
-            YamlProducer::List(Box::new(YamlProducer::Map(vec![
-                ("description", YamlProducer::Empty),
-                ("path", YamlProducer::FilePath),
-            ]))),
-        ),
-        ("topics", YamlProducer::Empty),
-        (
-            "environment",
-            YamlProducer::Map(vec![
-                ("flutter", YamlProducer::Empty),
-                ("sdk", YamlProducer::Empty),
-            ]),
-        ),
-        (
-            "workspace",
-            YamlProducer::List(Box::new(YamlProducer::FilePath)),
-        ),
-        ("resolution", YamlProducer::Empty),
-        ("dependencies", YamlProducer::Empty),
-        ("dev_dependencies", YamlProducer::Empty),
-        ("dependency_overrides", YamlProducer::Empty),
-        (
-            "flutter",
-            YamlProducer::Map(vec![
-                (
-                    "assets",
-                    YamlProducer::List(Box::new(YamlProducer::FilePath)),
-                ),
-                (
-                    "fonts",
-                    YamlProducer::List(Box::new(YamlProducer::Map(vec![
-                        ("family", YamlProducer::Empty),
-                        (
-                            "fonts",
-                            YamlProducer::List(Box::new(YamlProducer::Map(vec![
-                                ("asset", YamlProducer::FilePath),
-                                ("style", YamlProducer::Enum(&["italic", "normal"])),
-                                (
-                                    "weight",
-                                    YamlProducer::Enum(&[
-                                        "100", "200", "300", "400", "500", "600", "700", "800",
-                                        "900",
-                                    ]),
-                                ),
-                            ]))),
-                        ),
-                    ]))),
-                ),
-                ("generate", YamlProducer::Boolean),
-                (
-                    "module",
-                    YamlProducer::Map(vec![
-                        ("androidX", YamlProducer::Boolean),
-                        ("androidPackage", YamlProducer::Empty),
-                        ("iosBundleIdentifier", YamlProducer::Empty),
-                    ]),
-                ),
-                (
-                    "plugin",
-                    YamlProducer::Map(vec![("platforms", YamlProducer::Empty)]),
-                ),
-                ("uses-material-design", YamlProducer::Boolean),
-            ]),
-        ),
-    ])
-}
-
 /// Computes YAML completions for `analysis_options.yaml`, `fix_data.yaml`, and `pubspec.yaml`,
 /// following `YamlCompletionGenerator.getSuggestions`.
 pub fn compute_yaml_suggestions(file_path: &str, offset: i64) -> CompletionGetSuggestions2Result {
-    let file_name = std::path::Path::new(file_path)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
-    let top_level_producer = if file_name == "analysis_options.yaml" {
-        analysis_options_producer()
-    } else if file_name == "fix_data.yaml" {
-        fix_data_producer()
-    } else if file_name == "pubspec.yaml"
-        || (file_path.contains("/fix_data/") && file_path.ends_with(".yaml"))
-    {
-        if file_name == "pubspec.yaml" {
-            pubspec_producer()
-        } else {
-            fix_data_producer()
-        }
-    } else {
+    let Some(kind) = c::yaml::YamlFileKind::from_path(file_path) else {
         return CompletionGetSuggestions2Result {
             replacement_offset: offset,
             replacement_length: 0,
@@ -1250,178 +823,51 @@ pub fn compute_yaml_suggestions(file_path: &str, offset: i64) -> CompletionGetSu
         };
     };
 
-    let Ok(root) = load_yaml_node(&content) else {
-        return CompletionGetSuggestions2Result {
-            replacement_offset: 0,
-            replacement_length: 0,
-            suggestions: Vec::new(),
-            is_incomplete: false,
-        };
-    };
-
-    let offset_usize = offset.max(0) as usize;
-    let node_path = yaml_path_to_offset(&root, &content, offset_usize);
-    let Some(&completion_node) = node_path.last() else {
-        return CompletionGetSuggestions2Result {
-            replacement_offset: 0,
-            replacement_length: 0,
-            suggestions: Vec::new(),
-            is_incomplete: false,
-        };
-    };
-
-    let mut siblings_in_list: Vec<String> = Vec::new();
-    let mut siblings_in_map: Vec<String> = Vec::new();
-    if node_path.len() >= 2 {
-        let parent = node_path[node_path.len() - 2];
-        match &parent.kind {
-            YamlNodeKind::List(items) => {
-                for item in items {
-                    if !std::ptr::eq(item, completion_node)
-                        && let YamlNodeKind::Scalar(Scalar::String(s)) = &item.kind
-                    {
-                        siblings_in_list.push(s.clone());
-                    }
-                }
-            }
-            YamlNodeKind::Map(entries) => {
-                for (k, v) in entries {
-                    if !std::ptr::eq(k, completion_node)
-                        && let YamlNodeKind::Scalar(Scalar::String(s)) = &k.kind
-                    {
-                        if matches!(&v.kind, YamlNodeKind::List(_)) {
-                            siblings_in_map.push(format!("{s}:"));
-                        } else {
-                            siblings_in_map.push(format!("{s}: "));
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-    } else if let YamlNodeKind::Map(entries) = &completion_node.kind {
-        for (k, v) in entries {
-            if let YamlNodeKind::Scalar(Scalar::String(s)) = &k.kind {
-                if matches!(&v.kind, YamlNodeKind::List(_)) {
-                    siblings_in_map.push(format!("{s}:"));
-                } else {
-                    siblings_in_map.push(format!("{s}: "));
-                }
-            }
-        }
-    }
-
-    let Some(producer) = producer_for_node_path(&top_level_producer, &node_path) else {
-        return CompletionGetSuggestions2Result {
-            replacement_offset: 0,
-            replacement_length: 0,
-            suggestions: Vec::new(),
-            is_incomplete: false,
-        };
-    };
-
-    let mut suggestions = producer.suggestions(file_path);
-    suggestions.retain(|s| {
-        !siblings_in_list.contains(&s.completion) && !siblings_in_map.contains(&s.completion)
-    });
-
-    let (replacement_offset, replacement_length) = match &completion_node.kind {
-        YamlNodeKind::Scalar(_) if node_contains_offset(completion_node, offset_usize) => (
-            completion_node.span.start as i64,
-            completion_node.span.length() as i64,
-        ),
-        _ => (offset, 0),
-    };
+    let results = c::yaml::compute_yaml_suggestions_with_content(
+        kind,
+        file_path,
+        &content,
+        offset.max(0) as usize,
+    );
+    let suggestions = results
+        .suggestions
+        .into_iter()
+        .map(|s| CompletionSuggestion {
+            kind: match s.kind {
+                c::yaml::YamlSuggestionKind::Identifier => CompletionSuggestionKind::IDENTIFIER,
+                c::yaml::YamlSuggestionKind::PackageName => CompletionSuggestionKind::PackageName,
+            },
+            relevance: s.relevance,
+            completion: s.completion,
+            display_text: None,
+            replacement_offset: None,
+            replacement_length: None,
+            selection_offset: s.selection_offset as i64,
+            selection_length: s.selection_length as i64,
+            is_deprecated: false,
+            is_potential: false,
+            doc_summary: None,
+            doc_complete: s.doc_complete,
+            declaring_type: None,
+            default_argument_list_string: None,
+            default_argument_list_text_ranges: None,
+            element: None,
+            return_type: None,
+            parameter_names: None,
+            parameter_types: None,
+            required_parameter_count: None,
+            has_named_parameters: None,
+            parameter_name: None,
+            parameter_type: None,
+            library_uri: None,
+            is_not_imported: None,
+        })
+        .collect();
 
     CompletionGetSuggestions2Result {
-        replacement_offset,
-        replacement_length,
+        replacement_offset: results.replacement_offset as i64,
+        replacement_length: results.replacement_length as i64,
         suggestions,
         is_incomplete: false,
     }
-}
-
-fn yaml_path_to_offset<'a>(root: &'a YamlNode, _content: &str, offset: usize) -> Vec<&'a YamlNode> {
-    let mut path = Vec::new();
-    let mut cur = root;
-    loop {
-        path.push(cur);
-        match &cur.kind {
-            YamlNodeKind::List(items) => {
-                let child = items.iter().find(|n| node_contains_offset(n, offset));
-                match child {
-                    Some(c) => cur = c,
-                    None => break,
-                }
-            }
-            YamlNodeKind::Map(entries) => {
-                let mut next = None;
-                for (i, (k, v)) in entries.iter().enumerate() {
-                    if node_contains_offset(k, offset) {
-                        next = Some(k);
-                        break;
-                    }
-                    let next_entry_offset = entries.get(i + 1).map(|(nk, _)| nk.span.start);
-                    if node_contains_offset(v, offset)
-                        || (matches!(&v.kind, YamlNodeKind::Scalar(Scalar::Null))
-                            && next_entry_offset.is_none_or(|ne| offset < ne))
-                    {
-                        next = Some(v);
-                        break;
-                    }
-                }
-                match next {
-                    Some(c) => cur = c,
-                    None => break,
-                }
-            }
-            YamlNodeKind::Scalar(_) => break,
-        }
-    }
-    path
-}
-
-fn node_contains_offset(node: &YamlNode, offset: usize) -> bool {
-    let span = node.span;
-    if matches!(&node.kind, YamlNodeKind::Scalar(Scalar::Null)) && span.length() == 0 {
-        return false;
-    }
-    span.start <= offset && offset <= span.end
-}
-
-fn producer_for_node_path<'a>(
-    top: &'a YamlProducer,
-    path: &[&YamlNode],
-) -> Option<&'a YamlProducer> {
-    let mut producer = top;
-    for i in 0..path.len().saturating_sub(1) {
-        let node = path[i];
-        let child = path[i + 1];
-        match &node.kind {
-            YamlNodeKind::Map(entries) => {
-                let mut found_key = None;
-                for (k, v) in entries {
-                    if std::ptr::eq(k, child) {
-                        return Some(producer);
-                    }
-                    if std::ptr::eq(v, child) {
-                        if let YamlNodeKind::Scalar(Scalar::String(s)) = &k.kind {
-                            found_key = Some(s.as_str());
-                        }
-                        break;
-                    }
-                }
-                let key = found_key?;
-                producer = producer.producer_for_key(key)?;
-            }
-            YamlNodeKind::List(_) => {
-                producer = match producer {
-                    YamlProducer::List(inner) => inner,
-                    _ => return None,
-                };
-            }
-            YamlNodeKind::Scalar(_) => return None,
-        }
-    }
-    Some(producer)
 }

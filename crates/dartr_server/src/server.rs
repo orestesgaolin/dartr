@@ -58,7 +58,7 @@ use crate::source_edits::apply_changes_with_edits;
 use crate::transport::{Channel, read_message};
 use crate::uri::{UriError, normalize, path_to_uri, uri_to_path};
 
-mod code_actions;
+pub(crate) mod code_actions;
 mod completion;
 mod editor;
 pub mod fix_cli;
@@ -175,6 +175,13 @@ enum Pending {
     RenamePrompt {
         request_id: Value,
         edit: Value,
+        class_file_rename: Option<(String, String, Value)>,
+    },
+    /// The prompt of renaming a class file along with the class.
+    RenameClassFile {
+        request_id: Value,
+        edit: Value,
+        rename_op: Value,
     },
     /// The prompt of `refactor.perform` with problems.
     RefactorPrompt {
@@ -592,6 +599,7 @@ impl Server {
                 self.catching(method, |s| s.call_hierarchy_outgoing(&params))
             }
             "workspace/symbol" => self.catching(method, |s| s.workspace_symbol(&params)),
+            "workspace/willRenameFiles" => self.catching(method, |s| s.will_rename_files(&params)),
             "textDocument/codeAction" => self.catching(method, |s| s.code_action(&params)),
             "textDocument/documentColor" => self.catching(method, |s| s.document_color(&params)),
             "textDocument/colorPresentation" => {
@@ -768,9 +776,16 @@ impl Server {
                 command_name,
                 edit,
             } => self.apply_edit_response(&request_id, &command_name, &edit, message),
-            Pending::RenamePrompt { request_id, edit } => {
-                self.rename_prompt_response(&request_id, edit, message)
-            }
+            Pending::RenamePrompt {
+                request_id,
+                edit,
+                class_file_rename,
+            } => self.rename_prompt_response(&request_id, edit, class_file_rename, message),
+            Pending::RenameClassFile {
+                request_id,
+                edit,
+                rename_op,
+            } => self.rename_class_file_response(&request_id, edit, rename_op, message),
             Pending::RefactorPrompt { request_id, edit } => {
                 self.refactor_prompt_response(&request_id, edit, message)
             }

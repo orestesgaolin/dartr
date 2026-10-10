@@ -18,12 +18,17 @@ use crate::navigation::{self, Collector, Target};
 use crate::uri::path_to_uri;
 
 /// A resolved unit: its library and its index (Dart `ResolvedUnitResult`).
+#[derive(Clone)]
 pub struct ResolvedUnitRef {
     pub library: Arc<ResolvedLibraryResult>,
     pub index: usize,
 }
 
 impl ResolvedUnitRef {
+    pub fn path(&self) -> &str {
+        &self.library.inputs[self.index].path
+    }
+
     pub fn unit(&self) -> &dartr_resolver::library_analyzer::ResolvedUnit {
         &self.library.library.units[self.index]
     }

@@ -48,6 +48,17 @@ pub mod commands {
     pub const PERFORM_REFACTOR: &str = "refactor.perform";
     pub const VALIDATE_REFACTOR: &str = "refactor.validate";
     pub const LOG_ACTION: &str = "dart.logAction";
+    pub const ADD_CONSTRUCTOR_NAME: &str = "dart.refactor.add_constructor_name";
+    pub const ADD_IMPORT_PREFIX: &str = "dart.refactor_add.import_prefix";
+    pub const CONVERT_ALL_FORMAL_PARAMETERS_TO_NAMED: &str =
+        "dart.refactor.convert_all_formal_parameters_to_named";
+    pub const CONVERT_SELECTED_FORMAL_PARAMETERS_TO_NAMED: &str =
+        "dart.refactor.convert_selected_formal_parameters_to_named";
+    pub const MOVE_SELECTED_FORMAL_PARAMETERS_LEFT: &str =
+        "dart.refactor.move_selected_formal_parameters_left";
+    pub const MOVE_TOP_LEVEL_TO_FILE: &str = "dart.refactor.move_top_level_to_file";
+    pub const REMOVE_CONSTRUCTOR_NAME: &str = "dart.refactor.remove_constructor_name";
+    pub const REMOVE_IMPORT_PREFIX: &str = "dart.refactor.remove_import_prefix";
 
     /// The commands that dartr executes (a subset of Dart
     /// `Commands.serverSupportedCommands`, in Dart order).
@@ -61,6 +72,14 @@ pub mod commands {
         PERFORM_REFACTOR,
         VALIDATE_REFACTOR,
         LOG_ACTION,
+        ADD_CONSTRUCTOR_NAME,
+        ADD_IMPORT_PREFIX,
+        CONVERT_ALL_FORMAL_PARAMETERS_TO_NAMED,
+        CONVERT_SELECTED_FORMAL_PARAMETERS_TO_NAMED,
+        MOVE_SELECTED_FORMAL_PARAMETERS_LEFT,
+        MOVE_TOP_LEVEL_TO_FILE,
+        REMOVE_CONSTRUCTOR_NAME,
+        REMOVE_IMPORT_PREFIX,
     ];
 }
 
@@ -1195,6 +1214,10 @@ impl Server {
                     )));
                 };
                 self.send_workspace_edit_to_client(id, "Send Workspace Edit", edit)
+            }
+            c if crate::refactoring::producer::is_framework_refactor_command(c) => {
+                let progress_token = params.get("workDoneToken").cloned();
+                self.framework_refactor_command(id, c, &parameters, progress_token)
             }
             _ => Some(Ok(Value::Null)),
         }
