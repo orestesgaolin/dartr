@@ -101,10 +101,31 @@ impl ElementMetadata for EngineMetadata<'_> {
 }
 
 /// Defining unit first, followed by parts. Each unit reads its own local arena.
+/// The lints that an ignore comment suppresses are removed.
 pub fn compute_lints(
     input: &LibraryAnalysisInput<'_>,
     library: &ResolvedLibrary,
     enabled: &[&str],
+) -> Vec<Vec<dartr_lints::LintDiagnostic>> {
+    compute_lints_with(input, library, enabled, true)
+}
+
+/// [compute_lints] without the ignore filtering, for callers that validate
+/// the ignore comments (Dart `IgnoreValidator` needs the ignored
+/// diagnostics) and filter the diagnostics of the file together.
+pub fn compute_lints_unfiltered(
+    input: &LibraryAnalysisInput<'_>,
+    library: &ResolvedLibrary,
+    enabled: &[&str],
+) -> Vec<Vec<dartr_lints::LintDiagnostic>> {
+    compute_lints_with(input, library, enabled, false)
+}
+
+fn compute_lints_with(
+    input: &LibraryAnalysisInput<'_>,
+    library: &ResolvedLibrary,
+    enabled: &[&str],
+    filter_ignored: bool,
 ) -> Vec<Vec<dartr_lints::LintDiagnostic>> {
     if enabled.is_empty() {
         return vec![vec![]; library.units.len()];
@@ -200,7 +221,11 @@ pub fn compute_lints(
             }),
         })
         .collect();
-    let mut diagnostics = lint_resolved_library(&units, enabled);
+    let mut diagnostics = if filter_ignored {
+        lint_resolved_library(&units, enabled)
+    } else {
+        dartr_lints::lint_resolved_library_unfiltered(&units, enabled)
+    };
     for (unit, output) in library.units.iter().zip(&mut diagnostics) {
         if unit.panic.is_some() {
             output.clear();

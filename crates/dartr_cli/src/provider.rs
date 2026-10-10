@@ -117,6 +117,10 @@ pub(crate) struct FileSettings {
     pub(crate) unignorable_names: HashSet<String>,
     /// The enabled lint rules that `dartr_lints` implements.
     pub(crate) lint_rules: Vec<&'static str>,
+    /// The enabled lint rules that `dartr_lints` does not implement: an
+    /// ignore of one of them is not reported as unnecessary, since dartr
+    /// cannot know whether the rule reports there.
+    pub(crate) unimplemented_lint_rules: HashSet<String>,
 }
 
 impl FileSettings {
@@ -151,19 +155,23 @@ impl FileSettings {
         let implemented = dartr_lints::rules::implemented_rules();
         let debug = std::env::var_os("DARTR_DEBUG_LINTS").is_some();
         let mut lint_rules = Vec::new();
+        let mut unimplemented_lint_rules = HashSet::new();
         for name in &options.lint_rules {
             match implemented.iter().find(|n| **n == name.as_str()) {
                 Some(rule) => lint_rules.push(*rule),
-                None if debug => {
-                    eprintln!("dartr: lint rule {name} is not implemented (needs resolution)")
+                None => {
+                    if debug {
+                        eprintln!("dartr: lint rule {name} is not implemented (needs resolution)");
+                    }
+                    unimplemented_lint_rules.insert(name.to_lowercase());
                 }
-                None => {}
             }
         }
         FileSettings {
             experiments,
             unignorable_names,
             lint_rules,
+            unimplemented_lint_rules,
         }
     }
 }
@@ -264,7 +272,16 @@ pub(crate) fn finish_file(
     let unignorable = &settings.unignorable_names;
     diagnostics.extend(lints);
     if !is_generated(path) {
-        diagnostics.extend(validate_ignores(&ignore_info, unignorable));
+        let validate_unnecessary_ignores = settings.lint_rules.contains(&"unnecessary_ignore");
+        let ignore_diagnostics = validate_ignores(
+            &ignore_info,
+            &diagnostics,
+            &parsed.line_info,
+            unignorable,
+            validate_unnecessary_ignores,
+            &settings.unimplemented_lint_rules,
+        );
+        diagnostics.extend(ignore_diagnostics);
     }
     let diagnostics =
         filter_ignored_diagnostics(diagnostics, &ignore_info, &parsed.line_info, unignorable);

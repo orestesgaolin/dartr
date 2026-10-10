@@ -90,8 +90,10 @@ impl Driver {
 
     /// [`Driver::analyze_libraries`] that also runs the enabled lint rules
     /// of each library on its resolved units (Dart `_computeLints`, after
-    /// resolution). [f] gets the lint diagnostics of each unit (filtered by
-    /// the `ignore` comments), in the order of the units.
+    /// resolution). [f] gets the lint diagnostics of each unit, in the order
+    /// of the units, not filtered by the `ignore` comments: the caller
+    /// validates the ignore comments with all diagnostics of the file (Dart
+    /// `IgnoreValidator`) and then filters them.
     pub fn analyze_libraries_with_lints<T, F>(&self, libraries: &[LintJob<'_>], f: F) -> Vec<T>
     where
         T: Send,
@@ -148,7 +150,7 @@ impl Driver {
                     Ok(resolved) if !rules.is_empty() => {
                         let enabled: Vec<&str> = rules.iter().map(String::as_str).collect();
                         catch_unwind(AssertUnwindSafe(|| {
-                            crate::lints::compute_lints(&input, resolved, &enabled)
+                            crate::lints::compute_lints_unfiltered(&input, resolved, &enabled)
                         }))
                         .unwrap_or_default()
                     }

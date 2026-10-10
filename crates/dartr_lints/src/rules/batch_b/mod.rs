@@ -113,4 +113,5 @@ rules!(
     unnecessary_this,
     use_declaring_parameters,
     use_build_context_synchronously,
+    unnecessary_ignore,
 );
