@@ -10,8 +10,6 @@ dart-code static command dart.refactor.move_top_level_to_file
 dart-code static command dart.refactor.remove_constructor_name
 dart-code static command dart.refactor.remove_import_prefix
 dart-code static command dart.refactor_add.import_prefix
-dart-code static command refactor.perform
-dart-code static command refactor.validate
 dart-code static experimental.interactiveResolveProvider.kinds
 dart-code static experimental.textDocument.augmentation
 dart-code static experimental.textDocument.augmented
@@ -36,8 +34,6 @@ static static command dart.refactor.move_top_level_to_file
 static static command dart.refactor.remove_constructor_name
 static static command dart.refactor.remove_import_prefix
 static static command dart.refactor_add.import_prefix
-static static command refactor.perform
-static static command refactor.validate
 static static documentLinkProvider.resolveProvider
 static static experimental.interactiveResolveProvider.kinds
 static static experimental.textDocument.augmentation

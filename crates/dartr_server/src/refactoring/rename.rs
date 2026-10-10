@@ -108,13 +108,13 @@ pub struct Rename {
 /// The edits of a change in the order the files are first edited (Dart
 /// `ChangeBuilder`).
 #[derive(Default)]
-struct ChangeAcc {
+pub(crate) struct ChangeAcc {
     files: Vec<SourceFileEdit>,
     next_id: u64,
 }
 
 impl ChangeAcc {
-    fn add(&mut self, file: &str, offset: u32, length: u32, replacement: &str) {
+    pub(crate) fn add(&mut self, file: &str, offset: u32, length: u32, replacement: &str) {
         let index = match self.files.iter().position(|f| f.file == file) {
             Some(i) => i,
             None => {
@@ -134,7 +134,7 @@ impl ChangeAcc {
         let _ = self.files[index].add(edit, false);
     }
 
-    fn into_change(self, message: String) -> SourceChange {
+    pub(crate) fn into_change(self, message: String) -> SourceChange {
         SourceChange {
             message,
             edits: self.files,
@@ -204,7 +204,7 @@ fn parameter_is_named(ctx: &Ctx<'_>, e: ElementId) -> bool {
 }
 
 /// The path of the library fragment of the first fragment of [e].
-fn element_path(ctx: &Ctx<'_>, e: ElementId) -> Option<String> {
+pub(crate) fn element_path(ctx: &Ctx<'_>, e: ElementId) -> Option<String> {
     let first = ctx.element_data(e)?.first_fragment;
     crate::navigation::fragment_path(ctx, first)
 }
@@ -249,15 +249,15 @@ pub struct Engine<'h> {
 }
 
 impl Engine<'_> {
-    fn require_resolved_unit_in(&mut self, path: &str, context: Option<usize>) -> Result<ResolvedUnitRef, ()> {
+    pub(crate) fn require_resolved_unit_in(&mut self, path: &str, context: Option<usize>) -> Result<ResolvedUnitRef, ()> {
         self.host.resolved_unit_in(path, context).ok_or(())
     }
 
-    fn search_references(&mut self, element: &SElem) -> Vec<Match> {
+    pub(crate) fn search_references(&mut self, element: &SElem) -> Vec<Match> {
         self.host.search_references(element)
     }
 
-    fn hierarchy_members_and_parameters(&mut self, member: &SElem) -> (Vec<SElem>, Vec<SElem>) {
+    pub(crate) fn hierarchy_members_and_parameters(&mut self, member: &SElem) -> (Vec<SElem>, Vec<SElem>) {
         self.host.hierarchy_members_and_parameters(member)
     }
 
@@ -295,7 +295,7 @@ impl Engine<'_> {
     }
 
     /// Dart `RefactoringWorkspace.containsElement`.
-    fn workspace_contains(&self, target: &Target) -> bool {
+    pub(crate) fn workspace_contains(&self, target: &Target) -> bool {
         match target {
             Target::Import { unit, .. } => self.workspace_contains_file(&unit.path()),
             Target::Element(e) => e
@@ -883,7 +883,7 @@ impl Engine<'_> {
 
     /// Dart `SearchMatch.element`: the element whose fragment encloses the
     /// match (Dart `_getEnclosingFragment`).
-    pub(crate) fn match_element(&mut self, m: &Match) -> Option<SElem> {
+    pub fn match_element(&mut self, m: &Match) -> Option<SElem> {
         let resolved = self.require_resolved_unit_in(&m.path, Some(m.context)).ok()?;
         let unit = resolved.unit();
         let ast = &unit.ast;

@@ -63,6 +63,7 @@ mod completion;
 mod editor;
 mod hierarchy;
 mod nav;
+mod refactor;
 mod rename;
 mod search;
 mod symbols;
@@ -169,6 +170,8 @@ enum Pending {
     /// The prompt of a rename with warnings: the rename request is
     /// answered with the edit when the client chooses "Rename Anyway".
     RenamePrompt { request_id: Value, edit: Value },
+    /// The prompt of `refactor.perform` with problems.
+    RefactorPrompt { request_id: Value, edit: Value },
 }
 
 /// Dart `_ServerCreatedProgressReporter` for the analysis token.
@@ -725,6 +728,9 @@ impl Server {
             } => self.apply_edit_response(&request_id, &command_name, &edit, message),
             Pending::RenamePrompt { request_id, edit } => {
                 self.rename_prompt_response(&request_id, edit, message)
+            }
+            Pending::RefactorPrompt { request_id, edit } => {
+                self.refactor_prompt_response(&request_id, edit, message)
             }
             Pending::Registration => {
                 if let Some(e) = error {
