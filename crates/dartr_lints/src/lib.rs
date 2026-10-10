@@ -38,10 +38,22 @@ pub struct ResolvedLintContext<'a> {
     /// Resolver `corresponding_parameter_type`: argument expression → Dart
     /// `correspondingParameter.type`.
     pub corresponding_parameter_type: &'a dartr_ast::NodeMap<dartr_element::TypeId>,
+    /// Resolver `FunctionBodyImpl.bodyContext` of the function bodies.
+    pub body_context: &'a dartr_ast::NodeMap<BodyContext>,
     pub library: dartr_element::EId<dartr_element::LibraryElement>,
     /// Dart `Element.metadata` of elements of any library, with the
     /// annotation values (`None`: no metadata access).
     pub metadata: Option<&'a dyn ElementMetadata>,
+}
+
+/// Dart `BodyInferenceContext` facts of a function body
+/// (`FunctionBodyImpl.bodyContext`).
+#[derive(Clone, Copy, Debug)]
+pub struct BodyContext {
+    /// Dart `imposedType`.
+    pub imposed_type: Option<dartr_element::TypeId>,
+    /// Dart `mayCompleteNormally`.
+    pub may_complete_normally: bool,
 }
 
 /// An `Annotation` node of a resolved unit of the analyzed library or of

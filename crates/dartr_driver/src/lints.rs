@@ -131,11 +131,29 @@ pub fn compute_lints(
     );
     *engine.values.borrow_mut() = library.constants.clone();
     let metadata = EngineMetadata(engine);
+    let body_contexts: Vec<dartr_ast::NodeMap<dartr_lints::BodyContext>> = library
+        .units
+        .iter()
+        .map(|unit| {
+            let mut map = dartr_ast::NodeMap::new();
+            for (node, context) in unit.rt.body_context.iter() {
+                map.insert(
+                    node,
+                    dartr_lints::BodyContext {
+                        imposed_type: context.imposed_type,
+                        may_complete_normally: context.may_complete_normally,
+                    },
+                );
+            }
+            map
+        })
+        .collect();
     let units: Vec<_> = input
         .units
         .iter()
         .zip(&library.units)
-        .map(|(original, resolved)| ResolvedRuleContextUnit {
+        .zip(&body_contexts)
+        .map(|((original, resolved), body_context)| ResolvedRuleContextUnit {
             parsed: &original.parsed,
             ast: &resolved.ast,
             unit: resolved.unit.raw(),
@@ -150,6 +168,7 @@ pub fn compute_lints(
                 tables: &resolved.tables,
                 potentially_mutated_in_scope: &resolved.rt.potentially_mutated_in_scope,
                 corresponding_parameter_type: &resolved.rt.corresponding_parameter_type,
+                body_context,
                 library: library.library,
                 metadata: Some(&metadata),
             }),
