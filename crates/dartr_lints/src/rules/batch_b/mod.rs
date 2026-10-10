@@ -100,4 +100,7 @@ rules!(
     use_enums,
     public_member_api_docs,
     strict_top_level_inference,
+    prefer_initializing_formals,
+    use_super_parameters,
+    unnecessary_lambdas,
 );
