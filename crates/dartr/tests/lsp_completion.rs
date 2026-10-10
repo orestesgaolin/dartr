@@ -591,6 +591,23 @@ mixin Named {
 }
 "#,
     );
+    // Static members of a class through an import prefix, also as an
+    // argument (`prefix.Enum.` was empty).
+    write(
+        "app/lib/prefixed.dart",
+        r#"import 'package:app/shapes.dart' as s;
+
+Object f(Object? v) {
+  if (v == null) {
+    throw ArgumentError.value(
+      s.Color.red.index,
+      'v',
+    );
+  }
+  return s.Color.green;
+}
+"#,
+    );
     write(
         "app/lib/main.dart",
         r#"import 'dart:async';
