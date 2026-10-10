@@ -2,10 +2,6 @@ dart-code static command dart.edit.codeAction.apply
 dart-code static command dart.edit.fixAll
 dart-code static command dart.edit.fixAllInWorkspace
 dart-code static command dart.edit.fixAllInWorkspace.preview
-dart-code static command dart.edit.organizeImports
-dart-code static command dart.edit.sendWorkspaceEdit
-dart-code static command dart.edit.sortMembers
-dart-code static command dart.logAction
 dart-code static command dart.refactor.add_constructor_name
 dart-code static command dart.refactor.convert_all_formal_parameters_to_named
 dart-code static command dart.refactor.convert_selected_formal_parameters_to_named
@@ -16,32 +12,23 @@ dart-code static command dart.refactor.remove_import_prefix
 dart-code static command dart.refactor_add.import_prefix
 dart-code static command refactor.perform
 dart-code static command refactor.validate
-dart-code static executeCommandProvider.workDoneProgress
 dart-code static experimental.interactiveResolveProvider.kinds
 dart-code static experimental.textDocument.augmentation
 dart-code static experimental.textDocument.augmented
 dart-code static experimental.textDocument.super
 dart-code static experimental.updateDiagnosticInformation
-dart-code dynamic textDocument/codeAction [dart,**/pubspec.yaml,**/analysis_options.yaml]
 dart-code dynamic textDocument/codeLens [dart]
-dart-code dynamic textDocument/completion [**/pubspec.yaml,**/analysis_options.yaml,**/lib/{fix_data.yaml,fix_data/**.yaml}]
-dart-code dynamic textDocument/completion [dart]
 dart-code dynamic textDocument/documentColor [dart]
 dart-code dynamic textDocument/documentLink [dart,**/pubspec.yaml,**/analysis_options.yaml]
 dart-code dynamic textDocument/inlineValue [dart]
 dart-code dynamic textDocument/rename [dart]
 dart-code dynamic workspace/willRenameFiles
-static static codeActionProvider.codeActionKinds
 static static codeLensProvider
 static static colorProvider.documentSelector
 static static command dart.edit.codeAction.apply
 static static command dart.edit.fixAll
 static static command dart.edit.fixAllInWorkspace
 static static command dart.edit.fixAllInWorkspace.preview
-static static command dart.edit.organizeImports
-static static command dart.edit.sendWorkspaceEdit
-static static command dart.edit.sortMembers
-static static command dart.logAction
 static static command dart.refactor.add_constructor_name
 static static command dart.refactor.convert_all_formal_parameters_to_named
 static static command dart.refactor.convert_selected_formal_parameters_to_named
@@ -52,11 +39,7 @@ static static command dart.refactor.remove_import_prefix
 static static command dart.refactor_add.import_prefix
 static static command refactor.perform
 static static command refactor.validate
-static static completionProvider.completionItem.labelDetailsSupport
-static static completionProvider.resolveProvider
-static static completionProvider.triggerCharacters
 static static documentLinkProvider.resolveProvider
-static static executeCommandProvider.workDoneProgress
 static static experimental.interactiveResolveProvider.kinds
 static static experimental.textDocument.augmentation
 static static experimental.textDocument.augmented

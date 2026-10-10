@@ -81,6 +81,10 @@ at each merge; the final process report is written from it.
 | 10-10 12:30 | 8790cf2 | LSP: signature help, semantic tokens, inlay hints, call/type hierarchy, workspace symbols | Opus | compared with `dart language-server` on fixtures; 5,580 tests |
 | 10-10 13:00 | 5a40205 | release preparation: LICENSE, notices, README guide, release workflow, Homebrew formula | Opus | `dartr --version` checked; tag `v0.1.0-preview.1` pushed |
 | 10-10 14:10 | 0c9d176 | legacy protocol: analysis hover/navigation + 6 subscription notifications, search domain, edit.format/sortMembers/organizeDirectives | Gemini 4 (Antigravity) | 32/32 steps identical to `dart language-server --protocol=analyzer` on a clean checkout; 5,581 tests |
+| 10-10 15:00 | 00228a9 | legacy protocol: server, execution, diagnostic, analytics domains; remaining analysis and search requests (39/59 requests, 19/22 notifications) | Gemini 4 (Antigravity) | 78 steps identical to `dart language-server --protocol=analyzer`; coordinator added a step-list check; 5,581 tests |
+| 10-10 15:55 | 434d7e2 | LSP code completion: textDocument/completion, completionItem/resolve (port of DartCompletionManager, relevance tables, not-imported suggestions) | Opus | 137/156 completion lists identical to `dart language-server` on the fixture; visible-app first 177 of 2,000 items in Dart's order; 5,583 tests |
+| 10-10 15:55 | c1afb75 | landing page in site/, published with GitHub Pages | Opus | checked in Chrome at 1280 px and 390 px, light and dark; every number traced to a repo file |
+| 10-10 16:50 | 302b531 | LSP code actions: quick fixes, assists, organize imports, sort members, fix_data.yaml renames, workspace/executeCommand | Opus | every returned action identical to `dart language-server` (~7,000 import fixes, 191 create fixes, 486 assists, fixture + corpus sample); 5,585 tests |
 
 ## Incidents and lessons
 

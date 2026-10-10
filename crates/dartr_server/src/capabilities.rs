@@ -129,9 +129,9 @@ pub const DART_FEATURES: &[Feature] = &[
         true,
     ),
     feature("ChangeWorkspaceFoldersRegistrations", None, true),
-    feature("CodeActionRegistrations", Some("codeActionProvider"), false),
+    feature("CodeActionRegistrations", Some("codeActionProvider"), true),
     feature("CodeLensRegistrations", Some("codeLensProvider"), false),
-    feature("CompletionRegistrations", Some("completionProvider"), false),
+    feature("CompletionRegistrations", Some("completionProvider"), true),
     feature("DefinitionRegistrations", Some("definitionProvider"), true),
     feature(
         "DocumentLinkRegistrations",
@@ -152,7 +152,7 @@ pub const DART_FEATURES: &[Feature] = &[
     feature(
         "ExecuteCommandRegistrations",
         Some("executeCommandProvider"),
-        false,
+        true,
     ),
     feature("FoldingRegistrations", Some("foldingRangeProvider"), true),
     feature(
@@ -245,8 +245,44 @@ fn semantic_tokens_options() -> Value {
     })
 }
 
+/// Dart `dartCompletionTriggerCharacters`.
+const DART_COMPLETION_TRIGGER_CHARACTERS: &[&str] = &[".", "=", "(", "$", "\"", "'", "{", "/", ":"];
+
+/// Dart `CompletionOptions` / `CompletionRegistrationOptions` of the Dart
+/// files.
+fn completion_options(config: &LspClientConfiguration) -> Map<String, Value> {
+    let mut m = Map::new();
+    m.insert(
+        "triggerCharacters".into(),
+        json!(DART_COMPLETION_TRIGGER_CHARACTERS),
+    );
+    if config.global().preview_commit_characters() {
+        m.insert("allCommitCharacters".into(), json!(["("]));
+    }
+    m.insert("resolveProvider".into(), json!(true));
+    m.insert(
+        "completionItem".into(),
+        json!({"labelDetailsSupport": true}),
+    );
+    m
+}
+
 fn dart_files() -> Value {
     json!([{"language": "dart", "scheme": "file"}])
+}
+
+/// Dart `CodeActionRegistrations.staticOptions`: `CodeActionOptions` for
+/// clients with code action literal support, `true` otherwise.
+fn code_action_options(client: &ClientCapabilities) -> Value {
+    if client
+        .raw
+        .pointer("/textDocument/codeAction/codeActionLiteralSupport")
+        .is_some()
+    {
+        json!({"codeActionKinds": crate::server::SERVER_SUPPORTED_CODE_ACTION_KINDS})
+    } else {
+        json!(true)
+    }
 }
 
 /// Dart `TextDocumentRegistrations.synchronisedTypes`.
@@ -282,6 +318,21 @@ pub fn server_capabilities(client: &ClientCapabilities, config: &LspClientConfig
     let mut c = Map::new();
     if !client.text_document_dynamic("callHierarchy") {
         c.insert("callHierarchyProvider".into(), json!(true));
+    }
+    // Dart `CodeActionRegistrations.staticOptions`.
+    if !client.text_document_dynamic("codeAction") {
+        c.insert("codeActionProvider".into(), code_action_options(client));
+    }
+    // Dart `ExecuteCommandRegistrations`: static only.
+    c.insert(
+        "executeCommandProvider".into(),
+        json!({"commands": crate::server::SUPPORTED_COMMANDS, "workDoneProgress": true}),
+    );
+    if !client.text_document_dynamic("completion") {
+        c.insert(
+            "completionProvider".into(),
+            Value::Object(completion_options(config)),
+        );
     }
     if !client.text_document_dynamic("inlayHint") {
         c.insert(
@@ -378,6 +429,33 @@ pub fn dynamic_registrations(
         out.push(reg(
             "textDocument/prepareCallHierarchy",
             json!({"documentSelector": dart_files()}),
+        ));
+    }
+    // Dart `CodeActionRegistrations`: Dart files, pubspec.yaml and
+    // analysis_options.yaml.
+    if client.text_document_dynamic("codeAction") {
+        out.push(reg(
+            "textDocument/codeAction",
+            json!({
+                "documentSelector": [
+                    {"language": "dart", "scheme": "file"},
+                    {"language": "yaml", "pattern": "**/pubspec.yaml", "scheme": "file"},
+                    {"language": "yaml", "pattern": "**/analysis_options.yaml", "scheme": "file"},
+                ],
+                "codeActionKinds": crate::server::SERVER_SUPPORTED_CODE_ACTION_KINDS,
+            }),
+        ));
+    }
+    if client.text_document_dynamic("completion") {
+        let mut options = completion_options(config);
+        options.insert("documentSelector".into(), dart_files());
+        out.push(reg("textDocument/completion", Value::Object(options)));
+        // Dart `nonDartCompletionTypes`: pubspec, analysis options and fix
+        // data files.
+        let non_dart: Vec<Value> = synchronised_types().as_array().unwrap()[1..].to_vec();
+        out.push(reg(
+            "textDocument/completion",
+            json!({"documentSelector": non_dart, "resolveProvider": true}),
         ));
     }
     if client.text_document_dynamic("definition") {

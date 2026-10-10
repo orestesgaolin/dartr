@@ -58,11 +58,17 @@ use crate::source_edits::apply_changes;
 use crate::transport::{Channel, read_message};
 use crate::uri::{UriError, normalize, path_to_uri, uri_to_path};
 
+mod code_actions;
+mod completion;
 mod editor;
 mod hierarchy;
 mod nav;
 mod search;
 mod symbols;
+
+pub(crate) use code_actions::SERVER_SUPPORTED_KINDS as SERVER_SUPPORTED_CODE_ACTION_KINDS;
+pub(crate) use code_actions::commands::SUPPORTED as SUPPORTED_COMMANDS;
+pub use nav::ResolvedUnitRef;
 
 /// The progress token of analysis (Dart `analyzingProgressToken`).
 const ANALYZING_TOKEN: &str = "ANALYZING";
@@ -85,6 +91,10 @@ pub struct InitializationOptions {
     pub closing_labels: bool,
     pub outline: bool,
     pub flutter_outline: bool,
+    /// `completionBudgetMilliseconds`.
+    pub completion_budget_ms: Option<u64>,
+    /// `suggestFromUnimportedLibraries` (default `true`).
+    pub suggest_from_unimported_libraries: bool,
 }
 
 impl InitializationOptions {
@@ -95,13 +105,22 @@ impl InitializationOptions {
             closing_labels: flag("closingLabels"),
             outline: flag("outline"),
             flutter_outline: flag("flutterOutline"),
+            completion_budget_ms: v
+                .and_then(|v| v.get("completionBudgetMilliseconds"))
+                .and_then(Value::as_u64),
+            suggest_from_unimported_libraries: v
+                .and_then(|v| v.get("suggestFromUnimportedLibraries"))
+                .and_then(Value::as_bool)
+                .unwrap_or(true),
         }
     }
 }
 
 /// An open document (overlay).
-struct Document {
+pub(crate) struct Document {
     content: String,
+    /// The version of the client (Dart `documentVersions`).
+    version: Option<i64>,
 }
 
 /// A parsed file, cached for requests and notifications of open files.
@@ -130,10 +149,19 @@ impl ParseSettings {
 
 /// What a request sent to the client is for.
 enum Pending {
-    Configuration { folders: Vec<String> },
+    Configuration {
+        folders: Vec<String>,
+    },
     ProgressCreate,
     Registration,
     Unregistration,
+    /// `workspace/applyEdit` of a command: the command request is answered
+    /// with the response.
+    ApplyEdit {
+        request_id: Value,
+        command_name: String,
+        edit: Value,
+    },
 }
 
 /// Dart `_ServerCreatedProgressReporter` for the analysis token.
@@ -417,6 +445,14 @@ impl Server {
                 codes::REQUEST_CANCELLED,
                 "Request was cancelled",
             )),
+            (State::Initialized, "workspace/executeCommand") => {
+                match self.catching_optional(method, |s| s.execute_command(id, &params)) {
+                    Some(result) => result,
+                    // The response is sent when the client answers
+                    // `workspace/applyEdit`.
+                    None => return Flow::Continue,
+                }
+            }
             (State::Initialized, _) => self.handle_initialized_request(method, params),
         };
         if let Err(e) = &result {
@@ -466,6 +502,8 @@ impl Server {
             "textDocument/references" => self.catching(method, |s| s.references(&params)),
             "textDocument/implementation" => self.catching(method, |s| s.implementation(&params)),
             "textDocument/signatureHelp" => self.catching(method, |s| s.signature_help(&params)),
+            "textDocument/completion" => self.catching(method, |s| s.completion(&params)),
+            "completionItem/resolve" => self.catching(method, |s| s.completion_resolve(&params)),
             "textDocument/semanticTokens/full" => {
                 self.catching(method, |s| s.semantic_tokens(&params, false))
             }
@@ -492,6 +530,7 @@ impl Server {
                 self.catching(method, |s| s.call_hierarchy_outgoing(&params))
             }
             "workspace/symbol" => self.catching(method, |s| s.workspace_symbol(&params)),
+            "textDocument/codeAction" => self.catching(method, |s| s.code_action(&params)),
             "textDocument/formatting" => self.format_request(&params, FormatKind::Document),
             "textDocument/rangeFormatting" => {
                 let range = params
@@ -647,6 +686,11 @@ impl Server {
                 }
             }
             Pending::Unregistration => {}
+            Pending::ApplyEdit {
+                request_id,
+                command_name,
+                edit,
+            } => self.apply_edit_response(&request_id, &command_name, &edit, message),
             Pending::Registration => {
                 if let Some(e) = error {
                     let code = e.get("code").cloned().unwrap_or(Value::Null);
@@ -854,6 +898,23 @@ impl Server {
         }
     }
 
+    /// [Self::catching] for a handler whose response can be sent later.
+    fn catching_optional(
+        &mut self,
+        method: &str,
+        f: impl FnOnce(&mut Self) -> Option<ErrorOr<Value>>,
+    ) -> Option<ErrorOr<Value>> {
+        let mut deferred = false;
+        let result = self.catching(method, |s| match f(s) {
+            Some(r) => r,
+            None => {
+                deferred = true;
+                Ok(Value::Null)
+            }
+        });
+        if deferred { None } else { Some(result) }
+    }
+
     /// Dart `pathOfDoc` for `params.textDocument`.
     fn path_of_doc(&self, params: &Value) -> ErrorOr<String> {
         let uri = params
@@ -902,8 +963,16 @@ impl Server {
         // `illegal_character`, columns without the mark).
         let text = dartr_syntax::strip_bom(text).to_string();
         dartr_project::fs::set_overlay(&path, Some(text.clone()));
-        self.overlays
-            .insert(path.clone(), Document { content: text });
+        let version = params
+            .pointer("/textDocument/version")
+            .and_then(Value::as_i64);
+        self.overlays.insert(
+            path.clone(),
+            Document {
+                content: text,
+                version,
+            },
+        );
         self.file_changed(&path);
         if !self.priority.contains(&path) {
             self.priority.push(path.clone());
@@ -934,6 +1003,9 @@ impl Server {
             .ok_or_else(|| invalid_params("textDocument/didChange"))?;
         let content = apply_changes(&doc.content, changes)?;
         doc.content = dartr_syntax::strip_bom(&content).to_string();
+        doc.version = params
+            .pointer("/textDocument/version")
+            .and_then(Value::as_i64);
         dartr_project::fs::set_overlay(&path, Some(doc.content.clone()));
         self.file_changed(&path);
         // Checked with `dart language-server`: a change of an open

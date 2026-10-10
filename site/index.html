@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dartr: the Dart analyzer in Rust</title>
+<meta name="description" content="dartr is a Rust port of the Dart analyzer (Dart SDK 3.13.3): dart analyze, dart format and the Dart language server in one native binary. Preview release.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f5f3ee" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111317" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="dartr, top of page">
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="1" y="1" width="13" height="13" rx="2" fill="#0175C2"/><rect x="8" y="8" width="13" height="13" rx="2" fill="#DEA584" stroke="#A5653D"/></svg>
+      dartr
+    </a>
+    <nav class="site-nav" aria-label="Sections">
+      <a class="opt" href="#what">Commands</a>
+      <a href="#compare">Benchmarks</a>
+      <a class="opt" href="#correct">Correctness</a>
+      <a class="opt" href="#speed">Performance</a>
+      <a class="opt" href="#story">History</a>
+      <a href="#setup">Setup</a>
+      <a href="https://github.com/orestesgaolin/dartr">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- Hero -->
+<section class="hero" id="top" aria-labelledby="hero-title">
+  <div class="wrap">
+    <p class="tag"><span class="dot" aria-hidden="true"></span><span>Preview · v0.1.0-preview.3 · Dart SDK 3.13.3</span></p>
+    <div class="hero-grid">
+      <div>
+        <h1 id="hero-title">A <span class="r">Rust</span> port of the <span class="d">Dart analyzer</span></h1>
+        <p class="lede">dartr follows Dart SDK 3.13.3. It has the commands <code>analyze</code>, <code>format</code> and <code>language-server</code>, with the same options, output formats and exit codes as the Dart tools.</p>
+        <div class="term">
+          <div class="term-bar"><span>install and use</span><button class="copy" type="button" data-copy="t-hero" hidden>Copy</button></div>
+<pre id="t-hero"><span class="p">$ </span><span data-cmd>brew install orestesgaolin/tap/dartr</span>
+<span class="p">$ </span><span data-cmd>dartr analyze</span>            <span class="c"># like `dart analyze`</span>
+<span class="p">$ </span><span data-cmd>dartr format lib</span>         <span class="c"># like `dart format`</span>
+<span class="p">$ </span><span data-cmd>dartr language-server</span>    <span class="c"># LSP, for editors</span></pre>
+        </div>
+      </div>
+      <aside class="hero-stat" aria-label="Headline benchmark">
+        <div class="k">1.56 million line Flutter app · wall time</div>
+        <div class="row"><span>dart analyze</span><div class="htrack"><div class="bar dart" style="--w:1"></div><b class="val dart">76.8 s</b></div></div>
+        <div class="row"><span>dartr analyze</span><div class="htrack"><div class="bar dartr" style="--w:.2878"></div><b class="val dartr">22.1 s</b></div></div>
+        <p>Full pipeline: errors, warnings, lints, analyzer plugins. Same 20 diagnostics from both tools. Single run on a busy machine. dartr is slower on one of the four test projects; see <a href="#compare">benchmarks</a>.</p>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- 1. What it is -->
+<section class="block" id="what" aria-labelledby="what-title">
+  <div class="wrap">
+    <p class="eyebrow"><b>01</b></p>
+    <h2 id="what-title">Commands</h2>
+    <p class="section-intro">dartr reads the <code>dart:</code> libraries from the Dart or Flutter SDK on your <code>PATH</code>, so it needs that SDK. Use SDK 3.13.3: dartr copies the behavior of that version.</p>
+
+    <div class="grid-3">
+      <article class="card">
+        <h3>dartr analyze <span class="pill ok">parity</span></h3>
+        <p>The diagnostics of <code>dart analyze</code>: errors, warnings, lints and analyzer plugins. Same options, output formats (<code>default</code>, <code>machine</code>, <code>json</code>) and exit codes, including <code>--fatal-infos</code> and <code>--fatal-warnings</code>.</p>
+      </article>
+      <article class="card">
+        <h3>dartr format <span class="pill ok">byte-exact</span></h3>
+        <p>A port of <code>dart_style</code>, the code behind <code>dart format</code>. Tall style and short style. Same output on the <code>dart_style</code> test data and on the corpora. Supports <code>-o</code> and <code>--set-exit-if-changed</code>.</p>
+      </article>
+      <article class="card">
+        <h3>dartr language-server <span class="pill part">partial</span></h3>
+        <p>An LSP server. Has diagnostics, outline, closing labels, folding, selection ranges, document symbols, formatting, navigation, references, hover, signature help, semantic tokens, inlay hints, call and type hierarchy and workspace symbols. Completion and code actions (quick fixes, assists, organize imports, sort members). <b>Missing:</b> fix all, some fixes and assists, rename.</p>
+        <p>The legacy analysis server protocol (<code>--protocol=analyzer</code>) is partial: 39 of 59 requests and 19 of 22 notifications. Its completion, quick fixes and refactorings are not done yet.</p>
+      </article>
+    </div>
+
+    <div class="grid-2">
+      <div>
+        <h3>Install</h3>
+        <div class="term" style="margin-top:14px">
+          <div class="term-bar"><span>Homebrew</span><button class="copy" type="button" data-copy="t-brew" hidden>Copy</button></div>
+<pre id="t-brew"><span class="p">$ </span><span data-cmd>brew install orestesgaolin/tap/dartr</span>
+<span class="p">$ </span><span data-cmd>dartr --version</span>
+<span class="o">dartr 0.1.0
+port of the Dart SDK 3.13.3 analyzer (pinned reference version)</span></pre>
+        </div>
+        <p style="margin-top:14px;color:var(--ink-2)">Or download <code>dartr-&lt;version&gt;-&lt;target&gt;.tar.gz</code> from <a href="https://github.com/orestesgaolin/dartr/releases">GitHub Releases</a> for <code>aarch64-apple-darwin</code> or <code>x86_64-unknown-linux-gnu</code>, check it against the <code>.sha256</code> file and extract it. <code>bin/dartr</code> is the binary.</p>
+        <p style="color:var(--ink-2)">From source (Rust stable, edition 2024): <code>cargo build --release -p dartr</code>.</p>
+      </div>
+      <div>
+        <h3>Status: preview</h3>
+        <ul class="card" style="list-style:none;margin-top:14px;padding:18px 22px;display:grid;gap:10px;color:var(--ink-2);font-size:0.95rem">
+          <li>This is early software. <b style="color:var(--ink)">If dartr and <code>dart analyze</code> differ, dartr is wrong.</b> Please <a href="https://github.com/orestesgaolin/dartr/issues">report it</a>.</li>
+          <li>Platforms: macOS arm64 and Linux x86_64. No Windows or Intel macOS builds.</li>
+          <li>The language server does not watch files that change on disk yet.</li>
+          <li><code>flutter analyze</code> and IntelliJ start the SDK's own server and have no setting for another one. They do not work with dartr yet.</li>
+          <li>Cold analysis of a large package can be slower than <code>dart analyze</code> today.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 2. Benchmarks -->
+<section class="block" id="compare" aria-labelledby="compare-title">
+  <div class="wrap">
+    <p class="eyebrow"><b>02</b></p>
+    <h2 id="compare-title">Benchmarks</h2>
+    <p class="section-intro"><code>dartr analyze</code> and <code>dart analyze</code> 3.13.3 on the same machine, run one after the other, with the full pipeline (errors, warnings, lints, analyzer plugins). Both report the same diagnostics on all four projects. dartr is faster on three of the four projects and slower on <code>flutter_tools</code> (3.5 s against 2.5 s). Wall time in seconds, lower is better. <code>dart</code> uses its normal disk cache (<code>~/.dartServer</code>). dartr has no disk cache and starts cold every time.</p>
+
+    <ul class="legend" aria-label="Chart legend">
+      <li><span class="sw dart" aria-hidden="true"></span><span><code>dart analyze</code>, warm disk cache</span></li>
+      <li><span class="sw dartr" aria-hidden="true"></span><span><code>dartr analyze</code>, cold (no cache)</span></li>
+      <li><span class="sw ref" aria-hidden="true"></span><span>reference: <code>dart analyze</code>, empty cache, idle machine</span></li>
+    </ul>
+
+    <div class="charts">
+      <figure class="chart" aria-labelledby="c1-t">
+        <figcaption><b id="c1-t">Flutter application</b><span>1,559,637 lines · plugins</span></figcaption>
+        <div class="bars" role="img" aria-label="Flutter application: dart analyze 76.8 seconds, dartr analyze 22.1 seconds, reference dart analyze with empty cache on idle machine 72.8 seconds.">
+          <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
+          <div class="bar-row"><span class="lbl">dart</span><div class="track"><div class="fill dart" style="--w:.96"></div><span class="val dart">76.8 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dartr</span><div class="track"><div class="fill dartr" style="--w:.27625"></div><span class="val dartr">22.1 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dart, empty cache</span><div class="track"><div class="fill ref" style="--w:.91"></div><span class="val ref">72.8 s</span></div></div>
+          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">20</span><span style="left:50%">40</span><span style="left:75%">60</span><span style="left:100%">80</span></div><span class="axis-title">seconds</span></div>
+        </div>
+        <p class="verdict">dartr: 22.1 s against 76.8 s.</p>
+      </figure>
+
+      <figure class="chart" aria-labelledby="c2-t">
+        <figcaption><b id="c2-t">Flutter <code>packages/flutter</code></b><span>1,309,663 lines</span></figcaption>
+        <div class="bars" role="img" aria-label="Flutter packages/flutter: dart analyze 15.4 seconds, dartr analyze 6.2 seconds, reference dart analyze with empty cache on idle machine 19.6 seconds.">
+          <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
+          <div class="bar-row"><span class="lbl">dart</span><div class="track"><div class="fill dart" style="--w:.77"></div><span class="val dart">15.4 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dartr</span><div class="track"><div class="fill dartr" style="--w:.31"></div><span class="val dartr">6.2 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dart, empty cache</span><div class="track"><div class="fill ref" style="--w:.98"></div><span class="val ref">19.6 s</span></div></div>
+          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">5</span><span style="left:50%">10</span><span style="left:75%">15</span><span style="left:100%">20</span></div><span class="axis-title">seconds</span></div>
+        </div>
+        <p class="verdict">dartr: 6.2 s against 15.4 s.</p>
+      </figure>
+
+      <figure class="chart" aria-labelledby="c3-t">
+        <figcaption><b id="c3-t"><code>analyzer</code> 9.0.0 (pub)</b><span>909,249 lines</span></figcaption>
+        <div class="bars" role="img" aria-label="analyzer 9.0.0: dart analyze 2.5 seconds, dartr analyze 1.9 seconds, reference dart analyze with empty cache on idle machine 7.1 seconds.">
+          <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
+          <div class="bar-row"><span class="lbl">dart</span><div class="track"><div class="fill dart" style="--w:.3125"></div><span class="val dart">2.5 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dartr</span><div class="track"><div class="fill dartr" style="--w:.2375"></div><span class="val dartr">1.9 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dart, empty cache</span><div class="track"><div class="fill ref" style="--w:.8875"></div><span class="val ref">7.1 s</span></div></div>
+          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">2</span><span style="left:50%">4</span><span style="left:75%">6</span><span style="left:100%">8</span></div><span class="axis-title">seconds</span></div>
+        </div>
+        <p class="verdict">dartr: 1.9 s against 2.5 s.</p>
+      </figure>
+
+      <figure class="chart" aria-labelledby="c4-t">
+        <figcaption><b id="c4-t"><code>flutter_tools</code></b><span>455,099 lines</span></figcaption>
+        <div class="bars" role="img" aria-label="flutter_tools: dart analyze 2.5 seconds, dartr analyze 3.5 seconds, so dartr is slower here. Reference dart analyze with empty cache on idle machine 7.6 seconds.">
+          <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
+          <div class="bar-row"><span class="lbl">dart</span><div class="track"><div class="fill dart" style="--w:.3125"></div><span class="val dart">2.5 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dartr</span><div class="track"><div class="fill dartr" style="--w:.4375"></div><span class="val dartr">3.5 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dart, empty cache</span><div class="track"><div class="fill ref" style="--w:.95"></div><span class="val ref">7.6 s</span></div></div>
+          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">2</span><span style="left:50%">4</span><span style="left:75%">6</span><span style="left:100%">8</span></div><span class="axis-title">seconds</span></div>
+        </div>
+        <p class="verdict slow">dartr is slower here: 3.5 s against 2.5 s. The resolved lints add most of its time. That is the first optimization target.</p>
+      </figure>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+                <thead>
+          <tr><th scope="col">project</th><th scope="col" class="num">Dart lines</th><th scope="col" class="num">dart analyze</th><th scope="col" class="num">dartr analyze</th><th scope="col" class="num">dart, empty cache, idle</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">Flutter application (pub workspace, analyzer plugins)</th><td class="num">1,559,637</td><td class="num dart">76.8 s</td><td class="num dartr">22.1 s</td><td class="num">72.8 s</td></tr>
+          <tr><th scope="row">Flutter <code>packages/flutter</code></th><td class="num">1,309,663</td><td class="num dart">15.4 s</td><td class="num dartr">6.2 s</td><td class="num">19.6 s</td></tr>
+          <tr><th scope="row"><code>analyzer</code> 9.0.0 (pub)</th><td class="num">909,249</td><td class="num dart">2.5 s</td><td class="num dartr">1.9 s</td><td class="num">7.1 s</td></tr>
+          <tr><th scope="row"><code>flutter_tools</code></th><td class="num">455,099</td><td class="num dart">2.5 s</td><td class="num dartr">3.5 s</td><td class="num">7.6 s</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="table-note">Each chart has its own scale. Source: <a href="https://github.com/orestesgaolin/dartr#benchmarks">README.md</a> and <a href="https://github.com/orestesgaolin/dartr/blob/main/docs/BENCHMARKS.md">docs/BENCHMARKS.md</a>.</p>
+
+    <div class="note">
+      <p><b>Caveat.</b> These are single runs from 2026-10-10, made while other processes loaded the machine (Apple M5 Pro, 15 cores). The final comparison on an idle machine is still to come, so treat the numbers as indicative only.</p>
+      <p>The reference column is a different measurement: <code>hyperfine</code>, mean of 3 runs, isolated <code>--cache</code> directory deleted before each run, on an idle machine on 2026-10-09. It shows what <code>dart analyze</code> costs without its cache. dartr has no cache, so every dartr run is a cold run.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 3. Correctness -->
+<section class="block" id="correct" aria-labelledby="correct-title">
+  <div class="wrap">
+    <p class="eyebrow"><b>03</b></p>
+    <h2 id="correct-title">Correctness</h2>
+    <p class="section-intro">Each part of dartr is checked by a differential test against the pinned Dart analyzer 3.13.3. A Dart program (<code>tools/oracle</code>) uses the real <code>package:analyzer</code> and writes JSON Lines. <code>dartr dump</code> writes the same format. <code>difftest</code> runs both and reports the first difference of each file.</p>
+
+    <div class="stats">
+      <div class="stat"><div class="n">27,278<small> / 27,278</small></div><p>diagnostics matched on <code>analyzer</code> 9.0.0 (unseen corpus), 0 extra.</p></div>
+      <div class="stat"><div class="n">57,211<small> / 57,211</small></div><p>lint diagnostics matched (unseen corpus).</p></div>
+      <div class="stat"><div class="n">20<small> / 20</small></div><p>diagnostics on the 1.56 million line app, including the <code>jaspr_lints</code> analyzer plugin.</p></div>
+      <div class="stat"><div class="n">exact</div><p><code>dartr analyze</code> output on Flutter <code>packages/flutter</code> and <code>flutter_tools</code>.</p></div>
+      <div class="stat"><div class="n">8,702</div><p><code>dart_style</code> tests byte-exact. Also <code>flutter_tools</code> 366/366 and <code>analyzer</code> 9.0.0 456/456 (unseen).</p></div>
+      <div class="stat"><div class="n">1,488<small> / 1,488</small></div><p>diagnostic codes, with messages equal to Dart.</p></div>
+      <div class="stat"><div class="n">31<small> / 31</small></div><p>LSP session steps identical to <code>dart language-server</code> (first LSP milestone). Later LSP features compared on fixtures.</p></div>
+      <div class="stat"><div class="n">78</div><p>legacy protocol steps identical to <code>dart language-server --protocol=analyzer</code> (39 of 59 requests implemented).</p></div>
+      <div class="stat"><div class="n">5,581</div><p>workspace tests at the last merge.</p></div>
+    </div>
+
+    <ol class="steps">
+      <li><span><b>Each layer is compared.</b> Tokens, parser events, AST, element model, resolved types and elements, constants, diagnostics: each has a dump mode and a parity report. Scanner: 16,046/16,046 on an unseen corpus. Parser: 11,633/11,633. AST builder: 11,392/11,392.</span></li>
+      <li><span><b>Checks on unseen code.</b> A unit is done when its differential test passes and the coordinator has re-run it on a corpus the worker did not use. These runs found bugs that the worker's own corpora did not show.</span></li>
+      <li><span><b>Proof that a test can fail.</b> Each worker breaks one rule on purpose and shows the failure.</span></li>
+      <li><span><b>Full tests after every merge</b>, in release mode, plus determinism checks: the output must not depend on the number of threads.</span></li>
+    </ol>
+
+    <h3 style="margin-top:40px">Check it on your project</h3>
+    <div class="term" style="margin-top:14px">
+      <div class="term-bar"><span>compare with dart analyze</span><button class="copy" type="button" data-copy="t-diff" hidden>Copy</button></div>
+<pre id="t-diff"><span class="p">$ </span><span data-cmd>dart analyze --format=json  &gt; dart.json;  echo "dart: $?"</span>
+<span class="p">$ </span><span data-cmd>dartr analyze --format=json &gt; dartr.json; echo "dartr: $?"</span>
+<span class="p">$ </span><span data-cmd>diff &lt;(jq -S . dart.json) &lt;(jq -S . dartr.json)</span></pre>
+    </div>
+    <p style="margin-top:14px;color:var(--ink-2)">Differences in output or exit code count as bugs. <a href="https://github.com/orestesgaolin/dartr/issues">Open an issue</a> with the smallest Dart file that shows it, the exact command, <code class="nw">dartr --version</code>, <code class="nw">dart --version</code> and the output of both tools.</p>
+  </div>
+</section>
+
+<!-- 4. Speed -->
+<section class="block" id="speed" aria-labelledby="speed-title">
+  <div class="wrap">
+    <p class="eyebrow"><b>04</b></p>
+    <h2 id="speed-title">Performance</h2>
+    <p class="section-intro">dartr does not use a cache to be fast: it has no disk cache and links the SDK libraries from source on every run. The time comes from how the work is done. Each point below names the code that does it.</p>
+
+    <div class="reasons">
+      <div class="reason">
+        <h3>Files are read and parsed in parallel</h3>
+        <div>
+          <p>The driver reads, scans and parses all referenced files in parallel waves on a rayon thread pool. It also computes the unlinked data and API signatures of each file there. The parsed unit is kept, so linking does not parse the file again.</p>
+          <p>A parse-only run shows what this part costs on its own: 1,697 files of Flutter <code>packages/flutter</code> in 142.2 ms, 3,090 files of the 1.56 million line app in 472.0 ms (mean of 10 runs, busy machine). This is a lower bound, not a comparable number.</p>
+          <p class="src">crates/dartr_driver/src/file_state.rs · docs/BENCHMARKS.md</p>
+        </div>
+      </div>
+      <div class="reason">
+        <h3>Library cycles link as soon as they can</h3>
+        <div>
+          <p>Libraries are grouped into import cycles. A DAG scheduler on rayon starts linking a cycle as soon as all its direct dependencies are linked, and publishes each linked cycle into an immutable snapshot. Independent cycles link at the same time.</p>
+          <p class="src">crates/dartr_driver/src/driver.rs · docs/design/semantics.md §2.5</p>
+        </div>
+      </div>
+      <div class="reason">
+        <h3>Libraries and their files resolve in parallel</h3>
+        <div>
+          <p>Libraries are analyzed in parallel (<code>par_iter</code>). Inside one library, each file is resolved in parallel with its own arena for local elements and types. Only the library-wide steps (constants, imports verifier, unused elements) run in sequence. Resolution reads linked elements and never changes them, so no locks are needed around elements.</p>
+          <p class="src">crates/dartr_driver/src/analysis.rs · crates/dartr_resolver/src/library_analyzer.rs</p>
+        </div>
+      </div>
+      <div class="reason">
+        <h3>AST and elements are stored in arenas with typed indices</h3>
+        <div>
+          <p>The tokens and AST nodes of a file live in one arena per compilation unit. Nodes are stored per kind in vectors and referenced by 32-bit indices. Resolution results go into side tables indexed by node, so the AST stays read-only and can be shared between threads. Elements use 64-bit ids into per-cycle stores.</p>
+          <p class="src">crates/dartr_ast/src/arena.rs · crates/dartr_element/README.md</p>
+        </div>
+      </div>
+      <div class="reason">
+        <h3>Types are interned</h3>
+        <div>
+          <p>Each type, type list and substitution is stored once in a sharded global interner and referenced by id. Types that mention local elements go into a per-task overlay, so parallel tasks do not write to shared state for them.</p>
+          <p class="src">crates/dartr_element/src/interner.rs · crates/dartr_element/src/pool.rs</p>
+        </div>
+      </div>
+      <div class="reason">
+        <h3>A native binary</h3>
+        <div>
+          <p>dartr is compiled Rust (release profile with thin LTO). It starts as a native process and loads no Dart VM. Analyzer plugins are the exception: they run out of process and need the Dart SDK.</p>
+          <p>On the same one-file package, a measurement made for this page on a shared machine: <code>dartr analyze</code> took 0.04 to 0.10 s wall time (3 runs), <code>dart analyze</code> with its warm cache took 0.82 and 1.06 s (2 runs).</p>
+          <p class="src">Cargo.toml [profile.release] · crates/dartr_plugins/src/lib.rs (the only place that starts <code>dart</code>)</p>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="margin-top:40px">See the phases yourself</h3>
+    <p style="margin-top:10px;color:var(--ink-2)">Set <code>DARTR_TIMINGS=1</code> to print the time of each phase of <code>dartr analyze</code> to stderr: context discovery, the file list and the diagnostics (parse, link, resolve, verifiers, lints).</p>
+    <div class="term" style="margin-top:14px">
+      <div class="term-bar"><span>phase timings</span><button class="copy" type="button" data-copy="t-time" hidden>Copy</button></div>
+<pre id="t-time"><span class="p">$ </span><span data-cmd>DARTR_TIMINGS=1 dartr analyze .</span>
+<span class="o">Analyzing ....
+[timings] contexts 552.041µs, file list 43.5µs (1 files), diagnostics 37.771667ms
+
+  error - lib/mini.dart:5:14 - A value of type 'int' can't be assigned to a variable of type 'String'. ...
+warning - lib/mini.dart:5:10 - The value of the local variable 's' isn't used. ...
+
+2 issues found.</span></pre>
+    </div>
+    <p class="src" style="margin-top:8px">A one-file package with two problems, dartr 0.1.0 from Homebrew, 2026-10-10. The diagnostics phase includes linking the <code>dart:core</code> cycle from SDK source. Messages shortened here.</p>
+
+    <h3 style="margin-top:40px">What is slower today</h3>
+    <p style="margin-top:10px;color:var(--ink-2)">Performance is the next phase of the plan (phase 11). These are the known targets:</p>
+    <ul class="slow-list">
+      <li><b>Resolved lints.</b> When the lints that need resolution were added, <code>dartr analyze</code> on <code>flutter_tools</code> went from 0.7 s to 3.5 s (dart: 2.6 s), and on Flutter from 3.2 s to 5.9 s. Optimization starts here.</li>
+      <li><b>Cold search index.</b> The language server has no persistent index. A first references search over the SDK takes 5.7 s (<code>String</code>), and 130 s for <code>runtimeType</code> on Flutter. Dart has a warm disk index.</li>
+      <li><b>High system time.</b> The installed release binary analyzed <code>flutter_tools</code> with the same result as <code>dart analyze</code> in 3.7 s, but used 29.6 s of system CPU time (dart: 2.4 s wall time).</li>
+      <li><b>No disk cache.</b> Every run links and resolves everything again, including the SDK core libraries. A cache of linked cycles is designed but not built yet.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 5. Story -->
+<section class="block" id="story" aria-labelledby="story-title">
+  <div class="wrap">
+    <p class="eyebrow"><b>05</b></p>
+    <h2 id="story-title">History</h2>
+    <div class="story-grid">
+      <div>
+        <p style="color:var(--ink-2)">The first commit is from 2026-10-08 20:04. The first public release, <code>v0.1.0-preview.1</code>, was published on 2026-10-10 at 13:15. AI coding agents wrote the code, and one person directed and reviewed the work.</p>
+        <ul class="card" style="list-style:none;padding:18px 22px;display:grid;gap:10px;color:var(--ink-2);font-size:0.95rem;margin:0">
+          <li><b style="color:var(--ink)">Coordinator:</b> one Claude Opus session. It plans, writes the task prompts, verifies results and merges. It does not port code itself.</li>
+          <li><b style="color:var(--ink)">Workers:</b> Claude Opus for complex porting units, Claude Sonnet for wiring, Codex for isolated units, and Gemini (Antigravity) for part of the legacy protocol. Each unit runs in its own git worktree and branch.</li>
+          <li><b style="color:var(--ink)">Rule:</b> a unit merges only when its differential test against Dart 3.13.3 passes and the coordinator has re-run it on a corpus the worker did not use.</li>
+        </ul>
+        <p style="margin-top:16px;color:var(--ink-2)">Ported files keep the structure and names of the Dart code, and each starts with a comment that names its Dart source file. The full log, with the evidence for each merge and a list of incidents, is in <a href="https://github.com/orestesgaolin/dartr/blob/main/docs/TIMELINE.md">docs/TIMELINE.md</a>.</p>
+      </div>
+      <figure class="comic">
+        <img src="ohmygod.png" width="960" height="748" loading="lazy" alt="Hand-drawn comic. A speech bubble says &quot;rewrite dart analyzer in rust&quot;. The computer answers &quot;&gt;rewrites dart analyzer in rust&quot;. The person at the desk says &quot;oh my god&quot;.">
+        <figcaption>The original request.</figcaption>
+      </figure>
+    </div>
+
+    <ol class="timeline" aria-label="Milestones">
+      <li class="key"><time datetime="2026-10-08T20:04">10-08 20:04</time><span class="what">Workspace, Dart oracle, plan<span class="who">coordinator</span><span class="ev">oracle smoke test</span></span></li>
+      <li><time datetime="2026-10-08T20:40">10-08 20:40</time><span class="what">Scanner and difftest<span class="who">Opus</span><span class="ev">16,046/16,046 on an unseen corpus</span></span></li>
+      <li><time datetime="2026-10-08T22:09">10-08 22:09</time><span class="what">Parser and AST builder<span class="who">Opus</span><span class="ev">AST 11,392/11,392 unseen</span></span></li>
+      <li><time datetime="2026-10-08T23:24">10-08 23:24</time><span class="what">Type system, inference, flow analysis, linker<span class="who">Opus</span><span class="ev">flow analysis 783/783 Dart tests; element dump 100% on 5 corpora</span></span></li>
+      <li><time datetime="2026-10-09T01:06">10-09 01:06</time><span class="what">LSP foundation<span class="who">Opus</span><span class="ev">31/31 session steps vs <code>dart language-server</code></span></span></li>
+      <li><time datetime="2026-10-09T01:15">10-09 01:15</time><span class="what">Lint framework and 79 AST-only rules<span class="who">Codex</span><span class="ev">exact on 6 corpora after 2 bugs found on unseen corpora</span></span></li>
+      <li class="key"><time datetime="2026-10-09T11:10">10-09 11:10</time><span class="what"><code>dart_style</code> port and <code>dartr format</code><span class="who">Opus</span><span class="ev">8,702 tests byte-exact</span></span></li>
+      <li class="key"><time datetime="2026-10-09T13:40">10-09 13:40</time><span class="what">Resolver at parity<span class="who">Codex</span><span class="ev"><code>flutter_tools</code> types 100%, elements 99.84%</span></span></li>
+      <li><time datetime="2026-10-09T17:35">10-09 17:35</time><span class="what">Constant evaluation and exhaustiveness<span class="who">Opus</span><span class="ev">constant values and diagnostics 100% on 2 unseen corpora</span></span></li>
+      <li><time datetime="2026-10-10T01:30">10-10 01:30</time><span class="what">Error verifiers integrated<span class="who">Opus</span><span class="ev"><code>flutter_tools</code> exact</span></span></li>
+      <li><time datetime="2026-10-10T08:40">10-10 08:40</time><span class="what">Analyzer plugins<span class="who">Opus</span><span class="ev">1.56 million line app: 20/20 vs <code>dart analyze</code></span></span></li>
+      <li class="key"><time datetime="2026-10-10T11:20">10-10 11:20</time><span class="what">Last <code>analyzer</code> 9.0.0 differences fixed<span class="who">Opus</span><span class="ev">27,278/27,278, 0 extra; lints 57,211/57,211</span></span></li>
+      <li class="key"><time datetime="2026-10-10T13:15">10-10 13:15</time><span class="what">First public release <code>v0.1.0-preview.1</code><span class="who">Opus</span><span class="ev">Homebrew formula; <code>brew test</code> passes</span></span></li>
+      <li><time datetime="2026-10-10T14:10">10-10 14:10</time><span class="what">Legacy protocol: hover, navigation, search, edit<span class="who">Gemini</span><span class="ev">32/32 steps identical</span></span></li>
+      <li><time datetime="2026-10-10T15:00">10-10 15:00</time><span class="what">Legacy protocol: server, execution, diagnostic, analytics domains<span class="who">Gemini</span><span class="ev">39/59 requests, 19/22 notifications; 78 steps identical</span></span></li>
+    </ol>
+  </div>
+</section>
+
+<!-- 6. Setup and links -->
+<section class="block" id="setup" aria-labelledby="setup-title" style="border-bottom:0">
+  <div class="wrap">
+    <p class="eyebrow"><b>06</b></p>
+    <h2 id="setup-title">Editor setup</h2>
+    <p class="section-intro">Dart-Code (the VS Code extension) can only start the analysis server as a Dart script, so <code>dart.analyzerPath</code> points to <code>dartr_shim.dart</code>. The shim starts <code>dartr language-server</code> with the same arguments and forwards stdin, stdout, stderr and the exit code. Homebrew installs the shim with <code>dartr</code> next to it.</p>
+
+    <div class="grid-2">
+      <div>
+        <h3>VS Code (Dart-Code)</h3>
+        <div class="term" style="margin-top:14px">
+          <div class="term-bar"><span>find the shim</span><button class="copy" type="button" data-copy="t-shim" hidden>Copy</button></div>
+<pre id="t-shim"><span class="p">$ </span><span data-cmd>echo "$(brew --prefix dartr)/libexec/dartr_shim.dart"</span></pre>
+        </div>
+        <div class="term" style="margin-top:12px">
+          <div class="term-bar"><span>settings.json</span></div>
+<pre><span class="o">{
+  "dart.analyzerPath": "/opt/homebrew/opt/dartr/libexec/dartr_shim.dart"
+}</span></pre>
+        </div>
+        <p style="margin-top:12px;color:var(--ink-2);font-size:0.95rem">Use the path that the first command prints. Without Homebrew, set the environment variable <code>DARTR_BIN</code> to the dartr binary for the VS Code process, or put <code>dartr</code> next to the shim. To go back to the Dart server, remove <code>dart.analyzerPath</code> and reload the window. The <code>initialize</code> result has <code>serverInfo.name</code> <code>dartr LSP Analysis Server</code>.</p>
+      </div>
+      <div>
+        <h3>Other editors</h3>
+        <p style="margin-top:14px;color:var(--ink-2);font-size:0.95rem">Neovim, Helix, Zed, Emacs and Sublime start a language server command directly. They can run dartr without the shim.</p>
+        <div class="term">
+          <div class="term-bar"><span>languages.toml (Helix)</span></div>
+<pre><span class="o">[language-server.dartr]
+command = "dartr"
+args = ["language-server"]
+
+[[language]]
+name = "dart"
+language-servers = ["dartr"]</span></pre>
+        </div>
+        <p style="margin-top:12px;color:var(--ink-2);font-size:0.95rem"><code>flutter analyze</code> and IntelliJ start <code>&lt;sdk&gt;/bin/dart language-server</code> and have no setting for another server. They do not work with dartr yet.</p>
+      </div>
+    </div>
+
+    <nav class="links" aria-label="Project links">
+      <a href="https://github.com/orestesgaolin/dartr"><b>Source code</b><span>github.com/orestesgaolin/dartr</span></a>
+      <a href="https://github.com/orestesgaolin/dartr/releases"><b>Releases</b><span>macOS arm64, Linux x86_64</span></a>
+      <a href="https://github.com/orestesgaolin/dartr#readme"><b>README</b><span>usage, status, limitations</span></a>
+      <a href="https://github.com/orestesgaolin/dartr/blob/main/docs/editor-setup.md"><b>Editor setup</b><span>docs/editor-setup.md</span></a>
+      <a href="https://github.com/orestesgaolin/dartr/blob/main/docs/BENCHMARKS.md"><b>Benchmarks</b><span>docs/BENCHMARKS.md</span></a>
+      <a href="https://github.com/orestesgaolin/dartr/blob/main/docs/TIMELINE.md"><b>Timeline</b><span>docs/TIMELINE.md</span></a>
+      <a href="https://github.com/orestesgaolin/dartr/blob/main/LICENSE"><b>License</b><span>BSD-3-Clause</span></a>
+      <a href="https://github.com/orestesgaolin/dartr/blob/main/THIRD_PARTY_NOTICES.md"><b>Third-party notices</b><span>THIRD_PARTY_NOTICES.md</span></a>
+    </nav>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <p>dartr is licensed under the BSD 3-Clause License. It is a port of code of the Dart project and uses test data and diagnostic messages from it; the licenses and copyright lines of that code are in <a href="https://github.com/orestesgaolin/dartr/blob/main/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>. dartr is not affiliated with or endorsed by Google or the Dart team.</p>
+  </div>
+</footer>
+
+<script src="site.js"></script>
+</body>
+</html>

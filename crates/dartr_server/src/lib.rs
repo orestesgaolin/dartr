@@ -37,7 +37,9 @@
 pub mod args;
 pub mod capabilities;
 pub mod client_configuration;
+pub mod completion;
 pub mod computer;
+pub mod correction;
 pub mod element_locator;
 pub mod features;
 pub mod formatting;
