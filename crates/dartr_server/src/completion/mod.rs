@@ -18,8 +18,8 @@
 pub mod candidate;
 pub mod declaration;
 pub mod elem;
-pub mod keyword;
 pub mod imports;
+pub mod keyword;
 pub mod lsp;
 pub mod overrides;
 pub mod pass;

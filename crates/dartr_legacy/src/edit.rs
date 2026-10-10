@@ -1266,3 +1266,267 @@ fn compute_simple_diff(old_str: &str, new_str: &str) -> (usize, usize, String) {
     }
     (0, old_u.len(), new_str.to_string())
 }
+
+pub struct LegacyWorkspace<'s> {
+    pub session: &'s mut dartr_cli::DriverSession,
+    pub collection: &'s dartr_project::AnalysisContextCollection,
+}
+
+impl dartr_server::correction::change_builder::ChangeWorkspace for LegacyWorkspace<'_> {
+    fn resolved_unit(&mut self, path: &str) -> Option<dartr_server::server::ResolvedUnitRef> {
+        if !path.ends_with(".dart") || self.collection.context_for(path).is_none() {
+            return None;
+        }
+        let library = self.session.resolved_library(self.collection, path)?;
+        let index = library.unit_index(path)?;
+        Some(dartr_server::server::ResolvedUnitRef { library, index })
+    }
+
+    fn analysis_options(&self, path: &str) -> std::rc::Rc<dartr_project::AnalysisOptions> {
+        match self.collection.context_for(path) {
+            Some(context) => self.collection.options_for(context, path).clone(),
+            None => std::rc::Rc::new(dartr_project::AnalysisOptions::default()),
+        }
+    }
+
+    fn content(&self, path: &str) -> Option<String> {
+        dartr_project::fs::read_string(path)
+    }
+
+    fn fix_data_files(&self, path: &str) -> Vec<(String, Option<String>)> {
+        let Some(context) = self.collection.context_for(path) else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for package in context.packages.packages() {
+            out.push((
+                format!("{}/fix_data.yaml", package.lib),
+                Some(package.name.clone()),
+            ));
+            let mut files = Vec::new();
+            yaml_files_recursively(&format!("{}/fix_data", package.lib), &mut files);
+            out.extend(files.into_iter().map(|f| (f, Some(package.name.clone()))));
+        }
+        if let Some(sdk) = context.sdk.as_ref().or(self.collection.sdk.as_ref()) {
+            out.push((format!("{}/_internal/fix_data.yaml", sdk.lib_path()), None));
+        }
+        out
+    }
+
+    fn top_level_declarations(
+        &mut self,
+        path: &str,
+        name: &str,
+    ) -> Vec<dartr_server::correction::change_builder::TopLevelDeclaration> {
+        use dartr_server::correction::change_builder::TopLevelDeclaration;
+        use dartr_server::correction::producers::import_library::{element_kind, exported_element};
+
+        let collection = self.collection;
+        let Some(context) = collection.context_for(path) else {
+            return Vec::new();
+        };
+        let index = collection
+            .contexts
+            .iter()
+            .position(|x| std::ptr::eq(x, context))
+            .unwrap_or(0);
+        let mut candidates = self.session.known_files(index);
+        candidates.extend(
+            context
+                .root
+                .analyzed_files()
+                .into_iter()
+                .filter(|f| f.ends_with(".dart")),
+        );
+        if let Some(sdk) = context.sdk.as_ref() {
+            candidates.extend(
+                sdk.libraries()
+                    .iter()
+                    .filter(|l| !l.is_internal())
+                    .filter_map(|l| sdk.map_dart_uri(&l.short_name)),
+            );
+        }
+        let mut seen = std::collections::HashSet::new();
+        let mut result = Vec::new();
+        for candidate in candidates {
+            if !seen.insert(candidate.clone()) {
+                continue;
+            }
+            let Some(linked) = self
+                .session
+                .linked_library_in(collection, index, &candidate)
+            else {
+                continue;
+            };
+            if linked.library_path != candidate {
+                continue;
+            }
+            let sink = dartr_element::NoopSink;
+            let features = dartr_element::FeatureSet::new(Vec::<std::sync::Arc<str>>::new());
+            let ctx = linked.ctx(&sink, &features);
+            let Some(library) = ctx.library_by_uri(&linked.uri) else {
+                continue;
+            };
+            let element = exported_element(&ctx, library, name)
+                .or_else(|| exported_element(&ctx, library, &format!("{name}=")));
+            let Some(mut element) = element else { continue };
+            if matches!(
+                element.tag(),
+                dartr_element::Tag::Getter | dartr_element::Tag::Setter
+            ) && let Some(v) =
+                dartr_resolver::element_metadata::accessor_variable_any(&ctx, element)
+            {
+                element = v;
+            }
+            let declared_in_library =
+                dartr_resolver::error::support::library_of(&ctx, element) == Some(library);
+            result.push(TopLevelDeclaration {
+                library_uri: linked.uri.clone(),
+                library_path: linked.library_path.clone(),
+                kind: element_kind(element),
+                declared_in_library,
+            });
+        }
+        result
+    }
+}
+
+fn yaml_files_recursively(folder: &str, out: &mut Vec<String>) {
+    let Some(children) = dartr_project::fs::children(folder) else {
+        return;
+    };
+    for child in children {
+        match child.kind {
+            dartr_project::fs::ResourceKind::File => {
+                if child.path.ends_with(".yaml") {
+                    out.push(child.path);
+                }
+            }
+            dartr_project::fs::ResourceKind::Folder => yaml_files_recursively(&child.path, out),
+        }
+    }
+}
+
+pub fn to_protocol_source_change(
+    change: dartr_server::correction::change::SourceChange,
+) -> protocol::SourceChange {
+    use dartr_server::correction::change::LinkedEditSuggestionKind as K;
+    let edits = change
+        .edits
+        .into_iter()
+        .map(|fe| protocol::SourceFileEdit {
+            file_stamp: if dartr_project::fs::file_exists(&fe.file) {
+                0
+            } else {
+                -1
+            },
+            file: fe.file,
+            edits: fe
+                .edits
+                .into_iter()
+                .map(|e| protocol::SourceEdit {
+                    offset: e.offset as i64,
+                    length: e.length as i64,
+                    replacement: e.replacement,
+                    id: None,
+                    description: None,
+                })
+                .collect(),
+        })
+        .collect();
+    let linked_edit_groups = change
+        .linked_edit_groups
+        .into_iter()
+        .map(|g| protocol::LinkedEditGroup {
+            positions: g
+                .positions
+                .into_iter()
+                .map(|p| protocol::Position {
+                    file: p.file,
+                    offset: p.offset as i64,
+                })
+                .collect(),
+            length: g.length as i64,
+            suggestions: g
+                .suggestions
+                .into_iter()
+                .map(|s| protocol::LinkedEditSuggestion {
+                    value: s.value,
+                    kind: match s.kind {
+                        K::Method => protocol::LinkedEditSuggestionKind::METHOD,
+                        K::Parameter => protocol::LinkedEditSuggestionKind::PARAMETER,
+                        K::Type => protocol::LinkedEditSuggestionKind::TYPE,
+                        K::Variable => protocol::LinkedEditSuggestionKind::VARIABLE,
+                    },
+                })
+                .collect(),
+        })
+        .collect();
+    protocol::SourceChange {
+        message: change.message,
+        edits,
+        linked_edit_groups,
+        selection: change.selection.map(|p| protocol::Position {
+            file: p.file,
+            offset: p.offset as i64,
+        }),
+        selection_length: change.selection_length.map(|l| l as i64),
+        id: change.id,
+    }
+}
+
+pub fn compute_import_elements(
+    workspace: &mut dyn dartr_server::correction::change_builder::ChangeWorkspace,
+    resolved: &crate::search::ResolvedUnitRef,
+    file: &str,
+    elements: &[protocol::ImportedElements],
+) -> Option<protocol::SourceFileEdit> {
+    if elements.is_empty() {
+        return None;
+    }
+    let sink = dartr_element::NoopSink;
+    let ctx = resolved.ctx(&sink);
+    let unit = resolved.unit();
+    let eol = dartr_server::correction::change_builder::end_of_line(&unit.ast.tokens.source);
+    let mut builder = dartr_server::correction::change_builder::ChangeBuilder::new(workspace, eol);
+
+    let ok = builder.add_dart_file_edit(file, |file_builder| {
+        for imported in elements {
+            let uri = ctx
+                .world
+                .libraries
+                .iter()
+                .find_map(|(u, &lib_id)| {
+                    let first = ctx.get(lib_id).first_fragment();
+                    if ctx.fragment(first).source.path.as_ref() == imported.path {
+                        Some(u.to_string())
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or_else(|| format!("file://{}", imported.path));
+            let prefix = if imported.prefix.is_empty() {
+                None
+            } else {
+                Some(imported.prefix.as_str())
+            };
+            if imported.elements.is_empty() {
+                file_builder.import_library_element(&uri, prefix, None, false);
+            } else {
+                for elem_name in &imported.elements {
+                    file_builder.import_library_element(
+                        &uri,
+                        prefix,
+                        Some(elem_name.as_str()),
+                        false,
+                    );
+                }
+            }
+        }
+    });
+    if !ok {
+        return None;
+    }
+    let change = to_protocol_source_change(builder.source_change());
+    change.edits.into_iter().find(|fe| !fe.edits.is_empty())
+}

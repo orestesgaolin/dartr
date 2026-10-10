@@ -149,7 +149,10 @@ pub fn import_namespace(
 }
 
 /// The name of the prefix of an import.
-pub(crate) fn import_prefix_name(ctx: &Ctx<'_>, import: &dartr_element::LibraryImport) -> Option<String> {
+pub(crate) fn import_prefix_name(
+    ctx: &Ctx<'_>,
+    import: &dartr_element::LibraryImport,
+) -> Option<String> {
     let prefix = import.prefix?;
     let element = ctx.fragment(prefix).element.try_get().copied()?;
     ctx.element_name(element).map(str::to_string)

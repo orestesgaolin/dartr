@@ -686,7 +686,11 @@ pub fn to_item(
     }
     // Dart `server.getColorHexString(element)`: a color constant has the
     // kind `Color`.
-    let kind = if color_hex.is_some() { Some(16) } else { item_kind(ctx, caps, c, &label) };
+    let kind = if color_hex.is_some() {
+        Some(16)
+    } else {
+        item_kind(ctx, caps, c, &label)
+    };
     let mut detail = completion_detail(
         ctx,
         c,
@@ -762,7 +766,11 @@ pub fn to_item(
     }
     // Dart appends the hex color to the documentation.
     if let Some(hex) = &color_hex {
-        cleaned_doc = Some(format!("{}\n\n{hex}", cleaned_doc.unwrap_or_default()).trim().to_string());
+        cleaned_doc = Some(
+            format!("{}\n\n{hex}", cleaned_doc.unwrap_or_default())
+                .trim()
+                .to_string(),
+        );
     }
     let is_deprecated = base.is_some_and(|b| elem::has_or_inherits_deprecated(ctx, b));
     let mut item = Map::new();
@@ -855,8 +863,7 @@ pub fn is_color(ctx: &Ctx<'_>, ty: TypeId) -> bool {
         };
         let element = element.raw();
         ctx.element_name(element) == Some("Color")
-            && member::library(ctx, ElemRef::Base(element))
-                .and_then(|l| ctx.element_name(l.raw()))
+            && member::library(ctx, ElemRef::Base(element)).and_then(|l| ctx.element_name(l.raw()))
                 == Some("dart.ui")
     };
     is_exact(ty) || ctx.all_supertypes(ty).into_iter().any(is_exact)

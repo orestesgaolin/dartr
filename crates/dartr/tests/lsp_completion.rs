@@ -743,7 +743,11 @@ fn lsp_completion_root_uri_only() {
     let labels = |r: &Value| -> Vec<String> {
         r["result"]["items"]
             .as_array()
-            .map(|a| a.iter().map(|i| i["label"].as_str().unwrap_or("").to_string()).collect())
+            .map(|a| {
+                a.iter()
+                    .map(|i| i["label"].as_str().unwrap_or("").to_string())
+                    .collect()
+            })
             .unwrap_or_default()
     };
     eprintln!(

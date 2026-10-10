@@ -38,7 +38,11 @@ fn directive_uri_value(ast: &Ast, uri: Id<StringLiteral>) -> String {
 }
 
 /// Dart `CodeStyleOptions.preferredQuoteForUris`.
-fn preferred_quote_for_uris(ast: &Ast, imports: &[Id<ImportDirective>], lint_quote: Option<char>) -> char {
+fn preferred_quote_for_uris(
+    ast: &Ast,
+    imports: &[Id<ImportDirective>],
+    lint_quote: Option<char>,
+) -> char {
     if let Some(q) = lint_quote {
         return q;
     }
@@ -108,7 +112,11 @@ pub fn import_edits(
     let write_import = |uri: &str| format!("import {quote}{uri}{quote};");
     let mut edits: Vec<SourceEdit> = Vec::new();
     fn insert(edits: &mut Vec<SourceEdit>, offset: u32, text: String) {
-        edits.push(SourceEdit { offset, length: 0, text });
+        edits.push(SourceEdit {
+            offset,
+            length: 0,
+            text,
+        });
     }
 
     if !imports.is_empty() {
@@ -122,7 +130,10 @@ pub fn import_edits(
             let mut is_last_existing_dart = false;
             let mut is_last_existing_package = false;
             // Dart `insert(prev:, next:, trailingNewLine:)`.
-            let insert_at = |edits: &mut Vec<SourceEdit>, prev: Option<Id<ImportDirective>>, next: Id<ImportDirective>, trailing: bool| {
+            let insert_at = |edits: &mut Vec<SourceEdit>,
+                             prev: Option<Id<ImportDirective>>,
+                             next: Id<ImportDirective>,
+                             trailing: bool| {
                 if let Some(prev) = prev {
                     let mut offset = ast.end(prev);
                     let next_token = ast.t_next(ast.end_token(prev));
@@ -135,9 +146,12 @@ pub fn import_edits(
                 } else {
                     let is_first = ast.list_raw(ast[unit].directives).first() == Some(&next.raw());
                     let offset = if is_first {
-                        crate::computer::outline::first_token_after_comment_and_metadata(ast, next.raw())
-                            .map(|t| ast.t_offset(t))
-                            .unwrap_or_else(|| ast.offset(next))
+                        crate::computer::outline::first_token_after_comment_and_metadata(
+                            ast,
+                            next.raw(),
+                        )
+                        .map(|t| ast.t_offset(t))
+                        .unwrap_or_else(|| ast.offset(next))
                     } else {
                         ast.offset(next)
                     };
@@ -163,7 +177,11 @@ pub fn import_edits(
                         if ast.is::<HideCombinator>(*c) {
                             let begin = ast.begin_token(*c);
                             let previous_end = ast.t_prev(begin).map(|t| ast.t_end(t)).unwrap_or(0);
-                            edits.push(SourceEdit { offset: previous_end, length: ast.end(*c) - previous_end, text: String::new() });
+                            edits.push(SourceEdit {
+                                offset: previous_end,
+                                length: ast.end(*c) - previous_end,
+                                text: String::new(),
+                            });
                         }
                     }
                     inserted = true;
@@ -176,7 +194,12 @@ pub fn import_edits(
                     }
                 } else if is_package {
                     if is_existing_relative || is_new_before_existing {
-                        insert_at(&mut edits, last_existing_package, existing, is_existing_relative);
+                        insert_at(
+                            &mut edits,
+                            last_existing_package,
+                            existing,
+                            is_existing_relative,
+                        );
                         inserted = true;
                         break;
                     }

@@ -432,12 +432,16 @@ impl ContextTypeVisitor<'_, '_, '_> {
                 let is_operand = ast
                     .cast::<BinaryExpression>(parent)
                     .is_some_and(|b| ast[b].right_operand.raw() == argument)
-                    || ast.cast::<IndexExpression>(parent).is_some_and(|i| ast[i].index.raw() == argument);
+                    || ast
+                        .cast::<IndexExpression>(parent)
+                        .is_some_and(|i| ast[i].index.raw() == argument);
                 if !is_operand {
                     return None;
                 }
                 let method = *tables.element.get(parent)?;
-                member::formal_parameters(self.ctx(), method).first().copied()?
+                member::formal_parameters(self.ctx(), method)
+                    .first()
+                    .copied()?
             }
         };
         // Dart gives the parameter of the instantiated invocation (a
@@ -445,18 +449,21 @@ impl ContextTypeVisitor<'_, '_, '_> {
         // argument list when the parameter is one of its parameters.
         let ast = self.ast();
         let list = ast.parent(argument).and_then(|p| {
-            if ast.is::<NamedArgument>(p) { ast.parent(p) } else { Some(p) }
+            if ast.is::<NamedArgument>(p) {
+                ast.parent(p)
+            } else {
+                Some(p)
+            }
         });
         if let Some(list) = list.and_then(|l| ast.cast::<ArgumentList>(l)) {
             let base = member::base_element(self.ctx(), found);
             let params = self
                 .argument_list_function_type(list)
                 .and_then(|t| self.function_type_params(t));
-            if let Some(p) = params
-                .iter()
-                .flatten()
-                .find(|p| p.element.is_some_and(|e| member::base_element(self.ctx(), e) == base))
-            {
+            if let Some(p) = params.iter().flatten().find(|p| {
+                p.element
+                    .is_some_and(|e| member::base_element(self.ctx(), e) == base)
+            }) {
                 return Some(p.ty);
             }
         }

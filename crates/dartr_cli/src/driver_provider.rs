@@ -594,9 +594,11 @@ impl DriverSession {
         elements
             .iter()
             .map(|&e| {
-                catch_unwind(AssertUnwindSafe(|| engine.compute_constant_value_of(e).and_then(|v| f(&v))))
-                    .ok()
-                    .flatten()
+                catch_unwind(AssertUnwindSafe(|| {
+                    engine.compute_constant_value_of(e).and_then(|v| f(&v))
+                }))
+                .ok()
+                .flatten()
             })
             .collect()
     }
@@ -610,7 +612,12 @@ impl DriverSession {
     /// and the doc imports of `addDirectivesSignature` when a cycle is
     /// evaluated), then [available] (`discoverAvailableFiles`). Call after
     /// [Self::link_known_libraries].
-    pub fn dart_known_order(&mut self, context: usize, added: &[String], available: &[String]) -> Vec<String> {
+    pub fn dart_known_order(
+        &mut self,
+        context: usize,
+        added: &[String],
+        available: &[String],
+    ) -> Vec<String> {
         let Some(driver) = self.drivers.get_mut(&context) else {
             return Vec::new();
         };
@@ -620,7 +627,11 @@ impl DriverSession {
             evaluated: std::collections::HashSet::new(),
         };
         // `_discoverDartCore`.
-        let core = fs.files().iter().find(|f| &*f.uri_str == "dart:core").map(|f| f.id);
+        let core = fs
+            .files()
+            .iter()
+            .find(|f| &*f.uri_str == "dart:core")
+            .map(|f| f.id);
         if let Some(core) = core {
             order.insert(fs, core);
             if fs.file(core).content.is_some() {
@@ -636,7 +647,10 @@ impl DriverSession {
             }
         }
         // `_discoverLibraries`.
-        let added_ids: Vec<FileId> = added.iter().filter_map(|p| fs.get_existing_from_path(p)).collect();
+        let added_ids: Vec<FileId> = added
+            .iter()
+            .filter_map(|p| fs.get_existing_from_path(p))
+            .collect();
         for &id in &added_ids {
             order.insert(fs, id);
         }
@@ -660,7 +674,10 @@ impl DriverSession {
             .into_iter()
             .filter(|&id| {
                 let f = fs.file(id);
-                f.content.as_ref().is_some_and(|c| c.exists && c.kind.is_library()) && f.path.ends_with(".dart")
+                f.content
+                    .as_ref()
+                    .is_some_and(|c| c.exists && c.kind.is_library())
+                    && f.path.ends_with(".dart")
             })
             .map(|id| fs.file(id).path.to_string())
             .collect()
@@ -910,7 +927,11 @@ struct KnownOrder {
 impl KnownOrder {
     /// Dart `_buildConfigurableDirectiveUris`: the primary URI, then the
     /// URIs of the configurations.
-    fn create(&mut self, fs: &dartr_driver::file_state::FileSystemState, uris: &dartr_driver::file_state::DirectiveUris) {
+    fn create(
+        &mut self,
+        fs: &dartr_driver::file_state::FileSystemState,
+        uris: &dartr_driver::file_state::DirectiveUris,
+    ) {
         use dartr_driver::file_state::DirectiveUri;
         for u in std::iter::once(&uris.primary).chain(&uris.configurations) {
             if let DirectiveUri::WithFile { file, .. } = u {
@@ -934,7 +955,11 @@ impl KnownOrder {
 
     /// Dart `LibraryFileKind.fileKinds`, with the files of the part
     /// directives created on the way.
-    fn file_kinds(&mut self, fs: &dartr_driver::file_state::FileSystemState, library: FileId) -> Vec<FileId> {
+    fn file_kinds(
+        &mut self,
+        fs: &dartr_driver::file_state::FileSystemState,
+        library: FileId,
+    ) -> Vec<FileId> {
         let mut result = Vec::new();
         let mut visited = std::collections::HashSet::new();
         let mut stack = vec![library];
@@ -967,7 +992,11 @@ impl KnownOrder {
     }
 
     /// Dart `_LibraryNode.computeDependencies`.
-    fn dependencies(&mut self, fs: &dartr_driver::file_state::FileSystemState, library: FileId) -> Vec<FileId> {
+    fn dependencies(
+        &mut self,
+        fs: &dartr_driver::file_state::FileSystemState,
+        library: FileId,
+    ) -> Vec<FileId> {
         let mut deps = indexmap::IndexSet::new();
         for kind in self.file_kinds(fs, library) {
             let c = fs.file(kind).c();
@@ -1019,7 +1048,12 @@ impl KnownOrder {
             next: u32,
             stack: Vec<FileId>,
         }
-        fn strong_connect(o: &mut KnownOrder, fs: &dartr_driver::file_state::FileSystemState, st: &mut State, node: FileId) {
+        fn strong_connect(
+            o: &mut KnownOrder,
+            fs: &dartr_driver::file_state::FileSystemState,
+            st: &mut State,
+            node: FileId,
+        ) {
             st.index.insert(node, (st.next, st.next));
             st.next += 1;
             st.stack.push(node);
