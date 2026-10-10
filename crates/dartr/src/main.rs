@@ -12,7 +12,7 @@ use clap::{Parser, Subcommand};
 
 /// `dartr --version`: the version, the pinned Dart SDK, and the license notice.
 const VERSION_TEXT: &str = concat!(
-    env!("CARGO_PKG_VERSION"),
+    env!("DARTR_VERSION"),
     "\nport of the Dart SDK 3.13.3 analyzer (pinned reference version)",
     "\nLicense: BSD-3-Clause. Third-party notices: THIRD_PARTY_NOTICES.md",
     " (https://github.com/orestesgaolin/dartr)"
