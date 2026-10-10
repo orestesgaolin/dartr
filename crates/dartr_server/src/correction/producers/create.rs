@@ -310,7 +310,7 @@ fn add_all(excluded: &[String], result: &mut Vec<String>, items: Vec<String>) {
 }
 
 /// Dart `_getVariableNameSuggestionsForExpression`.
-fn variable_name_suggestions(
+pub(crate) fn variable_name_suggestions(
     c: &ProducerContext<'_>,
     ty: TypeId,
     expression: NodeId,

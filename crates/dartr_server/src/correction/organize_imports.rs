@@ -79,6 +79,7 @@ impl ImportOrganizer<'_> {
         if code != initial.units {
             let suffix = find_common_suffix(&initial.units, &code);
             edits.push(SourceEdit {
+                description: None,
                 offset: 0,
                 length: (initial.units.len() - suffix) as u32,
                 replacement: String::from_utf16_lossy(&code[..code.len() - suffix]),

@@ -10,9 +10,9 @@
 //! - Assists: one request per word start of each file (empty range,
 //!   `only: ["refactor"]`); the actions with a `dart.assist.*` id are
 //!   compared (the refactorings are not).
-//! - Source actions: `only: ["source"]`, then the `Organize Imports` and
-//!   `Sort Members` commands; the `workspace/applyEdit` of each command is
-//!   compared.
+//! - Source actions: `only: ["source"]`, then the `Organize Imports`,
+//!   `Sort Members` and `Fix All` commands; the `workspace/applyEdit` of
+//!   each command is compared.
 //!
 //! The report has one line per fix kind (the `dart.logAction` id of the
 //! action): identical, differing, missing in dartr, extra in dartr.
@@ -65,7 +65,15 @@ struct Results {
     assists: Vec<Value>,
     source_actions: Vec<Value>,
     commands: Vec<(Value, Option<Value>)>,
+    /// The workspace commands (`WORKSPACE_COMMANDS`).
+    workspace_commands: Vec<(Value, Option<Value>)>,
 }
+
+/// The commands executed once for the workspace.
+const WORKSPACE_COMMANDS: [&str; 2] = [
+    "dart.edit.fixAllInWorkspace.preview",
+    "dart.edit.fixAllInWorkspace",
+];
 
 fn start(program: &str, root: &Path, files: &[OpenFile]) -> LspClient {
     let mut c = LspClient::spawn(program, &session_args(), &[]);
@@ -183,7 +191,7 @@ fn run(
             }),
         );
         results.source_actions.push(response);
-        for command in ["dart.edit.organizeImports", "dart.edit.sortMembers"] {
+        for command in COMMANDS {
             let before = c.server_requests.len();
             let response = c.request(
                 "workspace/executeCommand",
@@ -196,8 +204,27 @@ fn run(
             results.commands.push((response, edit));
         }
     }
+    for command in WORKSPACE_COMMANDS {
+        let before = c.server_requests.len();
+        let response = c.request(
+            "workspace/executeCommand",
+            json!({"command": command, "arguments": []}),
+        );
+        let edit = c.server_requests[before..]
+            .iter()
+            .find(|(m, _)| m == "workspace/applyEdit")
+            .map(|(_, p)| p.clone());
+        results.workspace_commands.push((response, edit));
+    }
     results
 }
+
+/// The commands executed for each file.
+const COMMANDS: [&str; 3] = [
+    "dart.edit.organizeImports",
+    "dart.edit.sortMembers",
+    "dart.edit.fixAll",
+];
 
 /// The fix kind of an action (the argument of `dart.logAction`, else the
 /// LSP kind).
@@ -308,11 +335,7 @@ fn compare(
         }
     }
     for (i, (d, x)) in dart.commands.iter().zip(&dartr.commands).enumerate() {
-        let name = if i % 2 == 0 {
-            "organizeImports"
-        } else {
-            "sortMembers"
-        };
+        let name = COMMANDS[i % COMMANDS.len()].trim_start_matches("dart.edit.");
         let t = tally.entry(format!("command {name}")).or_default();
         if d == x {
             t.identical += 1;
@@ -320,6 +343,27 @@ fn compare(
             t.differing += 1;
             problems.push(format!(
                 "command {name} {i}: dart {} {} dartr {} {}",
+                truncate(&d.0),
+                d.1.as_ref().map(truncate).unwrap_or_default(),
+                truncate(&x.0),
+                x.1.as_ref().map(truncate).unwrap_or_default()
+            ));
+        }
+    }
+    for (i, (d, x)) in dart
+        .workspace_commands
+        .iter()
+        .zip(&dartr.workspace_commands)
+        .enumerate()
+    {
+        let name = WORKSPACE_COMMANDS[i].trim_start_matches("dart.edit.");
+        let t = tally.entry(format!("command {name}")).or_default();
+        if d == x {
+            t.identical += 1;
+        } else {
+            t.differing += 1;
+            problems.push(format!(
+                "command {name}: dart {} {} dartr {} {}",
                 truncate(&d.0),
                 d.1.as_ref().map(truncate).unwrap_or_default(),
                 truncate(&x.0),
@@ -394,6 +438,7 @@ fn code_actions_match_dart_language_server() {
         "warnings.dart",
         "data_driven.dart",
         "assists.dart",
+        "more.dart",
     ] {
         let path = root.join("lib").join(name);
         let content = std::fs::read_to_string(&path).unwrap();
@@ -402,13 +447,9 @@ fn code_actions_match_dart_language_server() {
     let (tally, problems) = run_both("fixes_project", &root, &files);
     // Every action that dartr returns must be identical (dartr does not
     // implement every producer: missing actions are allowed). The source
-    // actions differ by `Fix All` (the `dart.edit.fixAll` command is not
-    // implemented).
+    // actions and the commands must be identical.
     let mut failures = Vec::new();
     for (id, t) in &tally {
-        if id == "source actions" {
-            continue;
-        }
         if t.differing + t.extra > 0 {
             failures.push(format!(
                 "{id}: {} differing, {} extra",

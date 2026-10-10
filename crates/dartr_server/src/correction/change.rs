@@ -14,12 +14,14 @@ pub fn utf16_len(s: &str) -> u32 {
 
 /// Dart `SourceEdit`. [id] identifies the edit (Dart compares edits by
 /// identity when it reverts and finalizes).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SourceEdit {
     pub offset: u32,
     pub length: u32,
     pub replacement: String,
     pub id: u64,
+    /// Dart `SourceEdit.description` (the fix kind message of a bulk fix).
+    pub description: Option<String>,
 }
 
 impl SourceEdit {
