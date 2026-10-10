@@ -120,6 +120,7 @@ fn main() {
     }
     let mut diagnostics: Vec<Vec<Value>> = vec![vec![]; parsed.len()];
     let mut visited = vec![false; parsed.len()];
+    let mut pkg_cache = dartr_lints::LintPackageCache::default();
     // Defining units precede parts; unattached part files are still analyzed.
     let order = (0..parsed.len())
         .filter(|&i| !is_part[i])
@@ -128,6 +129,7 @@ fn main() {
         if visited[i] {
             continue;
         }
+        let pkg_info = pkg_cache.for_defining_path(paths[i]);
         let indices: Vec<_> = std::iter::once(i).chain(parts[i].iter().copied()).collect();
         let units: Vec<_> = indices
             .iter()
@@ -135,6 +137,8 @@ fn main() {
                 parsed: &parsed[j],
                 source: &sources[j],
                 path: paths[j],
+                source_uri: None,
+                package_info: Some(&pkg_info),
             })
             .collect();
         let enabled: Vec<_> = requests[i]["enabled"]

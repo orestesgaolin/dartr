@@ -63,7 +63,7 @@ impl SourceFactory {
 
 /// The language version and experiments of a file (Dart
 /// `FileState.packageLanguageVersion` and `featureSet`).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FileConfig {
     pub package_language_version: (u32, u32),
     pub experiments: Vec<ExperimentalFlag>,
@@ -73,9 +73,18 @@ pub struct FileConfig {
 /// `Send + Sync`, so that a driver can move to the threads of a pool.
 pub type ConfigFor = Box<dyn Fn(&str, &str) -> FileConfig + Send + Sync>;
 
-/// A file to read and parse: id, path, whether it is `dart:core`, config,
-/// salt.
-type ParseJob = (FileId, Arc<str>, bool, FileConfig, Vec<u32>);
+/// Cache key for a parsed and unlinked SDK (`dart:*`) file.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub(crate) struct SdkFileKey {
+    pub path: Arc<str>,
+    pub is_dart_core: bool,
+    pub config: FileConfig,
+    pub salt: Vec<u32>,
+}
+
+/// A file to read and parse: id, path, whether it is `dart:*`, whether it is
+/// `dart:core`, config, salt.
+type ParseJob = (FileId, Arc<str>, bool, bool, FileConfig, Vec<u32>);
 
 /// Dart `DirectiveUri` (no `DirectiveUriWithInSummarySource`: there are no
 /// summary inputs).
@@ -257,6 +266,9 @@ pub struct FileSystemState {
     config_for: ConfigFor,
     /// Files that are added but not read and parsed yet.
     pending: Vec<FileId>,
+    /// Shared cache of SDK (`dart:*`) files and cycles for the current
+    /// generation.
+    pub(crate) sdk_cache: Option<Arc<crate::driver::SdkCache>>,
 }
 
 impl FileSystemState {
@@ -272,6 +284,7 @@ impl FileSystemState {
             library_name_to_files: IndexMap::new(),
             config_for,
             pending: Vec::new(),
+            sdk_cache: None,
         }
     }
 
@@ -343,6 +356,9 @@ impl FileSystemState {
     /// repeats until no file is pending. Dart does the same lazily
     /// (`refresh`, `discoverReferencedFiles`).
     pub fn discover(&mut self) {
+        let sdk_cache = (!dartr_project::fs::has_overlays())
+            .then(|| self.sdk_cache.clone())
+            .flatten();
         while !self.pending.is_empty() {
             let pending = std::mem::take(&mut self.pending);
             let jobs: Vec<ParseJob> = pending
@@ -352,15 +368,31 @@ impl FileSystemState {
                     (
                         id,
                         f.path.clone(),
+                        f.uri_properties.is_dart,
                         &*f.uri_str == "dart:core",
                         f.config.clone(),
                         self.salt_for_unlinked.clone(),
                     )
                 })
                 .collect();
+            let sdk_cache_ref = sdk_cache.as_deref();
             let results: Vec<(FileId, RefreshData)> = jobs
                 .into_par_iter()
-                .map(|(id, path, is_dart_core, config, salt)| {
+                .map(|(id, path, is_dart, is_dart_core, config, salt)| {
+                    if is_dart && let Some(cache) = sdk_cache_ref {
+                        let key = SdkFileKey {
+                            path: path.clone(),
+                            is_dart_core,
+                            config: config.clone(),
+                            salt: salt.clone(),
+                        };
+                        if let Some(cached) = cache.get_file(&key) {
+                            return (id, (*cached).clone());
+                        }
+                        let data = refresh_data(&path, is_dart_core, &config, &salt);
+                        cache.insert_file(key, Arc::new(data.clone()));
+                        return (id, data);
+                    }
                     (id, refresh_data(&path, is_dart_core, &config, &salt))
                 })
                 .collect();
@@ -382,6 +414,11 @@ impl FileSystemState {
             return true;
         }
         let f = self.file(file);
+        if f.uri_properties.is_dart
+            && let Some(cache) = &self.sdk_cache
+        {
+            cache.invalidate_file(&f.path);
+        }
         let is_dart_core = &*f.uri_str == "dart:core";
         let data = refresh_data(&f.path, is_dart_core, &f.config, &self.salt_for_unlinked);
         let old = self.files[file.0 as usize]
@@ -847,7 +884,8 @@ impl FileSystemState {
 
 /// The result of reading and parsing one file (the first half of Dart
 /// `FileState.refresh`), computed in parallel.
-struct RefreshData {
+#[derive(Clone)]
+pub(crate) struct RefreshData {
     exists: bool,
     content_hash: String,
     unlinked_signature: [u8; 16],
