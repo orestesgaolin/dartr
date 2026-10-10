@@ -32,7 +32,15 @@ fn byte_index(content: &str, offset: u32) -> usize {
 /// Dart `applyAndConvertEditsToServer(failureIsCritical: true)`: applies
 /// the `contentChanges` of `didChange` to [content].
 pub fn apply_changes(content: &str, changes: &[Value]) -> ErrorOr<String> {
+    apply_changes_with_edits(content, changes).map(|(new_content, _)| new_content)
+}
+
+/// Applies `contentChanges` of `didChange` to [content] and returns both
+/// the new content and the `plugin.SourceEdit` JSON objects for
+/// `ChangeContentOverlay`.
+pub fn apply_changes_with_edits(content: &str, changes: &[Value]) -> ErrorOr<(String, Vec<Value>)> {
     let mut new_content = content.to_string();
+    let mut edits = Vec::new();
     for change in changes {
         let text = change
             .get("text")
@@ -46,24 +54,37 @@ pub fn apply_changes(content: &str, changes: &[Value]) -> ErrorOr<String> {
                     return Err(ResponseError::new(codes::INVALID_PARAMS, "Invalid range"));
                 };
                 let lines = LineInfo::from_content(&new_content);
-                let start = to_offset(&lines, start.0, start.1, true)?;
-                let end = to_offset(&lines, end.0, end.1, true)?;
-                let (start, end) = (
-                    byte_index(&new_content, start),
-                    byte_index(&new_content, end),
+                let start_offset = to_offset(&lines, start.0, start.1, true)?;
+                let end_offset = to_offset(&lines, end.0, end.1, true)?;
+                let (start_byte, end_byte) = (
+                    byte_index(&new_content, start_offset),
+                    byte_index(&new_content, end_offset),
                 );
-                if start > end {
+                if start_byte > end_byte {
                     return Err(ResponseError::new(
                         codes::CLIENT_SERVER_INCONSISTENT_STATE,
                         "Invalid range",
                     ));
                 }
-                new_content.replace_range(start..end, text);
+                edits.push(json!({
+                    "offset": start_offset,
+                    "length": end_offset - start_offset,
+                    "replacement": text,
+                }));
+                new_content.replace_range(start_byte..end_byte, text);
             }
-            None => new_content = text.to_string(),
+            None => {
+                let len_utf16 = new_content.encode_utf16().count() as u32;
+                edits.push(json!({
+                    "offset": 0,
+                    "length": len_utf16,
+                    "replacement": text,
+                }));
+                new_content = text.to_string();
+            }
         }
     }
-    Ok(new_content)
+    Ok((new_content, edits))
 }
 
 /// Dart `_isValidFormatterChange`: `RegExp(r'^[\s,;<>]*$')`, with the

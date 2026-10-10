@@ -24,7 +24,8 @@ use serde_json::{Map, Value, json};
 
 use super::{Document, Pending, ResolvedUnitRef, Server};
 use crate::correction::change::{
-    LinkedEditGroup, SourceChange, SourceEdit, SourceFileEdit, utf16_len,
+    LinkedEditGroup, LinkedEditSuggestion, LinkedEditSuggestionKind, Position, SourceChange,
+    SourceEdit, SourceFileEdit, utf16_len,
 };
 use crate::correction::change_builder::{ChangeWorkspace, TopLevelDeclaration};
 use crate::correction::fix_processor::{FixUnit, compute_fixes};
@@ -610,10 +611,10 @@ impl Server {
             return Ok(json!([]));
         };
         let mut actions: Vec<Value> = Vec::new();
-        let Some(resolved) = resolved else {
-            return Ok(json!([]));
-        };
-        if filter.include_any_of_kind("source") && self.editor_supports_apply_edit() {
+        if resolved.is_some()
+            && filter.include_any_of_kind("source")
+            && self.editor_supports_apply_edit()
+        {
             let create_action = |kind: &str, title: &str, command: &str| {
                 let mut argument = json!({"path": path});
                 if auto_triggered {
@@ -645,28 +646,49 @@ impl Server {
             }
         }
         if filter.include_any_of_kind("quickfix") {
-            let fixes = self.fix_actions(&path, &resolved, &range, &filter, literal);
+            let mut fixes = match &resolved {
+                Some(resolved) => self.fix_actions(&path, resolved, &range, &filter, literal),
+                None => Vec::new(),
+            };
+            if literal {
+                fixes.extend(self.plugin_fix_actions(&path, start_offset, &line_info, &filter));
+            }
             actions.extend(sort_actions(fixes, &range));
         }
         if filter.include_any_of_kind("refactor") {
-            let assists = self.assist_actions(
-                &path,
-                &resolved,
-                &range,
-                start_offset,
-                end_offset.saturating_sub(start_offset),
-                &filter,
-                literal,
-            );
+            let length = end_offset.saturating_sub(start_offset);
+            let mut assists = match &resolved {
+                Some(resolved) => self.assist_actions(
+                    &path,
+                    resolved,
+                    &range,
+                    start_offset,
+                    length,
+                    &filter,
+                    literal,
+                ),
+                None => Vec::new(),
+            };
+            if literal {
+                assists.extend(self.plugin_assist_actions(
+                    &path,
+                    start_offset,
+                    length,
+                    &line_info,
+                    &filter,
+                ));
+            }
             actions.extend(sort_actions(assists, &range));
-            actions.extend(self.refactor_actions(
-                &path,
-                &resolved,
-                start_offset,
-                end_offset.saturating_sub(start_offset),
-                &filter,
-                literal,
-            ));
+            if let Some(resolved) = &resolved {
+                actions.extend(self.refactor_actions(
+                    &path,
+                    resolved,
+                    start_offset,
+                    length,
+                    &filter,
+                    literal,
+                ));
+            }
         }
         Ok(Value::Array(actions))
     }
@@ -882,6 +904,135 @@ impl Server {
             });
         }
         actions
+    }
+
+    /// Dart `PluginCodeActionsProducer.getFixActions`.
+    fn plugin_fix_actions(
+        &mut self,
+        path: &str,
+        offset: u32,
+        line_info: &LineInfo,
+        filter: &KindFilter,
+    ) -> Vec<ActionWithPriority> {
+        let context_root = self
+            .collection
+            .as_ref()
+            .and_then(|c| c.context_for(path))
+            .map(|c| c.root.root.clone());
+        let error_fixes_list = self
+            .plugins
+            .get_fixes(context_root.as_deref(), path, offset);
+        let diagnostic_options = self.client.diagnostic_options();
+        let mut actions = Vec::new();
+        for error_fixes in error_fixes_list {
+            let Some(diagnostic) =
+                mapping::plugin_to_diagnostic(&error_fixes.error, &diagnostic_options, &|f| {
+                    if f == path {
+                        Some(line_info.clone())
+                    } else {
+                        self.line_info_of(f)
+                    }
+                })
+            else {
+                continue;
+            };
+            for fix in error_fixes.fixes {
+                let Some(change) = parse_plugin_source_change(&fix.change) else {
+                    continue;
+                };
+                let kind = to_code_action_kind(change.id.as_deref(), "quickfix");
+                if !filter.include_kind(&kind) {
+                    continue;
+                }
+                let action = self.plugin_change_action(
+                    &change,
+                    &kind,
+                    "fix from plugin",
+                    path,
+                    line_info,
+                    Some(diagnostic.clone()),
+                );
+                actions.push(ActionWithPriority {
+                    action,
+                    priority: fix.priority as i64,
+                });
+            }
+        }
+        actions
+    }
+
+    /// Dart `PluginCodeActionsProducer.getAssistActions`.
+    fn plugin_assist_actions(
+        &mut self,
+        path: &str,
+        offset: u32,
+        length: u32,
+        line_info: &LineInfo,
+        filter: &KindFilter,
+    ) -> Vec<ActionWithPriority> {
+        let context_root = self
+            .collection
+            .as_ref()
+            .and_then(|c| c.context_for(path))
+            .map(|c| c.root.root.clone());
+        let assists = self
+            .plugins
+            .get_assists(context_root.as_deref(), path, offset, length);
+        let mut actions = Vec::new();
+        for assist in assists {
+            let Some(change) = parse_plugin_source_change(&assist.change) else {
+                continue;
+            };
+            let kind = to_code_action_kind(change.id.as_deref(), "refactor");
+            if !filter.include_kind(&kind) {
+                continue;
+            }
+            let action = self.plugin_change_action(
+                &change,
+                &kind,
+                "assist from plugin",
+                path,
+                line_info,
+                None,
+            );
+            actions.push(ActionWithPriority {
+                action,
+                priority: assist.priority as i64,
+            });
+        }
+        actions
+    }
+
+    /// Dart `PluginCodeActionsProducer._createAction`.
+    fn plugin_change_action(
+        &self,
+        change: &SourceChange,
+        kind: &str,
+        logged_action: &str,
+        path: &str,
+        line_info: &LineInfo,
+        diagnostic: Option<Value>,
+    ) -> Value {
+        let mut m = Map::new();
+        m.insert("title".into(), json!(change.message));
+        m.insert("kind".into(), json!(kind));
+        m.insert(
+            "diagnostics".into(),
+            json!(diagnostic.map(|d| vec![d]).unwrap_or_default()),
+        );
+        m.insert(
+            "command".into(),
+            json!({
+                "command": commands::LOG_ACTION,
+                "title": "Log Action",
+                "arguments": [{"action": logged_action}],
+            }),
+        );
+        m.insert(
+            "edit".into(),
+            self.create_workspace_edit(change, true, path, line_info),
+        );
+        Value::Object(m)
     }
 
     /// The line info of [file] for edits (Dart `server.getLineInfo`).
@@ -1812,4 +1963,100 @@ fn escape(s: &str, chars: &[char]) -> String {
         out.push(c);
     }
     out
+}
+
+/// Parses an analyzer_plugin JSON `SourceChange` into a [SourceChange].
+fn parse_plugin_source_change(val: &Value) -> Option<SourceChange> {
+    let message = val.get("message")?.as_str()?.to_string();
+    let edits_val = val.get("edits")?.as_array()?;
+    let mut edits = Vec::with_capacity(edits_val.len());
+    for fe in edits_val {
+        let file = fe.get("file")?.as_str()?.to_string();
+        let file_stamp = fe.get("fileStamp").and_then(Value::as_i64).unwrap_or(0);
+        let file_edits_val = fe.get("edits")?.as_array()?;
+        let mut file_edits = Vec::with_capacity(file_edits_val.len());
+        for (idx, se) in file_edits_val.iter().enumerate() {
+            let offset = se.get("offset")?.as_u64()? as u32;
+            let length = se.get("length")?.as_u64()? as u32;
+            let replacement = se.get("replacement")?.as_str()?.to_string();
+            let description = se
+                .get("description")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            file_edits.push(SourceEdit {
+                offset,
+                length,
+                replacement,
+                id: idx as u64,
+                description,
+            });
+        }
+        edits.push(SourceFileEdit {
+            file,
+            file_stamp,
+            edits: file_edits,
+        });
+    }
+    let mut linked_edit_groups = Vec::new();
+    if let Some(groups_val) = val.get("linkedEditGroups").and_then(Value::as_array) {
+        for g in groups_val {
+            let length = g.get("length").and_then(Value::as_u64).unwrap_or(0) as u32;
+            let positions = g
+                .get("positions")
+                .and_then(Value::as_array)
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|p| {
+                            Some(Position {
+                                file: p.get("file")?.as_str()?.to_string(),
+                                offset: p.get("offset")?.as_u64()? as u32,
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let suggestions = g
+                .get("suggestions")
+                .and_then(Value::as_array)
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|s| {
+                            let value = s.get("value")?.as_str()?.to_string();
+                            let kind = match s.get("kind").and_then(Value::as_str).unwrap_or("") {
+                                "METHOD" => LinkedEditSuggestionKind::Method,
+                                "PARAMETER" => LinkedEditSuggestionKind::Parameter,
+                                "TYPE" => LinkedEditSuggestionKind::Type,
+                                _ => LinkedEditSuggestionKind::Variable,
+                            };
+                            Some(LinkedEditSuggestion { value, kind })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            linked_edit_groups.push(LinkedEditGroup {
+                positions,
+                length,
+                suggestions,
+            });
+        }
+    }
+    let selection = val.get("selection").and_then(|s| {
+        Some(Position {
+            file: s.get("file")?.as_str()?.to_string(),
+            offset: s.get("offset")?.as_u64()? as u32,
+        })
+    });
+    let selection_length = val
+        .get("selectionLength")
+        .and_then(Value::as_u64)
+        .map(|n| n as u32);
+    let id = val.get("id").and_then(Value::as_str).map(str::to_string);
+    Some(SourceChange {
+        message,
+        edits,
+        linked_edit_groups,
+        selection,
+        selection_length,
+        id,
+    })
 }
