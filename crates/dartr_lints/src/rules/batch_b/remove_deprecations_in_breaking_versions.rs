@@ -85,7 +85,7 @@ fn is_breaking_version(v: &ParsedVersion) -> bool {
 }
 
 fn has_breaking_version(c: &LinterContext<'_>) -> bool {
-    let Some(root) = c.package_root() else {
+    let Some(root) = c.pub_package_root() else {
         return false;
     };
     let pubspec_path = root.join("pubspec.yaml");

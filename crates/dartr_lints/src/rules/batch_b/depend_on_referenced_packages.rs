@@ -35,7 +35,7 @@ fn process_dependencies(node: &YamlNode) -> Option<Vec<String>> {
 }
 
 fn available_deps(c: &LinterContext<'_>) -> Option<Vec<String>> {
-    let root = c.package_root()?;
+    let root = c.pub_package_root()?;
     let pubspec_path = root.join("pubspec.yaml");
     let content = dartr_project::fs::read_string_strict(pubspec_path.to_str()?)?;
     let yaml = dartr_project::yaml::load_yaml_node(&content).ok()?;
