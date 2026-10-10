@@ -41,6 +41,7 @@ pub mod computer;
 pub mod element_locator;
 pub mod features;
 pub mod formatting;
+pub mod fuzzy;
 pub mod highlights;
 pub mod hover;
 pub mod index;

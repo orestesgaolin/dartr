@@ -232,7 +232,7 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
     }
 
     /// Dart `addParameterNamePrefix`.
-    fn parameter_name(&mut self, offset: u32, parameter: ElemRef, literal: bool) {
+    fn parameter_name(&mut self, offset: u32, parameter: ElemRef, literal: bool, substituted: bool) {
         let ctx = *self.ctx();
         let base = member::base_element(&ctx, parameter);
         let Some(name) = element_name(&ctx, base).filter(|n| !n.is_empty()) else {
@@ -241,7 +241,7 @@ impl<'u, 'c, 'a> Computer<'u, 'c, 'a> {
         // A substituted parameter (of an instantiated invoke type) is a new
         // element in Dart, without a fragment: no location.
         let location = match parameter {
-            ElemRef::Base(_) => self.location(Some(base)),
+            ElemRef::Base(_) if !substituted => self.location(Some(base)),
             _ => None,
         };
         let hint = json!({
@@ -310,13 +310,14 @@ fn is_literal(ast: &Ast, node: NodeId) -> bool {
 
 impl AstVisitor for Computer<'_, '_, '_> {
     fn visit_argument_list(&mut self, ast: &Ast, node: Id<ArgumentList>) {
+        let substituted = crate::signature::invocation_parameters_substituted(self.unit, node.raw());
         for &argument in ast.list_raw(ast[node].arguments) {
             if ast.is::<NamedArgument>(argument) {
                 continue;
             }
             if let Some(p) = self.unit.tables.param_element.get(argument).copied() {
                 let offset = ast.offset(argument);
-                self.parameter_name(offset, p, is_literal(ast, argument));
+                self.parameter_name(offset, p, is_literal(ast, argument), substituted);
             }
         }
         ast.visit_children(node.raw(), self);

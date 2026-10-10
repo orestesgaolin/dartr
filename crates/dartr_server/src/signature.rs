@@ -154,7 +154,9 @@ pub fn compute_signature(
         // Dart `parameters.indexOf(correspondingParameter)`: a substituted
         // parameter is a new element in Dart, never in the list (-1).
         active = match p {
-            ElemRef::Base(base) => parameters.iter().position(|q| q.element == Some(base)),
+            ElemRef::Base(base) if !invocation_parameters_substituted(unit, argument_list.raw()) => {
+                parameters.iter().position(|q| q.element == Some(base))
+            }
             _ => None,
         };
         if active.is_none() {
@@ -186,6 +188,31 @@ pub fn compute_signature(
         dartdoc,
         active_parameter_index: active,
     })
+}
+
+/// Whether the parameters of the invocation of [argument_list] are
+/// substituted in Dart (new elements, never equal to the parameters of the
+/// declaration): the invoked element is a member (a generic receiver or
+/// class), or the invocation has inferred type arguments.
+pub fn invocation_parameters_substituted(unit: &Unit<'_, '_>, argument_list: NodeId) -> bool {
+    let ast = unit.ast;
+    let Some(invocation) = ast.parent(argument_list) else {
+        return false;
+    };
+    let ctx = unit.ctx;
+    let has_type_arguments = unit
+        .tables
+        .type_arg_types
+        .get(invocation)
+        .is_some_and(|l| !ctx.list(*l).is_empty());
+    let element = if let Some(m) = ast.cast::<MethodInvocation>(invocation) {
+        unit.tables.element.get(ast[m].method_name.raw()).copied()
+    } else if let Some(i) = ast.cast::<InstanceCreationExpression>(invocation) {
+        unit.tables.element.get(ast[i].constructor_name.raw()).copied()
+    } else {
+        unit.tables.element.get(invocation).copied()
+    };
+    has_type_arguments || matches!(element, Some(ElemRef::Member(_)))
 }
 
 /// Dart `Argument.correspondingParameter`.

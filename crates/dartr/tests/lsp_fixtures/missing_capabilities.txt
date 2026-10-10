@@ -22,22 +22,15 @@ dart-code static experimental.textDocument.augmentation
 dart-code static experimental.textDocument.augmented
 dart-code static experimental.textDocument.super
 dart-code static experimental.updateDiagnosticInformation
-dart-code static workspaceSymbolProvider
 dart-code dynamic textDocument/codeAction [dart,**/pubspec.yaml,**/analysis_options.yaml]
 dart-code dynamic textDocument/codeLens [dart]
 dart-code dynamic textDocument/completion [**/pubspec.yaml,**/analysis_options.yaml,**/lib/{fix_data.yaml,fix_data/**.yaml}]
 dart-code dynamic textDocument/completion [dart]
 dart-code dynamic textDocument/documentColor [dart]
 dart-code dynamic textDocument/documentLink [dart,**/pubspec.yaml,**/analysis_options.yaml]
-dart-code dynamic textDocument/inlayHint [dart]
 dart-code dynamic textDocument/inlineValue [dart]
-dart-code dynamic textDocument/prepareCallHierarchy [dart]
-dart-code dynamic textDocument/prepareTypeHierarchy [dart]
 dart-code dynamic textDocument/rename [dart]
-dart-code dynamic textDocument/semanticTokens [dart]
-dart-code dynamic textDocument/signatureHelp [dart]
 dart-code dynamic workspace/willRenameFiles
-static static callHierarchyProvider
 static static codeActionProvider.codeActionKinds
 static static codeLensProvider
 static static colorProvider.documentSelector
@@ -69,15 +62,6 @@ static static experimental.textDocument.augmentation
 static static experimental.textDocument.augmented
 static static experimental.textDocument.super
 static static experimental.updateDiagnosticInformation
-static static inlayHintProvider.resolveProvider
 static static inlineValueProvider
 static static renameProvider.prepareProvider
-static static semanticTokensProvider.full.delta
-static static semanticTokensProvider.legend.tokenModifiers
-static static semanticTokensProvider.legend.tokenTypes
-static static semanticTokensProvider.range
-static static signatureHelpProvider.retriggerCharacters
-static static signatureHelpProvider.triggerCharacters
-static static typeHierarchyProvider
 static static workspace.fileOperations.willRename.filters
-static static workspaceSymbolProvider
