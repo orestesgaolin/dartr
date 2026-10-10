@@ -57,6 +57,39 @@ fn scratch() -> PathBuf {
     dir.canonicalize().unwrap()
 }
 
+/// Runs `f` on every item with at most `DARTR_PARITY_JOBS` (default 3) items at a time.
+/// Each item starts `dart analyze`; one thread per item started dozens of Dart processes at
+/// once and overloaded the machine (load average 70).
+fn bounded_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    let jobs = std::env::var("DARTR_PARITY_JOBS")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(3)
+        .max(1);
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let mut results: Vec<(usize, R)> = std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..jobs.min(items.len()))
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut done = Vec::new();
+                    loop {
+                        let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        let Some(item) = items.get(i) else { break };
+                        done.push((i, f(item)));
+                    }
+                    done
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .flat_map(|h| h.join().unwrap())
+            .collect()
+    });
+    results.sort_by_key(|(i, _)| *i);
+    results.into_iter().map(|(_, r)| r).collect()
+}
+
 /// Compares `dart analyze <args>` and `dartr analyze <args>` in [cwd].
 /// Returns a description of the difference, or `None`.
 fn compare(cwd: &Path, args: &[&str]) -> Option<String> {
@@ -315,24 +348,16 @@ fn check_fixture_projects(fixtures: &Path, scratch_name: &str) {
     }
     // Each `dart analyze` start takes seconds: run the projects in parallel.
     let count = names.len() * 3;
-    let failures: Vec<String> = std::thread::scope(|scope| {
-        let handles: Vec<_> = names
+    let failures: Vec<String> = bounded_map(&names, |name| {
+        let root = base.join(name);
+        [vec![], vec!["--format=json"], vec!["--format=machine"]]
             .iter()
-            .map(|name| {
-                let root = base.join(name);
-                scope.spawn(move || {
-                    [vec![], vec!["--format=json"], vec!["--format=machine"]]
-                        .iter()
-                        .filter_map(|args| compare(&root, args))
-                        .collect::<Vec<_>>()
-                })
-            })
-            .collect();
-        handles
-            .into_iter()
-            .flat_map(|h| h.join().unwrap())
-            .collect()
-    });
+            .filter_map(|args| compare(&root, args))
+            .collect::<Vec<_>>()
+    })
+    .into_iter()
+    .flatten()
+    .collect();
     assert!(
         failures.is_empty(),
         "{} of {count} cases differ:\n{}",
@@ -533,16 +558,10 @@ fn analyze_parity_lints() {
     }
     cases.push((plain.as_path(), vec!["lib/Bad_Name_part.dart"]));
     cases.push((plain.as_path(), vec!["lib/bad_name_two.dart", "lib/a.dart"]));
-    let failures: Vec<String> = std::thread::scope(|scope| {
-        let handles: Vec<_> = cases
-            .iter()
-            .map(|(cwd, args)| scope.spawn(move || compare(cwd, args)))
-            .collect();
-        handles
-            .into_iter()
-            .filter_map(|h| h.join().unwrap())
-            .collect()
-    });
+    let failures: Vec<String> = bounded_map(&cases, |(cwd, args)| compare(cwd, args))
+        .into_iter()
+        .flatten()
+        .collect();
     assert!(
         failures.is_empty(),
         "{} of {} cases differ:\n{}",

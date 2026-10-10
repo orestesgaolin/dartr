@@ -59,6 +59,7 @@ use crate::transport::{Channel, read_message};
 use crate::uri::{UriError, normalize, path_to_uri, uri_to_path};
 
 mod code_actions;
+mod completion;
 mod editor;
 pub mod fix_cli;
 mod hierarchy;
@@ -91,6 +92,10 @@ pub struct InitializationOptions {
     pub closing_labels: bool,
     pub outline: bool,
     pub flutter_outline: bool,
+    /// `completionBudgetMilliseconds`.
+    pub completion_budget_ms: Option<u64>,
+    /// `suggestFromUnimportedLibraries` (default `true`).
+    pub suggest_from_unimported_libraries: bool,
 }
 
 impl InitializationOptions {
@@ -101,6 +106,13 @@ impl InitializationOptions {
             closing_labels: flag("closingLabels"),
             outline: flag("outline"),
             flutter_outline: flag("flutterOutline"),
+            completion_budget_ms: v
+                .and_then(|v| v.get("completionBudgetMilliseconds"))
+                .and_then(Value::as_u64),
+            suggest_from_unimported_libraries: v
+                .and_then(|v| v.get("suggestFromUnimportedLibraries"))
+                .and_then(Value::as_bool)
+                .unwrap_or(true),
         }
     }
 }
@@ -491,6 +503,8 @@ impl Server {
             "textDocument/references" => self.catching(method, |s| s.references(&params)),
             "textDocument/implementation" => self.catching(method, |s| s.implementation(&params)),
             "textDocument/signatureHelp" => self.catching(method, |s| s.signature_help(&params)),
+            "textDocument/completion" => self.catching(method, |s| s.completion(&params)),
+            "completionItem/resolve" => self.catching(method, |s| s.completion_resolve(&params)),
             "textDocument/semanticTokens/full" => {
                 self.catching(method, |s| s.semantic_tokens(&params, false))
             }

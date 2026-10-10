@@ -44,6 +44,51 @@ impl LspResourceClientConfiguration<'_> {
             .unwrap_or(true)
     }
 
+    fn setting_or_fallback(&self, name: &str) -> Option<&Value> {
+        self.setting(name)
+            .or_else(|| self.fallback.and_then(|f| f.get(name)))
+    }
+
+    /// Dart `completeFunctionCalls` (default `false`).
+    pub fn complete_function_calls(&self) -> bool {
+        self.setting("completeFunctionCalls")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    }
+
+    /// Dart `previewCommitCharacters` (default `false`).
+    pub fn preview_commit_characters(&self) -> bool {
+        self.setting("previewCommitCharacters")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    }
+
+    /// Dart `enableSnippets` (default `true`).
+    pub fn enable_snippets(&self) -> bool {
+        if self.setting("enableServerSnippets") == Some(&Value::Bool(false)) {
+            return false;
+        }
+        self.setting_or_fallback("enableSnippets")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
+    }
+
+    /// Dart `maxCompletionItems` (default 2000).
+    pub fn max_completion_items(&self) -> i64 {
+        self.setting_or_fallback("maxCompletionItems")
+            .and_then(Value::as_i64)
+            .unwrap_or(2000)
+    }
+
+    /// Dart `preferredDocumentation`: `none`, `summary` or `full`.
+    pub fn preferred_documentation(&self) -> &'static str {
+        match self.setting("documentation").and_then(Value::as_str) {
+            Some("none") => "none",
+            Some("summary") => "summary",
+            _ => "full",
+        }
+    }
+
     /// Dart `lineLength`: the page width of the formatter, `None` for the
     /// default of the formatter.
     pub fn line_length(&self) -> Option<i64> {

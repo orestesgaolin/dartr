@@ -134,12 +134,9 @@ use `dartr_format`. Parity: `cargo test -p dartr_format --test format_test_data`
 (CLI against `dart format`), the formatting steps of `crates/dartr/tests/lsp_parity.rs`,
 and `tools/format_parity.py` on corpora (copies the corpus, compares `-o json` output).
 
-## Open: analyzer plugins
+## Analyzer plugins (done)
 
-`dart analyze` loads analyzer plugins (`analysis_options.yaml` `plugins:`; new-style
-`analysis_server_plugin` and legacy `analyzer_plugin`). visible-app uses one (Jaspr lints:
-`styles_ordering`, `prefer_html_components`, `sort_children_last`). dartr does not run plugins yet.
-Options: run Dart plugins out of process like the analysis server does (plugin isolates need a
-Dart VM), or port popular plugins. Decide after phase 10b.
-Research and recommendation (run plugins out of process, dartr implements the server side of the
-plugin protocol): `docs/research/analyzer-plugins.md`.
+`dartr analyze` runs new-style analyzer plugins (`plugins:` in `analysis_options.yaml`) out of
+process through a Dart bridge (`crates/dartr_plugins`); visible-app's `jaspr_lints` diagnostics
+match `dart analyze`. Not done: legacy plugins (`analyzer: plugins:`) and plugins in the
+language server. Research: `docs/research/analyzer-plugins.md`.

@@ -18,6 +18,10 @@ pub struct Pubspec {
     pub workspace: Option<Vec<Option<String>>>,
     /// `environment: sdk:`, if it is a scalar.
     pub environment_sdk: Option<Option<String>>,
+    /// The names of `dependencies` (the keys of the map).
+    pub dependencies: Vec<String>,
+    /// The names of `dev_dependencies` (the keys of the map).
+    pub dev_dependencies: Vec<String>,
 }
 
 impl Pubspec {
@@ -51,6 +55,21 @@ impl Pubspec {
                             .filter_map(|n| n.scalar().map(text_of))
                             .collect()
                     })
+                }
+                "dependencies" | "dev_dependencies" => {
+                    let names: Vec<String> = value
+                        .as_map()
+                        .map(|m| {
+                            m.iter()
+                                .filter_map(|(k, _)| k.scalar().map(|k| k.to_dart_string()))
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    if key.to_dart_string() == "dependencies" {
+                        result.dependencies = names;
+                    } else {
+                        result.dev_dependencies = names;
+                    }
                 }
                 "environment" => {
                     if let Some(env) = value.as_map() {
