@@ -644,7 +644,7 @@ pub(crate) fn has_wildcard_variables_feature_enabled(
 }
 
 /// Dart `Element.isWildcardVariable` (`ElementExtension`).
-pub(crate) fn is_wildcard_variable(ctx: &Ctx<'_>, e: ElementId) -> bool {
+pub fn is_wildcard_variable(ctx: &Ctx<'_>, e: ElementId) -> bool {
     let local_kind = matches!(
         e.tag(),
         Tag::LocalFunction

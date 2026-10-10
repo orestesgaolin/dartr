@@ -671,7 +671,7 @@ impl Server {
 impl Server {
     /// The dartdoc templates of the files of the context of [path] (Dart
     /// `FileSystemState.dartdocDirectiveInfo`).
-    fn dartdoc_templates(&mut self, path: &str) -> std::collections::HashMap<String, String> {
+    pub(crate) fn dartdoc_templates(&mut self, path: &str) -> std::collections::HashMap<String, String> {
         let Some(collection) = &self.collection else {
             return Default::default();
         };

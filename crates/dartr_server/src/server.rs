@@ -58,6 +58,7 @@ use crate::source_edits::apply_changes;
 use crate::transport::{Channel, read_message};
 use crate::uri::{UriError, normalize, path_to_uri, uri_to_path};
 
+mod editor;
 mod nav;
 mod search;
 
@@ -462,6 +463,14 @@ impl Server {
             }
             "textDocument/references" => self.catching(method, |s| s.references(&params)),
             "textDocument/implementation" => self.catching(method, |s| s.implementation(&params)),
+            "textDocument/signatureHelp" => self.catching(method, |s| s.signature_help(&params)),
+            "textDocument/semanticTokens/full" => {
+                self.catching(method, |s| s.semantic_tokens(&params, false))
+            }
+            "textDocument/semanticTokens/range" => {
+                self.catching(method, |s| s.semantic_tokens(&params, true))
+            }
+            "textDocument/inlayHint" => self.catching(method, |s| s.inlay_hints(&params)),
             "textDocument/formatting" => self.format_request(&params, FormatKind::Document),
             "textDocument/rangeFormatting" => {
                 let range = params
