@@ -2,7 +2,7 @@
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
-use dartr_element::ElementKind;
+use dartr_element::{ElementKind, TypeId};
 use dartr_typesystem::{TypeExt, member};
 
 pub fn register(registry: &mut RuleVisitorRegistry) {
@@ -56,53 +56,7 @@ pub(crate) fn is_obvious(ctx: &LinterContext<'_>, node: NodeId) -> bool {
                             })
                     })
         }
-        NodeKind::ListLiteral => {
-            let literal = &ctx.ast[Id::<ListLiteral>::from_raw(node)];
-            if literal.type_arguments.is_some() {
-                return true;
-            }
-            let Some(ty) = ctx.static_type(node) else {
-                return false;
-            };
-            let Some(element_type) = ctx
-                .resolved
-                .map(|r| r.ctx.type_arguments(ty))
-                .and_then(|args| args.first().copied())
-            else {
-                return false;
-            };
-            let elements = ctx.ast.list_raw(literal.elements);
-            !elements.is_empty()
-                && elements.iter().all(|element| {
-                    collection_element_is_obvious(ctx, *element, Some(element_type), None)
-                })
-        }
-        NodeKind::SetOrMapLiteral => {
-            let literal = &ctx.ast[Id::<SetOrMapLiteral>::from_raw(node)];
-            if literal.type_arguments.is_some() {
-                return true;
-            }
-            let Some(ty) = ctx.static_type(node) else {
-                return false;
-            };
-            let Some(resolved) = ctx.resolved else {
-                return false;
-            };
-            let args = resolved.ctx.type_arguments(ty);
-            let (element, map) = if resolved.ctx.is_dart_core_map(ty) {
-                let [key, value] = args else {
-                    return false;
-                };
-                (Some(*key), Some(*value))
-            } else {
-                (args.first().copied(), None)
-            };
-            let elements = ctx.ast.list_raw(literal.elements);
-            !elements.is_empty()
-                && elements
-                    .iter()
-                    .all(|entry| collection_element_is_obvious(ctx, *entry, element, map))
-        }
+        NodeKind::ListLiteral | NodeKind::SetOrMapLiteral => typed_literal_is_obvious(ctx, node),
         NodeKind::RecordLiteral => {
             let literal = &ctx.ast[Id::<RecordLiteral>::from_raw(node)];
             ctx.ast.list_raw(literal.fields).iter().all(|field| {
@@ -177,68 +131,132 @@ pub(crate) fn is_obvious(ctx: &LinterContext<'_>, node: NodeId) -> bool {
     }
 }
 
-fn collection_element_is_obvious(
-    ctx: &LinterContext<'_>,
-    node: NodeId,
-    element_or_key_type: Option<dartr_element::TypeId>,
-    value_type: Option<dartr_element::TypeId>,
-) -> bool {
+/// Dart `ExpressionExtensions.hasObviousType` of a `TypedLiteral`.
+fn typed_literal_is_obvious(ctx: &LinterContext<'_>, node: NodeId) -> bool {
+    let (type_arguments, elements) = match ctx.ast.kind(node) {
+        NodeKind::ListLiteral => {
+            let literal = &ctx.ast[Id::<ListLiteral>::from_raw(node)];
+            (literal.type_arguments, ctx.ast.list_raw(literal.elements))
+        }
+        _ => {
+            let literal = &ctx.ast[Id::<SetOrMapLiteral>::from_raw(node)];
+            (literal.type_arguments, ctx.ast.list_raw(literal.elements))
+        }
+    };
+    if type_arguments.is_some() {
+        return true;
+    }
+    let same_or_null = |a: Option<TypeId>, b: Option<TypeId>| a.is_none() || b.is_none() || a == b;
+    let (mut the_type, mut the_key, mut the_value) = (None, None, None);
+    for &element in elements {
+        if !element_has_obvious_type(ctx, element) {
+            return false;
+        }
+        let (element_type, key_type, value_type) = (
+            element_type(ctx, element),
+            key_type(ctx, element),
+            value_type(ctx, element),
+        );
+        the_type = the_type.or(element_type);
+        the_key = the_key.or(key_type);
+        the_value = the_value.or(value_type);
+        if !same_or_null(the_type, element_type)
+            || !same_or_null(the_key, key_type)
+            || !same_or_null(the_value, value_type)
+        {
+            return false;
+        }
+    }
+    let self_type = ctx.static_type(node);
+    if the_type.is_some() {
+        element_type_of_iterable(ctx, self_type) == the_type
+    } else if let (Some(key), Some(value)) = (the_key, the_value) {
+        key_value_type_of_map(ctx, self_type) == Some((key, value))
+    } else {
+        false
+    }
+}
+
+/// Dart `DartTypeExtensions.elementTypeOfIterable`.
+fn element_type_of_iterable(ctx: &LinterContext<'_>, ty: Option<TypeId>) -> Option<TypeId> {
+    let resolved = ctx.resolved?;
+    let ty = ty?;
+    resolved.ctx.interface_element(ty)?;
+    let iterable = resolved
+        .ctx
+        .as_instance_of(ty, resolved.ctx.tp.iterable_element().upcast())?;
+    resolved.ctx.type_arguments(iterable).first().copied()
+}
+
+/// Dart `DartTypeExtensions.keyValueTypeOfMap`.
+fn key_value_type_of_map(ctx: &LinterContext<'_>, ty: Option<TypeId>) -> Option<(TypeId, TypeId)> {
+    let resolved = ctx.resolved?;
+    let ty = ty?;
+    resolved.ctx.interface_element(ty)?;
+    let map = resolved
+        .ctx
+        .as_instance_of(ty, resolved.ctx.tp.map_element().upcast())?;
+    match resolved.ctx.type_arguments(map) {
+        [key, value] => Some((*key, *value)),
+        _ => None,
+    }
+}
+
+/// Dart `CollectionElementExtensions.elementType`.
+fn element_type(ctx: &LinterContext<'_>, node: NodeId) -> Option<TypeId> {
+    match ctx.ast.kind(node) {
+        NodeKind::MapLiteralEntry | NodeKind::ForElement | NodeKind::NullAwareElement => None,
+        NodeKind::IfElement => element_type(
+            ctx,
+            ctx.ast[Id::<IfElement>::from_raw(node)].then_element.raw(),
+        ),
+        NodeKind::SpreadElement => {
+            let expression = ctx.ast[Id::<SpreadElement>::from_raw(node)].expression;
+            element_type_of_iterable(ctx, ctx.static_type(expression))
+        }
+        kind if Expression::test(kind) => ctx.static_type(node),
+        _ => None,
+    }
+}
+
+/// Dart `CollectionElementExtensions.keyType`.
+fn key_type(ctx: &LinterContext<'_>, node: NodeId) -> Option<TypeId> {
+    let entry = ctx.ast.cast::<MapLiteralEntry>(node)?;
+    element_type(ctx, ctx.ast[entry].key.raw())
+}
+
+/// Dart `CollectionElementExtensions.valueType`.
+fn value_type(ctx: &LinterContext<'_>, node: NodeId) -> Option<TypeId> {
+    let entry = ctx.ast.cast::<MapLiteralEntry>(node)?;
+    element_type(ctx, ctx.ast[entry].value.raw())
+}
+
+/// Dart `CollectionElementExtensions.hasObviousType`.
+fn element_has_obvious_type(ctx: &LinterContext<'_>, node: NodeId) -> bool {
     match ctx.ast.kind(node) {
         NodeKind::MapLiteralEntry => {
             let entry = &ctx.ast[Id::<MapLiteralEntry>::from_raw(node)];
-            is_obvious(ctx, entry.key.raw())
-                && is_obvious(ctx, entry.value.raw())
-                && element_or_key_type.is_none_or(|ty| ctx.static_type(entry.key) == Some(ty))
-                && value_type.is_none_or(|ty| ctx.static_type(entry.value) == Some(ty))
+            is_obvious(ctx, entry.key.raw()) && is_obvious(ctx, entry.value.raw())
         }
         NodeKind::IfElement => {
             let element = &ctx.ast[Id::<IfElement>::from_raw(node)];
-            collection_element_is_obvious(
-                ctx,
-                element.then_element.raw(),
-                element_or_key_type,
-                value_type,
-            ) && element.else_element.is_none_or(|else_element| {
-                collection_element_is_obvious(
-                    ctx,
-                    else_element.raw(),
-                    element_or_key_type,
-                    value_type,
-                )
-            })
+            element_has_obvious_type(ctx, element.then_element.raw())
+                && element
+                    .else_element
+                    .is_none_or(|e| element_has_obvious_type(ctx, e.raw()))
         }
-        NodeKind::SpreadElement => {
-            let expression = ctx.ast[Id::<SpreadElement>::from_raw(node)].expression;
-            if !is_obvious(ctx, expression.raw()) {
-                return false;
-            }
-            let Some(resolved) = ctx.resolved else {
-                return false;
-            };
-            let Some(ty) = ctx.static_type(expression) else {
-                return false;
-            };
-            let target = if value_type.is_some() {
-                resolved.ctx.tp.map_element().upcast()
-            } else {
-                resolved.ctx.tp.iterable_element().upcast()
-            };
-            let Some(as_target) = resolved.ctx.as_instance_of(ty, target) else {
-                return false;
-            };
-            let args = resolved.ctx.type_arguments(as_target);
-            args.first().copied() == element_or_key_type
-                && value_type.is_none_or(|value| args.get(1) == Some(&value))
-        }
+        NodeKind::SpreadElement => is_obvious(
+            ctx,
+            ctx.ast[Id::<SpreadElement>::from_raw(node)]
+                .expression
+                .raw(),
+        ),
         NodeKind::NullAwareElement => is_obvious(
             ctx,
             ctx.ast[Id::<NullAwareElement>::from_raw(node)].value.raw(),
         ),
         NodeKind::ForElement => false,
-        kind if Expression::test(kind) => {
-            is_obvious(ctx, node)
-                && element_or_key_type.is_none_or(|ty| ctx.static_type(node) == Some(ty))
-        }
+        kind if Expression::test(kind) => is_obvious(ctx, node),
         _ => false,
     }
 }

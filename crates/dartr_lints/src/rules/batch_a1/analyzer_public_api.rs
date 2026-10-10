@@ -4,14 +4,14 @@ use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
 use dartr_element::{
-    AnyElement, DirectiveUri, EId, ElementId, ExecutableElement, ExtensionElement,
+    AnyElement, DirectiveUri, EId, ElementId, ExecutableElement, ExtensionElement, FragmentFlags,
     InterfaceElement, LibraryElement, LibraryFragment, NamespaceCombinator,
     PropertyInducingElement, TypeId, TypeKind, TypeParameterElement,
 };
 use dartr_typesystem::{TypeExt, member};
 use indexmap::IndexSet;
 
-use super::helpers::{KnownAnnotation, annotation_status, descendants, element_annotation_status};
+use super::helpers::{KnownAnnotation, annotation_status, descendants};
 
 pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
     registry.add(NodeKind::CompilationUnit, "analyzer_public_api", check);
@@ -126,16 +126,98 @@ fn library_children(c: &LinterContext<'_>, library: EId<LibraryElement>) -> Vec<
     result
 }
 
-fn element_is_ok(c: &LinterContext<'_>, element: ElementId) -> bool {
+/// Dart `_isPublicApiAnnotation`: the constant value of the annotation has
+/// the type `AnalyzerPublicApi`.
+fn has_public_api_annotation(c: &LinterContext<'_>, element: ElementId) -> bool {
     let Some(r) = c.resolved else { return false };
-    let Some(library) = r.ctx.element_data(element).and_then(|data| data.library) else {
-        return matches!(r.ctx.any(element), AnyElement::Dynamic | AnyElement::Never);
+    let Some(metadata) = r.metadata else {
+        return false;
     };
-    let uri = r.ctx.library_uri(library);
-    uri.starts_with("dart:")
-        || is_analyzer_public_uri(uri)
-        || publicly_imported(c, element)
-        || element_annotation_status(c, element, KnownAnnotation::AnalyzerPublicApi) != Some(false)
+    metadata.annotations(element).into_iter().any(|annotation| {
+        metadata.annotation_value(annotation).is_some_and(|value| {
+            r.ctx
+                .interface_element(value.ty)
+                .is_some_and(|e| r.ctx.element_name(e.raw()) == Some("AnalyzerPublicApi"))
+        })
+    })
+}
+
+fn first_fragment_flags(c: &LinterContext<'_>, element: ElementId) -> FragmentFlags {
+    let Some(r) = c.resolved else {
+        return FragmentFlags::EMPTY;
+    };
+    r.ctx
+        .element_data(element)
+        .and_then(|d| r.ctx.fragment_data(d.first_fragment))
+        .map(|f| f.flags.get())
+        .unwrap_or_default()
+}
+
+/// Dart `Element.isInAnalyzerPublicApi`.
+fn is_in_analyzer_public_api(c: &LinterContext<'_>, element: ElementId) -> bool {
+    let Some(r) = c.resolved else { return false };
+    match r.ctx.any(element) {
+        AnyElement::Getter(_) | AnyElement::Setter(_)
+            if first_fragment_flags(c, element)
+                .contains(FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_VARIABLE) =>
+        {
+            let variable = r
+                .ctx
+                .property_accessor(EId::from_raw(element))
+                .variable
+                .get()
+                .map(|v| v.raw());
+            if variable.is_some_and(|v| is_in_analyzer_public_api(c, v)) {
+                return true;
+            }
+        }
+        AnyElement::Field(_) | AnyElement::TopLevelVariable(_) => {
+            let flags = first_fragment_flags(c, element);
+            let origin_getter_setter = !flags
+                .contains(FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_DECLARATION)
+                && !flags
+                    .contains(FragmentFlags::FIELD_FRAGMENT_IS_ORIGIN_DECLARING_FORMAL_PARAMETER);
+            if origin_getter_setter {
+                let data = r.ctx.property_inducing(EId::from_raw(element));
+                for accessor in [data.getter.map(|g| g.raw()), data.setter.map(|s| s.raw())]
+                    .into_iter()
+                    .flatten()
+                {
+                    if is_in_analyzer_public_api(c, accessor) {
+                        return true;
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    if has_public_api_annotation(c, element) {
+        return true;
+    }
+    if r.ctx
+        .element_name(element)
+        .is_some_and(|n| n.starts_with('_'))
+    {
+        return false;
+    }
+    r.ctx
+        .element_data(element)
+        .and_then(|d| d.library)
+        .is_some_and(|l| is_analyzer_public_uri(r.ctx.library_uri(l)))
+}
+
+/// Dart `Element.isOkForAnalyzerPublicApi`.
+fn is_ok_for_analyzer_public_api(c: &LinterContext<'_>, element: ElementId) -> bool {
+    let Some(r) = c.resolved else { return false };
+    if matches!(r.ctx.any(element), AnyElement::Dynamic | AnyElement::Never)
+        || element.tag() == dartr_element::Tag::TypeParameter
+    {
+        return true;
+    }
+    let Some(library) = r.ctx.element_data(element).and_then(|data| data.library) else {
+        return false;
+    };
+    r.ctx.library_uri(library).starts_with("dart:") || is_in_analyzer_public_api(c, element)
 }
 
 fn type_problems(
@@ -150,7 +232,8 @@ fn type_problems(
     }
     match *r.ctx.ty(ty) {
         TypeKind::Interface { element, args, .. } => {
-            if !element_is_ok(c, element.raw())
+            if !publicly_imported(c, element.raw())
+                && !is_ok_for_analyzer_public_api(c, element.raw())
                 && let Some(name) = r.ctx.element_name(element.raw())
             {
                 problems.insert(name.to_owned());
@@ -352,7 +435,7 @@ fn check_export(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) 
                 &linked.combinators,
                 name.strip_suffix('=').unwrap_or(name),
             )
-            && !element_is_ok(c, element)
+            && !is_ok_for_analyzer_public_api(c, element)
         {
             bad.insert(name.trim_end_matches('=').to_owned());
         }
@@ -398,11 +481,17 @@ fn check_part(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
 }
 
 fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
-    if !is_analyzer_public_uri(&c.source_uri()) {
-        return;
-    }
     let unit = &c.ast[Id::<CompilationUnit>::from_raw(node)];
-    for directive in c.ast.list_raw(unit.directives) {
+    // Dart `visitExportDirective` / `visitPartDirective` check only the
+    // directives of the analyzer public `lib`; the declarations of any unit
+    // are checked when their element is in the analyzer public API.
+    let in_public_lib = is_analyzer_public_uri(&c.source_uri());
+    for directive in c
+        .ast
+        .list_raw(unit.directives)
+        .iter()
+        .filter(|_| in_public_lib)
+    {
         match c.ast.kind(*directive) {
             NodeKind::ExportDirective => check_export(c, *directive, out),
             NodeKind::PartDirective => check_part(c, *directive, out),
@@ -428,11 +517,18 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         }) else {
             continue;
         };
+        // Dart `_checkTopLevelFragment`: only elements in the analyzer public
+        // API are checked (with their members).
         if c.declared_element(*declaration).is_some() {
+            if !is_in_analyzer_public_api(c, top_element) {
+                continue;
+            }
             check_fragment(c, *declaration, top_element, out);
         } else {
             for candidate in candidates.iter().skip(1) {
-                if let Some(element) = c.declared_element(*candidate) {
+                if let Some(element) = c.declared_element(*candidate)
+                    && is_in_analyzer_public_api(c, element)
+                {
                     check_fragment(c, *candidate, element, out);
                 }
             }
