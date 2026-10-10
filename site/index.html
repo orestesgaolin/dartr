@@ -24,11 +24,11 @@
       dartr
     </a>
     <nav class="site-nav" aria-label="Sections">
-      <a class="opt" href="#what">What it is</a>
+      <a class="opt" href="#what">Commands</a>
       <a href="#compare">Benchmarks</a>
       <a class="opt" href="#correct">Correctness</a>
-      <a class="opt" href="#speed">Speed</a>
-      <a class="opt" href="#story">Story</a>
+      <a class="opt" href="#speed">Performance</a>
+      <a class="opt" href="#story">History</a>
       <a href="#setup">Setup</a>
       <a href="https://github.com/orestesgaolin/dartr">GitHub</a>
     </nav>
@@ -40,11 +40,11 @@
 <!-- Hero -->
 <section class="hero" id="top" aria-labelledby="hero-title">
   <div class="wrap">
-    <p class="tag"><span class="dot" aria-hidden="true"></span><span>Preview · v0.1.0-preview.1 · Dart SDK 3.13.3</span></p>
+    <p class="tag"><span class="dot" aria-hidden="true"></span><span>Preview · v0.1.0-preview.2 · Dart SDK 3.13.3</span></p>
     <div class="hero-grid">
       <div>
-        <h1 id="hero-title">Same diagnostics as <span class="d">dart analyze</span>. One native <span class="r">Rust</span> binary.</h1>
-        <p class="lede">dartr is a port of the Dart analyzer to Rust. The reference version is Dart SDK 3.13.3. One binary runs <code>analyze</code>, <code>format</code> and <code>language-server</code>, with the options, output formats and exit codes of the Dart tools.</p>
+        <h1 id="hero-title">A <span class="r">Rust</span> port of the <span class="d">Dart analyzer</span></h1>
+        <p class="lede">dartr follows Dart SDK 3.13.3. It has the commands <code>analyze</code>, <code>format</code> and <code>language-server</code>, with the same options, output formats and exit codes as the Dart tools.</p>
         <div class="term">
           <div class="term-bar"><span>install and use</span><button class="copy" type="button" data-copy="t-hero" hidden>Copy</button></div>
 <pre id="t-hero"><span class="p">$ </span><span data-cmd>brew install orestesgaolin/tap/dartr</span>
@@ -66,9 +66,9 @@
 <!-- 1. What it is -->
 <section class="block" id="what" aria-labelledby="what-title">
   <div class="wrap">
-    <p class="eyebrow"><b>01</b> / What it is</p>
-    <h2 id="what-title">Three Dart tools in one binary.</h2>
-    <p class="section-intro">The aim is the same output as the Dart tools, produced faster. dartr reads the <code>dart:</code> libraries from the Dart or Flutter SDK on your <code>PATH</code>, so it needs that SDK. Use SDK 3.13.3: dartr copies the behavior of that version.</p>
+    <p class="eyebrow"><b>01</b></p>
+    <h2 id="what-title">Commands</h2>
+    <p class="section-intro">dartr reads the <code>dart:</code> libraries from the Dart or Flutter SDK on your <code>PATH</code>, so it needs that SDK. Use SDK 3.13.3: dartr copies the behavior of that version.</p>
 
     <div class="grid-3">
       <article class="card">
@@ -81,8 +81,8 @@
       </article>
       <article class="card">
         <h3>dartr language-server <span class="pill part">partial</span></h3>
-        <p>An LSP server. Has diagnostics, outline, closing labels, folding, selection ranges, document symbols, formatting, navigation, references, hover, signature help, semantic tokens, inlay hints, call and type hierarchy and workspace symbols. <b>Missing:</b> completion, quick fixes, assists, rename.</p>
-        <p>The legacy analysis server protocol (<code>--protocol=analyzer</code>) is partial: 39 of 59 requests and 19 of 22 notifications. Completion, quick fixes and refactorings are not done yet.</p>
+        <p>An LSP server. Has diagnostics, outline, closing labels, folding, selection ranges, document symbols, formatting, navigation, references, hover, signature help, semantic tokens, inlay hints, call and type hierarchy and workspace symbols. Completion since <code>v0.1.0-preview.2</code>. <b>Missing:</b> quick fixes, assists, rename.</p>
+        <p>The legacy analysis server protocol (<code>--protocol=analyzer</code>) is partial: 39 of 59 requests and 19 of 22 notifications. Its completion, quick fixes and refactorings are not done yet.</p>
       </article>
     </div>
 
@@ -116,9 +116,9 @@ port of the Dart SDK 3.13.3 analyzer (pinned reference version)</span></pre>
 <!-- 2. Benchmarks -->
 <section class="block" id="compare" aria-labelledby="compare-title">
   <div class="wrap">
-    <p class="eyebrow"><b>02</b> / How it compares</p>
-    <h2 id="compare-title">Faster on three of four projects. Slower on <code>flutter_tools</code>.</h2>
-    <p class="section-intro"><code>dartr analyze</code> and <code>dart analyze</code> 3.13.3 on the same machine, run one after the other, with the full pipeline (errors, warnings, lints, analyzer plugins). Both report the same diagnostics on all four projects. Wall time in seconds, lower is better. <code>dart</code> uses its normal disk cache (<code>~/.dartServer</code>). dartr has no disk cache and starts cold every time.</p>
+    <p class="eyebrow"><b>02</b></p>
+    <h2 id="compare-title">Benchmarks</h2>
+    <p class="section-intro"><code>dartr analyze</code> and <code>dart analyze</code> 3.13.3 on the same machine, run one after the other, with the full pipeline (errors, warnings, lints, analyzer plugins). Both report the same diagnostics on all four projects. dartr is faster on three of the four projects and slower on <code>flutter_tools</code> (3.5 s against 2.5 s). Wall time in seconds, lower is better. <code>dart</code> uses its normal disk cache (<code>~/.dartServer</code>). dartr has no disk cache and starts cold every time.</p>
 
     <ul class="legend" aria-label="Chart legend">
       <li><span class="sw dart" aria-hidden="true"></span><span><code>dart analyze</code>, warm disk cache</span></li>
@@ -201,8 +201,8 @@ port of the Dart SDK 3.13.3 analyzer (pinned reference version)</span></pre>
 <!-- 3. Correctness -->
 <section class="block" id="correct" aria-labelledby="correct-title">
   <div class="wrap">
-    <p class="eyebrow"><b>03</b> / How we know it is correct</p>
-    <h2 id="correct-title">Compared with the real analyzer, diagnostic by diagnostic.</h2>
+    <p class="eyebrow"><b>03</b></p>
+    <h2 id="correct-title">Correctness</h2>
     <p class="section-intro">Each part of dartr is checked by a differential test against the pinned Dart analyzer 3.13.3. A Dart program (<code>tools/oracle</code>) uses the real <code>package:analyzer</code> and writes JSON Lines. <code>dartr dump</code> writes the same format. <code>difftest</code> runs both and reports the first difference of each file.</p>
 
     <div class="stats">
@@ -218,8 +218,8 @@ port of the Dart SDK 3.13.3 analyzer (pinned reference version)</span></pre>
     </div>
 
     <ol class="steps">
-      <li><span><b>Layer by layer.</b> Tokens, parser events, AST, element model, resolved types and elements, constants, diagnostics: each has a dump mode and a parity report. Scanner: 16,046/16,046 on an unseen corpus. Parser: 11,633/11,633. AST builder: 11,392/11,392.</span></li>
-      <li><span><b>Unseen corpora.</b> A unit is done when its differential test passes and the coordinator has re-run it on a corpus the worker did not use. These runs found bugs that the worker's own corpora did not show.</span></li>
+      <li><span><b>Each layer is compared.</b> Tokens, parser events, AST, element model, resolved types and elements, constants, diagnostics: each has a dump mode and a parity report. Scanner: 16,046/16,046 on an unseen corpus. Parser: 11,633/11,633. AST builder: 11,392/11,392.</span></li>
+      <li><span><b>Checks on unseen code.</b> A unit is done when its differential test passes and the coordinator has re-run it on a corpus the worker did not use. These runs found bugs that the worker's own corpora did not show.</span></li>
       <li><span><b>Proof that a test can fail.</b> Each worker breaks one rule on purpose and shows the failure.</span></li>
       <li><span><b>Full tests after every merge</b>, in release mode, plus determinism checks: the output must not depend on the number of threads.</span></li>
     </ol>
@@ -238,8 +238,8 @@ port of the Dart SDK 3.13.3 analyzer (pinned reference version)</span></pre>
 <!-- 4. Speed -->
 <section class="block" id="speed" aria-labelledby="speed-title">
   <div class="wrap">
-    <p class="eyebrow"><b>04</b> / Where the speed comes from</p>
-    <h2 id="speed-title">Parallel work on every core, native code, compact data.</h2>
+    <p class="eyebrow"><b>04</b></p>
+    <h2 id="speed-title">Performance</h2>
     <p class="section-intro">dartr does not use a cache to be fast: it has no disk cache and links the SDK libraries from source on every run. The time comes from how the work is done. Each point below names the code that does it.</p>
 
     <div class="reasons">
@@ -266,7 +266,7 @@ port of the Dart SDK 3.13.3 analyzer (pinned reference version)</span></pre>
         </div>
       </div>
       <div class="reason">
-        <h3>Arenas and typed indices, not object graphs</h3>
+        <h3>AST and elements are stored in arenas with typed indices</h3>
         <div>
           <p>The tokens and AST nodes of a file live in one arena per compilation unit. Nodes are stored per kind in vectors and referenced by 32-bit indices. Resolution results go into side tables indexed by node, so the AST stays read-only and can be shared between threads. Elements use 64-bit ids into per-cycle stores.</p>
           <p class="src">crates/dartr_ast/src/arena.rs · crates/dartr_element/README.md</p>
@@ -307,10 +307,10 @@ warning - lib/mini.dart:5:10 - The value of the local variable 's' isn't used. .
     <h3 style="margin-top:40px">What is slower today</h3>
     <p style="margin-top:10px;color:var(--ink-2)">Performance is the next phase of the plan (phase 11). These are the known targets:</p>
     <ul class="slow-list">
-      <li><b>Resolved lints.</b> When the lints that need resolution were added, <code>dartr analyze</code> on <code>flutter_tools</code> went from 0.7 s to 3.5 s (dart: 2.6 s), and on Flutter from 3.2 s to 5.9 s. This is the first target.</li>
+      <li><b>Resolved lints.</b> When the lints that need resolution were added, <code>dartr analyze</code> on <code>flutter_tools</code> went from 0.7 s to 3.5 s (dart: 2.6 s), and on Flutter from 3.2 s to 5.9 s. Optimization starts here.</li>
       <li><b>Cold search index.</b> The language server has no persistent index. A first references search over the SDK takes 5.7 s (<code>String</code>), and 130 s for <code>runtimeType</code> on Flutter. Dart has a warm disk index.</li>
       <li><b>High system time.</b> The installed release binary analyzed <code>flutter_tools</code> with the same result as <code>dart analyze</code> in 3.7 s, but used 29.6 s of system CPU time (dart: 2.4 s wall time).</li>
-      <li><b>No disk cache.</b> Every run links and resolves everything again, including the SDK core libraries. A cache of linked cycles is in the design, not in the code.</li>
+      <li><b>No disk cache.</b> Every run links and resolves everything again, including the SDK core libraries. A cache of linked cycles is designed but not built yet.</li>
     </ul>
   </div>
 </section>
@@ -318,11 +318,11 @@ warning - lib/mini.dart:5:10 - The value of the local variable 's' isn't used. .
 <!-- 5. Story -->
 <section class="block" id="story" aria-labelledby="story-title">
   <div class="wrap">
-    <p class="eyebrow"><b>05</b> / How it was built</p>
-    <h2 id="story-title">Ported by AI coding agents in about 41 hours.</h2>
+    <p class="eyebrow"><b>05</b></p>
+    <h2 id="story-title">History</h2>
     <div class="story-grid">
       <div>
-        <p style="color:var(--ink-2)">The first commit is from 2026-10-08 20:04. The first public release, <code>v0.1.0-preview.1</code>, was published on 2026-10-10 at 13:15. AI coding agents wrote the code. One person operated them.</p>
+        <p style="color:var(--ink-2)">The first commit is from 2026-10-08 20:04. The first public release, <code>v0.1.0-preview.1</code>, was published on 2026-10-10 at 13:15. AI coding agents wrote the code, and one person directed and reviewed the work.</p>
         <ul class="card" style="list-style:none;padding:18px 22px;display:grid;gap:10px;color:var(--ink-2);font-size:0.95rem;margin:0">
           <li><b style="color:var(--ink)">Coordinator:</b> one Claude Opus session. It plans, writes the task prompts, verifies results and merges. It does not port code itself.</li>
           <li><b style="color:var(--ink)">Workers:</b> Claude Opus for complex porting units, Claude Sonnet for wiring, Codex for isolated units, and Gemini (Antigravity) for part of the legacy protocol. Each unit runs in its own git worktree and branch.</li>
@@ -332,7 +332,7 @@ warning - lib/mini.dart:5:10 - The value of the local variable 's' isn't used. .
       </div>
       <figure class="comic">
         <img src="ohmygod.png" width="960" height="748" loading="lazy" alt="Hand-drawn comic. A speech bubble says &quot;rewrite dart analyzer in rust&quot;. The computer answers &quot;&gt;rewrites dart analyzer in rust&quot;. The person at the desk says &quot;oh my god&quot;.">
-        <figcaption>The project in one picture.</figcaption>
+        <figcaption>The original request.</figcaption>
       </figure>
     </div>
 
@@ -359,9 +359,9 @@ warning - lib/mini.dart:5:10 - The value of the local variable 's' isn't used. .
 <!-- 6. Setup and links -->
 <section class="block" id="setup" aria-labelledby="setup-title" style="border-bottom:0">
   <div class="wrap">
-    <p class="eyebrow"><b>06</b> / Editor setup</p>
-    <h2 id="setup-title">Use dartr in VS Code through a small shim.</h2>
-    <p class="section-intro">Dart-Code (the VS Code extension) can only start the analysis server as a Dart script. So <code>dart.analyzerPath</code> points to <code>dartr_shim.dart</code>. The shim starts <code>dartr language-server</code> with the same arguments and forwards stdin, stdout, stderr and the exit code. Homebrew installs the shim with <code>dartr</code> next to it.</p>
+    <p class="eyebrow"><b>06</b></p>
+    <h2 id="setup-title">Editor setup</h2>
+    <p class="section-intro">Dart-Code (the VS Code extension) can only start the analysis server as a Dart script, so <code>dart.analyzerPath</code> points to <code>dartr_shim.dart</code>. The shim starts <code>dartr language-server</code> with the same arguments and forwards stdin, stdout, stderr and the exit code. Homebrew installs the shim with <code>dartr</code> next to it.</p>
 
     <div class="grid-2">
       <div>
