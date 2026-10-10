@@ -111,4 +111,6 @@ rules!(
     unsafe_variance,
     unreachable_from_main,
     unnecessary_this,
+    use_declaring_parameters,
+    use_build_context_synchronously,
 );

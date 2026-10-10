@@ -8,7 +8,6 @@ use dartr_typesystem::TypeExt;
 
 const URI_BASIC: &str = "package:flutter/src/widgets/basic.dart";
 const URI_CONTAINER: &str = "package:flutter/src/widgets/container.dart";
-const URI_FOUNDATION: &str = "package:flutter/src/foundation/constants.dart";
 const URI_FRAMEWORK: &str = "package:flutter/src/widgets/framework.dart";
 
 /// Dart `InterfaceElementExtension._isExactly(type, uri)`.
@@ -41,12 +40,6 @@ pub fn is_widget(c: &LinterContext<'_>, element: EId<InterfaceElement>) -> bool 
 /// Dart `InterfaceElementExtension.isState`.
 pub fn is_state(c: &LinterContext<'_>, element: EId<InterfaceElement>) -> bool {
     is_exactly(c, element, "State", URI_FRAMEWORK) || any_supertype(c, element, "State", URI_FRAMEWORK)
-}
-
-/// Dart `InterfaceElementExtension.isStatefulWidget`.
-pub fn is_stateful_widget(c: &LinterContext<'_>, element: EId<InterfaceElement>) -> bool {
-    is_exactly(c, element, "StatefulWidget", URI_FRAMEWORK)
-        || any_supertype(c, element, "StatefulWidget", URI_FRAMEWORK)
 }
 
 /// Dart `InterfaceElementExtension.extendsWidget`.
@@ -112,13 +105,6 @@ pub fn is_build_context(c: &LinterContext<'_>, ty: Option<TypeId>, skip_nullable
         return false;
     }
     is_exactly(c, element, "BuildContext", URI_FRAMEWORK)
-}
-
-/// Dart `FlutterElementExtension.isKDebugMode`.
-pub fn is_k_debug_mode(c: &LinterContext<'_>, element: Option<dartr_element::ElementId>) -> bool {
-    element.is_some_and(|e| {
-        name(c, e) == Some("kDebugMode") && library_uri(c, e) == Some(URI_FOUNDATION)
-    })
 }
 
 /// Dart `isWidgetTypeContainer` of an instance creation expression type.

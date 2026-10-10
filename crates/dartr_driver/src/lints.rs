@@ -148,12 +148,36 @@ pub fn compute_lints(
             map
         })
         .collect();
+    let exit_detectors: Vec<Box<dyn Fn(dartr_ast::NodeId) -> bool + '_>> = library
+        .units
+        .iter()
+        .map(|unit| {
+            let ctx = Ctx {
+                local: Some(&unit.local),
+                features,
+                ..global
+            };
+            Box::new(move |node: dartr_ast::NodeId| {
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    dartr_resolver::exit_detector::exits_resolved(
+                        &unit.ast,
+                        &unit.tables,
+                        &unit.rt,
+                        ctx,
+                        node,
+                    )
+                }))
+                .unwrap_or(false)
+            }) as Box<dyn Fn(dartr_ast::NodeId) -> bool + '_>
+        })
+        .collect();
     let units: Vec<_> = input
         .units
         .iter()
         .zip(&library.units)
         .zip(&body_contexts)
-        .map(|((original, resolved), body_context)| ResolvedRuleContextUnit {
+        .zip(&exit_detectors)
+        .map(|(((original, resolved), body_context), exits)| ResolvedRuleContextUnit {
             parsed: &original.parsed,
             ast: &resolved.ast,
             unit: resolved.unit.raw(),
@@ -170,6 +194,7 @@ pub fn compute_lints(
                 corresponding_parameter_type: &resolved.rt.corresponding_parameter_type,
                 body_context,
                 this_scope_lookup: &resolved.rt.this_scope_lookup,
+                exits: Some(exits.as_ref()),
                 library: library.library,
                 metadata: Some(&metadata),
             }),

@@ -156,38 +156,9 @@ pub fn implements_any_interface(
         .any(|(i, l)| implements_interface(c, ty, i, l))
 }
 
-/// Dart `DartTypeExtension.extendsClass(className, library)`.
-pub fn extends_class(c: &LinterContext<'_>, ty: Option<TypeId>, class: &str, library: &str) -> bool {
-    let Some(ty) = ty else { return false };
-    let Some(ctx) = rctx(c) else { return false };
-    let check = type_for_interface_check(c, ty);
-    let mut seen = indexmap::IndexSet::new();
-    let mut current = ctx.interface_element(check).map(|_| check);
-    while let Some(t) = current {
-        let Some(e) = ctx.interface_element(t) else {
-            return false;
-        };
-        if !seen.insert(e) {
-            return false;
-        }
-        if ctx.element_name(e.raw()) == Some(class) && library_name(c, e.raw()) == Some(library)
-        {
-            return true;
-        }
-        current = ctx.superclass(t);
-    }
-    false
-}
-
 /// Dart `InterfaceType.element` of a type, when it is an interface type.
 pub fn interface_element(c: &LinterContext<'_>, ty: TypeId) -> Option<EId<InterfaceElement>> {
     rctx(c)?.interface_element(ty)
-}
-
-/// Whether [element] is the class [name] declared in the library named
-/// [library] (Dart `element.name == name && element.library.name == library`).
-pub fn is_element(c: &LinterContext<'_>, element: ElementId, name: &str, library: &str) -> bool {
-    self::name(c, element) == Some(name) && library_name(c, element) == Some(library)
 }
 
 /// Dart `FunctionBody.isAsynchronous` / `isSynchronous` / `isGenerator`
@@ -238,29 +209,6 @@ pub fn is_deprecated_annotation_element(c: &LinterContext<'_>, element: ElementI
         }
         Tag::Getter | Tag::Setter => name(c, element) == Some("deprecated"),
         _ => false,
-    }
-}
-
-/// The source text of [node].
-pub fn text(c: &LinterContext<'_>, node: impl Into<NodeId>) -> String {
-    c.text(node)
-}
-
-/// Dart `Identifier.name` / `SimpleIdentifier.name`.
-pub fn identifier_name(c: &LinterContext<'_>, node: NodeId) -> Option<String> {
-    match c.ast.kind(node) {
-        NodeKind::SimpleIdentifier => Some(
-            lexeme(c, c.ast[Id::<SimpleIdentifier>::from_raw(node)].token).to_string(),
-        ),
-        NodeKind::PrefixedIdentifier => {
-            let p = &c.ast[Id::<PrefixedIdentifier>::from_raw(node)];
-            Some(format!(
-                "{}.{}",
-                lexeme(c, c.ast[p.prefix].token),
-                lexeme(c, c.ast[p.identifier].token)
-            ))
-        }
-        _ => None,
     }
 }
 

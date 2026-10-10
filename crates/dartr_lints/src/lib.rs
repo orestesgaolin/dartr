@@ -45,6 +45,9 @@ pub struct ResolvedLintContext<'a> {
     /// (the linter `resolveNameInScope`).
     pub this_scope_lookup:
         &'a dartr_ast::NodeMap<(Option<dartr_element::ElementId>, Option<dartr_element::ElementId>)>,
+    /// Dart `node.accept(ExitDetector())` of a node of the unit (the
+    /// resolved exit detector of the analyzer).
+    pub exits: Option<&'a dyn Fn(NodeId) -> bool>,
     pub library: dartr_element::EId<dartr_element::LibraryElement>,
     /// Dart `Element.metadata` of elements of any library, with the
     /// annotation values (`None`: no metadata access).
