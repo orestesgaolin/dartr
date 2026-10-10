@@ -25,34 +25,44 @@ Generated types cover every domain; runtime support is the subset below.
 | Domain | Requests implemented / total | Notifications implemented / total |
 | --- | ---: | ---: |
 | server | 3 / 7 | 3 / 5 |
-| analysis | 6 / 14 | 3 / 12 |
+| analysis | 9 / 14 | 9 / 12 |
 | completion | 0 / 3 | 0 / 1 |
-| search | 0 / 6 | 0 / 1 |
-| edit | 0 / 14 | 0 / 0 |
+| search | 5 / 6 | 1 / 1 |
+| edit | 3 / 14 | 0 / 0 |
 | execution | 0 / 5 | 0 / 1 |
 | diagnostic | 0 / 2 | 0 / 0 |
 | analytics | 0 / 4 | 0 / 0 |
 | flutter | 0 / 3 | 0 / 1 |
 | lsp | 0 / 1 | 0 / 1 |
-| Total | 9 / 59 | 6 / 22 |
+| Total | 20 / 59 | 13 / 22 |
 
 Requests: `server.getVersion`, `server.shutdown`, `server.setSubscriptions`,
 `analysis.setAnalysisRoots`, `analysis.updateContent`, `analysis.setPriorityFiles`,
-`analysis.setSubscriptions`, `analysis.getErrors`, `analysis.reanalyze`.
+`analysis.setSubscriptions`, `analysis.getErrors`, `analysis.getHover`,
+`analysis.getNavigation`, `analysis.getReachableSources`, `analysis.reanalyze`,
+`search.findElementReferences`, `search.findMemberDeclarations`,
+`search.findMemberReferences`, `search.findTopLevelDeclarations`,
+`search.getTypeHierarchy`, `edit.format`, `edit.sortMembers`,
+`edit.organizeDirectives`.
 
 Notifications: `server.connected`, `server.status`, `server.error`,
-`analysis.errors`, `analysis.flushResults`, `analysis.folding`.
+`analysis.errors`, `analysis.flushResults`, `analysis.folding`,
+`analysis.navigation`, `analysis.highlights`, `analysis.occurrences`,
+`analysis.outline`, `analysis.implemented`, `analysis.overrides`,
+`search.results`.
 `analysis.flushResults` is a notification, not a request.
 
 Other requests return `UNKNOWN_REQUEST` with message `Unknown request`.
 This includes `edit.bulkFixes`: `dart fix` is not functional with this subset.
-Known analysis subscriptions are accepted, but only `FOLDING` emits feature
-results. `STATUS` emits analysis start and end. `LOG` is accepted without
-statistics notifications.
+`analysis.getReachableSources` returns `UNSUPPORTED_FEATURE` matching the pinned
+Dart 3.13.3 `UnsupportedRequestHandler`. Known analysis subscriptions are
+accepted; `FOLDING`, `NAVIGATION`, `HIGHLIGHTS`, `OCCURRENCES`, `OUTLINE`,
+`IMPLEMENTED`, and `OVERRIDES` emit feature notifications. `STATUS` emits
+analysis start and end. `LOG` is accepted without statistics notifications.
 
 ## Diagnostics and overlays
 
-Analysis emits scanner/parser diagnostics, implemented AST-only lints,
+Analysis emits scanner/parser/resolver diagnostics, implemented lints,
 ignore-comment diagnostics, and options/pubspec/manifest diagnostics. It applies
 configured `errors:` processors and exclusions through the shared CLI pipeline.
 Locations and SourceEdit offsets use UTF-16 code units and one-based line/column
@@ -80,11 +90,12 @@ cargo test -p dartr --test legacy_parity --test legacy_folding --test legacy_tra
 ```
 
 The differential tests run the real Dart 3.13.3 server. They compare full
-syntactic and implemented lint diagnostic objects, lifecycle responses,
-UTF-16 overlay edits, invalid requests, reanalysis, exclusions, result flushing,
-and folding for disk/overlay/outside-root subscriptions. They normalize IDs,
-process IDs, and nondeterministic notification timing; they do not establish
-resolver or full IntelliJ compatibility. A missing Dart installation skips the
+diagnostic objects, lifecycle responses, UTF-16 overlay edits, invalid requests,
+reanalysis, exclusions, result flushing, folding, hover, navigation, highlights,
+occurrences, outline, implemented, overrides, search requests (`search.results`
+and type hierarchy), and edit requests (`edit.format`, `edit.sortMembers`,
+`edit.organizeDirectives`). They normalize IDs, process IDs, and
+nondeterministic notification timing. A missing Dart installation skips the
 differential tests. `DART_BIN` selects a standalone SDK executable. The test
 helper also detects the SDK binary behind a Flutter wrapper.
 
@@ -97,12 +108,10 @@ python3 tools/legacy_parity.py --server target/debug/dartr --output /tmp/dartr-l
 
 ## Remaining work
 
-Resolution and static types are needed for semantic diagnostics, highlights,
-occurrences, navigation, completion, fixes, and most editor services. The existing
-outline computer uses syntactic substitutes and omits required legacy flags and
-aliased types, so legacy outlines are deferred. No filesystem watcher is installed;
+Completion, quick fixes, refactorings, bulk fixes, and closing labels are not
+implemented in the legacy protocol yet. No filesystem watcher is installed;
 on-disk changes become visible after a request that triggers analysis, such as
-`analysis.reanalyze`. Analysis currently rebuilds contexts and analyzes the roots
-synchronously instead of using the incremental driver scheduler. Notification
-batching and response ordering can therefore differ from Dart, while analysis
-start precedes completion and clients receive the final diagnostic state.
+`analysis.reanalyze`. Analysis currently analyzes the roots synchronously on
+each analysis pass instead of using an asynchronous background scheduler.
+Notification batching and response ordering can therefore differ from Dart,
+while analysis start precedes completion and clients receive the final state.

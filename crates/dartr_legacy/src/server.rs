@@ -7,18 +7,28 @@
 //! Legacy request handlers using the shared parse/lint diagnostic pipeline.
 //! Resolution-dependent requests return UNKNOWN_REQUEST until the resolver is ready.
 
+use std::collections::{HashMap, HashSet};
 use std::io::{self, BufRead, Write};
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::Arc;
 
-use dartr_cli::provider::{AnalyzedFile, FileDiagnostics, diagnostics_with_reader};
+use dartr_cli::DriverSession;
+use dartr_cli::provider::{AnalyzedFile, FileDiagnostics};
 use dartr_cli::server::{AnalysisError, LineInfoCache, analysis_errors};
+use dartr_diagnostics::DiagnosticType;
+use dartr_element::{ElementId, NoopSink, Tag};
 use dartr_project::{AnalysisContextCollection, CollectionOptions, FileKind, fs, non_dart, paths};
 use dartr_server::args::ServerOptions;
 use dartr_syntax::LineInfo;
 use indexmap::{IndexMap, IndexSet};
+use rustc_hash::FxHashMap;
 use serde_json::{Value, json};
 
+use crate::convert::{convert_element, is_local_element};
 use crate::protocol;
+use crate::search::{
+    LegacyUnitIndex, OwnedFiles, ResolvedUnitRef, SElem, SearchEngine, SearchScope,
+};
 use crate::transport::{Channel, LineReader};
 
 /// The supported subset of the pinned spec. Notifications are not requests.
@@ -31,7 +41,18 @@ pub const IMPLEMENTED_REQUESTS: &[&str] = &[
     "analysis.setPriorityFiles",
     "analysis.setSubscriptions",
     "analysis.getErrors",
+    "analysis.getHover",
+    "analysis.getNavigation",
+    "analysis.getReachableSources",
     "analysis.reanalyze",
+    "search.findElementReferences",
+    "search.findMemberDeclarations",
+    "search.findMemberReferences",
+    "search.findTopLevelDeclarations",
+    "search.getTypeHierarchy",
+    "edit.format",
+    "edit.sortMembers",
+    "edit.organizeDirectives",
 ];
 pub const IMPLEMENTED_NOTIFICATIONS: &[&str] = &[
     "server.connected",
@@ -40,6 +61,13 @@ pub const IMPLEMENTED_NOTIFICATIONS: &[&str] = &[
     "analysis.errors",
     "analysis.flushResults",
     "analysis.folding",
+    "analysis.navigation",
+    "analysis.highlights",
+    "analysis.occurrences",
+    "analysis.outline",
+    "analysis.implemented",
+    "analysis.overrides",
+    "search.results",
 ];
 
 #[derive(Debug)]
@@ -79,6 +107,12 @@ impl RequestFailure {
     fn overlay() -> Self {
         Self::new("INVALID_OVERLAY_CHANGE", "Invalid overlay change")
     }
+    fn file_not_analyzed(file: &str) -> Self {
+        Self::new(
+            "FILE_NOT_ANALYZED",
+            format!("File is not analyzed: {file}."),
+        )
+    }
 }
 
 fn field<'a>(params: &'a Value, key: &str) -> Result<&'a Value> {
@@ -90,6 +124,11 @@ fn string<'a>(value: &'a Value, path: &str) -> Result<&'a str> {
     value
         .as_str()
         .ok_or_else(|| RequestFailure::mismatch(path, "String", value))
+}
+fn boolean(value: &Value, path: &str) -> Result<bool> {
+    value
+        .as_bool()
+        .ok_or_else(|| RequestFailure::mismatch(path, "bool", value))
 }
 fn strings(value: &Value, path: &str) -> Result<Vec<String>> {
     if value.is_null() {
@@ -140,8 +179,15 @@ struct Server<W: Write> {
     subscriptions: IndexMap<String, Vec<String>>,
     status_subscribed: bool,
     collection: Option<AnalysisContextCollection>,
+    driver_session: DriverSession,
+    owned_files: OwnedFiles,
+    search_scope: Option<Arc<SearchScope>>,
+    search_words: FxHashMap<String, Arc<HashSet<String>>>,
+    indexes: FxHashMap<(usize, String), Arc<LegacyUnitIndex>>,
+    next_search_id: u64,
     published: IndexSet<String>,
     dirty: bool,
+    roots_dirty: bool,
 }
 
 /// Runs line-delimited JSON until shutdown or input closure.
@@ -156,8 +202,15 @@ pub fn run<R: BufRead, W: Write>(options: ServerOptions, input: R, channel: Chan
         subscriptions: IndexMap::new(),
         status_subscribed: false,
         collection: None,
+        driver_session: DriverSession::default(),
+        owned_files: OwnedFiles::default(),
+        search_scope: None,
+        search_words: FxHashMap::default(),
+        indexes: FxHashMap::default(),
+        next_search_id: 0,
         published: IndexSet::new(),
         dirty: false,
+        roots_dirty: false,
     };
     if server
         .notify(
@@ -349,6 +402,7 @@ impl<W: Write> Server<W> {
                 // The pinned handler decodes packageRoots but no longer passes it to setAnalysisRoots.
                 self.included = included;
                 self.excluded = excluded;
+                self.roots_dirty = true;
                 self.dirty = true;
                 self.response(id, None)?;
             }
@@ -386,7 +440,6 @@ impl<W: Write> Server<W> {
                     subscriptions.insert(service.clone(), files);
                 }
                 self.subscriptions = subscriptions;
-                // AST-only folding is computed even when diagnostics did not change.
                 self.dirty = self.collection.is_some();
                 self.response(id, None)?;
             }
@@ -416,14 +469,699 @@ impl<W: Write> Server<W> {
                     Some(json!({"errors":errors.get(file).cloned().unwrap_or_default()})),
                 )?;
             }
+            "analysis.getHover" => {
+                let file = string(field(params, "file")?, "params.file")?;
+                let offset = integer(field(params, "offset")?, "params.offset")?;
+                valid_path(file)?;
+                let hovers = self.get_hover(file, offset)?;
+                self.response(id, Some(wire(protocol::AnalysisGetHoverResult { hovers })))?;
+            }
+            "analysis.getNavigation" => {
+                let file = string(field(params, "file")?, "params.file")?;
+                let offset = integer(field(params, "offset")?, "params.offset")?;
+                let length = integer(field(params, "length")?, "params.length")?;
+                valid_path(file)?;
+                let result = self.get_navigation(file, offset, length)?;
+                self.response(id, Some(wire(result)))?;
+            }
+            "analysis.getReachableSources" => {
+                return Err(RequestFailure::new(
+                    "UNSUPPORTED_FEATURE",
+                    "Please contact the Dart analyzer team if you need this request.",
+                ));
+            }
             "analysis.reanalyze" => {
                 self.response(id, None)?;
+                self.roots_dirty = true;
                 self.dirty = true;
+            }
+            "search.findElementReferences" => {
+                let file = string(field(params, "file")?, "params.file")?;
+                let offset = integer(field(params, "offset")?, "params.offset")?;
+                let include_potential = boolean(
+                    field(params, "includePotential")?,
+                    "params.includePotential",
+                )?;
+                valid_path(file)?;
+                self.handle_find_element_references(id, file, offset, include_potential)?;
+            }
+            "search.findMemberDeclarations" => {
+                let name = string(field(params, "name")?, "params.name")?;
+                self.handle_find_member_declarations(id, name)?;
+            }
+            "search.findMemberReferences" => {
+                let name = string(field(params, "name")?, "params.name")?;
+                self.handle_find_member_references(id, name)?;
+            }
+            "search.findTopLevelDeclarations" => {
+                let pattern = string(field(params, "pattern")?, "params.pattern")?;
+                self.handle_find_top_level_declarations(id, pattern)?;
+            }
+            "search.getTypeHierarchy" => {
+                let file = string(field(params, "file")?, "params.file")?;
+                let offset = integer(field(params, "offset")?, "params.offset")?;
+                let super_only = match params.get("superOnly") {
+                    Some(v) if !v.is_null() => Some(boolean(v, "params.superOnly")?),
+                    _ => None,
+                };
+                valid_path(file)?;
+                let result = self.get_type_hierarchy(file, offset, super_only)?;
+                self.response(id, Some(wire(result)))?;
+            }
+            "edit.format" => {
+                let file = string(field(params, "file")?, "params.file")?;
+                let selection_offset =
+                    integer(field(params, "selectionOffset")?, "params.selectionOffset")?;
+                let selection_length =
+                    integer(field(params, "selectionLength")?, "params.selectionLength")?;
+                let line_length = match params.get("lineLength") {
+                    Some(v) if !v.is_null() => Some(integer(v, "params.lineLength")?),
+                    _ => None,
+                };
+                let result =
+                    self.edit_format(file, selection_offset, selection_length, line_length)?;
+                self.response(id, Some(wire(result)))?;
+            }
+            "edit.sortMembers" => {
+                let file = string(field(params, "file")?, "params.file")?;
+                valid_path(file)?;
+                let result = self.edit_sort_members(file)?;
+                self.response(id, Some(wire(result)))?;
+            }
+            "edit.organizeDirectives" => {
+                let file = string(field(params, "file")?, "params.file")?;
+                valid_path(file)?;
+                let result = self.edit_organize_directives(file)?;
+                self.response(id, Some(wire(result)))?;
             }
             _ => return Err(RequestFailure::new("UNKNOWN_REQUEST", "Unknown request")),
         }
         Ok(false)
     }
+
+    fn next_search_id(&mut self) -> String {
+        let id = self.next_search_id.to_string();
+        self.next_search_id += 1;
+        id
+    }
+
+    fn resolve_unit(&mut self, file: &str) -> Option<ResolvedUnitRef> {
+        if !file.ends_with(".dart") {
+            return None;
+        }
+        if self.roots_dirty {
+            self.refresh_roots();
+        }
+        let collection = self.collection.as_ref()?;
+        if collection.contexts.is_empty() {
+            return None;
+        }
+        fs::read_string(file)?;
+        let library = self.driver_session.resolved_library(collection, file)?;
+        let index = library.unit_index(file)?;
+        Some(ResolvedUnitRef { library, index })
+    }
+
+    fn dartdoc_templates(&mut self, path: &str) -> HashMap<String, String> {
+        let Some(collection) = &self.collection else {
+            return Default::default();
+        };
+        let mut templates = HashMap::new();
+        for (_, parsed) in self.driver_session.known_parsed_units(collection, path) {
+            dartr_server::hover::extract_templates_from_unit(
+                &parsed.ast,
+                parsed.unit,
+                &mut templates,
+            );
+        }
+        templates
+    }
+
+    fn hover_library_name(&self, library_path: &str, library_uri: &str) -> String {
+        if !library_uri.starts_with("file:") {
+            return library_uri.to_string();
+        }
+        let root = self.collection.as_ref().and_then(|c| {
+            let context = c.context_for(library_path)?;
+            let root = context
+                .root
+                .workspace
+                .find_package_for(library_path)
+                .map(|p| p.root().to_string())
+                .unwrap_or_else(|| context.root.root.clone());
+            Some(root)
+        });
+        match root {
+            Some(root) => library_path
+                .strip_prefix(&format!("{root}/"))
+                .unwrap_or(library_path)
+                .to_string(),
+            None => library_path.to_string(),
+        }
+    }
+
+    fn get_hover(&mut self, file: &str, offset: i64) -> Result<Vec<protocol::HoverInformation>> {
+        let Some(resolved) = self.resolve_unit(file) else {
+            return Err(RequestFailure::file_not_analyzed(file));
+        };
+        let Ok(offset) = u32::try_from(offset) else {
+            return Ok(Vec::new());
+        };
+        let templates = self.dartdoc_templates(file);
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let unit = resolved.unit();
+        let u = dartr_server::element_locator::Unit {
+            ctx: &ctx,
+            ast: &unit.ast,
+            tables: &unit.tables,
+        };
+        let library_name = |p: &str, uri: &str| self.hover_library_name(p, uri);
+        let computer = dartr_server::hover::HoverComputer {
+            unit: &u,
+            root: unit.unit,
+            templates: &templates,
+            library_name: &library_name,
+        };
+        let Some(hover) = computer.compute(offset) else {
+            return Ok(Vec::new());
+        };
+        let element = unit
+            .ast
+            .node_covering(unit.unit, offset, 0)
+            .and_then(|n| hover_target_node(&unit.ast, n))
+            .and_then(|n| u.locate(n));
+        let (element_kind, is_deprecated, containing_library_path) = match element {
+            Some(el) => {
+                let kind = Some(el.kind().display_name().to_string());
+                let deprecated = Some(hover.is_deprecated);
+                let enclosing = ctx.element_data(el).and_then(|d| d.enclosing);
+                let local = enclosing.is_some_and(dartr_server::element_locator::is_executable)
+                    || is_local_element(el);
+                let lib_path = if !local {
+                    dartr_resolver::error::support::library_of(&ctx, el).map(|lib| {
+                        let first = ctx.get(lib).first_fragment();
+                        ctx.fragment(first).source.path.to_string()
+                    })
+                } else {
+                    None
+                };
+                (kind, deprecated, lib_path)
+            }
+            None => (None, None, None),
+        };
+        Ok(vec![protocol::HoverInformation {
+            offset: hover.offset as i64,
+            length: hover.length as i64,
+            containing_library_path,
+            containing_library_name: hover.containing_library_name,
+            containing_class_description: hover.containing_class_description,
+            dartdoc: hover.dartdoc,
+            element_description: hover.element_description,
+            element_kind,
+            is_deprecated,
+            parameter: hover.parameter,
+            propagated_type: None,
+            static_type: hover.static_type,
+        }])
+    }
+
+    fn get_navigation(
+        &mut self,
+        file: &str,
+        offset: i64,
+        length: i64,
+    ) -> Result<protocol::AnalysisGetNavigationResult> {
+        if self
+            .collection
+            .as_ref()
+            .is_none_or(|c| c.contexts.is_empty())
+        {
+            return Err(RequestFailure::new(
+                "GET_NAVIGATION_INVALID_FILE",
+                "Error during `analysis.getNavigation`: invalid file.",
+            ));
+        }
+        let Some(resolved) = self.resolve_unit(file) else {
+            return Ok(protocol::AnalysisGetNavigationResult {
+                files: Vec::new(),
+                targets: Vec::new(),
+                regions: Vec::new(),
+            });
+        };
+        let offset = u32::try_from(offset.max(0)).unwrap_or(u32::MAX);
+        let length = u32::try_from(length.max(0)).unwrap_or(u32::MAX);
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let unit = resolved.unit();
+        let nav = crate::navigation::compute_dart_navigation(
+            &ctx,
+            &unit.ast,
+            &unit.tables,
+            unit.unit,
+            Some(offset),
+            Some(length),
+        );
+        Ok(protocol::AnalysisGetNavigationResult {
+            files: nav.files,
+            targets: nav.targets,
+            regions: nav.regions,
+        })
+    }
+
+    fn get_element_at_offset(
+        &mut self,
+        file: &str,
+        offset: i64,
+    ) -> Option<(ResolvedUnitRef, ElementId)> {
+        let offset = u32::try_from(offset).ok()?;
+        let is_priority = self.priority.iter().any(|p| p == file);
+        let resolved = self.resolve_unit(file)?;
+        let element = {
+            let sink = NoopSink;
+            let ctx = resolved.ctx(&sink);
+            let unit = resolved.unit();
+            if !is_priority
+                && let Some(frag) =
+                    crate::search::find_fragment_by_name_offset(&ctx, unit.fragment, offset)
+                && let Some(el) = ctx
+                    .fragment_data(frag)
+                    .and_then(|d| d.element.try_get().copied())
+            {
+                Some(el)
+            } else {
+                let u = dartr_server::element_locator::Unit {
+                    ctx: &ctx,
+                    ast: &unit.ast,
+                    tables: &unit.tables,
+                };
+                let node = unit.ast.node_covering(unit.unit, offset, 0)?;
+                dartr_server::element_locator::get_element(&u, node)
+            }
+        }?;
+        Some((resolved, element))
+    }
+
+    fn handle_find_element_references(
+        &mut self,
+        id: &str,
+        file: &str,
+        offset: i64,
+        include_potential: bool,
+    ) -> Result<()> {
+        let search_id = self.next_search_id();
+        let Some((resolved, mut element)) = self.get_element_at_offset(file, offset) else {
+            return self.response(
+                id,
+                Some(wire(protocol::SearchFindElementReferencesResult {
+                    id: None,
+                    element: None,
+                })),
+            );
+        };
+        let proto_element = {
+            let sink = NoopSink;
+            let ctx = resolved.ctx(&sink);
+            if element.tag() == Tag::FieldFormalParameter
+                && let dartr_element::AnyElement::FormalParameter(p) = ctx.any(element)
+                && let Some(field) = p.field.get()
+            {
+                element = field.raw();
+            }
+            if matches!(element.tag(), Tag::Getter | Tag::Setter)
+                && let Some(var) =
+                    dartr_resolver::element_metadata::accessor_variable_any(&ctx, element)
+            {
+                element = var;
+            }
+            convert_element(&ctx, element, None)
+        };
+        self.response(
+            id,
+            Some(wire(protocol::SearchFindElementReferencesResult {
+                id: Some(search_id.clone()),
+                element: Some(proto_element),
+            })),
+        )?;
+        let target = SElem {
+            lib: resolved.library.clone(),
+            unit: resolved.index,
+            id: element,
+        };
+        let results = match &self.collection {
+            Some(collection) => {
+                let mut engine = SearchEngine {
+                    collection,
+                    excluded: &self.excluded,
+                    session: &mut self.driver_session,
+                    owned: &mut self.owned_files,
+                    search_scope: &mut self.search_scope,
+                    search_words: &mut self.search_words,
+                    indexes: &mut self.indexes,
+                };
+                engine.find_element_references(&target, include_potential)
+            }
+            None => Vec::new(),
+        };
+        self.notify(
+            "search.results",
+            wire(protocol::SearchResultsParams {
+                id: search_id,
+                results,
+                is_last: true,
+            }),
+        )
+        .map_err(|e| RequestFailure::new("SERVER_ERROR", e.to_string()))
+    }
+
+    fn handle_find_member_declarations(&mut self, id: &str, name: &str) -> Result<()> {
+        let search_id = self.next_search_id();
+        self.response(
+            id,
+            Some(wire(protocol::SearchFindMemberDeclarationsResult {
+                id: search_id.clone(),
+            })),
+        )?;
+        if self.roots_dirty {
+            self.refresh_roots();
+        }
+        let results = match &self.collection {
+            Some(collection) => {
+                let mut engine = SearchEngine {
+                    collection,
+                    excluded: &self.excluded,
+                    session: &mut self.driver_session,
+                    owned: &mut self.owned_files,
+                    search_scope: &mut self.search_scope,
+                    search_words: &mut self.search_words,
+                    indexes: &mut self.indexes,
+                };
+                engine.find_member_declarations(name)
+            }
+            None => Vec::new(),
+        };
+        self.notify(
+            "search.results",
+            wire(protocol::SearchResultsParams {
+                id: search_id,
+                results,
+                is_last: true,
+            }),
+        )
+        .map_err(|e| RequestFailure::new("SERVER_ERROR", e.to_string()))
+    }
+
+    fn handle_find_member_references(&mut self, id: &str, name: &str) -> Result<()> {
+        let search_id = self.next_search_id();
+        self.response(
+            id,
+            Some(wire(protocol::SearchFindMemberReferencesResult {
+                id: search_id.clone(),
+            })),
+        )?;
+        if self.roots_dirty {
+            self.refresh_roots();
+        }
+        let results = match &self.collection {
+            Some(collection) => {
+                let mut engine = SearchEngine {
+                    collection,
+                    excluded: &self.excluded,
+                    session: &mut self.driver_session,
+                    owned: &mut self.owned_files,
+                    search_scope: &mut self.search_scope,
+                    search_words: &mut self.search_words,
+                    indexes: &mut self.indexes,
+                };
+                engine.find_member_references(name)
+            }
+            None => Vec::new(),
+        };
+        self.notify(
+            "search.results",
+            wire(protocol::SearchResultsParams {
+                id: search_id,
+                results,
+                is_last: true,
+            }),
+        )
+        .map_err(|e| RequestFailure::new("SERVER_ERROR", e.to_string()))
+    }
+
+    fn handle_find_top_level_declarations(&mut self, id: &str, pattern: &str) -> Result<()> {
+        let regex = regress::Regex::new(pattern).map_err(|e| {
+            RequestFailure::new(
+                "INVALID_PARAMETER",
+                format!("Invalid parameter 'pattern'. RegExp: {e}."),
+            )
+        })?;
+        let search_id = self.next_search_id();
+        self.response(
+            id,
+            Some(wire(protocol::SearchFindTopLevelDeclarationsResult {
+                id: search_id.clone(),
+            })),
+        )?;
+        if self.roots_dirty {
+            self.refresh_roots();
+        }
+        let results = match &self.collection {
+            Some(collection) => {
+                let mut engine = SearchEngine {
+                    collection,
+                    excluded: &self.excluded,
+                    session: &mut self.driver_session,
+                    owned: &mut self.owned_files,
+                    search_scope: &mut self.search_scope,
+                    search_words: &mut self.search_words,
+                    indexes: &mut self.indexes,
+                };
+                engine.find_top_level_declarations(&regex)
+            }
+            None => Vec::new(),
+        };
+        self.notify(
+            "search.results",
+            wire(protocol::SearchResultsParams {
+                id: search_id,
+                results,
+                is_last: true,
+            }),
+        )
+        .map_err(|e| RequestFailure::new("SERVER_ERROR", e.to_string()))
+    }
+
+    fn get_type_hierarchy(
+        &mut self,
+        file: &str,
+        offset: i64,
+        super_only: Option<bool>,
+    ) -> Result<protocol::SearchGetTypeHierarchyResult> {
+        let Some((resolved, element)) = self.get_element_at_offset(file, offset) else {
+            return Ok(protocol::SearchGetTypeHierarchyResult {
+                hierarchy_items: None,
+            });
+        };
+        let Some(collection) = &self.collection else {
+            return Ok(protocol::SearchGetTypeHierarchyResult {
+                hierarchy_items: None,
+            });
+        };
+        let target = SElem {
+            lib: resolved.library,
+            unit: resolved.index,
+            id: element,
+        };
+        let mut engine = SearchEngine {
+            collection,
+            excluded: &self.excluded,
+            session: &mut self.driver_session,
+            owned: &mut self.owned_files,
+            search_scope: &mut self.search_scope,
+            search_words: &mut self.search_words,
+            indexes: &mut self.indexes,
+        };
+        let hierarchy_items = engine.compute_type_hierarchy(&target, super_only.unwrap_or(false));
+        Ok(protocol::SearchGetTypeHierarchyResult { hierarchy_items })
+    }
+
+    fn parse_file_for_context(
+        &self,
+        file: &str,
+    ) -> Option<(
+        String,
+        dartr_ast_builder::ParsedUnit,
+        &dartr_project::AnalysisOptions,
+    )> {
+        let collection = self.collection.as_ref()?;
+        let context = collection
+            .context_for(file)
+            .or_else(|| collection.contexts.first())?;
+        let content = fs::read_string(file).unwrap_or_default();
+        let content = dartr_syntax::strip_bom(&content).to_string();
+        let version = context.file_info(file).language_version;
+        let options = collection.options_for(context, file);
+        let experiments = options
+            .enabled_experiments()
+            .iter()
+            .filter_map(|name| {
+                dartr_parser::ExperimentalFlag::VALUES
+                    .iter()
+                    .copied()
+                    .find(|flag| flag.name() == *name)
+            })
+            .collect::<Vec<_>>();
+        let parsed = dartr_ast_builder::parse_file(
+            &content,
+            file,
+            (version.major, version.minor),
+            &experiments,
+        );
+        Some((content, parsed, options))
+    }
+
+    fn edit_format(
+        &self,
+        file: &str,
+        selection_offset: i64,
+        selection_length: i64,
+        line_length: Option<i64>,
+    ) -> Result<protocol::EditFormatResult> {
+        if valid_path(file).is_err()
+            || !file.ends_with(".dart")
+            || self
+                .collection
+                .as_ref()
+                .is_none_or(|c| c.contexts.is_empty())
+        {
+            return Err(RequestFailure::new(
+                "FORMAT_INVALID_FILE",
+                "Error during `edit.format`: invalid file.",
+            ));
+        }
+        let Some((content, _, options)) = self.parse_file_for_context(file) else {
+            return Err(RequestFailure::new(
+                "FORMAT_INVALID_FILE",
+                "Error during `edit.format`: invalid file.",
+            ));
+        };
+        let collection = self.collection.as_ref().unwrap();
+        let context = collection
+            .context_for(file)
+            .or_else(|| collection.contexts.first())
+            .unwrap();
+        let version = context.file_info(file).language_version;
+        match crate::edit::format_code(
+            &content,
+            (version.major, version.minor),
+            &options.enabled_experiments(),
+            options.formatter_page_width,
+            options.formatter_trailing_commas,
+            selection_offset,
+            selection_length,
+            line_length,
+        ) {
+            crate::edit::FormatOutcome::Ok(result) => Ok(result),
+            crate::edit::FormatOutcome::FormatWithErrors
+            | crate::edit::FormatOutcome::InvalidSelection(_) => Err(RequestFailure::new(
+                "FORMAT_WITH_ERRORS",
+                "Error during `edit.format`: source contains syntax errors.",
+            )),
+        }
+    }
+
+    fn edit_sort_members(&self, file: &str) -> Result<protocol::EditSortMembersResult> {
+        if !file.ends_with(".dart") {
+            return Err(RequestFailure::new(
+                "SORT_MEMBERS_INVALID_FILE",
+                "Error during `edit.sortMembers`: invalid file.",
+            ));
+        }
+        if self
+            .collection
+            .as_ref()
+            .is_none_or(|c| c.contexts.is_empty())
+            || fs::read_string(file).is_none()
+        {
+            return Err(RequestFailure::file_not_analyzed(file));
+        }
+        let Some((content, parsed, options)) = self.parse_file_for_context(file) else {
+            return Err(RequestFailure::file_not_analyzed(file));
+        };
+        let num_errors = parsed
+            .diagnostics
+            .iter()
+            .filter(|d| d.code.diagnostic_type == DiagnosticType::SyntacticError)
+            .count();
+        if num_errors != 0 {
+            return Err(RequestFailure::new(
+                "SORT_MEMBERS_PARSE_ERRORS",
+                format!(
+                    "Error during `edit.sortMembers`: file has {num_errors} scan/parse errors."
+                ),
+            ));
+        }
+        let sort_constructors_first = options
+            .lint_rules
+            .iter()
+            .any(|r| r == "sort_constructors_first");
+        let edits = crate::edit::sort_members(
+            &content,
+            &parsed.ast,
+            parsed.unit,
+            &parsed.line_info,
+            sort_constructors_first,
+        );
+        Ok(protocol::EditSortMembersResult {
+            edit: protocol::SourceFileEdit {
+                file: file.to_string(),
+                file_stamp: -1,
+                edits,
+            },
+        })
+    }
+
+    fn edit_organize_directives(
+        &mut self,
+        file: &str,
+    ) -> Result<protocol::EditOrganizeDirectivesResult> {
+        let Some(resolved) = self.resolve_unit(file) else {
+            return Err(RequestFailure::file_not_analyzed(file));
+        };
+        let input = &resolved.library.inputs[resolved.index];
+        let unit = resolved.unit();
+        let num_errors = input
+            .parsed
+            .diagnostics
+            .iter()
+            .filter(|d| d.code.diagnostic_type == DiagnosticType::SyntacticError)
+            .count();
+        if num_errors != 0 {
+            return Err(RequestFailure::new(
+                "ORGANIZE_DIRECTIVES_ERROR",
+                format!("File has {num_errors} scan/parse errors."),
+            ));
+        }
+        let code = &input.parsed.ast.tokens.source;
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let edits = crate::edit::organize_directives(
+            code,
+            &unit.ast,
+            unit.unit,
+            &input.parsed.line_info,
+            &unit.diagnostics,
+            Some((&ctx, &unit.tables, unit.fragment)),
+        );
+        Ok(protocol::EditOrganizeDirectivesResult {
+            edit: protocol::SourceFileEdit {
+                file: file.to_string(),
+                file_stamp: -1,
+                edits,
+            },
+        })
+    }
+
     fn flush(&mut self, files: Vec<String>) -> Result<()> {
         if !files.is_empty() {
             self.notify("analysis.flushResults", json!({"files":files}))
@@ -448,15 +1186,23 @@ impl<W: Write> Server<W> {
             })
     }
     fn refresh_roots(&mut self) -> IndexSet<String> {
-        self.collection = Some(AnalysisContextCollection::new(
-            &self.included,
-            &CollectionOptions {
-                sdk_path: self.options.dart_sdk.clone(),
-                package_config_file: self.options.packages.clone(),
-                enabled_experiments: self.options.enabled_experiments.clone(),
-                ..Default::default()
-            },
-        ));
+        if self.roots_dirty || self.collection.is_none() {
+            self.roots_dirty = false;
+            self.collection = Some(AnalysisContextCollection::new(
+                &self.included,
+                &CollectionOptions {
+                    sdk_path: self.options.dart_sdk.clone(),
+                    package_config_file: self.options.packages.clone(),
+                    enabled_experiments: self.options.enabled_experiments.clone(),
+                    ..Default::default()
+                },
+            ));
+            self.driver_session = DriverSession::default();
+            self.owned_files = OwnedFiles::default();
+            self.search_scope = None;
+            self.search_words.clear();
+            self.indexes.clear();
+        }
         let mut files = IndexSet::new();
         if let Some(collection) = &self.collection {
             for context in &collection.contexts {
@@ -475,7 +1221,7 @@ impl<W: Write> Server<W> {
         }
         files
     }
-    fn diagnostics(&self, paths: &[String]) -> IndexMap<String, Vec<Value>> {
+    fn diagnostics(&mut self, paths: &[String]) -> IndexMap<String, Vec<Value>> {
         let Some(collection) = &self.collection else {
             return IndexMap::new();
         };
@@ -496,8 +1242,7 @@ impl<W: Write> Server<W> {
                 })
             })
             .collect();
-        let read = |path: &str| fs::read_string(path);
-        let results = diagnostics_with_reader(collection, &files, &read);
+        let results = self.driver_session.diagnostics(collection, &files);
         let mut infos = LineInfoCache::default();
         let mut output = IndexMap::new();
         for file in results {
@@ -555,6 +1300,128 @@ impl<W: Write> Server<W> {
             for file in files {
                 if let Some(regions) = self.folding(&file) {
                     self.notify("analysis.folding", json!({"file":file,"regions":regions}))?;
+                }
+            }
+        }
+        if let Some(files) = self.subscriptions.get("NAVIGATION").cloned() {
+            for file in files {
+                if let Some(resolved) = self.resolve_unit(&file) {
+                    let sink = NoopSink;
+                    let ctx = resolved.ctx(&sink);
+                    let unit = resolved.unit();
+                    let nav = crate::navigation::compute_dart_navigation(
+                        &ctx,
+                        &unit.ast,
+                        &unit.tables,
+                        unit.unit,
+                        None,
+                        None,
+                    );
+                    self.notify(
+                        "analysis.navigation",
+                        wire(protocol::AnalysisNavigationParams {
+                            file,
+                            regions: nav.regions,
+                            targets: nav.targets,
+                            files: nav.files,
+                        }),
+                    )?;
+                }
+            }
+        }
+        if let Some(files) = self.subscriptions.get("HIGHLIGHTS").cloned() {
+            for file in files {
+                if let Some(resolved) = self.resolve_unit(&file) {
+                    let sink = NoopSink;
+                    let ctx = resolved.ctx(&sink);
+                    let unit = resolved.unit();
+                    let regions = crate::highlights::compute_dart_highlights(
+                        &ctx,
+                        &unit.ast,
+                        &unit.tables,
+                        unit.unit,
+                    );
+                    self.notify(
+                        "analysis.highlights",
+                        wire(protocol::AnalysisHighlightsParams { file, regions }),
+                    )?;
+                }
+            }
+        }
+        if let Some(files) = self.subscriptions.get("OCCURRENCES").cloned() {
+            for file in files {
+                if let Some(resolved) = self.resolve_unit(&file) {
+                    let sink = NoopSink;
+                    let ctx = resolved.ctx(&sink);
+                    let unit = resolved.unit();
+                    let occurrences = crate::occurrences::compute_dart_occurrences(
+                        &ctx,
+                        &unit.ast,
+                        &unit.tables,
+                        unit.unit,
+                    );
+                    self.notify(
+                        "analysis.occurrences",
+                        wire(protocol::AnalysisOccurrencesParams { file, occurrences }),
+                    )?;
+                }
+            }
+        }
+        if let Some(files) = self.subscriptions.get("OUTLINE").cloned() {
+            for file in files {
+                if let Some(resolved) = self.resolve_unit(&file) {
+                    let sink = NoopSink;
+                    let ctx = resolved.ctx(&sink);
+                    let unit = resolved.unit();
+                    let params = crate::outline::compute_analysis_outline(
+                        &file,
+                        &ctx,
+                        &unit.ast,
+                        &unit.tables,
+                        resolved.line_info(),
+                        unit.unit,
+                    );
+                    self.notify("analysis.outline", wire(params))?;
+                }
+            }
+        }
+        if let Some(files) = self.subscriptions.get("OVERRIDES").cloned() {
+            for file in files {
+                if let Some(resolved) = self.resolve_unit(&file) {
+                    let sink = NoopSink;
+                    let ctx = resolved.ctx(&sink);
+                    let unit = resolved.unit();
+                    let overrides = crate::overrides::compute_dart_overrides(
+                        &ctx,
+                        &unit.ast,
+                        &unit.tables,
+                        unit.unit,
+                    );
+                    self.notify(
+                        "analysis.overrides",
+                        wire(protocol::AnalysisOverridesParams { file, overrides }),
+                    )?;
+                }
+            }
+        }
+        if let Some(files) = self.subscriptions.get("IMPLEMENTED").cloned() {
+            for file in files {
+                if let Some(resolved) = self.resolve_unit(&file)
+                    && let Some(collection) = &self.collection
+                {
+                    let mut engine = SearchEngine {
+                        collection,
+                        excluded: &self.excluded,
+                        session: &mut self.driver_session,
+                        owned: &mut self.owned_files,
+                        search_scope: &mut self.search_scope,
+                        search_words: &mut self.search_words,
+                        indexes: &mut self.indexes,
+                    };
+                    let params = crate::implemented::compute_implemented(&resolved, &file, |cls| {
+                        engine.members_of_subtypes(cls)
+                    });
+                    self.notify("analysis.implemented", wire(params))?;
                 }
             }
         }
@@ -641,6 +1508,17 @@ impl<W: Write> Server<W> {
                 }
             }
             fs::set_overlay(&file, content);
+            self.indexes.retain(|(_, p), _| p != &file);
+            self.search_words.remove(&file);
+            self.search_scope = None;
+            if file.ends_with(".dart") {
+                for affected in self.driver_session.change_file(&file) {
+                    self.indexes.retain(|(_, p), _| p != &affected);
+                }
+            }
+            if FileKind::of(&file) == FileKind::AnalysisOptions {
+                self.roots_dirty = true;
+            }
             self.dirty = true;
         }
         Ok(())
@@ -652,6 +1530,44 @@ impl<W: Write> Drop for Server<W> {
             fs::set_overlay(file, None);
         }
     }
+}
+
+fn hover_target_node(ast: &dartr_ast::Ast, node: dartr_ast::NodeId) -> Option<dartr_ast::NodeId> {
+    use dartr_ast::*;
+    let parent = ast.parent(node);
+    let parent2 = parent.and_then(|p| ast.parent(p));
+    if ast.is::<ClassNamePart>(node) {
+        return parent;
+    }
+    if let (Some(p), Some(p2)) = (parent, parent2)
+        && ast.is::<NamedType>(p)
+        && ast.is::<ConstructorName>(p2)
+        && ast
+            .parent(p2)
+            .is_some_and(|p3| ast.is::<InstanceCreationExpression>(p3))
+    {
+        return ast.parent(p2);
+    }
+    if let (Some(p), Some(p2)) = (parent, parent2)
+        && ast.is::<ConstructorName>(p)
+        && ast.is::<InstanceCreationExpression>(p2)
+    {
+        return Some(p2);
+    }
+    if ast.is::<SimpleIdentifier>(node)
+        && let Some(p) = parent
+        && let Some(c) = ast.cast::<ConstructorDeclaration>(p)
+        && ast[c].name.is_some()
+    {
+        return Some(p);
+    }
+    if ast.is::<SimpleIdentifier>(node)
+        && let Some(p) = parent
+        && ast.is::<DotShorthandConstructorInvocation>(p)
+    {
+        return Some(p);
+    }
+    Some(node)
 }
 
 fn protocol_location(location: &dartr_cli::server::Location) -> protocol::Location {
