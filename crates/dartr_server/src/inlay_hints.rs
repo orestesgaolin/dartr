@@ -310,7 +310,10 @@ fn is_literal(ast: &Ast, node: NodeId) -> bool {
 
 impl AstVisitor for Computer<'_, '_, '_> {
     fn visit_argument_list(&mut self, ast: &Ast, node: Id<ArgumentList>) {
-        let substituted = crate::signature::invocation_parameters_substituted(self.unit, node.raw());
+        // Dart: the parameters of a member instantiated with type arguments
+        // are new elements without a fragment (no location).
+        let (member, type_arguments) = crate::signature::invocation_substitution(self.unit, node.raw());
+        let substituted = member && type_arguments;
         for &argument in ast.list_raw(ast[node].arguments) {
             if ast.is::<NamedArgument>(argument) {
                 continue;

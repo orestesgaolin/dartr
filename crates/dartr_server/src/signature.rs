@@ -195,9 +195,17 @@ pub fn compute_signature(
 /// declaration): the invoked element is a member (a generic receiver or
 /// class), or the invocation has inferred type arguments.
 pub fn invocation_parameters_substituted(unit: &Unit<'_, '_>, argument_list: NodeId) -> bool {
+    let (member, type_arguments) = invocation_substitution(unit, argument_list);
+    member || type_arguments
+}
+
+/// Whether the invoked element of the invocation of [argument_list] is a
+/// member (substituted), and whether the invocation has inferred type
+/// arguments.
+pub fn invocation_substitution(unit: &Unit<'_, '_>, argument_list: NodeId) -> (bool, bool) {
     let ast = unit.ast;
     let Some(invocation) = ast.parent(argument_list) else {
-        return false;
+        return (false, false);
     };
     let ctx = unit.ctx;
     let has_type_arguments = unit
@@ -212,7 +220,7 @@ pub fn invocation_parameters_substituted(unit: &Unit<'_, '_>, argument_list: Nod
     } else {
         unit.tables.element.get(invocation).copied()
     };
-    has_type_arguments || matches!(element, Some(ElemRef::Member(_)))
+    (matches!(element, Some(ElemRef::Member(_))), has_type_arguments)
 }
 
 /// Dart `Argument.correspondingParameter`.
