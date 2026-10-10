@@ -418,6 +418,7 @@ dependencies = [
  "dartr_element",
  "dartr_link",
  "dartr_parser",
+ "dartr_project",
  "dartr_syntax",
  "dartr_typesystem",
  "indexmap",

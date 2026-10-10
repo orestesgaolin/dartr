@@ -55,6 +55,10 @@ pub struct UnitInput {
     /// `_resolveDirectives`); the driver computes them from its file states
     /// (`dartr_driver::directives`).
     pub directive_diagnostics: Vec<Diagnostic>,
+    /// `Configuration.resolvedUri` of the configuration nodes of the unit
+    /// (Dart `_resolveUriConfigurations`, computed in
+    /// `dartr_driver::directives`).
+    pub resolved_uris: dartr_ast::NodeMap<dartr_element::DirectiveUri>,
 }
 
 /// The inputs of [`analyze_library`].
@@ -644,6 +648,7 @@ fn resolve_file(
     let mut ast = unit.parsed.ast.clone();
     let root = unit.parsed.unit;
     let mut tables = ResolutionTables::new();
+    tables.resolved_uri = unit.resolved_uris.clone();
     let mut rt = ResolverTables::new();
     let mut diagnostics: Vec<Diagnostic> = unit.parsed.diagnostics.clone();
     // Dart `_resolveDirectives` runs before `_resolveFile`.
@@ -818,6 +823,7 @@ impl<'w> ExternalUnitCache<'w> {
             fragment,
             // Only the constants of this unit are read.
             directive_diagnostics: Vec::new(),
+            resolved_uris: dartr_ast::NodeMap::new(),
         };
         let resolved = resolve_file(&input, &scopes, &features, &unit);
         if resolved.panic.is_some() {
