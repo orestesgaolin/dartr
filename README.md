@@ -120,7 +120,6 @@ Open an issue at <https://github.com/orestesgaolin/dartr/issues> with:
 - Language server: no completion, quick fixes, assists or rename. Files that change
   on disk are not watched yet.
 - Legacy analysis server protocol: partial.
-- Primary constructor bodies (a newer language feature) are not fully resolved.
 - Cold analysis of a large package can be slower than `dart analyze` today (resolved
   lints, search index). See the benchmarks.
 - macOS arm64 and Linux x86_64 only. No Windows or Intel macOS builds.
@@ -129,9 +128,10 @@ Open an issue at <https://github.com/orestesgaolin/dartr/issues> with:
 
 Baseline `dart analyze` 3.13.3, cold cache, Apple M5 Pro (15 cores):
 Flutter `packages/flutter` 19.6 s, `flutter_tools` 7.6 s, `analyzer` 7.1 s, a 1.56 million
-line application 72.8 s. Early `dartr analyze` runs (parse and syntax errors only)
-take 0.1-0.5 s on the same corpora; with the full pipeline and lints, `flutter_tools`
-took about 3.5 s against 2.6 s for Dart at the time of measurement.
+line application 72.8 s. Final `dartr analyze` benchmarks on an idle machine are still to come. Single runs on a
+busy machine, full pipeline with lints and plugins, cold cache: the 1.56 million line
+application took 22 s with dartr against 52-78 s with Dart; Flutter `packages/flutter`
+6 s against 15 s; `flutter_tools` 3.5 s against 2.4-4.1 s (dartr is not faster there yet).
 
 **Caveat:** several of these measurements ran while other processes loaded the
 machine (load average 11-21 on 15 cores). The final comparison on an idle machine is
