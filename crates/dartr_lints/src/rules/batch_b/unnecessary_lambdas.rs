@@ -119,7 +119,7 @@ fn contains_null_aware_invocation_in_chain(c: &LinterContext<'_>, node: Option<N
 }
 
 /// Dart `argumentsMatchParameters` (`util/dart_type_utilities.dart`).
-fn arguments_match_parameters(c: &LinterContext<'_>, arguments: &[NodeId], parameters: &[NodeId]) -> bool {
+pub(crate) fn arguments_match_parameters(c: &LinterContext<'_>, arguments: &[NodeId], parameters: &[NodeId]) -> bool {
     let mut named_parameters: IndexMap<&str, Option<ElementId>> = IndexMap::new();
     let mut named_arguments: IndexMap<&str, ElementId> = IndexMap::new();
     let mut positional_parameters = Vec::new();

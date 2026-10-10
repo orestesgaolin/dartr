@@ -52,6 +52,16 @@ impl ElementMetadata for EngineMetadata<'_> {
         .flatten()
     }
 
+    fn default_value_code(&self, element: dartr_element::ElementId) -> Option<String> {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let node = self.0.constant_initializer(element)?;
+            let unit = self.0.unit(node.unit);
+            Some(dartr_ast::to_source::to_source(&unit.ast, node.node))
+        }))
+        .ok()
+        .flatten()
+    }
+
     fn expression_constant_value(
         &self,
         unit: u32,

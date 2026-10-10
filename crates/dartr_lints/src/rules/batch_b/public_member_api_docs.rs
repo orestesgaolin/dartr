@@ -4,7 +4,6 @@ use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
 use dartr_element::{ClassElement, EId, ElementFlags, FragmentFlags, Tag};
-use dartr_typesystem::TypeExt;
 use indexmap::{IndexMap, IndexSet};
 
 pub fn register(r: &mut RuleVisitorRegistry, c: &LinterContext<'_>) {

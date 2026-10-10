@@ -86,6 +86,11 @@ pub trait ElementMetadata {
     /// literal, a dot shorthand constructor invocation or a constructor
     /// declaration) in the unit with the index [unit].
     fn can_be_const(&self, unit: u32, node: NodeId) -> bool;
+    /// Dart `FormalParameterElement.defaultValueCode`: the source of the
+    /// constant initializer of [element].
+    fn default_value_code(&self, _element: dartr_element::ElementId) -> Option<String> {
+        None
+    }
 }
 /// A resolved AST and its original parse metadata. Resolution can rewrite nodes.
 #[derive(Clone, Copy)]
@@ -306,6 +311,10 @@ impl<'a> LinterContext<'a> {
                         })
             })
         })
+    }
+    /// Dart `FormalParameterElement.defaultValueCode`.
+    pub fn default_value_code(&self, element: dartr_element::ElementId) -> Option<String> {
+        self.resolved?.metadata?.default_value_code(element)
     }
     /// Dart `canBeConst` (`analyzer/src/lint/constants.dart`, `ast.dart`).
     pub fn can_be_const(&self, node: impl Into<NodeId>) -> bool {

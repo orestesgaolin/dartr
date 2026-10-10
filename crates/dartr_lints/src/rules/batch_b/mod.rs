@@ -103,4 +103,7 @@ rules!(
     prefer_initializing_formals,
     use_super_parameters,
     unnecessary_lambdas,
+    unnecessary_overrides,
+    use_late_for_private_fields_and_variables,
+    unnecessary_parenthesis,
 );
