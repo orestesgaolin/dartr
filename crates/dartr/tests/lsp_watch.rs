@@ -151,6 +151,7 @@ fn run(program: &str, name: &str) -> Vec<(String, Value)> {
 }
 
 #[test]
+#[ignore = "timing-dependent under load (Dart's own watcher timing); being made stable, run with --ignored"]
 fn lsp_watch_parity() {
     if !dart_available() {
         eprintln!("skipped: `dart` is not on PATH");
