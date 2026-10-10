@@ -567,6 +567,27 @@ fn analyze_parity_driver_diagnostics() {
     check_fixture_projects(&fixtures, "driver_exact");
 }
 
+/// Analyzer plugins (`plugins:` in `analysis_options.yaml`): a local path
+/// plugin with one lint rule; its diagnostics, ignore comments with the
+/// plugin name, and `--no-plugins`. The plugin package needs `dart pub
+/// upgrade` (the pub cache, or network on the first run).
+#[test]
+fn analyze_parity_plugins() {
+    if !dart_available() {
+        eprintln!("skipped: dart 3.13.3 is not on PATH");
+        return;
+    }
+    let fixtures =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/analyze_driver/plugins");
+    check_fixture_projects(&fixtures, "plugins");
+    let base = scratch().join("plugins");
+    let failures: Vec<String> = fs::read_dir(&base)
+        .unwrap()
+        .filter_map(|e| compare(&e.unwrap().path(), &["--no-plugins"]))
+        .collect();
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
 /// The codes of the error verifiers that `dartr_resolver` does not report
 /// before the verifier branches merge. Remove codes from this list when
 /// they are reported.

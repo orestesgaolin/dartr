@@ -1,0 +1,8 @@
+name: my_lint
+version: 0.0.1
+publish_to: none
+environment:
+  sdk: ^3.8.0
+dependencies:
+  analysis_server_plugin: ^0.3.0
+  analyzer: ^12.1.0

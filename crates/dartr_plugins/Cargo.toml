@@ -1,0 +1,11 @@
+[package]
+name = "dartr_plugins"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Analyzer plugins for `dartr analyze`: the server side of the plugin protocol (pkg/analysis_server/lib/src/plugin and plugin2), with a Dart bridge that runs the plugin isolate."
+
+[dependencies]
+dartr_project.workspace = true
+serde_json.workspace = true
+md-5 = "0.11.0"
