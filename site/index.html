@@ -81,8 +81,8 @@
       </article>
       <article class="card">
         <h3>dartr language-server <span class="pill part">partial</span></h3>
-        <p>An LSP server. Has diagnostics, outline, closing labels, folding, selection ranges, document symbols, formatting, navigation, hover, signature help, semantic tokens and inlay hints. <b>Missing:</b> completion, quick fixes, assists, rename.</p>
-        <p>The legacy analysis server protocol (<code>--protocol=analyzer</code>) is partial: 20 of 59 requests and 13 of 22 notifications.</p>
+        <p>An LSP server. Has diagnostics, outline, closing labels, folding, selection ranges, document symbols, formatting, navigation, references, hover, signature help, semantic tokens, inlay hints, call and type hierarchy and workspace symbols. <b>Missing:</b> completion, quick fixes, assists, rename.</p>
+        <p>The legacy analysis server protocol (<code>--protocol=analyzer</code>) is partial: 39 of 59 requests and 19 of 22 notifications. Completion, quick fixes and refactorings are not done yet.</p>
       </article>
     </div>
 
@@ -213,7 +213,7 @@ port of the Dart SDK 3.13.3 analyzer (pinned reference version)</span></pre>
       <div class="stat"><div class="n">8,702</div><p><code>dart_style</code> tests byte-exact. Also <code>flutter_tools</code> 366/366 and <code>analyzer</code> 9.0.0 456/456 (unseen).</p></div>
       <div class="stat"><div class="n">1,488<small> / 1,488</small></div><p>diagnostic codes, with messages equal to Dart.</p></div>
       <div class="stat"><div class="n">31<small> / 31</small></div><p>LSP session steps identical to <code>dart language-server</code> (first LSP milestone). Later LSP features compared on fixtures.</p></div>
-      <div class="stat"><div class="n">32<small> / 32</small></div><p>legacy protocol steps identical to <code>dart language-server --protocol=analyzer</code>.</p></div>
+      <div class="stat"><div class="n">78</div><p>legacy protocol steps identical to <code>dart language-server --protocol=analyzer</code> (39 of 59 requests implemented).</p></div>
       <div class="stat"><div class="n">5,581</div><p>workspace tests at the last merge.</p></div>
     </div>
 
@@ -351,6 +351,7 @@ warning - lib/mini.dart:5:10 - The value of the local variable 's' isn't used. .
       <li class="key"><time datetime="2026-10-10T11:20">10-10 11:20</time><span class="what">Last <code>analyzer</code> 9.0.0 differences fixed<span class="who">Opus</span><span class="ev">27,278/27,278, 0 extra; lints 57,211/57,211</span></span></li>
       <li class="key"><time datetime="2026-10-10T13:15">10-10 13:15</time><span class="what">First public release <code>v0.1.0-preview.1</code><span class="who">Opus</span><span class="ev">Homebrew formula; <code>brew test</code> passes</span></span></li>
       <li><time datetime="2026-10-10T14:10">10-10 14:10</time><span class="what">Legacy protocol: hover, navigation, search, edit<span class="who">Gemini</span><span class="ev">32/32 steps identical</span></span></li>
+      <li><time datetime="2026-10-10T15:00">10-10 15:00</time><span class="what">Legacy protocol: server, execution, diagnostic, analytics domains<span class="who">Gemini</span><span class="ev">39/59 requests, 19/22 notifications; 78 steps identical</span></span></li>
     </ol>
   </div>
 </section>
