@@ -65,6 +65,22 @@ impl Server {
         }
     }
 
+    /// The quote of the `prefer_single_quotes` or `prefer_double_quotes`
+    /// lint of [path] (Dart `CodeStyleOptions._lintQuote`).
+    fn lint_quote(&self, path: &str) -> Option<char> {
+        let collection = self.collection.as_ref()?;
+        let context = collection.context_for(path)?;
+        let options = collection.options_for(context, path);
+        let has = |name: &str| options.lint_rules.iter().any(|r| r == name);
+        if has("prefer_single_quotes") {
+            Some('\'')
+        } else if has("prefer_double_quotes") {
+            Some('"')
+        } else {
+            None
+        }
+    }
+
     /// The code style options of [path] (Dart `CodeStyleOptions`).
     fn code_style(&self, path: &str) -> CodeStyle {
         let Some(collection) = &self.collection else {
@@ -75,14 +91,10 @@ impl Server {
         };
         let options = collection.options_for(context, path);
         let has = |name: &str| options.lint_rules.iter().any(|r| r == name);
-        let quote = if has("prefer_single_quotes") {
-            '\''
-        } else if has("prefer_double_quotes") {
-            '"'
-        } else {
-            '\''
-        };
+        let lint_quote = self.lint_quote(path);
+        let quote = lint_quote.unwrap_or('\'');
         CodeStyle {
+            lint_quote,
             specify_types: has("always_specify_types"),
             make_locals_final: has("prefer_final_locals"),
             quote,
@@ -145,6 +157,40 @@ impl Server {
             None => (None, Vec::new(), Vec::new()),
         };
 
+        // The added files and the files of `discoverAvailableFiles`.
+        let mut added_files: Vec<String> = Vec::new();
+        let mut available_files: Vec<String> = Vec::new();
+        if let Some(collection) = &self.collection {
+            let context = &collection.contexts[context_index];
+            added_files = context
+                .root
+                .analyzed_files()
+                .into_iter()
+                .filter(|f| f.ends_with(".dart") && !self.is_excluded(f))
+                .collect();
+            if let Some(sdk) = context.sdk.as_ref().or(collection.sdk.as_ref()) {
+                available_files.extend(sdk.libraries().iter().filter_map(|l| sdk.map_dart_uri(&l.short_name)));
+            }
+            fn recurse(folder: &str, out: &mut Vec<String>) {
+                let Some(children) = dartr_project::fs::children(folder) else {
+                    return;
+                };
+                for child in children {
+                    match child.kind {
+                        dartr_project::fs::ResourceKind::File => {
+                            if child.path.ends_with(".dart") {
+                                out.push(child.path);
+                            }
+                        }
+                        dartr_project::fs::ResourceKind::Folder => recurse(&child.path, out),
+                    }
+                }
+            }
+            for package in context.packages.packages() {
+                recurse(&package.lib, &mut available_files);
+            }
+        }
+
         // The libraries of the not-imported pass (Dart `knownFiles`).
         let known = if use_not_imported {
             match &self.collection {
@@ -160,16 +206,14 @@ impl Server {
                             eprintln!("KNOWN {}", l.uri);
                         }
                     }
-                    let mut included: Vec<String> = libraries
+                    let included: Vec<String> = libraries
                         .iter()
                         .filter(|l| filter.should_include(l, &root_of))
                         .map(|l| l.uri.clone())
                         .collect();
-                    // Dart `AnalysisDriver._discoverDartCore`: `dart:core` and
-                    // the files it references are known before the analyzed
-                    // files.
+                    // The order of the known files of the Dart driver.
                     let sink = NoopSink;
-                    let core_ctx = Ctx {
+                    let order_ctx = Ctx {
                         world: &world,
                         current: None,
                         local: None,
@@ -177,27 +221,27 @@ impl Server {
                         features: &resolved.library.features,
                         req: &sink,
                     };
-                    let mut front = vec!["dart:core".to_string()];
-                    if let Some(core) = core_ctx.library_by_uri("dart:core") {
-                        let first = core_ctx.get(core).first_fragment();
-                        let f = core_ctx.fragment(first);
-                        let uris = f
-                            .library_exports
-                            .iter()
-                            .map(|e| &e.directive.uri)
-                            .chain(f.library_imports.iter().filter(|i| !i.is_synthetic).map(|i| &i.directive.uri));
-                        for uri in uris {
-                            if let dartr_element::DirectiveUri::Library { library, .. } = uri {
-                                let u = c::elem::library_uri(&core_ctx, *library);
-                                if !front.contains(&u) {
-                                    front.push(u);
-                                }
-                            }
+                    let uri_of_path: std::collections::HashMap<String, String> = libraries
+                        .iter()
+                        .map(|l| (l.path.clone(), l.uri.clone()))
+                        .collect();
+                    let order = c::known::dart_known_order(
+                        &order_ctx,
+                        &c::known::KnownOrderInputs {
+                            added_files: &added_files,
+                            available_files: &available_files,
+                            uri_of_path: &uri_of_path,
+                        },
+                    );
+                    let rank: std::collections::HashMap<&str, usize> =
+                        order.iter().enumerate().map(|(i, u)| (u.as_str(), i)).collect();
+                    let mut ordered = included.clone();
+                    ordered.sort_by_key(|u| rank.get(u.as_str()).copied().unwrap_or(usize::MAX));
+                    if std::env::var_os("DARTR_DEBUG_COMPLETION").is_some() {
+                        for u in &ordered {
+                            eprintln!("ORDER {u}");
                         }
                     }
-                    let mut ordered: Vec<String> = front.into_iter().filter(|u| included.contains(u)).collect();
-                    included.retain(|u| !ordered.contains(u));
-                    ordered.append(&mut included);
                     (world, ordered)
                 }),
                 None => None,
@@ -484,7 +528,9 @@ impl Server {
         }
         let mut edits = Vec::new();
         if !import_uris.is_empty() {
-            edits = import_edits(&unit.ast, unit.unit, &line_info, &import_uris);
+            let content = self.content(&file).unwrap_or_default();
+            let lint_quote = self.lint_quote(&file);
+            edits = c::imports::import_edits(&unit.ast, unit.unit, &line_info, &content, lint_quote, &import_uris);
         }
         let mut detail = item.get("detail").and_then(Value::as_str).map(str::to_string);
         if !edits.is_empty() && !import_uris.is_empty() {
@@ -598,66 +644,6 @@ fn member_children(ctx: &Ctx<'_>, element: ElementId) -> Vec<ElementId> {
     out.extend(data.setters.iter().map(|e| e.raw()));
     out.extend(data.type_params.iter().map(|e| e.raw()));
     out
-}
-
-/// The edits that import [uris] (a simplified Dart
-/// `DartFileEditBuilder.importLibraryElement`): a new import directive in
-/// the sorted position among the existing imports.
-fn import_edits(ast: &Ast, unit: Id<CompilationUnit>, line_info: &dartr_syntax::LineInfo, uris: &[String]) -> Vec<Value> {
-    let mut edits = Vec::new();
-    let imports: Vec<Id<ImportDirective>> = ast
-        .list_raw(ast[unit].directives)
-        .iter()
-        .filter_map(|d| ast.cast::<ImportDirective>(*d))
-        .collect();
-    let group = |uri: &str| -> u8 {
-        if uri.starts_with("dart:") {
-            0
-        } else if uri.starts_with("package:") {
-            1
-        } else {
-            2
-        }
-    };
-    for uri in uris {
-        let text = format!("import '{uri}';");
-        let existing_uri = |i: Id<ImportDirective>| -> String {
-            let u = ast[i].uri.raw();
-            ast.cast::<SimpleStringLiteral>(u)
-                .map(|s| ast[s].value.to_string())
-                .unwrap_or_default()
-        };
-        if imports.is_empty() {
-            let directives = ast.list_raw(ast[unit].directives);
-            if let Some(&last) = directives.last() {
-                let end = ast.end(last);
-                edits.push(json!({"range": to_range(line_info, end, 0), "newText": format!("\n\n{text}")}));
-            } else {
-                edits.push(json!({"range": to_range(line_info, 0, 0), "newText": format!("{text}\n\n")}));
-            }
-            continue;
-        }
-        let key = (group(uri), uri.clone());
-        let before = imports.iter().copied().find(|i| {
-            let u = existing_uri(*i);
-            (group(&u), u) > key
-        });
-        match before {
-            Some(i) => {
-                let offset = ast.offset(i);
-                let u = existing_uri(i);
-                let sep = if group(&u) != group(uri) { "\n\n" } else { "\n" };
-                edits.push(json!({"range": to_range(line_info, offset, 0), "newText": format!("{text}{sep}")}));
-            }
-            None => {
-                let last = *imports.last().unwrap();
-                let u = existing_uri(last);
-                let sep = if group(&u) != group(uri) { "\n\n" } else { "\n" };
-                edits.push(json!({"range": to_range(line_info, ast.end(last), 0), "newText": format!("{sep}{text}")}));
-            }
-        }
-    }
-    edits
 }
 
 /// Dart `_truncateResults`.

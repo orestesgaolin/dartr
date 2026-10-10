@@ -118,10 +118,11 @@ fn add_package_folder_suggestions(out: &mut Out, partial: &str, prefix: &str, fo
 }
 
 /// Dart `_addPackageSuggestions`.
+///
+/// The package map of the source factory of Dart is never null for a
+/// context of the server (a context without a package config has an empty
+/// map), so `package:` is always suggested.
 fn add_package_suggestions(q: &Request<'_, '_>, out: &mut Out, partial: &str) {
-    if q.packages.is_empty() {
-        return;
-    }
     suggest_uri(out, "package:");
     for (name, lib) in &q.packages {
         let prefix = format!("package:{name}/");

@@ -19,6 +19,8 @@ pub mod candidate;
 pub mod declaration;
 pub mod elem;
 pub mod keyword;
+pub mod imports;
+pub mod known;
 pub mod lsp;
 pub mod overrides;
 pub mod pass;
@@ -54,6 +56,9 @@ pub struct CodeStyle {
     pub make_locals_final: bool,
     /// Dart `preferredQuoteForStrings`.
     pub quote: char,
+    /// The quote of the `prefer_single_quotes` or `prefer_double_quotes`
+    /// lint (Dart `CodeStyleOptions._lintQuote`).
+    pub lint_quote: Option<char>,
 }
 
 impl Default for CodeStyle {
@@ -62,6 +67,7 @@ impl Default for CodeStyle {
             specify_types: false,
             make_locals_final: false,
             quote: '\'',
+            lint_quote: None,
         }
     }
 }
@@ -452,6 +458,20 @@ pub fn compute(
     computer.completion_location = collector.completion_location.clone();
     for c in collector.suggestions.iter_mut() {
         c.relevance = computer.compute_relevance(c);
+    }
+    if std::env::var_os("DARTR_DEBUG_COMPLETION").is_some() {
+        let ctx_type = q
+            .context_type
+            .map(|t| lsp::type_display(q.ctx, t))
+            .unwrap_or_default();
+        eprintln!(
+            "COMPLETION location={:?} context_type={ctx_type} containing={:?}",
+            collector.completion_location,
+            ast.kind(q.target.containing_node)
+        );
+        for c in &collector.suggestions {
+            eprintln!("  CAND {} {}", c.completion(q.ctx), c.relevance);
+        }
     }
     let suggestions = std::mem::take(&mut collector.suggestions);
     collector.suggestions = dart_sort_vec(suggestions, |a, b| {
