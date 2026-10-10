@@ -374,3 +374,120 @@ pub fn flutter_wrap_producers(
     }));
     producers
 }
+
+/// Dart `_FlutterBaseWrapBuilder` and its subclasses.
+pub struct WrapBuilder {
+    builder_name: &'static str,
+    extra_named_params: &'static [&'static str],
+    extra_builder_params: &'static [&'static str],
+    kind: &'static FixKind,
+}
+
+impl CorrectionProducer for WrapBuilder {
+    fn fix_kind(&self) -> Option<&'static FixKind> {
+        None
+    }
+
+    fn assist_kind(&self) -> Option<&'static FixKind> {
+        Some(self.kind)
+    }
+
+    fn applicability(&self) -> Applicability {
+        Applicability::SingleLocation
+    }
+
+    fn compute(&mut self, c: &ProducerContext<'_>, builder: &mut ChangeBuilder<'_>) {
+        let ast = c.ast;
+        let Some(widget) = find_widget_expression(c, c.node) else {
+            return;
+        };
+        let ty = super::create::static_type(c, widget);
+        if is_exact_widget_type(c.ctx, ty, "Builder", URI_BASIC) {
+            return;
+        }
+        let widget_src = c.utils.get_node_text(widget);
+        let Some(builder_element) = get_class(c, WIDGETS_URI, self.builder_name) else {
+            return;
+        };
+        let mut params = vec!["context"];
+        params.extend_from_slice(self.extra_builder_params);
+        let range = c.range().node(widget);
+        let widget_offset = ast.offset(widget);
+        let named_params = self.extra_named_params.join(", ");
+        let trailing_commas = c.code_style().add_trailing_commas();
+        builder.add_dart_file_edit(c.path, |b| {
+            b.add_replacement(range.offset, range.length, |e| {
+                e.write_reference(builder_element);
+                e.writeln("(");
+                let indent_old = c.utils.get_line_prefix(widget_offset);
+                let indent_new1 = format!("{indent_old}{}", c.utils.one_indent());
+                let indent_new2 = format!("{indent_old}{}", c.utils.two_indents());
+                if !named_params.is_empty() {
+                    e.write(&indent_new1);
+                    e.write(&format!("{named_params}: "));
+                    e.add_simple_linked_edit("variable", &named_params, None);
+                    e.writeln(",");
+                }
+                e.write(&indent_new1);
+                e.writeln(&format!("builder: ({}) {{", params.join(", ")));
+                let src = c.utils.replace_source_indent(
+                    &widget_src,
+                    &indent_old,
+                    &indent_new2,
+                    false,
+                    false,
+                );
+                e.write(&indent_new2);
+                e.write(&format!("return {src}"));
+                e.writeln(";");
+                e.write(&indent_new1);
+                e.writeln(&format!("}}{}", if trailing_commas { "," } else { "" }));
+                e.write(&indent_old);
+                e.write(")");
+            });
+        });
+    }
+}
+
+/// Dart `FlutterWrapBuilders.producers`.
+pub fn flutter_wrap_builders_producers(
+    c: &ProducerContext<'_>,
+    _workspace: &mut dyn ChangeWorkspace,
+) -> Vec<Box<dyn CorrectionProducer>> {
+    if find_widget_expression(c, c.node).is_none() {
+        return Vec::new();
+    }
+    let make = |builder_name,
+                extra_named_params,
+                extra_builder_params,
+                kind|
+     -> Box<dyn CorrectionProducer> {
+        Box::new(WrapBuilder {
+            builder_name,
+            extra_named_params,
+            extra_builder_params,
+            kind,
+        })
+    };
+    vec![
+        make("Builder", &[], &[], &a::FLUTTER_WRAP_BUILDER),
+        make(
+            "ValueListenableBuilder",
+            &["valueListenable"],
+            &["value", "child"],
+            &a::FLUTTER_WRAP_VALUE_LISTENABLE_BUILDER,
+        ),
+        make(
+            "StreamBuilder",
+            &["stream"],
+            &["asyncSnapshot"],
+            &a::FLUTTER_WRAP_STREAM_BUILDER,
+        ),
+        make(
+            "FutureBuilder",
+            &["future"],
+            &["asyncSnapshot"],
+            &a::FLUTTER_WRAP_FUTURE_BUILDER,
+        ),
+    ]
+}

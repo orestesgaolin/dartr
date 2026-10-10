@@ -410,10 +410,14 @@ assist!(ImportAddShow, a::IMPORT_ADD_SHOW, |c, builder| {
             || ast.is::<FunctionExpressionInvocation>(n)
             || ast.is::<IndexExpression>(n)
             || ast.is::<PatternField>(n)
-            || ast.is::<PrefixedIdentifier>(n)
             || ast.is::<PrefixExpression>(n)
         {
             add_extension(&mut names, locator.element(n));
+        } else if let Some(p) = ast.cast::<PrefixedIdentifier>(n) {
+            let element = locator
+                .element(n)
+                .or_else(|| locator.write_or_read_element(ast[p].identifier));
+            add_extension(&mut names, element);
         } else if let Some(m) = ast.cast::<MethodInvocation>(n) {
             add_extension(&mut names, locator.element(ast[m].method_name));
         } else if let Some(p) = ast.cast::<PropertyAccess>(n) {

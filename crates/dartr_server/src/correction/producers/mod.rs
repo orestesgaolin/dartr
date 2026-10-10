@@ -9,6 +9,7 @@ pub mod create_types;
 pub mod data_driven;
 pub mod dead_code;
 pub mod extensions;
+pub mod flutter_edit;
 pub mod flutter_wrap;
 pub mod import_library;
 pub mod members;
@@ -132,6 +133,12 @@ pub fn generator(name: &str) -> Option<ProducerGenerator> {
         "ImportAddShow.new" => |_: C| boxed(more::ImportAddShow),
         "CreateExtensionSetter.new" => |_: C| boxed(extensions::CreateExtensionSetter::new()),
         "CreateMissingOverrides.new" => |_: C| boxed(more::CreateMissingOverrides::new()),
+        "FlutterMoveUp.new" => |_: C| boxed(flutter_edit::FlutterMoveUp),
+        "FlutterMoveDown.new" => |_: C| boxed(flutter_edit::FlutterMoveDown),
+        "FlutterConvertToChildren.new" => |_: C| boxed(flutter_edit::FlutterConvertToChildren),
+        "FlutterSwapWithChild.new" => |_: C| boxed(flutter_edit::FlutterSwapWithChild),
+        "FlutterSwapWithParent.new" => |_: C| boxed(flutter_edit::FlutterSwapWithParent),
+        "FlutterRemoveWidget.new" => |_: C| boxed(flutter_edit::FlutterRemoveWidget),
         "MakeFinal.new" => |_: C| boxed(MakeFinal),
         "MakeVariableNullable.new" => |_: C| boxed(MakeVariableNullable::new()),
         "RemoveAnnotation.new" => |_: C| boxed(small::RemoveAnnotation::new()),
@@ -184,6 +191,7 @@ pub fn multi_generator(name: &str) -> Option<MultiProducerGenerator> {
         "CreateMixin.new" => return Some(create_types::create_mixin_producers),
         "DataDriven.new" => return Some(data_driven::data_driven_producers),
         "FlutterWrap.new" => return Some(flutter_wrap::flutter_wrap_producers),
+        "FlutterWrapBuilders.new" => return Some(flutter_wrap::flutter_wrap_builders_producers),
         _ => {}
     }
     let g: MultiProducerGenerator = match ImportKind::from_name(name)? {
