@@ -94,10 +94,13 @@ impl Engine<'_> {
         for e in self.getter_elements(getter) {
             // `_updateElementDeclaration`.
             for (path, name_offset, name_length) in self.fragment_names(&e) {
-                let Some(declaration) = self.declaration_node(&path, e.lib.context, name_offset) else {
+                let Some(declaration) = self.declaration_node(&path, e.lib.context, name_offset)
+                else {
                     break;
                 };
-                let resolved = self.require_resolved_unit_in(&path, Some(e.lib.context)).ok();
+                let resolved = self
+                    .require_resolved_unit_in(&path, Some(e.lib.context))
+                    .ok();
                 let Some(resolved) = resolved else { break };
                 let ast = &resolved.unit().ast;
                 let keyword = if let Some(m) = ast.cast::<MethodDeclaration>(declaration) {
@@ -119,7 +122,12 @@ impl Engine<'_> {
                 if reference.kind == RelationKind::IsReferencedByPatternField {
                     continue;
                 }
-                acc.add(&reference.path, reference.offset + reference.length, 0, "()");
+                acc.add(
+                    &reference.path,
+                    reference.offset + reference.length,
+                    0,
+                    "()",
+                );
             }
         }
         acc.into_change("Convert Getter To Method".to_string())
@@ -150,7 +158,9 @@ impl Engine<'_> {
             ));
         }
         if has_parameters {
-            return RefactoringStatus::fatal("Only methods without parameters can be converted to getters.");
+            return RefactoringStatus::fatal(
+                "Only methods without parameters can be converted to getters.",
+            );
         }
         RefactoringStatus::new()
     }
@@ -169,10 +179,14 @@ impl Engine<'_> {
         for e in elements {
             // `_updateElementDeclaration`.
             for (path, name_offset, _) in self.fragment_names(&e) {
-                let Some(declaration) = self.declaration_node(&path, e.lib.context, name_offset) else {
+                let Some(declaration) = self.declaration_node(&path, e.lib.context, name_offset)
+                else {
                     break;
                 };
-                let Some(resolved) = self.require_resolved_unit_in(&path, Some(e.lib.context)).ok() else {
+                let Some(resolved) = self
+                    .require_resolved_unit_in(&path, Some(e.lib.context))
+                    .ok()
+                else {
                     break;
                 };
                 let ast = &resolved.unit().ast;
@@ -190,11 +204,16 @@ impl Engine<'_> {
             // `_updateElementReferences`.
             let matches = self.search_references(&e);
             for reference in source_references(&matches) {
-                let Some(ref_element) = self.match_element(&reference) else { continue };
+                let Some(ref_element) = self.match_element(&reference) else {
+                    continue;
+                };
                 let Some(path) = ref_element.with(|ctx| element_path(ctx, ref_element.id)) else {
                     continue;
                 };
-                let Some(resolved) = self.require_resolved_unit_in(&path, Some(reference.context)).ok() else {
+                let Some(resolved) = self
+                    .require_resolved_unit_in(&path, Some(reference.context))
+                    .ok()
+                else {
                     continue;
                 };
                 let unit = resolved.unit();
@@ -219,7 +238,9 @@ impl Engine<'_> {
             let mut out = Vec::new();
             let mut f = ctx.element_data(e.id).map(|d| d.first_fragment);
             while let Some(id) = f {
-                let Some(data) = ctx.fragment_data(id) else { break };
+                let Some(data) = ctx.fragment_data(id) else {
+                    break;
+                };
                 let path = crate::navigation::fragment_path(ctx, id);
                 let length = data
                     .name
@@ -250,7 +271,11 @@ impl Engine<'_> {
     }
 
     /// Dart `nodeCovering(offset)?.getElement()` at [offset] of [resolved].
-    pub fn element_at(&mut self, resolved: &crate::server::ResolvedUnitRef, offset: u32) -> Option<SElem> {
+    pub fn element_at(
+        &mut self,
+        resolved: &crate::server::ResolvedUnitRef,
+        offset: u32,
+    ) -> Option<SElem> {
         let sink = NoopSink;
         let ctx = resolved.ctx(&sink);
         let unit = resolved.unit();
@@ -268,4 +293,3 @@ impl Engine<'_> {
         })
     }
 }
-

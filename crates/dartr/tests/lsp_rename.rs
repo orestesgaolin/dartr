@@ -64,7 +64,14 @@ fn position_of(text: &str, offset: usize) -> (u32, u32) {
 
 /// The probe at the [occurrence]-th match of [marker] in [file], [delta]
 /// UTF-16 units into the marker.
-fn probe(root: &Path, file: &str, marker: &str, occurrence: usize, delta: usize, new_name: &str) -> Probe {
+fn probe(
+    root: &Path,
+    file: &str,
+    marker: &str,
+    occurrence: usize,
+    delta: usize,
+    new_name: &str,
+) -> Probe {
     let path = root.join(file);
     let text = std::fs::read_to_string(&path).unwrap();
     let byte = text
@@ -93,7 +100,10 @@ fn write_project(name: &str) -> PathBuf {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, content).unwrap();
     };
-    write("app/pubspec.yaml", "name: app\nenvironment:\n  sdk: ^3.9.0\n");
+    write(
+        "app/pubspec.yaml",
+        "name: app\nenvironment:\n  sdk: ^3.9.0\n",
+    );
     write(
         "app/lib/shapes.dart",
         r#"/// Shapes.
@@ -349,7 +359,9 @@ fn strip(mut v: Value) -> Value {
 fn run_or_reuse(program: &str, label: &str, root: &Path, probes: &[Probe]) -> Vec<Value> {
     let dump = std::env::var_os("DARTR_LSP_RENAME_DUMP").map(PathBuf::from);
     let server = if program == "dart" { "dart" } else { "dartr" };
-    let path = dump.as_ref().map(|d| d.join(format!("{label}.{server}.json")));
+    let path = dump
+        .as_ref()
+        .map(|d| d.join(format!("{label}.{server}.json")));
     if server == "dart" && std::env::var_os("DARTR_LSP_RENAME_REUSE_DART").is_some() {
         if let Some(text) = path.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
             let value: Value = serde_json::from_str(&text).unwrap();
@@ -359,7 +371,11 @@ fn run_or_reuse(program: &str, label: &str, root: &Path, probes: &[Probe]) -> Ve
     let out = run(program, root, probes);
     if let Some(path) = path {
         let _ = std::fs::create_dir_all(path.parent().unwrap());
-        std::fs::write(path, serde_json::to_string_pretty(&Value::Array(out.clone())).unwrap()).unwrap();
+        std::fs::write(
+            path,
+            serde_json::to_string_pretty(&Value::Array(out.clone())).unwrap(),
+        )
+        .unwrap();
     }
     out
 }
@@ -404,7 +420,11 @@ fn compare(title: &str, dart: &[Value], dartr: &[Value]) {
                 if d[key] != r[key] && !(key == "rename" && ru_ok) {
                     let ds = d[key].to_string();
                     let rs = r[key].to_string();
-                    eprintln!("  {key}\n    dart:  {}\n    dartr: {}", &ds[..ds.len().min(900)], &rs[..rs.len().min(900)]);
+                    eprintln!(
+                        "  {key}\n    dart:  {}\n    dartr: {}",
+                        &ds[..ds.len().min(900)],
+                        &rs[..rs.len().min(900)]
+                    );
                 }
             }
         }
@@ -443,7 +463,9 @@ fn corpus_probes(path: &Path, every: usize, counter: &mut usize) -> Vec<Probe> {
         if c.is_ascii_alphabetic() || c == '_' {
             let mut j = i;
             let mut word = String::new();
-            while j < chars.len() && (chars[j].is_ascii_alphanumeric() || chars[j] == '_' || chars[j] == '$') {
+            while j < chars.len()
+                && (chars[j].is_ascii_alphanumeric() || chars[j] == '_' || chars[j] == '$')
+            {
                 word.push(chars[j]);
                 units += chars[j].len_utf16();
                 j += 1;
@@ -457,7 +479,12 @@ fn corpus_probes(path: &Path, every: usize, counter: &mut usize) -> Vec<Probe> {
                     line,
                     column,
                     new_name: new_name.clone(),
-                    label: format!("{}:{}:{} {word} -> {new_name}", path.display(), line, column),
+                    label: format!(
+                        "{}:{}:{} {word} -> {new_name}",
+                        path.display(),
+                        line,
+                        column
+                    ),
                 });
             }
             i = j;
@@ -473,7 +500,9 @@ fn dart_files(root: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
         let mut entries: Vec<_> = entries.flatten().map(|e| e.path()).collect();
         entries.sort();
         for p in entries {
@@ -504,14 +533,21 @@ fn lsp_rename_corpus() {
     let mut files = dart_files(if lib.is_dir() { &lib } else { &root });
     if files.len() > max_files {
         let step = files.len() / max_files;
-        files = files.into_iter().step_by(step.max(1)).take(max_files).collect();
+        files = files
+            .into_iter()
+            .step_by(step.max(1))
+            .take(max_files)
+            .collect();
     }
     let mut counter = 0;
     let probes: Vec<Probe> = files
         .iter()
         .flat_map(|f| corpus_probes(f, every, &mut counter))
         .collect();
-    let label = format!("{}-{every}-{max_files}", root.file_name().unwrap().to_string_lossy());
+    let label = format!(
+        "{}-{every}-{max_files}",
+        root.file_name().unwrap().to_string_lossy()
+    );
     let dart = run_or_reuse("dart", &label, &root, &probes);
     let dartr = run_or_reuse(dartr_bin(), &label, &root, &probes);
     compare(&label, &dart, &dartr);

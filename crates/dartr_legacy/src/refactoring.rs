@@ -376,7 +376,6 @@ fn is_valid_identifier(name: &str) -> bool {
     chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
 }
 
-
 #[allow(clippy::too_many_arguments)]
 pub fn get_refactoring(
     resolved: Option<ResolvedUnitRef>,
@@ -488,13 +487,20 @@ fn compute_rename_refactoring(
         return Ok(response);
     }
     response.feedback = serde_json::to_value(protocol::RENAMEFeedback {
-        offset: if name_offset == u32::MAX { -1 } else { name_offset as i64 },
+        offset: if name_offset == u32::MAX {
+            -1
+        } else {
+            name_offset as i64
+        },
         length: name_length as i64,
         element_kind_name: engine.element_kind_name(&rename),
         old_name: rename.old_name.clone(),
     })
     .ok();
-    let Some(new_name) = options.and_then(|o| o.get("newName")).and_then(Value::as_str) else {
+    let Some(new_name) = options
+        .and_then(|o| o.get("newName"))
+        .and_then(Value::as_str)
+    else {
         return Ok(response);
     };
     rename.new_name = new_name.to_string();

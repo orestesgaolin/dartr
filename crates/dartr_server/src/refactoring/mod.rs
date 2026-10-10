@@ -4,8 +4,8 @@
 //! a refactoring and the naming conventions. The refactorings themselves
 //! are in [`crate::server::rename`] and [`crate::server::refactor`].
 
-pub mod host;
 pub mod convert;
+pub mod host;
 pub mod naming;
 pub mod rename;
 pub mod status;
@@ -107,7 +107,8 @@ impl Engine<'_> {
     /// The getter at [offset] (Dart `nodeCovering(offset)?.getElement()` is
     /// a `GetterElement`).
     pub fn getter_at(&mut self, resolved: &ResolvedUnitRef, offset: u32) -> Option<SElem> {
-        self.element_at(resolved, offset).filter(|e| e.id.tag() == dartr_element::Tag::Getter)
+        self.element_at(resolved, offset)
+            .filter(|e| e.id.tag() == dartr_element::Tag::Getter)
     }
 
     /// The executable at [offset] (an `ExecutableElement`).

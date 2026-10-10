@@ -139,7 +139,11 @@ fn validate_identifier(
     RefactoringStatus::new()
 }
 
-fn validate_lower_camel_case(identifier: &str, desc: &str, allow_built_in: bool) -> RefactoringStatus {
+fn validate_lower_camel_case(
+    identifier: &str,
+    desc: &str,
+    allow_built_in: bool,
+) -> RefactoringStatus {
     let desc = format!("{desc} name");
     let status = validate_identifier(
         identifier,
@@ -176,7 +180,9 @@ fn validate_upper_camel_case(identifier: &str, desc: &str) -> RefactoringStatus 
         return RefactoringStatus::new();
     }
     if !(b'A' as u16..=b'Z' as u16).contains(&first) {
-        return RefactoringStatus::warning(format!("{desc} should start with an uppercase letter."));
+        return RefactoringStatus::warning(format!(
+            "{desc} should start with an uppercase letter."
+        ));
     }
     RefactoringStatus::new()
 }

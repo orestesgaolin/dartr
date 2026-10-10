@@ -87,7 +87,11 @@ impl Server {
         perform: bool,
         progress_token: Option<Value>,
     ) -> Option<ErrorOr<Value>> {
-        let command_name = if perform { "Perform Refactor" } else { "Validate Refactor" };
+        let command_name = if perform {
+            "Perform Refactor"
+        } else {
+            "Validate Refactor"
+        };
         let kind = parameters.get("kind").and_then(Value::as_str);
         let path = parameters.get("path").and_then(Value::as_str);
         let doc_version = parameters.get("docVersion");
@@ -96,7 +100,8 @@ impl Server {
         let options = parameters.get("options");
         let valid_version = doc_version.is_none_or(|v| v.is_null() || v.is_i64());
         let valid_options = options.is_none_or(|o| o.is_null() || o.is_object());
-        let (Some(kind), Some(path), Some(offset), Some(length)) = (kind, path, offset, length) else {
+        let (Some(kind), Some(path), Some(offset), Some(length)) = (kind, path, offset, length)
+        else {
             return Some(Err(invalid_arguments(command_name)));
         };
         if !valid_version || !valid_options {
@@ -113,14 +118,18 @@ impl Server {
             let mut engine = Engine { host: self };
             let offset = offset as u32;
             match RefactoringKind::by_name(&kind) {
-                Some(RefactoringKind::ConvertGetterToMethod) => match engine.getter_at(&resolved, offset) {
-                    Some(g) => Ok(Refactoring::ConvertGetterToMethod(g)),
-                    None => Err(no_longer_valid(command_name, &kind)),
-                },
-                Some(RefactoringKind::ConvertMethodToGetter) => match engine.executable_at(&resolved, offset) {
-                    Some(e) => Ok(Refactoring::ConvertMethodToGetter(e)),
-                    None => Err(no_longer_valid(command_name, &kind)),
-                },
+                Some(RefactoringKind::ConvertGetterToMethod) => {
+                    match engine.getter_at(&resolved, offset) {
+                        Some(g) => Ok(Refactoring::ConvertGetterToMethod(g)),
+                        None => Err(no_longer_valid(command_name, &kind)),
+                    }
+                }
+                Some(RefactoringKind::ConvertMethodToGetter) => {
+                    match engine.executable_at(&resolved, offset) {
+                        Some(e) => Ok(Refactoring::ConvertMethodToGetter(e)),
+                        None => Err(no_longer_valid(command_name, &kind)),
+                    }
+                }
                 _ => Err(ResponseError::new(
                     codes::INVALID_COMMAND_ARGUMENTS,
                     format!("Unknown RefactoringKind {kind} was supplied to {command_name}"),
@@ -134,13 +143,19 @@ impl Server {
         };
         let progress = self.begin_command_progress(
             progress_token,
-            if perform { "Refactoring…" } else { "Preparing Refactor…" },
+            if perform {
+                "Refactoring…"
+            } else {
+                "Preparing Refactor…"
+            },
         );
         if !perform {
             let status = Engine { host: self }.initial_conditions(&refactoring);
             self.end_command_progress(progress);
             if status.has_fatal_error() {
-                return Some(Ok(json!({"valid": false, "message": status.message().unwrap_or("")})));
+                return Some(Ok(
+                    json!({"valid": false, "message": status.message().unwrap_or("")}),
+                ));
             }
             return Some(Ok(json!({"valid": true})));
         }
@@ -208,10 +223,20 @@ impl Server {
 
     /// The answer of the client to the prompt of a refactoring with
     /// problems.
-    pub(crate) fn refactor_prompt_response(&mut self, request_id: &Value, edit: Value, message: &Value) {
-        let choice = message.pointer("/result/title").and_then(Value::as_str).unwrap_or("");
+    pub(crate) fn refactor_prompt_response(
+        &mut self,
+        request_id: &Value,
+        edit: Value,
+        message: &Value,
+    ) {
+        let choice = message
+            .pointer("/result/title")
+            .and_then(Value::as_str)
+            .unwrap_or("");
         if choice == REFACTOR_ANYWAY {
-            if let Some(result) = self.send_workspace_edit_to_client(request_id, "Perform Refactor", edit) {
+            if let Some(result) =
+                self.send_workspace_edit_to_client(request_id, "Perform Refactor", edit)
+            {
                 self.send_response(request_id, result);
             }
         } else {
@@ -258,7 +283,10 @@ impl Server {
 
     fn end_command_progress(&mut self, token: Option<Value>) {
         if let Some(token) = token {
-            self.send_notification("$/progress", json!({"token": token, "value": {"kind": "end"}}));
+            self.send_notification(
+                "$/progress",
+                json!({"token": token, "value": {"kind": "end"}}),
+            );
         }
     }
 }

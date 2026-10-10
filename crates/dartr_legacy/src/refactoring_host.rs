@@ -46,7 +46,11 @@ impl RefactoringHost for SearchEngine<'_> {
         Some(self.collection)
     }
 
-    fn resolved_unit_in(&mut self, path: &str, context: Option<usize>) -> Option<srv::ResolvedUnitRef> {
+    fn resolved_unit_in(
+        &mut self,
+        path: &str,
+        context: Option<usize>,
+    ) -> Option<srv::ResolvedUnitRef> {
         let r = SearchEngine::resolved_unit_in(self, path, context)?;
         Some(srv::ResolvedUnitRef {
             library: r.library,
@@ -61,9 +65,15 @@ impl RefactoringHost for SearchEngine<'_> {
             .collect()
     }
 
-    fn hierarchy_members_and_parameters(&mut self, member: &srv::SElem) -> (Vec<srv::SElem>, Vec<srv::SElem>) {
+    fn hierarchy_members_and_parameters(
+        &mut self,
+        member: &srv::SElem,
+    ) -> (Vec<srv::SElem>, Vec<srv::SElem>) {
         let (m, p) = SearchEngine::hierarchy_members_and_parameters(self, &to_legacy(member));
-        (m.iter().map(to_server).collect(), p.iter().map(to_server).collect())
+        (
+            m.iter().map(to_server).collect(),
+            p.iter().map(to_server).collect(),
+        )
     }
 
     fn hierarchy_named_parameters(&mut self, parameter: &srv::SElem) -> Vec<srv::SElem> {
@@ -73,7 +83,12 @@ impl RefactoringHost for SearchEngine<'_> {
             .collect()
     }
 
-    fn append_all_subtypes(&mut self, class: &srv::SElem, all: &mut Vec<srv::SElem>, keys: &mut Vec<(usize, ElementKey)>) {
+    fn append_all_subtypes(
+        &mut self,
+        class: &srv::SElem,
+        all: &mut Vec<srv::SElem>,
+        keys: &mut Vec<(usize, ElementKey)>,
+    ) {
         let mut legacy: Vec<SElem> = Vec::new();
         SearchEngine::append_all_subtypes(self, &to_legacy(class), &mut legacy, keys);
         all.extend(legacy.iter().map(to_server));

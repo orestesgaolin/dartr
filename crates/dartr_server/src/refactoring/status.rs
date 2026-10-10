@@ -92,7 +92,9 @@ impl RefactoringStatus {
 
     /// Dart `problem`: the first problem with the severity of the status.
     pub fn problem(&self) -> Option<&Problem> {
-        self.problems.iter().find(|p| Some(p.severity) == self.severity)
+        self.problems
+            .iter()
+            .find(|p| Some(p.severity) == self.severity)
     }
 
     /// Dart `message`.

@@ -43,7 +43,12 @@ impl RefactoringHost for Server {
         Server::hierarchy_named_parameters(self, parameter)
     }
 
-    fn append_all_subtypes(&mut self, class: &SElem, all: &mut Vec<SElem>, keys: &mut Vec<(usize, ElementKey)>) {
+    fn append_all_subtypes(
+        &mut self,
+        class: &SElem,
+        all: &mut Vec<SElem>,
+        keys: &mut Vec<(usize, ElementKey)>,
+    ) {
         Server::append_all_subtypes(self, class, all, keys)
     }
 
@@ -56,7 +61,9 @@ impl RefactoringHost for Server {
     }
 
     fn with_change_workspace(&mut self, f: &mut dyn FnMut(&mut dyn ChangeWorkspace)) {
-        let Some(collection) = self.collection.as_ref() else { return };
+        let Some(collection) = self.collection.as_ref() else {
+            return;
+        };
         let mut workspace = ServerWorkspace {
             session: &mut self.session,
             collection,
@@ -80,7 +87,8 @@ impl Server {
         let line_info = resolved.line_info().clone();
         let offset = self.position_offset(&line_info, params)?;
         let mut engine = Engine { host: self };
-        let Some((target, name_offset, name_length)) = engine.element_to_rename(&resolved, offset) else {
+        let Some((target, name_offset, name_length)) = engine.element_to_rename(&resolved, offset)
+        else {
             return Ok(Value::Null);
         };
         let Some(mut rename) = engine.create_rename(&resolved, target) else {
@@ -93,7 +101,11 @@ impl Server {
                 status.message().unwrap_or("").to_string(),
             ));
         }
-        let start = if name_offset == u32::MAX { offset } else { name_offset };
+        let start = if name_offset == u32::MAX {
+            offset
+        } else {
+            name_offset
+        };
         Ok(json!({
             "range": mapping::to_range(&line_info, start, name_length),
             "placeholder": rename.old_name,
@@ -131,7 +143,10 @@ impl Server {
             return Ok(Some(Value::Null));
         };
         let not_valid = |s: &RefactoringStatus| {
-            ResponseError::new(codes::RENAME_NOT_VALID, s.message().unwrap_or("").to_string())
+            ResponseError::new(
+                codes::RENAME_NOT_VALID,
+                s.message().unwrap_or("").to_string(),
+            )
         };
         let initial = engine.check_initial_conditions(&mut rename);
         if initial.has_fatal_error() {
@@ -149,7 +164,8 @@ impl Server {
         let change = engine.create_change(&mut rename);
         let edit = self.create_workspace_edit(&change, false, &path, &line_info);
         if final_status.has_error() || final_status.has_warning() {
-            if !self.client_flag("/window/showMessage/messageActionItem/additionalPropertiesSupport")
+            if !self
+                .client_flag("/window/showMessage/messageActionItem/additionalPropertiesSupport")
                 && self.client.raw.pointer("/window/showMessage").is_none()
             {
                 return Err(not_valid(&final_status));
@@ -172,7 +188,12 @@ impl Server {
     }
 
     /// The answer of the client to the prompt of a rename with warnings.
-    pub(crate) fn rename_prompt_response(&mut self, request_id: &Value, edit: Value, message: &Value) {
+    pub(crate) fn rename_prompt_response(
+        &mut self,
+        request_id: &Value,
+        edit: Value,
+        message: &Value,
+    ) {
         let choice = message
             .pointer("/result/title")
             .and_then(Value::as_str)
@@ -185,5 +206,4 @@ impl Server {
         };
         self.send_response(request_id, Ok(result));
     }
-
 }

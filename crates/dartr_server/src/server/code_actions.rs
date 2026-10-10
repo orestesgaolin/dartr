@@ -970,7 +970,12 @@ impl Server {
                 json!({})
             };
             let progress_token = params.get("workDoneToken").cloned();
-            return self.refactor_command(id, &parameters, command == commands::PERFORM_REFACTOR, progress_token);
+            return self.refactor_command(
+                id,
+                &parameters,
+                command == commands::PERFORM_REFACTOR,
+                progress_token,
+            );
         }
         let parameters = if arguments.is_empty() {
             json!({})

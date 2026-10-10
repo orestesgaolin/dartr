@@ -368,10 +368,18 @@ pub fn server_capabilities(client: &ClientCapabilities, config: &LspClientConfig
     }
     // Dart `RenameRegistrations.staticOptions`.
     if !client.text_document_dynamic("rename") {
-        let validation = client.raw.pointer("/textDocument/rename/prepareSupport").and_then(Value::as_bool).unwrap_or(false);
+        let validation = client
+            .raw
+            .pointer("/textDocument/rename/prepareSupport")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         c.insert(
             "renameProvider".into(),
-            if validation { json!({"prepareProvider": true}) } else { json!(true) },
+            if validation {
+                json!({"prepareProvider": true})
+            } else {
+                json!(true)
+            },
         );
     }
     if !client.text_document_dynamic("synchronization") {
