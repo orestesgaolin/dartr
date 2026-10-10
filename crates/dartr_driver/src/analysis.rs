@@ -227,8 +227,8 @@ impl Driver {
             features: &features,
             req: &sink,
         };
-        let mut directive_diagnostics =
-            crate::directives::directive_diagnostics(&self.fs, &ctx, library, file);
+        let (mut directive_diagnostics, mut resolved_uris) =
+            crate::directives::resolve_library_directives(&self.fs, &ctx, library, file);
         let mut units = Vec::new();
         for fragment in library_fragments(&ctx, library) {
             let source = &ctx.fragment(fragment).source;
@@ -244,6 +244,7 @@ impl Driver {
                 directive_diagnostics: directive_diagnostics
                     .shift_remove(&unit_file)
                     .unwrap_or_default(),
+                resolved_uris: resolved_uris.shift_remove(&unit_file).unwrap_or_default(),
             });
         }
         Some((library, units))

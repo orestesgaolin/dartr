@@ -657,3 +657,18 @@ fn analyze_parity_driver_pending_verifiers() {
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
+
+/// Non-AST context lint rules (`avoid_web_libraries_in_flutter`,
+/// `conditional_uri_does_not_exist`, `depend_on_referenced_packages`,
+/// `remove_deprecations_in_breaking_versions`), positive and negative
+/// fixture projects.
+#[test]
+fn analyze_parity_lints_ext() {
+    if !dart_available() {
+        eprintln!("skipped: dart 3.13.3 is not on PATH");
+        return;
+    }
+    let fixtures =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/analyze_driver/lints_ext");
+    check_fixture_projects(&fixtures, "lints_ext");
+}

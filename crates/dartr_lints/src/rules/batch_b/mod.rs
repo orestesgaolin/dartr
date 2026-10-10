@@ -114,4 +114,8 @@ rules!(
     use_declaring_parameters,
     use_build_context_synchronously,
     unnecessary_ignore,
+    avoid_web_libraries_in_flutter,
+    conditional_uri_does_not_exist,
+    depend_on_referenced_packages,
+    remove_deprecations_in_breaking_versions,
 );

@@ -1,0 +1,1 @@
+int selfVal = 0;

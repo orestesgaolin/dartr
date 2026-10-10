@@ -11,8 +11,8 @@
 //! each unit ([`dartr_resolver::library_analyzer::UnitInput`]).
 
 use dartr_ast::{
-    Ast, CompilationUnit, ExportDirective, Id, ImportDirective, LibraryDirective, PartDirective,
-    StringLiteral,
+    Ast, CompilationUnit, Configuration, ExportDirective, Id, ImportDirective, LibraryDirective,
+    NodeList, NodeMap, PartDirective, StringLiteral,
 };
 use dartr_diagnostics::{Diagnostic, LocatableDiagnostic, diag};
 use dartr_element::{Ctx, EId, FId, LibraryElement, LibraryFragment};
@@ -36,6 +36,13 @@ pub fn is_generated(path: &str) -> bool {
     SUFFIXES.iter().any(|s| path.ends_with(s))
 }
 
+/// The directive diagnostics and `Configuration.resolvedUri` maps of the
+/// library [library_file] (linked as [library]), by unit file.
+pub type ResolvedDirectives = (
+    IndexMap<FileId, Vec<Diagnostic>>,
+    IndexMap<FileId, NodeMap<dartr_element::DirectiveUri>>,
+);
+
 /// The directive diagnostics of the library [library_file] (linked as
 /// [library]), by unit file. Dart `_resolveDirectives` from the defining
 /// unit, recursively into the parts.
@@ -45,6 +52,17 @@ pub fn directive_diagnostics(
     library: EId<LibraryElement>,
     library_file: FileId,
 ) -> IndexMap<FileId, Vec<Diagnostic>> {
+    resolve_library_directives(fs, ctx, library, library_file).0
+}
+
+/// Dart `LibraryAnalyzer._resolveDirectives`: computes both the directive URI
+/// diagnostics and the `Configuration.resolvedUri` side table for each unit.
+pub fn resolve_library_directives(
+    fs: &FileSystemState,
+    ctx: &Ctx<'_>,
+    library: EId<LibraryElement>,
+    library_file: FileId,
+) -> ResolvedDirectives {
     let mut resolver = DirectivesResolver {
         fs,
         ctx,
@@ -52,10 +70,11 @@ pub fn directive_diagnostics(
         library_file,
         library_files: IndexSet::new(),
         result: IndexMap::new(),
+        resolved_uris: IndexMap::new(),
     };
     let first = ctx.get(library).first_fragment();
     resolver.resolve_directives(library_file, library_file, first);
-    resolver.result
+    (resolver.result, resolver.resolved_uris)
 }
 
 struct DirectivesResolver<'a, 'c> {
@@ -66,6 +85,7 @@ struct DirectivesResolver<'a, 'c> {
     /// Dart `_libraryFiles`: the files of the library parsed so far.
     library_files: IndexSet<FileId>,
     result: IndexMap<FileId, Vec<Diagnostic>>,
+    resolved_uris: IndexMap<FileId, NodeMap<dartr_element::DirectiveUri>>,
 }
 
 impl DirectivesResolver<'_, '_> {
@@ -102,12 +122,24 @@ impl DirectivesResolver<'_, '_> {
                 let index = library_export_index;
                 library_export_index += 1;
                 if let Some(state) = content.library_exports.get(index) {
+                    self.resolve_uri_configurations(
+                        file,
+                        ast,
+                        ast[d].configurations,
+                        &state.uris.configurations,
+                    );
                     self.resolve_library_export_directive(file, ast, ast[d].uri, state);
                 }
             } else if let Some(d) = ast.cast::<ImportDirective>(directive) {
                 let index = library_import_index;
                 library_import_index += 1;
                 if let Some(state) = content.library_imports.get(index) {
+                    self.resolve_uri_configurations(
+                        file,
+                        ast,
+                        ast[d].configurations,
+                        &state.uris.configurations,
+                    );
                     self.report_import_directive_errors(file, ast, ast[d].uri, state);
                 }
             } else if let Some(d) = ast.cast::<LibraryDirective>(directive) {
@@ -135,6 +167,63 @@ impl DirectivesResolver<'_, '_> {
                 let uri = doc_ast[doc_import.import].uri;
                 self.report_import_directive_errors(file, doc_ast, uri, state);
             }
+        }
+    }
+
+    /// Dart `_resolveUriConfigurations`.
+    fn resolve_uri_configurations(
+        &mut self,
+        file: FileId,
+        ast: &Ast,
+        configurations: NodeList<Configuration>,
+        uris: &[DirectiveUri],
+    ) {
+        if configurations.is_empty() {
+            return;
+        }
+        let resolved: Vec<_> = ast
+            .list(configurations)
+            .iter()
+            .zip(uris)
+            .map(|(&node, uri)| (node.raw(), self.as_directive_uri(uri)))
+            .collect();
+        let map = self.resolved_uris.entry(file).or_default();
+        for (node, uri) in resolved {
+            map.insert(node, uri);
+        }
+    }
+
+    /// Dart `file_state.DirectiveUri.asDirectiveUri`.
+    fn as_directive_uri(&self, uri: &DirectiveUri) -> dartr_element::DirectiveUri {
+        match uri {
+            DirectiveUri::WithFile {
+                relative_uri_str,
+                relative_uri,
+                file,
+            } => {
+                let f = self.fs.file(*file);
+                dartr_element::DirectiveUri::Source {
+                    relative_uri_string: relative_uri_str.clone(),
+                    relative_uri: relative_uri.clone(),
+                    source: dartr_element::SourceRef {
+                        path: f.path.clone(),
+                        uri: f.uri_str.clone(),
+                    },
+                }
+            }
+            DirectiveUri::WithUri {
+                relative_uri_str,
+                relative_uri,
+            } => dartr_element::DirectiveUri::RelativeUri {
+                relative_uri_string: relative_uri_str.clone(),
+                relative_uri: relative_uri.clone(),
+            },
+            DirectiveUri::WithString { relative_uri_str } => {
+                dartr_element::DirectiveUri::RelativeUriString {
+                    relative_uri_string: relative_uri_str.clone(),
+                }
+            }
+            DirectiveUri::WithoutString => dartr_element::DirectiveUri::None,
         }
     }
 
