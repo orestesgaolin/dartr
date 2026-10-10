@@ -283,7 +283,58 @@ struct Fixer {
     overlays: HashMap<String, Document>,
 }
 
+/// Dart `BulkFixProcessor._computeFixes` code check: the message for the
+/// codes that the analyzer does not define.
+pub fn undefined_codes_message(codes: &[String]) -> Option<String> {
+    let undefined: Vec<String> = codes
+        .iter()
+        .filter(|c| {
+            !dartr_diagnostics::all_codes()
+                .iter()
+                .any(|d| d.name == c.as_str())
+        })
+        .cloned()
+        .collect();
+    if undefined.is_empty() {
+        return None;
+    }
+    let count = undefined.len();
+    Some(format!(
+        "The {} {} {} not defined by the analyzer.",
+        pluralize("diagnostic", count),
+        quoted_and(&undefined),
+        if count == 1 { "is" } else { "are" }
+    ))
+}
+
+/// Dart `BulkFixProcessor.fixErrors` as the legacy `edit.bulkFixes`
+/// request runs it: one pass over the files of a new collection of
+/// [included] (open files are read through the overlays of
+/// `dartr_project::fs`). Returns the edits and the fixes by path and code,
+/// or the error message for undefined [codes] (lower case names).
+pub fn bulk_fixes(
+    included: &[String],
+    options: &CollectionOptions,
+    codes: Option<&[String]>,
+) -> Result<(Vec<SourceFileEdit>, ChangeMap), String> {
+    if let Some(message) = codes.and_then(undefined_codes_message) {
+        return Err(message);
+    }
+    let mut fixer = Fixer::with_collection(AnalysisContextCollection::new(included, options));
+    Ok(fixer.fix_errors(codes))
+}
+
 impl Fixer {
+    fn with_collection(collection: AnalysisContextCollection) -> Fixer {
+        Fixer {
+            target: String::new(),
+            session: DriverSession::default(),
+            collection,
+            content_cache: indexmap::IndexMap::new(),
+            overlays: HashMap::new(),
+        }
+    }
+
     fn new(target: &str) -> Fixer {
         let collection =
             AnalysisContextCollection::new(&[target.to_string()], &CollectionOptions::default());
@@ -298,25 +349,8 @@ impl Fixer {
 
     /// Dart `applyAllEdits` (without the pubspec pass).
     fn apply_all_edits(&mut self, codes: Option<&[String]>) -> Result<ChangeMap, String> {
-        if let Some(codes) = codes {
-            let undefined: Vec<String> = codes
-                .iter()
-                .filter(|c| {
-                    !dartr_diagnostics::all_codes()
-                        .iter()
-                        .any(|d| d.name == c.as_str())
-                })
-                .cloned()
-                .collect();
-            if !undefined.is_empty() {
-                let count = undefined.len();
-                return Err(format!(
-                    "The {} {} {} not defined by the analyzer.",
-                    pluralize("diagnostic", count),
-                    quoted_and(&undefined),
-                    if count == 1 { "is" } else { "are" }
-                ));
-            }
+        if let Some(message) = codes.and_then(undefined_codes_message) {
+            return Err(message);
         }
         let mut details = ChangeMap::default();
         for _ in 0..MAX_PASSES {
