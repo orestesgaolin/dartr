@@ -22,12 +22,14 @@ lock_for() {
   if [ "$1" = 1 ]; then echo "$dir/heavy.lock"; else echo "$dir/heavy.lock.$1"; fi
 }
 
+# lockf -k keeps the lock file: without it, lockf deletes the file when the command ends, and a
+# process that waits on the deleted file and a process that creates a new one can both hold the slot.
 # Take a free slot without waiting, highest slot first: the inline lock command that agents use
 # when they cannot run this script takes only slot 1, so keep slot 1 free for them when possible.
 # lockf exits 75 when the lock is busy.
 i=$slots
 while [ "$i" -ge 1 ]; do
-  /usr/bin/lockf -s -t 0 "$(lock_for "$i")" nice -n "$niceness" "$@"
+  /usr/bin/lockf -k -s -t 0 "$(lock_for "$i")" nice -n "$niceness" "$@"
   rc=$?
   [ "$rc" -ne 75 ] && exit "$rc"
   i=$((i - 1))
@@ -53,7 +55,7 @@ while :; do
   slots=${DARTR_HEAVY_SLOTS:-$(cat "$dir/heavy.slots" 2>/dev/null || echo 2)}
   i=$slots
   while [ "$i" -ge 1 ]; do
-    /usr/bin/lockf -s -t 0 "$(lock_for "$i")" nice -n "$niceness" "$@"
+    /usr/bin/lockf -k -s -t 0 "$(lock_for "$i")" nice -n "$niceness" "$@"
     rc=$?
     [ "$rc" -ne 75 ] && exit "$rc"
     i=$((i - 1))
