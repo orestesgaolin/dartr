@@ -108,6 +108,39 @@ pub fn type_elements(ctx: &Ctx<'_>, ty: TypeId) -> Vec<ElementId> {
 
 const ORIGIN_VARIABLE: FragmentFlags = FragmentFlags::PROPERTY_ACCESSOR_FRAGMENT_IS_ORIGIN_VARIABLE;
 
+/// Dart `FieldElementImpl.declaringFormalParameter`: the declaring field
+/// formal parameter (of the primary constructor) of [field].
+fn declaring_formal_parameter(ctx: &Ctx<'_>, field: ElementId) -> Option<ElementId> {
+    let enclosing = ctx.element_data(field)?.enclosing?;
+    let interface = enclosing.cast::<crate::InterfaceElement>()?;
+    for &c in &ctx.interface(interface).constructors {
+        for &p in &ctx.executable(c.upcast()).formal_params {
+            let p = p.raw();
+            if p.tag() != Tag::FieldFormalParameter {
+                continue;
+            }
+            let AnyElement::FormalParameter(fp) = ctx.any(p) else {
+                continue;
+            };
+            if fp.field.get().map(|f| f.raw()) != Some(field) {
+                continue;
+            }
+            let declaring = ctx
+                .element_data(p)
+                .and_then(|d| ctx.fragment_data(d.first_fragment))
+                .is_some_and(|f| {
+                    f.flags
+                        .get()
+                        .contains(FragmentFlags::FIELD_FORMAL_PARAMETER_FRAGMENT_IS_DECLARING)
+                });
+            if declaring {
+                return Some(p);
+            }
+        }
+    }
+    None
+}
+
 /// Dart `element.nonSynthetic`.
 pub fn non_synthetic(ctx: &Ctx<'_>, element: ElementId) -> ElementId {
     let first_flags = |e: ElementId| {
@@ -142,8 +175,11 @@ pub fn non_synthetic(ctx: &Ctx<'_>, element: ElementId) -> ElementId {
                     .contains(FragmentFlags::FIELD_FRAGMENT_IS_ORIGIN_DECLARING_FORMAL_PARAMETER)
             {
                 // FieldElementImpl.nonSynthetic returns the declaring
-                // formal parameter of the primary constructor (unit B4).
-                todo!("FieldElementImpl.declaringFormalParameter")
+                // formal parameter of the primary constructor.
+                if let Some(p) = declaring_formal_parameter(ctx, element) {
+                    return p;
+                }
+                return element;
             }
             let data = ctx.element_data(element).expect("variable data");
             if let Some(enclosing) = data.enclosing

@@ -139,11 +139,100 @@ enum WriteFormalParameterKind {
 
 /// The data of one formal parameter that `_writeFormalParameters` reads:
 /// from a `FormalParameterElement` or from a function type parameter.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct ParamView {
     kind: ParameterKind,
     ty: TypeId,
     name: Option<Name>,
+    /// Dart `defaultValueCode` (elements only).
+    default_code: Option<String>,
+}
+
+/// The substituted types of a member (Dart `SubstitutedElementImpl`), for
+/// [`member_display_string_with`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct MemberTypes {
+    pub return_type: Option<TypeId>,
+    pub parameter_types: Vec<TypeId>,
+    pub variable_type: Option<TypeId>,
+}
+
+/// `displayString(multiline:)` of a member: the element with the
+/// substituted types of [types].
+pub fn member_display_string_with(
+    ctx: &Ctx<'_>,
+    element: ElementId,
+    types: &MemberTypes,
+    options: DisplayOptions,
+) -> String {
+    let mut builder = ElementDisplayStringBuilder::new(ctx, options);
+    builder.member = Some(types.clone());
+    builder.append_element(element);
+    builder.buffer
+}
+
+/// Dart `FormalParameterElement.defaultValueCode`: the source of the
+/// default value expression (the `ConstExprs` copy).
+pub fn default_value_code(ctx: &Ctx<'_>, parameter: EId<FormalParameterElement>) -> Option<String> {
+    let first = ctx.element_data(parameter.raw())?.first_fragment;
+    let fragment = first.cast::<crate::FormalParameterFragment>()?;
+    // An element without fragments (built in memory) has no source.
+    if first.index() as usize >= ctx.store(first.store()).fragments.params.len() {
+        return None;
+    }
+    if let Some(expression) = ctx.fragment(fragment).constant_initializer
+        && let Some(const_ast) = ctx.store(first.store()).const_ast.try_get()
+    {
+        return Some(dartr_ast::to_source::to_source(
+            const_ast.ast(),
+            expression.0,
+        ));
+    }
+    // `SuperFormalParameterElementImpl.defaultValueCode`: the default of the
+    // super constructor parameter (an optional parameter only).
+    if parameter.raw().tag() == crate::Tag::SuperFormalParameter
+        && !ctx.get(parameter).kind.is_required()
+    {
+        let super_parameter = super_constructor_parameter(ctx, parameter)?;
+        return default_value_code(ctx, super_parameter);
+    }
+    None
+}
+
+/// Dart `SuperFormalParameterElementImpl.superConstructorParameter` (base
+/// element).
+fn super_constructor_parameter(
+    ctx: &Ctx<'_>,
+    parameter: EId<FormalParameterElement>,
+) -> Option<EId<FormalParameterElement>> {
+    let enclosing = ctx.element_data(parameter.raw())?.enclosing?;
+    let constructor = enclosing.cast::<crate::ConstructorElement>()?;
+    let super_constructor = match ctx.get(constructor).super_constructor.get()? {
+        crate::ElemRef::Base(b) => b,
+        crate::ElemRef::Member(m) => ctx.member(m).base,
+    };
+    let super_params = ctx
+        .executable(super_constructor.cast::<crate::ExecutableElement>()?)
+        .formal_params
+        .clone();
+    let data = ctx.get(parameter);
+    if data.kind.is_named() {
+        let name = data.name;
+        super_params
+            .into_iter()
+            .find(|&p| ctx.get(p).kind.is_named() && ctx.get(p).name == name)
+    } else {
+        let index = ctx
+            .executable(enclosing.cast::<crate::ExecutableElement>()?)
+            .formal_params
+            .iter()
+            .filter(|p| p.raw().tag() == crate::Tag::SuperFormalParameter)
+            .position(|p| *p == parameter)?;
+        super_params
+            .into_iter()
+            .filter(|&p| ctx.get(p).kind.is_positional())
+            .nth(index)
+    }
 }
 
 /// Dart `ElementDisplayStringBuilder` (with `withNullability: true`).
@@ -156,6 +245,8 @@ struct ElementDisplayStringBuilder<'c, 'a> {
     /// (Dart: the synthetic type parameters of `_uniqueTypeParameters`).
     /// The last entry for an element wins.
     renames: Vec<(EId<TypeParameterElement>, String)>,
+    /// The substituted types when the element is a member.
+    member: Option<MemberTypes>,
 }
 
 impl<'c, 'a> ElementDisplayStringBuilder<'c, 'a> {
@@ -166,6 +257,7 @@ impl<'c, 'a> ElementDisplayStringBuilder<'c, 'a> {
             multiline: options.multiline,
             prefer_type_alias: options.prefer_type_alias,
             renames: Vec::new(),
+            member: None,
         }
     }
 
@@ -397,6 +489,7 @@ impl<'c, 'a> ElementDisplayStringBuilder<'c, 'a> {
                 kind: p.kind,
                 ty: p.ty,
                 name: p.name,
+                default_code: None,
             })
             .collect();
         self.write_formal_parameters(&params, false, false);
@@ -580,14 +673,21 @@ impl<'c, 'a> ElementDisplayStringBuilder<'c, 'a> {
     // ---- formal parameters ----
 
     fn element_params(&self, params: &[EId<FormalParameterElement>]) -> Vec<ParamView> {
+        let member_types = self.member.as_ref().map(|m| m.parameter_types.clone());
         params
             .iter()
-            .map(|&p| {
+            .enumerate()
+            .map(|(i, &p)| {
                 let data = self.ctx.get(p);
+                let ty = member_types
+                    .as_ref()
+                    .and_then(|t| t.get(i).copied())
+                    .unwrap_or_else(|| Self::slot_type(data.type_.get()));
                 ParamView {
                     kind: data.kind,
-                    ty: Self::slot_type(data.type_.get()),
+                    ty,
                     name: data.name,
+                    default_code: default_value_code(self.ctx, p),
                 }
             })
             .collect()
@@ -663,6 +763,11 @@ impl<'c, 'a> ElementDisplayStringBuilder<'c, 'a> {
         {
             self.write(" ");
             self.write(name);
+        }
+
+        if for_element && let Some(code) = &parameter.default_code {
+            self.write(" = ");
+            self.write(code);
         }
     }
 
@@ -757,10 +862,16 @@ impl<'c, 'a> ElementDisplayStringBuilder<'c, 'a> {
                 self.write_type_parameter_element(EId::from_raw(element));
             }
             AnyElement::FormalParameter(e) => {
+                let ty = self
+                    .member
+                    .as_ref()
+                    .and_then(|m| m.variable_type)
+                    .unwrap_or_else(|| Self::slot_type(e.type_.get()));
                 let param = ParamView {
                     kind: e.kind,
-                    ty: Self::slot_type(e.type_.get()),
+                    ty,
                     name: e.name,
+                    default_code: default_value_code(self.ctx, EId::from_raw(element)),
                 };
                 let (open, close) = if param.kind.is_required_positional() {
                     ("", "")
@@ -833,6 +944,7 @@ impl<'c, 'a> ElementDisplayStringBuilder<'c, 'a> {
 
     /// `writeVariableElement`.
     fn write_variable_element(&mut self, data: &ElementData, ty: Option<TypeId>) {
+        let ty = self.member.as_ref().and_then(|m| m.variable_type).or(ty);
         self.write_type(Self::slot_type(ty));
         self.write(" ");
         self.write(self.element_display_name(data));
@@ -846,7 +958,12 @@ impl<'c, 'a> ElementDisplayStringBuilder<'c, 'a> {
         kind: ExecutableKind,
     ) {
         if kind != ExecutableKind::Setter {
-            self.write_type(Self::slot_type(e.return_type.get()));
+            let ty = self
+                .member
+                .as_ref()
+                .and_then(|m| m.return_type)
+                .or(e.return_type.get());
+            self.write_type(Self::slot_type(ty));
             self.write(" ");
         }
 
@@ -862,7 +979,12 @@ impl<'c, 'a> ElementDisplayStringBuilder<'c, 'a> {
     /// `writeMethodElement`, `writeTopLevelFunctionElement` (multiline
     /// allowed) and `writeLocalFunctionElement` (not allowed).
     fn write_function_like(&mut self, e: &crate::ExecutableElementData, allow_multiline: bool) {
-        self.write_type(Self::slot_type(e.return_type.get()));
+        let ty = self
+            .member
+            .as_ref()
+            .and_then(|m| m.return_type)
+            .or(e.return_type.get());
+        self.write_type(Self::slot_type(ty));
         self.write(" ");
         self.write(self.name_or(e, "<null-name>"));
         self.write_type_parameters(&e.type_params);
@@ -872,7 +994,12 @@ impl<'c, 'a> ElementDisplayStringBuilder<'c, 'a> {
 
     /// `writeConstructorElement`.
     fn write_constructor_element(&mut self, e: &crate::ConstructorElement) {
-        match e.return_type.get() {
+        match self
+            .member
+            .as_ref()
+            .and_then(|m| m.return_type)
+            .or(e.return_type.get())
+        {
             Some(ty) => self.write_type(ty),
             None => self.write_constructor_this_type(e.enclosing),
         }
