@@ -37,8 +37,19 @@ done
 # long build while another slot is idle. Read the slot count again on every poll, so a change of
 # heavy.slots also reaches commands that are already waiting.
 echo "heavy.sh: all $slots build slots busy, waiting" >&2
+# Gemini agents (worktrees gm-*) run commands as background tasks, and their runtime ends the whole
+# session when a background task takes longer than 30 minutes. Give up waiting after 10 minutes
+# there, so the agent can try again instead of losing its session.
+max_wait=${DARTR_HEAVY_MAX_WAIT:-0}
+case "$PWD" in */worktrees/dartr/gm-*) [ "$max_wait" = 0 ] && max_wait=600 ;; esac
+waited=0
 while :; do
   sleep 5
+  waited=$((waited + 5))
+  if [ "$max_wait" -gt 0 ] && [ "$waited" -ge "$max_wait" ]; then
+    echo "heavy.sh: build slots still busy after $((max_wait / 60)) minutes; run this command again later (in the foreground)" >&2
+    exit 75
+  fi
   slots=${DARTR_HEAVY_SLOTS:-$(cat "$dir/heavy.slots" 2>/dev/null || echo 2)}
   i=$slots
   while [ "$i" -ge 1 ]; do
