@@ -875,6 +875,53 @@ impl EditBuilder<'_, '_, '_> {
         self.write(")");
     }
 
+    /// Dart `writeImportedName`: [name] with the prefix of an import of one
+    /// of [uris], or with an import of the first URI.
+    pub fn write_imported_name(&mut self, uris: &[String], name: &str) {
+        let resolved = self.file.resolved();
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let library = self.library();
+        let mut found: Option<Option<String>> = None;
+        for import in existing_imports(&ctx, library) {
+            let Some(imported) = import.library else {
+                continue;
+            };
+            if !uris.contains(&library_uri(&ctx, imported)) {
+                continue;
+            }
+            // Dart `_getBestImportForName`: an import that does not hide the
+            // name.
+            let visible = import.combinators.iter().all(|(is_show, names)| {
+                if *is_show {
+                    names.iter().any(|n| n == name)
+                } else {
+                    !names.iter().any(|n| n == name)
+                }
+            });
+            if visible {
+                found = Some(import.prefix.clone());
+                break;
+            }
+        }
+        match found {
+            Some(prefix) => {
+                if let Some(p) = prefix {
+                    self.write(&format!("{p}."));
+                }
+            }
+            None => {
+                let prefix = self
+                    .file
+                    .import_library_impl(&uris[0], None, None, true, false, false, false);
+                if !prefix.is_empty() {
+                    self.write(&format!("{prefix}."));
+                }
+            }
+        }
+        self.write(name);
+    }
+
     /// Dart `DartLinkedEditBuilder.addSuperTypesAsSuggestions`.
     pub fn add_super_types_as_suggestions(&mut self, ctx: &Ctx<'_>, ty: TypeId) {
         let TypeKind::Interface { element, .. } = *ctx.ty(ty) else {

@@ -7,8 +7,10 @@ pub mod convert_quotes;
 pub mod create;
 pub mod create_types;
 pub mod data_driven;
+pub mod data_driven_changes;
 pub mod dead_code;
 pub mod extensions;
+pub mod flutter_convert;
 pub mod flutter_edit;
 pub mod flutter_wrap;
 pub mod import_library;
@@ -138,6 +140,9 @@ pub fn generator(name: &str) -> Option<ProducerGenerator> {
         "FlutterConvertToChildren.new" => |_: C| boxed(flutter_edit::FlutterConvertToChildren),
         "FlutterSwapWithChild.new" => |_: C| boxed(flutter_edit::FlutterSwapWithChild),
         "FlutterSwapWithParent.new" => |_: C| boxed(flutter_edit::FlutterSwapWithParent),
+        "FlutterConvertToStatefulWidget.new" => {
+            |_: C| boxed(flutter_convert::FlutterConvertToStatefulWidget)
+        }
         "FlutterRemoveWidget.new" => |_: C| boxed(flutter_edit::FlutterRemoveWidget),
         "MakeFinal.new" => |_: C| boxed(MakeFinal),
         "MakeVariableNullable.new" => |_: C| boxed(MakeVariableNullable::new()),

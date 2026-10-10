@@ -60,7 +60,11 @@ macro_rules! assist {
             fn applicability(&self) -> Applicability {
                 Applicability::SingleLocation
             }
-            fn compute(&mut self, $c: &ProducerContext<'_>, $b: &mut ChangeBuilder<'_>) $body
+            fn compute(
+                &mut self,
+                $c: &ProducerContext<'_>,
+                $b: &mut $crate::correction::change_builder::ChangeBuilder<'_>,
+            ) $body
         }
     };
 }
