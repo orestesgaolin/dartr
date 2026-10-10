@@ -180,6 +180,44 @@ impl ChangeWorkspace for ServerWorkspace<'_> {
                 declared_in_library,
             });
         }
+        // Dart iterates `FileSystemState.knownFiles`: order the libraries by
+        // the known-file order of the Dart driver.
+        if result.len() > 1 {
+            let added: Vec<String> = context
+                .root
+                .analyzed_files()
+                .into_iter()
+                .filter(|f| f.ends_with(".dart"))
+                .collect();
+            let mut available: Vec<String> = Vec::new();
+            if let Some(sdk) = context.sdk.as_ref().or(collection.sdk.as_ref()) {
+                available.extend(
+                    sdk.libraries()
+                        .iter()
+                        .filter_map(|l| sdk.map_dart_uri(&l.short_name)),
+                );
+            }
+            for package in context.packages.packages() {
+                dart_files_recursively(&package.lib, &mut available);
+            }
+            if self
+                .session
+                .link_known_libraries(collection, index)
+                .is_some()
+            {
+                let order = self.session.dart_known_order(index, &added, &available);
+                let rank: HashMap<&str, usize> = order
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| (p.as_str(), i))
+                    .collect();
+                result.sort_by_key(|d| {
+                    rank.get(d.library_path.as_str())
+                        .copied()
+                        .unwrap_or(usize::MAX)
+                });
+            }
+        }
         result
     }
 }

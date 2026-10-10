@@ -439,6 +439,7 @@ fn code_actions_match_dart_language_server() {
         "data_driven.dart",
         "assists.dart",
         "more.dart",
+        "ignores.dart",
     ] {
         let path = root.join("lib").join(name);
         let content = std::fs::read_to_string(&path).unwrap();

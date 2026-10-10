@@ -3288,14 +3288,6 @@ impl<W: Write> Server<W> {
         if self.roots_dirty {
             self.refresh_roots();
         }
-        // The pubspec pass (`MissingDependencyValidator`) is not ported.
-        if update_pubspec == Some(true) {
-            return Ok(protocol::EditBulkFixesResult {
-                message: String::new(),
-                edits: Vec::new(),
-                details: Vec::new(),
-            });
-        }
         let codes: Option<Vec<String>> =
             codes.map(|c| c.iter().map(|s| s.to_lowercase()).collect());
         let options = CollectionOptions {
@@ -3304,8 +3296,16 @@ impl<W: Write> Server<W> {
             enabled_experiments: self.options.enabled_experiments.clone(),
             ..Default::default()
         };
-        // The bulk fix processor of dartr_server (`BulkFixProcessor.fixErrors`).
-        match dartr_server::server::fix_cli::bulk_fixes(included, &options, codes.as_deref()) {
+        // The bulk fix processor of dartr_server (`BulkFixProcessor.fixErrors`
+        // and `fixPubspec`).
+        let result = if update_pubspec == Some(true) {
+            Ok(dartr_server::server::fix_cli::bulk_fixes_pubspec(
+                included, &options,
+            ))
+        } else {
+            dartr_server::server::fix_cli::bulk_fixes(included, &options, codes.as_deref())
+        };
+        match result {
             Err(message) => Ok(protocol::EditBulkFixesResult {
                 message,
                 edits: Vec::new(),
