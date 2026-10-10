@@ -447,7 +447,7 @@ impl Server {
         json!({"uri": path_to_uri(path), "version": version})
     }
 
-    fn client_flag(&self, pointer: &str) -> bool {
+    pub(crate) fn client_flag(&self, pointer: &str) -> bool {
         self.client
             .raw
             .pointer(pointer)

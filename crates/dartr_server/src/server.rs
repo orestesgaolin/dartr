@@ -63,8 +63,10 @@ mod completion;
 mod editor;
 mod hierarchy;
 mod nav;
+mod rename;
 mod search;
 mod symbols;
+mod watch;
 
 pub(crate) use code_actions::SERVER_SUPPORTED_KINDS as SERVER_SUPPORTED_CODE_ACTION_KINDS;
 pub(crate) use code_actions::commands::SUPPORTED as SUPPORTED_COMMANDS;
@@ -162,6 +164,9 @@ enum Pending {
         command_name: String,
         edit: Value,
     },
+    /// The prompt of a rename with warnings: the rename request is
+    /// answered with the edit when the client chooses "Rename Anyway".
+    RenamePrompt { request_id: Value, edit: Value },
 }
 
 /// Dart `_ServerCreatedProgressReporter` for the analysis token.
@@ -221,6 +226,12 @@ pub struct Server {
     registrations: Vec<(String, DynamicRegistration)>,
     last_registration_id: u64,
     shutdown_called: bool,
+    /// The sender of the message queue, for the events of the file watcher.
+    watch_tx: Option<mpsc::Sender<Option<Value>>>,
+    /// The watcher of the included paths of the contexts (Dart
+    /// `ContextManagerImpl` watchers) and the watched paths.
+    watcher: Option<notify::RecommendedWatcher>,
+    watched: Vec<String>,
 }
 
 /// What the main loop does after a message.
@@ -233,6 +244,7 @@ enum Flow {
 /// the input. Returns the exit code.
 pub fn run(options: ServerOptions, input: Box<dyn Read + Send>, channel: Channel) -> i32 {
     let (tx, rx) = mpsc::channel::<Option<Value>>();
+    let watch_tx = tx.clone();
     let log = channel.clone();
     thread::spawn(move || {
         let mut reader = BufReader::new(input);
@@ -252,6 +264,7 @@ pub fn run(options: ServerOptions, input: Box<dyn Read + Send>, channel: Channel
         }
     });
     let mut server = Server::new(options, channel);
+    server.watch_tx = Some(watch_tx);
     let mut queue: VecDeque<Value> = VecDeque::new();
     let mut input_closed = false;
     loop {
@@ -322,6 +335,9 @@ impl Server {
             registrations: Vec::new(),
             last_registration_id: 0,
             shutdown_called: false,
+            watch_tx: None,
+            watcher: None,
+            watched: Vec::new(),
         }
     }
 
@@ -387,6 +403,11 @@ impl Server {
             .and_then(Value::as_str)
             .map(str::to_string);
         let id = message.get("id").cloned();
+        if method.as_deref() == Some(watch::WATCH_EVENT) {
+            let params = message.get("params").cloned().unwrap_or(Value::Null);
+            self.handle_watch_event(&params);
+            return Flow::Continue;
+        }
         match (method, id) {
             (Some(method), Some(id)) => {
                 let params = message.get("params").cloned().unwrap_or(Value::Null);
@@ -453,6 +474,14 @@ impl Server {
                     None => return Flow::Continue,
                 }
             }
+            (State::Initialized, "textDocument/rename") => {
+                match self.catching_optional(method, |s| s.rename(id, &params)) {
+                    Some(result) => result,
+                    // The response is sent when the client answers the
+                    // prompt.
+                    None => return Flow::Continue,
+                }
+            }
             (State::Initialized, _) => self.handle_initialized_request(method, params),
         };
         if let Err(e) = &result {
@@ -500,6 +529,7 @@ impl Server {
                 self.catching(method, |s| s.document_highlights(&params))
             }
             "textDocument/references" => self.catching(method, |s| s.references(&params)),
+            "textDocument/prepareRename" => self.catching(method, |s| s.prepare_rename(&params)),
             "textDocument/implementation" => self.catching(method, |s| s.implementation(&params)),
             "textDocument/signatureHelp" => self.catching(method, |s| s.signature_help(&params)),
             "textDocument/completion" => self.catching(method, |s| s.completion(&params)),
@@ -691,6 +721,9 @@ impl Server {
                 command_name,
                 edit,
             } => self.apply_edit_response(&request_id, &command_name, &edit, message),
+            Pending::RenamePrompt { request_id, edit } => {
+                self.rename_prompt_response(&request_id, edit, message)
+            }
             Pending::Registration => {
                 if let Some(e) = error {
                     let code = e.get("code").cloned().unwrap_or(Value::Null);
@@ -1298,6 +1331,7 @@ impl Server {
         );
         self.analyzed = analyzed;
         self.parsed.clear();
+        self.watch_roots();
     }
 
     /// Dart `ContextManager._analyzeAnalysisOptionsYaml`,

@@ -99,6 +99,9 @@ pub struct LspClient {
     pub messages: Vec<Value>,
     /// The `dart` settings that `workspace/configuration` returns.
     pub configuration: Value,
+    /// The index of the action to choose in `window/showMessageRequest`
+    /// (`None`: answer `null`, like a dismissed prompt).
+    pub show_message_choice: Option<usize>,
     /// The program that was started (for failure messages).
     program: String,
 }
@@ -158,6 +161,7 @@ impl LspClient {
             server_requests: Vec::new(),
             messages: Vec::new(),
             configuration: json!({}),
+            show_message_choice: None,
             program: program.to_string(),
         }
     }
@@ -300,6 +304,10 @@ impl LspClient {
                 }
                 // Dart-Code applies the edit.
                 "workspace/applyEdit" => json!({"applied": true}),
+                "window/showMessageRequest" => match self.show_message_choice {
+                    Some(i) => params["actions"].get(i).cloned().unwrap_or(Value::Null),
+                    None => Value::Null,
+                },
                 _ => Value::Null,
             };
             self.send(&json!({"jsonrpc": "2.0", "id": id, "result": result}));

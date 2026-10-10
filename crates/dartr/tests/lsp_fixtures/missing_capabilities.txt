@@ -21,7 +21,6 @@ dart-code dynamic textDocument/codeLens [dart]
 dart-code dynamic textDocument/documentColor [dart]
 dart-code dynamic textDocument/documentLink [dart,**/pubspec.yaml,**/analysis_options.yaml]
 dart-code dynamic textDocument/inlineValue [dart]
-dart-code dynamic textDocument/rename [dart]
 dart-code dynamic workspace/willRenameFiles
 static static codeLensProvider
 static static colorProvider.documentSelector
@@ -46,5 +45,4 @@ static static experimental.textDocument.augmented
 static static experimental.textDocument.super
 static static experimental.updateDiagnosticInformation
 static static inlineValueProvider
-static static renameProvider.prepareProvider
 static static workspace.fileOperations.willRename.filters

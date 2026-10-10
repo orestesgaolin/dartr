@@ -61,6 +61,9 @@ pub struct Relation {
     pub kind: RelationKind,
     pub offset: u32,
     pub length: u32,
+    /// Dart `usedElementIsQualifiedFlags`: the reference has an explicit or
+    /// implicit qualifier, so a local declaration cannot shadow it.
+    pub is_qualified: bool,
 }
 
 /// Dart `AnalysisDriverUnitIndex` (the element relations).
@@ -574,6 +577,7 @@ impl Contributor<'_, '_> {
         kind: RelationKind,
         offset: u32,
         length: u32,
+        is_qualified: bool,
     ) {
         let Some(element) = element else { return };
         match element.tag() {
@@ -611,24 +615,44 @@ impl Contributor<'_, '_> {
             kind,
             offset,
             length,
+            is_qualified,
         });
     }
 
+    /// Dart `recordRelationToken` (qualified by default).
     fn record_token(&mut self, element: Option<ElementId>, kind: RelationKind, token: TokenId) {
-        let t = self.ast.tokens.get(token);
-        self.record_offset(element, kind, t.offset, t.end() - t.offset);
+        self.record_token_q(element, kind, token, true);
     }
 
-    fn record_node(&mut self, element: Option<ElementId>, kind: RelationKind, node: NodeId) {
+    fn record_token_q(
+        &mut self,
+        element: Option<ElementId>,
+        kind: RelationKind,
+        token: TokenId,
+        is_qualified: bool,
+    ) {
+        let t = self.ast.tokens.get(token);
+        self.record_offset(element, kind, t.offset, t.end() - t.offset, is_qualified);
+    }
+
+    /// Dart `recordRelation`.
+    fn record_node(
+        &mut self,
+        element: Option<ElementId>,
+        kind: RelationKind,
+        node: NodeId,
+        is_qualified: bool,
+    ) {
         let (o, l) = (self.ast.offset(node), self.ast.length(node));
-        self.record_offset(element, kind, o, l);
+        self.record_offset(element, kind, o, l, is_qualified);
     }
 
     /// Dart `recordSuperType`.
     fn record_super_type(&mut self, named_type: Id<NamedType>, kind: RelationKind) {
         let element = self.element(named_type);
         let name = self.ast[named_type].name;
-        self.record_token(element, kind, name);
+        let is_qualified = self.ast[named_type].import_prefix.is_some();
+        self.record_token_q(element, kind, name, is_qualified);
     }
 
     /// Dart `_recordImportPrefixedElement`.
@@ -649,7 +673,12 @@ impl Contributor<'_, '_> {
         } else {
             self.add_prefix_for_element(element);
         }
-        self.record_token(Some(element), RelationKind::IsReferencedBy, name);
+        self.record_token_q(
+            Some(element),
+            RelationKind::IsReferencedBy,
+            name,
+            import_prefix.is_some(),
+        );
     }
 
     /// Dart `_getActualConstructorElement`: through mixin application
@@ -734,6 +763,7 @@ impl AstVisitor for Contributor<'_, '_> {
                     RelationKind::IsInvokedBy,
                     offset,
                     ast.end(constructor_name) - offset,
+                    true,
                 );
             } else if identifier_is_constructor {
                 let p = ast.cast::<PrefixedIdentifier>(name).unwrap();
@@ -743,13 +773,14 @@ impl AstVisitor for Contributor<'_, '_> {
                     RelationKind::IsInvokedBy,
                     offset,
                     ast.end(name) - offset,
+                    true,
                 );
             } else {
                 let offset = ast[node]
                     .type_arguments
                     .map(|t| ast.end(t))
                     .unwrap_or_else(|| ast.end(name));
-                self.record_offset(base, RelationKind::IsInvokedBy, offset, 0);
+                self.record_offset(base, RelationKind::IsInvokedBy, offset, 0, true);
             }
             if identifier_is_constructor {
                 let p = ast.cast::<PrefixedIdentifier>(name).unwrap();
@@ -770,7 +801,7 @@ impl AstVisitor for Contributor<'_, '_> {
 
     fn visit_assigned_variable_pattern(&mut self, ast: &Ast, node: Id<AssignedVariablePattern>) {
         let element = self.element(node);
-        self.record_token(element, RelationKind::IsWrittenBy, ast[node].name);
+        self.record_token_q(element, RelationKind::IsWrittenBy, ast[node].name, false);
         ast.visit_children(node, self);
     }
 
@@ -801,7 +832,7 @@ impl AstVisitor for Contributor<'_, '_> {
                             _ => None,
                         });
                 let offset = ast.tokens.get(name_token).offset;
-                self.record_offset(object, RelationKind::IsExtendedBy, offset, 0);
+                self.record_offset(object, RelationKind::IsExtendedBy, offset, 0, true);
             }
             let constructors = &self.ctx.interface(class).constructors;
             if constructors.len() == 1 {
@@ -840,6 +871,7 @@ impl AstVisitor for Contributor<'_, '_> {
                     RelationKind::IsReferencedBy,
                     offset,
                     ast.end(expression) - offset,
+                    true,
                 );
             } else {
                 self.record_offset(
@@ -847,6 +879,7 @@ impl AstVisitor for Contributor<'_, '_> {
                     RelationKind::IsReferencedBy,
                     ast.end(expression),
                     0,
+                    true,
                 );
             }
             return;
@@ -877,7 +910,7 @@ impl AstVisitor for Contributor<'_, '_> {
                 .or(ast[node].new_keyword.map(|t| ast.tokens.get(t).end()))
                 .or(ast[node].factory_keyword.map(|t| ast.tokens.get(t).end()))
                 .unwrap_or(start);
-            self.record_offset(Some(s), RelationKind::IsInvokedBy, start, end - start);
+            self.record_offset(Some(s), RelationKind::IsInvokedBy, start, end - start, true);
         }
         ast.visit_children(node, self);
     }
@@ -889,7 +922,7 @@ impl AstVisitor for Contributor<'_, '_> {
     ) {
         let field_name = ast[node].field_name;
         let element = self.element(field_name);
-        self.record_node(element, RelationKind::IsWrittenBy, field_name.raw());
+        self.record_node(element, RelationKind::IsWrittenBy, field_name.raw(), true);
         ast.accept(ast[node].expression, self);
     }
 
@@ -910,7 +943,7 @@ impl AstVisitor for Contributor<'_, '_> {
             }
             None => (ast.end(ast[node].type_), 0),
         };
-        self.record_offset(element, kind, offset, length);
+        self.record_offset(element, kind, offset, length, true);
         ast.accept(ast[node].type_, self);
     }
 
@@ -927,6 +960,7 @@ impl AstVisitor for Contributor<'_, '_> {
             element,
             RelationKind::IsInvokedByDotShorthandsConstructor,
             ast[node].constructor_name.raw(),
+            true,
         );
         ast.accept(ast[node].argument_list, self);
     }
@@ -934,7 +968,7 @@ impl AstVisitor for Contributor<'_, '_> {
     fn visit_dot_shorthand_invocation(&mut self, ast: &Ast, node: Id<DotShorthandInvocation>) {
         let name = ast[node].member_name;
         let element = self.element(name);
-        self.record_node(element, RelationKind::IsInvokedBy, name.raw());
+        self.record_node(element, RelationKind::IsInvokedBy, name.raw(), true);
         if let Some(t) = ast[node].type_arguments {
             ast.accept(t, self);
         }
@@ -954,7 +988,7 @@ impl AstVisitor for Contributor<'_, '_> {
         } else {
             RelationKind::IsReferencedBy
         };
-        self.record_node(element, kind, name.raw());
+        self.record_node(element, kind, name.raw(), true);
     }
 
     fn visit_enum_constant_declaration(&mut self, ast: &Ast, node: Id<EnumConstantDeclaration>) {
@@ -973,7 +1007,7 @@ impl AstVisitor for Contributor<'_, '_> {
             } else {
                 RelationKind::IsInvokedBy
             };
-            self.record_offset(Some(constructor), kind, offset, length);
+            self.record_offset(Some(constructor), kind, offset, length, true);
         }
         ast.visit_children(node, self);
     }
@@ -1042,7 +1076,9 @@ impl AstVisitor for Contributor<'_, '_> {
         } else {
             RelationKind::IsInvokedBy
         };
-        self.record_node(element, kind, name.raw());
+        let is_qualified =
+            dartr_resolver::ast_ext::method_invocation_real_target(ast, node).is_some();
+        self.record_node(element, kind, name.raw(), is_qualified);
         if let Some(t) = ast[node].target {
             ast.accept(t, self);
         }
@@ -1095,6 +1131,7 @@ impl AstVisitor for Contributor<'_, '_> {
                 RelationKind::IsReferencedByPatternField,
                 offset,
                 length,
+                true,
             );
         }
         ast.visit_children(node, self);
@@ -1132,11 +1169,17 @@ impl AstVisitor for Contributor<'_, '_> {
         match ast[node].constructor_name {
             Some(name) => {
                 let o = ast.tokens.get(ast[node].period.expect("period")).offset;
-                self.record_offset(element, RelationKind::IsInvokedBy, o, ast.end(name) - o);
+                self.record_offset(
+                    element,
+                    RelationKind::IsInvokedBy,
+                    o,
+                    ast.end(name) - o,
+                    true,
+                );
             }
             None => {
                 let o = ast.tokens.get(ast[node].this_keyword).end();
-                self.record_offset(element, RelationKind::IsInvokedBy, o, 0);
+                self.record_offset(element, RelationKind::IsInvokedBy, o, 0, true);
             }
         }
         ast.accept(ast[node].argument_list, self);
@@ -1187,8 +1230,8 @@ impl AstVisitor for Contributor<'_, '_> {
                 kind = RelationKind::IsWrittenBy;
             }
         }
-        let _ = self.is_qualified(node);
-        self.record_node(element, kind, node.raw());
+        let is_qualified = self.is_qualified(node);
+        self.record_node(element, kind, node.raw(), is_qualified);
     }
 
     fn visit_super_constructor_invocation(
@@ -1200,11 +1243,17 @@ impl AstVisitor for Contributor<'_, '_> {
         match ast[node].constructor_name {
             Some(name) => {
                 let o = ast.tokens.get(ast[node].period.expect("period")).offset;
-                self.record_offset(element, RelationKind::IsInvokedBy, o, ast.end(name) - o);
+                self.record_offset(
+                    element,
+                    RelationKind::IsInvokedBy,
+                    o,
+                    ast.end(name) - o,
+                    true,
+                );
             }
             None => {
                 let o = ast.tokens.get(ast[node].super_keyword).end();
-                self.record_offset(element, RelationKind::IsInvokedBy, o, 0);
+                self.record_offset(element, RelationKind::IsInvokedBy, o, 0, true);
             }
         }
         ast.accept(ast[node].argument_list, self);

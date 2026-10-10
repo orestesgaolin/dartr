@@ -31,6 +31,7 @@ pub mod codes {
     pub const FILE_NOT_ANALYZED: i64 = -32007;
     pub const FILE_HAS_ERRORS: i64 = -32008;
     pub const CLIENT_FAILED_TO_APPLY_EDIT: i64 = -32009;
+    pub const RENAME_NOT_VALID: i64 = -32010;
     pub const CLIENT_SERVER_INCONSISTENT_STATE: i64 = -32099;
 }
 
