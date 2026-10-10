@@ -178,11 +178,12 @@ pub struct Server {
     #[allow(dead_code)]
     options: ServerOptions,
     state: State,
-    client: ClientCapabilities,
+    pub(crate) client: ClientCapabilities,
     init: InitializationOptions,
     workspace_folders: Vec<String>,
     /// The `dart` settings (`workspace/configuration`).
-    client_configuration: LspClientConfiguration,
+    pub(crate) client_configuration: LspClientConfiguration,
+    pub(crate) client_diagnostic_information: Option<Value>,
     overlays: HashMap<String, Document>,
     /// Open files (Dart priority files), in open order.
     priority: Vec<String>,
@@ -298,6 +299,7 @@ impl Server {
             init: InitializationOptions::default(),
             workspace_folders: Vec::new(),
             client_configuration: LspClientConfiguration::default(),
+            client_diagnostic_information: None,
             overlays: HashMap::new(),
             priority: Vec::new(),
             collection: None,
@@ -531,6 +533,21 @@ impl Server {
             }
             "workspace/symbol" => self.catching(method, |s| s.workspace_symbol(&params)),
             "textDocument/codeAction" => self.catching(method, |s| s.code_action(&params)),
+            "textDocument/documentColor" => self.catching(method, |s| s.document_color(&params)),
+            "textDocument/colorPresentation" => {
+                self.catching(method, |s| s.color_presentation(&params))
+            }
+            "textDocument/documentLink" => self.catching(method, |s| s.document_link(&params)),
+            "textDocument/codeLens" => self.catching(method, |s| s.code_lens(&params)),
+            "textDocument/inlineValue" => self.catching(method, |s| s.inline_value(&params)),
+            "dart/textDocument/super" => self.catching(method, |s| s.dart_super(&params)),
+            "dart/textDocument/augmentation" => {
+                self.catching(method, |s| s.dart_augmentation(&params))
+            }
+            "dart/textDocument/augmented" => self.catching(method, |s| s.dart_augmented(&params)),
+            "dart/updateDiagnosticInformation" => {
+                self.catching(method, |s| s.update_diagnostic_information(&params))
+            }
             "textDocument/formatting" => self.format_request(&params, FormatKind::Document),
             "textDocument/rangeFormatting" => {
                 let range = params
@@ -916,7 +933,7 @@ impl Server {
     }
 
     /// Dart `pathOfDoc` for `params.textDocument`.
-    fn path_of_doc(&self, params: &Value) -> ErrorOr<String> {
+    pub(crate) fn path_of_doc(&self, params: &Value) -> ErrorOr<String> {
         let uri = params
             .get("textDocument")
             .and_then(|d| d.get("uri"))
@@ -1057,7 +1074,7 @@ impl Server {
     }
 
     /// The content of [path]: the overlay, the file, or `None`.
-    fn content(&self, path: &str) -> Option<String> {
+    pub(crate) fn content(&self, path: &str) -> Option<String> {
         match self.overlays.get(path) {
             Some(d) => Some(d.content.clone()),
             None => read_file(path),
@@ -1065,11 +1082,80 @@ impl Server {
     }
 
     /// Dart `isAnalyzed`.
-    fn is_analyzed(&self, path: &str) -> bool {
+    pub(crate) fn is_analyzed(&self, path: &str) -> bool {
         self.collection
             .as_ref()
             .is_some_and(|c| c.contexts.iter().any(|x| x.root.is_analyzed(path)))
             && !self.is_excluded(path)
+    }
+
+    /// Dart `_isInFlutterProject`: whether the context for [path] can resolve
+    /// `package:flutter/widgets.dart`.
+    pub(crate) fn is_in_flutter_project(&self, path: &str) -> bool {
+        let Some(collection) = &self.collection else {
+            return false;
+        };
+        let Some(context) = collection
+            .context_for(path)
+            .or_else(|| collection.contexts.first())
+        else {
+            return false;
+        };
+        context
+            .packages
+            .packages()
+            .iter()
+            .any(|p| p.name == "flutter")
+    }
+
+    pub(crate) fn unit_sources(
+        &self,
+        context: usize,
+    ) -> indexmap::IndexMap<std::sync::Arc<str>, (std::sync::Arc<str>, std::sync::Arc<ParsedUnit>)>
+    {
+        self.session.unit_sources(context)
+    }
+
+    pub(crate) fn link_library_in(&mut self, context: usize, uri: &str) {
+        let Some(collection) = &self.collection else {
+            return;
+        };
+        let Some(ctx) = collection.contexts.get(context) else {
+            return;
+        };
+        let lib_path = if let Some(rest) = uri.strip_prefix("package:")
+            && let Some((pkg_name, rel)) = rest.split_once('/')
+        {
+            ctx.packages
+                .packages()
+                .iter()
+                .find(|p| p.name == pkg_name)
+                .map(|p| format!("{}/{rel}", p.lib))
+        } else if uri.starts_with("dart:") {
+            ctx.sdk
+                .as_ref()
+                .or(collection.sdk.as_ref())
+                .and_then(|s| s.map_dart_uri(uri))
+        } else {
+            None
+        };
+        if let Some(lib_path) = lib_path {
+            self.session
+                .ensure_library_linked_in(collection, context, &lib_path);
+        }
+    }
+
+    pub(crate) fn with_change_workspace<R>(
+        &mut self,
+        f: impl FnOnce(&mut dyn crate::correction::change_builder::ChangeWorkspace) -> R,
+    ) -> Option<R> {
+        let collection = self.collection.as_ref()?;
+        let mut ws = code_actions::ServerWorkspace {
+            session: &mut self.session,
+            collection,
+            overlays: &self.overlays,
+        };
+        Some(f(&mut ws))
     }
 
     fn is_excluded(&self, path: &str) -> bool {
@@ -1198,7 +1284,7 @@ impl Server {
     }
 
     /// Dart `requireUnresolvedUnit` / `requireResolvedUnit`.
-    fn require_parsed(&mut self, path: &str, resolved: bool) -> ErrorOr<Rc<ParsedFile>> {
+    pub(crate) fn require_parsed(&mut self, path: &str, resolved: bool) -> ErrorOr<Rc<ParsedFile>> {
         match self.parsed_unit(path) {
             Some(file) => {
                 if resolved && self.content(path).is_none() {
@@ -1474,15 +1560,13 @@ impl Server {
     }
 
     /// Dart `LspServerContextManagerCallbacks.handleResolvedUnitResult`:
-    /// closing labels and the outline of an open file. The Flutter outline
-    /// needs resolution and is not sent yet.
+    /// closing labels, the outline, and the Flutter outline of an open file.
     ///
     /// The outline is sent for every open Dart file that has an analysis
     /// context (also excluded files), closing labels only for analyzed files
-    /// (Dart `shouldSendClosingLabelsFor`, `shouldSendOutlineFor`). Dart
-    /// sends nothing for an excluded open file until its analysis driver
-    /// knows the file (an analyzed file imports it, or after the next
-    /// change); dartr sends the outline at once.
+    /// (Dart `shouldSendClosingLabelsFor`, `shouldSendOutlineFor`), and the
+    /// Flutter outline for open files in a Flutter project
+    /// (`shouldSendFlutterOutlineFor`).
     fn publish_open_file_notifications(&mut self, path: &str) {
         let Some(file) = self.parsed_unit(path) else {
             return;
@@ -1494,10 +1578,28 @@ impl Server {
                 json!({"uri": uri, "labels": features::closing_labels(&file)}),
             );
         }
+        let in_flutter = !self.parse_only && self.is_in_flutter_project(path);
+        let resolved = if in_flutter && (self.init.outline || self.init.flutter_outline) {
+            self.require_resolved_unit(path).ok()
+        } else {
+            None
+        };
         if self.init.outline {
+            let outline = match &resolved {
+                Some(r) => features::outline_with_flutter(r),
+                None => features::outline(&file),
+            };
             self.send_notification(
                 "dart/textDocument/publishOutline",
-                json!({"uri": uri, "outline": features::outline(&file)}),
+                json!({"uri": uri, "outline": outline}),
+            );
+        }
+        if self.init.flutter_outline
+            && let Some(r) = &resolved
+        {
+            self.send_notification(
+                "dart/textDocument/publishFlutterOutline",
+                json!({"uri": uri, "outline": features::flutter_outline(r, &file.content)}),
             );
         }
     }
@@ -1567,7 +1669,7 @@ fn read_file(path: &str) -> Option<String> {
 }
 
 /// Dart `isDartDocument`: the path of the document URI ends with `.dart`.
-fn is_dart_document(params: &Value) -> bool {
+pub(crate) fn is_dart_document(params: &Value) -> bool {
     params
         .get("textDocument")
         .and_then(|d| d.get("uri"))

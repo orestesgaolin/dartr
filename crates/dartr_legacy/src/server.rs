@@ -2664,14 +2664,16 @@ impl<W: Write> Server<W> {
         };
         let options = collection.options_for(context, path);
         let has = |name: &str| options.lint_rules.iter().any(|r| r == name);
-        let quote = if has("prefer_single_quotes") {
-            '\''
+        let lint_quote = if has("prefer_single_quotes") {
+            Some('\'')
         } else if has("prefer_double_quotes") {
-            '"'
+            Some('"')
         } else {
-            '\''
+            None
         };
+        let quote = lint_quote.unwrap_or('\'');
         dartr_server::completion::CodeStyle {
+            lint_quote,
             specify_types: has("always_specify_types"),
             make_locals_final: has("prefer_final_locals"),
             quote,
@@ -3590,6 +3592,7 @@ impl<W: Write> Server<W> {
                 false,
                 resolution,
                 doc,
+                None,
             ) {
                 items.push(item);
             }
