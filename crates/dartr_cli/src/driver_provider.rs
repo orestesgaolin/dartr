@@ -127,12 +127,14 @@ pub struct DriverSession {
     /// Resolved libraries for the navigation features, by the path of the
     /// defining unit (Dart `AnalysisDriver.getResolvedLibrary` results);
     /// cleared when a file changes.
-    resolved: HashMap<String, Arc<ResolvedLibraryResult>>,
+    resolved: HashMap<(usize, String), Arc<ResolvedLibraryResult>>,
 }
 
 /// A resolved library with the element model it was resolved against
 /// (Dart `ResolvedLibraryResult`).
 pub struct ResolvedLibraryResult {
+    /// The index of the context whose driver resolved the library.
+    pub context: usize,
     /// A snapshot of the linked element model.
     pub world: dartr_element::WorldSnapshot,
     pub type_provider: dartr_element::TypeProvider,
@@ -252,6 +254,18 @@ impl DriverSession {
             .context_for(path)
             .and_then(|c| collection.contexts.iter().position(|x| std::ptr::eq(x, c)))
             .unwrap_or(0);
+        self.resolved_library_in(collection, context, path)
+    }
+
+    /// [Self::resolved_library] with the driver of [context] (Dart: the
+    /// driver that owns [path] in a search, which can be a file of the SDK
+    /// or of a package that the context depends on).
+    pub fn resolved_library_in(
+        &mut self,
+        collection: &AnalysisContextCollection,
+        context: usize,
+        path: &str,
+    ) -> Option<Arc<ResolvedLibraryResult>> {
         if context >= collection.contexts.len() {
             return None;
         }
@@ -273,7 +287,8 @@ impl DriverSession {
                 }
                 let library = driver.fs.library_of(id)?;
                 let library_path = driver.fs.file(library).path.to_string();
-                if let Some(r) = resolved.get(&library_path) {
+                let key = (context, library_path.clone());
+                if let Some(r) = resolved.get(&key) {
                     return Some(r.clone());
                 }
                 driver.link_libraries(&[library]);
@@ -305,13 +320,14 @@ impl DriverSession {
                     ctx.get(library.library).feature_set.clone()
                 };
                 let entry = Arc::new(ResolvedLibraryResult {
+                    context,
                     world,
                     type_provider,
                     features,
                     library,
                     inputs,
                 });
-                resolved.insert(library_path, entry.clone());
+                resolved.insert(key, entry.clone());
                 Some(entry)
             }))
         });
@@ -359,18 +375,53 @@ impl DriverSession {
             .collect()
     }
 
+    /// The existing Dart files that the driver of [context] knows (Dart
+    /// `FileSystemState.knownFiles`), in the order the driver found them;
+    /// empty when the context has no driver yet.
+    pub fn known_files(&self, context: usize) -> Vec<String> {
+        let Some(driver) = self.drivers.get(&context) else {
+            return Vec::new();
+        };
+        driver
+            .fs
+            .files()
+            .iter()
+            .filter(|f| f.content.is_some() && f.exists() && f.path.ends_with(".dart"))
+            .map(|f| f.path.to_string())
+            .collect()
+    }
+
+    /// The library file of the part [path] in the driver of [context] when
+    /// the part names its library with a URI (Dart creates that library
+    /// file when it creates the part: `PartOfUriKnownFileKind`).
+    pub fn part_of_uri_library(&self, context: usize, path: &str) -> Option<String> {
+        let driver = self.drivers.get(&context)?;
+        let id = driver.fs.get_existing_from_path(path)?;
+        let file = driver.fs.file(id);
+        file.content.as_ref()?;
+        match file.kind() {
+            dartr_driver::file_state::FileKind::PartOfUriKnown { uri_file } => {
+                Some(driver.fs.file(*uri_file).path.to_string())
+            }
+            _ => None,
+        }
+    }
+
     /// Dart `AnalysisDriver.changeFile` for every driver: reads [path] again
     /// and invalidates what depends on it (design §4.2). Returns the paths
     /// of the units of the libraries to analyze again.
     pub fn change_file(&mut self, path: &str) -> Vec<String> {
         let mut result: Vec<String> = Vec::new();
-        self.resolved.clear();
-        for driver in self.drivers.values_mut() {
+        for (&context, driver) in self.drivers.iter_mut() {
             if driver.fs.get_existing_from_path(path).is_none() {
                 continue;
             }
             let change = driver.change_file(path);
             for library in change.libraries {
+                // The resolved library is not valid anymore (Dart: the
+                // library signature changed).
+                self.resolved
+                    .remove(&(context, driver.fs.file(library).path.to_string()));
                 for unit in driver.fs.library_file_kinds(library) {
                     let p = driver.fs.file(unit).path.to_string();
                     if !result.contains(&p) {

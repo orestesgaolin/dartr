@@ -17,8 +17,16 @@ use serde_json::{Value, json};
 
 /// The time without messages after which a session step is complete.
 const QUIET: Duration = Duration::from_millis(400);
-/// The longest time that one step can take.
-const STEP_TIMEOUT: Duration = Duration::from_secs(60);
+/// The longest time that one step can take (`DARTR_LSP_STEP_TIMEOUT`
+/// seconds, else 60: a debug build needs more for a search that indexes
+/// large SDK libraries).
+fn step_timeout() -> Duration {
+    let seconds = std::env::var("DARTR_LSP_STEP_TIMEOUT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(60);
+    Duration::from_secs(seconds)
+}
 
 /// The root of the workspace (the repository).
 pub fn repo_root() -> PathBuf {
@@ -188,7 +196,7 @@ impl LspClient {
     }
 
     pub fn wait_for_response(&mut self, id: i64) -> Value {
-        let deadline = Instant::now() + STEP_TIMEOUT;
+        let deadline = Instant::now() + step_timeout();
         loop {
             let m = self
                 .next_message(deadline)
@@ -210,7 +218,7 @@ impl LspClient {
     #[track_caller]
     pub fn settle(&mut self, expect_analysis: bool) {
         let ends_before = self.progress_ends;
-        let deadline = Instant::now() + STEP_TIMEOUT;
+        let deadline = Instant::now() + step_timeout();
         loop {
             match self.next_message(Instant::now() + QUIET) {
                 Some(_) => {}

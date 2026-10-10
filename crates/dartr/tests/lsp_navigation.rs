@@ -24,8 +24,13 @@ const METHODS: &[&str] = &[
     "textDocument/implementation",
 ];
 
+/// The `dartr` binary of the build, or `DARTR_LSP_NAV_BIN` (for example a
+/// release build: a search in the SDK libraries is slow in a debug build).
 fn dartr_bin() -> &'static str {
-    env!("CARGO_BIN_EXE_dartr")
+    match std::env::var("DARTR_LSP_NAV_BIN") {
+        Ok(bin) => Box::leak(bin.into_boxed_str()),
+        Err(_) => env!("CARGO_BIN_EXE_dartr"),
+    }
 }
 
 fn session_args() -> Vec<&'static str> {
@@ -118,6 +123,13 @@ fn run_requests(program: &str, root: &Path, files: &[PathBuf], every: usize) -> 
     for file in files {
         let text = std::fs::read_to_string(file).unwrap();
         let uri = file_uri(file);
+        // As in an editor: the file is open (Dart: a priority file, whose
+        // resolved unit the server keeps, so a local search finds the
+        // elements of the request).
+        c.notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {"uri": uri, "languageId": "dart", "version": 1, "text": text}}),
+        );
         for position in identifier_positions(&text, every) {
             for &method in METHODS {
                 let mut response = c.request(method, params_for(method, &uri, position));
@@ -129,8 +141,47 @@ fn run_requests(program: &str, root: &Path, files: &[PathBuf], every: usize) -> 
                     .push((uri.clone(), position, response));
             }
         }
+        c.notify("textDocument/didClose", json!({"textDocument": {"uri": uri}}));
     }
     let _ = c.shutdown_and_exit();
+    out
+}
+
+/// `DARTR_LSP_NAV_DUMP=<folder>`: writes the responses of each server to
+/// `<folder>/<label>.<server>.json`. With `DARTR_LSP_NAV_REUSE_DART=1`, the
+/// `dart` responses are read from that file when it exists.
+fn run_or_reuse(program: &str, label: &str, root: &Path, files: &[PathBuf], every: usize) -> Responses {
+    let dump = std::env::var_os("DARTR_LSP_NAV_DUMP").map(PathBuf::from);
+    let server = if program == "dart" { "dart" } else { "dartr" };
+    let path = dump.as_ref().map(|d| d.join(format!("{label}.{server}.json")));
+    if server == "dart" && std::env::var_os("DARTR_LSP_NAV_REUSE_DART").is_some() {
+        if let Some(text) = path.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
+            let value: Value = serde_json::from_str(&text).unwrap();
+            let mut out: Responses = BTreeMap::new();
+            for &method in METHODS {
+                for item in value[method].as_array().into_iter().flatten() {
+                    out.entry(method).or_default().push((
+                        item[0].as_str().unwrap().to_string(),
+                        (item[1].as_u64().unwrap() as u32, item[2].as_u64().unwrap() as u32),
+                        item[3].clone(),
+                    ));
+                }
+            }
+            return out;
+        }
+    }
+    let out = run_requests(program, root, files, every);
+    if let Some(path) = path {
+        let _ = std::fs::create_dir_all(path.parent().unwrap());
+        let value: serde_json::Map<String, Value> = out
+            .iter()
+            .map(|(m, items)| {
+                let list = items.iter().map(|(u, p, r)| json!([u, p.0, p.1, r])).collect();
+                (m.to_string(), Value::Array(list))
+            })
+            .collect();
+        std::fs::write(path, serde_json::to_string_pretty(&Value::Object(value)).unwrap()).unwrap();
+    }
     out
 }
 
@@ -148,10 +199,15 @@ fn compare(
             continue;
         };
         let mut same = 0;
+        let mut same_set = 0;
         let mut shown = 0;
         for ((uri, pos, ra), (_, _, rb)) in a.iter().zip(b) {
             if ra == rb {
                 same += 1;
+            } else if sorted_result(ra) == sorted_result(rb) {
+                // The same locations in another order (Dart: the order of
+                // the files of a search depends on the earlier requests).
+                same_set += 1;
             } else if shown < 5 {
                 shown += 1;
                 println!(
@@ -163,10 +219,21 @@ fn compare(
                 );
             }
         }
-        println!("  {method}: {same} of {} identical", a.len());
+        println!(
+            "  {method}: {same} of {} identical ({same_set} more with the same locations in another order)",
+            a.len()
+        );
         counts.insert(method, (same, a.len()));
     }
     counts
+}
+
+/// The result array of a response, sorted (by the JSON text of each item).
+fn sorted_result(response: &Value) -> Option<Vec<String>> {
+    let items = response.get("result")?.as_array()?;
+    let mut v: Vec<String> = items.iter().map(Value::to_string).collect();
+    v.sort();
+    Some(v)
 }
 
 fn truncate(s: &str) -> String {
@@ -379,8 +446,8 @@ fn lsp_navigation_parity() {
     }
     let root = write_project();
     let files = dart_files(&root);
-    let dart = run_requests("dart", &root, &files, 1);
-    let dartr = run_requests(dartr_bin(), &root, &files, 1);
+    let dart = run_or_reuse("dart", "fixture", &root, &files, 1);
+    let dartr = run_or_reuse(dartr_bin(), "fixture", &root, &files, 1);
     let counts = compare("fixture project", &dart, &dartr);
     // The methods that must be at parity on the fixture.
     let required: Vec<&str> = std::env::var("DARTR_LSP_NAV_REQUIRED")
@@ -419,7 +486,8 @@ fn lsp_navigation_corpus() {
             .take(max_files)
             .collect();
     }
-    let dart = run_requests("dart", &root, &files, every);
-    let dartr = run_requests(dartr_bin(), &root, &files, every);
+    let label = root.file_name().unwrap().to_string_lossy().to_string();
+    let dart = run_or_reuse("dart", &label, &root, &files, every);
+    let dartr = run_or_reuse(dartr_bin(), &label, &root, &files, every);
     compare(&format!("corpus {}", root.display()), &dart, &dartr);
 }

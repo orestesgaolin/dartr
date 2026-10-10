@@ -10,6 +10,7 @@
 //! engine over the analyzed files of all contexts, with the index of each
 //! unit ([`crate::index`]).
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use dartr_ast::*;
@@ -44,6 +45,12 @@ impl SElem {
         self.with(|ctx| crate::index::element_key(ctx, self.id))
     }
 
+    /// The identity of the element in Dart: the same element of the same
+    /// driver (each driver has its own element model).
+    fn identity(&self) -> Option<(usize, ElementKey)> {
+        self.key().map(|k| (self.lib.context, k))
+    }
+
     fn same(&self, other: ElementId) -> SElem {
         SElem {
             lib: self.lib.clone(),
@@ -59,6 +66,8 @@ pub(crate) struct Match {
     pub path: String,
     pub offset: u32,
     pub length: u32,
+    /// The context of the driver that found the match.
+    pub context: usize,
 }
 
 const REFERENCES: &[RelationKind] = &[
@@ -106,59 +115,268 @@ const SUBTYPES: &[RelationKind] = &[
     RelationKind::Constrains,
 ];
 
-fn is_identifier_char(c: u8) -> bool {
-    c.is_ascii_alphanumeric() || c == b'_' || c == b'$'
-}
-
-/// Whether [content] has the identifier [name] (Dart `referencedNames`
-/// contains it; a superset: every identifier token).
-fn mentions(content: &str, name: &str) -> bool {
-    let bytes = content.as_bytes();
-    let mut from = 0;
-    while let Some(i) = content[from..].find(name) {
-        let start = from + i;
-        let end = start + name.len();
-        let before = start == 0 || !is_identifier_char(bytes[start - 1]);
-        let after = end >= bytes.len() || !is_identifier_char(bytes[end]);
-        if before && after {
-            return true;
-        }
-        from = start + 1;
+/// Dart VM `String.hashCode` (`StringHasher`: one-at-a-time over the
+/// UTF-16 code units, 30 bits, 0 is 1).
+pub(crate) fn dart_string_hash(s: &str) -> u32 {
+    let mut h: u32 = 0;
+    for c in s.encode_utf16() {
+        h = h.wrapping_add(c as u32);
+        h = h.wrapping_add(h << 10);
+        h ^= h >> 6;
     }
-    false
+    h = h.wrapping_add(h << 3);
+    h ^= h >> 11;
+    h = h.wrapping_add(h << 15);
+    h &= (1 << 30) - 1;
+    if h == 0 { 1 } else { h }
 }
 
-impl Server {
-    /// The analyzed Dart files of each context (Dart `ownedFiles` of each
-    /// driver), in context order.
-    fn owned_files(&self) -> Vec<Vec<String>> {
-        let Some(collection) = &self.collection else {
+/// The iteration order of a Dart VM `HashMap` (`_HashMap`: 8 buckets at
+/// first, new entries first in their bucket, twice the buckets when more
+/// than 3/4 full) after inserting the distinct [hashes] in order: indexes
+/// into [hashes].
+pub(crate) fn dart_hash_map_order(hashes: &[u32]) -> Vec<usize> {
+    let mut buckets: Vec<Vec<usize>> = vec![Vec::new(); 8];
+    let mut count = 0usize;
+    for (i, &h) in hashes.iter().enumerate() {
+        let length = buckets.len();
+        buckets[h as usize & (length - 1)].insert(0, i);
+        count += 1;
+        if (count << 2) > ((length << 1) + length) {
+            let new_length = length << 1;
+            let mut new_buckets: Vec<Vec<usize>> = vec![Vec::new(); new_length];
+            for bucket in &buckets {
+                for &e in bucket {
+                    new_buckets[hashes[e] as usize & (new_length - 1)].insert(0, e);
+                }
+            }
+            buckets = new_buckets;
+        }
+    }
+    buckets.into_iter().flatten().collect()
+}
+
+/// The identifier-like words of [content] (a superset of Dart
+/// `FileState.referencedNames`).
+fn words(content: &str) -> HashSet<String> {
+    content
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$'))
+        .filter(|w| !w.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// Dart `Folder.getChildren` recursively: the Dart files under [folder], in
+/// directory order (`discoverAvailableFiles.discoverRecursively`).
+fn dart_files_recursively(folder: &str, out: &mut Vec<String>) {
+    let Some(children) = dartr_project::fs::children(folder) else {
+        return;
+    };
+    for child in children {
+        match child.kind {
+            dartr_project::fs::ResourceKind::File => {
+                if child.path.ends_with(".dart") {
+                    out.push(child.path);
+                }
+            }
+            dartr_project::fs::ResourceKind::Folder => dart_files_recursively(&child.path, out),
+        }
+    }
+}
+
+/// The paths of the files of the library of [e] (Dart
+/// `LibraryFileKind.files`: the library, then its parts, depth first).
+fn library_file_paths(element: &SElem, e: ElementId) -> Vec<String> {
+    element.with(|ctx| {
+        let Some(library) = support::library_of(ctx, e) else {
             return Vec::new();
         };
-        collection
-            .contexts
-            .iter()
-            .map(|c| {
-                c.root
+        let first = ctx.get(library).first_fragment();
+        let mut out = Vec::new();
+        let mut stack = vec![first];
+        while let Some(f) = stack.pop() {
+            out.push(ctx.fragment(f).source.path.to_string());
+            for part in ctx.fragment(f).parts.iter().rev() {
+                if let dartr_element::DirectiveUri::Unit { library_fragment, .. } = &part.directive.uri {
+                    stack.push(*library_fragment);
+                }
+            }
+        }
+        out
+    })
+}
+
+/// Dart `OwnedFiles`: the driver (context) of each file that a search
+/// looks at.
+#[derive(Default)]
+pub(crate) struct OwnedFiles {
+    /// The analyzed files, by the context that adds them.
+    pub added: indexmap::IndexMap<String, usize>,
+    /// Other files, by the first context that knows them.
+    pub known: indexmap::IndexMap<String, usize>,
+    /// Whether `discoverAvailableFiles` ran.
+    pub discovered: bool,
+}
+
+impl OwnedFiles {
+    /// Dart `addKnown`; returns whether the file is new.
+    fn add_known(&mut self, path: String, context: usize) -> bool {
+        if self.added.contains_key(&path) || self.known.contains_key(&path) {
+            return false;
+        }
+        self.known.insert(path, context);
+        true
+    }
+}
+
+/// The files that a search looks at (Dart `OwnedFiles.filesFor(driver)` of
+/// each driver after `discoverAvailableFiles`): by context, in the order of
+/// `SearchEngineImpl._drivers`.
+pub(crate) type SearchScope = Vec<(usize, Vec<String>)>;
+
+impl Server {
+    /// Dart `OwnedFiles` after `discoverAvailableFiles` of all drivers. A
+    /// file is owned by the driver to which it is added (the analyzed files
+    /// of the context), else by the first driver that knows it: the files
+    /// that the analysis found (contexts in collection order), then the
+    /// SDK libraries and the Dart files of the package `lib` folders
+    /// (drivers in search order, once), then the files that later
+    /// resolutions find. The ownership only grows (Dart: the maps are
+    /// append-only), so the files of a search depend on the earlier
+    /// requests, as in Dart. The drivers are in the order of the
+    /// `HashMap<Folder, AnalysisDriver>` of the context manager.
+    fn search_scope(&mut self) -> Arc<SearchScope> {
+        if let Some(scope) = &self.search_scope {
+            return scope.clone();
+        }
+        let Some(collection) = &self.collection else {
+            return Arc::new(Vec::new());
+        };
+        let count = collection.contexts.len();
+        if self.owned.added.is_empty() {
+            for (index, context) in collection.contexts.iter().enumerate() {
+                let files: Vec<String> = context
+                    .root
                     .analyzed_files()
                     .into_iter()
                     .filter(|f| f.ends_with(".dart") && !self.is_excluded(f))
-                    .collect()
+                    .collect();
+                // Dart creates the library of a part with a URI before the
+                // part is known (`_newFile` calls `onNewFile` after
+                // `refresh`).
+                for f in &files {
+                    if let Some(library) = self.session.part_of_uri_library(index, f) {
+                        if files.contains(&library) {
+                            self.owned.added.entry(library).or_insert(index);
+                        }
+                    }
+                    self.owned.added.entry(f.clone()).or_insert(index);
+                }
+            }
+        }
+        for index in 0..count {
+            for f in self.session.known_files(index) {
+                self.owned.add_known(f, index);
+            }
+        }
+        let hashes: Vec<u32> = collection
+            .contexts
+            .iter()
+            .map(|c| dart_string_hash(&c.root.root))
+            .collect();
+        let order = dart_hash_map_order(&hashes);
+        if !self.owned.discovered {
+            self.owned.discovered = true;
+            for &index in &order {
+                let context = &collection.contexts[index];
+                let sdk = context.sdk.as_ref().or(collection.sdk.as_ref());
+                let mut discovered = Vec::new();
+                if let Some(sdk) = sdk {
+                    discovered.extend(sdk.libraries().iter().filter_map(|l| sdk.map_dart_uri(&l.short_name)));
+                }
+                for package in context.packages.packages() {
+                    dart_files_recursively(&package.lib, &mut discovered);
+                }
+                for f in discovered {
+                    if std::path::Path::new(&f).is_file() {
+                        self.owned.add_known(f, index);
+                    }
+                }
+            }
+        }
+        let scope: SearchScope = order
+            .iter()
+            .map(|&index| {
+                let files = self
+                    .owned
+                    .added
+                    .iter()
+                    .chain(self.owned.known.iter())
+                    .filter(|(_, owner)| **owner == index)
+                    .map(|(f, _)| f.clone())
+                    .collect();
+                (index, files)
             })
-            .collect()
+            .collect();
+        if std::env::var_os("DARTR_DEBUG_SEARCH").is_some() {
+            for (index, files) in &scope {
+                let root = &collection.contexts[*index].root.root;
+                eprintln!("dartr: search scope of context {index} ({root}): {} files", files.len());
+            }
+        }
+        let scope = Arc::new(scope);
+        self.search_scope = Some(scope.clone());
+        scope
     }
 
-    /// The index of the unit [path] (cached until a file changes).
-    fn unit_index(&mut self, path: &str) -> Option<Arc<UnitIndex>> {
-        if let Some(i) = self.indexes.get(path) {
+    /// The context that owns [path] in a search.
+    fn owner_of(&mut self, path: &str) -> Option<usize> {
+        self.search_scope()
+            .iter()
+            .find(|(_, files)| files.iter().any(|f| f == path))
+            .map(|(index, _)| *index)
+    }
+
+    /// Whether [content] of [path] has one of [names] (Dart
+    /// `FileState.referencedNames`); cached until a file changes.
+    fn mentions_any(&mut self, path: &str, names: &[String]) -> bool {
+        let words = match self.search_words.get(path) {
+            Some(w) => w.clone(),
+            None => {
+                let w = Arc::new(words(&self.content(path).unwrap_or_default()));
+                self.search_words.insert(path.to_string(), w.clone());
+                w
+            }
+        };
+        names.iter().any(|n| words.contains(n))
+    }
+
+    /// The index of the unit [path] in the driver of [context] (cached
+    /// until a file changes).
+    fn unit_index(&mut self, path: &str, context: usize) -> Option<Arc<UnitIndex>> {
+        let key = (context, path.to_string());
+        if let Some(i) = self.indexes.get(&key) {
             return Some(i.clone());
         }
-        let resolved = self.require_resolved_unit(path).ok()?;
+        let resolved = self.require_resolved_unit_in(path, Some(context)).ok()?;
+        // Dart: the resolution creates the files of the library and of the
+        // libraries it depends on in the driver (known to it unless another
+        // driver knows them).
+        let mut grew = false;
+        for input in &resolved.library.inputs {
+            grew |= self.owned.add_known(input.path.to_string(), context);
+        }
+        for f in self.session.known_files(context) {
+            grew |= self.owned.add_known(f, context);
+        }
+        if grew {
+            self.search_scope = None;
+        }
         let sink = NoopSink;
         let ctx = resolved.ctx(&sink);
         let unit = resolved.unit();
         let index = Arc::new(crate::index::index_unit(&ctx, &unit.ast, &unit.tables, unit.unit));
-        self.indexes.insert(path.to_string(), index.clone());
+        self.indexes.insert(key, index.clone());
         Some(index)
     }
 
@@ -175,25 +393,7 @@ impl Server {
         // The library files of the declaring library (and of the class for
         // an unnamed constructor).
         let mut library_files: Vec<Vec<String>> = Vec::new();
-        let library_files_of = |e: ElementId| -> Vec<String> {
-            element.with(|ctx| {
-                let Some(library) = support::library_of(ctx, e) else {
-                    return Vec::new();
-                };
-                let first = ctx.get(library).first_fragment();
-                let mut out = Vec::new();
-                let mut stack = vec![first];
-                while let Some(f) = stack.pop() {
-                    out.push(ctx.fragment(f).source.path.to_string());
-                    for part in ctx.fragment(f).parts.iter().rev() {
-                        if let dartr_element::DirectiveUri::Unit { library_fragment, .. } = &part.directive.uri {
-                            stack.push(*library_fragment);
-                        }
-                    }
-                }
-                out
-            })
-        };
+        let library_files_of = |e: ElementId| library_file_paths(element, e);
         library_files.push(library_files_of(element.id));
         if element.id.tag() == Tag::Constructor && name == "new" {
             let class = element.with(|ctx| ctx.element_data(element.id).and_then(|d| d.enclosing));
@@ -205,7 +405,8 @@ impl Server {
             }
         }
         let mut results = Vec::new();
-        for owned in self.owned_files() {
+        let scope = self.search_scope();
+        for (context, owned) in scope.iter() {
             let mut files: Vec<String> = Vec::new();
             for lib in &library_files {
                 if lib.first().is_some_and(|f| owned.contains(f)) {
@@ -217,23 +418,23 @@ impl Server {
                 }
             }
             if !name.starts_with('_') {
-                for f in &owned {
+                for f in owned {
                     if files.contains(f) {
                         continue;
                     }
-                    let content = self.content(f).unwrap_or_default();
-                    if reference_names.iter().any(|n| mentions(&content, n)) {
+                    if self.mentions_any(f, &reference_names) {
                         files.push(f.clone());
                     }
                 }
             }
             for f in files {
-                let Some(index) = self.unit_index(&f) else { continue };
+                let Some(index) = self.unit_index(&f, *context) else { continue };
                 for r in index.relations_of(&key, |k| kinds.contains(&k)) {
                     results.push(Match {
                         path: f.clone(),
                         offset: r.offset,
                         length: r.length,
+                        context: *context,
                     });
                 }
             }
@@ -318,10 +519,8 @@ impl Server {
             });
             Some((path, offset))
         })?;
-        if !self.owned_files().iter().any(|f| f.contains(&path)) {
-            return None;
-        }
-        let resolved = self.require_resolved_unit(&path).ok()?;
+        let owner = self.owner_of(&path)?;
+        let resolved = self.require_resolved_unit_in(&path, Some(owner)).ok()?;
         Some((resolved, name_offset?))
     }
 
@@ -372,6 +571,7 @@ impl Server {
                 path: path.clone(),
                 offset,
                 length,
+                context: resolved.library.context,
             })
             .collect()
     }
@@ -430,7 +630,7 @@ impl Server {
         let mut results = Vec::new();
         let paths: Vec<String> = element.lib.inputs.iter().map(|u| u.path.to_string()).collect();
         for path in paths {
-            if let Ok(resolved) = self.require_resolved_unit(&path) {
+            if let Ok(resolved) = self.require_resolved_unit_in(&path, Some(element.lib.context)) {
                 let root = resolved.unit().unit.raw();
                 results.extend(self.local_references(&resolved, root, &[element.id]));
             }
@@ -438,19 +638,32 @@ impl Server {
         results
     }
 
-    /// Dart `_searchReferences_Library`: the `part of` directives.
+    /// Dart `_searchReferences_Library`: the `part of` directives in the
+    /// files of the library, when a driver owns the library.
     fn search_library(&mut self, element: &SElem) -> Vec<Match> {
+        let paths = library_file_paths(element, element.id);
+        let Some(first) = paths.first() else {
+            return Vec::new();
+        };
+        let Some(owner) = self.owner_of(first) else {
+            return Vec::new();
+        };
         let mut results = Vec::new();
-        for (index, unit) in element.lib.library.units.iter().enumerate() {
+        for path in paths {
+            let Ok(resolved) = self.require_resolved_unit_in(&path, Some(owner)) else {
+                continue;
+            };
+            let unit = resolved.unit();
             let ast = &unit.ast;
             for &d in ast.list_raw(ast[unit.unit].directives) {
                 if let Some(p) = ast.cast::<PartOfDirective>(d) {
                     let target = ast[p].library_name.map(|n| n.raw()).or(ast[p].uri.map(|u| u.raw()));
                     if let Some(t) = target {
                         results.push(Match {
-                            path: element.lib.inputs[index].path.to_string(),
+                            path: path.clone(),
                             offset: ast.offset(t),
                             length: ast.length(t),
+                            context: owner,
                         });
                     }
                 }
@@ -465,7 +678,7 @@ impl Server {
         let matches = self.search_index(class, SUBTYPES);
         let mut out = Vec::new();
         for m in matches {
-            let Ok(resolved) = self.require_resolved_unit(&m.path) else {
+            let Ok(resolved) = self.require_resolved_unit_in(&m.path, Some(m.context)) else {
                 continue;
             };
             let unit = resolved.unit();
@@ -500,9 +713,9 @@ impl Server {
     }
 
     /// Dart `SearchEngine.appendAllSubtypes(type, allSubtypes)`.
-    fn append_all_subtypes(&mut self, class: &SElem, all: &mut Vec<SElem>, keys: &mut Vec<ElementKey>) {
+    fn append_all_subtypes(&mut self, class: &SElem, all: &mut Vec<SElem>, keys: &mut Vec<(usize, ElementKey)>) {
         for sub in self.direct_subtypes(class) {
-            let Some(key) = sub.key() else { continue };
+            let Some(key) = sub.identity() else { continue };
             if keys.contains(&key) {
                 continue;
             }
@@ -547,7 +760,7 @@ impl Server {
             out
         });
         let mut sub_classes: Vec<SElem> = Vec::new();
-        let mut keys: Vec<ElementKey> = Vec::new();
+        let mut keys: Vec<(usize, ElementKey)> = Vec::new();
         for super_class in search_classes {
             let declares = member.with(|ctx| !class_members(ctx, super_class, Some(&name)).is_empty());
             if !declares {
@@ -555,7 +768,7 @@ impl Server {
             }
             let sc = member.same(super_class);
             self.append_all_subtypes(&sc, &mut sub_classes, &mut keys);
-            if let Some(key) = sc.key()
+            if let Some(key) = sc.identity()
                 && !keys.contains(&key)
             {
                 keys.push(key);
@@ -574,13 +787,13 @@ impl Server {
             });
         }
         let member_key = member.key();
-        let mut member_keys: Vec<ElementKey> = Vec::new();
+        let mut member_keys: Vec<(usize, ElementKey)> = Vec::new();
         for sub in &sub_classes {
             let children = sub.with(|ctx| children_named(ctx, sub.id, &name));
             for c in children {
                 if matches!(c.tag(), Tag::Field | Tag::Method) {
                     let e = sub.same(c);
-                    if let Some(k) = e.key()
+                    if let Some(k) = e.identity()
                         && !member_keys.contains(&k)
                     {
                         member_keys.push(k);
@@ -588,7 +801,7 @@ impl Server {
                     }
                 }
             }
-            if id.tag() == Tag::Field {
+            if id.tag() == Tag::Field && sub.lib.context == member.lib.context {
                 let field_formals: Vec<ElementId> = sub.with(|ctx| {
                     let Some(interface) = sub.id.cast::<dartr_element::InterfaceElement>() else {
                         return Vec::new();
@@ -806,22 +1019,24 @@ impl Server {
             unit: resolved.index,
             id: element,
         };
-        let helper = pivot.with(|ctx| HierarchyHelper::from_element(ctx, element));
+        let helper = pivot.with(|ctx| HierarchyHelper::from_element(ctx, pivot.lib.context, element));
         let Some(pivot_class) = helper.pivot_class else {
             return Ok(json!([]));
         };
         let pivot_class = pivot.same(pivot_class);
-        let needs_member = pivot_class.with(|ctx| helper.find_member(ctx, pivot_class.id)).is_some();
+        let needs_member = pivot_class
+            .with(|ctx| helper.find_member(ctx, pivot_class.lib.context, pivot_class.id))
+            .is_some();
         let mut all = Vec::new();
         let mut keys = Vec::new();
         self.append_all_subtypes(&pivot_class, &mut all, &mut keys);
-        let mut seen: Vec<ElementKey> = Vec::new();
+        let mut seen: Vec<(usize, ElementKey)> = Vec::new();
         let mut locations = Vec::new();
         for sub in all {
             let target = if needs_member {
                 let found = sub.with(|ctx| {
                     helper
-                        .find_member(ctx, sub.id)
+                        .find_member(ctx, sub.lib.context, sub.id)
                         .map(|m| dartr_element::diagnostics::non_synthetic(ctx, m))
                 });
                 match found {
@@ -831,7 +1046,7 @@ impl Server {
             } else {
                 sub
             };
-            if let Some(k) = target.key() {
+            if let Some(k) = target.identity() {
                 if seen.contains(&k) {
                     continue;
                 }
@@ -905,7 +1120,9 @@ fn children_named(ctx: &Ctx<'_>, parent: ElementId, name: &str) -> Vec<ElementId
 
 /// Dart `TypeHierarchyComputerHelper`.
 struct HierarchyHelper {
-    pivot: ElementId,
+    /// The context of the element model of the pivot (Dart compares the
+    /// elements of a driver by identity).
+    pivot_context: usize,
     pivot_key: Option<ElementKey>,
     pivot_library_path: Option<String>,
     pivot_library_uri: Option<String>,
@@ -916,7 +1133,7 @@ struct HierarchyHelper {
 }
 
 impl HierarchyHelper {
-    fn from_element(ctx: &Ctx<'_>, element: ElementId) -> HierarchyHelper {
+    fn from_element(ctx: &Ctx<'_>, context: usize, element: ElementId) -> HierarchyHelper {
         let mut pivot = element;
         let mut current = Some(element);
         let mut field_final = false;
@@ -942,7 +1159,7 @@ impl HierarchyHelper {
         let pivot_library_uri = support::library_of(ctx, pivot)
             .map(|l| ctx.fragment(ctx.get(l).first_fragment()).source.uri.to_string());
         HierarchyHelper {
-            pivot,
+            pivot_context: context,
             pivot_key: crate::index::element_key(ctx, pivot),
             pivot_library_path,
             pivot_library_uri,
@@ -954,7 +1171,7 @@ impl HierarchyHelper {
     }
 
     /// Dart `findMemberElement(clazz)`.
-    fn find_member(&self, ctx: &Ctx<'_>, class: ElementId) -> Option<ElementId> {
+    fn find_member(&self, ctx: &Ctx<'_>, context: usize, class: ElementId) -> Option<ElementId> {
         if self.pivot_class.is_some_and(|c| c.tag() == Tag::ExtensionType) || class.tag() == Tag::ExtensionType {
             return None;
         }
@@ -1024,7 +1241,10 @@ impl HierarchyHelper {
                 Tag::Field => lookup(Tag::Getter).or_else(|| if self.pivot_field_final { None } else { lookup(Tag::Setter) }),
                 _ => None,
             };
-            if result.is_some() && result.and_then(|r| crate::index::element_key(ctx, r)) == self.pivot_key {
+            if result.is_some()
+                && context == self.pivot_context
+                && result.and_then(|r| crate::index::element_key(ctx, r)) == self.pivot_key
+            {
                 return None;
             }
             if result.is_some() {
@@ -1120,5 +1340,26 @@ impl AstVisitor for LocalReferencesVisitor<'_, '_> {
         if self.contains(e) {
             self.results.push((ast.offset(node), ast.length(node)));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The values that `dart` prints for the same strings and inserts.
+    #[test]
+    fn dart_hash_map_order_matches_the_vm() {
+        assert_eq!(dart_string_hash(""), 1);
+        assert_eq!(dart_string_hash("a"), 170824770);
+        assert_eq!(dart_string_hash("hello world"), 1045060183);
+        assert_eq!(dart_string_hash("/Users/a/ą€😀"), 667505471);
+        let mut keys: Vec<String> = (0..20).map(|i| format!("/p/pkg_{i}")).collect();
+        keys.push("/Users/a/ą€😀".to_string());
+        let hashes: Vec<u32> = keys.iter().map(|k| dart_string_hash(k)).collect();
+        assert_eq!(
+            dart_hash_map_order(&hashes),
+            vec![19, 17, 8, 0, 11, 9, 14, 7, 4, 1, 18, 3, 10, 12, 5, 13, 2, 16, 15, 6, 20]
+        );
     }
 }

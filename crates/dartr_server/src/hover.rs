@@ -650,6 +650,9 @@ fn element_with_documentation(ctx: &Ctx<'_>, element: ElementId) -> Option<Eleme
 
 /// Dart `Element.documentationComment`: of the first fragment with one.
 pub fn documentation_comment(ctx: &Ctx<'_>, element: ElementId) -> Option<String> {
+    if let Some(library) = element.cast::<dartr_element::LibraryElement>() {
+        return ctx.get(library).documentation_comment.as_ref().map(|c| c.to_string());
+    }
     let mut f = ctx.element_data(element).map(|d| d.first_fragment);
     while let Some(id) = f {
         let data = ctx.fragment_data(id)?;
@@ -673,7 +676,7 @@ pub fn documentation(
     candidates.extend(supers);
     candidates.extend(interfaces);
     if matches!(element.tag(), Tag::Getter | Tag::Setter)
-        && let Some(v) = dartr_resolver::element_metadata::accessor_variable(ctx, element)
+        && let Some(v) = dartr_resolver::element_metadata::accessor_variable_any(ctx, element)
     {
         candidates.push(v);
     }

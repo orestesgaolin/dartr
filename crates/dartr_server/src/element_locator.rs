@@ -190,6 +190,19 @@ impl Unit<'_, '_> {
                 if ast.is::<AssignedVariablePattern>(node) {
                     return self.element(node);
                 }
+                if ast.is::<LibraryDirective>(node) {
+                    // Dart `LibraryDirective.element`: the library of the
+                    // unit.
+                    return self.element(node).or_else(|| {
+                        let unit = ast.cast::<CompilationUnit>(ast.parent(node)?)?;
+                        let fragment = self
+                            .tables
+                            .declared_fragment
+                            .get(unit.raw())?
+                            .cast::<dartr_element::LibraryFragment>()?;
+                        Some(self.ctx.fragment(fragment).library.raw())
+                    });
+                }
                 self.element(node)
             }
             NodeKind::CatchClauseParameter

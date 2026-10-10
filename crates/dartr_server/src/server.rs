@@ -172,7 +172,13 @@ pub struct Server {
     session: DriverSession,
     /// The search index of each unit (`textDocument/references`), until a
     /// file changes.
-    indexes: HashMap<String, std::sync::Arc<crate::index::UnitIndex>>,
+    indexes: HashMap<(usize, String), std::sync::Arc<crate::index::UnitIndex>>,
+    /// The files of a search by driver, until a file changes.
+    search_scope: Option<std::sync::Arc<search::SearchScope>>,
+    /// The owner of each file of a search, until the roots change.
+    owned: search::OwnedFiles,
+    /// The words of each file of a search, until a file changes.
+    search_words: HashMap<String, std::sync::Arc<HashSet<String>>>,
     /// `DARTR_PARSE_ONLY=1`: the parse-only diagnostics (for comparison).
     parse_only: bool,
     next_request_id: i64,
@@ -274,6 +280,9 @@ impl Server {
             parsed: HashMap::new(),
             session: DriverSession::default(),
             indexes: HashMap::new(),
+            search_scope: None,
+            owned: search::OwnedFiles::default(),
+            search_words: HashMap::new(),
             parse_only: std::env::var_os("DARTR_PARSE_ONLY").is_some(),
             next_request_id: 1,
             pending: HashMap::new(),
@@ -912,13 +921,18 @@ impl Server {
 
     fn file_changed(&mut self, path: &str) {
         self.parsed.remove(path);
-        self.indexes.clear();
+        // The search data of the file and of the units of the libraries
+        // that the change affects.
+        self.indexes.retain(|(_, p), _| p != path);
+        self.search_scope = None;
+        self.search_words.remove(path);
         if path.ends_with(".dart") && !self.parse_only {
             // Dart `AnalysisDriver.changeFile`: the units of the libraries
             // to analyze again (only the library of the file when only
             // function bodies changed; after an API change the relinked
             // libraries too).
             for affected in self.session.change_file(path) {
+                self.indexes.retain(|(_, p), _| *p != affected);
                 if self.analyzed.contains(&affected) || self.priority.contains(&affected) {
                     self.dirty.insert(affected);
                 }
@@ -1120,6 +1134,9 @@ impl Server {
         // New contexts: new drivers.
         self.session = DriverSession::default();
         self.indexes.clear();
+        self.search_scope = None;
+        self.search_words.clear();
+        self.owned = search::OwnedFiles::default();
         self.collection = if included.is_empty() {
             None
         } else {

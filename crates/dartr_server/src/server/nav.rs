@@ -40,6 +40,16 @@ impl ResolvedUnitRef {
 impl Server {
     /// Dart `requireResolvedUnit(path)`.
     pub(crate) fn require_resolved_unit(&mut self, path: &str) -> ErrorOr<ResolvedUnitRef> {
+        self.require_resolved_unit_in(path, None)
+    }
+
+    /// [Self::require_resolved_unit] with the driver of [context] (the
+    /// context of [path] when `None`).
+    pub(crate) fn require_resolved_unit_in(
+        &mut self,
+        path: &str,
+        context: Option<usize>,
+    ) -> ErrorOr<ResolvedUnitRef> {
         let not_analyzed = || {
             ResponseError::with_data(codes::FILE_NOT_ANALYZED, "File is not being analyzed", path)
         };
@@ -56,10 +66,11 @@ impl Server {
                 path,
             ));
         }
-        let library = self
-            .session
-            .resolved_library(collection, path)
-            .ok_or_else(not_analyzed)?;
+        let library = match context {
+            Some(context) => self.session.resolved_library_in(collection, context, path),
+            None => self.session.resolved_library(collection, path),
+        }
+        .ok_or_else(not_analyzed)?;
         let index = library.unit_index(path).ok_or_else(not_analyzed)?;
         Ok(ResolvedUnitRef { library, index })
     }

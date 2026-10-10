@@ -752,8 +752,13 @@ impl AstVisitor for Contributor<'_, '_> {
 
     fn visit_comment_reference(&mut self, ast: &Ast, node: Id<CommentReference>) {
         let expression = ast[node].expression;
+        // Dart `PrefixedIdentifier.element`: the element of the identifier.
+        let element = self.element(expression).or_else(|| {
+            ast.cast::<PrefixedIdentifier>(expression)
+                .and_then(|p| self.element(ast[p].identifier))
+        });
         if ast.is::<Identifier>(expression)
-            && let Some(element) = self.element(expression)
+            && let Some(element) = element
             && element.tag() == Tag::Constructor
         {
             if let Some(p) = ast.cast::<PrefixedIdentifier>(expression) {
