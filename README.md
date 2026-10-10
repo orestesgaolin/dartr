@@ -144,11 +144,12 @@ config:
       plotColorPalette: "#0175C2, #DEA584"
 ---
 xychart-beta
+    %% -100 = no bar: one series per tool gives each tool its own color
     title "Large projects: wall time (s), lower is better"
     x-axis ["app: dart", "app: dartr", "flutter: dart", "flutter: dartr"]
     y-axis "seconds" 0 --> 80
-    bar [76.8, 0, 15.4, 0]
-    bar [0, 22.1, 0, 6.2]
+    bar [76.8, -100, 15.4, -100]
+    bar [-100, 22.1, -100, 6.2]
 ```
 
 ```mermaid
@@ -161,11 +162,12 @@ config:
       plotColorPalette: "#0175C2, #DEA584"
 ---
 xychart-beta
+    %% -100 = no bar: one series per tool gives each tool its own color
     title "Smaller packages: wall time (s), lower is better"
     x-axis ["analyzer: dart", "analyzer: dartr", "flutter_tools: dart", "flutter_tools: dartr"]
     y-axis "seconds" 0 --> 4
-    bar [2.5, 0, 2.5, 0]
-    bar [0, 1.9, 0, 3.5]
+    bar [2.5, -100, 2.5, -100]
+    bar [-100, 1.9, -100, 3.5]
 ```
 
 Blue: `dart analyze`. Orange: `dartr analyze`. "app" is a 1.56 million line Flutter
