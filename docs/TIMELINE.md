@@ -86,6 +86,7 @@ at each merge; the final process report is written from it.
 | 10-10 15:55 | c1afb75 | landing page in site/, published with GitHub Pages | Opus | checked in Chrome at 1280 px and 390 px, light and dark; every number traced to a repo file |
 | 10-10 16:50 | 302b531 | LSP code actions: quick fixes, assists, organize imports, sort members, fix_data.yaml renames, workspace/executeCommand | Opus | every returned action identical to `dart language-server` (~7,000 import fixes, 191 create fixes, 486 assists, fixture + corpus sample); 5,585 tests |
 | 10-10 17:45 | 12b87a9 | legacy protocol: flutter domain (outline, widget descriptions), lsp.handle, clippy cleanup (43/59 requests, 21/22 notifications) | Gemini 4 (Antigravity) | 126 steps identical to `dart language-server --protocol=analyzer`, including a Flutter project; 5,586 tests |
+| 10-10 18:40 | 1c2ab18 | completion part 2: Dart driver file order, Flutter widget snippets, import edits from resolve, package: URIs, color constants | Opus | fixture 153/153, visible-app 130/130 completion lists identical; flutter_tools (unseen) 568/577; analyze on flutter_tools + analyzer-9.0.0 unchanged (27,278/27,278); 5,587 tests |
 
 ## Incidents and lessons
 
