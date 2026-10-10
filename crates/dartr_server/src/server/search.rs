@@ -157,13 +157,22 @@ pub(crate) fn dart_hash_map_order(hashes: &[u32]) -> Vec<usize> {
 }
 
 /// The identifier-like words of [content] (a superset of Dart
-/// `FileState.referencedNames`).
+/// `FileState.referencedNames`). A word with `$` also gives its parts: in a
+/// string, `$name` is an interpolation of `name`.
 fn words(content: &str) -> HashSet<String> {
-    content
-        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$'))
-        .filter(|w| !w.is_empty())
-        .map(str::to_string)
-        .collect()
+    let mut out = HashSet::new();
+    for w in content.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$')) {
+        if w.is_empty() {
+            continue;
+        }
+        if w.contains('$') {
+            for part in w.split('$').filter(|p| !p.is_empty()) {
+                out.insert(part.to_string());
+            }
+        }
+        out.insert(w.to_string());
+    }
+    out
 }
 
 /// Dart `Folder.getChildren` recursively: the Dart files under [folder], in

@@ -231,9 +231,26 @@ fn compare(
 /// The result array of a response, sorted (by the JSON text of each item).
 fn sorted_result(response: &Value) -> Option<Vec<String>> {
     let items = response.get("result")?.as_array()?;
-    let mut v: Vec<String> = items.iter().map(Value::to_string).collect();
+    let mut v: Vec<String> = items.iter().map(canonical).collect();
     v.sort();
     Some(v)
+}
+
+/// The JSON text of [v] with the keys of each object sorted.
+fn canonical(v: &Value) -> String {
+    match v {
+        Value::Object(m) => {
+            let mut keys: Vec<&String> = m.keys().collect();
+            keys.sort();
+            let fields: Vec<String> = keys
+                .iter()
+                .map(|k| format!("{}:{}", Value::String((*k).clone()), canonical(&m[*k])))
+                .collect();
+            format!("{{{}}}", fields.join(","))
+        }
+        Value::Array(a) => format!("[{}]", a.iter().map(canonical).collect::<Vec<_>>().join(",")),
+        other => other.to_string(),
+    }
 }
 
 fn truncate(s: &str) -> String {
@@ -476,7 +493,9 @@ fn lsp_navigation_corpus() {
     let root = PathBuf::from(parts.next().unwrap()).canonicalize().unwrap();
     let every: usize = parts.next().and_then(|s| s.parse().ok()).unwrap_or(50);
     let max_files: usize = parts.next().and_then(|s| s.parse().ok()).unwrap_or(40);
-    let mut files = dart_files(&root);
+    // The files of `lib` when the folder is a package.
+    let lib = root.join("lib");
+    let mut files = dart_files(if lib.is_dir() { &lib } else { &root });
     // A deterministic sample spread over the folder.
     if files.len() > max_files {
         let step = files.len() / max_files;
@@ -486,7 +505,7 @@ fn lsp_navigation_corpus() {
             .take(max_files)
             .collect();
     }
-    let label = root.file_name().unwrap().to_string_lossy().to_string();
+    let label = format!("{}-{every}-{max_files}", root.file_name().unwrap().to_string_lossy());
     let dart = run_or_reuse("dart", &label, &root, &files, every);
     let dartr = run_or_reuse(dartr_bin(), &label, &root, &files, every);
     compare(&format!("corpus {}", root.display()), &dart, &dartr);
