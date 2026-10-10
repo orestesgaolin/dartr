@@ -170,3 +170,11 @@ at each merge; the final process report is written from it.
 - **Flaky LSP step:** `lsp_session_parity_with_dart_language_server` failed once at "didChangeConfiguration:
   server requests" under load, then passed 2/2. Timing of server requests; to fix later.
 - **Cold search speed:** a first references search over the SDK takes 5.7 s (`String`), and 130 s for `runtimeType` on flutter; Dart has a warm disk index. Optimization target (persistent index).
+- **First public build (10-10 13:15):** `v0.1.0-preview.1` released by the release workflow on its first run
+  (macOS arm64 8 MB, Linux x86_64 38 MB: debug info is not stripped on Linux). Homebrew formula pushed to
+  `orestesgaolin/homebrew-tap`; `brew install orestesgaolin/tap/dartr` and `brew test` pass. The installed
+  binary gives the same result as `dart analyze` on flutter_tools (0 issues), but takes 3.7 s with 29.6 s of
+  system CPU time (dart: 2.4 s). The system time is an optimization target.
+- **Load 73 (10-10 13:04):** a worker ran the inline lock command without `RUST_TEST_THREADS=4`, so the
+  parity tests started one `dart analyze` per core (66 Dart processes). The inline command in the worker
+  rules now sets `RUST_TEST_THREADS=4`.
