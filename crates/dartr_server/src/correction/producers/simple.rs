@@ -40,7 +40,11 @@ macro_rules! producer {
             fn applicability(&self) -> Applicability {
                 Applicability::$app
             }
-            fn compute(&mut self, $c: &ProducerContext<'_>, $b: &mut ChangeBuilder<'_>) $body
+            fn compute(
+                &mut self,
+                $c: &ProducerContext<'_>,
+                $b: &mut $crate::correction::change_builder::ChangeBuilder<'_>,
+            ) $body
         }
     };
 }

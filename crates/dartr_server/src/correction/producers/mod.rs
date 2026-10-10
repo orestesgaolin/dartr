@@ -2,6 +2,7 @@
 //! the name of the Dart generator in the fix registry.
 
 pub mod assists;
+pub mod assists2;
 pub mod collections;
 pub mod convert_quotes;
 pub mod create;
@@ -144,6 +145,11 @@ pub fn generator(name: &str) -> Option<ProducerGenerator> {
             |_: C| boxed(flutter_convert::FlutterConvertToStatefulWidget)
         }
         "FlutterRemoveWidget.new" => |_: C| boxed(flutter_edit::FlutterRemoveWidget),
+        "InvertIfStatement.new" => |_: C| boxed(assists2::InvertIfStatement),
+        "InvertConditionalExpression.new" => |_: C| boxed(assists2::InvertConditionalExpression),
+        "ConvertToIntLiteral.new" => |_: C| boxed(assists2::ConvertToIntLiteral),
+        "ReplaceConditionalWithIfElse.new" => |_: C| boxed(assists2::ReplaceConditionalWithIfElse),
+        "AssignToLocalVariable.new" => |_: C| boxed(assists2::AssignToLocalVariable),
         "MakeFinal.new" => |_: C| boxed(MakeFinal),
         "MakeVariableNullable.new" => |_: C| boxed(MakeVariableNullable::new()),
         "RemoveAnnotation.new" => |_: C| boxed(small::RemoveAnnotation::new()),

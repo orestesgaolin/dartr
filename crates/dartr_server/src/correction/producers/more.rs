@@ -335,15 +335,9 @@ fn import_namespace(
         .iter()
         .filter(|i| !i.is_synthetic)
         .nth(index)?;
-    if let Some(namespace) = import.namespace.try_get() {
-        return Some(namespace.clone());
-    }
-    // Not computed: without combinators and prefix, the namespace of the
-    // import is the export namespace of the imported library (with a
-    // prefix, the names have the prefix and no simple name matches).
-    if import.prefix.is_some() {
-        return None;
-    }
+    // Without combinators, the import namespace (Dart
+    // `getImportNamespace`, without the prefix) is the export namespace of
+    // the imported library.
     let library = dartr_resolver::error::support::uri_library(&import.directive.uri)?;
     c.ctx.get(library).export_namespace.try_get().cloned()
 }
