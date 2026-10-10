@@ -51,6 +51,8 @@ struct LegacyClient {
     diagnostics: BTreeMap<String, Vec<Value>>,
     notifications: BTreeMap<String, BTreeMap<String, Value>>,
     search_results: BTreeMap<String, Value>,
+    analyzed_files: Vec<Value>,
+    server_logs: Vec<Value>,
     analysis_started: usize,
     analysis_completed: usize,
     analyzing: bool,
@@ -101,6 +103,8 @@ impl LegacyClient {
             diagnostics: BTreeMap::new(),
             notifications: BTreeMap::new(),
             search_results: BTreeMap::new(),
+            analyzed_files: Vec::new(),
+            server_logs: Vec::new(),
             analysis_started: 0,
             analysis_completed: 0,
             analyzing: false,
@@ -108,14 +112,18 @@ impl LegacyClient {
         }
     }
 
+    fn send_raw(&mut self, message: &Value) {
+        let stdin = self.stdin.as_mut().expect("server stdin");
+        serde_json::to_writer(&mut *stdin, message).unwrap();
+        stdin.write_all(b"\n").unwrap();
+        stdin.flush().unwrap();
+    }
+
     fn send_request(&mut self, method: &str, params: Value) -> String {
         self.next_id += 1;
         let id = self.next_id.to_string();
         let message = json!({"id": id, "method": method, "params": params});
-        let stdin = self.stdin.as_mut().expect("server stdin");
-        serde_json::to_writer(&mut *stdin, &message).unwrap();
-        stdin.write_all(b"\n").unwrap();
-        stdin.flush().unwrap();
+        self.send_raw(&message);
         self.next_id.to_string()
     }
 
@@ -207,7 +215,8 @@ impl LegacyClient {
                 | "analysis.outline"
                 | "analysis.implemented"
                 | "analysis.overrides"
-                | "analysis.folding"),
+                | "analysis.folding"
+                | "analysis.closingLabels"),
             ) => {
                 let params = &message["params"];
                 if let Some(file) = params["file"].as_str() {
@@ -216,6 +225,12 @@ impl LegacyClient {
                         .or_default()
                         .insert(file.to_string(), params.clone());
                 }
+            }
+            Some("analysis.analyzedFiles") => {
+                self.analyzed_files.push(message["params"].clone());
+            }
+            Some("server.log") => {
+                self.server_logs.push(message["params"].clone());
             }
             Some("search.results") => {
                 let params = &message["params"];
@@ -677,8 +692,14 @@ fn run_extended_session(program: &Path, args: &[&str], root: &Path) -> ExtendedT
                 "OUTLINE": [&lib_file, &part_file],
                 "IMPLEMENTED": [&lib_file, &helper_file],
                 "OVERRIDES": [&lib_file, &part_file],
+                "CLOSING_LABELS": [&lib_file, &part_file],
+                "INVALIDATE": [&lib_file],
             }
         }),
+    );
+    let general_sub_resp = client.request(
+        "analysis.setGeneralSubscriptions",
+        json!({"subscriptions": ["ANALYZED_FILES"]}),
     );
     client.request(
         "analysis.setPriorityFiles",
@@ -692,6 +713,10 @@ fn run_extended_session(program: &Path, args: &[&str], root: &Path) -> ExtendedT
     client.settle(completed, true);
 
     let mut steps = BTreeMap::new();
+    steps.insert(
+        "analysis.setGeneralSubscriptions:subscribe".to_string(),
+        general_sub_resp,
+    );
 
     // 1. analysis.getHover
     for (label, file, src, needle) in [
@@ -721,12 +746,14 @@ fn run_extended_session(program: &Path, args: &[&str], root: &Path) -> ExtendedT
         normalize_paths(nav_resp, &root_str),
     );
 
-    // 3. analysis.getReachableSources
+    // 3. analysis.getReachableSources & analysis.getLibraryDependencies
     let reachable_resp = client.request("analysis.getReachableSources", json!({"file": lib_file}));
     steps.insert(
         "analysis.getReachableSources".to_string(),
         normalize_paths(reachable_resp, &root_str),
     );
+    let lib_deps_resp = client.request("analysis.getLibraryDependencies", json!({}));
+    steps.insert("analysis.getLibraryDependencies".to_string(), lib_deps_resp);
 
     // 4. search.findElementReferences
     for (label, needle, include_potential) in [
@@ -876,6 +903,381 @@ fn run_extended_session(program: &Path, args: &[&str], root: &Path) -> ExtendedT
         normalize_paths(org_err, &root_str),
     );
 
+    // 12. server domain additions
+    let cancel_resp = client.request("server.cancelRequest", json!({"id": "99999"}));
+    steps.insert("server.cancelRequest".to_string(), cancel_resp);
+    let caps_ok = client.request(
+        "server.setClientCapabilities",
+        json!({
+            "requests": ["openUrlRequest", "showMessageRequest"],
+            "supportsUris": true,
+            "lspCapabilities": {"textDocument": {}}
+        }),
+    );
+    steps.insert("server.setClientCapabilities:ok".to_string(), caps_ok);
+    let caps_err = client.request(
+        "server.setClientCapabilities",
+        json!({"requests": [], "lspCapabilities": "bad"}),
+    );
+    steps.insert("server.setClientCapabilities:invalid".to_string(), caps_err);
+    let open_url_req = client.request("server.openUrlRequest", json!({"url": "https://dart.dev"}));
+    steps.insert(
+        "server.openUrlRequest:client_sent".to_string(),
+        open_url_req,
+    );
+    let show_msg_req = client.request(
+        "server.showMessageRequest",
+        json!({"type": "INFO", "message": "hi", "actions": []}),
+    );
+    steps.insert(
+        "server.showMessageRequest:client_sent".to_string(),
+        show_msg_req,
+    );
+    // Client response to server-initiated request should be accepted without INVALID_REQUEST
+    client.send_raw(&json!({"id": "server-req-1", "result": {}}));
+    client.send_raw(&json!({"id": "server-req-2", "result": {"action": "OK"}}));
+    let ver_after_client_resp = client.request("server.getVersion", json!({}));
+    assert!(
+        !client.responses.contains_key(""),
+        "unexpected INVALID_REQUEST after client response"
+    );
+    steps.insert(
+        "server.clientResponse:followed_by_getVersion".to_string(),
+        ver_after_client_resp,
+    );
+
+    // server.log subscription
+    client.server_logs.clear();
+    let log_sub_on = client.request(
+        "server.setSubscriptions",
+        json!({"subscriptions": ["STATUS", "LOG"]}),
+    );
+    steps.insert("server.setSubscriptions:log_on".to_string(), log_sub_on);
+    let _ = client.request("server.getVersion", json!({}));
+    let log_sub_off = client.request(
+        "server.setSubscriptions",
+        json!({"subscriptions": ["STATUS"]}),
+    );
+    steps.insert("server.setSubscriptions:log_off".to_string(), log_sub_off);
+    let mut normalized_logs = Vec::new();
+    for entry in &client.server_logs {
+        let kind = entry["kind"].as_str().unwrap_or("");
+        let data = &entry["data"];
+        assert!(
+            entry["time"].as_i64().is_some(),
+            "server.log entry missing time"
+        );
+        assert!(
+            entry["sdkVersion"].as_str().is_some(),
+            "server.log entry missing sdkVersion"
+        );
+        if kind == "REQUEST" && data["method"] == "server.getVersion" {
+            normalized_logs.push(json!({
+                "kind": "REQUEST",
+                "method": data["method"],
+                "hasId": data["id"].as_str().is_some(),
+                "hasServerRequestTime": data["serverRequestTime"].as_i64().is_some(),
+            }));
+        } else if kind == "RESPONSE" && data["result"]["version"] == "1.40.1" {
+            normalized_logs.push(json!({
+                "kind": "RESPONSE",
+                "result": data["result"],
+                "hasId": data["id"].as_str().is_some(),
+                "hasResponseTime": data["responseTime"].as_i64().is_some(),
+            }));
+        }
+    }
+    steps.insert(
+        "notification:server.log".to_string(),
+        Value::Array(normalized_logs),
+    );
+
+    // 13. analysis.updateOptions, analysis.getImportedElements, analysis.getSignature
+    let update_opts_ok = client.request(
+        "analysis.updateOptions",
+        json!({"options": {"enableSuperMixins": true, "generateHints": true, "generateLints": false}}),
+    );
+    steps.insert("analysis.updateOptions:ok".to_string(), update_opts_ok);
+    let update_opts_err = client.request(
+        "analysis.updateOptions",
+        json!({"options": {"generateHints": "not_bool"}}),
+    );
+    steps.insert(
+        "analysis.updateOptions:invalid".to_string(),
+        update_opts_err,
+    );
+
+    let imp_needle = "final box = HelperBox<T>(seed);\n    final m = math.max(1, 2);";
+    let imp_offset = find_offset(&lib_src, imp_needle);
+    let imp_length = imp_needle.encode_utf16().count() as i64;
+    let mut imp_ok = client.request(
+        "analysis.getImportedElements",
+        json!({"file": lib_file, "offset": imp_offset, "length": imp_length}),
+    );
+    if let Some(elements) = imp_ok["result"]["elements"].as_array_mut() {
+        for el in elements.iter_mut() {
+            if let Some(path) = el["path"].as_str()
+                && path.ends_with("/lib/math/math.dart")
+            {
+                el["path"] = json!("${SDK}/lib/math/math.dart");
+            }
+        }
+        elements.sort_by(|a, b| {
+            let ka = (
+                a["path"].as_str().unwrap_or(""),
+                a["prefix"].as_str().unwrap_or(""),
+            );
+            let kb = (
+                b["path"].as_str().unwrap_or(""),
+                b["prefix"].as_str().unwrap_or(""),
+            );
+            ka.cmp(&kb)
+        });
+    }
+    steps.insert(
+        "analysis.getImportedElements:ok".to_string(),
+        normalize_paths(imp_ok, &root_str),
+    );
+    let imp_invalid_path = client.request(
+        "analysis.getImportedElements",
+        json!({"file": "relative.dart", "offset": 0, "length": 1}),
+    );
+    steps.insert(
+        "analysis.getImportedElements:invalid_path".to_string(),
+        imp_invalid_path,
+    );
+    let imp_invalid_file = client.request(
+        "analysis.getImportedElements",
+        json!({"file": root.join("pubspec.yaml"), "offset": 0, "length": 1}),
+    );
+    steps.insert(
+        "analysis.getImportedElements:invalid_file".to_string(),
+        normalize_paths(imp_invalid_file, &root_str),
+    );
+
+    for (label, needle, delta) in [
+        (
+            "function_formatGreeting",
+            "formatGreeting('hi'",
+            "formatGreeting(".len() as i64,
+        ),
+        (
+            "method_helperValue",
+            "helperValue(box.item)",
+            "helperValue(".len() as i64,
+        ),
+        (
+            "ctor_HelperBox",
+            "HelperBox<T>(seed)",
+            "HelperBox<T>(".len() as i64,
+        ),
+        ("unknown_function", "class Sub", 0),
+    ] {
+        let offset = find_offset(&lib_src, needle) + delta;
+        let resp = client.request(
+            "analysis.getSignature",
+            json!({"file": lib_file, "offset": offset}),
+        );
+        steps.insert(
+            format!("analysis.getSignature:{label}"),
+            normalize_paths(resp, &root_str),
+        );
+    }
+    let sig_bad_offset = client.request(
+        "analysis.getSignature",
+        json!({"file": lib_file, "offset": 999999}),
+    );
+    steps.insert(
+        "analysis.getSignature:invalid_offset".to_string(),
+        sig_bad_offset,
+    );
+    let sig_bad_file = client.request(
+        "analysis.getSignature",
+        json!({"file": root.join("pubspec.yaml"), "offset": 0}),
+    );
+    steps.insert(
+        "analysis.getSignature:invalid_file".to_string(),
+        normalize_paths(sig_bad_file, &root_str),
+    );
+
+    // 14. search.getElementDeclarations
+    let decls_pattern = client.request(
+        "search.getElementDeclarations",
+        json!({"pattern": "HelperBox"}),
+    );
+    steps.insert(
+        "search.getElementDeclarations:pattern".to_string(),
+        normalize_paths(decls_pattern, &root_str),
+    );
+    let decls_file = client.request(
+        "search.getElementDeclarations",
+        json!({"pattern": "compute", "file": lib_file}),
+    );
+    steps.insert(
+        "search.getElementDeclarations:onlyForFile".to_string(),
+        normalize_paths(decls_file, &root_str),
+    );
+    let decls_max = client.request(
+        "search.getElementDeclarations",
+        json!({"pattern": "", "file": lib_file, "maxResults": 4}),
+    );
+    steps.insert(
+        "search.getElementDeclarations:maxResults".to_string(),
+        normalize_paths(decls_max, &root_str),
+    );
+
+    // 15. execution domain
+    let mut create_ctx = client.request("execution.createContext", json!({"contextRoot": root}));
+    let exec_ctx_id = create_ctx["result"]["id"]
+        .as_str()
+        .expect("execution context id")
+        .to_string();
+    create_ctx["result"]["id"] = json!("${EXEC_CTX}");
+    steps.insert("execution.createContext".to_string(), create_ctx);
+
+    let map_file = client.request(
+        "execution.mapUri",
+        json!({"id": exec_ctx_id, "file": lib_file}),
+    );
+    let mapped_uri = map_file["result"]["uri"]
+        .as_str()
+        .expect("mapped uri")
+        .to_string();
+    steps.insert(
+        "execution.mapUri:file_to_uri".to_string(),
+        normalize_paths(map_file, &root_str),
+    );
+    let map_uri = client.request(
+        "execution.mapUri",
+        json!({"id": exec_ctx_id, "uri": mapped_uri}),
+    );
+    steps.insert(
+        "execution.mapUri:uri_to_file".to_string(),
+        normalize_paths(map_uri, &root_str),
+    );
+    let map_both = client.request(
+        "execution.mapUri",
+        json!({"id": exec_ctx_id, "file": lib_file, "uri": mapped_uri}),
+    );
+    steps.insert("execution.mapUri:both_error".to_string(), map_both);
+    let map_neither = client.request("execution.mapUri", json!({"id": exec_ctx_id}));
+    steps.insert("execution.mapUri:neither_error".to_string(), map_neither);
+    let map_dir = client.request("execution.mapUri", json!({"id": exec_ctx_id, "file": root}));
+    steps.insert("execution.mapUri:dir_error".to_string(), map_dir);
+    let map_missing = client.request(
+        "execution.mapUri",
+        json!({"id": exec_ctx_id, "file": root.join("lib/missing.dart")}),
+    );
+    steps.insert("execution.mapUri:missing_error".to_string(), map_missing);
+    let map_bad_ctx = client.request(
+        "execution.mapUri",
+        json!({"id": "nonexistent_ctx", "file": lib_file}),
+    );
+    steps.insert("execution.mapUri:invalid_ctx".to_string(), map_bad_ctx);
+    let exec_sugg = client.request(
+        "execution.getSuggestions",
+        json!({
+            "code": "x",
+            "offset": 1,
+            "contextFile": lib_file,
+            "contextOffset": 0,
+            "variables": []
+        }),
+    );
+    steps.insert("execution.getSuggestions".to_string(), exec_sugg);
+    let exec_sub = client.request(
+        "execution.setSubscriptions",
+        json!({"subscriptions": ["LAUNCH_DATA"]}),
+    );
+    steps.insert("execution.setSubscriptions".to_string(), exec_sub);
+    let delete_ctx = client.request("execution.deleteContext", json!({"id": exec_ctx_id}));
+    steps.insert("execution.deleteContext".to_string(), delete_ctx);
+
+    // 16. diagnostic domain
+    let mut diag_resp = client.request("diagnostic.getDiagnostics", json!({}));
+    if let Some(contexts) = diag_resp["result"]["contexts"].as_array_mut() {
+        for ctx in contexts.iter_mut() {
+            assert!(
+                ctx["explicitFileCount"].as_i64().unwrap_or(0) > 0,
+                "expected positive explicitFileCount"
+            );
+            assert!(
+                ctx["implicitFileCount"].as_i64().unwrap_or(-1) >= 0,
+                "expected non-negative implicitFileCount"
+            );
+            ctx["implicitFileCount"] = json!("${IMPLICIT}");
+            ctx["workItemQueueLength"] = json!(0);
+        }
+    }
+    steps.insert(
+        "diagnostic.getDiagnostics".to_string(),
+        normalize_paths(diag_resp, &root_str),
+    );
+    let mut port_resp = client.request("diagnostic.getServerPort", json!({}));
+    assert!(
+        port_resp["result"]["port"].as_i64().unwrap_or(0) > 0,
+        "expected positive server port"
+    );
+    port_resp["result"]["port"] = json!("${PORT}");
+    steps.insert("diagnostic.getServerPort".to_string(), port_resp);
+
+    // 17. analytics domain
+    let analytics_enabled = client.request("analytics.isEnabled", json!({}));
+    steps.insert("analytics.isEnabled".to_string(), analytics_enabled);
+    let analytics_enable = client.request("analytics.enable", json!({"value": true}));
+    steps.insert("analytics.enable".to_string(), analytics_enable);
+    let analytics_event = client.request("analytics.sendEvent", json!({"action": "testAction"}));
+    steps.insert("analytics.sendEvent".to_string(), analytics_event);
+    let analytics_timing = client.request(
+        "analytics.sendTiming",
+        json!({"event": "testEvent", "millis": 42}),
+    );
+    steps.insert("analytics.sendTiming:ok".to_string(), analytics_timing);
+    let analytics_timing_err = client.request(
+        "analytics.sendTiming",
+        json!({"event": "testEvent", "millis": -1}),
+    );
+    steps.insert(
+        "analytics.sendTiming:invalid".to_string(),
+        analytics_timing_err,
+    );
+
+    let general_unsub_resp = client.request(
+        "analysis.setGeneralSubscriptions",
+        json!({"subscriptions": []}),
+    );
+    steps.insert(
+        "analysis.setGeneralSubscriptions:unsubscribe".to_string(),
+        general_unsub_resp,
+    );
+
+    assert!(
+        client.analyzed_files.len() >= 2,
+        "expected initial and post-analysis analysis.analyzedFiles notifications"
+    );
+    assert_eq!(client.analyzed_files[0], json!({"directories": []}));
+    let last_analyzed = client.analyzed_files.last().unwrap();
+    let dirs = last_analyzed["directories"]
+        .as_array()
+        .expect("analyzedFiles directories");
+    assert!(
+        dirs.iter()
+            .filter_map(Value::as_str)
+            .all(|d| !d.ends_with(".yaml")),
+        "analysis.analyzedFiles should exclude .yaml files"
+    );
+    let mut root_analyzed: Vec<String> = dirs
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|d| d.starts_with(&root_str))
+        .map(|d| d.replace(&root_str, "${ROOT}"))
+        .collect();
+    root_analyzed.sort();
+    steps.insert(
+        "notification:analysis.analyzedFiles".to_string(),
+        json!({"directories": root_analyzed}),
+    );
+
     for event in [
         "analysis.navigation",
         "analysis.highlights",
@@ -883,6 +1285,7 @@ fn run_extended_session(program: &Path, args: &[&str], root: &Path) -> ExtendedT
         "analysis.outline",
         "analysis.implemented",
         "analysis.overrides",
+        "analysis.closingLabels",
     ] {
         let map = client.notifications.get(event).cloned().unwrap_or_default();
         let mut normalized = Map::new();
@@ -922,7 +1325,7 @@ fn extended_legacy_requests_and_notifications_match_dart_3_13_3() {
 
     std::fs::write(
         lib_dir.join("helper.dart"),
-        "library legacy_ext.helper;\n\nabstract class Iface<T> {\n  T compute(T input);\n  int get tag;\n}\n\nclass HelperBox<E extends num> {\n  final E item;\n  const HelperBox(this.item);\n}\n",
+        "library legacy_ext.helper;\n\nabstract class Iface<T> {\n  T compute(T input);\n  int get tag;\n}\n\nclass HelperBox<E extends num> {\n  final E item;\n  const HelperBox(this.item);\n}\n\n/// Formats a greeting.\nString formatGreeting(String name, {int repeat = 1, required String prefix}) =>\n    '$prefix $name' * repeat;\n",
     )
     .unwrap();
 
@@ -934,7 +1337,7 @@ fn extended_legacy_requests_and_notifications_match_dart_3_13_3() {
 
     std::fs::write(
         lib_dir.join("lib.dart"),
-        "library legacy_ext.lib;\n\nimport 'dart:math' as math;\n\nimport 'helper.dart';\n\npart 'part_a.dart';\n\nabstract class Base<T extends num> implements Iface<T> {\n  final T seed;\n  Base(this.seed);\n\n  @override\n  int get tag => 1;\n\n  T helperValue(T x) => x;\n}\n\nmixin Mix<T extends num> on Base<T> {\n  int mixed() => tag;\n}\n\n/// A generic concrete class.\nclass Sub<T extends num> extends Base<T> with Mix<T> {\n  Sub(super.seed);\n\n  @override\n  int get tag => 2;\n\n  @override\n  T compute(T input) {\n    final box = HelperBox<T>(seed);\n    final m = math.max(1, 2);\n    if (m > 0) {\n      return helperValue(box.item);\n    }\n    return input;\n  }\n}\n\nint runDemo(Sub<int> s, dynamic dynTarget) {\n  final c = PartChild(s.seed);\n  final p = dynTarget.compute(3);\n  return c.compute(s.mixed()) + (p as int);\n}\n",
+        "library legacy_ext.lib;\n\nimport 'dart:math' as math;\n\nimport 'helper.dart';\n\npart 'part_a.dart';\n\nabstract class Base<T extends num> implements Iface<T> {\n  final T seed;\n  Base(this.seed);\n\n  @override\n  int get tag => 1;\n\n  T helperValue(T x) => x;\n}\n\nmixin Mix<T extends num> on Base<T> {\n  int mixed() => tag;\n}\n\n/// A generic concrete class.\nclass Sub<T extends num> extends Base<T> with Mix<T> {\n  Sub(super.seed);\n\n  @override\n  int get tag => 2;\n\n  @override\n  T compute(T input) {\n    final box = HelperBox<T>(seed);\n    final m = math.max(1, 2);\n    if (m > 0) {\n      return helperValue(box.item);\n    }\n    return input;\n  }\n}\n\nint runDemo(Sub<int> s, dynamic dynTarget) {\n  final c = PartChild(s.seed);\n  final p = dynTarget.compute(3);\n  final msg = formatGreeting('hi', prefix: 'p');\n  final boxes = <HelperBox<int>>[\n    HelperBox<int>(\n      msg.length,\n    ),\n  ];\n  return c.compute(s.mixed()) + (p as int) + boxes.length;\n}\n",
     )
     .unwrap();
 
