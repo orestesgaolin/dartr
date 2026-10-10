@@ -45,6 +45,16 @@ struct ParamInfo {
     ty: TypeId,
     default_code: Option<String>,
     has_required: bool,
+    /// Dart `metadata.hasDeprecated`.
+    has_deprecated: bool,
+}
+
+/// Dart `FormalParameterElement.displayName`: the name, or `<unnamed>`.
+fn parameter_display_name(name: Option<&str>) -> String {
+    match name {
+        Some(n) if !n.is_empty() => n.to_string(),
+        _ => "<unnamed>".to_string(),
+    }
 }
 
 fn element_params(ctx: &Ctx<'_>, element: ElemRef) -> Vec<ParamInfo> {
@@ -54,11 +64,16 @@ fn element_params(ctx: &Ctx<'_>, element: ElemRef) -> Vec<ParamInfo> {
             let base = member::base_element(ctx, p);
             let fp = EId::<FormalParameterElement>::from_raw(base);
             ParamInfo {
-                name: ctx.element_name(base).unwrap_or("").to_string(),
+                name: parameter_display_name(ctx.element_name(base)),
                 kind: ctx.get(fp).kind,
                 ty: member::type_(ctx, p),
                 default_code: default_value_code(ctx, fp),
                 has_required: elem::has_required(ctx, base),
+                has_deprecated: elem::metadata_has(
+                    ctx,
+                    base,
+                    dartr_resolver::element_metadata::flags::DEPRECATED,
+                ),
             }
         })
         .collect()
@@ -76,11 +91,14 @@ fn function_type_params(ctx: &Ctx<'_>, ty: TypeId) -> Vec<ParamInfo> {
                 .filter(|b| b.cast::<FormalParameterElement>().is_some())
                 .map(EId::<FormalParameterElement>::from_raw);
             ParamInfo {
-                name: p.name.map(|n| ctx.name_str(n).to_string()).unwrap_or_default(),
+                name: parameter_display_name(p.name.map(|n| ctx.name_str(n))),
                 kind: p.kind,
                 ty: p.ty,
                 default_code: fp.and_then(|fp| default_value_code(ctx, fp)),
                 has_required: base.is_some_and(|b| elem::has_required(ctx, b)),
+                has_deprecated: base.is_some_and(|b| {
+                    elem::metadata_has(ctx, b, dartr_resolver::element_metadata::flags::DEPRECATED)
+                }),
             }
         })
         .collect()
@@ -115,6 +133,9 @@ fn parameters_list_string(ctx: &Ctx<'_>, mut parameters: Vec<ParamInfo>) -> Stri
         }
         if p.kind.is_required_named() {
             sb.push_str("required ");
+        } else if p.has_deprecated {
+            // Dart writes `@required ` for a deprecated parameter here.
+            sb.push_str("@required ");
         }
         // Dart `appendToWithoutDelimiters`.
         sb.push_str(&type_display(ctx, p.ty));

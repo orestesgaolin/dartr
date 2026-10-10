@@ -69,7 +69,9 @@ pub fn is_factory(ctx: &Ctx<'_>, e: ElementId) -> bool {
 
 /// Dart `ClassElement.isAbstract`.
 pub fn is_abstract_class(ctx: &Ctx<'_>, e: ElementId) -> bool {
-    e.tag() == Tag::Class && has(ctx, e, FragmentFlags::CLASS_FRAGMENT_IS_ABSTRACT)
+    e.tag() == Tag::Class
+        && (has(ctx, e, FragmentFlags::CLASS_FRAGMENT_IS_ABSTRACT)
+            || has(ctx, e, FragmentFlags::CLASS_FRAGMENT_IS_SEALED))
 }
 
 /// Dart `MethodElement.isOperator`.

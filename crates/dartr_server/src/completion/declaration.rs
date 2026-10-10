@@ -1157,6 +1157,12 @@ impl DeclarationHelper {
                 continue;
             };
             let prefix = import_prefix_name(ctx, import);
+            if std::env::var_os("DARTR_DEBUG_COMPLETION").is_some() {
+                eprintln!("IMPORT {} prefix={prefix:?}", elem::library_uri(ctx, library));
+                for (n, _) in &names {
+                    eprintln!("  {n}");
+                }
+            }
             if prefix.as_deref() != Some("_") {
                 let import_data = ImportData {
                     library_uri: elem::library_uri(ctx, library),
@@ -2289,7 +2295,7 @@ impl DeclarationHelper {
             return;
         }
         let is_getter = base.tag() == Tag::Getter;
-        let returns_void = is_getter && matches!(ctx.ty(member::return_type(ctx, accessor)), TypeKind::Void);
+        let returns_void = matches!(ctx.ty(member::return_type(ctx, accessor)), TypeKind::Void);
         if (self.cfg.must_be_assignable && is_getter && elem::corresponding_setter(ctx, base).is_none())
             || self.cfg.must_be_constant
             || (self.cfg.must_be_non_void && returns_void)
@@ -2516,8 +2522,8 @@ impl DeclarationHelper {
             return;
         }
         let is_getter = element.tag() == Tag::Getter;
-        let returns_void = is_getter
-            && matches!(ctx.ty(member::return_type(ctx, ElemRef::Base(element))), TypeKind::Void);
+        let returns_void =
+            matches!(ctx.ty(member::return_type(ctx, ElemRef::Base(element))), TypeKind::Void);
         if (self.cfg.must_be_assignable && is_getter && elem::corresponding_setter(ctx, element).is_none())
             || (self.cfg.must_be_constant && !elem::accessor_is_const(ctx, element))
             || (self.cfg.must_be_non_void && returns_void)

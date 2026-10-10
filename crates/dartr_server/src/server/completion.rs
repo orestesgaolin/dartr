@@ -155,12 +155,50 @@ impl Server {
                         Some(dartr_project::workspace::WorkspacePackage::Pub { root, .. }) => Some(root),
                         _ => None,
                     };
-                    let included: Vec<String> = libraries
+                    if std::env::var_os("DARTR_DEBUG_COMPLETION").is_some() {
+                        for l in &libraries {
+                            eprintln!("KNOWN {}", l.uri);
+                        }
+                    }
+                    let mut included: Vec<String> = libraries
                         .iter()
                         .filter(|l| filter.should_include(l, &root_of))
                         .map(|l| l.uri.clone())
                         .collect();
-                    (world, included)
+                    // Dart `AnalysisDriver._discoverDartCore`: `dart:core` and
+                    // the files it references are known before the analyzed
+                    // files.
+                    let sink = NoopSink;
+                    let core_ctx = Ctx {
+                        world: &world,
+                        current: None,
+                        local: None,
+                        tp: &resolved.library.type_provider,
+                        features: &resolved.library.features,
+                        req: &sink,
+                    };
+                    let mut front = vec!["dart:core".to_string()];
+                    if let Some(core) = core_ctx.library_by_uri("dart:core") {
+                        let first = core_ctx.get(core).first_fragment();
+                        let f = core_ctx.fragment(first);
+                        let uris = f
+                            .library_exports
+                            .iter()
+                            .map(|e| &e.directive.uri)
+                            .chain(f.library_imports.iter().filter(|i| !i.is_synthetic).map(|i| &i.directive.uri));
+                        for uri in uris {
+                            if let dartr_element::DirectiveUri::Library { library, .. } = uri {
+                                let u = c::elem::library_uri(&core_ctx, *library);
+                                if !front.contains(&u) {
+                                    front.push(u);
+                                }
+                            }
+                        }
+                    }
+                    let mut ordered: Vec<String> = front.into_iter().filter(|u| included.contains(u)).collect();
+                    included.retain(|u| !ordered.contains(u));
+                    ordered.append(&mut included);
+                    (world, ordered)
                 }),
                 None => None,
             }

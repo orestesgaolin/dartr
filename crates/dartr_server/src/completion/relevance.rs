@@ -28,15 +28,15 @@ pub const MAXIMUM_RELEVANCE_SORT: i64 = 9999;
 
 /// Dart `Relevance` constants.
 pub mod relevance {
-    pub const CALL_FUNCTION: i32 = 500;
+    pub const CALL_FUNCTION: i32 = 200;
     pub const CLOSURE: i32 = 900;
-    pub const IMPORT: i32 = 1000;
-    pub const IMPORT_DART_CORE: i32 = 1001;
+    pub const IMPORT: i32 = 900;
+    pub const IMPORT_DART_CORE: i32 = 100;
     pub const LABEL: i32 = 1000;
-    pub const LOAD_LIBRARY: i32 = 1000;
-    pub const NAMED_ARGUMENT: i32 = 950;
+    pub const LOAD_LIBRARY: i32 = 200;
+    pub const NAMED_ARGUMENT: i32 = 900;
     pub const OVERRIDE: i32 = 750;
-    pub const REQUIRED_NAMED_ARGUMENT: i32 = 1250;
+    pub const REQUIRED_NAMED_ARGUMENT: i32 = 950;
     pub const SUPER_FORMAL_PARAMETER: i32 = 1000;
 }
 
