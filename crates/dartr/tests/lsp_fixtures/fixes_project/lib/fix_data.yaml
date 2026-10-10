@@ -1,0 +1,27 @@
+version: 1
+transforms:
+  - title: 'Rename to Other'
+    date: 2024-01-01
+    element:
+      uris: ['src/other.dart']
+      class: 'OldOther'
+    changes:
+      - kind: 'rename'
+        newName: 'Other'
+  - title: 'Rename to run'
+    date: 2024-01-01
+    element:
+      uris: ['src/other.dart']
+      method: 'oldRun'
+      inClass: 'Base'
+    changes:
+      - kind: 'rename'
+        newName: 'run'
+  - title: 'Rename to helperFunction'
+    date: 2024-01-01
+    element:
+      uris: ['src/helpers.dart']
+      function: 'oldHelper'
+    changes:
+      - kind: 'rename'
+        newName: 'helperFunction'

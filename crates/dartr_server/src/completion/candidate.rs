@@ -4,10 +4,10 @@
 //! The candidate suggestions of a completion request (Dart
 //! `CandidateSuggestion` and its subclasses).
 
-#[allow(unused_imports)]
-use dartr_typesystem::TypeExt;
 use dartr_element::{Ctx, ElemRef, ElementId, TypeId, TypeKind};
 use dartr_resolver::error::support;
+#[allow(unused_imports)]
+use dartr_typesystem::TypeExt;
 use dartr_typesystem::member;
 
 /// Dart `CompletionSuggestionKind` (the two kinds of executables).
@@ -436,7 +436,9 @@ impl Candidate {
             | Kind::TopLevelFunction { element: e, .. } => {
                 format!("{}{}", self.completion_prefix(), display_name(ctx, *e))
             }
-            Kind::Closure { .. } | Kind::NamedArgument { .. } | Kind::RecordLiteralNamedField { .. } => {
+            Kind::Closure { .. }
+            | Kind::NamedArgument { .. }
+            | Kind::RecordLiteralNamedField { .. } => {
                 self.suggestion_data(ctx).map(|d| d.completion).unwrap()
             }
             Kind::EnumConstant {
@@ -528,8 +530,10 @@ impl Candidate {
                 indent,
                 end_of_line,
             } => {
-                let parameters = build_closure_parameters(ctx, *function_type, *include_types, true);
-                let display_parameters = build_closure_parameters(ctx, *function_type, false, false);
+                let parameters =
+                    build_closure_parameters(ctx, *function_type, *include_types, true);
+                let display_parameters =
+                    build_closure_parameters(ctx, *function_type, false, false);
                 let mut buffer = parameters;
                 let display_text;
                 let selection_offset;

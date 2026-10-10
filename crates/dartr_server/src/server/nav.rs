@@ -18,7 +18,7 @@ use crate::navigation::{self, Collector, Target};
 use crate::uri::path_to_uri;
 
 /// A resolved unit: its library and its index (Dart `ResolvedUnitResult`).
-pub(crate) struct ResolvedUnitRef {
+pub struct ResolvedUnitRef {
     pub library: Arc<ResolvedLibraryResult>,
     pub index: usize,
 }

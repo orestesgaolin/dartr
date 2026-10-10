@@ -26,7 +26,11 @@ pub mod codes {
     pub const SERVER_ALREADY_INITIALIZED: i64 = -32002;
     pub const INVALID_FILE_PATH: i64 = -32003;
     pub const INVALID_FILE_LINE_COL: i64 = -32004;
+    pub const UNKNOWN_COMMAND: i64 = -32005;
+    pub const INVALID_COMMAND_ARGUMENTS: i64 = -32006;
     pub const FILE_NOT_ANALYZED: i64 = -32007;
+    pub const FILE_HAS_ERRORS: i64 = -32008;
+    pub const CLIENT_FAILED_TO_APPLY_EDIT: i64 = -32009;
     pub const CLIENT_SERVER_INCONSISTENT_STATE: i64 = -32099;
 }
 

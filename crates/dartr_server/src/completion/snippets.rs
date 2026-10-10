@@ -44,7 +44,9 @@ pub fn snippet_context(q: &Request<'_, '_>) -> SnippetContext {
         Some(Entity::Token(t)) => {
             let before = ast.tokens.get(t).before_synthetic.get().unwrap_or(t);
             let ty = ast.t_ty(before);
-            if ty == dartr_syntax::TokenType::MULTI_LINE_COMMENT || ty == dartr_syntax::TokenType::SINGLE_LINE_COMMENT {
+            if ty == dartr_syntax::TokenType::MULTI_LINE_COMMENT
+                || ty == dartr_syntax::TokenType::SINGLE_LINE_COMMENT
+            {
                 return InComment;
             }
             if ty == dartr_syntax::TokenType::STRING
@@ -93,7 +95,9 @@ pub fn snippet_context(q: &Request<'_, '_>) -> SnippetContext {
             NodeKind::SwitchExpression => return InPattern,
             NodeKind::Annotation => return InAnnotation,
             NodeKind::BlockFunctionBody => return InBlock,
-            NodeKind::ClassDeclaration | NodeKind::ExtensionDeclaration | NodeKind::MixinDeclaration => {
+            NodeKind::ClassDeclaration
+            | NodeKind::ExtensionDeclaration
+            | NodeKind::MixinDeclaration => {
                 return InClass;
             }
             NodeKind::EnumConstantArguments => return InConstantExpression,
@@ -157,7 +161,10 @@ struct FlutterRefs {
 impl FlutterRefs {
     /// The reference to [name], with the prefix of its import.
     fn r(&self, name: &str) -> String {
-        format!("{}{name}", self.prefixes.get(name).map(String::as_str).unwrap_or(""))
+        format!(
+            "{}{name}",
+            self.prefixes.get(name).map(String::as_str).unwrap_or("")
+        )
     }
 }
 
@@ -207,12 +214,18 @@ fn flutter_refs(q: &Request<'_, '_>) -> Option<FlutterRefs> {
             .find(|(_, names)| names.iter().any(|(n, e)| n == name && *e == element));
         match found {
             Some((prefix, _)) => {
-                prefixes.insert(name, prefix.as_ref().map(|p| format!("{p}.")).unwrap_or_default());
+                prefixes.insert(
+                    name,
+                    prefix.as_ref().map(|p| format!("{p}.")).unwrap_or_default(),
+                );
             }
             None => import_widgets = true,
         }
     }
-    Some(FlutterRefs { prefixes, import_widgets })
+    Some(FlutterRefs {
+        prefixes,
+        import_widgets,
+    })
 }
 
 /// The Flutter widget snippets (Dart `FlutterStatefulWidget`,
@@ -221,14 +234,19 @@ fn flutter_refs(q: &Request<'_, '_>) -> Option<FlutterRefs> {
 fn flutter_snippets(q: &Request<'_, '_>, f: &FlutterRefs) -> Vec<Snippet> {
     let eol = q.end_of_line();
     let name = "${1:MyWidget}";
-    let constructor = if q.feature_enabled(dartr_parser::experimental_flags::ExperimentalFlag::SuperParameters) {
-        format!("  const {name}({{super.key}});")
-    } else {
-        format!("  const {name}({{{}? key}}) : super(key: key);", f.r("Key"))
-    };
+    let constructor =
+        if q.feature_enabled(dartr_parser::experimental_flags::ExperimentalFlag::SuperParameters) {
+            format!("  const {name}({{super.key}});")
+        } else {
+            format!("  const {name}({{{}? key}}) : super(key: key);", f.r("Key"))
+        };
     let build = [
         "  @override".to_string(),
-        format!("  {} build({} context) {{", f.r("Widget"), f.r("BuildContext")),
+        format!(
+            "  {} build({} context) {{",
+            f.r("Widget"),
+            f.r("BuildContext")
+        ),
         format!("    return ${{0:const {}()}};", f.r("Placeholder")),
         "  }".to_string(),
     ]
@@ -243,7 +261,11 @@ fn flutter_snippets(q: &Request<'_, '_>, f: &FlutterRefs) -> Vec<Snippet> {
         String::new(),
     ]
     .join(eol.as_str());
-    let imports = if f.import_widgets { vec![WIDGETS_URI.to_string()] } else { Vec::new() };
+    let imports = if f.import_widgets {
+        vec![WIDGETS_URI.to_string()]
+    } else {
+        Vec::new()
+    };
     let stful = [
         stateful_widget.clone(),
         format!("class _{name}State extends {}<{name}> {{", f.r("State")),
@@ -260,7 +282,10 @@ fn flutter_snippets(q: &Request<'_, '_>, f: &FlutterRefs) -> Vec<Snippet> {
         "  @override".to_string(),
         "  void initState() {".to_string(),
         "    super.initState();".to_string(),
-        format!("    _controller = {}(vsync: this);", f.r("AnimationController")),
+        format!(
+            "    _controller = {}(vsync: this);",
+            f.r("AnimationController")
+        ),
         "  }".to_string(),
         String::new(),
         "  @override".to_string(),
@@ -339,16 +364,18 @@ fn snippets_for(q: &Request<'_, '_>, context: SnippetContext) -> Vec<Snippet> {
     };
     match context {
         AtTopLevel => {
-            let args = if q.in_test_directory { "" } else { "List<String> args" };
-            let mut out = vec![
-                Snippet {
-                    prefix: "class",
-                    label: "class",
-                    documentation: "Insert a class definition.",
-                    imports: Vec::new(),
-                    text: block("class ${1:ClassName} {".to_string()),
-                },
-            ];
+            let args = if q.in_test_directory {
+                ""
+            } else {
+                "List<String> args"
+            };
+            let mut out = vec![Snippet {
+                prefix: "class",
+                label: "class",
+                documentation: "Insert a class definition.",
+                imports: Vec::new(),
+                text: block("class ${1:ClassName} {".to_string()),
+            }];
             if let Some(f) = flutter_refs(q) {
                 out.extend(flutter_snippets(q, &f));
             }
@@ -365,21 +392,31 @@ fn snippets_for(q: &Request<'_, '_>, context: SnippetContext) -> Vec<Snippet> {
             out
         }
         InBlock => {
-            let var_or_final = if q.style.make_locals_final { "final" } else { "var" };
+            let var_or_final = if q.style.make_locals_final {
+                "final"
+            } else {
+                "var"
+            };
             let mut out = vec![
                 Snippet {
                     prefix: "do",
                     label: "do while",
                     documentation: "Insert a do-while loop.",
                     imports: Vec::new(),
-                    text: format!("do {{{eol}{}$0{eol}{}", i("  "), i("} while (${1:condition});")),
+                    text: format!(
+                        "do {{{eol}{}$0{eol}{}",
+                        i("  "),
+                        i("} while (${1:condition});")
+                    ),
                 },
                 Snippet {
                     prefix: "forin",
                     label: "for in",
                     documentation: "Insert a for-in loop.",
                     imports: Vec::new(),
-                    text: block(format!("for ({var_or_final} ${{1:element}} in ${{2:collection}}) {{")),
+                    text: block(format!(
+                        "for ({var_or_final} ${{1:element}} in ${{2:collection}}) {{"
+                    )),
                 },
                 Snippet {
                     prefix: "for",
@@ -430,14 +467,22 @@ fn snippets_for(q: &Request<'_, '_>, context: SnippetContext) -> Vec<Snippet> {
                     label: "test",
                     documentation: "Insert a test block.",
                     imports: Vec::new(),
-                    text: format!("test('${{1:test name}}', () {{{eol}{}$0{eol}{}", i("  "), i("});")),
+                    text: format!(
+                        "test('${{1:test name}}', () {{{eol}{}$0{eol}{}",
+                        i("  "),
+                        i("});")
+                    ),
                 });
                 out.push(Snippet {
                     prefix: "group",
                     label: "group",
                     documentation: "Insert a test group block.",
                     imports: Vec::new(),
-                    text: format!("group('${{1:group name}}', () {{{eol}{}$0{eol}{}", i("  "), i("});")),
+                    text: format!(
+                        "group('${{1:group name}}', () {{{eol}{}$0{eol}{}",
+                        i("  "),
+                        i("});")
+                    ),
                 });
             }
             out.push(Snippet {
@@ -542,7 +587,11 @@ pub fn snippet_items(
             item.insert("additionalTextEdits".into(), Value::Array(edits));
         }
         // Dart `_FuzzyScoreHelper.completionItemMatches`.
-        let filter = if s.prefix != s.label { s.prefix } else { s.label };
+        let filter = if s.prefix != s.label {
+            s.prefix
+        } else {
+            s.label
+        };
         if matcher.score(filter) > 0.0 {
             out.push(Value::Object(item));
         }

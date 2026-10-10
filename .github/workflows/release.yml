@@ -1,0 +1,93 @@
+name: Release
+
+# Runs when a tag `vX.Y.Z` (or `vX.Y.Z-rc.1`, a prerelease) is pushed.
+# Builds the binaries, packs `dartr-<version>-<target>.tar.gz` with a
+# `.sha256` file for each, and creates a GitHub Release.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup target add ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Check that the tag matches the crate version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          crate_version=$(cargo metadata --no-deps --format-version 1 \
+            | python3 -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "dartr"))')
+          test "v${crate_version%%-*}" = "${TAG%%-*}" || {
+            echo "tag $TAG does not match crate version $crate_version" >&2
+            exit 1
+          }
+      - name: Build
+        run: cargo build --release --locked -p dartr --target ${{ matrix.target }}
+      - name: Smoke test
+        run: target/${{ matrix.target }}/release/dartr --version
+      - name: Package
+        env:
+          TAG: ${{ github.ref_name }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          version="${TAG#v}"
+          name="dartr-${version}-${TARGET}"
+          mkdir -p "dist/${name}/bin" "dist/${name}/tools/shim"
+          cp "target/${TARGET}/release/dartr" "dist/${name}/bin/dartr"
+          cp LICENSE THIRD_PARTY_NOTICES.md README.md "dist/${name}/"
+          cp tools/shim/dartr_shim.dart "dist/${name}/tools/shim/"
+          tar -C dist -czf "dist/${name}.tar.gz" "${name}"
+          (cd dist && if command -v sha256sum >/dev/null; then
+            sha256sum "${name}.tar.gz" > "${name}.tar.gz.sha256"
+          else
+            shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256"
+          fi)
+          cat "dist/${name}.tar.gz.sha256"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dartr-${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          if-no-files-found: error
+
+  release:
+    name: GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          pattern: dartr-*
+          merge-multiple: true
+      - run: ls -l dist
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true

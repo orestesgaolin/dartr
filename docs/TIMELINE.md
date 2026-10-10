@@ -77,6 +77,15 @@ at each merge; the final process report is written from it.
 | 10-10 08:40 | 1235fe5 | analyzer plugins in `dartr analyze` (dartr_plugins + Dart bridge) | Opus | **visible-app 20/20 exact vs `dart analyze`** (incl. jaspr_lints plugin), 5,574 tests |
 | 10-10 09:40 | 4a6bf13 | LSP navigation: definition, typeDefinition, hover, references, documentHighlight, implementation, search index | Opus | 333 fixture positions identical for 4 methods; references/implementation same locations (order differs where Dart's order depends on earlier requests); 5,578 tests |
 | 10-10 07:20 | 260fd05 | lint batch B (82 rules), unnecessary_ignore / removed_lint_use / replaced_lint_use | Opus | analyzer-9.0.0: **27,278/27,278 matched**, 5 extra (4 unnecessary_ignore, 1 analyzer_public_api); visible-app 20/20; flutter, flutter_tools exact |
+| 10-10 11:20 | 255b94d | last analyzer-9.0.0 differences (unnecessary_ignore, analyzer_public_api, two rules) | Opus | analyzer-9.0.0 **27,278/27,278, 0 extra**; lints 57,211/57,211 (unseen) |
+| 10-10 12:30 | 8790cf2 | LSP: signature help, semantic tokens, inlay hints, call/type hierarchy, workspace symbols | Opus | compared with `dart language-server` on fixtures; 5,580 tests |
+| 10-10 13:00 | 5a40205 | release preparation: LICENSE, notices, README guide, release workflow, Homebrew formula | Opus | `dartr --version` checked; tag `v0.1.0-preview.1` pushed |
+| 10-10 14:10 | 0c9d176 | legacy protocol: analysis hover/navigation + 6 subscription notifications, search domain, edit.format/sortMembers/organizeDirectives | Gemini 4 (Antigravity) | 32/32 steps identical to `dart language-server --protocol=analyzer` on a clean checkout; 5,581 tests |
+| 10-10 15:00 | 00228a9 | legacy protocol: server, execution, diagnostic, analytics domains; remaining analysis and search requests (39/59 requests, 19/22 notifications) | Gemini 4 (Antigravity) | 78 steps identical to `dart language-server --protocol=analyzer`; coordinator added a step-list check; 5,581 tests |
+| 10-10 15:55 | 434d7e2 | LSP code completion: textDocument/completion, completionItem/resolve (port of DartCompletionManager, relevance tables, not-imported suggestions) | Opus | 137/156 completion lists identical to `dart language-server` on the fixture; visible-app first 177 of 2,000 items in Dart's order; 5,583 tests |
+| 10-10 15:55 | c1afb75 | landing page in site/, published with GitHub Pages | Opus | checked in Chrome at 1280 px and 390 px, light and dark; every number traced to a repo file |
+| 10-10 16:50 | 302b531 | LSP code actions: quick fixes, assists, organize imports, sort members, fix_data.yaml renames, workspace/executeCommand | Opus | every returned action identical to `dart language-server` (~7,000 import fixes, 191 create fixes, 486 assists, fixture + corpus sample); 5,585 tests |
+| 10-10 17:45 | 12b87a9 | legacy protocol: flutter domain (outline, widget descriptions), lsp.handle, clippy cleanup (43/59 requests, 21/22 notifications) | Gemini 4 (Antigravity) | 126 steps identical to `dart language-server --protocol=analyzer`, including a Flutter project; 5,586 tests |
 
 ## Incidents and lessons
 
@@ -167,3 +176,11 @@ at each merge; the final process report is written from it.
 - **Flaky LSP step:** `lsp_session_parity_with_dart_language_server` failed once at "didChangeConfiguration:
   server requests" under load, then passed 2/2. Timing of server requests; to fix later.
 - **Cold search speed:** a first references search over the SDK takes 5.7 s (`String`), and 130 s for `runtimeType` on flutter; Dart has a warm disk index. Optimization target (persistent index).
+- **First public build (10-10 13:15):** `v0.1.0-preview.1` released by the release workflow on its first run
+  (macOS arm64 8 MB, Linux x86_64 38 MB: debug info is not stripped on Linux). Homebrew formula pushed to
+  `orestesgaolin/homebrew-tap`; `brew install orestesgaolin/tap/dartr` and `brew test` pass. The installed
+  binary gives the same result as `dart analyze` on flutter_tools (0 issues), but takes 3.7 s with 29.6 s of
+  system CPU time (dart: 2.4 s). The system time is an optimization target.
+- **Load 73 (10-10 13:04):** a worker ran the inline lock command without `RUST_TEST_THREADS=4`, so the
+  parity tests started one `dart analyze` per core (66 Dart processes). The inline command in the worker
+  rules now sets `RUST_TEST_THREADS=4`.

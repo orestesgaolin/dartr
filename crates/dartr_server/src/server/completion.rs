@@ -3,10 +3,10 @@
 
 //! `textDocument/completion` and `completionItem/resolve`.
 
-#[allow(unused_imports)]
-use dartr_typesystem::TypeExt;
 use dartr_ast::*;
 use dartr_element::{Ctx, ElemRef, ElementId, NoopSink, Tag};
+#[allow(unused_imports)]
+use dartr_typesystem::TypeExt;
 use dartr_typesystem::member;
 use serde_json::{Map, Value, json};
 
@@ -22,7 +22,11 @@ const MAX_DOC_SIZE_FOR_INLINING: usize = 25;
 
 impl Server {
     fn bool_cap(&self, pointer: &str) -> bool {
-        self.client.raw.pointer(pointer).and_then(Value::as_bool).unwrap_or(false)
+        self.client
+            .raw
+            .pointer(pointer)
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
     }
 
     fn int_set_cap(&self, pointer: &str) -> Option<Vec<i64>> {
@@ -42,7 +46,11 @@ impl Server {
             .raw
             .pointer("/textDocument/completion/completionList/itemDefaults")
             .and_then(Value::as_array)
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
             .unwrap_or_default();
         ItemCapabilities {
             snippets: self.bool_cap(&format!("{item}/snippetSupport")),
@@ -57,7 +65,11 @@ impl Server {
                 .is_some_and(|s| s.contains(&1)),
             item_kinds: self
                 .int_set_cap("/textDocument/completion/completionItemKind/valueSet")
-                .unwrap_or_else(|| vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]),
+                .unwrap_or_else(|| {
+                    vec![
+                        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+                    ]
+                }),
             documentation_formats: self.client_formats(&format!("{item}/documentationFormat")),
             default_edit_range: defaults.iter().any(|d| d == "editRange"),
             default_text_mode: defaults.iter().any(|d| d == "insertTextMode"),
@@ -147,7 +159,9 @@ impl Server {
             Some(collection) => {
                 let context = &collection.contexts[context_index];
                 let package = match context.root.workspace.find_package_for(&path) {
-                    Some(dartr_project::workspace::WorkspacePackage::Pub { root, name, .. }) => Some((root, name)),
+                    Some(dartr_project::workspace::WorkspacePackage::Pub {
+                        root, name, ..
+                    }) => Some((root, name)),
                     _ => None,
                 };
                 let sdk = context.sdk.as_ref().or(collection.sdk.as_ref());
@@ -182,7 +196,11 @@ impl Server {
                 .filter(|f| f.ends_with(".dart") && !self.is_excluded(f))
                 .collect();
             if let Some(sdk) = context.sdk.as_ref().or(collection.sdk.as_ref()) {
-                available_files.extend(sdk.libraries().iter().filter_map(|l| sdk.map_dart_uri(&l.short_name)));
+                available_files.extend(
+                    sdk.libraries()
+                        .iter()
+                        .filter_map(|l| sdk.map_dart_uri(&l.short_name)),
+                );
             }
             fn recurse(folder: &str, out: &mut Vec<String>) {
                 let Some(children) = dartr_project::fs::children(folder) else {
@@ -207,29 +225,34 @@ impl Server {
         // The libraries of the not-imported pass (Dart `knownFiles`).
         let known = if use_not_imported {
             match &self.collection {
-                Some(collection) => self.session.link_known_libraries(collection, context_index).map(|(world, libraries)| {
-                    let filter = c::FileFilter::new(package.clone(), &path);
-                    let workspace = collection.contexts[context_index].root.workspace.clone();
-                    let root_of = |p: &str| match workspace.find_package_for(p) {
-                        Some(dartr_project::workspace::WorkspacePackage::Pub { root, .. }) => Some(root),
-                        _ => None,
-                    };
-                    if std::env::var_os("DARTR_DEBUG_COMPLETION").is_some() {
-                        for l in &libraries {
-                            eprintln!("KNOWN {}", l.uri);
+                Some(collection) => self
+                    .session
+                    .link_known_libraries(collection, context_index)
+                    .map(|(world, libraries)| {
+                        let filter = c::FileFilter::new(package.clone(), &path);
+                        let workspace = collection.contexts[context_index].root.workspace.clone();
+                        let root_of = |p: &str| match workspace.find_package_for(p) {
+                            Some(dartr_project::workspace::WorkspacePackage::Pub {
+                                root, ..
+                            }) => Some(root),
+                            _ => None,
+                        };
+                        if std::env::var_os("DARTR_DEBUG_COMPLETION").is_some() {
+                            for l in &libraries {
+                                eprintln!("KNOWN {}", l.uri);
+                            }
                         }
-                    }
-                    let included: Vec<String> = libraries
-                        .iter()
-                        .filter(|l| filter.should_include(l, &root_of))
-                        .map(|l| l.uri.clone())
-                        .collect();
-                    let uri_of_path: std::collections::HashMap<String, String> = libraries
-                        .iter()
-                        .map(|l| (l.path.clone(), l.uri.clone()))
-                        .collect();
-                    (world, libraries, included, uri_of_path)
-                }),
+                        let included: Vec<String> = libraries
+                            .iter()
+                            .filter(|l| filter.should_include(l, &root_of))
+                            .map(|l| l.uri.clone())
+                            .collect();
+                        let uri_of_path: std::collections::HashMap<String, String> = libraries
+                            .iter()
+                            .map(|l| (l.path.clone(), l.uri.clone()))
+                            .collect();
+                        (world, libraries, included, uri_of_path)
+                    }),
                 None => None,
             }
         } else {
@@ -237,27 +260,33 @@ impl Server {
         };
         // The order of the known files of the Dart driver.
         let known = known.map(|(world, _libraries, included, uri_of_path)| {
-                    let order: Vec<String> = self
-                        .session
-                        .dart_known_order(context_index, &added_files, &available_files)
-                        .into_iter()
-                        .filter_map(|p| uri_of_path.get(&p).cloned())
-                        .collect();
-                    let rank: std::collections::HashMap<&str, usize> =
-                        order.iter().enumerate().map(|(i, u)| (u.as_str(), i)).collect();
-                    let mut ordered = included.clone();
-                    ordered.sort_by_key(|u| rank.get(u.as_str()).copied().unwrap_or(usize::MAX));
-                    if std::env::var_os("DARTR_DEBUG_COMPLETION").is_some() {
-                        for u in &ordered {
-                            eprintln!("ORDER {u}");
-                        }
-                    }
-                    (world, ordered)
+            let order: Vec<String> = self
+                .session
+                .dart_known_order(context_index, &added_files, &available_files)
+                .into_iter()
+                .filter_map(|p| uri_of_path.get(&p).cloned())
+                .collect();
+            let rank: std::collections::HashMap<&str, usize> = order
+                .iter()
+                .enumerate()
+                .map(|(i, u)| (u.as_str(), i))
+                .collect();
+            let mut ordered = included.clone();
+            ordered.sort_by_key(|u| rank.get(u.as_str()).copied().unwrap_or(usize::MAX));
+            if std::env::var_os("DARTR_DEBUG_COMPLETION").is_some() {
+                for u in &ordered {
+                    eprintln!("ORDER {u}");
+                }
+            }
+            (world, ordered)
         });
 
         let unit = resolved.unit();
         let sink = NoopSink;
-        let world = known.as_ref().map(|k| &k.0).unwrap_or(&resolved.library.world);
+        let world = known
+            .as_ref()
+            .map(|k| &k.0)
+            .unwrap_or(&resolved.library.world);
         let ctx = Ctx {
             world,
             current: None,
@@ -338,8 +367,12 @@ impl Server {
             }
             defaults = Some(Value::Object(d));
         }
-        let has_default_edit_range = defaults.as_ref().is_some_and(|d| d.get("editRange").is_some());
-        let has_default_text_mode = defaults.as_ref().is_some_and(|d| d.get("insertTextMode").is_some());
+        let has_default_edit_range = defaults
+            .as_ref()
+            .is_some_and(|d| d.get("editRange").is_some());
+        let has_default_text_mode = defaults
+            .as_ref()
+            .is_some_and(|d| d.get("insertTextMode").is_some());
         let ic = ItemContext {
             caps: &caps,
             commit_characters_enabled: commit_characters,
@@ -366,9 +399,11 @@ impl Server {
                 }
             }
             if !elements.is_empty() {
-                let values = self.session.constant_values_of(context_index, q.library, &elements, |v| {
-                    c::lsp::color_hex_string(&ctx, v)
-                });
+                let values =
+                    self.session
+                        .constant_values_of(context_index, q.library, &elements, |v| {
+                            c::lsp::color_hex_string(&ctx, v)
+                        });
                 for (e, v) in elements.into_iter().zip(values) {
                     if let Some(v) = v {
                         color_hex.insert(e, v);
@@ -396,7 +431,10 @@ impl Server {
             }
             let mut item_length = r_length;
             let mut item_insert = insert_length;
-            if let Kind::NamedArgument { replacement_length, .. } = &candidate.kind {
+            if let Kind::NamedArgument {
+                replacement_length, ..
+            } = &candidate.kind
+            {
                 if let Some(l) = replacement_length {
                     item_length = *l;
                 }
@@ -438,9 +476,13 @@ impl Server {
             if resolution.is_none() {
                 if let Some(e) = element {
                     if documentation_preference != "none" {
-                        cleaned_doc = clean_documentation(&ctx, e, &templates, documentation_preference);
+                        cleaned_doc =
+                            clean_documentation(&ctx, e, &templates, documentation_preference);
                     }
-                    if cleaned_doc.as_ref().is_some_and(|d| d.encode_utf16().count() > MAX_DOC_SIZE_FOR_INLINING) {
+                    if cleaned_doc
+                        .as_ref()
+                        .is_some_and(|d| d.encode_utf16().count() > MAX_DOC_SIZE_FOR_INLINING)
+                    {
                         if let Some(l) = &location {
                             let mut d = Map::new();
                             if !caps.default_data {
@@ -455,7 +497,11 @@ impl Server {
             let has_default = has_default_edit_range
                 && insertion_range == default_insertion
                 && replacement_range == default_replacement;
-            let doc = if resolution.is_none() { cleaned_doc } else { None };
+            let doc = if resolution.is_none() {
+                cleaned_doc
+            } else {
+                None
+            };
             if let Some(item) = c::lsp::to_item(
                 &ctx,
                 &ic,
@@ -474,9 +520,10 @@ impl Server {
         let mut unranked: Vec<Value> = Vec::new();
         // Dart `SnippetProducer.isValid`: the file must be analyzed in the
         // root of its context (no snippets for a file outside the roots).
-        let in_context_root = self.collection.as_ref().is_some_and(|collection| {
-            collection.contexts[context_index].root.is_analyzed(&path)
-        });
+        let in_context_root = self
+            .collection
+            .as_ref()
+            .is_some_and(|collection| collection.contexts[context_index].root.is_analyzed(&path));
         if caps.snippets && enable_snippets && in_context_root {
             let default_range = defaults
                 .as_ref()
@@ -524,7 +571,11 @@ impl Server {
         let import_uris: Vec<String> = data
             .get("importUris")
             .and_then(Value::as_array)
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
             .unwrap_or_default();
         let reference = data.get("ref").and_then(Value::as_str).map(str::to_string);
         if import_uris.is_empty() && params.get("documentation").is_some() {
@@ -534,11 +585,15 @@ impl Server {
         let line_info = resolved.line_info().clone();
         let templates = self.dartdoc_templates(&file);
         let preference = self.client_configuration.global().preferred_documentation();
-        let formats = self.client_formats("/textDocument/completion/completionItem/documentationFormat");
+        let formats =
+            self.client_formats("/textDocument/completion/completionItem/documentationFormat");
         let context_index = resolved.library.context;
         let mut world = None;
         if let Some(collection) = &self.collection {
-            world = self.session.link_known_libraries(collection, context_index).map(|w| w.0);
+            world = self
+                .session
+                .link_known_libraries(collection, context_index)
+                .map(|w| w.0);
         }
         let unit = resolved.unit();
         let sink = NoopSink;
@@ -570,9 +625,19 @@ impl Server {
         if !import_uris.is_empty() {
             let content = self.content(&file).unwrap_or_default();
             let lint_quote = self.lint_quote(&file);
-            edits = c::imports::import_edits(&unit.ast, unit.unit, &line_info, &content, lint_quote, &import_uris);
+            edits = c::imports::import_edits(
+                &unit.ast,
+                unit.unit,
+                &line_info,
+                &content,
+                lint_quote,
+                &import_uris,
+            );
         }
-        let mut detail = item.get("detail").and_then(Value::as_str).map(str::to_string);
+        let mut detail = item
+            .get("detail")
+            .and_then(Value::as_str)
+            .map(str::to_string);
         if !edits.is_empty() && !import_uris.is_empty() {
             let rest = detail.clone().unwrap_or_default();
             detail = Some(if import_uris.len() == 1 {
@@ -581,9 +646,13 @@ impl Server {
                 } else {
                     import_uris[0].clone()
                 };
-                format!("Auto import from '{display}'\n\n{rest}").trim().to_string()
+                format!("Auto import from '{display}'\n\n{rest}")
+                    .trim()
+                    .to_string()
             } else {
-                format!("Auto import required URIs\n\n{rest}").trim().to_string()
+                format!("Auto import required URIs\n\n{rest}")
+                    .trim()
+                    .to_string()
             });
         }
         match detail {
@@ -616,7 +685,11 @@ fn clean_documentation(
 ) -> Option<String> {
     let full = crate::hover::documentation(ctx, element, templates)?;
     let doc = c::lsp::remove_dart_doc_delimiters(&full);
-    let raw = if preference == "summary" { summary_of(&doc) } else { doc };
+    let raw = if preference == "summary" {
+        summary_of(&doc)
+    } else {
+        doc
+    };
     Some(crate::hover::clean_dartdoc(&raw))
 }
 
@@ -641,7 +714,9 @@ fn locate_element(ctx: &Ctx<'_>, reference: &str) -> Option<ElementId> {
     let library = ctx.library_by_uri(parts[0])?;
     let children = library_children(ctx, library);
     let lookup = |e: ElementId| member::lookup_name(ctx, ElemRef::Base(e));
-    let top = children.into_iter().find(|c| lookup(*c).as_deref() == Some(parts[1]))?;
+    let top = children
+        .into_iter()
+        .find(|c| lookup(*c).as_deref() == Some(parts[1]))?;
     if parts.len() == 2 {
         return Some(top);
     }
@@ -651,7 +726,10 @@ fn locate_element(ctx: &Ctx<'_>, reference: &str) -> Option<ElementId> {
 }
 
 /// Dart `LibraryElement.children`.
-fn library_children(ctx: &Ctx<'_>, library: dartr_element::EId<dartr_element::LibraryElement>) -> Vec<ElementId> {
+fn library_children(
+    ctx: &Ctx<'_>,
+    library: dartr_element::EId<dartr_element::LibraryElement>,
+) -> Vec<ElementId> {
     let l = ctx.get(library);
     l.classes
         .iter()
@@ -693,11 +771,29 @@ fn truncate_results(items: Vec<(Value, f64)>, prefix: &str, max: usize) -> Vec<V
         if a.1 != b.1 {
             return if b.1 > a.1 { 1 } else { -1 };
         }
-        let a_text = a.0.get("sortText").or(a.0.get("label")).and_then(Value::as_str).unwrap_or("");
-        let b_text = b.0.get("sortText").or(b.0.get("label")).and_then(Value::as_str).unwrap_or("");
+        let a_text =
+            a.0.get("sortText")
+                .or(a.0.get("label"))
+                .and_then(Value::as_str)
+                .unwrap_or("");
+        let b_text =
+            b.0.get("sortText")
+                .or(b.0.get("label"))
+                .and_then(Value::as_str)
+                .unwrap_or("");
         if a_text == b_text {
-            let a_label = a.0.get("label").and_then(Value::as_str).unwrap_or("").encode_utf16().count() as i64;
-            let b_label = b.0.get("label").and_then(Value::as_str).unwrap_or("").encode_utf16().count() as i64;
+            let a_label =
+                a.0.get("label")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .encode_utf16()
+                    .count() as i64;
+            let b_label =
+                b.0.get("label")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .encode_utf16()
+                    .count() as i64;
             return a_label - b_label;
         }
         match a_text.cmp(b_text) {

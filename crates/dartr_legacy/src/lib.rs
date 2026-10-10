@@ -3,7 +3,17 @@
 
 //! Legacy analysis server protocol. The LSP implementation remains in dartr_server.
 
+pub mod convert;
+pub mod edit;
+pub mod flutter_outline;
+pub mod highlights;
+pub mod implemented;
+pub mod navigation;
+pub mod occurrences;
+pub mod outline;
+pub mod overrides;
 pub mod protocol;
+pub mod search;
 pub mod server;
 pub mod transport;
 

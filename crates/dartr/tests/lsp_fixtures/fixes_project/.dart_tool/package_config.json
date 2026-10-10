@@ -1,0 +1,12 @@
+{
+  "configVersion": 2,
+  "packages": [
+    {
+      "name": "fixes_project",
+      "rootUri": "../",
+      "packageUri": "lib/",
+      "languageVersion": "3.13"
+    }
+  ],
+  "generator": "dartr-fixture"
+}

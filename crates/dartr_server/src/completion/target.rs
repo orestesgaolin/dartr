@@ -537,13 +537,11 @@ impl CompletionTarget {
                     } else if ast.is::<SimpleStringLiteral>(node) {
                         uri = Some(node);
                         let parent = ast.parent(node);
-                        directive = parent
-                            .filter(|p| ast.is::<Directive>(*p))
-                            .or_else(|| {
-                                parent
-                                    .and_then(|p| ast.parent(p))
-                                    .filter(|p| ast.is::<Directive>(*p))
-                            });
+                        directive = parent.filter(|p| ast.is::<Directive>(*p)).or_else(|| {
+                            parent
+                                .and_then(|p| ast.parent(p))
+                                .filter(|p| ast.is::<Directive>(*p))
+                        });
                     } else if let Some(c) = ast.cast::<Comment>(node) {
                         for &r in ast.list(ast[c].references) {
                             if ast.offset(r) <= request_offset && ast.end(r) >= request_offset {
@@ -680,8 +678,7 @@ fn compute_dropped_token(
     };
     token = ast.t_next(token);
     while token != end_search && !ast.t_is_eof(token) {
-        if ast.t_kw_or_ident(token) && ast.t_offset(token) <= offset && offset <= ast.t_end(token)
-        {
+        if ast.t_kw_or_ident(token) && ast.t_offset(token) <= offset && offset <= ast.t_end(token) {
             return Some(token);
         }
         token = ast.t_next(token);
