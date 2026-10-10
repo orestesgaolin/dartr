@@ -95,6 +95,26 @@ impl ChangeWorkspace for ServerWorkspace<'_> {
         }
     }
 
+    fn fix_data_files(&self, path: &str) -> Vec<(String, Option<String>)> {
+        let Some(context) = self.collection.context_for(path) else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for package in context.packages.packages() {
+            out.push((
+                format!("{}/fix_data.yaml", package.lib),
+                Some(package.name.clone()),
+            ));
+            let mut files = Vec::new();
+            yaml_files_recursively(&format!("{}/fix_data", package.lib), &mut files);
+            out.extend(files.into_iter().map(|f| (f, Some(package.name.clone()))));
+        }
+        if let Some(sdk) = context.sdk.as_ref().or(self.collection.sdk.as_ref()) {
+            out.push((format!("{}/_internal/fix_data.yaml", sdk.lib_path()), None));
+        }
+        out
+    }
+
     fn top_level_declarations(&mut self, path: &str, name: &str) -> Vec<TopLevelDeclaration> {
         let collection = self.collection;
         let Some(context) = collection.context_for(path) else {
@@ -157,6 +177,23 @@ impl ChangeWorkspace for ServerWorkspace<'_> {
             });
         }
         result
+    }
+}
+
+/// The yaml files under [folder] (Dart `_loadTransforms` order).
+fn yaml_files_recursively(folder: &str, out: &mut Vec<String>) {
+    let Some(children) = dartr_project::fs::children(folder) else {
+        return;
+    };
+    for child in children {
+        match child.kind {
+            dartr_project::fs::ResourceKind::File => {
+                if child.path.ends_with(".yaml") {
+                    out.push(child.path);
+                }
+            }
+            dartr_project::fs::ResourceKind::Folder => yaml_files_recursively(&child.path, out),
+        }
     }
 }
 

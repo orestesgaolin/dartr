@@ -726,22 +726,6 @@ fn target_interface_element(c: &ProducerContext<'_>, target: NodeId) -> Option<E
     None
 }
 
-/// Dart `getDeclarationNodeFromElement`: the declaration of [element] in
-/// the unit of [c] (dartr only edits declarations of the current unit).
-fn declaration_node(c: &ProducerContext<'_>, element: ElementId) -> Option<NodeId> {
-    let ast = c.ast;
-    if !matches!(
-        element.tag(),
-        Tag::Class | Tag::Enum | Tag::Mixin | Tag::ExtensionType
-    ) {
-        return None;
-    }
-    ast.list_raw(ast[c.unit].declarations)
-        .iter()
-        .copied()
-        .find(|d| c.locator().declared_element(*d) == Some(element))
-}
-
 /// Dart `CreateMethod.method`.
 pub struct CreateMethod {
     name: String,
@@ -783,6 +767,7 @@ impl CorrectionProducer for CreateMethod {
         };
         let mut has_static = false;
         let target_node;
+        let mut target_path = c.path.to_string();
         match real_target(ast, invocation) {
             Some(target) => {
                 if ast.is::<ExtensionOverride>(target) {
@@ -797,9 +782,10 @@ impl CorrectionProducer for CreateMethod {
                 let Some(element) = target_interface_element(c, target) else {
                     return;
                 };
-                let Some(node) = declaration_node(c, element) else {
+                let Some((path, node)) = super::members::declaration_of(c, builder, element) else {
                     return;
                 };
+                target_path = path;
                 target_node = Some(node);
                 if ast.is::<Identifier>(target) {
                     has_static = c.element_of(target).is_some_and(|e| {
@@ -848,7 +834,8 @@ impl CorrectionProducer for CreateMethod {
         let (node_offset, node_length) = (ast.offset(c.node), ast.length(c.node));
         let name = self.name.clone();
         let ctx = c.ctx;
-        builder.add_dart_file_edit(c.path, |b| {
+        let same_file = target_path == c.path;
+        builder.add_dart_file_edit(&target_path, |b| {
             let Some(target_node) = target_node else {
                 return;
             };
@@ -872,7 +859,9 @@ impl CorrectionProducer for CreateMethod {
                 }
                 e.write(" {}");
             });
-            b.add_linked_position(node_offset, node_length, "NAME");
+            if same_file {
+                b.add_linked_position(node_offset, node_length, "NAME");
+            }
         });
     }
 }
@@ -1017,3 +1006,171 @@ producer!(
         });
     }
 );
+
+// Dart source: pkg/analysis_server/lib/src/services/correction/dart/create_parameter.dart
+// Dart source: pkg/analyzer_plugin/lib/src/utilities/change_builder/change_builder_dart.dart (writeParameter, DartLinkedEditBuilderImpl.addSuperTypesAsSuggestions)
+
+/// The kind of a formal parameter node.
+fn parameter_kind(ast: &Ast, p: NodeId) -> ParameterKind {
+    if let Some(x) = ast.cast::<RegularFormalParameter>(p) {
+        ast[x].kind
+    } else if let Some(x) = ast.cast::<FieldFormalParameter>(p) {
+        ast[x].kind
+    } else if let Some(x) = ast.cast::<SuperFormalParameter>(p) {
+        ast[x].kind
+    } else {
+        ParameterKind::Required
+    }
+}
+
+/// Dart `CreateParameter`.
+pub struct CreateParameter {
+    name: String,
+}
+
+impl CreateParameter {
+    pub fn new() -> Self {
+        CreateParameter {
+            name: String::new(),
+        }
+    }
+}
+
+impl CorrectionProducer for CreateParameter {
+    fn fix_kind(&self) -> Option<&'static FixKind> {
+        Some(&k::CREATE_PARAMETER)
+    }
+
+    fn fix_arguments(&self) -> Vec<String> {
+        vec![self.name.clone()]
+    }
+
+    fn applicability(&self) -> Applicability {
+        Applicability::SingleLocation
+    }
+
+    fn compute(&mut self, c: &ProducerContext<'_>, builder: &mut ChangeBuilder<'_>) {
+        let ast = c.ast;
+        let ctx = c.ctx;
+        let Some(id) = ast.cast::<SimpleIdentifier>(c.node) else {
+            return;
+        };
+        self.name = c.lexeme(ast[id].token).to_string();
+        let parameters = ast
+            .this_or_ancestor_of_type::<FunctionExpression>(id)
+            .and_then(|f| ast[f].parameters)
+            .or_else(|| {
+                ast.this_or_ancestor_of_type::<MethodDeclaration>(id)
+                    .and_then(|m| ast[m].parameters)
+            })
+            .or_else(|| {
+                ast.this_or_ancestor_of_type::<ConstructorDeclaration>(id)
+                    .map(|m| ast[m].parameters)
+            });
+        let Some(parameters) = parameters else { return };
+        let list: Vec<NodeId> = ast.list_raw(ast[parameters].parameters).to_vec();
+        let required: Vec<NodeId> = list
+            .iter()
+            .copied()
+            .filter(|p| parameter_kind(ast, *p) == ParameterKind::Required)
+            .collect();
+        let named: Vec<NodeId> = list
+            .iter()
+            .copied()
+            .filter(|p| {
+                matches!(
+                    parameter_kind(ast, *p),
+                    ParameterKind::Named | ParameterKind::NamedRequired
+                )
+            })
+            .collect();
+        let something_after_positionals = !required.is_empty()
+            && list
+                .iter()
+                .any(|p| parameter_kind(ast, *p) != ParameterKind::Required);
+        let something_before_named = required.is_empty()
+            && list.iter().any(|p| {
+                !matches!(
+                    parameter_kind(ast, *p),
+                    ParameterKind::Named | ParameterKind::NamedRequired
+                )
+            });
+        let has_following = something_after_positionals || something_before_named;
+        let ty = match infer_undefined_expression_type(c, c.node) {
+            Inferred::Invalid => return,
+            Inferred::Type(t) => t,
+            Inferred::Unknown => ctx.tp.dynamic_type(),
+        };
+        let last_required = required.last().copied();
+        let last_named = named.last().copied();
+        let has_previous = last_required.is_some() || last_named.is_some();
+        let last = last_required.or(last_named);
+        let trailing_comma = list
+            .last()
+            .is_some_and(|p| c.lexeme(ast.tokens.next(ast.end_token(*p))) == ",");
+        let insertion = if let Some(last) = last {
+            let next = ast.tokens.next(ast.end_token(last));
+            if trailing_comma {
+                c.token_end(next)
+            } else if has_following {
+                c.token_end(next) + 1
+            } else {
+                ast.end(last)
+            }
+        } else {
+            c.token_end(ast[parameters].left_parenthesis)
+        };
+        let whitespace = last.map(|l| c.utils.get_node_prefix(l)).unwrap_or_default();
+        let is_required_named = last.is_some() && last == last_named && nullability_none(ctx, ty);
+        let name = self.name.clone();
+        let (node_offset, node_length) = (ast.offset(c.node), ast.length(c.node));
+        builder.add_dart_file_edit(c.path, |b| {
+            b.add_insertion(insertion, |e| {
+                if has_previous {
+                    if trailing_comma {
+                        e.newline();
+                        e.write(&whitespace);
+                    } else if !has_following {
+                        e.write(", ");
+                    }
+                }
+                // Dart `writeParameter`.
+                if is_required_named {
+                    e.write("required ");
+                }
+                let mut has_type = false;
+                e.add_linked_edit("TYPE", |e| {
+                    has_type = e.write_type(
+                        Some(ty),
+                        &WriteType {
+                            should_write_dynamic: true,
+                            ..Default::default()
+                        },
+                    );
+                    // Dart `addSuperTypesAsSuggestions`.
+                    if matches!(ctx.ty(ty), TypeKind::Interface { .. }) {
+                        let mut types = vec![ty];
+                        types.extend(ctx.all_supertypes(ty));
+                        for t in types {
+                            let display =
+                                dartr_element::type_display_string_with(ctx, t, Default::default());
+                            e.add_suggestion(LinkedEditSuggestionKind::Type, &display);
+                        }
+                    }
+                });
+                if !name.is_empty() {
+                    if has_type {
+                        e.write(" ");
+                    }
+                    e.add_linked_edit("NAME", |e| e.write(&name));
+                }
+                if trailing_comma {
+                    e.write(",");
+                } else if has_following {
+                    e.write(", ");
+                }
+            });
+            b.add_linked_position(node_offset, node_length, "NAME");
+        });
+    }
+}

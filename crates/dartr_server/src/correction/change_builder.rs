@@ -38,6 +38,13 @@ pub trait ChangeWorkspace {
     fn top_level_declarations(&mut self, _path: &str, _name: &str) -> Vec<TopLevelDeclaration> {
         Vec::new()
     }
+
+    /// Dart `TransformSetManager.forLibrary`: the `fix_data.yaml` files
+    /// available to [path] (the `lib/fix_data.yaml` and `lib/fix_data/**.yaml`
+    /// files of the packages, then the SDK file), with the package name.
+    fn fix_data_files(&self, _path: &str) -> Vec<(String, Option<String>)> {
+        Vec::new()
+    }
 }
 
 /// A top-level declaration that a library exports.

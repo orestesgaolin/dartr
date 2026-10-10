@@ -4,9 +4,14 @@
 pub mod collections;
 pub mod convert_quotes;
 pub mod create;
+pub mod create_types;
+pub mod data_driven;
+pub mod extensions;
 pub mod import_library;
+pub mod members;
 pub mod modifiers;
 pub mod simple;
+pub mod small;
 pub mod super_parameters;
 pub mod variables;
 
@@ -32,6 +37,8 @@ pub fn generator(name: &str) -> Option<ProducerGenerator> {
         "AddReturnType.new" => |_: C| boxed(create::AddReturnType),
         "AddLate.new" => |_: C| boxed(AddLate { this_: false }),
         "AddLate.this_" => |_: C| boxed(AddLate { this_: true }),
+        "AddNullCheck.new" => |c: C| boxed(small::AddNullCheck::new(c, false)),
+        "AddNullCheck.withoutAssignabilityCheck" => |c: C| boxed(small::AddNullCheck::new(c, true)),
         "AddOverride.new" => |_: C| boxed(AddOverride),
         "AddRequiredKeyword.new" => |_: C| boxed(AddRequiredKeyword),
         "ConvertQuotes.new" => |_: C| boxed(ConvertQuotes::new(QuotesKind::Swap)),
@@ -51,10 +58,22 @@ pub fn generator(name: &str) -> Option<ProducerGenerator> {
         "ReplaceWithIsEmpty.new" => |c: C| boxed(collections::ReplaceWithIsEmpty::new(c)),
         "ConvertToSuperParameters.new" => |_: C| boxed(super_parameters::ConvertToSuperParameters),
         "CreateFunction.new" => |_: C| boxed(create::CreateFunction::new()),
+        "CreateExtensionGetter.new" => |_: C| boxed(extensions::CreateExtensionGetter::new()),
+        "CreateExtensionMethod.new" => |_: C| boxed(extensions::CreateExtensionMethod::new()),
+        "CreateField.new" => |_: C| boxed(members::CreateMember::new(members::MemberKind::Field)),
+        "CreateGetter.new" => |_: C| boxed(members::CreateMember::new(members::MemberKind::Getter)),
+        "CreateSetter.new" => |_: C| boxed(members::CreateMember::new(members::MemberKind::Setter)),
+        "CreateParameter.new" => |_: C| boxed(create::CreateParameter::new()),
         "CreateLocalVariable.new" => |_: C| boxed(create::CreateLocalVariable::new()),
         "CreateMethod.method" => |_: C| boxed(create::CreateMethod::new()),
         "MakeFinal.new" => |_: C| boxed(MakeFinal),
         "MakeVariableNullable.new" => |_: C| boxed(MakeVariableNullable::new()),
+        "RemoveAnnotation.new" => |_: C| boxed(small::RemoveAnnotation::new()),
+        "RemoveNameFromDeclarationClause.new" => {
+            |_: C| boxed(small::RemoveNameFromDeclarationClause::new())
+        }
+        "ReplaceWithNullAware.inChain" => |_: C| boxed(small::ReplaceWithNullAware::new(true)),
+        "ReplaceWithNullAware.single" => |_: C| boxed(small::ReplaceWithNullAware::new(false)),
         "RemoveEmptyConstructorBody.new" => |_: C| boxed(RemoveEmptyConstructorBody),
         "RemoveInitializer.new" => |_: C| {
             boxed(RemoveInitializer {
@@ -94,6 +113,12 @@ pub fn multi_generator(name: &str) -> Option<MultiProducerGenerator> {
     use import_library::{ImportKind, import_library_producers};
     type C<'a, 'b> = &'a ProducerContext<'b>;
     type W<'a> = &'a mut dyn ChangeWorkspace;
+    match name {
+        "CreateClass.new" => return Some(create_types::create_class_producers),
+        "CreateMixin.new" => return Some(create_types::create_mixin_producers),
+        "DataDriven.new" => return Some(data_driven::data_driven_producers),
+        _ => {}
+    }
     let g: MultiProducerGenerator = match ImportKind::from_name(name)? {
         ImportKind::ForExtension => {
             |c: C, w: W| import_library_producers(ImportKind::ForExtension, c, w)
