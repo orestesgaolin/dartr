@@ -56,6 +56,7 @@ pub mod inlay_hints;
 pub mod inline_value;
 pub mod mapping;
 pub mod navigation;
+pub mod refactoring;
 pub mod semantic_tokens;
 pub mod server;
 pub mod signature;

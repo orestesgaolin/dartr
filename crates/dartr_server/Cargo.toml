@@ -24,6 +24,7 @@ dartr_driver.workspace = true
 dartr_lints.workspace = true
 dartr_yaml.workspace = true
 indexmap.workspace = true
+notify.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true

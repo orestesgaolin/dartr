@@ -190,7 +190,7 @@ pub const DART_FEATURES: &[Feature] = &[
         true,
     ),
     feature("ReferencesRegistrations", Some("referencesProvider"), true),
-    feature("RenameRegistrations", Some("renameProvider"), false),
+    feature("RenameRegistrations", Some("renameProvider"), true),
     feature(
         "SelectionRangeRegistrations",
         Some("selectionRangeProvider"),
@@ -391,6 +391,22 @@ pub fn server_capabilities(client: &ClientCapabilities, config: &LspClientConfig
             c.insert(key.into(), json!(true));
         }
     }
+    // Dart `RenameRegistrations.staticOptions`.
+    if !client.text_document_dynamic("rename") {
+        let validation = client
+            .raw
+            .pointer("/textDocument/rename/prepareSupport")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        c.insert(
+            "renameProvider".into(),
+            if validation {
+                json!({"prepareProvider": true})
+            } else {
+                json!(true)
+            },
+        );
+    }
     if !client.text_document_dynamic("synchronization") {
         c.insert(
             "textDocumentSync".into(),
@@ -586,6 +602,13 @@ pub fn dynamic_registrations(
         out.push(reg(
             "textDocument/references",
             json!({"documentSelector": dart_files()}),
+        ));
+    }
+    // Dart `RenameRegistrations`.
+    if client.text_document_dynamic("rename") {
+        out.push(reg(
+            "textDocument/rename",
+            json!({"documentSelector": dart_files(), "prepareProvider": true}),
         ));
     }
     if client.text_document_dynamic("selectionRange") {
