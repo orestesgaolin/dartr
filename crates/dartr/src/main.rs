@@ -139,11 +139,8 @@ fn main() -> anyhow::Result<()> {
     if argv.first().map(String::as_str) == Some("fix") {
         let stdout = std::io::stdout();
         let stderr = std::io::stderr();
-        let code = dartr_server::server::fix_cli::run(
-            &argv[1..],
-            &mut stdout.lock(),
-            &mut stderr.lock(),
-        );
+        let code =
+            dartr_server::server::fix_cli::run(&argv[1..], &mut stdout.lock(), &mut stderr.lock());
         std::process::exit(code);
     }
     let cli = Cli::parse();
@@ -153,7 +150,9 @@ fn main() -> anyhow::Result<()> {
             files,
             with_const,
         } => dump::run(mode, files, with_const),
-        Command::Analyze { .. } | Command::Format { .. } | Command::Fix { .. } => unreachable!("handled before clap"),
+        Command::Analyze { .. } | Command::Format { .. } | Command::Fix { .. } => {
+            unreachable!("handled before clap")
+        }
         Command::LanguageServer { args } => {
             std::process::exit(dartr_legacy::run_with_args(&args, true))
         }
