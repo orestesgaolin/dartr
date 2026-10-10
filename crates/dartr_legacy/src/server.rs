@@ -53,6 +53,8 @@ pub const IMPLEMENTED_REQUESTS: &[&str] = &[
     "analysis.setSubscriptions",
     "analysis.updateContent",
     "analysis.updateOptions",
+    "completion.getSuggestions2",
+    "completion.getSuggestionDetails2",
     "search.findElementReferences",
     "search.findMemberDeclarations",
     "search.findMemberReferences",
@@ -60,8 +62,19 @@ pub const IMPLEMENTED_REQUESTS: &[&str] = &[
     "search.getElementDeclarations",
     "search.getTypeHierarchy",
     "edit.format",
-    "edit.sortMembers",
+    "edit.getAssists",
+    "edit.getAvailableRefactorings",
+    "edit.getFixes",
+    "edit.getPostfixCompletion",
+    "edit.getRefactoring",
+    "edit.getStatementCompletion",
+    "edit.importElements",
+    "edit.isPostfixCompletionApplicable",
+    "edit.listPostfixCompletionTemplates",
     "edit.organizeDirectives",
+    "edit.sortMembers",
+    "edit.formatIfEnabled",
+    "edit.bulkFixes",
     "execution.createContext",
     "execution.deleteContext",
     "execution.getSuggestions",
@@ -872,6 +885,58 @@ impl<W: Write> Server<W> {
                 let result = self.get_type_hierarchy(file, offset, super_only)?;
                 self.response(id, Some(wire(result)))?;
             }
+            "completion.getSuggestions2" => {
+                let file = string(field(params, "file")?, "params.file")?;
+                let offset = integer(field(params, "offset")?, "params.offset")?;
+                let max_results = integer(field(params, "maxResults")?, "params.maxResults")?;
+                if let Some(v) = params.get("completionCaseMatchingMode")
+                    && !v.is_null()
+                {
+                    let s = string(v, "params.completionCaseMatchingMode")?;
+                    if !["FIRST_CHAR", "ALL_CHARS", "NONE"].contains(&s) {
+                        return Err(RequestFailure::mismatch(
+                            "params.completionCaseMatchingMode",
+                            "CompletionCaseMatchingMode",
+                            v,
+                        ));
+                    }
+                }
+                if let Some(v) = params.get("completionMode")
+                    && !v.is_null()
+                {
+                    let s = string(v, "params.completionMode")?;
+                    if !["BASIC", "SMART"].contains(&s) {
+                        return Err(RequestFailure::mismatch(
+                            "params.completionMode",
+                            "CompletionMode",
+                            v,
+                        ));
+                    }
+                }
+                if let Some(v) = params.get("invocationCount")
+                    && !v.is_null()
+                {
+                    integer(v, "params.invocationCount")?;
+                }
+                let timeout = match params.get("timeout") {
+                    Some(v) if !v.is_null() => Some(integer(v, "params.timeout")?),
+                    _ => None,
+                };
+                valid_path(file)?;
+                let result =
+                    self.completion_get_suggestions2(file, offset, max_results, timeout)?;
+                self.response(id, Some(wire(result)))?;
+            }
+            "completion.getSuggestionDetails2" => {
+                let file = string(field(params, "file")?, "params.file")?;
+                let offset = integer(field(params, "offset")?, "params.offset")?;
+                let completion = string(field(params, "completion")?, "params.completion")?;
+                let library_uri = string(field(params, "libraryUri")?, "params.libraryUri")?;
+                valid_path(file)?;
+                let result =
+                    self.completion_get_suggestion_details2(file, offset, completion, library_uri)?;
+                self.response(id, Some(wire(result)))?;
+            }
             "edit.format" => {
                 let file = string(field(params, "file")?, "params.file")?;
                 let selection_offset =
@@ -886,6 +951,97 @@ impl<W: Write> Server<W> {
                     self.edit_format(file, selection_offset, selection_length, line_length)?;
                 self.response(id, Some(wire(result)))?;
             }
+            "edit.getAssists" => {
+                let file = string(field(params, "file")?, "params.file")?;
+                let offset = integer(field(params, "offset")?, "params.offset")?;
+                let length = integer(field(params, "length")?, "params.length")?;
+                valid_path(file)?;
+                let result = self.edit_get_assists(file, offset, length)?;
+                self.response(id, Some(wire(result)))?;
+            }
+            "edit.getAvailableRefactorings" => {
+                let file = string(field(params, "file")?, "params.file")?;
+                let offset = integer(field(params, "offset")?, "params.offset")?;
+                let length = integer(field(params, "length")?, "params.length")?;
+                valid_path(file)?;
+                let resolved = self.resolve_unit(file);
+                let result = crate::refactoring::get_available_refactorings(
+                    resolved.as_ref(),
+                    offset,
+                    length,
+                );
+                self.response(id, Some(wire(result)))?;
+            }
+            "edit.getFixes" => {
+                let file = string(field(params, "file")?, "params.file")?;
+                let offset = integer(field(params, "offset")?, "params.offset")?;
+                valid_path(file)?;
+                let result = self.edit_get_fixes(file, offset)?;
+                self.response(id, Some(wire(result)))?;
+            }
+            "edit.getPostfixCompletion" => {
+                let file = string(field(params, "file")?, "params.file")?;
+                let key = string(field(params, "key")?, "params.key")?;
+                let offset = integer(field(params, "offset")?, "params.offset")?;
+                valid_path(file)?;
+                let result = self.edit_get_postfix_completion(file, key, offset)?;
+                self.response(id, Some(wire(result)))?;
+            }
+            "edit.getRefactoring" => {
+                let kind_val = field(params, "kind")?;
+                let kind_str = string(kind_val, "params.kind")?;
+                let kind: protocol::RefactoringKind = serde_json::from_value(json!(kind_str))
+                    .map_err(|_| {
+                        RequestFailure::mismatch("params.kind", "RefactoringKind", kind_val)
+                    })?;
+                let file = string(field(params, "file")?, "params.file")?;
+                let offset = integer(field(params, "offset")?, "params.offset")?;
+                let length = integer(field(params, "length")?, "params.length")?;
+                let validate_only = boolean(field(params, "validateOnly")?, "params.validateOnly")?;
+                let options = params.get("options").filter(|v| !v.is_null());
+                valid_path(file)?;
+                let result =
+                    self.edit_get_refactoring(kind, file, offset, length, validate_only, options)?;
+                self.response(id, Some(wire(result)))?;
+            }
+            "edit.getStatementCompletion" => {
+                let file = string(field(params, "file")?, "params.file")?;
+                let offset = integer(field(params, "offset")?, "params.offset")?;
+                valid_path(file)?;
+                let result = self.edit_get_statement_completion(file, offset)?;
+                self.response(id, Some(wire(result)))?;
+            }
+            "edit.importElements" => {
+                let file = string(field(params, "file")?, "params.file")?;
+                let elements =
+                    decode_imported_elements_list(field(params, "elements")?, "params.elements")?;
+                let offset = match params.get("offset") {
+                    Some(v) if !v.is_null() => Some(integer(v, "params.offset")?),
+                    _ => None,
+                };
+                valid_path(file)?;
+                let result = self.edit_import_elements(file, &elements, offset)?;
+                self.response(id, Some(wire(result)))?;
+            }
+            "edit.isPostfixCompletionApplicable" => {
+                let file = string(field(params, "file")?, "params.file")?;
+                let key = string(field(params, "key")?, "params.key")?;
+                let offset = integer(field(params, "offset")?, "params.offset")?;
+                valid_path(file)?;
+                let value = self.resolve_unit(file).is_some_and(|r| {
+                    crate::postfix::is_postfix_completion_applicable(&r, file, key, offset)
+                });
+                self.response(
+                    id,
+                    Some(wire(protocol::EditIsPostfixCompletionApplicableResult {
+                        value,
+                    })),
+                )?;
+            }
+            "edit.listPostfixCompletionTemplates" => {
+                let result = crate::postfix::list_postfix_completion_templates();
+                self.response(id, Some(wire(result)))?;
+            }
             "edit.sortMembers" => {
                 let file = string(field(params, "file")?, "params.file")?;
                 valid_path(file)?;
@@ -896,6 +1052,35 @@ impl<W: Write> Server<W> {
                 let file = string(field(params, "file")?, "params.file")?;
                 valid_path(file)?;
                 let result = self.edit_organize_directives(file)?;
+                self.response(id, Some(wire(result)))?;
+            }
+            "edit.formatIfEnabled" => {
+                let directories = strings(field(params, "directories")?, "params.directories")?;
+                valid_paths(&directories)?;
+                let result = self.edit_format_if_enabled(&directories)?;
+                self.response(id, Some(wire(result)))?;
+            }
+            "edit.bulkFixes" => {
+                let included = strings(field(params, "included")?, "params.included")?;
+                let in_test_mode = match params.get("inTestMode") {
+                    Some(v) if !v.is_null() => Some(boolean(v, "params.inTestMode")?),
+                    _ => None,
+                };
+                let update_pubspec = match params.get("updatePubspec") {
+                    Some(v) if !v.is_null() => Some(boolean(v, "params.updatePubspec")?),
+                    _ => None,
+                };
+                let codes = match params.get("codes") {
+                    Some(v) if !v.is_null() => Some(strings(v, "params.codes")?),
+                    _ => None,
+                };
+                valid_paths(&included)?;
+                let result = self.edit_bulk_fixes(
+                    &included,
+                    in_test_mode,
+                    update_pubspec,
+                    codes.as_deref(),
+                )?;
                 self.response(id, Some(wire(result)))?;
             }
             "execution.createContext" => {
@@ -2459,11 +2644,1091 @@ impl<W: Write> Server<W> {
             "dart/textDocument/super" => self.lsp_super(params),
             "dart/textDocument/augmentation" => self.lsp_augmentation(params, true),
             "dart/textDocument/augmented" => self.lsp_augmentation(params, false),
+            "textDocument/codeAction" => self.lsp_code_action(params),
             _ => Err(ResponseError::new(
                 codes::METHOD_NOT_FOUND,
                 format!("Unknown method {method}"),
             )),
         }
+    }
+
+    fn code_style_for(&self, path: &str) -> dartr_server::completion::CodeStyle {
+        let Some(collection) = &self.collection else {
+            return dartr_server::completion::CodeStyle::default();
+        };
+        let Some(context) = collection
+            .context_for(path)
+            .or_else(|| collection.contexts.first())
+        else {
+            return dartr_server::completion::CodeStyle::default();
+        };
+        let options = collection.options_for(context, path);
+        let has = |name: &str| options.lint_rules.iter().any(|r| r == name);
+        let quote = if has("prefer_single_quotes") {
+            '\''
+        } else if has("prefer_double_quotes") {
+            '"'
+        } else {
+            '\''
+        };
+        dartr_server::completion::CodeStyle {
+            specify_types: has("always_specify_types"),
+            make_locals_final: has("prefer_final_locals"),
+            quote,
+        }
+    }
+
+    fn completion_get_suggestions2(
+        &mut self,
+        file: &str,
+        offset: i64,
+        max_results: i64,
+        timeout: Option<i64>,
+    ) -> Result<protocol::CompletionGetSuggestions2Result> {
+        use dartr_server::completion::{self as c, KnownLibrary, RequestInputs, candidate::Kind};
+        if file.ends_with(".yaml") {
+            return Ok(crate::completion::compute_yaml_suggestions(file, offset));
+        }
+        let empty = || protocol::CompletionGetSuggestions2Result {
+            replacement_offset: offset,
+            replacement_length: 0,
+            suggestions: Vec::new(),
+            is_incomplete: false,
+        };
+        if !file.ends_with(".dart") {
+            return Ok(empty());
+        }
+        let Some(resolved) = self.resolve_unit(file) else {
+            return Ok(empty());
+        };
+        let Ok(offset_u32) = u32::try_from(offset) else {
+            return Ok(empty());
+        };
+        let line_info = resolved.line_info().clone();
+        let templates = self.dartdoc_templates(file);
+        let style = self.code_style_for(file);
+        let context_index = resolved.library.context;
+        let (package, sdk_libraries, packages, known) = match &self.collection {
+            Some(collection) => {
+                let context = &collection.contexts[context_index];
+                let package = match context.root.workspace.find_package_for(file) {
+                    Some(dartr_project::workspace::WorkspacePackage::Pub {
+                        root, name, ..
+                    }) => Some((root, name)),
+                    _ => None,
+                };
+                let sdk = context.sdk.as_ref().or(collection.sdk.as_ref());
+                let sdk_libraries = sdk
+                    .map(|s| {
+                        s.libraries()
+                            .iter()
+                            .map(|l| (l.short_name.clone(), l.is_internal(), l.implementation))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let packages = context
+                    .packages
+                    .packages()
+                    .iter()
+                    .map(|p| (p.name.clone(), p.lib.clone()))
+                    .collect();
+                let known = self
+                    .driver_session
+                    .link_known_libraries(collection, context_index)
+                    .map(|(world, libraries)| {
+                        let filter = c::FileFilter::new(package.clone(), file);
+                        let workspace = collection.contexts[context_index].root.workspace.clone();
+                        let root_of = |p: &str| match workspace.find_package_for(p) {
+                            Some(dartr_project::workspace::WorkspacePackage::Pub {
+                                root, ..
+                            }) => Some(root),
+                            _ => None,
+                        };
+                        let mut included: Vec<String> = libraries
+                            .iter()
+                            .filter(|l| filter.should_include(l, &root_of))
+                            .map(|l| l.uri.clone())
+                            .collect();
+                        let sink = NoopSink;
+                        let core_ctx = dartr_element::Ctx {
+                            world: &world,
+                            current: None,
+                            local: None,
+                            tp: &resolved.library.type_provider,
+                            features: &resolved.library.features,
+                            req: &sink,
+                        };
+                        let mut front = vec!["dart:core".to_string()];
+                        if let Some(core) = core_ctx.library_by_uri("dart:core") {
+                            let first = core_ctx.get(core).first_fragment();
+                            let f = core_ctx.fragment(first);
+                            let uris = f.library_exports.iter().map(|e| &e.directive.uri).chain(
+                                f.library_imports
+                                    .iter()
+                                    .filter(|i| !i.is_synthetic)
+                                    .map(|i| &i.directive.uri),
+                            );
+                            for uri in uris {
+                                if let dartr_element::DirectiveUri::Library { library, .. } = uri {
+                                    let u = c::elem::library_uri(&core_ctx, *library);
+                                    if !front.contains(&u) {
+                                        front.push(u);
+                                    }
+                                }
+                            }
+                        }
+                        let mut ordered: Vec<String> =
+                            front.into_iter().filter(|u| included.contains(u)).collect();
+                        included.retain(|u| !ordered.contains(u));
+                        ordered.append(&mut included);
+                        (world, ordered)
+                    });
+                (package, sdk_libraries, packages, known)
+            }
+            None => (None, Vec::new(), Vec::new(), None),
+        };
+        let unit = resolved.unit();
+        if (offset_u32 as usize) > unit.ast.tokens.source.len() {
+            return Ok(empty());
+        }
+        let sink = NoopSink;
+        let world = known
+            .as_ref()
+            .map(|k| &k.0)
+            .unwrap_or(&resolved.library.world);
+        let ctx = dartr_element::Ctx {
+            world,
+            current: None,
+            local: Some(&unit.local),
+            tp: &resolved.library.type_provider,
+            features: &resolved.library.features,
+            req: &sink,
+        };
+        let content = unit.ast.tokens.source.clone();
+        let package_root = package.as_ref().map(|(root, _)| root.clone());
+        let in_test_directory = package_root
+            .as_ref()
+            .is_some_and(|root| file.starts_with(&format!("{root}/test/")));
+        let Some(q) = c::build_request(RequestInputs {
+            ctx: &ctx,
+            ast: &unit.ast,
+            tables: &unit.tables,
+            root: unit.unit,
+            content: &content,
+            path: file,
+            offset: offset_u32,
+            line_info: &line_info,
+            style,
+            package_root,
+            in_test_directory,
+            sdk_libraries,
+            packages,
+        }) else {
+            return Ok(empty());
+        };
+        let known_list = || -> Vec<KnownLibrary> {
+            let Some((world, uris)) = &known else {
+                return Vec::new();
+            };
+            uris.iter()
+                .filter_map(|u| world.libraries.get(u.as_str()).copied())
+                .map(|element| KnownLibrary { element })
+                .collect()
+        };
+        let budget_ms = timeout.map(|t| t.max(0) as u64).unwrap_or(1000);
+        let result = c::compute(
+            &q,
+            budget_ms,
+            max_results,
+            Some(&known_list as &dyn Fn() -> Vec<KnownLibrary>),
+        );
+        let max_len = max_results.max(0) as usize;
+        let mut suggestions = Vec::new();
+        let mut is_incomplete = result.is_incomplete;
+        for mut candidate in result.candidates {
+            if suggestions.len() >= max_len {
+                is_incomplete = true;
+                break;
+            }
+            match &candidate.kind {
+                Kind::Override { .. } => {
+                    let data = c::overrides::override_data(&q, &candidate);
+                    if let Kind::Override { data: d, .. } = &mut candidate.kind {
+                        *d = data;
+                    }
+                }
+                _ => {
+                    if candidate.typed().is_some() {
+                        let data = c::overrides::typed_data(&q, &candidate);
+                        if let Some(t) = candidate.typed_mut() {
+                            t.data = data;
+                        }
+                    }
+                }
+            }
+            if let Some(s) =
+                crate::completion::candidate_to_completion_suggestion(&q, candidate, &templates)
+            {
+                suggestions.push(s);
+            }
+        }
+        Ok(protocol::CompletionGetSuggestions2Result {
+            replacement_offset: q.replacement.0 as i64,
+            replacement_length: q.replacement.1 as i64,
+            suggestions,
+            is_incomplete,
+        })
+    }
+
+    fn completion_get_suggestion_details2(
+        &mut self,
+        file: &str,
+        _offset: i64,
+        completion: &str,
+        library_uri: &str,
+    ) -> Result<protocol::CompletionGetSuggestionDetails2Result> {
+        let Some(resolved) = self.resolve_unit(file) else {
+            return Err(RequestFailure::new(
+                "INVALID_FILE_PATH_FORMAT",
+                format!("Invalid file path: {file}"),
+            ));
+        };
+        let Some(collection) = &self.collection else {
+            return Err(RequestFailure::new(
+                "INVALID_FILE_PATH_FORMAT",
+                format!("Invalid file path: {file}"),
+            ));
+        };
+        let eol = dartr_server::correction::change_builder::end_of_line(
+            &resolved.unit().ast.tokens.source,
+        );
+        let mut workspace = crate::edit::LegacyWorkspace {
+            session: &mut self.driver_session,
+            collection,
+        };
+        let mut builder =
+            dartr_server::correction::change_builder::ChangeBuilder::new(&mut workspace, eol);
+        let mut prefix = None;
+        builder.add_dart_file_edit(file, |fb| {
+            prefix = fb.import_library_element(library_uri, None, None, false);
+        });
+        let change = crate::edit::to_protocol_source_change(builder.source_change());
+        let result_completion = match prefix {
+            Some(p) if !p.is_empty() => format!("{p}.{completion}"),
+            _ => completion.to_string(),
+        };
+        Ok(protocol::CompletionGetSuggestionDetails2Result {
+            completion: result_completion,
+            change,
+        })
+    }
+
+    fn edit_get_fixes(&mut self, file: &str, offset: i64) -> Result<protocol::EditGetFixesResult> {
+        if self.roots_dirty {
+            self.refresh_roots();
+        }
+        if !self.is_analyzed(file) || fs::read_string(file).is_none() {
+            return Err(RequestFailure::new(
+                "GET_FIXES_INVALID_FILE",
+                "Error during `edit.getFixes`: invalid file.",
+            ));
+        }
+        if !file.ends_with(".dart") {
+            return Ok(protocol::EditGetFixesResult { fixes: Vec::new() });
+        }
+        let Some(resolved) = self.resolve_unit(file) else {
+            return Err(RequestFailure::new(
+                "GET_FIXES_INVALID_FILE",
+                "Error during `edit.getFixes`: invalid file.",
+            ));
+        };
+        let Ok(off) = u32::try_from(offset) else {
+            return Err(RequestFailure::new(
+                "GET_FIXES_INVALID_FILE",
+                "Error during `edit.getFixes`: invalid offset.",
+            ));
+        };
+        let line_info = resolved.line_info().clone();
+        if (off as usize) > resolved.unit().ast.tokens.source.len() {
+            return Err(RequestFailure::new(
+                "GET_FIXES_INVALID_FILE",
+                "Error during `edit.getFixes`: invalid offset.",
+            ));
+        }
+        let request_line = line_info.get_location(off).line_number;
+        let Some(collection) = &self.collection else {
+            return Ok(protocol::EditGetFixesResult { fixes: Vec::new() });
+        };
+        let context_index = resolved.library.context;
+        let diag_files = self.driver_session.diagnostics(
+            collection,
+            &[AnalyzedFile {
+                path: file.to_string(),
+                context: context_index,
+            }],
+        );
+        let Some(file_diags) = diag_files.into_iter().next() else {
+            return Ok(protocol::EditGetFixesResult { fixes: Vec::new() });
+        };
+        let mut infos = LineInfoCache::default();
+        let all_errors = analysis_errors(collection, &file_diags, &mut infos);
+        let context = &collection.contexts[context_index];
+        let options = collection.options_for(context, file).clone();
+        let resolved_rc = std::rc::Rc::new(dartr_server::server::ResolvedUnitRef {
+            library: resolved.library.clone(),
+            index: resolved.index,
+        });
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let unit = resolved.unit();
+        let utils = dartr_server::correction::utils::CorrectionUtils::new(&unit.ast, &line_info);
+        let engine_diags: Vec<dartr_diagnostics::Diagnostic> = file_diags
+            .diagnostics
+            .iter()
+            .map(|d| {
+                let mut d = d.clone();
+                d.severity = d.code.severity();
+                d
+            })
+            .collect();
+        let fix_unit = dartr_server::correction::fix_processor::FixUnit {
+            resolved: &resolved_rc,
+            ctx: &ctx,
+            utils: &utils,
+            path: file,
+            options: &options,
+            diagnostics: &engine_diags,
+        };
+        let mut workspace = crate::edit::LegacyWorkspace {
+            session: &mut self.driver_session,
+            collection,
+        };
+        let mut result_fixes = Vec::new();
+        for (diag, err) in engine_diags.iter().zip(all_errors.iter()) {
+            let diag_line = line_info.get_location(diag.offset as u32).line_number;
+            if diag_line != request_line {
+                continue;
+            }
+            let mut fixes = dartr_server::correction::fix_processor::compute_fixes(
+                &fix_unit,
+                diag,
+                &mut workspace,
+                None,
+            );
+            fixes.sort_by(|a, b| {
+                b.kind
+                    .priority
+                    .cmp(&a.kind.priority)
+                    .then_with(|| a.change.message.cmp(&b.change.message))
+            });
+            let proto_error: protocol::AnalysisError =
+                serde_json::from_value(error_json(err)).expect("valid AnalysisError");
+            let proto_fixes = fixes
+                .into_iter()
+                .map(|f| crate::edit::to_protocol_source_change(f.change))
+                .collect();
+            result_fixes.push(protocol::AnalysisErrorFixes {
+                error: proto_error,
+                fixes: proto_fixes,
+            });
+        }
+        Ok(protocol::EditGetFixesResult {
+            fixes: result_fixes,
+        })
+    }
+
+    fn edit_get_assists(
+        &mut self,
+        file: &str,
+        offset: i64,
+        length: i64,
+    ) -> Result<protocol::EditGetAssistsResult> {
+        if self.roots_dirty {
+            self.refresh_roots();
+        }
+        if !file.ends_with(".dart") {
+            return Ok(protocol::EditGetAssistsResult {
+                assists: Vec::new(),
+            });
+        }
+        let (Ok(off), Ok(len)) = (u32::try_from(offset), u32::try_from(length)) else {
+            return Ok(protocol::EditGetAssistsResult {
+                assists: Vec::new(),
+            });
+        };
+        let Some(resolved) = self.resolve_unit(file) else {
+            return Ok(protocol::EditGetAssistsResult {
+                assists: Vec::new(),
+            });
+        };
+        let Some(collection) = &self.collection else {
+            return Ok(protocol::EditGetAssistsResult {
+                assists: Vec::new(),
+            });
+        };
+        let line_info = resolved.line_info().clone();
+        let context_index = resolved.library.context;
+        let context = &collection.contexts[context_index];
+        let options = collection.options_for(context, file).clone();
+        let resolved_rc = std::rc::Rc::new(dartr_server::server::ResolvedUnitRef {
+            library: resolved.library.clone(),
+            index: resolved.index,
+        });
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let unit = resolved.unit();
+        if (off as usize) + (len as usize) > unit.ast.tokens.source.len() {
+            return Ok(protocol::EditGetAssistsResult {
+                assists: Vec::new(),
+            });
+        }
+        let utils = dartr_server::correction::utils::CorrectionUtils::new(&unit.ast, &line_info);
+        let fix_unit = dartr_server::correction::fix_processor::FixUnit {
+            resolved: &resolved_rc,
+            ctx: &ctx,
+            utils: &utils,
+            path: file,
+            options: &options,
+            diagnostics: &unit.diagnostics,
+        };
+        let mut workspace = crate::edit::LegacyWorkspace {
+            session: &mut self.driver_session,
+            collection,
+        };
+        let mut assists = dartr_server::correction::assist_processor::compute_assists(
+            &fix_unit,
+            off,
+            len,
+            &mut workspace,
+        );
+        assists.sort_by(|a, b| {
+            b.kind
+                .priority
+                .cmp(&a.kind.priority)
+                .then_with(|| a.change.message.cmp(&b.change.message))
+        });
+        let proto_assists = assists
+            .into_iter()
+            .map(|a| crate::edit::to_protocol_source_change(a.change))
+            .collect();
+        Ok(protocol::EditGetAssistsResult {
+            assists: proto_assists,
+        })
+    }
+
+    fn edit_get_refactoring(
+        &mut self,
+        kind: protocol::RefactoringKind,
+        file: &str,
+        offset: i64,
+        length: i64,
+        validate_only: bool,
+        options: Option<&Value>,
+    ) -> Result<crate::refactoring::RefactoringResponse> {
+        let resolved = self.resolve_unit(file);
+        let search_engine = self.collection.as_ref().map(|collection| SearchEngine {
+            collection,
+            excluded: &self.excluded,
+            session: &mut self.driver_session,
+            owned: &mut self.owned_files,
+            search_scope: &mut self.search_scope,
+            search_words: &mut self.search_words,
+            indexes: &mut self.indexes,
+        });
+        crate::refactoring::get_refactoring(
+            resolved,
+            search_engine,
+            kind,
+            file,
+            offset,
+            length,
+            validate_only,
+            options,
+        )
+        .map_err(|(code, msg)| RequestFailure::new(code, msg))
+    }
+
+    fn edit_get_postfix_completion(
+        &mut self,
+        file: &str,
+        key: &str,
+        offset: i64,
+    ) -> Result<protocol::EditGetPostfixCompletionResult> {
+        let change = match self.resolve_unit(file) {
+            Some(resolved) => crate::postfix::get_postfix_completion(&resolved, file, key, offset),
+            None => protocol::SourceChange {
+                message: String::new(),
+                edits: Vec::new(),
+                linked_edit_groups: Vec::new(),
+                selection: None,
+                selection_length: None,
+                id: None,
+            },
+        };
+        Ok(protocol::EditGetPostfixCompletionResult { change })
+    }
+
+    fn edit_get_statement_completion(
+        &mut self,
+        file: &str,
+        offset: i64,
+    ) -> Result<protocol::EditGetStatementCompletionResult> {
+        let Some(resolved) = self.resolve_unit(file) else {
+            return Ok(protocol::EditGetStatementCompletionResult {
+                change: protocol::SourceChange {
+                    message: String::new(),
+                    edits: Vec::new(),
+                    linked_edit_groups: Vec::new(),
+                    selection: None,
+                    selection_length: None,
+                    id: None,
+                },
+                whitespace_only: false,
+            });
+        };
+        Ok(crate::statement::get_statement_completion(
+            &resolved, file, offset,
+        ))
+    }
+
+    fn edit_import_elements(
+        &mut self,
+        file: &str,
+        elements: &[protocol::ImportedElements],
+        _offset: Option<i64>,
+    ) -> Result<protocol::EditImportElementsResult> {
+        let Some(resolved) = self.resolve_unit(file) else {
+            return Err(RequestFailure::new(
+                "IMPORT_ELEMENTS_INVALID_FILE",
+                "Error during `edit.importElements`: invalid file.",
+            ));
+        };
+        let Some(collection) = &self.collection else {
+            return Err(RequestFailure::new(
+                "IMPORT_ELEMENTS_INVALID_FILE",
+                "Error during `edit.importElements`: invalid file.",
+            ));
+        };
+        let mut workspace = crate::edit::LegacyWorkspace {
+            session: &mut self.driver_session,
+            collection,
+        };
+        let edit = crate::edit::compute_import_elements(&mut workspace, &resolved, file, elements);
+        Ok(protocol::EditImportElementsResult { edit })
+    }
+
+    fn edit_format_if_enabled(
+        &mut self,
+        directories: &[String],
+    ) -> Result<protocol::EditFormatIfEnabledResult> {
+        if self.roots_dirty {
+            self.refresh_roots();
+        }
+        let collection = AnalysisContextCollection::new(
+            directories,
+            &CollectionOptions {
+                sdk_path: self.options.dart_sdk.clone(),
+                package_config_file: self.options.packages.clone(),
+                enabled_experiments: self.options.enabled_experiments.clone(),
+                ..Default::default()
+            },
+        );
+        let mut edits = Vec::new();
+        for context in &collection.contexts {
+            for file in context.root.analyzed_files() {
+                if !file.ends_with(".dart") || self.is_excluded(&file) {
+                    continue;
+                }
+                let options = collection.options_for(context, &file);
+                if !options.code_style_use_formatter {
+                    continue;
+                }
+                let Some(content) = fs::read_string(&file) else {
+                    continue;
+                };
+                let content = dartr_syntax::strip_bom(&content).to_string();
+                let version = context.file_info(&file).language_version;
+                if let crate::edit::FormatOutcome::Ok(fmt) = crate::edit::format_code(
+                    &content,
+                    (version.major, version.minor),
+                    &options.enabled_experiments(),
+                    options.formatter_page_width,
+                    options.formatter_trailing_commas,
+                    0,
+                    0,
+                    None,
+                ) && !fmt.edits.is_empty()
+                {
+                    edits.push(protocol::SourceFileEdit {
+                        file,
+                        file_stamp: 0,
+                        edits: fmt.edits,
+                    });
+                }
+            }
+        }
+        Ok(protocol::EditFormatIfEnabledResult { edits })
+    }
+
+    fn edit_bulk_fixes(
+        &mut self,
+        included: &[String],
+        _in_test_mode: Option<bool>,
+        _update_pubspec: Option<bool>,
+        codes: Option<&[String]>,
+    ) -> Result<protocol::EditBulkFixesResult> {
+        if self.roots_dirty {
+            self.refresh_roots();
+        }
+        let collection = AnalysisContextCollection::new(
+            included,
+            &CollectionOptions {
+                sdk_path: self.options.dart_sdk.clone(),
+                package_config_file: self.options.packages.clone(),
+                enabled_experiments: self.options.enabled_experiments.clone(),
+                ..Default::default()
+            },
+        );
+        let code_filter: Option<HashSet<String>> =
+            codes.map(|c| c.iter().map(|s| s.to_lowercase()).collect());
+        let mut session = DriverSession::default();
+        let mut edits = Vec::new();
+        let mut details = Vec::new();
+
+        for (ctx_idx, context) in collection.contexts.iter().enumerate() {
+            for file in context.root.analyzed_files() {
+                if !file.ends_with(".dart") || self.is_excluded(&file) {
+                    continue;
+                }
+                let diag_files = session.diagnostics(
+                    &collection,
+                    &[AnalyzedFile {
+                        path: file.clone(),
+                        context: ctx_idx,
+                    }],
+                );
+                let Some(file_diags) = diag_files.into_iter().next() else {
+                    continue;
+                };
+                if file_diags.diagnostics.is_empty() {
+                    continue;
+                }
+                let Some(library) = session.resolved_library(&collection, &file) else {
+                    continue;
+                };
+                let Some(u_idx) = library.unit_index(&file) else {
+                    continue;
+                };
+                let resolved_rc = std::rc::Rc::new(dartr_server::server::ResolvedUnitRef {
+                    library: library.clone(),
+                    index: u_idx,
+                });
+                let line_info = resolved_rc.line_info().clone();
+                let options = collection.options_for(context, &file).clone();
+                let sink = NoopSink;
+                let ctx = resolved_rc.ctx(&sink);
+                let unit = resolved_rc.unit();
+                let utils =
+                    dartr_server::correction::utils::CorrectionUtils::new(&unit.ast, &line_info);
+                let engine_diags: Vec<dartr_diagnostics::Diagnostic> = file_diags
+                    .diagnostics
+                    .iter()
+                    .map(|d| {
+                        let mut d = d.clone();
+                        d.severity = d.code.severity();
+                        d
+                    })
+                    .collect();
+                let fix_unit = dartr_server::correction::fix_processor::FixUnit {
+                    resolved: &resolved_rc,
+                    ctx: &ctx,
+                    utils: &utils,
+                    path: &file,
+                    options: &options,
+                    diagnostics: &engine_diags,
+                };
+                let mut workspace = crate::edit::LegacyWorkspace {
+                    session: &mut session,
+                    collection: &collection,
+                };
+                let mut file_fixes_map: IndexMap<String, i64> = IndexMap::new();
+                let mut file_edits: Vec<protocol::SourceEdit> = Vec::new();
+                for diag in &engine_diags {
+                    let code_lower = diag.code.lower_case_name().to_string();
+                    if let Some(filter) = &code_filter
+                        && !filter.contains(&code_lower)
+                    {
+                        continue;
+                    }
+                    let fixes = dartr_server::correction::fix_processor::compute_fixes(
+                        &fix_unit,
+                        diag,
+                        &mut workspace,
+                        None,
+                    );
+                    if let Some(first_fix) = fixes.into_iter().find(|f| {
+                        !f.change
+                            .id
+                            .as_deref()
+                            .unwrap_or_default()
+                            .starts_with("dart.fix.ignore")
+                    }) {
+                        let proto_change = crate::edit::to_protocol_source_change(first_fix.change);
+                        let desc = if proto_change.message.is_empty() {
+                            None
+                        } else {
+                            Some(proto_change.message.clone())
+                        };
+                        for fe in proto_change.edits {
+                            if fe.file == file {
+                                for mut e in fe.edits {
+                                    e.description = desc.clone();
+                                    file_edits.push(e);
+                                }
+                                *file_fixes_map.entry(code_lower.clone()).or_insert(0) += 1;
+                            }
+                        }
+                    }
+                }
+                if !file_edits.is_empty() {
+                    file_edits.sort_by(|a, b| b.offset.cmp(&a.offset));
+                    edits.push(protocol::SourceFileEdit {
+                        file: file.clone(),
+                        file_stamp: 0,
+                        edits: file_edits,
+                    });
+                    details.push(protocol::BulkFix {
+                        path: file,
+                        fixes: file_fixes_map
+                            .into_iter()
+                            .map(|(code, occurrences)| protocol::BulkFixDetail {
+                                code,
+                                occurrences,
+                            })
+                            .collect(),
+                    });
+                }
+            }
+        }
+        Ok(protocol::EditBulkFixesResult {
+            message: String::new(),
+            edits,
+            details,
+        })
+    }
+
+    #[allow(dead_code)]
+    fn lsp_completion(&mut self, params: &Value) -> dartr_server::mapping::ErrorOr<Value> {
+        use dartr_server::completion::{
+            self as c, RequestInputs,
+            candidate::Kind,
+            lsp::{ItemCapabilities, ItemContext},
+        };
+        let path = self.lsp_path_of_doc(params)?;
+        if !path.ends_with(".dart") {
+            return Ok(json!({"isIncomplete": false, "items": []}));
+        }
+        let resolved = self.lsp_require_resolved(&path)?;
+        let line_info = resolved.line_info().clone();
+        let offset = self.lsp_position_offset(&line_info, params)?;
+        let raw_caps = &self.lsp_capabilities.raw;
+        let bool_cap = |ptr: &str| {
+            raw_caps
+                .pointer(ptr)
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+        };
+        let int_set_cap = |ptr: &str| {
+            raw_caps
+                .pointer(ptr)
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(Value::as_i64).collect::<Vec<_>>())
+        };
+        let item_ptr = "/textDocument/completion/completionItem";
+        let defaults_list: Vec<String> = raw_caps
+            .pointer("/textDocument/completion/completionList/itemDefaults")
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let doc_formats: Option<Vec<String>> = raw_caps
+            .pointer(&format!("{item_ptr}/documentationFormat"))
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            });
+        let caps = ItemCapabilities {
+            snippets: bool_cap(&format!("{item_ptr}/snippetSupport")),
+            insert_replace: bool_cap(&format!("{item_ptr}/insertReplaceSupport")),
+            deprecated_flag: bool_cap(&format!("{item_ptr}/deprecatedSupport")),
+            deprecated_tag: int_set_cap(&format!("{item_ptr}/tagSupport/valueSet"))
+                .is_some_and(|s| s.contains(&1)),
+            label_details: bool_cap(&format!("{item_ptr}/labelDetailsSupport")),
+            as_is_insert_mode: int_set_cap(&format!("{item_ptr}/insertTextModeSupport/valueSet"))
+                .is_some_and(|s| s.contains(&1)),
+            item_kinds: int_set_cap("/textDocument/completion/completionItemKind/valueSet")
+                .unwrap_or_else(|| (1..=18).collect()),
+            documentation_formats: doc_formats,
+            default_edit_range: defaults_list.iter().any(|d| d == "editRange"),
+            default_text_mode: defaults_list.iter().any(|d| d == "insertTextMode"),
+            default_data: bool_cap("/textDocument/completion/completionList/applyKindSupport"),
+        };
+        let templates = self.dartdoc_templates(&path);
+        let style = self.code_style_for(&path);
+        let context_index = resolved.library.context;
+        let (package, sdk_libraries, packages) = match &self.collection {
+            Some(collection) => {
+                let context = &collection.contexts[context_index];
+                let package = match context.root.workspace.find_package_for(&path) {
+                    Some(dartr_project::workspace::WorkspacePackage::Pub {
+                        root, name, ..
+                    }) => Some((root, name)),
+                    _ => None,
+                };
+                let sdk = context.sdk.as_ref().or(collection.sdk.as_ref());
+                let sdk_libraries = sdk
+                    .map(|s| {
+                        s.libraries()
+                            .iter()
+                            .map(|l| (l.short_name.clone(), l.is_internal(), l.implementation))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let packages = context
+                    .packages
+                    .packages()
+                    .iter()
+                    .map(|p| (p.name.clone(), p.lib.clone()))
+                    .collect();
+                (package, sdk_libraries, packages)
+            }
+            None => (None, Vec::new(), Vec::new()),
+        };
+        let unit = resolved.unit();
+        let sink = NoopSink;
+        let ctx = dartr_element::Ctx {
+            world: &resolved.library.world,
+            current: None,
+            local: Some(&unit.local),
+            tp: &resolved.library.type_provider,
+            features: &resolved.library.features,
+            req: &sink,
+        };
+        let content = unit.ast.tokens.source.clone();
+        let package_root = package.as_ref().map(|(root, _)| root.clone());
+        let in_test_directory = package_root
+            .as_ref()
+            .is_some_and(|root| path.starts_with(&format!("{root}/test/")));
+        let Some(q) = c::build_request(RequestInputs {
+            ctx: &ctx,
+            ast: &unit.ast,
+            tables: &unit.tables,
+            root: unit.unit,
+            content: &content,
+            path: &path,
+            offset,
+            line_info: &line_info,
+            style,
+            package_root,
+            in_test_directory,
+            sdk_libraries,
+            packages,
+        }) else {
+            return Ok(json!({"isIncomplete": false, "items": []}));
+        };
+        let result = c::compute(&q, 100, 1000, None);
+        let (r_offset, r_length) = q.replacement;
+        let insert_length = offset.saturating_sub(r_offset).min(r_length);
+        let default_replacement = dartr_server::mapping::to_range(&line_info, r_offset, r_length);
+        let default_insertion =
+            dartr_server::mapping::to_range(&line_info, r_offset, insert_length);
+        let ic = ItemContext {
+            caps: &caps,
+            commit_characters_enabled: false,
+            complete_function_calls: false,
+            has_default_text_mode: false,
+            file_path: &path,
+        };
+        let mut items = Vec::new();
+        for mut candidate in result.candidates {
+            match &candidate.kind {
+                Kind::Override { .. } => {
+                    let data = c::overrides::override_data(&q, &candidate);
+                    if let Kind::Override { data: d, .. } = &mut candidate.kind {
+                        *d = data;
+                    }
+                }
+                _ => {
+                    if candidate.typed().is_some() {
+                        let data = c::overrides::typed_data(&q, &candidate);
+                        if let Some(t) = candidate.typed_mut() {
+                            t.data = data;
+                        }
+                    }
+                }
+            }
+            let element = candidate
+                .element()
+                .map(|e| dartr_typesystem::member::base_element(&ctx, e));
+            let location = element.and_then(|e| c::lsp::element_location(&ctx, e));
+            let resolution = location.map(|l| json!({"file": path, "ref": l}));
+            let doc = element
+                .and_then(|e| dartr_server::hover::documentation(&ctx, e, &templates))
+                .map(|d| c::lsp::remove_dart_doc_delimiters(&d))
+                .map(|d| dartr_server::hover::clean_dartdoc(&d));
+            if let Some(item) = c::lsp::to_item(
+                &ctx,
+                &ic,
+                &candidate,
+                default_replacement.clone(),
+                default_insertion.clone(),
+                false,
+                resolution,
+                doc,
+            ) {
+                items.push(item);
+            }
+        }
+        Ok(json!({
+            "isIncomplete": result.is_incomplete,
+            "items": items,
+        }))
+    }
+
+    #[allow(dead_code)]
+    fn lsp_completion_resolve(&mut self, params: &Value) -> dartr_server::mapping::ErrorOr<Value> {
+        let Some(data) = params.get("data").filter(|d| d.is_object()) else {
+            return Ok(params.clone());
+        };
+        let Some(file) = data.get("file").and_then(Value::as_str).map(str::to_string) else {
+            return Ok(params.clone());
+        };
+        let reference = data.get("ref").and_then(Value::as_str).map(str::to_string);
+        let Ok(resolved) = self.lsp_require_resolved(&file) else {
+            return Ok(params.clone());
+        };
+        let templates = self.dartdoc_templates(&file);
+        let formats: Option<Vec<String>> = self
+            .lsp_capabilities
+            .raw
+            .pointer("/textDocument/completion/completionItem/documentationFormat")
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            });
+        let sink = NoopSink;
+        let ctx = resolved.ctx(&sink);
+        let mut item = params.as_object().cloned().unwrap_or_default();
+        if let Some(r) = reference
+            && let Some(el) = lsp_locate_element(&ctx, &r)
+            && let Some(doc) = dartr_server::hover::documentation(&ctx, el, &templates)
+        {
+            let cleaned = dartr_server::hover::clean_dartdoc(
+                &dartr_server::completion::lsp::remove_dart_doc_delimiters(&doc),
+            );
+            if !cleaned.is_empty() {
+                item.insert(
+                    "documentation".into(),
+                    lsp_markup_content_or_string(&formats, cleaned),
+                );
+            }
+        }
+        item.entry("additionalTextEdits".to_string())
+            .or_insert_with(|| json!([]));
+        Ok(Value::Object(item))
+    }
+
+    fn lsp_code_action(&mut self, params: &Value) -> dartr_server::mapping::ErrorOr<Value> {
+        if !lsp_is_dart_document(params) {
+            return Ok(json!([]));
+        }
+        let path = self.lsp_path_of_doc(params)?;
+        let Ok(resolved) = self.lsp_require_resolved(&path) else {
+            return Ok(json!([]));
+        };
+        let line_info = resolved.line_info().clone();
+        let range = params.get("range").cloned().unwrap_or(Value::Null);
+        let start = range
+            .get("start")
+            .and_then(dartr_server::mapping::read_position);
+        let end = range
+            .get("end")
+            .and_then(dartr_server::mapping::read_position);
+        let (Some(start), Some(end)) = (start, end) else {
+            return Ok(json!([]));
+        };
+        let (Ok(start_offset), Ok(end_offset)) = (
+            dartr_server::mapping::to_offset(&line_info, start.0, start.1, false),
+            dartr_server::mapping::to_offset(&line_info, end.0, end.1, false),
+        ) else {
+            return Ok(json!([]));
+        };
+        let literal = self
+            .lsp_capabilities
+            .raw
+            .pointer("/textDocument/codeAction/codeActionLiteralSupport")
+            .is_some();
+        let mut actions = Vec::new();
+        if let Ok(assists) = self.edit_get_assists(
+            &path,
+            start_offset as i64,
+            end_offset.saturating_sub(start_offset) as i64,
+        ) {
+            for assist in assists.assists {
+                let kind = assist
+                    .id
+                    .as_deref()
+                    .map(|id| id.replace("dart.assist", "refactor"))
+                    .unwrap_or_else(|| "refactor".to_string());
+                if literal {
+                    let mut doc_changes = Vec::new();
+                    for fe in &assist.edits {
+                        let fe_lines = fs::read_string(&fe.file)
+                            .map(|c| LineInfo::from_content(&c))
+                            .unwrap_or_else(|| line_info.clone());
+                        let edits: Vec<Value> = fe
+                            .edits
+                            .iter()
+                            .map(|e| {
+                                json!({
+                                    "range": dartr_server::mapping::to_range(&fe_lines, e.offset as u32, e.length as u32),
+                                    "newText": e.replacement,
+                                })
+                            })
+                            .collect();
+                        doc_changes.push(json!({
+                            "textDocument": {"uri": dartr_server::uri::path_to_uri(&fe.file), "version": Value::Null},
+                            "edits": edits,
+                        }));
+                    }
+                    actions.push(json!({
+                        "title": assist.message,
+                        "kind": kind,
+                        "diagnostics": [],
+                        "edit": {"documentChanges": doc_changes},
+                    }));
+                } else {
+                    actions.push(json!({
+                        "title": assist.message,
+                        "command": "dart.edit.codeAction.apply",
+                        "arguments": [{
+                            "textDocument": {"uri": dartr_server::uri::path_to_uri(&path), "version": Value::Null},
+                            "range": range,
+                            "kind": kind,
+                            "loggedAction": assist.id,
+                        }],
+                    }));
+                }
+            }
+        }
+        Ok(Value::Array(actions))
     }
 
     fn lsp_path_of_doc(&self, params: &Value) -> dartr_server::mapping::ErrorOr<String> {
@@ -4715,6 +5980,39 @@ fn integer(value: &Value, path: &str) -> Result<i64> {
         .as_i64()
         .or_else(|| value.as_str().and_then(|s| s.trim().parse().ok()))
         .ok_or_else(|| RequestFailure::mismatch(path, "int", value))
+}
+
+fn decode_imported_elements_list(
+    value: &Value,
+    path: &str,
+) -> Result<Vec<protocol::ImportedElements>> {
+    if value.is_null() {
+        return Ok(Vec::new());
+    }
+    let arr = value
+        .as_array()
+        .ok_or_else(|| RequestFailure::mismatch(path, "List", value))?;
+    let mut out = Vec::new();
+    for (i, item) in arr.iter().enumerate() {
+        let item_path = format!("{path}[{i}]");
+        let obj = item
+            .as_object()
+            .ok_or_else(|| RequestFailure::mismatch(&item_path, "ImportedElements", item))?;
+        let get = |k: &str| {
+            obj.get(k)
+                .ok_or_else(|| RequestFailure::mismatch(&item_path, k, item))
+        };
+        let p = string(get("path")?, &format!("{item_path}.path"))?.to_owned();
+        valid_path(&p)?;
+        let prefix = string(get("prefix")?, &format!("{item_path}.prefix"))?.to_owned();
+        let elements = strings(get("elements")?, &format!("{item_path}.elements"))?;
+        out.push(protocol::ImportedElements {
+            path: p,
+            prefix,
+            elements,
+        });
+    }
+    Ok(out)
 }
 
 fn wire(value: impl serde::Serialize) -> Value {

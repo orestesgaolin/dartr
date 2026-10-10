@@ -217,7 +217,8 @@ impl LegacyClient {
                 | "analysis.overrides"
                 | "analysis.folding"
                 | "analysis.closingLabels"
-                | "flutter.outline"),
+                | "flutter.outline"
+                | "completion.existingImports"),
             ) => {
                 let params = &message["params"];
                 if let Some(file) = params["file"].as_str() {
@@ -1833,6 +1834,607 @@ fn run_extended_session(program: &Path, args: &[&str], root: &Path) -> ExtendedT
         json!({"directories": root_analyzed}),
     );
 
+    // 20. completion domain
+    let comp_reg_paths = client.request("completion.registerLibraryPaths", json!({"paths": []}));
+    steps.insert(
+        "completion.registerLibraryPaths:unknown".to_string(),
+        comp_reg_paths,
+    );
+    let comp_set_subs = client.request(
+        "completion.setSubscriptions",
+        json!({"subscriptions": ["AVAILABLE_SUGGESTION_SETS"]}),
+    );
+    steps.insert(
+        "completion.setSubscriptions:unknown".to_string(),
+        comp_set_subs,
+    );
+
+    // Dart file completion at `box.` (completes HelperBox<T> members)
+    {
+        let offset = find_offset(&lib_src, "box.item") + ("box.".len() as i64);
+        let mut resp = client.request(
+            "completion.getSuggestions2",
+            json!({
+                "file": lib_file,
+                "offset": offset,
+                "maxResults": 100,
+                "completionCaseMatchingMode": "FIRST_CHAR",
+                "completionMode": "BASIC",
+                "invocationCount": 1,
+                "timeout": 10000
+            }),
+        );
+        if let Some(suggestions) = resp["result"]["suggestions"].as_array_mut() {
+            for s in suggestions.iter_mut() {
+                if let Some(loc_file) = s["element"]["location"]["file"].as_str()
+                    && loc_file.contains("/lib/core/")
+                {
+                    s["element"]["location"]["file"] = json!("${SDK}/lib/core/object.dart");
+                    s["element"]["location"]["offset"] = json!(0);
+                    s["element"]["location"]["length"] = json!(0);
+                    s["element"]["location"]["startLine"] = json!(1);
+                    s["element"]["location"]["startColumn"] = json!(1);
+                    s["element"]["location"]["endLine"] = json!(1);
+                    s["element"]["location"]["endColumn"] = json!(1);
+                }
+            }
+            suggestions.sort_by(|a, b| {
+                let ka = (
+                    b["relevance"].as_i64().unwrap_or(0),
+                    a["completion"].as_str().unwrap_or(""),
+                );
+                let kb = (
+                    a["relevance"].as_i64().unwrap_or(0),
+                    b["completion"].as_str().unwrap_or(""),
+                );
+                ka.cmp(&kb)
+            });
+        }
+        steps.insert(
+            "completion.getSuggestions2:dart_box_dot".to_string(),
+            normalize_paths(resp, &root_str),
+        );
+    }
+
+    // YAML completions: pubspec.yaml, analysis_options.yaml, fix_data.yaml
+    {
+        let pubspec_file = root.join("pubspec.yaml");
+        let mut resp = client.request(
+            "completion.getSuggestions2",
+            json!({
+                "file": pubspec_file,
+                "offset": 0,
+                "maxResults": 100
+            }),
+        );
+        if let Some(suggestions) = resp["result"]["suggestions"].as_array_mut() {
+            suggestions.sort_by(|a, b| {
+                a["completion"]
+                    .as_str()
+                    .unwrap_or("")
+                    .cmp(b["completion"].as_str().unwrap_or(""))
+            });
+        }
+        steps.insert(
+            "completion.getSuggestions2:pubspec_yaml".to_string(),
+            normalize_paths(resp, &root_str),
+        );
+
+        let options_file = root.join("analysis_options.yaml");
+        std::fs::write(&options_file, "analyzer:\n  \n").unwrap();
+        let mut resp_opts = client.request(
+            "completion.getSuggestions2",
+            json!({
+                "file": options_file,
+                "offset": 12,
+                "maxResults": 100
+            }),
+        );
+        if let Some(suggestions) = resp_opts["result"]["suggestions"].as_array_mut() {
+            suggestions.sort_by(|a, b| {
+                a["completion"]
+                    .as_str()
+                    .unwrap_or("")
+                    .cmp(b["completion"].as_str().unwrap_or(""))
+            });
+        }
+        steps.insert(
+            "completion.getSuggestions2:analysis_options_yaml".to_string(),
+            normalize_paths(resp_opts, &root_str),
+        );
+        let _ = std::fs::remove_file(&options_file);
+
+        let fix_data_file = root.join("lib/fix_data.yaml");
+        std::fs::write(&fix_data_file, "version: 1\ntransforms:\n  - \n").unwrap();
+        let mut resp_fix = client.request(
+            "completion.getSuggestions2",
+            json!({
+                "file": fix_data_file,
+                "offset": 27,
+                "maxResults": 100
+            }),
+        );
+        if let Some(suggestions) = resp_fix["result"]["suggestions"].as_array_mut() {
+            suggestions.sort_by(|a, b| {
+                a["completion"]
+                    .as_str()
+                    .unwrap_or("")
+                    .cmp(b["completion"].as_str().unwrap_or(""))
+            });
+        }
+        steps.insert(
+            "completion.getSuggestions2:fix_data_yaml".to_string(),
+            normalize_paths(resp_fix, &root_str),
+        );
+        let _ = std::fs::remove_file(&fix_data_file);
+    }
+
+    // completion.getSuggestionDetails2
+    {
+        let offset = find_offset(&lib_src, "math.max");
+        let resp_prefixed = client.request(
+            "completion.getSuggestionDetails2",
+            json!({
+                "file": lib_file,
+                "offset": offset,
+                "completion": "sin",
+                "libraryUri": "dart:math"
+            }),
+        );
+        steps.insert(
+            "completion.getSuggestionDetails2:existing_prefixed".to_string(),
+            normalize_paths(resp_prefixed, &root_str),
+        );
+
+        let resp_new = client.request(
+            "completion.getSuggestionDetails2",
+            json!({
+                "file": lib_file,
+                "offset": offset,
+                "completion": "Future",
+                "libraryUri": "dart:async"
+            }),
+        );
+        steps.insert(
+            "completion.getSuggestionDetails2:new_import".to_string(),
+            normalize_paths(resp_new, &root_str),
+        );
+    }
+
+    // 21. edit domain additions
+    let dartfix_resp = client.request("edit.dartfix", json!({"included": [root]}));
+    steps.insert("edit.dartfix:unknown".to_string(), dartfix_resp);
+
+    let postfix_list = client.request("edit.listPostfixCompletionTemplates", json!({}));
+    steps.insert(
+        "edit.listPostfixCompletionTemplates".to_string(),
+        postfix_list,
+    );
+
+    {
+        let bool_end = find_offset(&lib_src, "m > 0") + ("m > 0".len() as i64);
+        let stmt_end = find_offset(&lib_src, "final m = math.max(1, 2);")
+            + ("final m = math.max(1, 2);".len() as i64);
+        let app_not = client.request(
+            "edit.isPostfixCompletionApplicable",
+            json!({"file": lib_file, "key": ".not", "offset": bool_end}),
+        );
+        steps.insert(
+            "edit.isPostfixCompletionApplicable:not_true".to_string(),
+            app_not,
+        );
+        let app_fori_false = client.request(
+            "edit.isPostfixCompletionApplicable",
+            json!({"file": lib_file, "key": ".fori", "offset": bool_end}),
+        );
+        steps.insert(
+            "edit.isPostfixCompletionApplicable:fori_false".to_string(),
+            app_fori_false,
+        );
+        let app_try = client.request(
+            "edit.isPostfixCompletionApplicable",
+            json!({"file": lib_file, "key": ".try", "offset": stmt_end}),
+        );
+        steps.insert(
+            "edit.isPostfixCompletionApplicable:try_true".to_string(),
+            app_try,
+        );
+
+        let expand_par = client.request(
+            "edit.getPostfixCompletion",
+            json!({"file": lib_file, "key": ".par", "offset": bool_end}),
+        );
+        steps.insert(
+            "edit.getPostfixCompletion:par".to_string(),
+            normalize_paths(expand_par, &root_str),
+        );
+        let expand_try = client.request(
+            "edit.getPostfixCompletion",
+            json!({"file": lib_file, "key": ".try", "offset": stmt_end}),
+        );
+        steps.insert(
+            "edit.getPostfixCompletion:try".to_string(),
+            normalize_paths(expand_try, &root_str),
+        );
+        let expand_unknown = client.request(
+            "edit.getPostfixCompletion",
+            json!({"file": lib_file, "key": ".nonexistent", "offset": bool_end}),
+        );
+        steps.insert(
+            "edit.getPostfixCompletion:unknown_key".to_string(),
+            expand_unknown,
+        );
+    }
+
+    {
+        let stmt_offset = find_offset(&lib_src, "final m = math.max(1, 2)");
+        let stmt_comp = client.request(
+            "edit.getStatementCompletion",
+            json!({"file": lib_file, "offset": stmt_offset}),
+        );
+        steps.insert(
+            "edit.getStatementCompletion:ok".to_string(),
+            normalize_paths(stmt_comp, &root_str),
+        );
+        let stmt_comp_bad = client.request(
+            "edit.getStatementCompletion",
+            json!({"file": "relative.dart", "offset": 0}),
+        );
+        steps.insert(
+            "edit.getStatementCompletion:invalid_path".to_string(),
+            stmt_comp_bad,
+        );
+    }
+
+    {
+        let imp_existing = client.request(
+            "edit.importElements",
+            json!({
+                "file": lib_file,
+                "elements": [{
+                    "path": helper_file,
+                    "prefix": "",
+                    "elements": ["HelperBox"]
+                }]
+            }),
+        );
+        steps.insert(
+            "edit.importElements:existing".to_string(),
+            normalize_paths(imp_existing, &root_str),
+        );
+        let imp_bad = client.request(
+            "edit.importElements",
+            json!({
+                "file": root.join("pubspec.yaml"),
+                "elements": []
+            }),
+        );
+        steps.insert(
+            "edit.importElements:invalid_file".to_string(),
+            normalize_paths(imp_bad, &root_str),
+        );
+    }
+
+    {
+        let edit_src = std::fs::read_to_string(&edit_file).unwrap();
+        let unused_imp_offset = find_offset(&edit_src, "import 'dart:async';");
+        let fixes_resp = client.request(
+            "edit.getFixes",
+            json!({"file": edit_file, "offset": unused_imp_offset}),
+        );
+        steps.insert(
+            "edit.getFixes:unused_import".to_string(),
+            normalize_paths(fixes_resp, &root_str),
+        );
+        let fixes_bad = client.request(
+            "edit.getFixes",
+            json!({"file": "relative.dart", "offset": 0}),
+        );
+        steps.insert("edit.getFixes:invalid_path".to_string(), fixes_bad);
+    }
+
+    {
+        let op_offset = find_offset(&lib_src, "> 0");
+        let assists_resp = client.request(
+            "edit.getAssists",
+            json!({"file": lib_file, "offset": op_offset, "length": 0}),
+        );
+        steps.insert(
+            "edit.getAssists:exchange_operands".to_string(),
+            normalize_paths(assists_resp, &root_str),
+        );
+    }
+
+    {
+        for (label, needle, len) in [
+            ("local_var_box", "box = HelperBox<T>(seed)", 3),
+            ("method_mixed", "mixed() => tag;", 5),
+            ("getter_tag", "tag => 1;", 3),
+        ] {
+            let offset = find_offset(&lib_src, needle);
+            let mut resp = client.request(
+                "edit.getAvailableRefactorings",
+                json!({"file": lib_file, "offset": offset, "length": len}),
+            );
+            if let Some(kinds) = resp["result"]["kinds"].as_array_mut() {
+                kinds.sort_by(|a, b| a.as_str().unwrap_or("").cmp(b.as_str().unwrap_or("")));
+            }
+            steps.insert(format!("edit.getAvailableRefactorings:{label}"), resp);
+        }
+    }
+
+    // edit.getRefactoring for each kind
+    {
+        // RENAME local variable
+        let box_offset = find_offset(&lib_src, "box = HelperBox<T>(seed)");
+        let rename_val = client.request(
+            "edit.getRefactoring",
+            json!({
+                "kind": "RENAME",
+                "file": lib_file,
+                "offset": box_offset,
+                "length": 3,
+                "validateOnly": true
+            }),
+        );
+        steps.insert(
+            "edit.getRefactoring:RENAME_validate".to_string(),
+            normalize_paths(rename_val, &root_str),
+        );
+        let rename_exec = client.request(
+            "edit.getRefactoring",
+            json!({
+                "kind": "RENAME",
+                "file": lib_file,
+                "offset": box_offset,
+                "length": 3,
+                "validateOnly": false,
+                "options": {"newName": "renamedBox"}
+            }),
+        );
+        steps.insert(
+            "edit.getRefactoring:RENAME_exec".to_string(),
+            normalize_paths(rename_exec, &root_str),
+        );
+
+        // EXTRACT_LOCAL_VARIABLE
+        let max_offset = find_offset(&lib_src, "math.max(1, 2)");
+        let max_len = "math.max(1, 2)".len() as i64;
+        let extract_local_exec = client.request(
+            "edit.getRefactoring",
+            json!({
+                "kind": "EXTRACT_LOCAL_VARIABLE",
+                "file": lib_file,
+                "offset": max_offset,
+                "length": max_len,
+                "validateOnly": false,
+                "options": {"name": "maxVal", "extractAll": true}
+            }),
+        );
+        steps.insert(
+            "edit.getRefactoring:EXTRACT_LOCAL_VARIABLE".to_string(),
+            normalize_paths(extract_local_exec, &root_str),
+        );
+
+        // INLINE_LOCAL_VARIABLE
+        let m_offset = find_offset(&lib_src, "m = math.max(1, 2)");
+        let inline_local_exec = client.request(
+            "edit.getRefactoring",
+            json!({
+                "kind": "INLINE_LOCAL_VARIABLE",
+                "file": lib_file,
+                "offset": m_offset,
+                "length": 1,
+                "validateOnly": false
+            }),
+        );
+        steps.insert(
+            "edit.getRefactoring:INLINE_LOCAL_VARIABLE".to_string(),
+            normalize_paths(inline_local_exec, &root_str),
+        );
+
+        // CONVERT_METHOD_TO_GETTER
+        let mixed_offset = find_offset(&lib_src, "mixed() => tag;");
+        let conv_m2g = client.request(
+            "edit.getRefactoring",
+            json!({
+                "kind": "CONVERT_METHOD_TO_GETTER",
+                "file": lib_file,
+                "offset": mixed_offset,
+                "length": 5,
+                "validateOnly": false
+            }),
+        );
+        steps.insert(
+            "edit.getRefactoring:CONVERT_METHOD_TO_GETTER".to_string(),
+            normalize_paths(conv_m2g, &root_str),
+        );
+
+        // CONVERT_GETTER_TO_METHOD
+        let tag_offset = find_offset(&lib_src, "tag => 2;");
+        let conv_g2m = client.request(
+            "edit.getRefactoring",
+            json!({
+                "kind": "CONVERT_GETTER_TO_METHOD",
+                "file": lib_file,
+                "offset": tag_offset,
+                "length": 3,
+                "validateOnly": false
+            }),
+        );
+        steps.insert(
+            "edit.getRefactoring:CONVERT_GETTER_TO_METHOD".to_string(),
+            normalize_paths(conv_g2m, &root_str),
+        );
+
+        // EXTRACT_METHOD
+        let extract_method_exec = client.request(
+            "edit.getRefactoring",
+            json!({
+                "kind": "EXTRACT_METHOD",
+                "file": lib_file,
+                "offset": max_offset,
+                "length": max_len,
+                "validateOnly": false,
+                "options": {
+                    "returnType": "int",
+                    "createGetter": false,
+                    "name": "computeMax",
+                    "parameters": [],
+                    "extractAll": true
+                }
+            }),
+        );
+        steps.insert(
+            "edit.getRefactoring:EXTRACT_METHOD".to_string(),
+            normalize_paths(extract_method_exec, &root_str),
+        );
+
+        // INLINE_METHOD
+        let inline_method_exec = client.request(
+            "edit.getRefactoring",
+            json!({
+                "kind": "INLINE_METHOD",
+                "file": lib_file,
+                "offset": mixed_offset,
+                "length": 5,
+                "validateOnly": false,
+                "options": {
+                    "deleteSource": false,
+                    "inlineAll": true
+                }
+            }),
+        );
+        steps.insert(
+            "edit.getRefactoring:INLINE_METHOD".to_string(),
+            normalize_paths(inline_method_exec, &root_str),
+        );
+
+        // MOVE_FILE
+        let move_file_exec = client.request(
+            "edit.getRefactoring",
+            json!({
+                "kind": "MOVE_FILE",
+                "file": helper_file,
+                "offset": 0,
+                "length": 0,
+                "validateOnly": false,
+                "options": {
+                    "newFile": root.join("lib/moved_helper.dart")
+                }
+            }),
+        );
+        steps.insert(
+            "edit.getRefactoring:MOVE_FILE".to_string(),
+            normalize_paths(move_file_exec, &root_str),
+        );
+    }
+
+    // edit.formatIfEnabled & edit.bulkFixes
+    {
+        let fmt_enabled = client.request("edit.formatIfEnabled", json!({"directories": [root]}));
+        steps.insert(
+            "edit.formatIfEnabled".to_string(),
+            normalize_paths(fmt_enabled, &root_str),
+        );
+
+        let bulk_ok = client.request(
+            "edit.bulkFixes",
+            json!({"included": [edit_file], "codes": ["unused_import"]}),
+        );
+        steps.insert(
+            "edit.bulkFixes:unused_import".to_string(),
+            normalize_paths(bulk_ok, &root_str),
+        );
+
+        let bulk_bad = client.request(
+            "edit.bulkFixes",
+            json!({"included": [root.join("lib/does_not_exist.dart")]}),
+        );
+        steps.insert(
+            "edit.bulkFixes:nonexistent_error".to_string(),
+            normalize_paths(bulk_bad, &root_str),
+        );
+    }
+
+    // 22. lsp.handle: textDocument/completion, completionItem/resolve, textDocument/codeAction
+    {
+        let (line, col) = find_line_col(&lib_src, "box.item");
+        let comp_resp = client.request(
+            "lsp.handle",
+            json!({
+                "lspMessage": {
+                    "jsonrpc": "2.0",
+                    "id": 22,
+                    "method": "textDocument/completion",
+                    "params": {
+                        "textDocument": {"uri": lib_uri},
+                        "position": {"line": line, "character": col + ("box.".len() as u32)}
+                    }
+                }
+            }),
+        );
+        let item_candidate = comp_resp["result"]["lspResponse"]["result"]["items"]
+            .as_array()
+            .or_else(|| comp_resp["result"]["lspResponse"]["result"].as_array())
+            .and_then(|items| items.iter().find(|i| i["label"] == "item"))
+            .cloned()
+            .unwrap_or_else(|| json!({"label": "item"}));
+        let mut norm_comp = normalize_paths(comp_resp, &root_str);
+        if let Some(items) = norm_comp
+            .pointer_mut("/result/lspResponse/result/items")
+            .and_then(Value::as_array_mut)
+        {
+            items.sort_by(|a, b| {
+                a["label"]
+                    .as_str()
+                    .unwrap_or("")
+                    .cmp(b["label"].as_str().unwrap_or(""))
+            });
+        }
+        steps.insert("lsp.handle:completion".to_string(), norm_comp);
+
+        let resolve_resp = client.request(
+            "lsp.handle",
+            json!({
+                "lspMessage": {
+                    "jsonrpc": "2.0",
+                    "id": 23,
+                    "method": "completionItem/resolve",
+                    "params": item_candidate
+                }
+            }),
+        );
+        steps.insert(
+            "lsp.handle:completionItem/resolve".to_string(),
+            normalize_paths(resolve_resp, &root_str),
+        );
+
+        let (op_line, op_col) = find_line_col(&lib_src, "> 0");
+        let code_action_resp = client.request(
+            "lsp.handle",
+            json!({
+                "lspMessage": {
+                    "jsonrpc": "2.0",
+                    "id": 24,
+                    "method": "textDocument/codeAction",
+                    "params": {
+                        "textDocument": {"uri": lib_uri},
+                        "range": {
+                            "start": {"line": op_line, "character": op_col},
+                            "end": {"line": op_line, "character": op_col}
+                        },
+                        "context": {"diagnostics": []}
+                    }
+                }
+            }),
+        );
+        steps.insert(
+            "lsp.handle:codeAction".to_string(),
+            normalize_paths(code_action_resp, &root_str),
+        );
+    }
+
     for event in [
         "analysis.navigation",
         "analysis.highlights",
@@ -1850,6 +2452,23 @@ fn run_extended_session(program: &Path, args: &[&str], root: &Path) -> ExtendedT
             normalized.insert(key, normalize_paths(payload, &root_str));
         }
         steps.insert(format!("notification:{event}"), Value::Object(normalized));
+    }
+
+    {
+        let map = client
+            .notifications
+            .get("completion.existingImports")
+            .cloned()
+            .unwrap_or_default();
+        let mut normalized = Map::new();
+        for (file, payload) in map {
+            let key = file.replace(&root_str, "${ROOT}");
+            normalized.insert(key, normalize_paths(payload, &root_str));
+        }
+        steps.insert(
+            "notification:completion.existingImports".to_string(),
+            Value::Object(normalized),
+        );
     }
 
     client.request("server.shutdown", json!({}));
@@ -1932,7 +2551,7 @@ fn extended_legacy_requests_and_notifications_match_dart_3_13_3() {
         "dart and dartr recorded different steps"
     );
     assert!(
-        dart_tx.steps.len() >= 100,
+        dart_tx.steps.len() >= 138,
         "dart recorded only {} steps",
         dart_tx.steps.len()
     );
@@ -2129,6 +2748,34 @@ fn run_flutter_session(program: &Path, args: &[&str], root: &Path) -> ExtendedTr
         normalize_paths(container_desc, &root_str),
     );
 
+    // 4. EXTRACT_WIDGET refactoring on Padding(...)
+    let mut avail_widget = client.request(
+        "edit.getAvailableRefactorings",
+        json!({"file": main_file, "offset": padding_offset, "length": 0}),
+    );
+    if let Some(kinds) = avail_widget["result"]["kinds"].as_array_mut() {
+        kinds.sort_by(|a, b| a.as_str().unwrap_or("").cmp(b.as_str().unwrap_or("")));
+    }
+    steps.insert(
+        "edit.getAvailableRefactorings:Padding".to_string(),
+        avail_widget,
+    );
+    let extract_widget_resp = client.request(
+        "edit.getRefactoring",
+        json!({
+            "kind": "EXTRACT_WIDGET",
+            "file": main_file,
+            "offset": padding_offset,
+            "length": 0,
+            "validateOnly": false,
+            "options": {"name": "ExtractedPadding"}
+        }),
+    );
+    steps.insert(
+        "edit.getRefactoring:EXTRACT_WIDGET".to_string(),
+        normalize_paths(extract_widget_resp, &root_str),
+    );
+
     for event in ["analysis.outline", "flutter.outline"] {
         let map = client.notifications.get(event).cloned().unwrap_or_default();
         let mut normalized = Map::new();
@@ -2243,7 +2890,7 @@ class DemoWidget extends StatelessWidget {
         "dart and dartr recorded different flutter steps"
     );
     assert!(
-        dart_tx.steps.len() >= 13,
+        dart_tx.steps.len() >= 15,
         "dart recorded only {} flutter steps",
         dart_tx.steps.len()
     );
