@@ -11,6 +11,16 @@ pub fn register(r: &mut RuleVisitorRegistry) {
 /// Dart `getExpectedType(node, allowPromotable: true)`
 /// (`rules/unnecessary_null_checks.dart`).
 fn expected(ctx: &LinterContext<'_>, node: NodeId) -> Option<dartr_element::TypeId> {
+    get_expected_type(ctx, node, true)
+}
+
+/// Dart `getExpectedType(node, allowPromotable:)`
+/// (`rules/unnecessary_null_checks.dart`).
+pub(crate) fn get_expected_type(
+    ctx: &LinterContext<'_>,
+    node: NodeId,
+    allow_promotable: bool,
+) -> Option<dartr_element::TypeId> {
     let resolved = ctx.resolved?;
     let r = &resolved.ctx;
     let mut real_node = node;
@@ -114,6 +124,34 @@ fn expected(ctx: &LinterContext<'_>, node: NodeId) -> Option<dartr_element::Type
             };
             if same_names {
                 return None;
+            }
+            if !allow_promotable && Identifier::test(ctx.ast.kind(lhs)) {
+                // Do not return a type when the left side of an assignment is
+                // promotable.
+                if let Some(element) = ctx.element(lhs).map(|e| member::base_element(r, e)) {
+                    let tag = element.tag();
+                    if matches!(
+                        tag,
+                        dartr_element::Tag::LocalVariable
+                            | dartr_element::Tag::PatternVariable
+                            | dartr_element::Tag::BindPatternVariable
+                            | dartr_element::Tag::JoinPatternVariable
+                            | dartr_element::Tag::FormalParameter
+                            | dartr_element::Tag::FieldFormalParameter
+                            | dartr_element::Tag::SuperFormalParameter
+                    ) {
+                        return None;
+                    }
+                    if tag == dartr_element::Tag::Field
+                        && r.element_data(element)
+                            .and_then(|d| r.fragment_data(d.first_fragment))
+                            .is_some_and(|f| {
+                                f.flags.has(dartr_element::FragmentFlags::FIELD_FRAGMENT_IS_PROMOTABLE)
+                            })
+                    {
+                        return None;
+                    }
+                }
             }
             resolved.tables.write_type.get(parent).copied()
         }

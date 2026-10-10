@@ -1013,7 +1013,7 @@ fn unnecessary_brace_in_string_interps(
     }
 }
 
-fn in_constant_context(ctx: &LinterContext<'_>, node: NodeId) -> bool {
+pub(crate) fn in_constant_context(ctx: &LinterContext<'_>, node: NodeId) -> bool {
     let mut current = ctx.ast.parent(node);
     while let Some(n) = current {
         match ctx.ast.kind(n) {

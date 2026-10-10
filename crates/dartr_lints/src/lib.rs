@@ -76,6 +76,16 @@ pub trait ElementMetadata {
         unit: u32,
         node: NodeId,
     ) -> Option<dartr_constant::DartObjectImpl>;
+    /// Dart `AstNodeExtension.hasConstantVerifierError` of [node] in the unit
+    /// with the index [unit].
+    fn has_constant_verifier_error(&self, unit: u32, node: NodeId) -> bool;
+    /// Dart `hasConstantError(node)` (linter `ast.dart`) of [node] in the
+    /// unit with the index [unit].
+    fn expression_has_constant_error(&self, unit: u32, node: NodeId) -> bool;
+    /// Dart `canBeConst` of [node] (an instance creation, a typed or record
+    /// literal, a dot shorthand constructor invocation or a constructor
+    /// declaration) in the unit with the index [unit].
+    fn can_be_const(&self, unit: u32, node: NodeId) -> bool;
 }
 /// A resolved AST and its original parse metadata. Resolution can rewrite nodes.
 #[derive(Clone, Copy)]
@@ -296,6 +306,24 @@ impl<'a> LinterContext<'a> {
                         })
             })
         })
+    }
+    /// Dart `canBeConst` (`analyzer/src/lint/constants.dart`, `ast.dart`).
+    pub fn can_be_const(&self, node: impl Into<NodeId>) -> bool {
+        self.resolved
+            .and_then(|r| r.metadata)
+            .is_some_and(|m| m.can_be_const(self.current_unit as u32, node.into()))
+    }
+    /// Dart `hasConstantError(node)` of the linter `ast.dart`.
+    pub fn has_constant_error(&self, node: impl Into<NodeId>) -> bool {
+        self.resolved
+            .and_then(|r| r.metadata)
+            .is_none_or(|m| m.expression_has_constant_error(self.current_unit as u32, node.into()))
+    }
+    /// Dart `AstNodeExtension.hasConstantVerifierError`.
+    pub fn has_constant_verifier_error(&self, node: impl Into<NodeId>) -> bool {
+        self.resolved
+            .and_then(|r| r.metadata)
+            .is_some_and(|m| m.has_constant_verifier_error(self.current_unit as u32, node.into()))
     }
     pub fn static_type(&self, node: impl Into<NodeId>) -> Option<dartr_element::TypeId> {
         self.resolved?.tables.static_type.get(node.into()).copied()

@@ -13,7 +13,7 @@ pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
         check,
     );
 }
-fn approximate_context_type(context: &LinterContext<'_>, node: NodeId) -> Option<TypeId> {
+pub(crate) fn approximate_context_type(context: &LinterContext<'_>, node: NodeId) -> Option<TypeId> {
     let resolved = context.resolved?;
     let mut child = node;
     let mut parent = context.ast.parent(child);

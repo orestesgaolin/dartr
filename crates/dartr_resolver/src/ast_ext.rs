@@ -400,11 +400,48 @@ pub fn method_invocation_real_target(
     ast[node].target
 }
 
+thread_local! {
+    /// The nodes whose `const` keyword the linter's `canBeConst` sets for the
+    /// time of one check (Dart `constKeyword = KeywordToken(Keyword.CONST,
+    /// offset)` on the AST): (address of the unit AST, node).
+    static TEMPORARY_CONST_NODES: std::cell::RefCell<Vec<(usize, NodeId)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Runs [f] while [node] of [ast] has a `const` keyword (see
+/// `TEMPORARY_CONST_NODES`).
+pub fn with_temporary_const_keyword<R>(ast: &Ast, node: NodeId, f: impl FnOnce() -> R) -> R {
+    struct Unmark;
+    impl Drop for Unmark {
+        fn drop(&mut self) {
+            TEMPORARY_CONST_NODES.with(|s| {
+                s.borrow_mut().pop();
+            });
+        }
+    }
+    TEMPORARY_CONST_NODES.with(|s| s.borrow_mut().push((ast as *const Ast as usize, node)));
+    let _unmark = Unmark;
+    f()
+}
+
+/// Whether [node] of [ast] has a `const` keyword: [keyword] is the keyword
+/// token of the node (any keyword for nodes whose keyword can only be
+/// `const`), or the linter set one temporarily.
+pub fn has_const_keyword(ast: &Ast, node: NodeId, keyword: Option<TokenId>) -> bool {
+    keyword.is_some()
+        || TEMPORARY_CONST_NODES.with(|s| {
+            s.borrow()
+                .iter()
+                .any(|&(a, n)| a == ast as *const Ast as usize && n == node)
+        })
+}
+
 /// Dart `InstanceCreationExpressionImpl.isConst`.
 pub fn instance_creation_is_const(ast: &Ast, node: Id<InstanceCreationExpression>) -> bool {
     match ast[node].keyword {
-        Some(k) => ast.tokens.lexeme(k) == "const",
-        None => in_constant_context(ast, node.raw()),
+        Some(k) if ast.tokens.lexeme(k) == "const" => true,
+        Some(_) => has_const_keyword(ast, node.raw(), None),
+        None => has_const_keyword(ast, node.raw(), None) || in_constant_context(ast, node.raw()),
     }
 }
 
@@ -418,7 +455,7 @@ pub fn typed_literal_is_const(ast: &Ast, node: NodeId) -> bool {
     } else {
         None
     };
-    const_keyword.is_some() || in_constant_context(ast, node)
+    has_const_keyword(ast, node, const_keyword) || in_constant_context(ast, node)
 }
 
 /// Dart `DotShorthandConstructorInvocationImpl.isConst`:
@@ -427,7 +464,9 @@ pub fn dot_shorthand_constructor_invocation_is_const(
     ast: &Ast,
     node: Id<DotShorthandConstructorInvocation>,
 ) -> bool {
-    is_keyword(ast, ast[node].const_keyword, "const") || in_constant_context(ast, node.raw())
+    is_keyword(ast, ast[node].const_keyword, "const")
+        || has_const_keyword(ast, node.raw(), None)
+        || in_constant_context(ast, node.raw())
 }
 
 /// Dart `ExpressionImpl.inConstantContext`
@@ -445,36 +484,32 @@ pub fn in_constant_context(ast: &Ast, node: NodeId) -> bool {
                     .is_some();
             }
             NodeKind::DotShorthandConstructorInvocation => {
-                if ast[Id::<DotShorthandConstructorInvocation>::from_raw(p)]
-                    .const_keyword
-                    .is_some()
-                {
+                if has_const_keyword(
+                    ast,
+                    p,
+                    ast[Id::<DotShorthandConstructorInvocation>::from_raw(p)].const_keyword,
+                ) {
                     return true;
                 }
             }
             NodeKind::InstanceCreationExpression => {
                 let n = &ast[Id::<InstanceCreationExpression>::from_raw(p)];
-                if is_keyword(ast, n.keyword, "const") {
+                if is_keyword(ast, n.keyword, "const") || has_const_keyword(ast, p, None) {
                     return true;
                 }
             }
             NodeKind::RecordLiteral => {
-                if ast[Id::<RecordLiteral>::from_raw(p)]
-                    .const_keyword
-                    .is_some()
-                {
+                if has_const_keyword(ast, p, ast[Id::<RecordLiteral>::from_raw(p)].const_keyword) {
                     return true;
                 }
             }
             NodeKind::ListLiteral => {
-                if ast[Id::<ListLiteral>::from_raw(p)].const_keyword.is_some() {
+                if has_const_keyword(ast, p, ast[Id::<ListLiteral>::from_raw(p)].const_keyword) {
                     return true;
                 }
             }
             NodeKind::SetOrMapLiteral => {
-                if ast[Id::<SetOrMapLiteral>::from_raw(p)]
-                    .const_keyword
-                    .is_some()
+                if has_const_keyword(ast, p, ast[Id::<SetOrMapLiteral>::from_raw(p)].const_keyword)
                 {
                     return true;
                 }

@@ -64,6 +64,30 @@ impl ElementMetadata for EngineMetadata<'_> {
         .ok()
         .flatten()
     }
+
+    fn has_constant_verifier_error(&self, unit: u32, node: dartr_ast::NodeId) -> bool {
+        let node = NodeRef::new(unit, node);
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            dartr_resolver::constant::constant_verifier::has_constant_verifier_error(&self.0, node)
+        }))
+        .unwrap_or(false)
+    }
+
+    fn expression_has_constant_error(&self, unit: u32, node: dartr_ast::NodeId) -> bool {
+        let node = NodeRef::new(unit, node);
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.0.expression_has_constant_error(node)
+        }))
+        .unwrap_or(true)
+    }
+
+    fn can_be_const(&self, unit: u32, node: dartr_ast::NodeId) -> bool {
+        let node = NodeRef::new(unit, node);
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            dartr_resolver::constant::constant_verifier::can_be_const(&self.0, node)
+        }))
+        .unwrap_or(false)
+    }
 }
 
 /// Defining unit first, followed by parts. Each unit reads its own local arena.

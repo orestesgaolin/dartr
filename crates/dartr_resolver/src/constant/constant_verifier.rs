@@ -78,6 +78,155 @@ pub fn verify_unit(
     verifier.diagnostics.into_inner()
 }
 
+/// [`verify_unit`] of the subtree [root] of the unit [unit] (Dart
+/// `node.accept(ConstantVerifier(...))`).
+pub fn verify_subtree(
+    engine: &ConstantEvaluationEngine<'_>,
+    cache: &mut ExhaustivenessCache,
+    unit: u32,
+    root: NodeId,
+) -> Vec<Diagnostic> {
+    let handle = engine.unit(unit);
+    let resolved: &ResolvedUnit = &handle;
+    let ctx = engine.ctx(resolved);
+    let library = engine.unit_library(unit);
+    let mut verifier = ConstantVerifier {
+        engine,
+        unit_index: unit,
+        unit: resolved,
+        ctx,
+        library,
+        features: engine.library_features(library),
+        diagnostics: RefCell::new(Vec::new()),
+        cache,
+        constant_pattern_values: None,
+        map_pattern_key_values: None,
+    };
+    resolved.ast.accept(root, &mut verifier);
+    verifier.diagnostics.into_inner()
+}
+
+/// Dart `AstNodeExtension.hasConstantVerifierError`
+/// (`analyzer/src/lint/constants.dart`): computes the constants that [node]
+/// depends on, runs the constant verifier over [node] and reports whether
+/// it reports one of the constant errors of `_ConstantDiagnosticListener`.
+pub fn has_constant_verifier_error(engine: &ConstantEvaluationEngine<'_>, node: NodeRef) -> bool {
+    const CODES: &[&str] = &[
+        "constConstructorConstantFromDeferredLibrary",
+        "constConstructorWithFieldInitializedByNonConst",
+        "constEvalExtensionMethod",
+        "constEvalExtensionTypeMethod",
+        "constEvalMethodInvocation",
+        "constEvalPropertyAccess",
+        "constEvalTypeBool",
+        "constEvalTypeBoolInt",
+        "constEvalTypeBoolNumString",
+        "constEvalTypeInt",
+        "constEvalTypeNum",
+        "constEvalTypeNumString",
+        "constEvalTypeString",
+        "constEvalThrowsException",
+        "constEvalThrowsIdbze",
+        "constEvalForElement",
+        "constMapKeyNotPrimitiveEquality",
+        "constSetElementNotPrimitiveEquality",
+        "constTypeParameter",
+        "constWithNonConst",
+        "constWithNonConstantArgument",
+        "constWithTypeParameters",
+        "constWithTypeParametersConstructorTearoff",
+        "invalidConstant",
+        "missingConstInListLiteral",
+        "missingConstInMapLiteral",
+        "missingConstInSetLiteral",
+        "nonBoolCondition",
+        "nonConstantListElement",
+        "nonConstantMapElement",
+        "nonConstantMapKey",
+        "nonConstantMapValue",
+        "nonConstantRecordField",
+        "nonConstantSetElement",
+    ];
+    let dependencies: Vec<_> =
+        crate::constant::utilities::find_dependencies_in(engine, node.unit, node.node)
+            .into_iter()
+            .collect();
+    crate::constant::compute::compute_constants(engine, &dependencies);
+    let mut cache = ExhaustivenessCache::default();
+    verify_subtree(engine, &mut cache, node.unit, node.node)
+        .iter()
+        .any(|d| CODES.contains(&d.code.camel_case_name))
+}
+
+/// Dart `canBeConst` of an `InstanceCreationExpression`, a `ListLiteral` /
+/// `SetOrMapLiteral` (`TypedLiteralImpl.canBeConst`), a
+/// `DotShorthandConstructorInvocation`, a `ConstructorDeclaration` or a
+/// `PrimaryConstructorDeclaration` (`analyzer/src/lint/constants.dart`):
+/// sets a `const` keyword on [node] for the time of the check (and marks the
+/// constructor of a declaration as const) and reports whether the constant
+/// verifier finds no constant error.
+pub fn can_be_const(engine: &ConstantEvaluationEngine<'_>, node: NodeRef) -> bool {
+    use crate::constant::evaluation::ConstantTarget;
+    let handle = engine.unit(node.unit);
+    let ast = &handle.ast;
+    let ctx = engine.ctx(&handle);
+    let declared = |n: NodeId| {
+        let fragment = *handle.tables.declared_fragment.get(n)?;
+        ctx.fragment_data(fragment)?.element.try_get().copied()
+    };
+    match ast.kind(node.node) {
+        NodeKind::InstanceCreationExpression | NodeKind::DotShorthandConstructorInvocation => {
+            let constructor_name = match ast.kind(node.node) {
+                NodeKind::InstanceCreationExpression => ast
+                    [Id::<dartr_ast::InstanceCreationExpression>::from_raw(node.node)]
+                    .constructor_name
+                    .raw(),
+                _ => ast[Id::<dartr_ast::DotShorthandConstructorInvocation>::from_raw(node.node)]
+                    .constructor_name
+                    .raw(),
+            };
+            let Some(element) = handle.tables.element.get(constructor_name).copied() else {
+                return false;
+            };
+            let base = dartr_typesystem::member::base_element(&ctx, element);
+            if base.tag() != Tag::Constructor || !is_const_constructor(&ctx, base) {
+                return false;
+            }
+            // Dart `element.baseElement.computeConstantDependencies()`.
+            crate::constant::compute::compute_constants(engine, &[ConstantTarget::Element(base)]);
+            ast_ext::with_temporary_const_keyword(ast, node.node, || {
+                !has_constant_verifier_error(engine, node)
+            })
+        }
+        NodeKind::ListLiteral | NodeKind::SetOrMapLiteral | NodeKind::RecordLiteral => {
+            ast_ext::with_temporary_const_keyword(ast, node.node, || {
+                !has_constant_verifier_error(engine, node)
+            })
+        }
+        NodeKind::ConstructorDeclaration | NodeKind::PrimaryConstructorDeclaration => {
+            let Some(element) = declared(node.node) else {
+                return false;
+            };
+            let class = ctx.element_data(element).and_then(|d| d.enclosing);
+            if let Some(class) = class
+                && class.tag() == Tag::Class
+                && ctx
+                    .interface(dartr_element::EId::from_raw(class))
+                    .has_non_final_field
+                    .get()
+            {
+                return false;
+            }
+            crate::constant::potentially_constant::with_temporary_const_constructor(element, || {
+                ast_ext::with_temporary_const_keyword(ast, node.node, || {
+                    !has_constant_verifier_error(engine, node)
+                })
+            })
+        }
+        _ => false,
+    }
+}
+
 /// Dart `ConstantVerifier`: traverses an AST structure looking for
 /// additional errors and warnings not covered by the parser and resolver.
 /// In particular, it looks for errors and warnings related to constant
@@ -913,7 +1062,11 @@ impl AstVisitor for ConstantVerifier<'_, '_> {
     }
 
     fn visit_constructor_declaration(&mut self, ast: &Ast, node: Id<ConstructorDeclaration>) {
-        if let Some(const_keyword) = ast[node].const_keyword {
+        // The linter's `canBeConst` sets a `const` keyword temporarily.
+        let const_keyword = ast[node].const_keyword.or_else(|| {
+            ast_ext::has_const_keyword(ast, node.raw(), None).then(|| ast.begin_token(node))
+        });
+        if let Some(const_keyword) = const_keyword {
             // Check and report cycles.
             // Factory cycles are reported in elsewhere in
             // [ErrorVerifier._checkForRecursiveFactoryRedirect].
