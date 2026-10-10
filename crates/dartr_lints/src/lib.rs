@@ -35,6 +35,9 @@ pub struct ResolvedLintContext<'a> {
     pub tables: &'a dartr_element::ResolutionTables,
     /// Resolver `LocalVariableInfo.potentiallyMutatedInScope` facts.
     pub potentially_mutated_in_scope: &'a IndexSet<dartr_element::ElementId>,
+    /// Resolver `corresponding_parameter_type`: argument expression → Dart
+    /// `correspondingParameter.type`.
+    pub corresponding_parameter_type: &'a dartr_ast::NodeMap<dartr_element::TypeId>,
     pub library: dartr_element::EId<dartr_element::LibraryElement>,
     /// Dart `Element.metadata` of elements of any library, with the
     /// annotation values (`None`: no metadata access).
@@ -321,11 +324,10 @@ impl<'a> LinterContext<'a> {
         node: impl Into<NodeId>,
     ) -> Option<dartr_element::TypeId> {
         let node = node.into();
-        let tables = self.resolved?.tables;
-        tables.param_type.get(node).copied().or_else(|| {
+        let types = self.resolved?.corresponding_parameter_type;
+        types.get(node).copied().or_else(|| {
             let named = self.ast.cast::<dartr_ast::NamedArgument>(node)?;
-            tables
-                .param_type
+            types
                 .get(self.ast[named].argument_expression.raw())
                 .copied()
         })

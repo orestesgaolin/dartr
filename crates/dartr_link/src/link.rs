@@ -158,6 +158,12 @@ impl ConstExprs {
     }
 }
 
+impl AsRef<Ast> for ConstExprs {
+    fn as_ref(&self) -> &Ast {
+        &self.ast
+    }
+}
+
 impl Default for ConstExprs {
     fn default() -> Self {
         Self::new()
@@ -293,9 +299,11 @@ pub fn link_cycle(
     let LinkerCore {
         store, const_exprs, ..
     } = core;
+    let const_exprs = Arc::new(const_exprs);
+    store.const_ast.set_once(ConstAst(const_exprs.clone()));
     LinkedCycle {
         store: Arc::new(store),
-        const_exprs: Arc::new(const_exprs),
+        const_exprs,
         libraries: builders
             .into_iter()
             .map(|b| {

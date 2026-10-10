@@ -343,7 +343,12 @@ void f() {
     // constructor.
     let (_, t) = element_type_at(&a, NodeKind::SimpleIdentifier, "named('x')");
     assert_eq!(t, "C<String> Function(String)");
-    let names = a.diagnostic_names();
+    // The unused locals are reported by the wave D warnings, like the analyzer.
+    let names: Vec<String> = a
+        .diagnostic_names()
+        .into_iter()
+        .filter(|n| !n.starts_with("unused_local_variable@"))
+        .collect();
     assert_eq!(names.len(), 1, "{names:?}");
     assert!(
         names[0].starts_with("dot_shorthand_missing_context@"),

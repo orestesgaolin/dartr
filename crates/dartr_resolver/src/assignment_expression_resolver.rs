@@ -1,15 +1,15 @@
 // Dart source: pkg/analyzer/lib/src/dart/resolver/assignment_expression_resolver.dart,
 // pkg/analyzer/lib/src/generated/resolver.dart (visitAssignmentExpression,
 // resolveForWrite, setReadElement, setWriteElement),
-// pkg/analyzer/lib/src/error/assignment_verifier.dart (AssignmentVerifier)
+// pkg/analyzer/lib/src/error/assignment_verifier.dart (AssignmentVerifier: the call)
 
 //! `AssignmentExpressionResolver`: assignments `a = b`, compound
 //! assignments `a += b` (with the operator element and the numeric
 //! refinement), logical `a &&= b` / `a ||= b` and if-null `a ??= b`; the
 //! resolution of a left-hand side (`resolveForWrite`, shared with the
 //! prefix and postfix increments), the read and write elements and types,
-//! `AssignmentExpressionShared.checkFinalAlreadyAssigned` and the
-//! `AssignmentVerifier`.
+//! `AssignmentExpressionShared.checkFinalAlreadyAssigned` and the call of
+//! the `AssignmentVerifier` (`error/assignment_verifier.rs`).
 
 use dartr_ast::{
     AssignmentExpression, Expression, Id, IndexExpression, MethodInvocation, NodeId,
@@ -366,8 +366,10 @@ fn resolve_types(
         .copied()
         .unwrap_or(TypeId::INVALID);
     check_for_invalid_assignment(rv, write_type, right_hand_side, assigned_type);
-    // Dart `checkForArgumentTypeNotAssignableForArgument(node.rightHandSide,
-    // whyNotPromoted:)` for compound assignments (wave D).
+    if operator != TokenType::EQ && operator != TokenType::QUESTION_QUESTION_EQ {
+        let right_hand_side = rv.ast[node].right_hand_side;
+        rv.check_for_argument_type_not_assignable_for_argument(right_hand_side.raw(), false);
+    }
 }
 
 /// Dart `AssignmentExpressionShared.checkFinalAlreadyAssigned(left,
@@ -443,7 +445,8 @@ pub fn resolve_for_write(
         if property_element_resolver::index_expression_is_null_aware(rv, index_expression) {
             let target = rv.ast[index_expression].target;
             crate::method_invocation_resolver::start_null_aware_access(rv, target);
-            // Dart `nullSafetyDeadCodeVerifier.visitNode(node.index)` (wave D).
+            let index = rv.ast[index_expression].index;
+            crate::error::dead_code_verifier::visit_node(rv, index);
         }
 
         let result = property_element_resolver::resolve_index_expression(
@@ -454,9 +457,14 @@ pub fn resolve_for_write(
         );
 
         let index = rv.ast[index_expression].index;
-        rv.resolve_expression(index, result.index_context_type.unwrap_or(TypeId::UNKNOWN));
-        // Dart `checkIndexExpressionIndex(node.index, readElement:,
-        // writeElement:, whyNotPromoted:)` (wave D).
+        let index =
+            rv.resolve_expression(index, result.index_context_type.unwrap_or(TypeId::UNKNOWN));
+        let read_element = if has_read {
+            result.read_element()
+        } else {
+            None
+        };
+        rv.check_index_expression_index(index, read_element, result.write_element());
         result
     } else if let Some(prefixed) = rv.ast.cast::<PrefixedIdentifier>(node) {
         let prefix = rv.ast[prefixed].prefix;
@@ -517,8 +525,8 @@ pub fn resolve_for_write(
         if property_element_resolver::property_access_is_null_aware(rv, property_access) {
             let target = rv.ast[property_access].target;
             crate::method_invocation_resolver::start_null_aware_access(rv, target);
-            // Dart `nullSafetyDeadCodeVerifier.visitNode(node.propertyName)`
-            // (wave D).
+            let property_name = rv.ast[property_access].property_name;
+            crate::error::dead_code_verifier::visit_node(rv, property_name);
         }
 
         property_element_resolver::resolve_property_access(
@@ -692,16 +700,8 @@ pub fn set_write_element(
 
 // ------------------------------------------------------------------ AssignmentVerifier
 
-/// Dart `AssignmentVerifier.verify(node:, requested:, recovery:,
-/// receiverType:)`: we resolved [node] and found that it references the
-/// [requested] element. Verifies that this element is actually writable.
-///
-/// If the [requested] element is `None`, we might have the [recovery]
-/// element, which is definitely not a valid write target. We want to
-/// report a good error about this.
-///
-/// When the [receiver_type] is not `None`, we report `undefinedSetter`
-/// instead of a more generic `undefinedIdentifier`.
+/// Dart `AssignmentVerifier(diagnosticReporter).verify(node:, requested:,
+/// recovery:, receiverType:)`; ported in `error/assignment_verifier.rs`.
 pub fn verify_assignment(
     rv: &mut ResolverVisitor<'_>,
     node: Id<SimpleIdentifier>,
@@ -709,93 +709,5 @@ pub fn verify_assignment(
     recovery: Option<ElemRef>,
     receiver_type: Option<TypeId>,
 ) {
-    let ctx = rv.ctx;
-    if let Some(requested) = requested {
-        let base = member::base_element(&ctx, requested);
-        if base.is::<VariableElement>() && element_ext::is_const(&ctx, base) {
-            let d = rv.at(diag::assignment_to_const(), node);
-            rv.report(d);
-        }
-        return;
-    }
-
-    let recovery_base = recovery.map(|e| member::base_element(&ctx, e));
-    let tag = recovery_base.map(|e| e.tag());
-    match tag {
-        Some(Tag::Dynamic)
-        | Some(Tag::Class)
-        | Some(Tag::Enum)
-        | Some(Tag::Mixin)
-        | Some(Tag::ExtensionType)
-        | Some(Tag::TypeAlias)
-        | Some(Tag::TypeParameter) => {
-            let d = rv.at(diag::assignment_to_type(), node);
-            rv.report(d);
-        }
-        Some(Tag::LocalFunction) | Some(Tag::TopLevelFunction) => {
-            let d = rv.at(diag::assignment_to_function(), node);
-            rv.report(d);
-        }
-        Some(Tag::Method) => {
-            let d = rv.at(diag::assignment_to_method(), node);
-            rv.report(d);
-        }
-        Some(Tag::Prefix) => {
-            if let Some(prefix_name) = ctx.element_name(recovery_base.unwrap()) {
-                let d = rv.at(
-                    diag::prefix_identifier_not_followed_by_dot(prefix_name),
-                    node,
-                );
-                rv.report(d);
-            }
-        }
-        Some(Tag::Getter) => {
-            let Some(variable) = member::variable(&ctx, recovery.unwrap()) else {
-                return;
-            };
-            let variable = member::base_element(&ctx, variable);
-            let Some(variable_name) = ctx.element_name(variable) else {
-                return;
-            };
-            let variable_name = variable_name.to_string();
-
-            if element_ext::is_const(&ctx, variable) {
-                let d = rv.at(diag::assignment_to_const(), node);
-                rv.report(d);
-            } else if variable.tag() == Tag::Field
-                && element_ext::first_fragment_flags(&ctx, variable)
-                    .contains(FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_GETTER_SETTER)
-            {
-                let class_name = ctx
-                    .element_data(variable)
-                    .and_then(|d| d.enclosing)
-                    .and_then(|e| ctx.element_name(e))
-                    .unwrap_or("")
-                    .to_string();
-                let d = rv.at(
-                    diag::assignment_to_final_no_setter(&variable_name, &class_name),
-                    node,
-                );
-                rv.report(d);
-            } else {
-                let d = rv.at(diag::assignment_to_final(&variable_name), node);
-                rv.report(d);
-            }
-        }
-        Some(Tag::MultiplyDefined) => {
-            // Will be reported in ErrorVerifier.
-        }
-        _ => {
-            if rv.ast.tokens.get(rv.ast[node].token).is_synthetic() {
-                return;
-            }
-            let name = ast_ext::identifier_name(rv.ast, node).to_string();
-            let d = match receiver_type {
-                Some(receiver_type) => diag::undefined_setter(&name, type_arg(&ctx, receiver_type)),
-                None => diag::undefined_identifier(&name),
-            };
-            let d = rv.at(d, node);
-            rv.report(d);
-        }
-    }
+    crate::error::assignment_verifier::verify(rv, node, requested, recovery, receiver_type);
 }

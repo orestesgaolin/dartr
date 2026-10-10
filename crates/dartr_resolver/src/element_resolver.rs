@@ -6,9 +6,10 @@
 //! nothing are not ported; their call sites in the resolver are comments.
 //!
 //! Partly STUB (unit C2): `visitConstructorName`,
-//! `visitSuperConstructorInvocation`, `visitRedirectingConstructorInvocation`
-//! and `visitCommentReference` are ported with the units that own those
-//! nodes (C8 constructors, C9 comment references).
+//! `visitSuperConstructorInvocation`, `visitRedirectingConstructorInvocation`,
+//! `visitImportDirective`, `visitExportDirective` (combinators) and
+//! `visitCommentReference` are ported with the units that own those nodes
+//! (C8 constructors, C9 comment references).
 
 use dartr_ast::{Argument, ArgumentList, Expression, NamedArgument, NodeId};
 use dartr_ast::{
@@ -293,11 +294,15 @@ pub fn resolve_arguments_to_parameters(
 
     let mut used_names: Option<indexmap::IndexSet<String>> = None;
     if let Some(list) = enclosing_constructor_formal_parameter_list {
-        let (positional, named) =
-            verify_super_formal_parameters(rv, list, positional_argument_count != 0, report);
-        positional_argument_count += positional;
-        if !named.is_empty() {
-            used_names = Some(named.into_iter().collect());
+        let result = crate::error::super_formal_parameters_verifier::verify_super_formal_parameters(
+            rv,
+            list,
+            report,
+            positional_argument_count != 0,
+        );
+        positional_argument_count += result.positional_argument_count;
+        if !result.named_argument_names.is_empty() {
+            used_names = Some(result.named_argument_names.into_iter().collect());
         }
     }
 
@@ -382,11 +387,11 @@ pub fn resolve_arguments_to_parameters(
             Some(p) => {
                 rv.tables.param_element.insert(expression, p);
                 let ty = member::type_(&rv.ctx, p);
-                rv.tables.param_type.insert(expression, ty);
+                rv.rt.corresponding_parameter_type.insert(expression, ty);
             }
             None => {
                 rv.tables.param_element.remove(expression);
-                rv.tables.param_type.remove(expression);
+                rv.rt.corresponding_parameter_type.remove(expression);
             }
         }
     }
@@ -494,132 +499,78 @@ fn enum_constant_type_name(rv: &ResolverVisitor<'_>, node: NodeId) -> Option<Str
     ))
 }
 
-/// Dart `verifySuperFormalParameters(formalParameterList:,
-/// diagnosticReporter:, hasExplicitPositionalArguments:)`: the count of
-/// positional super parameters and the names of the named super
-/// parameters of [formal_parameter_list].
-pub fn verify_super_formal_parameters(
-    rv: &mut ResolverVisitor<'_>,
-    formal_parameter_list: Id<dartr_ast::FormalParameterList>,
-    has_explicit_positional_arguments: bool,
-    report: bool,
-) -> (usize, Vec<String>) {
-    let mut positional_argument_count = 0;
-    let mut named_argument_names = Vec::new();
-    let parameters = rv
+/// Dart `ElementResolver.visitImportDirective` / `visitExportDirective`:
+/// `_resolveCombinators(importedLibrary, node.combinators)` (the prefix
+/// element is set by the resolution visitor). [node] is an
+/// `ImportDirective` or an `ExportDirective` of the unit.
+pub fn visit_namespace_directive(rv: &mut ResolverVisitor<'_>, node: NodeId) {
+    use dartr_ast::{
+        CompilationUnit, ExportDirective, HideCombinator, ImportDirective, ShowCombinator,
+    };
+    // The index of the directive in `libraryImports` / `libraryExports`.
+    let is_import = rv.ast.is::<ImportDirective>(node);
+    let Some(unit) = rv
         .ast
-        .list(rv.ast[formal_parameter_list].parameters)
-        .to_vec();
-    for parameter in parameters {
-        let Some(parameter) = rv.ast.cast::<dartr_ast::SuperFormalParameter>(parameter) else {
-            continue;
-        };
-        let name_token = rv.ast[parameter].name;
-        if rv.ast[parameter].kind.is_named() {
-            named_argument_names.push(rv.lexeme(name_token).to_string());
-        } else {
-            positional_argument_count += 1;
-            if has_explicit_positional_arguments && report {
-                let d = rv.at_token(
-                    diag::positional_super_formal_parameter_with_positional_argument(),
-                    name_token,
-                );
-                rv.report(d);
+        .parent(node)
+        .and_then(|p| rv.ast.cast::<CompilationUnit>(p))
+    else {
+        return;
+    };
+    let index = rv
+        .ast
+        .list(rv.ast[unit].directives)
+        .iter()
+        .filter(|&&d| {
+            if is_import {
+                rv.ast.is::<ImportDirective>(d)
+            } else {
+                rv.ast.is::<ExportDirective>(d)
             }
-        }
-    }
-    (positional_argument_count, named_argument_names)
-}
-
-/// Dart `ElementResolver.visitExportDirective`.
-pub fn visit_export_directive(rv: &mut ResolverVisitor<'_>, node: Id<dartr_ast::ExportDirective>) {
-    let keyword = rv.ast[node].export_keyword;
-    let offset = rv.ast.tokens.get(keyword).offset as i32;
-    let library = rv
-        .ctx
-        .fragment(rv.unit.fragment)
-        .library_exports
-        .iter()
-        .find(|e| e.export_keyword_offset == offset)
-        .and_then(|e| match &e.directive.uri {
-            dartr_element::DirectiveUri::Library { library, .. } => Some(*library),
-            _ => None,
-        });
-    let combinators = rv.ast[node].combinators;
-    resolve_combinators(rv, library, combinators);
-}
-
-/// Dart `ElementResolver.visitImportDirective`.
-pub fn visit_import_directive(rv: &mut ResolverVisitor<'_>, node: Id<dartr_ast::ImportDirective>) {
-    if let Some(prefix_node) = rv.ast[node].prefix {
-        let prefix_name = rv.ast.tokens.lexeme(rv.ast[prefix_node].token).to_string();
-        let fragment = rv.ctx.fragment(rv.unit.fragment);
-        let prefix = fragment
-            .library_import_prefixes
-            .iter()
-            .copied()
-            .find(|&p| rv.ctx.element_name(p.raw()) == Some(prefix_name.as_str()));
-        if let Some(prefix) = prefix {
-            rv.set_element(prefix_node, Some(ElemRef::Base(prefix.raw())));
-        }
-    }
-    let keyword = rv.ast[node].import_keyword;
-    let offset = rv.ast.tokens.get(keyword).offset as i32;
-    let library = rv
-        .ctx
-        .fragment(rv.unit.fragment)
-        .library_imports
-        .iter()
-        .find(|i| !i.is_synthetic && i.import_keyword_offset == offset)
-        .and_then(|i| match &i.directive.uri {
-            dartr_element::DirectiveUri::Library { library, .. } => Some(*library),
-            _ => None,
-        });
-    if library.is_some() {
-        let combinators = rv.ast[node].combinators;
-        resolve_combinators(rv, library, combinators);
-    }
-}
-
-/// Dart `ElementResolver._resolveCombinators`.
-fn resolve_combinators(
-    rv: &mut ResolverVisitor<'_>,
-    library: Option<dartr_element::EId<dartr_element::LibraryElement>>,
-    combinators: dartr_ast::NodeList<dartr_ast::Combinator>,
-) {
-    let Some(library) = library else {
+        })
+        .position(|&d| d.raw() == node);
+    let Some(index) = index else {
         return;
     };
-    let Some(namespace) = rv.ctx.get(library).export_namespace.try_get().cloned() else {
+    let fragment = rv.ctx.fragment(rv.unit.fragment);
+    let uri = if is_import {
+        fragment
+            .library_imports
+            .get(index)
+            .map(|i| &i.directive.uri)
+    } else {
+        fragment
+            .library_exports
+            .get(index)
+            .map(|e| &e.directive.uri)
+    };
+    // Dart: the library is null when the URI is not valid.
+    let Some(dartr_element::DirectiveUri::Library { library, .. }) = uri else {
         return;
     };
-    let mut names: Vec<Id<dartr_ast::SimpleIdentifier>> = Vec::new();
-    for &combinator in rv.ast.list_raw(combinators) {
-        if let Some(hide) = rv.ast.cast::<dartr_ast::HideCombinator>(combinator) {
-            names.extend(rv.ast.list(rv.ast[hide].hidden_names));
-        } else if let Some(show) = rv.ast.cast::<dartr_ast::ShowCombinator>(combinator) {
-            names.extend(rv.ast.list(rv.ast[show].shown_names));
+    let library = *library;
+    let combinators = if let Some(i) = rv.ast.cast::<ImportDirective>(node) {
+        rv.ast[i].combinators
+    } else if let Some(e) = rv.ast.cast::<ExportDirective>(node) {
+        rv.ast[e].combinators
+    } else {
+        return;
+    };
+    let mut names = Vec::new();
+    for &combinator in rv.ast.list(combinators) {
+        if let Some(h) = rv.ast.cast::<HideCombinator>(combinator) {
+            names.extend(rv.ast.list(rv.ast[h].hidden_names).iter().copied());
+        } else if let Some(s) = rv.ast.cast::<ShowCombinator>(combinator) {
+            names.extend(rv.ast.list(rv.ast[s].shown_names).iter().copied());
         }
     }
     for name in names {
-        let name_str = rv.ast.tokens.lexeme(rv.ast[name].token).to_string();
-        let get = |text: &str| {
-            let name = rv.ctx.name(text);
-            namespace.defined_names.get(&name).copied()
-        };
-        let element = get(&name_str).or_else(|| get(&format!("{name_str}=")));
-        if let Some(element) = element {
-            // Ensure that the name always resolves to a top-level variable
-            // rather than a getter or setter.
-            let element = if matches!(
-                element.tag(),
-                dartr_element::Tag::Getter | dartr_element::Tag::Setter
-            ) {
-                member::variable(&rv.ctx, ElemRef::Base(element)).unwrap_or(ElemRef::Base(element))
-            } else {
-                ElemRef::Base(element)
-            };
-            rv.set_element(name, Some(element));
+        let name_str = crate::ast_ext::identifier_name(rv.ast, name).to_string();
+        // Dart `namespace.get2(name) ?? namespace.get2('$name=')`; a getter
+        // or setter resolves to its variable.
+        if let Some(element) =
+            crate::error::imports_verifier::combinator_name_element(&rv.ctx, library, &name_str)
+        {
+            rv.set_element(name, Some(ElemRef::Base(element)));
         }
     }
 }

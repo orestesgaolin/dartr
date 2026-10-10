@@ -17,6 +17,7 @@ use dartr_element::{
 };
 use dartr_resolver::library_analyzer::{
     ExternalUnitCache, LibraryAnalysisInput, ResolvedLibrary, UnitInput, analyze_library,
+    analyze_library_with_unignorable,
 };
 use dartr_resolver::options::AnalysisOptions;
 
@@ -62,21 +63,27 @@ impl Driver {
         Some(library)
     }
 
-    /// Analyzes [libraries] (defining units with their options) in
-    /// parallel on the current rayon pool (design §2.5 step 4) and maps each
-    /// result with [f], in the order of [libraries]. The libraries must be
-    /// linked; a library that is not linked, or whose analysis panics, gives
-    /// `Err` with a message. [f] gets the unit inputs of the library (the
-    /// parsed units, for steps that need the unresolved AST) and can drop
-    /// the resolved library, so that not all results are in memory at once.
-    pub fn analyze_libraries<T, F>(&self, libraries: &[(FileId, AnalysisOptions)], f: F) -> Vec<T>
+    /// Analyzes [libraries] (defining units with their options and the
+    /// unignorable code names of `analyzer: cannot-ignore`, which the ignore
+    /// filtering of the library analyzer keeps) in parallel on the current
+    /// rayon pool (design §2.5 step 4) and maps each result with [f], in the
+    /// order of [libraries]. The libraries must be linked; a library that is
+    /// not linked, or whose analysis panics, gives `Err` with a message. [f]
+    /// gets the unit inputs of the library (the parsed units, for steps that
+    /// need the unresolved AST) and can drop the resolved library, so that
+    /// not all results are in memory at once.
+    pub fn analyze_libraries<T, F>(
+        &self,
+        libraries: &[(FileId, AnalysisOptions, &[String])],
+        f: F,
+    ) -> Vec<T>
     where
         T: Send,
         F: Fn(FileId, &[UnitInput], Result<ResolvedLibrary, String>) -> T + Sync,
     {
-        let jobs: Vec<LintJob> = libraries
+        let jobs: Vec<LintJob<'_>> = libraries
             .iter()
-            .map(|&(file, options)| (file, options, Vec::new()))
+            .map(|&(file, options, unignorable)| (file, options, unignorable, Vec::new()))
             .collect();
         self.analyze_libraries_with_lints(&jobs, |file, units, result, _| f(file, units, result))
     }
@@ -85,7 +92,7 @@ impl Driver {
     /// of each library on its resolved units (Dart `_computeLints`, after
     /// resolution). [f] gets the lint diagnostics of each unit (filtered by
     /// the `ignore` comments), in the order of the units.
-    pub fn analyze_libraries_with_lints<T, F>(&self, libraries: &[LintJob], f: F) -> Vec<T>
+    pub fn analyze_libraries_with_lints<T, F>(&self, libraries: &[LintJob<'_>], f: F) -> Vec<T>
     where
         T: Send,
         F: Fn(FileId, &[UnitInput], Result<ResolvedLibrary, String>, Vec<Vec<Diagnostic>>) -> T
@@ -115,7 +122,7 @@ impl Driver {
                 .unwrap_or_else(|| "panic".to_string())
         };
         jobs.par_iter()
-            .map(|((file, options, rules), job, doc_imports)| {
+            .map(|((file, options, unignorable, rules), job, doc_imports)| {
                 let Some((library, units)) = job else {
                     return f(
                         *file,
@@ -133,8 +140,10 @@ impl Driver {
                     external: Some(&external),
                     doc_import_libraries: doc_imports.clone(),
                 };
-                let result = catch_unwind(AssertUnwindSafe(|| analyze_library(&input)))
-                    .map_err(panic_message);
+                let result = catch_unwind(AssertUnwindSafe(|| {
+                    analyze_library_with_unignorable(&input, unignorable)
+                }))
+                .map_err(panic_message);
                 let lints = match &result {
                     Ok(resolved) if !rules.is_empty() => {
                         let enabled: Vec<&str> = rules.iter().map(String::as_str).collect();
@@ -234,9 +243,9 @@ impl Driver {
     }
 }
 
-/// A library to analyze: the defining unit, its options and the enabled
-/// lint rules.
-pub type LintJob = (FileId, AnalysisOptions, Vec<String>);
+/// A library to analyze: the defining unit, its options, the unignorable
+/// code names and the enabled lint rules.
+pub type LintJob<'u> = (FileId, AnalysisOptions, &'u [String], Vec<String>);
 
 /// The library element and the unit inputs of a linked library.
 pub type LibraryUnits = (EId<LibraryElement>, Vec<UnitInput>);

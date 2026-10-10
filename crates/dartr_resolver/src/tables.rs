@@ -53,6 +53,16 @@ pub struct ResolverTables {
     /// `DotShorthandMixin.isDotShorthand` (from the parser:
     /// `ParsedUnit.dot_shorthands`).
     pub dot_shorthand: NodeMap<()>,
+    /// `FunctionBodyImpl.bodyContext`: the body inference context of a
+    /// block or expression function body, kept after the body is resolved
+    /// (read by `checkForBodyMayCompleteNormally`).
+    pub body_context: NodeMap<crate::body_inference_context::BodyInferenceContext>,
+    /// The type of `ExpressionImpl.correspondingParameter` of an argument
+    /// expression (keyed like `ResolutionTables::param_element`): the
+    /// parameter type of the invoked (instantiated) function type. Dart
+    /// reads it from the parameter member; `param_element` keeps the
+    /// declaring element.
+    pub corresponding_parameter_type: NodeMap<dartr_element::TypeId>,
 }
 
 impl ResolverTables {

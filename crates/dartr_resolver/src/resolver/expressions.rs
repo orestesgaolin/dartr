@@ -108,6 +108,7 @@ impl<'a> ResolverVisitor<'a> {
         self.flow_analysis
             .store_expression_info(node.upcast(), Some(info));
         self.insert_implicit_call_reference(node.upcast(), context_type);
+        crate::error::dead_code_verifier::verify_cascade_expression(self, node);
     }
 
     /// Dart `CascadeExpression.isNullAware`: the first section starts with
@@ -145,6 +146,7 @@ impl<'a> ResolverVisitor<'a> {
         }
         let then_expression = self.ast[node].then_expression;
         let then_expression = self.resolve_expression(then_expression, context_type);
+        crate::error::dead_code_verifier::flow_end(self, then_expression);
 
         let else_expression = self.ast[node].else_expression;
         if flow_active {
@@ -172,6 +174,7 @@ impl<'a> ResolverVisitor<'a> {
             );
             self.flow_analysis
                 .store_expression_info(node.upcast(), Some(result));
+            crate::error::dead_code_verifier::flow_end(self, else_expression);
         }
         self.insert_implicit_call_reference(node.upcast(), context_type);
     }

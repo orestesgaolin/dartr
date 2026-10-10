@@ -116,7 +116,7 @@ fn lookup_name<'a>(ctx: &Ctx<'a>, e: ElementId) -> Option<&'a str> {
 }
 
 /// Dart `LibraryElement.isInSdk`.
-fn library_is_in_sdk(ctx: &Ctx<'_>, library: EId<LibraryElement>) -> bool {
+pub(crate) fn library_is_in_sdk(ctx: &Ctx<'_>, library: EId<LibraryElement>) -> bool {
     ctx.library_uri(library).starts_with("dart:")
 }
 
@@ -229,7 +229,7 @@ impl std::fmt::Debug for LibraryScopes {
 /// (Dart `LibraryFragmentImpl.enclosingFragment`): the defining unit, then
 /// the parts, depth first in `part` directive order (so that a fragment
 /// comes after the fragment that includes it).
-fn library_fragments(
+pub(crate) fn library_fragments(
     ctx: &Ctx<'_>,
     library: EId<LibraryElement>,
 ) -> Vec<(FId<LibraryFragment>, Option<FId<LibraryFragment>>)> {
@@ -257,7 +257,11 @@ fn library_fragments(
 }
 
 /// Dart `Combinator.matches` / `List<Combinator>.allows`.
-fn combinators_allow(ctx: &Ctx<'_>, combinators: &[NamespaceCombinator], name: &str) -> bool {
+pub(crate) fn combinators_allow(
+    ctx: &Ctx<'_>,
+    combinators: &[NamespaceCombinator],
+    name: &str,
+) -> bool {
     let name = name.strip_suffix('=').unwrap_or(name);
     let matches = |names: &[Name]| names.iter().any(|&n| ctx.name_str(n) == name);
     for c in combinators {

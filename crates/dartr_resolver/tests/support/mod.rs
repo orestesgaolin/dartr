@@ -18,6 +18,8 @@ use dartr_project::{DartSdk, Packages, Workspace};
 use dartr_resolver::library_analyzer::{ResolvedLibrary, ResolvedUnit};
 use dartr_resolver::options::AnalysisOptions;
 
+pub mod g3;
+
 static COUNTER: AtomicU32 = AtomicU32::new(0);
 
 /// A resolved library and what is needed to read its results.
@@ -32,6 +34,14 @@ pub struct Analyzed {
 /// Analyzes the library `main.dart` of [files] (name, content). Returns
 /// `None` when no SDK is found.
 pub fn analyze(files: &[(&str, &str)]) -> Option<Analyzed> {
+    analyze_with_experiments(files, Vec::new())
+}
+
+/// Like [analyze], with these experiments enabled for all files.
+pub fn analyze_with_experiments(
+    files: &[(&str, &str)],
+    experiments: Vec<dartr_parser::experimental_flags::ExperimentalFlag>,
+) -> Option<Analyzed> {
     let sdk_path = dartr_project::sdk::find_sdk_path()?;
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
     let dir = format!(
@@ -58,7 +68,7 @@ pub fn analyze(files: &[(&str, &str)]) -> Option<Analyzed> {
     };
     let config_for = Box::new(move |_: &str, _: &str| FileConfig {
         package_language_version: version,
-        experiments: Vec::new(),
+        experiments: experiments.clone(),
     });
     let generation = Arc::new(Generation::new(0));
     let mut driver = Driver::new(FileSystemState::new(source_factory, config_for), generation);
@@ -205,4 +215,118 @@ pub fn is_attached(ast: &Ast, root: NodeId, node: NodeId) -> bool {
         current = parent;
     }
     true
+}
+
+/// The files of a mock package of the analyzer tests (Dart
+/// `MockPackages.add<Name>PackageFiles` in
+/// `pkg/analyzer/lib/src/test_utilities/mock_packages.dart`): (path
+/// relative to `lib`, content). `function` is e.g. `addMetaPackageFiles`.
+/// Returns `None` when the SDK sources are not available.
+pub fn mock_package_files(function: &str) -> Option<Vec<(String, String)>> {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../third_party/dart-sdk/pkg/analyzer/lib/src/test_utilities/mock_packages.dart"
+    );
+    let text = std::fs::read_to_string(path).ok()?;
+    let start = text.find(&format!("static void {function}("))?;
+    let body = &text[start..];
+    let end = body[1..]
+        .find("static void ")
+        .map(|e| e + 1)
+        .unwrap_or(body.len());
+    let mut body = &body[..end];
+    let mut files = Vec::new();
+    while let Some(i) = body.find("getFile('") {
+        let rest = &body[i + "getFile('".len()..];
+        let name_end = rest.find('\'')?;
+        let name = rest[..name_end].to_string();
+        let open = rest.find("r'''")? + 4;
+        let content_rest = &rest[open..];
+        let close = content_rest.find("'''")?;
+        files.push((name, content_rest[..close].to_string()));
+        body = &content_rest[close + 3..];
+    }
+    Some(files)
+}
+
+/// Like [analyze], but in a pub package `test` (`pubspec.yaml`, files in
+/// `test/lib`, mapped to `package:test/`) with the other [packages]
+/// (name, files relative to their `lib` folder), mapped to
+/// `package:<name>/` (Dart `PubPackageResolutionTest` with
+/// `writeTestPackageConfig`).
+pub fn analyze_in_packages(
+    files: &[(&str, &str)],
+    packages: &[(&str, Vec<(String, String)>)],
+    options: AnalysisOptions,
+) -> Option<Analyzed> {
+    let sdk_path = dartr_project::sdk::find_sdk_path()?;
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let dir = format!(
+        "{}/resolver_pkg_{}_{n}",
+        env!("CARGO_TARGET_TMPDIR"),
+        std::process::id()
+    );
+    let mut package_list = Vec::new();
+    let mut write_package = |name: &str, files: &[(String, String)]| -> Vec<(String, String)> {
+        let root = format!("{dir}/{name}");
+        let lib = format!("{root}/lib");
+        std::fs::create_dir_all(&lib).expect("temp dir");
+        std::fs::write(format!("{root}/pubspec.yaml"), format!("name: {name}\n")).expect("write");
+        let mut written = Vec::new();
+        for (path, content) in files {
+            let full = format!("{lib}/{path}");
+            if let Some(parent) = std::path::Path::new(&full).parent() {
+                std::fs::create_dir_all(parent).expect("dir");
+            }
+            std::fs::write(&full, content).expect("write");
+            written.push((full, content.clone()));
+        }
+        package_list.push(dartr_project::package_config::Package {
+            name: name.to_string(),
+            root,
+            lib,
+            language_version: None,
+        });
+        written
+    };
+    let test_files: Vec<(String, String)> = files
+        .iter()
+        .map(|(p, c)| (p.to_string(), c.to_string()))
+        .collect();
+    let sources = write_package("test", &test_files);
+    for (name, files) in packages {
+        write_package(name, files);
+    }
+
+    let sdk = DartSdk::new(&sdk_path);
+    let version = sdk
+        .language_version()
+        .map(|v| (v.major, v.minor))
+        .unwrap_or((3, 13));
+    let source_factory = SourceFactory {
+        workspace: Workspace::basic(Packages::new(package_list), &dir),
+        sdk: Some(sdk),
+    };
+    let config_for = Box::new(move |_: &str, _: &str| FileConfig {
+        package_language_version: version,
+        experiments: Vec::new(),
+    });
+    let generation = Arc::new(Generation::new(0));
+    let mut driver = Driver::new(FileSystemState::new(source_factory, config_for), generation);
+    let main = driver.fs.get_file_for_path(&sources[0].0);
+    driver.fs.discover();
+    driver.link_libraries(&[main]);
+    let library = driver
+        .analyze_library(main, options)
+        .expect("linked library");
+    let tp = Arc::new(dartr_link::types_builder::world_type_provider(
+        &driver.state.world,
+    ));
+    Some(Analyzed {
+        driver,
+        library,
+        tp,
+        features: FeatureSet::default(),
+        sources,
+    })
 }

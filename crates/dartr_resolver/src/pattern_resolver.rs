@@ -276,7 +276,11 @@ pub fn member_groups(ast: &Ast, node: Id<SwitchStatement>) -> Vec<SwitchStatemen
 }
 
 /// The group [case_index] of the switch statement [node].
-fn member_group(ast: &Ast, node: NodeId, case_index: usize) -> Option<SwitchStatementCaseGroup> {
+pub(crate) fn member_group(
+    ast: &Ast,
+    node: NodeId,
+    case_index: usize,
+) -> Option<SwitchStatementCaseGroup> {
     let node = ast.cast::<SwitchStatement>(node)?;
     member_groups(ast, node).into_iter().nth(case_index)
 }
@@ -594,11 +598,14 @@ pub fn finish_expression_case(
     node: Id<Expression>,
     case_index: usize,
 ) {
-    let _ = (node, case_index);
     // Dart `case_.expression = popRewrite()!`: the rewrite already replaced
     // the expression in the AST.
     rv.pop_rewrite();
-    // Dart `nullSafetyDeadCodeVerifier.flowEnd(case_)`: wave D.
+    // Dart `nullSafetyDeadCodeVerifier.flowEnd(case_)`.
+    if let Some(node) = rv.ast.cast::<SwitchExpression>(node) {
+        let case_ = rv.ast.list(rv.ast[node].cases)[case_index];
+        crate::error::dead_code_verifier::flow_end(rv, case_);
+    }
 }
 
 /// Converts the flow analysis inconsistency to the element model one.
@@ -759,7 +766,6 @@ pub fn handle_case_head(
     case_index: usize,
     sub_index: usize,
 ) {
-    let _ = sub_index;
     if rv.ast.is::<SwitchStatement>(node) {
         if let Some(group) = member_group(rv.ast, node, case_index)
             && let Some(mut exhaustiveness) = rv.legacy_switch_exhaustiveness.take()
@@ -767,8 +773,12 @@ pub fn handle_case_head(
             exhaustiveness.visit_switch_member(rv, &group);
             rv.legacy_switch_exhaustiveness = Some(exhaustiveness);
         }
-        // Dart `nullSafetyDeadCodeVerifier.flowEnd(group.members[subIndex])`:
-        // wave D.
+        // Dart `nullSafetyDeadCodeVerifier.flowEnd(group.members[subIndex])`.
+        if let Some(group) = member_group(rv.ast, node, case_index)
+            && let Some(&member) = group.members.get(sub_index)
+        {
+            crate::error::dead_code_verifier::flow_end(rv, member);
+        }
     } else if let Some(node) = rv.ast.cast::<SwitchExpression>(node) {
         let case_ = rv.ast.list(rv.ast[node].cases)[case_index];
         if let Some(mut exhaustiveness) = rv.legacy_switch_exhaustiveness.take() {
@@ -785,15 +795,18 @@ pub fn handle_default(
     case_index: usize,
     sub_index: usize,
 ) {
-    let _ = sub_index;
     if let Some(group) = member_group(rv.ast, node, case_index)
         && let Some(mut exhaustiveness) = rv.legacy_switch_exhaustiveness.take()
     {
         exhaustiveness.visit_switch_member(rv, &group);
         rv.legacy_switch_exhaustiveness = Some(exhaustiveness);
     }
-    // Dart `nullSafetyDeadCodeVerifier.flowEnd(group.members[subIndex])`:
-    // wave D.
+    // Dart `nullSafetyDeadCodeVerifier.flowEnd(group.members[subIndex])`.
+    if let Some(group) = member_group(rv.ast, node, case_index)
+        && let Some(&member) = group.members.get(sub_index)
+    {
+        crate::error::dead_code_verifier::flow_end(rv, member);
+    }
 }
 
 /// Dart `handleSwitchBeforeAlternative`.
@@ -1434,7 +1447,8 @@ fn referenced_element(rv: &ResolverVisitor<'_>, expression: Id<Expression>) -> O
     if let Some(e) = ast.cast::<ParenthesizedExpression>(expression) {
         referenced_element(rv, ast[e].expression)
     } else if let Some(e) = ast.cast::<PrefixedIdentifier>(expression) {
-        rv.element(e)
+        // Dart `PrefixedIdentifier.element` is `identifier.element`.
+        rv.element(ast[e].identifier)
     } else if let Some(e) = ast.cast::<PropertyAccess>(expression) {
         rv.element(ast[e].property_name)
     } else if let Some(e) = ast.cast::<SimpleIdentifier>(expression) {

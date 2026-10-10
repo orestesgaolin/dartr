@@ -256,12 +256,29 @@ fn analyze_context(
     let library_ids: Vec<FileId> = libraries.keys().copied().collect();
     driver.link_libraries(&library_ids);
 
+    // The unignorable codes of each library: the library analyzer keeps
+    // them in its ignore filtering, like `finish_file` does.
+    let unignorable: Vec<Vec<String>> = library_ids
+        .iter()
+        .map(|&l| {
+            let mut names: Vec<String> = options
+                .for_path(&driver.fs.file(l).path)
+                .0
+                .unignorable_names
+                .iter()
+                .cloned()
+                .collect();
+            names.sort();
+            names
+        })
+        .collect();
     // The rules that need resolution run on the resolved units (Dart
     // `_computeLints`); the parse-only rules keep running on the parsed units.
     let parsed_rules = dartr_lints::rules::parsed_rules();
-    let jobs: Vec<dartr_driver::analysis::LintJob> = library_ids
+    let jobs: Vec<dartr_driver::analysis::LintJob<'_>> = library_ids
         .iter()
-        .map(|&l| {
+        .zip(&unignorable)
+        .map(|(&l, names)| {
             let path = &driver.fs.file(l).path;
             let resolved_rules = options
                 .for_path(path)
@@ -271,7 +288,7 @@ fn analyze_context(
                 .filter(|rule| !parsed_rules.contains(rule))
                 .map(|rule| rule.to_string())
                 .collect();
-            (l, options.for_path(path).1, resolved_rules)
+            (l, options.for_path(path).1, &names[..], resolved_rules)
         })
         .collect();
     let requested = &requested;

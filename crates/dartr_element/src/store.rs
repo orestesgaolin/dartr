@@ -7,7 +7,7 @@
 use crate::element::*;
 use crate::fragment::*;
 use crate::ids::*;
-use crate::slot::Arena;
+use crate::slot::{Arena, OnceSlot};
 
 /// An element type with its own storage: a data struct, or a subclass
 /// marker that shares the data struct of its superclass
@@ -194,6 +194,28 @@ pub struct ElementStore {
     pub id: StoreId,
     pub elements: ElementArenas,
     pub fragments: FragmentStore,
+    /// The AST of the `ConstExprs` of a linked cycle (the detached copies
+    /// that [`crate::ConstExprId`]s of this store point into: annotations,
+    /// constant initializers, default values), set by `dartr_link` before the
+    /// store is frozen. Not a Dart field: Dart elements hold their AST
+    /// nodes directly (`ElementAnnotationImpl.annotationAst`, ...).
+    pub const_ast: OnceSlot<ConstAst>,
+}
+
+/// The AST of the `ConstExprs` of a cycle (see [`ElementStore::const_ast`]).
+#[derive(Clone)]
+pub struct ConstAst(pub std::sync::Arc<dyn AsRef<dartr_ast::Ast> + Send + Sync>);
+
+impl ConstAst {
+    pub fn ast(&self) -> &dartr_ast::Ast {
+        (*self.0).as_ref()
+    }
+}
+
+impl std::fmt::Debug for ConstAst {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ConstAst")
+    }
 }
 
 /// A borrowed element of any kind (for `match`, Dart `switch (element)`).
@@ -233,6 +255,7 @@ impl ElementStore {
             id,
             elements: ElementArenas::default(),
             fragments: FragmentStore::default(),
+            const_ast: OnceSlot::new(),
         }
     }
 

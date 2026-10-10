@@ -115,6 +115,7 @@ pub fn compute_lints(
                 },
                 tables: &resolved.tables,
                 potentially_mutated_in_scope: &resolved.rt.potentially_mutated_in_scope,
+                corresponding_parameter_type: &resolved.rt.corresponding_parameter_type,
                 library: library.library,
                 metadata: Some(&metadata),
             }),
