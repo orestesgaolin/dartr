@@ -183,7 +183,16 @@ pub fn compute_lints(
     library: &ResolvedLibrary,
     enabled: &[&str],
 ) -> Vec<Vec<dartr_lints::LintDiagnostic>> {
-    compute_lints_with(input, library, enabled, true)
+    compute_lints_with(input, library, enabled, true, None)
+}
+
+pub fn compute_lints_with_package(
+    input: &LibraryAnalysisInput<'_>,
+    library: &ResolvedLibrary,
+    enabled: &[&str],
+    package_info: Option<&dartr_lints::LintPackageInfo>,
+) -> Vec<Vec<dartr_lints::LintDiagnostic>> {
+    compute_lints_with(input, library, enabled, true, package_info)
 }
 
 /// [compute_lints] without the ignore filtering, for callers that validate
@@ -194,7 +203,16 @@ pub fn compute_lints_unfiltered(
     library: &ResolvedLibrary,
     enabled: &[&str],
 ) -> Vec<Vec<dartr_lints::LintDiagnostic>> {
-    compute_lints_with(input, library, enabled, false)
+    compute_lints_with(input, library, enabled, false, None)
+}
+
+pub fn compute_lints_unfiltered_with_package(
+    input: &LibraryAnalysisInput<'_>,
+    library: &ResolvedLibrary,
+    enabled: &[&str],
+    package_info: Option<&dartr_lints::LintPackageInfo>,
+) -> Vec<Vec<dartr_lints::LintDiagnostic>> {
+    compute_lints_with(input, library, enabled, false, package_info)
 }
 
 fn compute_lints_with(
@@ -202,6 +220,7 @@ fn compute_lints_with(
     library: &ResolvedLibrary,
     enabled: &[&str],
     filter_ignored: bool,
+    package_info: Option<&dartr_lints::LintPackageInfo>,
 ) -> Vec<Vec<dartr_lints::LintDiagnostic>> {
     if enabled.is_empty() {
         return vec![vec![]; library.units.len()];
@@ -281,6 +300,8 @@ fn compute_lints_with(
                 unit: resolved.unit.raw(),
                 source: &original.parsed.ast.tokens.source,
                 path: &resolved.path,
+                source_uri: Some(&original.uri),
+                package_info,
                 resolved: resolved.panic.is_none().then_some(ResolvedLintContext {
                     ctx: Ctx {
                         local: Some(&resolved.local),
