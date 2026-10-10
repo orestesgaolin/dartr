@@ -128,16 +128,52 @@ Open an issue at <https://github.com/orestesgaolin/dartr/issues> with:
 
 ## Benchmarks
 
-Baseline `dart analyze` 3.13.3, cold cache, Apple M5 Pro (15 cores):
-Flutter `packages/flutter` 19.6 s, `flutter_tools` 7.6 s, `analyzer` 7.1 s, a 1.56 million
-line application 72.8 s. Final `dartr analyze` benchmarks on an idle machine are still to come. Single runs on a
-busy machine, full pipeline with lints and plugins, cold cache: the 1.56 million line
-application took 22 s with dartr against 52-78 s with Dart; Flutter `packages/flutter`
-6 s against 15 s; `flutter_tools` 3.5 s against 2.4-4.1 s (dartr is not faster there yet).
+`dartr analyze` and `dart analyze` (3.13.3) on the same machine, run one after the
+other, with the full pipeline (errors, warnings, lints, analyzer plugins). Both report the
+same diagnostics on all four projects. Wall time in seconds, lower is better.
+`dart` uses its normal disk cache (`~/.dartServer`); dartr has no disk cache and starts
+cold every time.
 
-**Caveat:** several of these measurements ran while other processes loaded the
-machine (load average 11-21 on 15 cores). The final comparison on an idle machine is
-pending, so treat the numbers as indicative only. Details and method:
+```mermaid
+---
+config:
+  xyChart:
+    height: 300
+---
+xychart-beta
+    title "Large projects: wall time (s), lower is better"
+    x-axis ["app 1.56M lines: dart", "app: dartr", "flutter: dart", "flutter: dartr"]
+    y-axis "seconds" 0 --> 80
+    bar [76.8, 22.1, 15.4, 6.2]
+```
+
+```mermaid
+---
+config:
+  xyChart:
+    height: 300
+---
+xychart-beta
+    title "Smaller packages: wall time (s), lower is better"
+    x-axis ["analyzer: dart", "analyzer: dartr", "flutter_tools: dart", "flutter_tools: dartr"]
+    y-axis "seconds" 0 --> 4
+    bar [2.5, 1.9, 2.5, 3.5]
+```
+
+| project | Dart lines | `dart analyze` | `dartr analyze` |
+|---|---|---|---|
+| application (pub workspace, analyzer plugins) | 1,559,637 | 76.8 s | 22.1 s |
+| Flutter `packages/flutter` | 1,309,663 | 15.4 s | 6.2 s |
+| `analyzer` 9.0.0 (pub) | 909,249 | 2.5 s | 1.9 s |
+| `flutter_tools` | 455,099 | 2.5 s | 3.5 s |
+
+dartr is not faster on `flutter_tools` yet: the resolved lints added most of its time, and
+that is the first optimization target. For reference, `dart analyze` with an empty cache on
+an idle machine took 72.8 s, 19.6 s, 7.1 s and 7.6 s on the same four projects.
+
+**Caveat:** these are single runs from 2026-10-10, made while other processes loaded the
+machine (Apple M5 Pro, 15 cores). The final comparison on an idle machine is still to come,
+so treat the numbers as indicative only. Details and method:
 [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 ## License
