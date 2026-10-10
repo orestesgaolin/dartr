@@ -3296,7 +3296,8 @@ impl<W: Write> Server<W> {
                 details: Vec::new(),
             });
         }
-        let codes: Option<Vec<String>> = codes.map(|c| c.iter().map(|s| s.to_lowercase()).collect());
+        let codes: Option<Vec<String>> =
+            codes.map(|c| c.iter().map(|s| s.to_lowercase()).collect());
         let options = CollectionOptions {
             sdk_path: self.options.dart_sdk.clone(),
             package_config_file: self.options.packages.clone(),
