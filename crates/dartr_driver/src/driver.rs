@@ -88,6 +88,13 @@ impl Driver {
         let mut targets = Vec::new();
         for &library in libraries {
             targets.push(self.graph.library_cycle(&self.fs, library));
+            // Dart `AnalysisDriver._analyzeFileImpl` also loads the
+            // `@docImport` libraries of the library it analyzes.
+            if self.fs.file(library).kind().is_library() {
+                for doc_import in self.doc_import_files(library) {
+                    targets.push(self.graph.library_cycle(&self.fs, doc_import));
+                }
+            }
         }
         // The cycles to link, dependencies first.
         let mut order: IndexSet<CycleId> = IndexSet::new();

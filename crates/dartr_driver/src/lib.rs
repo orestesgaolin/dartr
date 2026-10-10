@@ -13,3 +13,5 @@ pub mod link_resolver;
 pub mod project;
 pub mod unlinked_data;
 pub mod uri;
+
+pub mod lints;

@@ -2,9 +2,7 @@
 //! A JSON-lines differential runner, separate from the dartr CLI.
 use dartr_ast::{PartDirective, PartOfDirective, SimpleStringLiteral};
 use dartr_ast_builder::parse_file;
-use dartr_lints::{
-    ExperimentalFlag, Registry, RuleContextUnit, lint_library, rules::implemented_rules,
-};
+use dartr_lints::{ExperimentalFlag, Registry, RuleContextUnit, lint_library, rules::parsed_rules};
 use indexmap::IndexMap;
 use serde_json::{Value, json};
 use std::{
@@ -14,7 +12,7 @@ use std::{
 
 fn diagnostic_json(d: dartr_diagnostics::Diagnostic) -> Value {
     json!({"code":d.code.name,"severity":d.severity.name(),"offset":d.offset,
-           "length":d.length,"message":d.message})
+           "length":d.length,"message":d.message,"correction":d.correction})
 }
 fn normalized(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
@@ -38,7 +36,7 @@ fn main() {
     }
     if std::env::args().any(|arg| arg == "--list") {
         let registry = Registry::builtin();
-        let rules: Vec<_> = implemented_rules().into_iter().map(|name| {
+        let rules: Vec<_> = parsed_rules().into_iter().map(|name| {
             let rule = registry.get_rule(name).expect("registered rule");
             json!({"name":name, "codes":rule.diagnostic_codes().map(|code| code.name).collect::<Vec<_>>()})
         }).collect();

@@ -1,7 +1,7 @@
 # dartr_lints
 
-AST and source-based lint rules from Dart SDK 3.13.3. The registry includes metadata
-for all 266 upstream rules; 79 AST-only rules have node processors. See [RULES.md](RULES.md)
+AST, source-based, and resolved lint rules from Dart SDK 3.13.3. The registry includes metadata
+for all 266 upstream rules; 79 AST-only rules and 83 batch-A resolved rules have node processors. See [RULES.md](RULES.md)
 for the complete classification and the reason each remaining rule is deferred.
 
 ```rust
@@ -26,6 +26,18 @@ filters diagnostics using the scanner's ignore comments. Offsets and lengths use
 UTF-16 code units. `lint_with_config` also applies configured severities.
 `simple_directive_paths` uses the visited unit's source URI, derived from the
 nearest package configuration when it maps the file, or the file path otherwise.
+
+`ResolvedRuleContextUnit` accepts the rewritten AST plus original parse metadata.
+`lint_resolved_library` and its unfiltered variant run the same subscriptions with
+`ResolvedLintContext { ctx, tables, potentially_mutated_in_scope, library, metadata }`. The `Ctx` must include the visited
+unit's local arena. A failed resolver unit has no semantic context. The driver
+uses `Driver::analyze_library_with_lints` to resolve first and append enabled lint
+diagnostics. The existing `analyze_library` entrypoint remains resolution-only.
+`ResolvedLintContext::metadata` gives element metadata of any library
+(`ElementMetadata`: annotations, their elements and values) and the constant
+values of elements and expressions (Dart `computeConstantValue()`), backed by
+the resolver's `ConstantEvaluationEngine`. Without it, a reduced constant
+adapter evaluates primitive literals and operators.
 
 Unsupported rules have metadata but no processors. Call
 `Registry::builtin().get_rule(name).is_implemented()` before using a rule when the
@@ -59,14 +71,29 @@ python3 tools/lints_differential.py --corpus flutter --binary target/release/lin
 python3 tools/lints_differential.py --input-dir /path/to/project/lib --binary target/release/lints_dump --output target/lints/project
 ```
 
+For resolved rules use the driver runner and select only the assigned rules:
+
+```sh
+cargo build --release -p dartr_driver --bin lints_resolved_dump
+python3 tools/lints_differential.py --corpus sdk --binary target/release/lints_resolved_dump --rules-file /path/to/rules.txt --output target/lints/resolved-sdk --timeout 600
+```
+
+The resolved runner accepts `includeResolution: true` on requests to retain
+node types, element identity, and parameter/read/write binding availability as
+mismatch evidence. It reports resolver panics and detached parts explicitly.
+The legacy `lints_dump --list` lists only the 79 parse-only rules.
+
 The corpus tool copies sources into temporary fixture projects under its output
-directory. It enables exactly the implemented rules, removes copied nested analysis
+directory. It enables the selected rules (or all implemented rules by default), removes copied nested analysis
 options, sets Dart language version 3.13, and compares only their lint codes. It saves
 the complete oracle output, Rust output, exact differences, enabled-rule list, summary,
-and per-rule TSV counts. Other diagnostics from unresolved copied SDK/Flutter imports
-are excluded from the comparison; this does not test resolution.
+and per-rule TSV counts. Existing package configurations are preserved with absolute dependency roots and
+the copied source package mapped to its temporary lib directory. Non-lint
+diagnostics are excluded from the comparison. Full outputs and differences are
+retained; `--reuse` only recomputes comparisons from those saved outputs.
 The context integration tests also compare explicit primary-constructor and
 augmentation experiments, and files without package configuration. The corpus
 tool accepts `--language-version`, repeatable `--enable-experiment`, and
-`--no-package-config` for these cases. The JSON runner accepts matching optional
-`languageVersion: [major, minor]` and `experiments: [name, ...]` fields.
+`--no-package-config` for these cases. The parsed JSON runner accepts matching optional
+`languageVersion: [major, minor]` and `experiments: [name, ...]` fields. The resolved
+runner uses the project package version and analysis options.

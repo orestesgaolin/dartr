@@ -1,0 +1,345 @@
+// Dart source: pkg/linter/lib/src/rules/cascade_invocations.dart
+
+use crate::{LinterContext, RuleVisitorRegistry};
+use dartr_ast::*;
+use dartr_diagnostics::{Diagnostic, diag};
+use dartr_element::{
+    ElementId, FieldElement, FormalParameterElement, FragmentFlags, GetterElement,
+    LocalVariableElement, SetterElement, Tag, TopLevelVariableElement,
+};
+
+pub fn register(registry: &mut RuleVisitorRegistry, _: &LinterContext<'_>) {
+    for kind in [
+        NodeKind::Block,
+        NodeKind::SwitchCase,
+        NodeKind::SwitchDefault,
+        NodeKind::SwitchPatternCase,
+    ] {
+        registry.add(kind, "cascade_invocations", check);
+    }
+}
+
+#[derive(Default)]
+struct Cascadable {
+    element: Option<ElementId>,
+    critical: Vec<NodeId>,
+    can_join: bool,
+    can_receive: bool,
+    can_be_cascaded: bool,
+}
+/// Dart `AstNodeNullableExtension.canonicalElement` (linter `extensions.dart`).
+fn canonical(context: &LinterContext<'_>, node: NodeId) -> Option<ElementId> {
+    if !Expression::test(context.ast.kind(node)) {
+        return None;
+    }
+    let mut node = node;
+    while let Some(p) = context.ast.cast::<ParenthesizedExpression>(node) {
+        node = context.ast[p].expression.raw();
+    }
+    let element = if Identifier::test(context.ast.kind(node)) {
+        context.element(node)
+    } else if let Some(access) = context.ast.cast::<PropertyAccess>(node) {
+        context.element(context.ast[access].property_name)
+    } else {
+        None
+    };
+    element.and_then(|e| super::helpers::base_element(context, e))
+}
+
+fn property_variable(context: &LinterContext<'_>, element: ElementId) -> Option<ElementId> {
+    let resolved = context.resolved?;
+    if let Some(getter) = element.cast::<GetterElement>() {
+        return resolved.ctx.get(getter).variable.get().map(|id| id.raw());
+    }
+    if let Some(setter) = element.cast::<SetterElement>() {
+        return resolved.ctx.get(setter).variable.get().map(|id| id.raw());
+    }
+    Some(element)
+}
+
+fn unparenthesized(context: &LinterContext<'_>, mut node: NodeId) -> NodeId {
+    while let Some(parenthesized) = context.ast.cast::<ParenthesizedExpression>(node) {
+        node = context.ast[parenthesized].expression.raw();
+    }
+    node
+}
+
+fn is_static(context: &LinterContext<'_>, element: ElementId) -> bool {
+    context
+        .resolved
+        .and_then(|resolved| resolved.ctx.element_data(element))
+        .and_then(|data| context.resolved?.ctx.fragment_data(data.first_fragment))
+        .is_some_and(|fragment| {
+            fragment
+                .flags
+                .has(FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC)
+                || fragment
+                    .flags
+                    .has(FragmentFlags::VARIABLE_FRAGMENT_IS_STATIC)
+        })
+}
+
+fn is_variable(element: ElementId) -> bool {
+    element.is::<FieldElement>()
+        || element.is::<TopLevelVariableElement>()
+        || element.is::<LocalVariableElement>()
+        || element.is::<FormalParameterElement>()
+}
+
+fn prefix_element(context: &LinterContext<'_>, expression: NodeId) -> Option<ElementId> {
+    let expression = unparenthesized(context, expression);
+    if let Some(prefixed) = context.ast.cast::<PrefixedIdentifier>(expression) {
+        return canonical(context, context.ast[prefixed].prefix.raw());
+    }
+    if let Some(property) = context.ast.cast::<PropertyAccess>(expression) {
+        let property = &context.ast[property];
+        if context.ast.tokens.lexeme(property.operator) == "."
+            && property
+                .target
+                .is_some_and(|target| context.ast.kind(target) == NodeKind::SimpleIdentifier)
+        {
+            return property
+                .target
+                .and_then(|target| canonical(context, target.raw()));
+        }
+    }
+    None
+}
+fn box_for(context: &LinterContext<'_>, statement: NodeId) -> Cascadable {
+    if let Some(s) = context.ast.cast::<VariableDeclarationStatement>(statement) {
+        let vars = &context.ast[context.ast[s].variables];
+        let variables = context.ast.list(vars.variables);
+        if variables.len() != 1 {
+            return Cascadable::default();
+        }
+        let v = &context.ast[variables[0]];
+        if v.initializer
+            .is_some_and(|i| context.ast.kind(i) == NodeKind::AwaitExpression)
+        {
+            return Cascadable::default();
+        }
+        return Cascadable {
+            element: context.declared_element(variables[0]),
+            critical: v.initializer.map(Id::raw).into_iter().collect(),
+            can_receive: vars
+                .keyword
+                .is_none_or(|t| context.ast.tokens.lexeme(t) != "const"),
+            ..Default::default()
+        };
+    }
+    let Some(s) = context.ast.cast::<ExpressionStatement>(statement) else {
+        return Cascadable::default();
+    };
+    let expression = unparenthesized(context, context.ast[s].expression.raw());
+    match context.ast.kind(expression) {
+        NodeKind::MethodInvocation => {
+            // Dart `_fromMethodInvocation`.
+            let n = &context.ast[context.ast.cast::<MethodInvocation>(expression).unwrap()];
+            let executable = n
+                .operator
+                .filter(|&t| context.ast.tokens.lexeme(t) == ".")
+                .and_then(|_| canonical(context, n.method_name.raw()))
+                .filter(|&e| {
+                    matches!(
+                        e.tag(),
+                        Tag::Method
+                            | Tag::Getter
+                            | Tag::Setter
+                            | Tag::TopLevelFunction
+                            | Tag::LocalFunction
+                            | Tag::Constructor
+                    )
+                });
+            if executable.is_none_or(|e| is_static(context, e)) {
+                return Cascadable::default();
+            }
+            let target_is_simple = n
+                .target
+                .is_some_and(|t| context.ast.kind(t) == NodeKind::SimpleIdentifier);
+            Cascadable {
+                element: n.target.and_then(|t| canonical(context, t.raw())),
+                critical: vec![n.method_name.raw(), n.argument_list.raw()],
+                can_join: target_is_simple,
+                can_receive: target_is_simple,
+                can_be_cascaded: true,
+            }
+        }
+        NodeKind::PrefixedIdentifier => {
+            let n = &context.ast[context.ast.cast::<PrefixedIdentifier>(expression).unwrap()];
+            Cascadable {
+                element: canonical(context, n.prefix.raw()),
+                critical: vec![n.identifier.raw()],
+                can_join: true,
+                can_receive: true,
+                can_be_cascaded: true,
+            }
+        }
+        NodeKind::PropertyAccess => {
+            // Dart `_fromPropertyAccess` (only with the `.` operator).
+            let n = &context.ast[context.ast.cast::<PropertyAccess>(expression).unwrap()];
+            if context.ast.tokens.lexeme(n.operator) != "." {
+                return Cascadable::default();
+            }
+            let target_is_simple = n
+                .target
+                .is_some_and(|t| context.ast.kind(t) == NodeKind::SimpleIdentifier);
+            Cascadable {
+                element: n.target.and_then(|t| canonical(context, t.raw())),
+                critical: vec![n.property_name.raw()],
+                can_join: target_is_simple,
+                can_receive: target_is_simple,
+                can_be_cascaded: true,
+            }
+        }
+        NodeKind::AssignmentExpression => {
+            let n = &context.ast[context
+                .ast
+                .cast::<AssignmentExpression>(expression)
+                .unwrap()];
+            let left = unparenthesized(context, n.left_hand_side.raw());
+            if context.ast.kind(left) == NodeKind::SimpleIdentifier {
+                return Cascadable {
+                    element: canonical(context, left),
+                    critical: vec![n.right_hand_side.raw()],
+                    can_receive: context.ast.tokens.lexeme(n.operator) != "??=",
+                    ..Default::default()
+                };
+            }
+            let element = prefix_element(context, left);
+            let can_receive = context.ast.tokens.lexeme(n.operator) != "??="
+                && element
+                    .is_some_and(|element| is_variable(element) && !is_static(context, element));
+            Cascadable {
+                element,
+                critical: vec![n.right_hand_side.raw()],
+                can_join: true,
+                can_receive,
+                can_be_cascaded: true,
+            }
+        }
+        NodeKind::CascadeExpression => {
+            let n = &context.ast[context.ast.cast::<CascadeExpression>(expression).unwrap()];
+            let simple = context.ast.kind(n.target) == NodeKind::SimpleIdentifier;
+            Cascadable {
+                element: canonical(context, n.target.raw()),
+                critical: context.ast.list_raw(n.cascade_sections).to_vec(),
+                can_join: simple,
+                can_receive: simple,
+                can_be_cascaded: true,
+            }
+        }
+        _ => Cascadable::default(),
+    }
+}
+/// Dart `_CriticalDependencyVisitor.isOrHasCriticalNode`.
+fn references(context: &LinterContext<'_>, root: NodeId, target: ElementId) -> bool {
+    let Some(resolved) = context.resolved else {
+        return false;
+    };
+    let ctx = &resolved.ctx;
+    // Dart `targetElement.variable` / the `PropertyInducingElement` itself.
+    let target_variable = (target.is::<GetterElement>() || target.is::<SetterElement>())
+        .then(|| property_variable(context, target))
+        .flatten();
+    let variable = target_variable.or_else(|| {
+        (target.is::<FieldElement>() || target.is::<TopLevelVariableElement>()).then_some(target)
+    });
+    let mut pending = vec![root];
+    while let Some(node) = pending.pop() {
+        let node_element = canonical(context, node);
+        if node_element == Some(target) {
+            return true;
+        }
+        if target_variable.is_some() && node_element == target_variable {
+            return true;
+        }
+        if let Some(variable) = variable {
+            if context.ast.kind(node) == NodeKind::FunctionExpression {
+                return true;
+            }
+            if let Some(element) = node_element
+                && matches!(
+                    element.tag(),
+                    Tag::Method
+                        | Tag::Getter
+                        | Tag::Setter
+                        | Tag::TopLevelFunction
+                        | Tag::LocalFunction
+                        | Tag::Constructor
+                )
+                && ctx.element_data(element).and_then(|d| d.enclosing)
+                    == ctx.element_data(variable).and_then(|d| d.enclosing)
+            {
+                return true;
+            }
+        }
+        pending.extend(context.ast.children(node));
+    }
+    false
+}
+fn compatible(context: &LinterContext<'_>, current: &Cascadable, previous: &Cascadable) -> bool {
+    let Some(element) = current.element else {
+        return false;
+    };
+    previous.can_receive
+        && current.can_join
+        && (current.can_be_cascaded || previous.can_be_cascaded)
+        && previous.element == Some(element)
+        && !current
+            .critical
+            .iter()
+            .chain(&previous.critical)
+            .any(|&n| references(context, n, element))
+}
+fn statements(context: &LinterContext<'_>, node: NodeId) -> Vec<NodeId> {
+    match context.ast.kind(node) {
+        NodeKind::Block => context
+            .ast
+            .list_raw(context.ast[context.ast.cast::<Block>(node).unwrap()].statements)
+            .to_vec(),
+        NodeKind::SwitchCase => context
+            .ast
+            .list_raw(context.ast[context.ast.cast::<SwitchCase>(node).unwrap()].statements)
+            .to_vec(),
+        NodeKind::SwitchDefault => context
+            .ast
+            .list_raw(context.ast[context.ast.cast::<SwitchDefault>(node).unwrap()].statements)
+            .to_vec(),
+        NodeKind::SwitchPatternCase => context
+            .ast
+            .list_raw(context.ast[context.ast.cast::<SwitchPatternCase>(node).unwrap()].statements)
+            .to_vec(),
+        _ => vec![],
+    }
+}
+fn check(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
+    let statements = statements(context, node);
+    let mut previous = Cascadable::default();
+    let mut previous_statement = None;
+    let mut first = None;
+    for statement in statements {
+        let current = box_for(context, statement);
+        if compatible(context, &current, &previous) {
+            first.get_or_insert(statement);
+        } else if let (Some(start), Some(end)) = (first.take(), previous_statement) {
+            context.report_offset(
+                out,
+                &diag::CASCADE_INVOCATIONS,
+                context.ast.offset(start) as usize,
+                (context.ast.end(end) - context.ast.offset(start)) as usize,
+                &[],
+            );
+        }
+        previous = current;
+        previous_statement = Some(statement);
+    }
+    if let (Some(start), Some(end)) = (first, previous_statement) {
+        context.report_offset(
+            out,
+            &diag::CASCADE_INVOCATIONS,
+            context.ast.offset(start) as usize,
+            (context.ast.end(end) - context.ast.offset(start)) as usize,
+            &[],
+        );
+    }
+}

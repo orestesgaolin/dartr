@@ -697,6 +697,48 @@ impl FileSystemState {
         }
     }
 
+    /// Dart `kind.library ?? kind.asLibrary` (`AnalysisDriver._analyzeFile`):
+    /// a part file without a library is analyzed as a library of its own.
+    /// Returns the library file: [file] itself or its library. Dart creates a
+    /// separate `LibraryFileKind(recoveredFrom: kind)`; this port changes the
+    /// kind of the file in place (with the synthetic `dart:core` import that
+    /// `FileKind.libraryImports` adds for a library). Call [`Self::discover`]
+    /// after it.
+    pub fn library_or_as_library(&mut self, file: FileId) -> FileId {
+        if let Some(library) = self.library_of(file) {
+            return library;
+        }
+        let content = self.files[file.0 as usize].c();
+        let add_dart_core =
+            !content.unlinked.is_dart_core && !content.unlinked.has_dart_core_import;
+        let core = add_dart_core.then(|| {
+            let u = UnlinkedLibraryImportDirective {
+                combinators: Vec::new(),
+                configurations: Vec::new(),
+                import_keyword_offset: -1,
+                is_doc_import: false,
+                is_synthetic_dart_core: true,
+                prefix: None,
+                uri: Some("dart:core".to_string()),
+            };
+            LibraryImportState {
+                uris: self.build_configurable_directive_uris(file, &u),
+                unlinked: u,
+            }
+        });
+        if let Some(DirectiveUri::WithFile { file: target, .. }) =
+            core.as_ref().map(|s| &s.uris.selected)
+        {
+            self.files[target.0 as usize].referencing_files.insert(file);
+        }
+        let content = self.files[file.0 as usize].content.as_mut().unwrap();
+        content.kind = FileKind::Library { name: None };
+        // `LibraryFileKind` reads doc imports from the library directive only.
+        content.doc_library_imports.clear();
+        content.library_imports.extend(core);
+        file
+    }
+
     /// Dart `PartOfUriKnownFileKind.includingContainer`.
     fn including_container(&self, file: FileId) -> Option<FileId> {
         let FileKind::PartOfUriKnown { uri_file } = *self.file(file).kind() else {
