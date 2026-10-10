@@ -80,6 +80,7 @@ at each merge; the final process report is written from it.
 | 10-10 11:20 | 255b94d | last analyzer-9.0.0 differences (unnecessary_ignore, analyzer_public_api, two rules) | Opus | analyzer-9.0.0 **27,278/27,278, 0 extra**; lints 57,211/57,211 (unseen) |
 | 10-10 12:30 | 8790cf2 | LSP: signature help, semantic tokens, inlay hints, call/type hierarchy, workspace symbols | Opus | compared with `dart language-server` on fixtures; 5,580 tests |
 | 10-10 13:00 | 5a40205 | release preparation: LICENSE, notices, README guide, release workflow, Homebrew formula | Opus | `dartr --version` checked; tag `v0.1.0-preview.1` pushed |
+| 10-10 14:10 | 0c9d176 | legacy protocol: analysis hover/navigation + 6 subscription notifications, search domain, edit.format/sortMembers/organizeDirectives | Gemini 4 (Antigravity) | 32/32 steps identical to `dart language-server --protocol=analyzer` on a clean checkout; 5,581 tests |
 
 ## Incidents and lessons
 
