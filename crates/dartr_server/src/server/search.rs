@@ -206,7 +206,10 @@ fn library_file_paths(element: &SElem, e: ElementId) -> Vec<String> {
         while let Some(f) = stack.pop() {
             out.push(ctx.fragment(f).source.path.to_string());
             for part in ctx.fragment(f).parts.iter().rev() {
-                if let dartr_element::DirectiveUri::Unit { library_fragment, .. } = &part.directive.uri {
+                if let dartr_element::DirectiveUri::Unit {
+                    library_fragment, ..
+                } = &part.directive.uri
+                {
                     stack.push(*library_fragment);
                 }
             }
@@ -301,7 +304,11 @@ impl Server {
                 let sdk = context.sdk.as_ref().or(collection.sdk.as_ref());
                 let mut discovered = Vec::new();
                 if let Some(sdk) = sdk {
-                    discovered.extend(sdk.libraries().iter().filter_map(|l| sdk.map_dart_uri(&l.short_name)));
+                    discovered.extend(
+                        sdk.libraries()
+                            .iter()
+                            .filter_map(|l| sdk.map_dart_uri(&l.short_name)),
+                    );
                 }
                 for package in context.packages.packages() {
                     dart_files_recursively(&package.lib, &mut discovered);
@@ -330,7 +337,10 @@ impl Server {
         if std::env::var_os("DARTR_DEBUG_SEARCH").is_some() {
             for (index, files) in &scope {
                 let root = &collection.contexts[*index].root.root;
-                eprintln!("dartr: search scope of context {index} ({root}): {} files", files.len());
+                eprintln!(
+                    "dartr: search scope of context {index} ({root}): {} files",
+                    files.len()
+                );
             }
         }
         let scope = Arc::new(scope);
@@ -384,7 +394,12 @@ impl Server {
         let sink = NoopSink;
         let ctx = resolved.ctx(&sink);
         let unit = resolved.unit();
-        let index = Arc::new(crate::index::index_unit(&ctx, &unit.ast, &unit.tables, unit.unit));
+        let index = Arc::new(crate::index::index_unit(
+            &ctx,
+            &unit.ast,
+            &unit.tables,
+            unit.unit,
+        ));
         self.indexes.insert(key, index.clone());
         Some(index)
     }
@@ -392,7 +407,11 @@ impl Server {
     /// Dart `Search._addResults`: the relations with [kinds] of [element]
     /// in the files of each driver that can reference it.
     fn search_index(&mut self, element: &SElem, kinds: &[RelationKind]) -> Vec<Match> {
-        let Some(name) = element.with(|ctx| ctx.element_data(element.id).and_then(|d| d.name).map(|n| ctx.name_str(n).to_string())) else {
+        let Some(name) = element.with(|ctx| {
+            ctx.element_data(element.id)
+                .and_then(|d| d.name)
+                .map(|n| ctx.name_str(n).to_string())
+        }) else {
             return Vec::new();
         };
         let Some(key) = element.key() else {
@@ -407,7 +426,11 @@ impl Server {
         if element.id.tag() == Tag::Constructor && name == "new" {
             let class = element.with(|ctx| ctx.element_data(element.id).and_then(|d| d.enclosing));
             if let Some(class) = class {
-                if let Some(class_name) = element.with(|ctx| ctx.element_data(class).and_then(|d| d.name).map(|n| ctx.name_str(n).to_string())) {
+                if let Some(class_name) = element.with(|ctx| {
+                    ctx.element_data(class)
+                        .and_then(|d| d.name)
+                        .map(|n| ctx.name_str(n).to_string())
+                }) {
                     reference_names.push(class_name);
                 }
                 library_files.push(library_files_of(class));
@@ -437,7 +460,9 @@ impl Server {
                 }
             }
             for f in files {
-                let Some(index) = self.unit_index(&f, *context) else { continue };
+                let Some(index) = self.unit_index(&f, *context) else {
+                    continue;
+                };
                 for r in index.relations_of(&key, |k| kinds.contains(&k)) {
                     results.push(Match {
                         path: f.clone(),
@@ -455,20 +480,34 @@ impl Server {
     pub(crate) fn search_references(&mut self, element: &SElem) -> Vec<Match> {
         let id = element.id;
         match id.tag() {
-            Tag::Extension | Tag::Class | Tag::Enum | Tag::Mixin | Tag::ExtensionType | Tag::Setter | Tag::TypeAlias => {
-                self.search_index(element, REFERENCES)
-            }
+            Tag::Extension
+            | Tag::Class
+            | Tag::Enum
+            | Tag::Mixin
+            | Tag::ExtensionType
+            | Tag::Setter
+            | Tag::TypeAlias => self.search_index(element, REFERENCES),
             Tag::Constructor => self.search_index(element, CONSTRUCTOR),
             Tag::Getter => self.search_index(element, GETTER),
             Tag::Field | Tag::TopLevelVariable => {
                 let (getter, setter, origin) = element.with(|ctx| {
                     let (getter, setter) = match ctx.any(id) {
-                        dartr_element::AnyElement::Field(f) => (f.getter.map(|g| g.raw()), f.setter.map(|s| s.raw())),
-                        dartr_element::AnyElement::TopLevelVariable(v) => (v.getter.map(|g| g.raw()), v.setter.map(|s| s.raw())),
+                        dartr_element::AnyElement::Field(f) => {
+                            (f.getter.map(|g| g.raw()), f.setter.map(|s| s.raw()))
+                        }
+                        dartr_element::AnyElement::TopLevelVariable(v) => {
+                            (v.getter.map(|g| g.raw()), v.setter.map(|s| s.raw()))
+                        }
                         _ => (None, None),
                     };
                     let flags = dartr_resolver::element_ext::first_fragment_flags(ctx, id);
-                    (getter, setter, flags.contains(FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_DECLARATION))
+                    (
+                        getter,
+                        setter,
+                        flags.contains(
+                            FragmentFlags::PROPERTY_INDUCING_FRAGMENT_IS_ORIGIN_DECLARATION,
+                        ),
+                    )
                 });
                 let mut results = Vec::new();
                 if origin {
@@ -500,7 +539,8 @@ impl Server {
                 let enclosing = element.with(|ctx| ctx.element_data(id).and_then(|d| d.enclosing));
                 if enclosing.is_some_and(|e| e.tag() == Tag::LocalFunction) {
                     self.search_local(element, &|ast, n| {
-                        ast.is::<Block>(n) || ast.parent(n).is_some_and(|p| ast.is::<CompilationUnit>(p))
+                        ast.is::<Block>(n)
+                            || ast.parent(n).is_some_and(|p| ast.is::<CompilationUnit>(p))
                     })
                 } else {
                     self.search_index(element, REFERENCES)
@@ -534,7 +574,11 @@ impl Server {
     }
 
     /// Dart `_searchReferences_Local`.
-    fn search_local(&mut self, element: &SElem, is_root: &dyn Fn(&Ast, NodeId) -> bool) -> Vec<Match> {
+    fn search_local(
+        &mut self,
+        element: &SElem,
+        is_root: &dyn Fn(&Ast, NodeId) -> bool,
+    ) -> Vec<Match> {
         let Some((resolved, name_offset)) = self.element_unit(element) else {
             return Vec::new();
         };
@@ -561,7 +605,12 @@ impl Server {
         self.local_references(&resolved, root, &elements)
     }
 
-    fn local_references(&self, resolved: &ResolvedUnitRef, root: NodeId, elements: &[ElementId]) -> Vec<Match> {
+    fn local_references(
+        &self,
+        resolved: &ResolvedUnitRef,
+        root: NodeId,
+        elements: &[ElementId],
+    ) -> Vec<Match> {
         let sink = NoopSink;
         let ctx = resolved.ctx(&sink);
         let unit = resolved.unit();
@@ -601,7 +650,8 @@ impl Server {
             let mut stack = vec![root];
             while let Some(v) = stack.pop() {
                 if v.tag() == Tag::JoinPatternVariable {
-                    let mut components = dartr_resolver::element_ext::join_pattern_variable_components(ctx, v);
+                    let mut components =
+                        dartr_resolver::element_ext::join_pattern_variable_components(ctx, v);
                     components.reverse();
                     stack.extend(components);
                 } else {
@@ -614,9 +664,14 @@ impl Server {
                 vec![root]
             }
         });
-        let bind = variables.iter().copied().find(|v| v.tag() == Tag::BindPatternVariable);
+        let bind = variables
+            .iter()
+            .copied()
+            .find(|v| v.tag() == Tag::BindPatternVariable);
         let Some(bind) = bind else { return Vec::new() };
-        let Some(node) = element.with(|ctx| dartr_resolver::element_ext::bind_pattern_variable_node(ctx, bind)) else {
+        let Some(node) =
+            element.with(|ctx| dartr_resolver::element_ext::bind_pattern_variable_node(ctx, bind))
+        else {
             return Vec::new();
         };
         let unit = resolved.unit();
@@ -624,7 +679,10 @@ impl Server {
         let mut current = Some(node);
         let mut root = None;
         while let Some(n) = current {
-            if ast.is::<SwitchExpression>(n) || ast.is::<Block>(n) || ast.is::<ExpressionFunctionBody>(n) {
+            if ast.is::<SwitchExpression>(n)
+                || ast.is::<Block>(n)
+                || ast.is::<ExpressionFunctionBody>(n)
+            {
                 root = Some(n);
                 break;
             }
@@ -637,7 +695,12 @@ impl Server {
     /// Dart `_searchReferences_Prefix`.
     fn search_prefix(&mut self, element: &SElem) -> Vec<Match> {
         let mut results = Vec::new();
-        let paths: Vec<String> = element.lib.inputs.iter().map(|u| u.path.to_string()).collect();
+        let paths: Vec<String> = element
+            .lib
+            .inputs
+            .iter()
+            .map(|u| u.path.to_string())
+            .collect();
         for path in paths {
             if let Ok(resolved) = self.require_resolved_unit_in(&path, Some(element.lib.context)) {
                 let root = resolved.unit().unit.raw();
@@ -666,7 +729,10 @@ impl Server {
             let ast = &unit.ast;
             for &d in ast.list_raw(ast[unit.unit].directives) {
                 if let Some(p) = ast.cast::<PartOfDirective>(d) {
-                    let target = ast[p].library_name.map(|n| n.raw()).or(ast[p].uri.map(|u| u.raw()));
+                    let target = ast[p]
+                        .library_name
+                        .map(|n| n.raw())
+                        .or(ast[p].uri.map(|u| u.raw()));
                     if let Some(t) = target {
                         results.push(Match {
                             path: path.clone(),
@@ -722,7 +788,12 @@ impl Server {
     }
 
     /// Dart `SearchEngine.appendAllSubtypes(type, allSubtypes)`.
-    fn append_all_subtypes(&mut self, class: &SElem, all: &mut Vec<SElem>, keys: &mut Vec<(usize, ElementKey)>) {
+    fn append_all_subtypes(
+        &mut self,
+        class: &SElem,
+        all: &mut Vec<SElem>,
+        keys: &mut Vec<(usize, ElementKey)>,
+    ) {
         for sub in self.direct_subtypes(class) {
             let Some(key) = sub.identity() else { continue };
             if keys.contains(&key) {
@@ -746,32 +817,37 @@ impl Server {
             return (members, parameters);
         }
         let is_static = member.with(|ctx| member::is_static(ctx, ElemRef::Base(id)));
-        if id.tag() == Tag::Constructor || (matches!(id.tag(), Tag::Field | Tag::Method) && is_static) {
+        if id.tag() == Tag::Constructor
+            || (matches!(id.tag(), Tag::Field | Tag::Method) && is_static)
+        {
             members.push(member.clone());
             return (members, parameters);
         }
-        let Some(class) = enclosing.and_then(|e| e.cast::<dartr_element::InterfaceElement>()) else {
+        let Some(class) = enclosing.and_then(|e| e.cast::<dartr_element::InterfaceElement>())
+        else {
             return (members, parameters);
         };
         let name = member.with(|ctx| support::display_name(ctx, id));
         let is_private = name.starts_with('_');
         let member_library = member.with(|ctx| support::library_of(ctx, id));
         let search_classes: Vec<ElementId> = member.with(|ctx| {
-            let mut out: Vec<ElementId> = dartr_typesystem::class_hierarchy::implemented_interfaces(ctx, class)
-                .iter()
-                .filter_map(|&t| match ctx.ty(t) {
-                    TypeKind::Interface { element, .. } => Some(element.raw()),
-                    _ => None,
-                })
-                .filter(|&e| !is_private || support::library_of(ctx, e) == member_library)
-                .collect();
+            let mut out: Vec<ElementId> =
+                dartr_typesystem::class_hierarchy::implemented_interfaces(ctx, class)
+                    .iter()
+                    .filter_map(|&t| match ctx.ty(t) {
+                        TypeKind::Interface { element, .. } => Some(element.raw()),
+                        _ => None,
+                    })
+                    .filter(|&e| !is_private || support::library_of(ctx, e) == member_library)
+                    .collect();
             out.push(class.raw());
             out
         });
         let mut sub_classes: Vec<SElem> = Vec::new();
         let mut keys: Vec<(usize, ElementKey)> = Vec::new();
         for super_class in search_classes {
-            let declares = member.with(|ctx| !class_members(ctx, super_class, Some(&name)).is_empty());
+            let declares =
+                member.with(|ctx| !class_members(ctx, super_class, Some(&name)).is_empty());
             if !declares {
                 continue;
             }
@@ -787,10 +863,20 @@ impl Server {
         if is_private {
             sub_classes.retain(|s| {
                 let library_path = s.with(|ctx| {
-                    support::library_of(ctx, s.id).map(|l| ctx.fragment(ctx.get(l).first_fragment()).source.path.to_string())
+                    support::library_of(ctx, s.id).map(|l| {
+                        ctx.fragment(ctx.get(l).first_fragment())
+                            .source
+                            .path
+                            .to_string()
+                    })
                 });
                 let member_path = member.with(|ctx| {
-                    member_library.map(|l| ctx.fragment(ctx.get(l).first_fragment()).source.path.to_string())
+                    member_library.map(|l| {
+                        ctx.fragment(ctx.get(l).first_fragment())
+                            .source
+                            .path
+                            .to_string()
+                    })
                 });
                 library_path == member_path
             });
@@ -819,7 +905,8 @@ impl Server {
                     for &c in &ctx.interface(interface).constructors {
                         for &p in &ctx.executable(c.upcast()).formal_params {
                             if p.raw().tag() == Tag::FieldFormalParameter
-                                && let dartr_element::AnyElement::FormalParameter(fp) = ctx.any(p.raw())
+                                && let dartr_element::AnyElement::FormalParameter(fp) =
+                                    ctx.any(p.raw())
                                 && let Some(f) = fp.field.get()
                                 && crate::index::element_key(ctx, f.raw()) == member_key
                             {
@@ -840,16 +927,16 @@ impl Server {
     /// Dart `getHierarchyNamedParameters`.
     fn hierarchy_named_parameters(&mut self, parameter: &SElem) -> Vec<SElem> {
         let (named, name, enclosing) = parameter.with(|ctx| {
-            let data = ctx.get(dartr_element::EId::<dartr_element::FormalParameterElement>::from_raw(parameter.id));
+            let data = ctx.get(
+                dartr_element::EId::<dartr_element::FormalParameterElement>::from_raw(parameter.id),
+            );
             (
                 data.kind.is_named(),
                 data.name.map(|n| ctx.name_str(n).to_string()),
                 ctx.element_data(parameter.id).and_then(|d| d.enclosing),
             )
         });
-        if named
-            && let Some(method) = enclosing.filter(|e| e.tag() == Tag::Method)
-        {
+        if named && let Some(method) = enclosing.filter(|e| e.tag() == Tag::Method) {
             let (members, _) = self.hierarchy_members_and_parameters(&parameter.same(method));
             let mut out = Vec::new();
             for m in members {
@@ -901,14 +988,20 @@ impl Server {
             {
                 node = ast.parent(n);
             }
-            node.and_then(|n| crate::element_locator::get_element(&u, n)).map(|e| match e.tag() {
-                Tag::FieldFormalParameter => match ctx.any(e) {
-                    dartr_element::AnyElement::FormalParameter(p) => p.field.get().map(|f| f.raw()).unwrap_or(e),
+            node.and_then(|n| crate::element_locator::get_element(&u, n))
+                .map(|e| match e.tag() {
+                    Tag::FieldFormalParameter => match ctx.any(e) {
+                        dartr_element::AnyElement::FormalParameter(p) => {
+                            p.field.get().map(|f| f.raw()).unwrap_or(e)
+                        }
+                        _ => e,
+                    },
+                    Tag::Getter | Tag::Setter => {
+                        dartr_resolver::element_metadata::accessor_variable_any(&ctx, e)
+                            .unwrap_or(e)
+                    }
                     _ => e,
-                },
-                Tag::Getter | Tag::Setter => dartr_resolver::element_metadata::accessor_variable_any(&ctx, e).unwrap_or(e),
-                _ => e,
-            })
+                })
         };
         let Some(element) = element else {
             return Ok(Value::Null);
@@ -923,13 +1016,18 @@ impl Server {
             element.id.tag(),
             Tag::FormalParameter | Tag::FieldFormalParameter | Tag::SuperFormalParameter
         ) && element.with(|ctx| {
-            ctx.get(dartr_element::EId::<dartr_element::FormalParameterElement>::from_raw(element.id))
-                .kind
-                .is_named()
+            ctx.get(
+                dartr_element::EId::<dartr_element::FormalParameterElement>::from_raw(element.id),
+            )
+            .kind
+            .is_named()
         });
         let ref_elements: Vec<SElem> = if is_named_parameter {
             self.hierarchy_named_parameters(&element)
-        } else if matches!(element.id.tag(), Tag::Method | Tag::Field | Tag::Constructor) {
+        } else if matches!(
+            element.id.tag(),
+            Tag::Method | Tag::Field | Tag::Constructor
+        ) {
             let (mut members, parameters) = self.hierarchy_members_and_parameters(&element);
             members.extend(parameters);
             members
@@ -967,20 +1065,26 @@ impl Server {
             let mut out = Vec::new();
             let mut f = ctx.element_data(e).map(|d| d.first_fragment);
             while let Some(id) = f {
-                let Some(data) = ctx.fragment_data(id) else { break };
+                let Some(data) = ctx.fragment_data(id) else {
+                    break;
+                };
                 let path = crate::navigation::fragment_path(ctx, id);
                 let mut name_offset = data.name_offset.or(if id.tag() == Tag::Label {
                     data.first_token_offset
                 } else {
                     None
                 });
-                let mut name_length = data.name.map(|n| ctx.name_str(n).encode_utf16().count() as u32);
+                let mut name_length = data
+                    .name
+                    .map(|n| ctx.name_str(n).encode_utf16().count() as u32);
                 if name_offset.is_none()
                     && let Some(c) = id.cast::<dartr_element::ConstructorFragment>()
                 {
                     let c = ctx.fragment(c);
                     name_offset = c.type_name_offset;
-                    name_length = c.type_name.map(|n| ctx.name_str(n).encode_utf16().count() as u32);
+                    name_length = c
+                        .type_name
+                        .map(|n| ctx.name_str(n).encode_utf16().count() as u32);
                 }
                 if let (Some(path), Some(o), Some(l)) = (path, name_offset, name_length) {
                     out.push((path, o, l));
@@ -1028,7 +1132,8 @@ impl Server {
             unit: resolved.index,
             id: element,
         };
-        let helper = pivot.with(|ctx| HierarchyHelper::from_element(ctx, pivot.lib.context, element));
+        let helper =
+            pivot.with(|ctx| HierarchyHelper::from_element(ctx, pivot.lib.context, element));
         let Some(pivot_class) = helper.pivot_class else {
             return Ok(json!([]));
         };
@@ -1066,12 +1171,18 @@ impl Server {
                 let path = crate::navigation::fragment_path(ctx, first)?;
                 let data = ctx.fragment_data(first)?;
                 let name = data.name?;
-                Some((path, data.name_offset?, ctx.name_str(name).encode_utf16().count() as u32))
+                Some((
+                    path,
+                    data.name_offset?,
+                    ctx.name_str(name).encode_utf16().count() as u32,
+                ))
             });
             if let Some((path, o, l)) = location
                 && let Some(lines) = self.line_info_of(&path)
             {
-                locations.push(json!({"uri": path_to_uri(&path), "range": mapping::to_range(&lines, o, l)}));
+                locations.push(
+                    json!({"uri": path_to_uri(&path), "range": mapping::to_range(&lines, o, l)}),
+                );
             }
         }
         Ok(Value::Array(locations))
@@ -1119,7 +1230,12 @@ fn children_named(ctx: &Ctx<'_>, parent: ElementId, name: &str) -> Vec<ElementId
         .chain(data.methods.iter().map(|m| m.raw()))
         .collect();
     if let Some(interface) = parent.cast::<dartr_element::InterfaceElement>() {
-        children.extend(ctx.interface(interface).constructors.iter().map(|c| c.raw()));
+        children.extend(
+            ctx.interface(interface)
+                .constructors
+                .iter()
+                .map(|c| c.raw()),
+        );
     }
     children
         .into_iter()
@@ -1163,17 +1279,28 @@ impl HierarchyHelper {
             current = ctx.element_data(pivot).and_then(|d| d.enclosing);
         }
         let pivot_class = current.filter(|e| e.cast::<dartr_element::InterfaceElement>().is_some());
-        let pivot_library_path = support::library_of(ctx, pivot)
-            .map(|l| ctx.fragment(ctx.get(l).first_fragment()).source.path.to_string());
-        let pivot_library_uri = support::library_of(ctx, pivot)
-            .map(|l| ctx.fragment(ctx.get(l).first_fragment()).source.uri.to_string());
+        let pivot_library_path = support::library_of(ctx, pivot).map(|l| {
+            ctx.fragment(ctx.get(l).first_fragment())
+                .source
+                .path
+                .to_string()
+        });
+        let pivot_library_uri = support::library_of(ctx, pivot).map(|l| {
+            ctx.fragment(ctx.get(l).first_fragment())
+                .source
+                .uri
+                .to_string()
+        });
         HierarchyHelper {
             pivot_context: context,
             pivot_key: crate::index::element_key(ctx, pivot),
             pivot_library_path,
             pivot_library_uri,
             pivot_tag: pivot.tag(),
-            pivot_name: ctx.element_data(pivot).and_then(|d| d.name).map(|n| ctx.name_str(n).to_string()),
+            pivot_name: ctx
+                .element_data(pivot)
+                .and_then(|d| d.name)
+                .map(|n| ctx.name_str(n).to_string()),
             pivot_field_final: field_final,
             pivot_class,
         }
@@ -1181,7 +1308,11 @@ impl HierarchyHelper {
 
     /// Dart `findMemberElement(clazz)`.
     fn find_member(&self, ctx: &Ctx<'_>, context: usize, class: ElementId) -> Option<ElementId> {
-        if self.pivot_class.is_some_and(|c| c.tag() == Tag::ExtensionType) || class.tag() == Tag::ExtensionType {
+        if self
+            .pivot_class
+            .is_some_and(|c| c.tag() == Tag::ExtensionType)
+            || class.tag() == Tag::ExtensionType
+        {
             return None;
         }
         let name = self.pivot_name.as_deref()?;
@@ -1189,7 +1320,8 @@ impl HierarchyHelper {
         let instance = class.cast::<dartr_element::InstanceElement>()?;
         let data = ctx.instance(instance);
         let named = |list: Vec<ElementId>| -> Option<ElementId> {
-            list.into_iter().find(|&e| support::display_name(ctx, e) == name)
+            list.into_iter()
+                .find(|&e| support::display_name(ctx, e) == name)
         };
         let methods = || named(data.methods.iter().map(|m| m.raw()).collect());
         let getters = || named(data.getters.iter().map(|g| g.raw()).collect());
@@ -1198,13 +1330,24 @@ impl HierarchyHelper {
             Tag::Method => methods(),
             Tag::Getter => getters(),
             Tag::Setter => setters(),
-            Tag::Field => getters().or_else(|| if self.pivot_field_final { None } else { setters() }),
+            Tag::Field => getters().or_else(|| {
+                if self.pivot_field_final {
+                    None
+                } else {
+                    setters()
+                }
+            }),
             _ => None,
         };
         let accessible = |e: ElementId| {
             !name.starts_with('_')
                 || support::library_of(ctx, e)
-                    .map(|l| ctx.fragment(ctx.get(l).first_fragment()).source.path.to_string())
+                    .map(|l| {
+                        ctx.fragment(ctx.get(l).first_fragment())
+                            .source
+                            .path
+                            .to_string()
+                    })
                     .as_deref()
                     == Some(library_path)
         };
@@ -1230,8 +1373,13 @@ impl HierarchyHelper {
             .unwrap_or_default();
         for mixin in mixins.into_iter().rev() {
             let lookup = |kind: Tag| -> Option<ElementId> {
-                let manager = dartr_typesystem::inheritance_manager3::InheritanceManager3::new(ctx.global());
-                let n = if kind == Tag::Setter { format!("{name}=") } else { name.to_string() };
+                let manager =
+                    dartr_typesystem::inheritance_manager3::InheritanceManager3::new(ctx.global());
+                let n = if kind == Tag::Setter {
+                    format!("{name}=")
+                } else {
+                    name.to_string()
+                };
                 // The pivot library in this element model (for a private
                 // name).
                 let library = self
@@ -1240,14 +1388,22 @@ impl HierarchyHelper {
                     .and_then(|uri| ctx.world.libraries.get(uri).copied());
                 let key = dartr_typesystem::inheritance_manager3::Name::new(ctx, library, &n);
                 let interface = mixin.cast::<dartr_element::InterfaceElement>()?;
-                let found = manager.get_member(interface, key).map(|m| member::base_element(ctx, m))?;
+                let found = manager
+                    .get_member(interface, key)
+                    .map(|m| member::base_element(ctx, m))?;
                 (found.tag() == kind).then_some(found)
             };
             let result = match self.pivot_tag {
                 Tag::Method => lookup(Tag::Method),
                 Tag::Getter => lookup(Tag::Getter),
                 Tag::Setter => lookup(Tag::Setter),
-                Tag::Field => lookup(Tag::Getter).or_else(|| if self.pivot_field_final { None } else { lookup(Tag::Setter) }),
+                Tag::Field => lookup(Tag::Getter).or_else(|| {
+                    if self.pivot_field_final {
+                        None
+                    } else {
+                        lookup(Tag::Setter)
+                    }
+                }),
                 _ => None,
             };
             if result.is_some()
@@ -1368,7 +1524,9 @@ mod tests {
         let hashes: Vec<u32> = keys.iter().map(|k| dart_string_hash(k)).collect();
         assert_eq!(
             dart_hash_map_order(&hashes),
-            vec![19, 17, 8, 0, 11, 9, 14, 7, 4, 1, 18, 3, 10, 12, 5, 13, 2, 16, 15, 6, 20]
+            vec![
+                19, 17, 8, 0, 11, 9, 14, 7, 4, 1, 18, 3, 10, 12, 5, 13, 2, 16, 15, 6, 20
+            ]
         );
     }
 }

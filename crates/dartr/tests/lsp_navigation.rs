@@ -146,7 +146,10 @@ fn run_requests(program: &str, root: &Path, files: &[PathBuf], every: usize) -> 
                     .push((uri.clone(), position, response));
             }
         }
-        c.notify("textDocument/didClose", json!({"textDocument": {"uri": uri}}));
+        c.notify(
+            "textDocument/didClose",
+            json!({"textDocument": {"uri": uri}}),
+        );
     }
     let _ = c.shutdown_and_exit();
     out
@@ -155,10 +158,18 @@ fn run_requests(program: &str, root: &Path, files: &[PathBuf], every: usize) -> 
 /// `DARTR_LSP_NAV_DUMP=<folder>`: writes the responses of each server to
 /// `<folder>/<label>.<server>.json`. With `DARTR_LSP_NAV_REUSE_DART=1`, the
 /// `dart` responses are read from that file when it exists.
-fn run_or_reuse(program: &str, label: &str, root: &Path, files: &[PathBuf], every: usize) -> Responses {
+fn run_or_reuse(
+    program: &str,
+    label: &str,
+    root: &Path,
+    files: &[PathBuf],
+    every: usize,
+) -> Responses {
     let dump = std::env::var_os("DARTR_LSP_NAV_DUMP").map(PathBuf::from);
     let server = if program == "dart" { "dart" } else { "dartr" };
-    let path = dump.as_ref().map(|d| d.join(format!("{label}.{server}.json")));
+    let path = dump
+        .as_ref()
+        .map(|d| d.join(format!("{label}.{server}.json")));
     if server == "dart" && std::env::var_os("DARTR_LSP_NAV_REUSE_DART").is_some() {
         if let Some(text) = path.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
             let value: Value = serde_json::from_str(&text).unwrap();
@@ -167,7 +178,10 @@ fn run_or_reuse(program: &str, label: &str, root: &Path, files: &[PathBuf], ever
                 for item in value[method].as_array().into_iter().flatten() {
                     out.entry(method).or_default().push((
                         item[0].as_str().unwrap().to_string(),
-                        (item[1].as_u64().unwrap() as u32, item[2].as_u64().unwrap() as u32),
+                        (
+                            item[1].as_u64().unwrap() as u32,
+                            item[2].as_u64().unwrap() as u32,
+                        ),
                         item[3].clone(),
                     ));
                 }
@@ -181,11 +195,18 @@ fn run_or_reuse(program: &str, label: &str, root: &Path, files: &[PathBuf], ever
         let value: serde_json::Map<String, Value> = out
             .iter()
             .map(|(m, items)| {
-                let list = items.iter().map(|(u, p, r)| json!([u, p.0, p.1, r])).collect();
+                let list = items
+                    .iter()
+                    .map(|(u, p, r)| json!([u, p.0, p.1, r]))
+                    .collect();
                 (m.to_string(), Value::Array(list))
             })
             .collect();
-        std::fs::write(path, serde_json::to_string_pretty(&Value::Object(value)).unwrap()).unwrap();
+        std::fs::write(
+            path,
+            serde_json::to_string_pretty(&Value::Object(value)).unwrap(),
+        )
+        .unwrap();
     }
     out
 }
@@ -253,7 +274,10 @@ fn canonical(v: &Value) -> String {
                 .collect();
             format!("{{{}}}", fields.join(","))
         }
-        Value::Array(a) => format!("[{}]", a.iter().map(canonical).collect::<Vec<_>>().join(",")),
+        Value::Array(a) => format!(
+            "[{}]",
+            a.iter().map(canonical).collect::<Vec<_>>().join(",")
+        ),
         other => other.to_string(),
     }
 }
@@ -510,7 +534,10 @@ fn lsp_navigation_corpus() {
             .take(max_files)
             .collect();
     }
-    let label = format!("{}-{every}-{max_files}", root.file_name().unwrap().to_string_lossy());
+    let label = format!(
+        "{}-{every}-{max_files}",
+        root.file_name().unwrap().to_string_lossy()
+    );
     let dart = run_or_reuse("dart", &label, &root, &files, every);
     let dartr = run_or_reuse(dartr_bin(), &label, &root, &files, every);
     compare(&format!("corpus {}", root.display()), &dart, &dartr);

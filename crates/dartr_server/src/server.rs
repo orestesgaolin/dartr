@@ -803,7 +803,11 @@ impl Server {
 
     /// Runs a request handler; a panic becomes an error response (Dart
     /// reports the exception of a handler to the client).
-    fn catching(&mut self, method: &str, f: impl FnOnce(&mut Self) -> ErrorOr<Value>) -> ErrorOr<Value> {
+    fn catching(
+        &mut self,
+        method: &str,
+        f: impl FnOnce(&mut Self) -> ErrorOr<Value>,
+    ) -> ErrorOr<Value> {
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(self))) {
             Ok(r) => r,
             Err(e) => {

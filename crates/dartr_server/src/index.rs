@@ -75,7 +75,11 @@ pub struct UnitIndex {
 impl UnitIndex {
     /// Dart `_IndexRequest.findElementId` + `getRelations`: the relations of
     /// [key] with a kind accepted by [accept], in index order.
-    pub fn relations_of(&self, key: &ElementKey, accept: impl Fn(RelationKind) -> bool) -> Vec<&Relation> {
+    pub fn relations_of(
+        &self,
+        key: &ElementKey,
+        accept: impl Fn(RelationKind) -> bool,
+    ) -> Vec<&Relation> {
         let Some(id) = self.elements.iter().position(|e| e == key) else {
             return Vec::new();
         };
@@ -159,7 +163,9 @@ pub fn element_key(ctx: &Ctx<'_>, element: ElementId) -> Option<ElementKey> {
         unit_member = lookup_name(ctx, e);
         if e.tag() == Tag::Extension && unit_member.is_none() {
             let library = support::library_of(ctx, e)?;
-            let index = library_extensions(ctx, library).iter().position(|x| *x == e)?;
+            let index = library_extensions(ctx, library)
+                .iter()
+                .position(|x| *x == e)?;
             unit_member = Some(format!("extension-{index}"));
         }
     }
@@ -174,21 +180,29 @@ pub fn element_key(ctx: &Ctx<'_>, element: ElementId) -> Option<ElementKey> {
 }
 
 /// Dart `LibraryElement.extensions` (of all units, in order).
-fn library_extensions(ctx: &Ctx<'_>, library: dartr_element::EId<dartr_element::LibraryElement>) -> Vec<ElementId> {
+fn library_extensions(
+    ctx: &Ctx<'_>,
+    library: dartr_element::EId<dartr_element::LibraryElement>,
+) -> Vec<ElementId> {
     let mut out = Vec::new();
     let first = ctx.get(library).first_fragment();
     let mut stack = vec![first];
     while let Some(f) = stack.pop() {
         let data = ctx.fragment(f);
         for e in &data.extensions {
-            if let Some(el) = ctx.fragment_data(e.raw()).and_then(|d| d.element.try_get().copied())
+            if let Some(el) = ctx
+                .fragment_data(e.raw())
+                .and_then(|d| d.element.try_get().copied())
                 && !out.contains(&el)
             {
                 out.push(el);
             }
         }
         for part in data.parts.iter().rev() {
-            if let dartr_element::DirectiveUri::Unit { library_fragment, .. } = &part.directive.uri {
+            if let dartr_element::DirectiveUri::Unit {
+                library_fragment, ..
+            } = &part.directive.uri
+            {
                 stack.push(*library_fragment);
             }
         }
@@ -215,7 +229,12 @@ fn do_sort<T: Clone>(a: &mut [T], left: isize, right: isize, compare: &dyn Fn(&T
     }
 }
 
-fn insertion_sort<T: Clone>(a: &mut [T], left: isize, right: isize, compare: &dyn Fn(&T, &T) -> i64) {
+fn insertion_sort<T: Clone>(
+    a: &mut [T],
+    left: isize,
+    right: isize,
+    compare: &dyn Fn(&T, &T) -> i64,
+) {
     let mut i = left + 1;
     while i <= right {
         let el = a[i as usize].clone();
@@ -229,7 +248,12 @@ fn insertion_sort<T: Clone>(a: &mut [T], left: isize, right: isize, compare: &dy
     }
 }
 
-fn dual_pivot_quicksort<T: Clone>(a: &mut [T], left: isize, right: isize, compare: &dyn Fn(&T, &T) -> i64) {
+fn dual_pivot_quicksort<T: Clone>(
+    a: &mut [T],
+    left: isize,
+    right: isize,
+    compare: &dyn Fn(&T, &T) -> i64,
+) {
     let u = |i: isize| i as usize;
     let sixth = (right - left + 1) / 6;
     let index1 = left + sixth;
@@ -438,7 +462,12 @@ fn dual_pivot_quicksort<T: Clone>(a: &mut [T], left: isize, right: isize, compar
 // ---- the contributor ----
 
 /// Dart `indexUnit(unit)`.
-pub fn index_unit(ctx: &Ctx<'_>, ast: &Ast, tables: &ResolutionTables, unit: Id<CompilationUnit>) -> UnitIndex {
+pub fn index_unit(
+    ctx: &Ctx<'_>,
+    ast: &Ast,
+    tables: &ResolutionTables,
+    unit: Id<CompilationUnit>,
+) -> UnitIndex {
     let mut c = Contributor {
         ctx,
         ast,
@@ -453,10 +482,17 @@ pub fn index_unit(ctx: &Ctx<'_>, ast: &Ast, tables: &ResolutionTables, unit: Id<
     const NULL: &str = "--nullString--";
     let infos = std::mem::take(&mut c.infos);
     let mut order: Vec<usize> = (0..infos.len()).collect();
-    let name = |s: &Option<String>| -> Vec<u16> { s.as_deref().unwrap_or(NULL).encode_utf16().collect() };
+    let name =
+        |s: &Option<String>| -> Vec<u16> { s.as_deref().unwrap_or(NULL).encode_utf16().collect() };
     let keys: Vec<(Vec<u16>, Vec<u16>, Vec<u16>)> = infos
         .iter()
-        .map(|k| (name(&k.unit_member), name(&k.class_member), name(&k.parameter)))
+        .map(|k| {
+            (
+                name(&k.unit_member),
+                name(&k.class_member),
+                name(&k.parameter),
+            )
+        })
         .collect();
     let cmp = |a: &usize, b: &usize| -> i64 {
         let (ka, kb) = (&keys[*a], &keys[*b]);
@@ -476,7 +512,9 @@ pub fn index_unit(ctx: &Ctx<'_>, ast: &Ast, tables: &ResolutionTables, unit: Id<
             r
         })
         .collect();
-    dart_sort(&mut relations, &|a: &Relation, b: &Relation| a.element as i64 - b.element as i64);
+    dart_sort(&mut relations, &|a: &Relation, b: &Relation| {
+        a.element as i64 - b.element as i64
+    });
     UnitIndex {
         elements: order.into_iter().map(|i| infos[i].clone()).collect(),
         relations,
@@ -520,14 +558,23 @@ impl Contributor<'_, '_> {
 
     /// Dart `addPrefixForElement`: creates the element info.
     fn add_prefix_for_element(&mut self, element: ElementId) {
-        if matches!(element.tag(), Tag::MultiplyDefined | Tag::Dynamic | Tag::Never) {
+        if matches!(
+            element.tag(),
+            Tag::MultiplyDefined | Tag::Dynamic | Tag::Never
+        ) {
             return;
         }
         self.element_info(element);
     }
 
     /// Dart `recordRelationOffset`.
-    fn record_offset(&mut self, element: Option<ElementId>, kind: RelationKind, offset: u32, length: u32) {
+    fn record_offset(
+        &mut self,
+        element: Option<ElementId>,
+        kind: RelationKind,
+        offset: u32,
+        length: u32,
+    ) {
         let Some(element) = element else { return };
         match element.tag() {
             Tag::Dynamic
@@ -550,7 +597,9 @@ impl Contributor<'_, '_> {
             let enclosing = self.ctx.element_data(element).and_then(|d| d.enclosing);
             match enclosing {
                 None => return,
-                Some(e) if matches!(e.tag(), Tag::LocalFunction | Tag::GenericFunctionType) => return,
+                Some(e) if matches!(e.tag(), Tag::LocalFunction | Tag::GenericFunctionType) => {
+                    return;
+                }
                 _ => {}
             }
         }
@@ -583,7 +632,12 @@ impl Contributor<'_, '_> {
     }
 
     /// Dart `_recordImportPrefixedElement`.
-    fn record_import_prefixed(&mut self, import_prefix: Option<Id<ImportPrefixReference>>, name: TokenId, element: Option<ElementId>) {
+    fn record_import_prefixed(
+        &mut self,
+        import_prefix: Option<Id<ImportPrefixReference>>,
+        name: TokenId,
+        element: Option<ElementId>,
+    ) {
         let Some(element) = element else { return };
         if let Some(prefix) = import_prefix {
             if let Some(p) = self.element(prefix)
@@ -632,13 +686,19 @@ impl Contributor<'_, '_> {
 
     fn super_constructor_of(&self, constructor: ElementId) -> Option<ElementId> {
         let c = constructor.cast::<dartr_element::ConstructorElement>()?;
-        self.ctx.get(c).super_constructor.get().map(|s| self.base(s))
+        self.ctx
+            .get(c)
+            .super_constructor
+            .get()
+            .map(|s| self.base(s))
     }
 
     /// Dart `SimpleIdentifier.isQualified` (and `Combinator`, `Label`).
     fn is_qualified(&self, node: Id<SimpleIdentifier>) -> bool {
         let ast = self.ast;
-        let Some(parent) = ast.parent(node) else { return false };
+        let Some(parent) = ast.parent(node) else {
+            return false;
+        };
         if let Some(p) = ast.cast::<PrefixedIdentifier>(parent) {
             return ast[p].identifier == node;
         }
@@ -649,7 +709,8 @@ impl Contributor<'_, '_> {
             return ast[p].name == Some(node);
         }
         if let Some(m) = ast.cast::<MethodInvocation>(parent) {
-            return ast[m].method_name == node && dartr_resolver::ast_ext::method_invocation_real_target(ast, m).is_some();
+            return ast[m].method_name == node
+                && dartr_resolver::ast_ext::method_invocation_real_target(ast, m).is_some();
         }
         ast.is::<Combinator>(parent) || ast.is::<Label>(parent)
     }
@@ -662,16 +723,27 @@ impl AstVisitor for Contributor<'_, '_> {
         {
             let base = self.actual_constructor(Some(element));
             let name = ast[node].name;
-            let identifier_is_constructor = ast
-                .cast::<PrefixedIdentifier>(name)
-                .is_some_and(|p| self.element(ast[p].identifier).is_some_and(|e| e.tag() == Tag::Constructor));
+            let identifier_is_constructor = ast.cast::<PrefixedIdentifier>(name).is_some_and(|p| {
+                self.element(ast[p].identifier)
+                    .is_some_and(|e| e.tag() == Tag::Constructor)
+            });
             if let Some(constructor_name) = ast[node].constructor_name {
                 let offset = ast.tokens.get(ast[node].period.expect("period")).offset;
-                self.record_offset(base, RelationKind::IsInvokedBy, offset, ast.end(constructor_name) - offset);
+                self.record_offset(
+                    base,
+                    RelationKind::IsInvokedBy,
+                    offset,
+                    ast.end(constructor_name) - offset,
+                );
             } else if identifier_is_constructor {
                 let p = ast.cast::<PrefixedIdentifier>(name).unwrap();
                 let offset = ast.tokens.get(ast[p].period).offset;
-                self.record_offset(base, RelationKind::IsInvokedBy, offset, ast.end(name) - offset);
+                self.record_offset(
+                    base,
+                    RelationKind::IsInvokedBy,
+                    offset,
+                    ast.end(name) - offset,
+                );
             } else {
                 let offset = ast[node]
                     .type_arguments
@@ -719,15 +791,15 @@ impl AstVisitor for Contributor<'_, '_> {
         let name_token = support::class_name_token(ast, ast[node].name_part);
         if let Some(class) = declared.and_then(|d| d.cast::<dartr_element::InterfaceElement>()) {
             if ast[node].extends_clause.is_none() {
-                let object = self
-                    .ctx
-                    .interface(class)
-                    .supertype
-                    .get()
-                    .and_then(|t| match self.ctx.ty(t) {
-                        TypeKind::Interface { element, .. } => Some(element.raw()),
-                        _ => None,
-                    });
+                let object =
+                    self.ctx
+                        .interface(class)
+                        .supertype
+                        .get()
+                        .and_then(|t| match self.ctx.ty(t) {
+                            TypeKind::Interface { element, .. } => Some(element.raw()),
+                            _ => None,
+                        });
                 let offset = ast.tokens.get(name_token).offset;
                 self.record_offset(object, RelationKind::IsExtendedBy, offset, 0);
             }
@@ -763,9 +835,19 @@ impl AstVisitor for Contributor<'_, '_> {
         {
             if let Some(p) = ast.cast::<PrefixedIdentifier>(expression) {
                 let offset = ast.end(ast[p].prefix);
-                self.record_offset(Some(element), RelationKind::IsReferencedBy, offset, ast.end(expression) - offset);
+                self.record_offset(
+                    Some(element),
+                    RelationKind::IsReferencedBy,
+                    offset,
+                    ast.end(expression) - offset,
+                );
             } else {
-                self.record_offset(Some(element), RelationKind::IsReferencedBy, ast.end(expression), 0);
+                self.record_offset(
+                    Some(element),
+                    RelationKind::IsReferencedBy,
+                    ast.end(expression),
+                    0,
+                );
             }
             return;
         }
@@ -800,7 +882,11 @@ impl AstVisitor for Contributor<'_, '_> {
         ast.visit_children(node, self);
     }
 
-    fn visit_constructor_field_initializer(&mut self, ast: &Ast, node: Id<ConstructorFieldInitializer>) {
+    fn visit_constructor_field_initializer(
+        &mut self,
+        ast: &Ast,
+        node: Id<ConstructorFieldInitializer>,
+    ) {
         let field_name = ast[node].field_name;
         let element = self.element(field_name);
         self.record_node(element, RelationKind::IsWrittenBy, field_name.raw());
@@ -828,9 +914,20 @@ impl AstVisitor for Contributor<'_, '_> {
         ast.accept(ast[node].type_, self);
     }
 
-    fn visit_dot_shorthand_constructor_invocation(&mut self, ast: &Ast, node: Id<DotShorthandConstructorInvocation>) {
-        let element = self.actual_constructor(self.element(node).or_else(|| self.element(ast[node].constructor_name)));
-        self.record_node(element, RelationKind::IsInvokedByDotShorthandsConstructor, ast[node].constructor_name.raw());
+    fn visit_dot_shorthand_constructor_invocation(
+        &mut self,
+        ast: &Ast,
+        node: Id<DotShorthandConstructorInvocation>,
+    ) {
+        let element = self.actual_constructor(
+            self.element(node)
+                .or_else(|| self.element(ast[node].constructor_name)),
+        );
+        self.record_node(
+            element,
+            RelationKind::IsInvokedByDotShorthandsConstructor,
+            ast[node].constructor_name.raw(),
+        );
         ast.accept(ast[node].argument_list, self);
     }
 
@@ -844,7 +941,11 @@ impl AstVisitor for Contributor<'_, '_> {
         ast.accept(ast[node].argument_list, self);
     }
 
-    fn visit_dot_shorthand_property_access(&mut self, ast: &Ast, node: Id<DotShorthandPropertyAccess>) {
+    fn visit_dot_shorthand_property_access(
+        &mut self,
+        ast: &Ast,
+        node: Id<DotShorthandPropertyAccess>,
+    ) {
         let name = ast[node].property_name;
         let mut element = self.element(name);
         let kind = if element.is_some_and(|e| e.tag() == Tag::Constructor) {
@@ -935,7 +1036,8 @@ impl AstVisitor for Contributor<'_, '_> {
     fn visit_method_invocation(&mut self, ast: &Ast, node: Id<MethodInvocation>) {
         let name = ast[node].method_name;
         let element = self.element(name);
-        let kind = if element.is_some_and(|e| e.cast::<dartr_element::InterfaceElement>().is_some()) {
+        let kind = if element.is_some_and(|e| e.cast::<dartr_element::InterfaceElement>().is_some())
+        {
             RelationKind::IsReferencedBy
         } else {
             RelationKind::IsInvokedBy
@@ -961,7 +1063,11 @@ impl AstVisitor for Contributor<'_, '_> {
         let parameter = support::corresponding_parameter(self.ctx, ast, self.tables, node.raw());
         let parameter = declared_named_argument_parameter(self, ast, node, parameter);
         if parameter.is_some() {
-            self.record_token(parameter, RelationKind::IsReferencedByNamedArgument, ast[node].name);
+            self.record_token(
+                parameter,
+                RelationKind::IsReferencedByNamedArgument,
+                ast[node].name,
+            );
         }
         ast.visit_children(node, self);
     }
@@ -984,7 +1090,12 @@ impl AstVisitor for Contributor<'_, '_> {
                 None => (ast.offset(name_node), 0),
             };
             let element = self.element(node);
-            self.record_offset(element, RelationKind::IsReferencedByPatternField, offset, length);
+            self.record_offset(
+                element,
+                RelationKind::IsReferencedByPatternField,
+                offset,
+                length,
+            );
         }
         ast.visit_children(node, self);
     }
@@ -1012,7 +1123,11 @@ impl AstVisitor for Contributor<'_, '_> {
         ast.visit_children(node, self);
     }
 
-    fn visit_redirecting_constructor_invocation(&mut self, ast: &Ast, node: Id<RedirectingConstructorInvocation>) {
+    fn visit_redirecting_constructor_invocation(
+        &mut self,
+        ast: &Ast,
+        node: Id<RedirectingConstructorInvocation>,
+    ) {
         let element = self.element(node);
         match ast[node].constructor_name {
             Some(name) => {
@@ -1048,7 +1163,10 @@ impl AstVisitor for Contributor<'_, '_> {
         }
         let mut kind = RelationKind::IsReferencedBy;
         if let Some(e) = element
-            && matches!(e.tag(), Tag::FormalParameter | Tag::FieldFormalParameter | Tag::SuperFormalParameter)
+            && matches!(
+                e.tag(),
+                Tag::FormalParameter | Tag::FieldFormalParameter | Tag::SuperFormalParameter
+            )
         {
             let is_get = dartr_resolver::ast_ext::simple_identifier_in_getter_context(ast, node);
             let is_set = dartr_resolver::ast_ext::simple_identifier_in_setter_context(ast, node);
@@ -1073,7 +1191,11 @@ impl AstVisitor for Contributor<'_, '_> {
         self.record_node(element, kind, node.raw());
     }
 
-    fn visit_super_constructor_invocation(&mut self, ast: &Ast, node: Id<SuperConstructorInvocation>) {
+    fn visit_super_constructor_invocation(
+        &mut self,
+        ast: &Ast,
+        node: Id<SuperConstructorInvocation>,
+    ) {
         let element = self.element(node);
         match ast[node].constructor_name {
             Some(name) => {
@@ -1091,7 +1213,8 @@ impl AstVisitor for Contributor<'_, '_> {
     fn visit_super_formal_parameter(&mut self, ast: &Ast, node: Id<SuperFormalParameter>) {
         if let Some(e) = self.declared(node)
             && e.tag() == Tag::SuperFormalParameter
-            && let Some(sp) = dartr_resolver::constant::evaluation::super_constructor_parameter(self.ctx, e)
+            && let Some(sp) =
+                dartr_resolver::constant::evaluation::super_constructor_parameter(self.ctx, e)
         {
             let sp = self.base(sp);
             let kind = if ast[node].kind.is_named() {
@@ -1120,7 +1243,11 @@ fn declared_named_argument_parameter(
     element: Option<ElementId>,
 ) -> Option<ElementId> {
     let element = element?;
-    if c.ctx.element_data(element).and_then(|d| d.enclosing).is_some() {
+    if c.ctx
+        .element_data(element)
+        .and_then(|d| d.enclosing)
+        .is_some()
+    {
         return Some(element);
     }
     let name = ast.tokens.lexeme(ast[node].name).to_string();
@@ -1172,10 +1299,18 @@ mod tests {
         let mut v: Vec<(i64, u32)> = (0..80u32).map(|i| (((i * 7) % 5) as i64, i)).collect();
         dart_sort(&mut v, &|a, b| a.0 - b.0);
         let order: Vec<String> = v.iter().map(|e| e.1.to_string()).collect();
-        assert_eq!(order.join(","), "5,10,75,15,20,25,0,30,70,35,40,45,65,50,55,60,63,78,3,8,13,18,73,23,28,33,38,68,43,48,53,58,26,36,1,66,21,41,11,6,46,76,71,51,56,16,31,61,9,34,19,69,44,24,14,49,79,4,54,29,64,59,74,39,57,47,52,67,42,37,32,27,72,22,17,12,7,77,2,62");
-        let mut w: Vec<(i64, u32)> = (0..200u32).map(|i| (((i * 13 + 7) % 11) as i64, i)).collect();
+        assert_eq!(
+            order.join(","),
+            "5,10,75,15,20,25,0,30,70,35,40,45,65,50,55,60,63,78,3,8,13,18,73,23,28,33,38,68,43,48,53,58,26,36,1,66,21,41,11,6,46,76,71,51,56,16,31,61,9,34,19,69,44,24,14,49,79,4,54,29,64,59,74,39,57,47,52,67,42,37,32,27,72,22,17,12,7,77,2,62"
+        );
+        let mut w: Vec<(i64, u32)> = (0..200u32)
+            .map(|i| (((i * 13 + 7) % 11) as i64, i))
+            .collect();
         dart_sort(&mut w, &|a, b| a.0 - b.0);
         let order: Vec<String> = w.iter().map(|e| e.1.to_string()).collect();
-        assert_eq!(order.join(","), "24,2,68,145,90,57,13,134,178,167,46,79,123,189,112,35,156,101,30,184,41,19,107,151,162,52,129,195,96,63,8,140,173,85,74,118,47,190,157,25,102,124,14,179,3,58,91,135,146,80,36,69,113,168,97,53,64,42,130,31,108,86,163,9,20,185,75,152,141,196,174,119,136,169,70,191,92,48,59,4,180,103,158,37,114,81,26,125,147,15,54,87,98,186,32,197,153,65,164,76,21,120,131,142,109,10,43,175,93,104,126,159,115,192,16,60,148,49,71,181,82,137,170,5,38,27,66,0,187,99,77,88,165,154,198,11,176,121,22,55,33,44,110,132,143,50,28,61,72,149,6,17,127,171,193,39,116,94,138,105,160,182,83,23,111,89,166,188,144,78,34,100,155,199,67,12,133,177,56,45,1,122,62,183,40,172,73,29,84,95,161,18,106,117,194,128,7,150,139,51");
+        assert_eq!(
+            order.join(","),
+            "24,2,68,145,90,57,13,134,178,167,46,79,123,189,112,35,156,101,30,184,41,19,107,151,162,52,129,195,96,63,8,140,173,85,74,118,47,190,157,25,102,124,14,179,3,58,91,135,146,80,36,69,113,168,97,53,64,42,130,31,108,86,163,9,20,185,75,152,141,196,174,119,136,169,70,191,92,48,59,4,180,103,158,37,114,81,26,125,147,15,54,87,98,186,32,197,153,65,164,76,21,120,131,142,109,10,43,175,93,104,126,159,115,192,16,60,148,49,71,181,82,137,170,5,38,27,66,0,187,99,77,88,165,154,198,11,176,121,22,55,33,44,110,132,143,50,28,61,72,149,6,17,127,171,193,39,116,94,138,105,160,182,83,23,111,89,166,188,144,78,34,100,155,199,67,12,133,177,56,45,1,122,62,183,40,172,73,29,84,95,161,18,106,117,194,128,7,150,139,51"
+        );
     }
 }
