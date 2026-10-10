@@ -1,5 +1,7 @@
 # dartr
 
+!["rewrite dart analyzer in rust" - ">rewrites dart analyzer in rust" - "oh my god"](docs/images/ohmygod.png)
+
 dartr is a port of the Dart analyzer to Rust. The reference version is the
 Dart SDK **3.13.3**. It is one native binary with these commands:
 
