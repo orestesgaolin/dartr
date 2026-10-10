@@ -93,6 +93,10 @@ at each merge; the final process report is written from it.
 | 10-10 22:15 | 482bb4e | least upper bound without typedef alias, Dart import order for fixes, pubspec fix pass, analyzer gaps | Opus (F) | import-fix order differences on visible-app 111 -> 0; `dartr fix` = `dart fix` on pubspec and analyzer-shaped fixtures |
 | 10-10 22:15 | fbe66f3 | rename (prepareRename, rename), file watching, one refactoring engine for LSP and legacy, convert getter/method | Opus (A) | rename 59/59 fixture probes; flutter_tools (unseen) 361/362 up to file order |
 | 10-10 22:15 | 301067e | `dartr analyze` optimization round 1: package config and pubspec lookups cached, cheap checks first | Gemini 4 (Antigravity) | system CPU on flutter 38.8 s -> 1.4 s; flutter_tools (unseen) 3.53 s -> 0.90 s; output identical on all 4 corpora; 5,590 tests |
+| 10-11 00:55 | d1b0a91 | refactorings in the shared engine: extract local/method/widget, inline local/method, move file, refactor commands | Gemini 4 (Antigravity) | rename 88/88 probes, refactorings 57/57 steps identical to `dart language-server` |
+| 10-11 00:55 | 8752a2a | remaining assists, fix_data.yaml oneOf/if, requiredIf, changeParameterType | Gemini 4 (Antigravity) | visible-app assists: 434 missing -> 0, 4,661 identical, 1 extra |
+| 10-11 00:55 | a9e05ee | optimization round 2: package data through the analysis context, SDK linked once per run | Gemini 4 (Antigravity) | language server first analysis of flutter: system CPU 40.3 s -> 0.9 s; visible-app peak RSS 12.5 -> 8.8 GB |
+| 10-11 00:55 | 296a817 | YAML completion over LSP, legacy protocol 59/59, stripped release binaries | Gemini 4 (Antigravity) | YAML completion 32/32 positions identical; batch: 5,593 tests (1 known flaky step), all 4 corpora identical |
 
 ## Incidents and lessons
 
