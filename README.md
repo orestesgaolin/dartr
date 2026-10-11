@@ -124,7 +124,8 @@ Open an issue at <https://github.com/orestesgaolin/dartr/issues> with:
 
 - Language server: hover and completion are slower than in Dart (tens to hundreds of ms), and the
   first references search on a large package is slow.
-- Memory use is about 3 times Dart's after the first analysis of a package. There is no disk
+- Memory use is higher than Dart's: peak RSS of `dartr analyze` is 0.8 GB on `analyzer`, 1.6 GB on
+  Flutter and 6.0 GB on the 1.56 million line application (after a 40 to 48% reduction). There is no disk
   cache yet.
 - macOS arm64 and Linux x86_64 only. No Windows or Intel macOS builds.
 

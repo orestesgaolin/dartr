@@ -309,7 +309,7 @@ warning - lib/mini.dart:5:10 - The value of the local variable 's' isn't used. .
     <ul class="slow-list">
       <li><b>Hover and completion in the editor.</b> Hover takes 22 to 181 ms in dartr and under 1 ms in Dart; completion 40 to 330 ms against 2 to 50 ms. dartr resolves the file again for each request; Dart keeps resolved results for open files.</li>
       <li><b>First references search.</b> The first search builds an index (3.1 s on <code>flutter_tools</code>, 91 s on Flutter) and the index is dropped after every edit.</li>
-      <li><b>Memory.</b> About 3 times Dart's resident memory after the first analysis of a package, and 1.4 times on the 1.56 million line application.</li>
+      <li><b>Memory.</b> Higher than Dart's. After a 40 to 48% reduction, the peak resident memory of <code>dartr analyze</code> is 0.8 GB on <code>analyzer</code>, 1.6 GB on Flutter and 6.0 GB on the 1.56 million line application. The language server comparison is being measured again.</li>
       <li><b>No disk cache.</b> Every run links and resolves everything again, including the SDK core libraries.</li>
     </ul>
   </div>
