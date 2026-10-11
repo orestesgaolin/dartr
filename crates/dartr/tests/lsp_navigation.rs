@@ -605,6 +605,9 @@ void main(List<String> args) {
   }
   p.Circle.diameter(4);
   helper(circle);
+  var fake = FakeShape();
+  fake.area;
+  fake.describe();
   int local(int x) => x * 2;
   print(local(counter));
 }
@@ -614,6 +617,13 @@ class Labeled extends Circle {
 
   @override
   double get area => super.area + 1;
+}
+
+class FakeShape implements Shape {
+  const FakeShape();
+
+  @override
+  noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 ShapeFactory<Square> squares = Square.new;
