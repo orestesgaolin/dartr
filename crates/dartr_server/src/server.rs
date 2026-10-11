@@ -54,11 +54,11 @@ use crate::client_configuration::LspClientConfiguration;
 use crate::features;
 use crate::formatting::{self, FormatterOptions};
 use crate::mapping::{self, DiagnosticOptions, ErrorOr, ResponseError, codes};
-use crate::source_edits::apply_changes;
+use crate::source_edits::apply_changes_with_edits;
 use crate::transport::{Channel, read_message};
 use crate::uri::{UriError, normalize, path_to_uri, uri_to_path};
 
-mod code_actions;
+pub(crate) mod code_actions;
 mod completion;
 mod editor;
 pub mod fix_cli;
@@ -175,6 +175,13 @@ enum Pending {
     RenamePrompt {
         request_id: Value,
         edit: Value,
+        class_file_rename: Option<(String, String, Value)>,
+    },
+    /// The prompt of renaming a class file along with the class.
+    RenameClassFile {
+        request_id: Value,
+        edit: Value,
+        rename_op: Value,
     },
     /// The prompt of `refactor.perform` with problems.
     RefactorPrompt {
@@ -247,6 +254,12 @@ pub struct Server {
     /// `ContextManagerImpl` watchers) and the watched paths.
     watcher: Option<notify::RecommendedWatcher>,
     watched: Vec<String>,
+    /// Analyzer plugin manager (`--no-plugins` leaves it empty).
+    pub(crate) plugins: dartr_plugins::PluginManager,
+    /// Server-produced LSP diagnostics per file (`NotificationManager.serverId`).
+    server_diagnostics: HashMap<String, Vec<Value>>,
+    /// Plugin-produced `PluginError`s per file (`ResultCollector`).
+    plugin_diagnostics: HashMap<String, Vec<(String, Vec<dartr_plugins::PluginError>)>>,
 }
 
 /// What the main loop does after a message.
@@ -279,6 +292,7 @@ pub fn run(options: ServerOptions, input: Box<dyn Read + Send>, channel: Channel
         }
     });
     let mut server = Server::new(options, channel);
+    server.plugins = dartr_plugins::PluginManager::new(Some(watch_tx.clone()));
     server.watch_tx = Some(watch_tx);
     let mut queue: VecDeque<Value> = VecDeque::new();
     let mut input_closed = false;
@@ -354,6 +368,9 @@ impl Server {
             watch_tx: None,
             watcher: None,
             watched: Vec::new(),
+            plugins: dartr_plugins::PluginManager::default(),
+            server_diagnostics: HashMap::new(),
+            plugin_diagnostics: HashMap::new(),
         }
     }
 
@@ -424,6 +441,10 @@ impl Server {
             self.handle_watch_event(&params);
             return Flow::Continue;
         }
+        if method.as_deref() == Some("$/dartr/pluginNotification") {
+            self.poll_plugins();
+            return Flow::Continue;
+        }
         match (method, id) {
             (Some(method), Some(id)) => {
                 let params = message.get("params").cloned().unwrap_or(Value::Null);
@@ -446,6 +467,7 @@ impl Server {
         let result = match (self.state, method) {
             (_, "exit") => {
                 // `exit` is a notification; a request is answered first.
+                self.plugins.stop_all();
                 self.send_response(id, Ok(Value::Null));
                 return Flow::Exit(if self.shutdown_called { 0 } else { 1 });
             }
@@ -460,6 +482,7 @@ impl Server {
             (_, "shutdown") => {
                 self.state = State::ShuttingDown;
                 self.shutdown_called = true;
+                self.plugins.stop_all();
                 Ok(Value::Null)
             }
             (State::Uninitialized, "initialize") => self.initialize(params),
@@ -576,7 +599,9 @@ impl Server {
                 self.catching(method, |s| s.call_hierarchy_outgoing(&params))
             }
             "workspace/symbol" => self.catching(method, |s| s.workspace_symbol(&params)),
+            "workspace/willRenameFiles" => self.catching(method, |s| s.will_rename_files(&params)),
             "textDocument/codeAction" => self.catching(method, |s| s.code_action(&params)),
+            "command/resolve" => self.catching(method, |s| s.command_resolve(&params)),
             "textDocument/documentColor" => self.catching(method, |s| s.document_color(&params)),
             "textDocument/colorPresentation" => {
                 self.catching(method, |s| s.color_presentation(&params))
@@ -752,9 +777,16 @@ impl Server {
                 command_name,
                 edit,
             } => self.apply_edit_response(&request_id, &command_name, &edit, message),
-            Pending::RenamePrompt { request_id, edit } => {
-                self.rename_prompt_response(&request_id, edit, message)
-            }
+            Pending::RenamePrompt {
+                request_id,
+                edit,
+                class_file_rename,
+            } => self.rename_prompt_response(&request_id, edit, class_file_rename, message),
+            Pending::RenameClassFile {
+                request_id,
+                edit,
+                rename_op,
+            } => self.rename_class_file_response(&request_id, edit, rename_op, message),
             Pending::RefactorPrompt { request_id, edit } => {
                 self.refactor_prompt_response(&request_id, edit, message)
             }
@@ -1029,6 +1061,8 @@ impl Server {
         // text without it (checked with `dart language-server`: no
         // `illegal_character`, columns without the mark).
         let text = dartr_syntax::strip_bom(text).to_string();
+        let disk_content = read_file(&path);
+        let changed_from_disk = disk_content.as_deref() != Some(text.as_str());
         dartr_project::fs::set_overlay(&path, Some(text.clone()));
         let version = params
             .pointer("/textDocument/version")
@@ -1036,13 +1070,15 @@ impl Server {
         self.overlays.insert(
             path.clone(),
             Document {
-                content: text,
+                content: text.clone(),
                 version,
             },
         );
+        self.plugins.overlay_added(&path, &text, changed_from_disk);
         self.file_changed(&path);
         if !self.priority.contains(&path) {
             self.priority.push(path.clone());
+            self.plugins.set_priority_files(&self.priority);
             // Open files get closing labels and outlines.
             if path.ends_with(".dart") {
                 self.dirty.insert(path.clone());
@@ -1068,18 +1104,24 @@ impl Server {
             .get("contentChanges")
             .and_then(Value::as_array)
             .ok_or_else(|| invalid_params("textDocument/didChange"))?;
-        let content = apply_changes(&doc.content, changes)?;
-        doc.content = dartr_syntax::strip_bom(&content).to_string();
+        let (content, edits) = apply_changes_with_edits(&doc.content, changes)?;
+        let new_content = dartr_syntax::strip_bom(&content).to_string();
+        let changed = new_content != doc.content;
+        doc.content = new_content.clone();
         doc.version = params
             .pointer("/textDocument/version")
             .and_then(Value::as_i64);
-        dartr_project::fs::set_overlay(&path, Some(doc.content.clone()));
+        dartr_project::fs::set_overlay(&path, Some(new_content.clone()));
+        if changed {
+            self.plugins.overlay_changed(&path, &new_content, edits);
+        }
         self.file_changed(&path);
         // Checked with `dart language-server`: a change of an open
         // `analysis_options.yaml` creates the contexts again and analyzes all
         // non-Dart files again. Changes of an open pubspec or manifest do
         // nothing until the next context rebuild.
         if FileKind::of(&path) == FileKind::AnalysisOptions {
+            self.plugins.mark_restart_needed();
             self.roots_dirty = true;
         }
         Ok(())
@@ -1087,10 +1129,14 @@ impl Server {
 
     fn did_close(&mut self, params: Value) -> ErrorOr<()> {
         let path = self.path_of_doc(&params)?;
-        self.overlays.remove(&path);
+        let old_overlay = self.overlays.remove(&path).map(|d| d.content);
+        let disk_content = read_file(&path);
+        let changed_from_disk = old_overlay.as_deref() != disk_content.as_deref();
         dartr_project::fs::set_overlay(&path, None);
+        self.plugins.overlay_removed(&path, changed_from_disk);
         self.file_changed(&path);
         self.priority.retain(|p| *p != path);
+        self.plugins.set_priority_files(&self.priority);
         if self.workspace_folders.is_empty() {
             self.roots_dirty = true;
         }
@@ -1418,6 +1464,8 @@ impl Server {
         // Dart `flushResults` for files that are no longer analyzed.
         let removed: Vec<String> = self.analyzed.difference(&analyzed).cloned().collect();
         for path in removed {
+            self.server_diagnostics.remove(&path);
+            self.plugin_diagnostics.remove(&path);
             self.publish_diagnostics(&path, Vec::new());
             self.parsed.remove(&path);
         }
@@ -1434,6 +1482,34 @@ impl Server {
         );
         self.analyzed = analyzed;
         self.parsed.clear();
+        if self.options.plugins {
+            let (jobs, dart) = match &self.collection {
+                Some(c) => (
+                    dartr_plugins::plugin_jobs(c),
+                    c.sdk
+                        .as_ref()
+                        .map(|s| dartr_plugins::dart_executable(s.path())),
+                ),
+                None => (Vec::new(), None),
+            };
+            let excluded = self.excluded.clone();
+            let analyzed_ref = &self.analyzed;
+            let removed_plugins = self.plugins.sync_contexts(
+                &jobs,
+                dart.as_deref(),
+                &included,
+                &excluded,
+                &self.priority,
+                &|root| {
+                    analyzed_ref
+                        .iter()
+                        .any(|f| dartr_project::paths::is_within(root, f))
+                },
+            );
+            if !removed_plugins.is_empty() {
+                self.clear_results_from_plugins(&removed_plugins);
+            }
+        }
         self.watch_roots();
     }
 
@@ -1566,8 +1642,8 @@ impl Server {
             .collect()
     }
 
-    /// Analyzes the dirty files: parse diagnostics, then closing labels and
-    /// outlines of open files.
+    /// Analyzes the dirty files: server diagnostics + plugin diagnostics,
+    /// then closing labels and outlines of open files.
     pub fn run_analysis(&mut self) {
         if self.state != State::Initialized || self.waiting_for_config {
             return;
@@ -1575,23 +1651,129 @@ impl Server {
         if self.roots_dirty {
             self.refresh_roots();
         }
-        if self.dirty.is_empty() {
+        if self.dirty.is_empty() && !self.plugins.has_pending() {
             return;
         }
         self.begin_progress();
         let dirty: Vec<String> = std::mem::take(&mut self.dirty).into_iter().collect();
         let options = self.client.diagnostic_options();
-        let results: Vec<(String, Vec<Value>)> = self.dart_diagnostics(&dirty, &options);
+        let results: Vec<(String, Vec<Value>)> = if dirty.is_empty() {
+            Vec::new()
+        } else {
+            self.dart_diagnostics(&dirty, &options)
+        };
+        let mut to_publish: BTreeSet<String> = BTreeSet::new();
         for (path, diagnostics) in results {
             // Dart `handleFileResult`: diagnostics only for analyzed files.
             if self.analyzed.contains(&path) {
-                self.publish_diagnostics(&path, diagnostics);
+                self.server_diagnostics.insert(path.clone(), diagnostics);
+                to_publish.insert(path);
             }
-            if self.priority.contains(&path) {
-                self.publish_open_file_notifications(&path);
+        }
+        for (plugin_id, file, errors) in self.plugins.wait_for_pending() {
+            if self.analyzed.contains(&file) {
+                self.record_plugin_errors(&plugin_id, &file, errors);
+                to_publish.insert(file);
+            }
+        }
+        for path in to_publish {
+            let merged = self.merged_diagnostics(&path, &options);
+            self.publish_diagnostics(&path, merged);
+        }
+        for path in &dirty {
+            if self.priority.contains(path) {
+                self.publish_open_file_notifications(path);
             }
         }
         self.end_progress();
+    }
+
+    /// Non-blockingly drains any incoming plugin notifications and publishes
+    /// updated merged diagnostics.
+    pub(crate) fn poll_plugins(&mut self) {
+        let updates = self.plugins.poll();
+        if updates.is_empty() {
+            return;
+        }
+        let options = self.client.diagnostic_options();
+        let mut to_publish = BTreeSet::new();
+        for (plugin_id, file, errors) in updates {
+            if self.analyzed.contains(&file) {
+                self.record_plugin_errors(&plugin_id, &file, errors);
+                to_publish.insert(file);
+            }
+        }
+        for path in to_publish {
+            let merged = self.merged_diagnostics(&path, &options);
+            self.publish_diagnostics(&path, merged);
+        }
+    }
+
+    fn record_plugin_errors(
+        &mut self,
+        plugin_id: &str,
+        file: &str,
+        errors: Vec<dartr_plugins::PluginError>,
+    ) {
+        let entry = self.plugin_diagnostics.entry(file.to_string()).or_default();
+        if let Some((_, list)) = entry.iter_mut().find(|(id, _)| id == plugin_id) {
+            *list = errors;
+        } else {
+            entry.push((plugin_id.to_string(), errors));
+        }
+    }
+
+    pub(super) fn clear_results_for_file(&mut self, file: &str) {
+        self.server_diagnostics.remove(file);
+        self.plugin_diagnostics.remove(file);
+    }
+
+    fn clear_results_from_plugins(&mut self, removed_plugins: &[String]) {
+        let options = self.client.diagnostic_options();
+        let mut affected = Vec::new();
+        for (file, list) in &mut self.plugin_diagnostics {
+            let before = list.len();
+            list.retain(|(id, _)| !removed_plugins.contains(id));
+            if list.len() != before && self.analyzed.contains(file) {
+                affected.push(file.clone());
+            }
+        }
+        for path in affected {
+            let merged = self.merged_diagnostics(&path, &options);
+            self.publish_diagnostics(&path, merged);
+        }
+    }
+
+    /// Dart `ResultCollector.getResults` + `ResultMerger.mergeAnalysisErrors`
+    /// + `LspNotificationManager.sendAnalysisErrors`.
+    fn merged_diagnostics(&self, path: &str, options: &DiagnosticOptions) -> Vec<Value> {
+        let mut out = self
+            .server_diagnostics
+            .get(path)
+            .cloned()
+            .unwrap_or_default();
+        if let Some(plugin_lists) = self.plugin_diagnostics.get(path) {
+            let mut seen_errors: Vec<&dartr_plugins::PluginError> = Vec::new();
+            let line_info = self.content(path).map(|c| LineInfo::from_content(&c));
+            for (_, errors) in plugin_lists {
+                for error in errors {
+                    if seen_errors.contains(&error) {
+                        continue;
+                    }
+                    seen_errors.push(error);
+                    if let Some(diag) = mapping::plugin_to_diagnostic(error, options, &|f| {
+                        if f == path {
+                            line_info.clone()
+                        } else {
+                            self.content(f).map(|c| LineInfo::from_content(&c))
+                        }
+                    }) {
+                        out.push(diag);
+                    }
+                }
+            }
+        }
+        out
     }
 
     /// Dart `publishDiagnostics`.

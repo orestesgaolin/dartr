@@ -337,7 +337,7 @@ assist!(
 
 /// Dart `ScopedNameFinder(offset)` from [node]: the local names visible
 /// at [node].
-fn scoped_names(c: &ProducerContext<'_>, node: NodeId, position: u32) -> Vec<String> {
+pub(crate) fn scoped_names(c: &ProducerContext<'_>, node: NodeId, position: u32) -> Vec<String> {
     let ast = c.ast;
     let mut locals: Vec<String> = Vec::new();
     let add = |t: Option<dartr_syntax::TokenId>, locals: &mut Vec<String>| {

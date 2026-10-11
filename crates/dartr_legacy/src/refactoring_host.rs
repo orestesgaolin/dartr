@@ -131,6 +131,7 @@ pub fn problems(status: &RefactoringStatus) -> Vec<protocol::RefactoringProblem>
 
 /// A change of the refactorings as a protocol change.
 pub fn change(change: &dartr_server::correction::change::SourceChange) -> protocol::SourceChange {
+    use dartr_server::correction::change::LinkedEditSuggestionKind;
     protocol::SourceChange {
         message: change.message.clone(),
         edits: change
@@ -152,9 +153,47 @@ pub fn change(change: &dartr_server::correction::change::SourceChange) -> protoc
                     .collect(),
             })
             .collect(),
-        linked_edit_groups: Vec::new(),
-        selection: None,
-        selection_length: None,
-        id: None,
+        linked_edit_groups: change
+            .linked_edit_groups
+            .iter()
+            .map(|g| protocol::LinkedEditGroup {
+                positions: g
+                    .positions
+                    .iter()
+                    .map(|p| protocol::Position {
+                        file: p.file.clone(),
+                        offset: p.offset as i64,
+                    })
+                    .collect(),
+                length: g.length as i64,
+                suggestions: g
+                    .suggestions
+                    .iter()
+                    .map(|s| protocol::LinkedEditSuggestion {
+                        value: s.value.clone(),
+                        kind: match s.kind {
+                            LinkedEditSuggestionKind::Method => {
+                                protocol::LinkedEditSuggestionKind::METHOD
+                            }
+                            LinkedEditSuggestionKind::Parameter => {
+                                protocol::LinkedEditSuggestionKind::PARAMETER
+                            }
+                            LinkedEditSuggestionKind::Type => {
+                                protocol::LinkedEditSuggestionKind::TYPE
+                            }
+                            LinkedEditSuggestionKind::Variable => {
+                                protocol::LinkedEditSuggestionKind::VARIABLE
+                            }
+                        },
+                    })
+                    .collect(),
+            })
+            .collect(),
+        selection: change.selection.as_ref().map(|p| protocol::Position {
+            file: p.file.clone(),
+            offset: p.offset as i64,
+        }),
+        selection_length: change.selection_length.map(|l| l as i64),
+        id: change.id.clone(),
     }
 }

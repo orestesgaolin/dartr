@@ -11,6 +11,15 @@ use serde_json::{Value, json};
 use super::code_actions::{KindFilter, commands};
 use super::{Pending, ResolvedUnitRef, Server};
 use crate::mapping::{ErrorOr, ResponseError, codes};
+use crate::refactoring::extract_local::ExtractLocal;
+use crate::refactoring::extract_method::ExtractMethod;
+use crate::refactoring::extract_widget::ExtractWidget;
+use crate::refactoring::inline_local::InlineLocal;
+use crate::refactoring::inline_method::InlineMethod;
+use crate::refactoring::producer::{
+    ComputeStatus, execute_framework_refactor, framework_refactor_actions,
+    is_framework_refactor_command, producer_is_available, resolve_framework_refactor_command,
+};
 use crate::refactoring::rename::Engine;
 use crate::refactoring::{Refactoring, RefactoringKind};
 
@@ -22,7 +31,17 @@ const CANCEL: &str = "Cancel";
 const CONTENT_MODIFIED: i64 = -32801;
 
 impl Server {
-    /// Dart `DartCodeActionsProducer.getRefactorActions` (the legacy
+    fn supports_file_creation(&self) -> bool {
+        self.client_flag("/workspace/workspaceEdit/documentChanges")
+            && self
+                .client
+                .raw
+                .pointer("/workspace/workspaceEdit/resourceOperations")
+                .and_then(Value::as_array)
+                .is_some_and(|a| a.iter().any(|v| v.as_str() == Some("create")))
+    }
+
+    /// Dart `DartCodeActionsProducer.getRefactorActions` (framework + legacy
     /// refactorings).
     pub(crate) fn refactor_actions(
         &mut self,
@@ -36,6 +55,32 @@ impl Server {
         if !self.editor_supports_apply_edit() {
             return Vec::new();
         }
+        let mut actions = Vec::new();
+
+        // 1. Framework refactorings (`RefactoringProcessor`).
+        let include_experimental = self.client_configuration.experimental_refactors();
+        let supports_file_creation = self.supports_file_creation();
+        let interactive_forms_enabled = !self
+            .client
+            .supported_interactive_form_input_types()
+            .is_empty();
+        let framework = framework_refactor_actions(
+            resolved,
+            offset,
+            length,
+            include_experimental,
+            supports_file_creation,
+            interactive_forms_enabled,
+            |kind| filter.include_kind(kind),
+        );
+        for action in framework {
+            if literal {
+                actions.push(action);
+            } else if let Some(cmd) = action.get("command").cloned() {
+                actions.push(cmd);
+            }
+        }
+
         let version = self.versioned_document(path)["version"].clone();
         let create = |kind: &str, title: &str, refactoring: RefactoringKind| {
             let command = json!({
@@ -49,7 +94,51 @@ impl Server {
                 command
             }
         };
-        let mut actions = Vec::new();
+
+        // 2. Extracts.
+        if filter.include_kind("refactor.extract") {
+            if ExtractMethod::is_available(resolved, offset, length) {
+                actions.push(create(
+                    "refactor.extract",
+                    "Extract Method",
+                    RefactoringKind::ExtractMethod,
+                ));
+            }
+            if ExtractLocal::is_available(resolved, offset, length) {
+                actions.push(create(
+                    "refactor.extract",
+                    "Extract Local Variable",
+                    RefactoringKind::ExtractLocalVariable,
+                ));
+            }
+            if ExtractWidget::new(resolved, offset, length).is_available() {
+                actions.push(create(
+                    "refactor.extract",
+                    "Extract Widget",
+                    RefactoringKind::ExtractWidget,
+                ));
+            }
+        }
+
+        // 3. Inlines.
+        if filter.include_kind("refactor.inline") {
+            if InlineLocal::is_available(resolved, offset) {
+                actions.push(create(
+                    "refactor.inline",
+                    "Inline Local Variable",
+                    RefactoringKind::InlineLocalVariable,
+                ));
+            }
+            if InlineMethod::new(resolved, offset).is_available() {
+                actions.push(create(
+                    "refactor.inline",
+                    "Inline Method",
+                    RefactoringKind::InlineMethod,
+                ));
+            }
+        }
+
+        // 4. Converts/Rewrites.
         if filter.include_kind("refactor.rewrite") {
             let mut engine = Engine { host: self };
             let getter = engine
@@ -74,6 +163,153 @@ impl Server {
             }
         }
         actions
+    }
+
+    /// Dart `CommandResolveHandler.handle` and `RefactorCommandResolver.handle`.
+    pub(crate) fn command_resolve(&mut self, params: &Value) -> ErrorOr<Value> {
+        let Some(obj) = params.as_object() else {
+            return Err(ResponseError::new(
+                codes::INVALID_PARAMS,
+                "Invalid params for command/resolve:\nparams must be of type InteractiveExecuteCommandParams",
+            ));
+        };
+        let Some(command) = obj.get("command").and_then(Value::as_str) else {
+            return Err(ResponseError::new(
+                codes::INVALID_PARAMS,
+                "Invalid params for command/resolve:\nparams.command must not be undefined",
+            ));
+        };
+        if let Some(args) = obj.get("arguments")
+            && !args.is_null()
+            && !args.is_array()
+        {
+            return Err(ResponseError::new(
+                codes::INVALID_PARAMS,
+                "Invalid params for command/resolve:\nparams.arguments must be of type List<Object?>",
+            ));
+        }
+
+        let normalized_input = normalize_interactive_command_params(params);
+
+        if !is_framework_refactor_command(command) {
+            return Ok(normalized_input);
+        }
+
+        let Some(args) = obj.get("arguments").and_then(Value::as_array) else {
+            return Err(ResponseError::new(
+                codes::INVALID_PARAMS,
+                "Refactor commands should always have exactly one argument, which is a map",
+            ));
+        };
+        if args.len() != 1 || !args[0].is_object() {
+            return Err(ResponseError::new(
+                codes::INVALID_PARAMS,
+                "Refactor commands should always have exactly one argument, which is a map",
+            ));
+        }
+        let parameters = &args[0];
+        let file_path = parameters.get("filePath").and_then(Value::as_str);
+        let offset = parameters.get("selectionOffset").and_then(Value::as_u64);
+        let length = parameters.get("selectionLength").and_then(Value::as_u64);
+        let arguments = parameters.get("arguments").and_then(Value::as_array);
+        let (Some(file_path), Some(offset), Some(length), Some(_arguments)) =
+            (file_path, offset, length, arguments)
+        else {
+            return Err(ResponseError::new(
+                codes::INVALID_COMMAND_ARGUMENTS,
+                "Refactoring operations require 4 parameters: filePath: String, offset: int, length: int, arguments: List",
+            ));
+        };
+
+        let file_path = file_path.to_string();
+        let command = command.to_string();
+        let resolved = self.require_resolved_unit(&file_path)?;
+        let supports_file_creation = self.supports_file_creation();
+        if !producer_is_available(
+            &command,
+            &resolved,
+            offset as u32,
+            length as u32,
+            supports_file_creation,
+        ) {
+            return Err(ResponseError::new(
+                codes::INVALID_PARAMS,
+                "Refactor command is no longer valid at this location",
+            ));
+        }
+
+        let supported_input_types = self.client.supported_interactive_form_input_types();
+        if let Some(resolved_cmd) = resolve_framework_refactor_command(
+            &command,
+            &resolved,
+            offset as u32,
+            length as u32,
+            supports_file_creation,
+            &supported_input_types,
+            params,
+        ) {
+            Ok(resolved_cmd)
+        } else {
+            Ok(normalized_input)
+        }
+    }
+
+    /// Dart `RefactorCommandExecutor.handle`.
+    pub(crate) fn framework_refactor_command(
+        &mut self,
+        id: &Value,
+        command: &str,
+        parameters: &Value,
+        progress_token: Option<Value>,
+    ) -> Option<ErrorOr<Value>> {
+        let file_path = parameters.get("filePath").and_then(Value::as_str);
+        let offset = parameters.get("selectionOffset").and_then(Value::as_u64);
+        let length = parameters.get("selectionLength").and_then(Value::as_u64);
+        let arguments = parameters.get("arguments").and_then(Value::as_array);
+        let (Some(file_path), Some(offset), Some(length), Some(arguments)) =
+            (file_path, offset, length, arguments)
+        else {
+            return Some(Err(ResponseError::new(
+                codes::INVALID_COMMAND_ARGUMENTS,
+                "Refactoring operations require 4 parameters: filePath: String, offset: int, length: int, arguments: List",
+            )));
+        };
+        let file_path = file_path.to_string();
+        let arguments = arguments.clone();
+        let resolved = match self.require_resolved_unit(&file_path) {
+            Ok(r) => r,
+            Err(e) => return Some(Err(e)),
+        };
+        let progress = self.begin_command_progress(progress_token, "Refactoring…");
+        let status = {
+            let mut engine = Engine { host: self };
+            execute_framework_refactor(
+                command,
+                &resolved,
+                offset as u32,
+                length as u32,
+                &arguments,
+                &mut engine,
+            )
+        };
+        self.end_command_progress(progress);
+        let change = match status {
+            ComputeStatus::Failure(reason) => {
+                let reason =
+                    reason.unwrap_or_else(|| "Cannot compute the change. No details.".to_string());
+                return Some(Err(ResponseError::new(
+                    codes::REFACTORING_COMPUTE_STATUS_FAILURE,
+                    reason,
+                )));
+            }
+            ComputeStatus::Success(change) => change,
+        };
+        if change.edits.is_empty() {
+            return Some(Ok(Value::Null));
+        }
+        let line_info = resolved.line_info().clone();
+        let edit = self.create_plain_workspace_edit(&change.edits, &file_path, &line_info);
+        self.send_workspace_edit_to_client(id, command, edit)
     }
 
     /// Dart `AbstractRefactorCommandHandler.handle` with
@@ -117,7 +353,50 @@ impl Server {
         let refactoring = {
             let mut engine = Engine { host: self };
             let offset = offset as u32;
+            let length = length as u32;
+            let opt_name = options
+                .and_then(Value::as_object)
+                .and_then(|o| o.get("name"))
+                .and_then(Value::as_str)
+                .map(str::to_string);
             match RefactoringKind::by_name(&kind) {
+                Some(RefactoringKind::ExtractMethod) => {
+                    let mut r = ExtractMethod::new(&resolved, offset, length);
+                    let mut preferred_name = opt_name;
+                    if preferred_name.is_none() {
+                        let _ = r.check_initial_conditions();
+                        if let Some(first) = r.names.first() {
+                            preferred_name = Some(first.clone());
+                        }
+                    }
+                    r.name = preferred_name.unwrap_or_else(|| "newMethod".to_string());
+                    r.extract_all = false;
+                    Ok(Refactoring::ExtractMethod(r))
+                }
+                Some(RefactoringKind::ExtractLocalVariable) => {
+                    let mut r = ExtractLocal::new(&resolved, offset, length);
+                    let mut preferred_name = opt_name;
+                    if preferred_name.is_none() {
+                        let _ = r.check_initial_conditions();
+                        if let Some(first) = r.names.first() {
+                            preferred_name = Some(first.clone());
+                        }
+                    }
+                    r.name = preferred_name.unwrap_or_else(|| "newVariable".to_string());
+                    r.extract_all = false;
+                    Ok(Refactoring::ExtractLocal(r))
+                }
+                Some(RefactoringKind::ExtractWidget) => {
+                    let mut r = ExtractWidget::new(&resolved, offset, length);
+                    r.name = opt_name.unwrap_or_else(|| "NewWidget".to_string());
+                    Ok(Refactoring::ExtractWidget(r))
+                }
+                Some(RefactoringKind::InlineLocalVariable) => Ok(Refactoring::InlineLocal(
+                    InlineLocal::new(&resolved, offset),
+                )),
+                Some(RefactoringKind::InlineMethod) => Ok(Refactoring::InlineMethod(
+                    InlineMethod::new(&resolved, offset),
+                )),
                 Some(RefactoringKind::ConvertGetterToMethod) => {
                     match engine.getter_at(&resolved, offset) {
                         Some(g) => Ok(Refactoring::ConvertGetterToMethod(g)),
@@ -136,8 +415,7 @@ impl Server {
                 )),
             }
         };
-        let _ = length;
-        let refactoring = match refactoring {
+        let mut refactoring = match refactoring {
             Ok(r) => r,
             Err(e) => return Some(Err(e)),
         };
@@ -150,7 +428,7 @@ impl Server {
             },
         );
         if !perform {
-            let status = Engine { host: self }.initial_conditions(&refactoring);
+            let status = Engine { host: self }.initial_conditions(&mut refactoring);
             self.end_command_progress(progress);
             if status.has_fatal_error() {
                 return Some(Ok(
@@ -160,11 +438,11 @@ impl Server {
             return Some(Ok(json!({"valid": true})));
         }
         let mut engine = Engine { host: self };
-        let status = engine.all_conditions(&refactoring);
+        let status = engine.all_conditions(&mut refactoring);
         let change = if status.has_fatal_error() {
             None
         } else {
-            Some(engine.change(&refactoring))
+            Some(engine.change(&mut refactoring))
         };
         let warning = status.has_error() || status.has_warning();
         if warning && (status.has_fatal_error() || !self.supports_show_message_request()) {
@@ -245,14 +523,19 @@ impl Server {
     }
 
     /// Dart `supportsShowMessageRequest`.
-    fn supports_show_message_request(&self) -> bool {
+    pub(crate) fn supports_show_message_request(&self) -> bool {
         self.client.raw.pointer("/window/showMessage").is_some()
     }
 
     /// Dart `fileHasBeenModified(path, docVersion)`.
-    fn file_has_been_modified(&self, path: &str, version: Option<i64>) -> bool {
-        let Some(version) = version else { return false };
-        self.overlays.get(path).and_then(|d| d.version) != Some(version)
+    pub(crate) fn file_has_been_modified(&self, path: &str, version: Option<i64>) -> bool {
+        let Some(client_version) = version else {
+            return false;
+        };
+        let Some(server_version) = self.overlays.get(path).and_then(|d| d.version) else {
+            return false;
+        };
+        client_version != server_version
     }
 
     /// The progress of a command (Dart `ProgressReporter`): the token of
@@ -289,6 +572,25 @@ impl Server {
             );
         }
     }
+}
+
+fn normalize_interactive_command_params(params: &Value) -> Value {
+    let mut out = serde_json::Map::new();
+    for key in [
+        "arguments",
+        "command",
+        "data",
+        "formAnswers",
+        "formFields",
+        "workDoneToken",
+    ] {
+        if let Some(val) = params.get(key)
+            && !val.is_null()
+        {
+            out.insert(key.to_string(), val.clone());
+        }
+    }
+    Value::Object(out)
 }
 
 fn invalid_arguments(command_name: &str) -> ResponseError {

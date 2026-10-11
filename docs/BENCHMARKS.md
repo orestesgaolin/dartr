@@ -115,3 +115,20 @@ Findings:
 - visible-app does not get faster from 4 threads to all cores in this run (61.8 s and 59.5 s). Part of
   its time is serial (the analyzer plugin runs in a Dart process), and the load was highest then.
 - With a warm cache, `dart analyze` skips most of the work, which dartr cannot do yet (no disk cache).
+
+## `dartr analyze` against `dart analyze` on a quiet machine (2026-10-11 03:00–03:35)
+
+Main at 2d0f037 (after optimization rounds 1 and 2: package data through the analysis context, SDK
+linked once per run). `COLD=1 bench/compare.sh`, `hyperfine -i -N -w 1 -r 3`. No builds ran; load
+average 2 to 4 on 15 cores. Same diagnostics from both tools on all four projects.
+
+| corpus | dart, warm: mean (min–max), user + system | dart, empty: mean (min–max), user + system | dartr: mean (min–max), user + system |
+|---|---|---|---|
+| visible-app | 70.290 s (60.324–87.437), 56.1 + 10.6 s | 95.132 s (91.411–97.405), 92.4 + 12.1 s | 17.919 s (17.857–18.033), 69.2 + 6.7 s |
+| flutter | 3.682 s (3.242–4.156), 3.1 + 1.6 s | 19.201 s (18.360–20.677), 20.5 + 5.5 s | 2.975 s (2.913–3.046), 21.5 + 1.3 s |
+| analyzer-9.0.0 | 3.461 s (2.842–4.308), 1.7 + 1.4 s | 6.589 s (6.578–6.610), 7.2 + 2.2 s | 0.856 s (0.847–0.868), 4.9 + 0.4 s |
+| flutter_tools | 2.026 s (1.345–2.424), 1.3 + 0.9 s | 7.523 s (7.456–7.626), 8.0 + 2.2 s | 0.805 s (0.801–0.807), 4.9 + 0.5 s |
+
+Compared with 2026-10-10 evening (main db36afb, busy machine): dartr went from 7.380 s to 2.975 s on
+flutter and from 3.665 s to 0.805 s on flutter_tools; its system time on flutter went from 38.8 s to
+1.3 s.

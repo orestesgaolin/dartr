@@ -792,3 +792,268 @@ fn lsp_completion_corpus() {
     let dartr = run_or_reuse(dartr_bin(), &label, &root, &files, every);
     compare(&format!("corpus {}", root.display()), &dart, &dartr);
 }
+
+fn run_yaml_session(
+    program: &str,
+    root: &Path,
+    open_files: &[(&Path, &str)],
+    queries: &[(&str, &Path, u32, u32)],
+) -> BTreeMap<String, Value> {
+    let mut c = LspClient::spawn(program, &session_args(), &[]);
+    let init = dart_code_initialize_params(root);
+    let response = c.request("initialize", init);
+    assert!(response["result"]["capabilities"].is_object(), "{response}");
+    c.notify("initialized", json!({}));
+    c.settle(true);
+    for (path, text) in open_files {
+        c.notify(
+            "textDocument/didOpen",
+            json!({
+                "textDocument": {
+                    "uri": file_uri(path),
+                    "languageId": "yaml",
+                    "version": 1,
+                    "text": text,
+                }
+            }),
+        );
+    }
+    c.settle(false);
+    let mut out = BTreeMap::new();
+    for (label, path, line, character) in queries {
+        let params = json!({
+            "textDocument": {"uri": file_uri(path)},
+            "position": {"line": line, "character": character},
+            "context": {"triggerKind": 1},
+        });
+        let mut resp = c.request("textDocument/completion", params);
+        if let Some(obj) = resp.as_object_mut() {
+            obj.remove("id");
+        }
+        out.insert((*label).to_string(), resp);
+    }
+    let _ = c.shutdown_and_exit();
+    out
+}
+
+#[test]
+fn lsp_yaml_completion_parity() {
+    if !dart_available() {
+        eprintln!("skipped: `dart` is not on PATH");
+        return;
+    }
+    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("lsp_yaml_completion");
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("lib/fix_data")).unwrap();
+    let root = root.canonicalize().unwrap();
+    std::fs::write(root.join("lib/main.dart"), "void main() {}\n").unwrap();
+
+    let pubspec_path = root.join("pubspec.yaml");
+    let pubspec_content = "\
+name: app
+dep
+resolution: 
+environment:
+  
+screenshots:
+  - 
+flutter:
+  generate: 
+  module:
+    
+  fonts:
+    - family: Foo
+      fonts:
+        - style: 
+          weight: 
+  plugin:
+    platforms:
+      android:
+        
+";
+    std::fs::write(&pubspec_path, pubspec_content).unwrap();
+
+    let analysis_options_path = root.join("analysis_options.yaml");
+    let analysis_options_content = "\
+include: 
+analyzer:
+  enable-experiment:
+    - 
+  errors:
+    unused_local_variable: 
+  language:
+    strict-casts: 
+  optional-checks:
+    
+code-style:
+  format: 
+formatter:
+  trailing_commas: 
+linter:
+  rules:
+    - avoid_empty
+";
+    std::fs::write(&analysis_options_path, analysis_options_content).unwrap();
+
+    let fix_data_path = root.join("lib/fix_data.yaml");
+    let fix_data_content = "\
+version: 1
+
+transforms:
+  - title: Rename
+    bulkApply: 
+    element:
+      
+    changes:
+      - kind: 
+        
+        argumentValue:
+          
+    oneOf:
+      - 
+";
+    std::fs::write(&fix_data_path, fix_data_content).unwrap();
+
+    let fix_data_sub_path = root.join("lib/fix_data/part.yaml");
+    let fix_data_sub_content = "\
+version: 1
+transforms:
+  - 
+";
+    std::fs::write(&fix_data_sub_path, fix_data_sub_content).unwrap();
+
+    let open_files = [
+        (analysis_options_path.as_path(), analysis_options_content),
+        (fix_data_path.as_path(), fix_data_content),
+    ];
+
+    let queries: &[(&str, &Path, u32, u32)] = &[
+        // pubspec.yaml positions (not opened via didOpen to avoid PubPackageService network/cache preload)
+        ("pubspec:top_level_prefix", &pubspec_path, 1, 3),
+        ("pubspec:resolution_value", &pubspec_path, 2, 12),
+        ("pubspec:environment_key", &pubspec_path, 4, 2),
+        ("pubspec:screenshots_item", &pubspec_path, 6, 4),
+        ("pubspec:flutter_key", &pubspec_path, 8, 2),
+        ("pubspec:flutter_generate_val", &pubspec_path, 8, 12),
+        ("pubspec:flutter_module_key", &pubspec_path, 10, 4),
+        ("pubspec:flutter_font_style", &pubspec_path, 14, 17),
+        ("pubspec:flutter_font_weight", &pubspec_path, 15, 18),
+        ("pubspec:flutter_plugin_android", &pubspec_path, 19, 8),
+        // analysis_options.yaml positions
+        ("analysis_options:top_level", &analysis_options_path, 0, 0),
+        (
+            "analysis_options:analyzer_key",
+            &analysis_options_path,
+            2,
+            2,
+        ),
+        ("analysis_options:experiment", &analysis_options_path, 3, 6),
+        (
+            "analysis_options:errors_key_all",
+            &analysis_options_path,
+            5,
+            4,
+        ),
+        (
+            "analysis_options:errors_key_prefix",
+            &analysis_options_path,
+            5,
+            11,
+        ),
+        (
+            "analysis_options:errors_severity",
+            &analysis_options_path,
+            5,
+            27,
+        ),
+        (
+            "analysis_options:language_key",
+            &analysis_options_path,
+            7,
+            4,
+        ),
+        (
+            "analysis_options:strict_casts_val",
+            &analysis_options_path,
+            7,
+            18,
+        ),
+        (
+            "analysis_options:optional_checks",
+            &analysis_options_path,
+            9,
+            4,
+        ),
+        (
+            "analysis_options:code_style_format",
+            &analysis_options_path,
+            11,
+            10,
+        ),
+        (
+            "analysis_options:formatter_key",
+            &analysis_options_path,
+            13,
+            2,
+        ),
+        (
+            "analysis_options:trailing_commas",
+            &analysis_options_path,
+            13,
+            19,
+        ),
+        ("analysis_options:linter_key", &analysis_options_path, 15, 4),
+        (
+            "analysis_options:linter_rules_all",
+            &analysis_options_path,
+            16,
+            6,
+        ),
+        (
+            "analysis_options:linter_rules_item",
+            &analysis_options_path,
+            16,
+            17,
+        ),
+        // fix_data.yaml and lib/fix_data/part.yaml positions
+        ("fix_data:top_level", &fix_data_path, 0, 3),
+        ("fix_data:bulk_apply_val", &fix_data_path, 4, 15),
+        ("fix_data:element_key", &fix_data_path, 6, 6),
+        ("fix_data:change_kind_val", &fix_data_path, 8, 14),
+        ("fix_data:change_key", &fix_data_path, 9, 8),
+        ("fix_data:argument_value_key", &fix_data_path, 11, 10),
+        ("fix_data:one_of_key", &fix_data_path, 13, 8),
+        ("fix_data_sub:transforms_item", &fix_data_sub_path, 2, 4),
+    ];
+
+    let dart = run_yaml_session("dart", &root, &open_files, queries);
+    let dartr = run_yaml_session(dartr_bin(), &root, &open_files, queries);
+
+    let dart_keys: Vec<_> = dart.keys().collect();
+    let dartr_keys: Vec<_> = dartr.keys().collect();
+    assert_eq!(dartr_keys, dart_keys);
+    assert_eq!(dart.len(), queries.len());
+
+    let mut diffs = Vec::new();
+    for (label, _, _, _) in queries {
+        let d = dart.get(*label).expect("missing dart step");
+        let r = dartr.get(*label).expect("missing dartr step");
+        let d_items = d["result"]["items"].as_array().expect("dart items array");
+        assert!(
+            !d_items.is_empty(),
+            "expected non-empty Dart completions for {label}, got {d}"
+        );
+        if d == r {
+            println!("PASS {label}: {} items identical", d_items.len());
+        } else {
+            let r_items = r["result"]["items"].as_array().expect("dartr items array");
+            println!(
+                "DIFF {label}: dart {} items vs dartr {} items\n  dart:  {d}\n  dartr: {r}",
+                d_items.len(),
+                r_items.len()
+            );
+            diffs.push((*label).to_string());
+        }
+    }
+    assert!(diffs.is_empty(), "YAML completion diffs: {diffs:?}");
+}
