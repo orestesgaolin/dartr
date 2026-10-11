@@ -1172,8 +1172,8 @@ impl<'a> SuperHierarchyBuilder<'a> {
             self.keys.push((
                 usize::MAX,
                 ElementKey {
-                    library_path: String::new(),
-                    unit_path: String::new(),
+                    library_path: "".into(),
+                    unit_path: "".into(),
                     unit_member: Some(format!("unknown-{item_id}")),
                     class_member: None,
                     parameter: None,
@@ -2511,8 +2511,8 @@ impl<'a> SearchEngine<'a> {
                 builder.keys.push((
                     usize::MAX,
                     ElementKey {
-                        library_path: String::new(),
-                        unit_path: String::new(),
+                        library_path: "".into(),
+                        unit_path: "".into(),
                         unit_member: Some(format!("unknown-{}", builder.items.len())),
                         class_member: None,
                         parameter: None,

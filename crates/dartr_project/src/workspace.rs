@@ -223,6 +223,32 @@ impl Workspace {
         }
     }
 
+    /// Finds the root of the [`WorkspacePackage::Pub`] that contains [path]
+    /// without reading or parsing `pubspec.yaml`.
+    pub fn find_pub_package_root_for(&self, path: &str) -> Option<String> {
+        match &self.kind {
+            WorkspaceKind::PackageConfig { .. } => {
+                if !paths::is_within(&self.root, path) {
+                    return None;
+                }
+                for current in paths::with_ancestors(paths::dirname(path)) {
+                    let pubspec = paths::join(current, "pubspec.yaml");
+                    if fs::file_exists(&pubspec) {
+                        if is_in_third_party_dart(&pubspec) {
+                            return None;
+                        }
+                        return Some(current.to_string());
+                    }
+                    if current == self.root {
+                        return None;
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
     /// Resolves an absolute `package:` URI to a file path. The file can be
     /// missing.
     pub fn resolve_package_uri(&self, uri: &str) -> Option<String> {

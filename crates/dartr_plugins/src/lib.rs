@@ -1193,14 +1193,18 @@ impl PluginManager {
             }
         });
         for isolate in &mut self.isolates {
-            let _ = isolate
-                .session
-                .request("analysis.updateContent", params.clone());
             if isolate.is_analyzing(path)
                 && path.ends_with(".dart")
                 && (changed_from_disk || isolate.is_legacy)
             {
+                let _ = isolate
+                    .session
+                    .request("analysis.updateContent", params.clone());
                 isolate.pending_analysis = true;
+            } else {
+                isolate
+                    .session
+                    .send("analysis.updateContent", params.clone());
             }
         }
     }
@@ -1221,11 +1225,15 @@ impl PluginManager {
             }
         });
         for isolate in &mut self.isolates {
-            let _ = isolate
-                .session
-                .request("analysis.updateContent", params.clone());
             if isolate.is_analyzing(path) && path.ends_with(".dart") {
+                let _ = isolate
+                    .session
+                    .request("analysis.updateContent", params.clone());
                 isolate.pending_analysis = true;
+            } else {
+                isolate
+                    .session
+                    .send("analysis.updateContent", params.clone());
             }
         }
     }
@@ -1244,14 +1252,18 @@ impl PluginManager {
             }
         });
         for isolate in &mut self.isolates {
-            let _ = isolate
-                .session
-                .request("analysis.updateContent", params.clone());
             if isolate.is_analyzing(path)
                 && path.ends_with(".dart")
                 && (changed_from_disk || isolate.is_legacy)
             {
+                let _ = isolate
+                    .session
+                    .request("analysis.updateContent", params.clone());
                 isolate.pending_analysis = true;
+            } else {
+                isolate
+                    .session
+                    .send("analysis.updateContent", params.clone());
             }
         }
     }

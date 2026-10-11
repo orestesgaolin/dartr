@@ -1818,7 +1818,8 @@ impl Server {
         self.parsed.remove(path);
         self.indexes.retain(|(_, p), _| p != path);
         self.search_scope = None;
-        self.search_words.remove(path);
+        self.search_sources.remove(path);
+        self.search_word_files.clear();
         for affected in self.session.change_file(path) {
             self.indexes.retain(|(_, p), _| *p != affected);
         }

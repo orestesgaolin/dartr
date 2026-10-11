@@ -108,11 +108,26 @@ fn write_and_wait_for(
     timeout: Duration,
     mut predicate: impl FnMut(&LspClient) -> bool,
 ) {
+    let is_add = !root.join(rel).exists();
     let deadline = std::time::Instant::now() + timeout;
+    let mut attempt = 0u32;
     loop {
-        write(root, rel, content);
+        // Only a retry may stop early: the first write always happens.
+        if attempt > 0 && predicate(c) {
+            break;
+        }
+        if attempt > 0 && is_add {
+            let _ = std::fs::remove_file(root.join(rel));
+            std::thread::sleep(Duration::from_millis(500));
+            c.settle(false);
+        }
+        // On each retry, append `attempt` trailing newlines so both `mtime` and
+        // file size change when an earlier FSEvent was coalesced or dropped.
+        let text = format!("{content}{}", "\n".repeat(attempt as usize));
+        write(root, rel, &text);
+        attempt += 1;
         let rem = deadline.saturating_duration_since(std::time::Instant::now());
-        let chunk = rem.min(Duration::from_secs(20));
+        let chunk = rem.min(Duration::from_secs(10));
         if c.wait_until_with_grace(chunk, &mut predicate) || std::time::Instant::now() >= deadline {
             break;
         }
@@ -130,6 +145,7 @@ fn run(program: &str, name: &str) -> Vec<(String, Value)> {
     let open_uri = file_uri(&open);
     let pubspec_uri = file_uri(&root.join("pubspec.yaml"));
     let mut c = LspClient::spawn(program, &session_args(), &[]);
+    c.step_timeout = c.step_timeout.max(Duration::from_secs(180));
     let init = c.request("initialize", dart_code_initialize_params(&root));
     assert!(init["result"]["capabilities"].is_object(), "{init}");
     c.notify("initialized", json!({}));
@@ -255,7 +271,6 @@ fn run(program: &str, name: &str) -> Vec<(String, Value)> {
 }
 
 #[test]
-#[ignore = "intermittent under heavy load (file events arrive late); run with --ignored"]
 fn lsp_watch_parity() {
     if !dart_available() {
         eprintln!("skipped: `dart` is not on PATH");

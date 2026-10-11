@@ -21,7 +21,7 @@ use crate::mapping::{ErrorOr, to_range};
 const MAX_DOC_SIZE_FOR_INLINING: usize = 25;
 
 impl Server {
-    fn bool_cap(&self, pointer: &str) -> bool {
+    pub(super) fn bool_cap(&self, pointer: &str) -> bool {
         self.client
             .raw
             .pointer(pointer)
@@ -103,7 +103,13 @@ impl Server {
         };
         let options = collection.options_for(context, path);
         let has = |name: &str| options.lint_rules.iter().any(|r| r == name);
-        let lint_quote = self.lint_quote(path);
+        let lint_quote = if has("prefer_single_quotes") {
+            Some('\'')
+        } else if has("prefer_double_quotes") {
+            Some('"')
+        } else {
+            None
+        };
         let quote = lint_quote.unwrap_or('\'');
         CodeStyle {
             lint_quote,
@@ -111,6 +117,194 @@ impl Server {
             make_locals_final: has("prefer_final_locals"),
             quote,
         }
+    }
+
+    fn completion_known_for(
+        &mut self,
+        context_index: usize,
+        package: Option<(String, Option<String>)>,
+        path: &str,
+    ) -> Option<(
+        dartr_element::WorldSnapshot,
+        std::sync::Arc<Vec<KnownLibrary>>,
+    )> {
+        let collection = self.collection.as_ref()?;
+        let excluded = &self.excluded;
+        let is_excluded_fn = |f: &str| {
+            excluded
+                .iter()
+                .any(|e| f == e || f.starts_with(&format!("{e}/")))
+        };
+        let pkg_root = package.as_ref().map(|(r, _)| r.clone());
+        let pkg_name = package.as_ref().and_then(|(_, n)| n.clone());
+        let cached_added = self.context_added_files.get(context_index).cloned();
+        let pkg_lib_files = &mut self.pkg_lib_files;
+        let (world, ordered_libraries) = self.session.link_known_libraries_ordered(
+            collection,
+            context_index,
+            pkg_root.clone(),
+            pkg_name.clone(),
+            |coll, ctx_idx| {
+                let context = &coll.contexts[ctx_idx];
+                let added_files: Vec<String> = cached_added.unwrap_or_else(|| {
+                    context
+                        .root
+                        .analyzed_files()
+                        .into_iter()
+                        .filter(|f| f.ends_with(".dart") && !is_excluded_fn(f))
+                        .collect()
+                });
+                let mut available_files: Vec<String> = Vec::new();
+                if let Some(sdk) = context.sdk.as_ref().or(coll.sdk.as_ref()) {
+                    available_files.extend(
+                        sdk.libraries()
+                            .iter()
+                            .filter_map(|l| sdk.map_dart_uri(&l.short_name)),
+                    );
+                }
+                fn recurse_pkg(folder: &str, skip_src: bool, out: &mut Vec<String>) {
+                    let Some(children) = dartr_project::fs::children(folder) else {
+                        return;
+                    };
+                    for child in children {
+                        match child.kind {
+                            dartr_project::fs::ResourceKind::File => {
+                                if child.path.ends_with(".dart") {
+                                    out.push(child.path);
+                                }
+                            }
+                            dartr_project::fs::ResourceKind::Folder => {
+                                if skip_src
+                                    && (child.path.ends_with("/src")
+                                        || child.path.ends_with("\\src"))
+                                {
+                                    continue;
+                                }
+                                recurse_pkg(&child.path, false, out);
+                            }
+                        }
+                    }
+                }
+                let friend_of_analyzer =
+                    matches!(pkg_name.as_deref(), Some("analysis_server" | "linter"));
+                let allowed_pkgs: Option<std::collections::HashSet<String>> =
+                    if let Some((root, name)) = &package {
+                        dartr_project::pubspec::Pubspec::read(&format!("{root}/pubspec.yaml")).map(
+                            |pubspec| {
+                                let mut set: std::collections::HashSet<String> = pubspec
+                                    .dependencies
+                                    .into_iter()
+                                    .chain(pubspec.dev_dependencies)
+                                    .collect();
+                                if let Some(n) = name {
+                                    set.insert(n.clone());
+                                }
+                                if friend_of_analyzer {
+                                    set.insert("analyzer".to_string());
+                                }
+                                set
+                            },
+                        )
+                    } else {
+                        None
+                    };
+                for pkg in context.packages.packages() {
+                    if let Some(allowed) = &allowed_pkgs
+                        && !allowed.contains(&pkg.name)
+                    {
+                        continue;
+                    }
+                    let skip_src = package.as_ref().is_some_and(|(root, _)| &pkg.root != root)
+                        && !(friend_of_analyzer && pkg.name == "analyzer");
+                    let files = pkg_lib_files
+                        .entry((pkg.lib.clone(), skip_src))
+                        .or_insert_with(|| {
+                            let mut v = Vec::new();
+                            recurse_pkg(&pkg.lib, skip_src, &mut v);
+                            std::sync::Arc::new(v)
+                        });
+                    available_files.extend(files.iter().cloned());
+                }
+                (
+                    added_files,
+                    available_files,
+                    allowed_pkgs,
+                    friend_of_analyzer,
+                )
+            },
+        )?;
+        let in_lib = package.as_ref().is_some_and(|(root, _)| {
+            ["lib", "bin", "web"]
+                .iter()
+                .any(|f| path.starts_with(&format!("{root}/{f}/")))
+        });
+        let cache_key = (context_index, pkg_root, in_lib);
+        let ordered_ptr = std::sync::Arc::as_ptr(&ordered_libraries) as usize;
+        let stores_len = world.stores.len();
+        if std::env::var_os("DARTR_DEBUG_COMPLETION").is_none()
+            && let Some((cached_ptr, cached_stores_len, cached_list, cached_indices)) =
+                self.completion_known_cache.get_mut(&cache_key)
+            && *cached_ptr == ordered_ptr
+        {
+            if *cached_stores_len == stores_len {
+                return Some((world, cached_list.clone()));
+            }
+            let filtered: Vec<KnownLibrary> = cached_indices
+                .iter()
+                .filter_map(|&i| {
+                    let l = &ordered_libraries[i];
+                    world
+                        .libraries
+                        .get(l.uri.as_str())
+                        .copied()
+                        .map(|element| KnownLibrary { element })
+                })
+                .collect();
+            let filtered = std::sync::Arc::new(filtered);
+            *cached_stores_len = stores_len;
+            *cached_list = filtered.clone();
+            return Some((world, filtered));
+        }
+        let filter = c::FileFilter::new(package, path);
+        let workspace = &collection.contexts[context_index].root.workspace;
+        let dir_cache: std::cell::RefCell<std::collections::HashMap<String, Option<String>>> =
+            std::cell::RefCell::new(std::collections::HashMap::new());
+        let root_of = |p: &str| {
+            let dir = dartr_project::paths::dirname(p);
+            if let Some(cached) = dir_cache.borrow().get(dir) {
+                return cached.clone();
+            }
+            let found = workspace.find_pub_package_root_for(p);
+            dir_cache
+                .borrow_mut()
+                .insert(dir.to_string(), found.clone());
+            found
+        };
+        if std::env::var_os("DARTR_DEBUG_COMPLETION").is_some() {
+            for l in ordered_libraries.iter() {
+                eprintln!("KNOWN {}", l.uri);
+            }
+        }
+        let mut indices = Vec::new();
+        let mut filtered = Vec::new();
+        for (i, l) in ordered_libraries.iter().enumerate() {
+            if !filter.should_include(l, &root_of) {
+                continue;
+            }
+            indices.push(i);
+            if std::env::var_os("DARTR_DEBUG_COMPLETION").is_some() {
+                eprintln!("ORDER {}", l.uri);
+            }
+            if let Some(&element) = world.libraries.get(l.uri.as_str()) {
+                filtered.push(KnownLibrary { element });
+            }
+        }
+        let filtered = std::sync::Arc::new(filtered);
+        self.completion_known_cache.insert(
+            cache_key,
+            (ordered_ptr, stores_len, filtered.clone(), indices),
+        );
+        Some((world, filtered))
     }
 
     /// Dart `CompletionHandler.handle`.
@@ -176,7 +370,6 @@ impl Server {
         let apply_edit = self.bool_cap("/workspace/applyEdit");
         let use_not_imported = self.init.suggest_from_unimported_libraries && apply_edit;
         let budget_ms = self.init.completion_budget_ms.unwrap_or(100);
-        let templates = self.dartdoc_templates(&path);
         let style = self.code_style(&path);
 
         // The package of the file and the SDK and packages of its context.
@@ -210,125 +403,10 @@ impl Server {
             None => (None, Vec::new(), Vec::new()),
         };
 
-        // The libraries of the not-imported pass (Dart `knownFiles`), ordered
-        // in `dart_known_order` and filtered by `FileFilter`, cached across
-        // requests when the linked world and file set have not changed.
-        let excluded = &self.excluded;
-        let is_excluded_fn = |f: &str| {
-            excluded
-                .iter()
-                .any(|e| f == e || f.starts_with(&format!("{e}/")))
-        };
-        let known: Option<(
-            dartr_element::WorldSnapshot,
-            std::sync::Arc<Vec<KnownLibrary>>,
-        )> = if use_not_imported {
-            match &self.collection {
-                Some(collection) => self
-                    .session
-                    .link_known_libraries_ordered(collection, context_index, |coll, ctx_idx| {
-                        let context = &coll.contexts[ctx_idx];
-                        let added_files: Vec<String> = context
-                            .root
-                            .analyzed_files()
-                            .into_iter()
-                            .filter(|f| f.ends_with(".dart") && !is_excluded_fn(f))
-                            .collect();
-                        let mut available_files: Vec<String> = Vec::new();
-                        if let Some(sdk) = context.sdk.as_ref().or(coll.sdk.as_ref()) {
-                            available_files.extend(
-                                sdk.libraries()
-                                    .iter()
-                                    .filter_map(|l| sdk.map_dart_uri(&l.short_name)),
-                            );
-                        }
-                        fn recurse(folder: &str, out: &mut Vec<String>) {
-                            let Some(children) = dartr_project::fs::children(folder) else {
-                                return;
-                            };
-                            for child in children {
-                                match child.kind {
-                                    dartr_project::fs::ResourceKind::File => {
-                                        if child.path.ends_with(".dart") {
-                                            out.push(child.path);
-                                        }
-                                    }
-                                    dartr_project::fs::ResourceKind::Folder => {
-                                        recurse(&child.path, out)
-                                    }
-                                }
-                            }
-                        }
-                        for package in context.packages.packages() {
-                            recurse(&package.lib, &mut available_files);
-                        }
-                        (added_files, available_files)
-                    })
-                    .map(|(world, ordered_libraries)| {
-                        let in_lib = package.as_ref().is_some_and(|(root, _)| {
-                            ["lib", "bin", "web"]
-                                .iter()
-                                .any(|f| path.starts_with(&format!("{root}/{f}/")))
-                        });
-                        let cache_key = (
-                            context_index,
-                            package.as_ref().map(|(r, _)| r.clone()),
-                            in_lib,
-                        );
-                        let ordered_ptr = std::sync::Arc::as_ptr(&ordered_libraries) as usize;
-                        if std::env::var_os("DARTR_DEBUG_COMPLETION").is_none()
-                            && let Some((cached_ptr, cached_list)) =
-                                self.completion_known_cache.get(&cache_key)
-                            && *cached_ptr == ordered_ptr
-                        {
-                            return (world, cached_list.clone());
-                        }
-                        let filter = c::FileFilter::new(package.clone(), &path);
-                        let workspace = collection.contexts[context_index].root.workspace.clone();
-                        let root_of = |p: &str| match workspace.find_package_for(p) {
-                            Some(dartr_project::workspace::WorkspacePackage::Pub {
-                                root, ..
-                            }) => Some(root),
-                            _ => None,
-                        };
-                        if std::env::var_os("DARTR_DEBUG_COMPLETION").is_some() {
-                            for l in ordered_libraries.iter() {
-                                eprintln!("KNOWN {}", l.uri);
-                            }
-                        }
-                        let filtered: Vec<KnownLibrary> = ordered_libraries
-                            .iter()
-                            .filter(|l| filter.should_include(l, &root_of))
-                            .filter_map(|l| {
-                                if std::env::var_os("DARTR_DEBUG_COMPLETION").is_some() {
-                                    eprintln!("ORDER {}", l.uri);
-                                }
-                                world
-                                    .libraries
-                                    .get(l.uri.as_str())
-                                    .copied()
-                                    .map(|element| KnownLibrary { element })
-                            })
-                            .collect();
-                        let filtered = std::sync::Arc::new(filtered);
-                        self.completion_known_cache
-                            .insert(cache_key, (ordered_ptr, filtered.clone()));
-                        (world, filtered)
-                    }),
-                None => None,
-            }
-        } else {
-            None
-        };
-
         let unit = resolved.unit();
         let sink = NoopSink;
-        let world = known
-            .as_ref()
-            .map(|k| &k.0)
-            .unwrap_or(&resolved.library.world);
         let ctx = Ctx {
-            world,
+            world: &resolved.library.world,
             current: None,
             local: Some(&unit.local),
             tp: &resolved.library.type_provider,
@@ -340,7 +418,7 @@ impl Server {
         let in_test_directory = package_root
             .as_ref()
             .is_some_and(|root| path.starts_with(&format!("{root}/test/")));
-        let Some(q) = c::build_request(RequestInputs {
+        let Some(mut q) = c::build_request(RequestInputs {
             ctx: &ctx,
             ast: &unit.ast,
             tables: &unit.tables,
@@ -362,17 +440,35 @@ impl Server {
                 return Ok(json!({"isIncomplete": false, "items": []}));
             }
         }
+        let in_scope = c::compute_in_scope(&q, budget_ms, max_items);
+
+        // The libraries of the not-imported pass (Dart `knownFiles`), ordered
+        // in `dart_known_order` and filtered by `FileFilter`, cached across
+        // requests when the linked world and file set have not changed.
+        // Only link and discover unimported libraries when the in-scope pass
+        // actually produced not-imported operations!
+        let known = if use_not_imported && in_scope.needs_not_imported() {
+            self.completion_known_for(context_index, package, &path)
+        } else {
+            None
+        };
+        let ctx_with_known;
+        if let Some((world, _)) = &known {
+            ctx_with_known = Ctx { world, ..ctx };
+            q.ctx = &ctx_with_known;
+        }
+        let ctx = *q.ctx;
         let known_list = || -> Vec<KnownLibrary> {
             let Some((_, list)) = &known else {
                 return Vec::new();
             };
             (**list).clone()
         };
-        let result = c::compute(
+        let result = c::finalize(
             &q,
-            budget_ms,
+            in_scope,
             max_items,
-            if use_not_imported {
+            if known.is_some() {
                 Some(&known_list as &dyn Fn() -> Vec<KnownLibrary>)
             } else {
                 None
@@ -459,6 +555,8 @@ impl Server {
                 }
             }
         }
+        let mut lazy_templates: Option<std::sync::Arc<std::collections::HashMap<String, String>>> =
+            None;
         let mut ranked: Vec<(Value, f64)> = Vec::new();
         for mut candidate in result.candidates {
             match &candidate.kind {
@@ -524,8 +622,17 @@ impl Server {
             if resolution.is_none() {
                 if let Some(e) = element {
                     if documentation_preference != "none" {
-                        cleaned_doc =
-                            clean_documentation(&ctx, e, &templates, documentation_preference);
+                        cleaned_doc = clean_documentation_with(
+                            &ctx,
+                            e,
+                            || {
+                                if lazy_templates.is_none() {
+                                    lazy_templates = Some(self.dartdoc_templates(&path));
+                                }
+                                lazy_templates.as_ref().unwrap()
+                            },
+                            documentation_preference,
+                        );
                     }
                     if cleaned_doc
                         .as_ref()
@@ -631,7 +738,6 @@ impl Server {
         }
         let resolved = self.require_resolved_unit(&file)?;
         let line_info = resolved.line_info().clone();
-        let templates = self.dartdoc_templates(&file);
         let preference = self.client_configuration.global().preferred_documentation();
         let formats =
             self.client_formats("/textDocument/completion/completionItem/documentationFormat");
@@ -658,7 +764,10 @@ impl Server {
         let mut documentation = None;
         if let Some(e) = element {
             if preference != "none" {
-                let doc = crate::hover::documentation(&ctx, e, &templates);
+                let mut lazy_templates = None;
+                let doc = crate::hover::documentation_with(&ctx, e, || {
+                    lazy_templates.insert(self.dartdoc_templates(&file))
+                });
                 let doc = if preference == "summary" {
                     doc.map(|d| summary_of(&d))
                 } else {
@@ -725,13 +834,13 @@ impl Server {
 }
 
 /// Dart `getCleanElementDocumentation`.
-fn clean_documentation(
+fn clean_documentation_with<'a>(
     ctx: &Ctx<'_>,
     element: ElementId,
-    templates: &std::collections::HashMap<String, String>,
+    get_templates: impl FnOnce() -> &'a std::collections::HashMap<String, String>,
     preference: &str,
 ) -> Option<String> {
-    let full = crate::hover::documentation(ctx, element, templates)?;
+    let full = crate::hover::documentation_with(ctx, element, get_templates)?;
     let doc = c::lsp::remove_dart_doc_delimiters(&full);
     let raw = if preference == "summary" {
         summary_of(&doc)

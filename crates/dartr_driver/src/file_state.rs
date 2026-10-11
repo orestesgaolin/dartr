@@ -108,7 +108,7 @@ pub enum DirectiveUri {
 }
 
 /// Dart `DirectiveUris`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DirectiveUris {
     pub primary: DirectiveUri,
     pub configurations: Vec<DirectiveUri>,
@@ -356,9 +356,7 @@ impl FileSystemState {
     /// repeats until no file is pending. Dart does the same lazily
     /// (`refresh`, `discoverReferencedFiles`).
     pub fn discover(&mut self) {
-        let sdk_cache = (!dartr_project::fs::has_overlays())
-            .then(|| self.sdk_cache.clone())
-            .flatten();
+        let sdk_cache = self.sdk_cache.clone();
         while !self.pending.is_empty() {
             let pending = std::mem::take(&mut self.pending);
             let jobs: Vec<ParseJob> = pending
@@ -379,7 +377,9 @@ impl FileSystemState {
             let results: Vec<(FileId, RefreshData)> = jobs
                 .into_par_iter()
                 .map(|(id, path, _is_dart, is_dart_core, config, salt)| {
-                    if let Some(cache) = sdk_cache_ref {
+                    if let Some(cache) = sdk_cache_ref
+                        && !dartr_project::fs::has_overlay(&path)
+                    {
                         let key = SdkFileKey {
                             path: path.clone(),
                             is_dart_core,
@@ -399,6 +399,13 @@ impl FileSystemState {
             for (id, data) in results {
                 self.apply_refresh(id, data);
             }
+        }
+    }
+
+    /// Invalidates [path] in the shared `SdkCache`, if present.
+    pub fn invalidate_cached_file(&self, path: &str) {
+        if let Some(cache) = &self.sdk_cache {
+            cache.invalidate_file(path);
         }
     }
 
