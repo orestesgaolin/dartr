@@ -45,12 +45,12 @@ pub enum SyntheticKind {
 /// id): the unit of its first fragment, its name components and kind.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ElementKey {
-    pub library_path: String,
-    pub unit_path: String,
     pub unit_member: Option<String>,
     pub class_member: Option<String>,
     pub parameter: Option<String>,
     pub kind: SyntheticKind,
+    pub unit_path: String,
+    pub library_path: String,
 }
 
 /// One relation: the index of the element in [UnitIndex::elements], the
@@ -86,9 +86,11 @@ impl UnitIndex {
         let Some(id) = self.elements.iter().position(|e| e == key) else {
             return Vec::new();
         };
-        self.relations
+        let start = self.relations.partition_point(|r| r.element < id);
+        self.relations[start..]
             .iter()
-            .filter(|r| r.element == id && accept(r.kind))
+            .take_while(|r| r.element == id)
+            .filter(|r| accept(r.kind))
             .collect()
     }
 }
@@ -475,7 +477,7 @@ pub fn index_unit(
         ctx,
         ast,
         tables,
-        element_map: Vec::new(),
+        element_map: std::collections::HashMap::new(),
         infos: Vec::new(),
         relations: Vec::new(),
     };
@@ -529,7 +531,7 @@ struct Contributor<'c, 'a> {
     ast: &'c Ast,
     tables: &'c ResolutionTables,
     /// Dart `elementMap` keys (base elements) with their info index.
-    element_map: Vec<(ElementId, usize)>,
+    element_map: std::collections::HashMap<ElementId, usize>,
     infos: Vec<ElementKey>,
     relations: Vec<Relation>,
 }
@@ -549,13 +551,13 @@ impl Contributor<'_, '_> {
 
     /// Dart `_IndexAssembler._getElementInfo`.
     fn element_info(&mut self, element: ElementId) -> Option<usize> {
-        if let Some((_, i)) = self.element_map.iter().find(|(e, _)| *e == element) {
-            return Some(*i);
+        if let Some(&i) = self.element_map.get(&element) {
+            return Some(i);
         }
         let key = element_key(self.ctx, element)?;
         let index = self.infos.len();
         self.infos.push(key);
-        self.element_map.push((element, index));
+        self.element_map.insert(element, index);
         Some(index)
     }
 

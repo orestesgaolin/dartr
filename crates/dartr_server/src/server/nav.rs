@@ -83,6 +83,18 @@ impl Server {
     /// Dart `server.getLineInfo(path)`: the line info of the content of
     /// [path] (the overlay or the file).
     pub(crate) fn line_info_of(&self, path: &str) -> Option<LineInfo> {
+        if let Some(p) = self.parsed.get(path) {
+            return Some(p.unit.line_info.clone());
+        }
+        if let Some(doc) = self.overlays.get(path) {
+            if let Some(info) = self.session.line_info_matching(path, Some(&doc.content)) {
+                return Some(info);
+            }
+            return Some(LineInfo::from_content(&doc.content));
+        }
+        if let Some(info) = self.session.line_info_matching(path, None) {
+            return Some(info);
+        }
         self.content(path).map(|c| LineInfo::from_content(&c))
     }
 
@@ -679,15 +691,41 @@ impl Server {
     pub(crate) fn dartdoc_templates(
         &mut self,
         path: &str,
-    ) -> std::collections::HashMap<String, String> {
+    ) -> Arc<std::collections::HashMap<String, String>> {
         let Some(collection) = &self.collection else {
             return Default::default();
         };
-        let mut templates = std::collections::HashMap::new();
-        for (_, parsed) in self.session.known_parsed_units(collection, path) {
-            crate::hover::extract_templates_from_unit(&parsed.ast, parsed.unit, &mut templates);
+        let count_info = self.session.context_files_count(collection, path);
+        if let Some((context, files_len)) = count_info
+            && let Some((cached_len, cached)) = self.dartdoc_templates_cache.get(&context)
+            && *cached_len == files_len
+        {
+            return cached.clone();
         }
-        templates
+        let mut templates = std::collections::HashMap::new();
+        for (unit_path, parsed) in self.session.known_parsed_units(collection, path) {
+            if let Some(entries) = self.file_templates_cache.get(&*unit_path) {
+                for (k, v) in entries {
+                    templates.insert(k.clone(), v.clone());
+                }
+            } else {
+                let mut file_map = std::collections::HashMap::new();
+                crate::hover::extract_templates_from_unit(&parsed.ast, parsed.unit, &mut file_map);
+                let mut entries: Vec<(String, String)> = file_map.into_iter().collect();
+                entries.sort_by(|a, b| a.0.cmp(&b.0));
+                for (k, v) in &entries {
+                    templates.insert(k.clone(), v.clone());
+                }
+                self.file_templates_cache
+                    .insert(unit_path.to_string(), entries);
+            }
+        }
+        let result = Arc::new(templates);
+        if let Some((context, files_len)) = count_info {
+            self.dartdoc_templates_cache
+                .insert(context, (files_len, result.clone()));
+        }
+        result
     }
 
     /// Dart `_libraryInfo(element).libraryName`: the URI, or for a `file:`
