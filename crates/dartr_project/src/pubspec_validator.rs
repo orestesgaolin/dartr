@@ -568,8 +568,13 @@ impl Validator<'_> {
     }
 
     fn report_span(&mut self, span: Span, diagnostic: LocatableDiagnostic) {
-        let offset = utf16_offset(self.text, span.start);
-        let end = utf16_offset(self.text, span.end);
+        let start = span.start.min(self.text.len());
+        let mut end = span.end.min(self.text.len()).max(start);
+        while end > start && matches!(self.text.as_bytes()[end - 1], b'\n' | b'\r') {
+            end -= 1;
+        }
+        let offset = utf16_offset(self.text, start);
+        let end = utf16_offset(self.text, end);
         self.diagnostics
             .push(diagnostic.to_diagnostic(offset, end.saturating_sub(offset)));
     }

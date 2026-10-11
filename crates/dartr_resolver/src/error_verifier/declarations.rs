@@ -2019,8 +2019,8 @@ impl ErrorVerifier<'_> {
                 },
             );
             if let Some(mixin_member) = mixin_member
-                && !correct_override::CorrectOverrideHelper::new(self.type_system, mixin_member)
-                    .is_correct_override_of(super_member)
+                && !correct_override::CorrectOverrideHelper::new(self.type_system, super_member)
+                    .is_correct_override_of(mixin_member)
             {
                 self.report_at(
                     diag::mixin_application_concrete_super_invoked_member_type(
