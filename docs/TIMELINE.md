@@ -102,6 +102,7 @@ at each merge; the final process report is written from it.
 | 10-11 06:30 | bdabf32 | language server: API changes in open files reach dependent files (API signature, transitive invalidation, resolved cache), progress begin before diagnostics, showTodos, LSP tests wait for events | Gemini 4 (Antigravity) | new parity test renames a documented method in an open file; idle CPU 0 (a 200 ms polling loop was rejected: 2.66 s per 30 s); 5,599 tests |
 | 10-11 07:40 | b021ba7 | memory round 3: compact node maps and arenas, smaller retained units; DARTR_MEM_STATS hang fixed | Gemini 4 (Antigravity) | peak RSS flutter 2.75 -> 1.60 GB, visible-app 10.9 -> 6.0 GB; 4 corpora identical, no hang; 5,596 tests (branch) |
 | 10-11 07:55 | 9137d50 | six parity fixes from a sweep over 65 real pub packages | Gemini 4 (Antigravity) | 59/65 -> 65/65 packages identical to `dart analyze` (14,846 diagnostics); 4 corpora identical; 5,598 tests (branch) |
+| 10-11 09:10 | f99ae51 | language-server latency: resolved units of open files reused, incremental search index, cached completion inputs | Gemini 4 (Antigravity) | flutter_tools: hover 38 -> <0.5 ms, completion after '.' 83 -> 1 ms, first references 2.9 -> 0.16 s; visible-app: hover 137 -> <0.5 ms, completion 283 -> 3 ms; 5,598 tests |
 
 ## Incidents and lessons
 
