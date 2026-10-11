@@ -1613,6 +1613,25 @@ assist!(
 // ConvertToGenericFunctionSyntax
 // ---------------------------------------------------------------------------
 
+fn all_parameters_have_types(ast: &Ast, parameters: Id<FormalParameterList>) -> bool {
+    for &param in ast.list_raw(ast[parameters].parameters) {
+        if let Some(rfp) = ast.cast::<RegularFormalParameter>(param) {
+            if ast[rfp].function_typed_suffix.is_none() && ast[rfp].type_.is_none() {
+                return false;
+            }
+        } else if let Some(ffp) = ast.cast::<FieldFormalParameter>(param) {
+            if ast[ffp].function_typed_suffix.is_none() && ast[ffp].type_.is_none() {
+                return false;
+            }
+        } else if let Some(sfp) = ast.cast::<SuperFormalParameter>(param) {
+            if ast[sfp].function_typed_suffix.is_none() && ast[sfp].type_.is_none() {
+                return false;
+            }
+        }
+    }
+    true
+}
+
 producer!(
     ConvertToGenericFunctionSyntax,
     k::CONVERT_TO_GENERIC_FUNCTION_SYNTAX,
@@ -1625,7 +1644,10 @@ producer!(
         while let Some(n) = cur {
             if let Some(fta) = ast.cast::<FunctionTypeAlias>(n) {
                 let params_node = ast[fta].parameters;
-                if c.selection_offset > ast.offset(params_node) {
+                if c.diagnostic.is_none() && c.selection_offset > ast.offset(params_node) {
+                    return;
+                }
+                if !all_parameters_have_types(ast, params_node) {
                     return;
                 }
                 let return_type = ast[fta]
@@ -1650,7 +1672,10 @@ producer!(
             if let Some(rfp) = ast.cast::<RegularFormalParameter>(n) {
                 if let Some(fts) = ast[rfp].function_typed_suffix {
                     let fp_params = ast[fts].formal_parameters;
-                    if c.selection_offset > ast.offset(fp_params) {
+                    if c.diagnostic.is_none() && c.selection_offset > ast.offset(fp_params) {
+                        return;
+                    }
+                    if !all_parameters_have_types(ast, fp_params) {
                         return;
                     }
                     let Some(name_tok) = ast[rfp].name else {
@@ -1679,7 +1704,7 @@ producer!(
                     return;
                 }
             }
-            if ast.is::<ArgumentList>(n) || ast.is::<FormalParameterList>(n) {
+            if ast.is::<ArgumentList>(n) || (ast.is::<FormalParameterList>(n) && c.diagnostic.is_none()) {
                 return;
             }
             cur = ast.parent(n);
