@@ -37,7 +37,8 @@
 <main id="main">
 
 <section class="hero" id="top" aria-labelledby="hero-title">
-  <div class="wrap">
+  <div class="wrap hero-grid">
+    <div>
     <p class="tag"><span class="dot" aria-hidden="true"></span><span>Preview · v0.1.0-preview.10 · Dart SDK 3.13.3</span></p>
     <h1 id="hero-title">dartr</h1>
     <p class="lede">A Rust port of the Dart analyzer (Dart SDK 3.13.3) with <code>analyze</code>, <code>format</code>, <code>fix</code> and <code>language-server</code>.</p>
@@ -45,16 +46,18 @@
       <div class="term-bar"><span>Install</span><button class="copy" type="button" data-copy="t-hero" hidden>Copy</button></div>
 <pre id="t-hero"><span class="p">$ </span><span data-cmd>brew install orestesgaolin/tap/dartr</span></pre>
     </div>
+    </div>
+    <img class="meme" src="ohmygod.png" width="960" height="748" alt="Hand-drawn comic. A speech bubble says &quot;rewrite dart analyzer in rust&quot;. The computer answers &quot;&gt;rewrites dart analyzer in rust&quot;. The person at the desk says &quot;oh my god&quot;.">
   </div>
 </section>
 
 <section class="block" id="benchmarks" aria-labelledby="benchmarks-title">
   <div class="wrap">
     <h2 id="benchmarks-title">Benchmarks</h2>
-    <p class="section-intro">Measured on 2026-10-11 on a single machine (Apple M5 Pro, 15 cores, 48 GB RAM) against Dart SDK 3.13.3. Files are analyzed in parallel on all cores. Dart caches results on disk (<code>~/.dartServer</code>); dartr does not yet.</p>
+    <p class="section-intro">Measured on a single machine (Apple M5 Pro, 15 cores, 48 GB RAM) against Dart SDK 3.13.3. Files are analyzed in parallel on all cores. Dart caches results on disk (<code>~/.dartServer</code>); dartr does not yet.</p>
 
     <h3><code>dartr analyze</code></h3>
-    <p class="sub-note">Wall time in seconds (mean of 3 runs, lower is better), measured on 2026-10-11 between 13:00 and 13:30 while other builds ran (load average 5 to 11).</p>
+    <p class="sub-note">Wall time in seconds, lower is better. Measured while other builds ran (load average 5 to 11).</p>
 
     <ul class="legend" aria-label="Chart legend">
       <li><span class="sw dart" aria-hidden="true"></span><span><code>dart analyze</code>, warm disk cache</span></li>
@@ -64,7 +67,7 @@
 
     <div class="charts">
       <figure class="chart" aria-labelledby="c1-t">
-        <figcaption><b id="c1-t">Flutter application</b><span>1,559,637 lines · plugins</span></figcaption>
+        <figcaption><b id="c1-t">Flutter application</b><span>1,559,637 lines · plugins · mean of 3 runs</span></figcaption>
         <div class="bars" role="img" aria-label="Flutter application: dart analyze warm cache 62.7 seconds, dart analyze empty cache 81.7 seconds, dartr analyze 22 seconds.">
           <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
           <div class="bar-row"><span class="lbl">dart, warm cache</span><div class="track"><div class="fill dart" style="--w:0.6270"></div><span class="val dart">62.7 s</span></div></div>
@@ -75,7 +78,7 @@
       </figure>
 
       <figure class="chart" aria-labelledby="c2-t">
-        <figcaption><b id="c2-t">Flutter <code>packages/flutter</code></b><span>1,309,663 lines</span></figcaption>
+        <figcaption><b id="c2-t">Flutter <code>packages/flutter</code></b><span>1,309,663 lines · mean of 3 runs</span></figcaption>
         <div class="bars" role="img" aria-label="Flutter packages/flutter: dart analyze warm cache 6 seconds, dart analyze empty cache 19.8 seconds, dartr analyze 1.75 seconds.">
           <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
           <div class="bar-row"><span class="lbl">dart, warm cache</span><div class="track"><div class="fill dart" style="--w:0.3000"></div><span class="val dart">6 s</span></div></div>
@@ -86,7 +89,7 @@
       </figure>
 
       <figure class="chart" aria-labelledby="c3-t">
-        <figcaption><b id="c3-t"><code>analyzer</code> 9.0.0 (pub)</b><span>909,249 lines</span></figcaption>
+        <figcaption><b id="c3-t"><code>analyzer</code> 9.0.0 (pub)</b><span>909,249 lines · mean of 3 runs</span></figcaption>
         <div class="bars" role="img" aria-label="analyzer 9.0.0: dart analyze warm cache 3.1 seconds, dart analyze empty cache 8.7 seconds, dartr analyze 0.84 seconds.">
           <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
           <div class="bar-row"><span class="lbl">dart, warm cache</span><div class="track"><div class="fill dart" style="--w:0.3100"></div><span class="val dart">3.1 s</span></div></div>
@@ -97,7 +100,7 @@
       </figure>
 
       <figure class="chart" aria-labelledby="c4-t">
-        <figcaption><b id="c4-t"><code>flutter_tools</code></b><span>455,099 lines</span></figcaption>
+        <figcaption><b id="c4-t"><code>flutter_tools</code></b><span>455,099 lines · mean of 3 runs</span></figcaption>
         <div class="bars" role="img" aria-label="flutter_tools: dart analyze warm cache 1.6 seconds, dart analyze empty cache 12.1 seconds, dartr analyze 0.87 seconds.">
           <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
           <div class="bar-row"><span class="lbl">dart, warm cache</span><div class="track"><div class="fill dart" style="--w:0.1000"></div><span class="val dart">1.6 s</span></div></div>
@@ -159,7 +162,7 @@
     </div>
 
     <h3 class="sub-head"><code>dartr language-server</code></h3>
-    <p class="sub-note">Measured on 2026-10-11 13:30–14:00 on the same machine (load average 5 to 7) with <code>bench/lsp_bench.py</code>. Median of 20 positions per request kind (7 to 10 for references). Memory is RSS after startup.</p>
+    <p class="sub-note">Measured on the same machine (load average 5 to 7) with <code>bench/lsp_bench.py</code>. Memory is RSS after startup.</p>
 
     <ul class="legend" aria-label="Language server chart legend">
       <li><span class="sw ref" aria-hidden="true"></span><span><code>dart language-server</code>, cold (empty cache)</span></li>
@@ -169,7 +172,7 @@
 
     <div class="charts">
       <figure class="chart" aria-labelledby="lsp-c1-t">
-        <figcaption><b id="lsp-c1-t">Startup</b><span>cold · warm · dartr (split scale)</span></figcaption>
+        <figcaption><b id="lsp-c1-t">Startup</b><span>dart cold: 1 run · dart warm, dartr: 2 runs · split scale</span></figcaption>
         <div class="bars wide-val" role="img" aria-label="Language server startup on Flutter application: dart cold 77 seconds, dart warm 87 seconds, dartr 26 seconds.">
           <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
           <div class="bar-row multi">
@@ -249,7 +252,7 @@
       </figure>
 
       <figure class="chart" aria-labelledby="lsp-c3-t">
-        <figcaption><b id="lsp-c3-t">References (first request)</b><span>split scale (s / ms)</span></figcaption>
+        <figcaption><b id="lsp-c3-t">References (first request)</b><span>1 request per project · split scale</span></figcaption>
         <div class="bars" role="img" aria-label="First references request on large projects: Flutter application dart 2.5 s vs dartr 2.0 s; Flutter dart 2.9 s vs dartr 1.2 s.">
           <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
           <div class="bar-row multi">
@@ -371,7 +374,12 @@
 <section class="block" id="setup" aria-labelledby="setup-title">
   <div class="wrap">
     <h2 id="setup-title">Editor setup</h2>
-    <p class="section-intro">In VS Code (Dart-Code), set <code>"dart.analyzerPath"</code> to the <code>dartr_shim.dart</code> installed by Homebrew (<code>/opt/homebrew/opt/dartr/libexec/dartr_shim.dart</code>). Editors that launch a binary directly (Neovim, Helix, Zed, Emacs, Sublime) run <code>dartr language-server</code>. Remove <code>"dart.analyzerPath"</code> and reload the window to switch back to the Dart server. See <a href="https://github.com/orestesgaolin/dartr/blob/main/docs/editor-setup.md">docs/editor-setup.md</a>.</p>
+    <ul class="setup-list">
+      <li><b>VS Code (Dart-Code):</b> set <code>"dart.analyzerPath"</code> to <code>/opt/homebrew/opt/dartr/libexec/dartr_shim.dart</code> (installed by Homebrew), then reload the window.</li>
+      <li><b>Neovim, Helix, Zed, Emacs, Sublime:</b> run <code>dartr language-server</code> as the Dart language server.</li>
+      <li><b>Back to the Dart server:</b> remove <code>"dart.analyzerPath"</code> and reload the window.</li>
+      <li><b>Details:</b> <a href="https://github.com/orestesgaolin/dartr/blob/main/docs/editor-setup.md">docs/editor-setup.md</a>.</li>
+    </ul>
   </div>
 </section>
 

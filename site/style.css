@@ -269,3 +269,10 @@ h1 code, h2 code, h3 code, .chart figcaption b code { background: none; border: 
 tbody th { background: none; text-transform: none; letter-spacing: 0; font-size: 0.9rem; color: var(--ink); font-family: var(--sans); font-weight: 500; min-width: 10em; }
 table code { white-space: nowrap; }
 .table-note { font-size: 0.85rem; color: var(--ink-3); margin: 16px 0 0; }
+
+.hero-grid { display: grid; gap: 28px; align-items: center; }
+@media (min-width: 900px) { .hero-grid { grid-template-columns: minmax(0, 1fr) 380px; } }
+.meme { width: 100%; max-width: 420px; height: auto; border: 1px solid var(--rule); border-radius: 10px; background: #fff; }
+.setup-list { margin: 14px 0 0; padding-left: 1.2em; color: var(--ink-2); max-width: 46em; }
+.setup-list li { margin: 6px 0; }
+.setup-list b { color: var(--ink); }
