@@ -197,8 +197,8 @@ th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--rul
 tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0; }
 th { font-family: var(--mono); font-size: 0.74rem; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.05em; background: var(--bg-sunk); }
 td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
-td.dart { color: var(--dart-text); }
-td.dartr { color: var(--dartr-text); font-weight: 600; }
+td.dart, td .dart { color: var(--dart-text); }
+td.dartr, td .dartr { color: var(--dartr-text); font-weight: 600; }
 
 /* Charts */
 .legend { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 18px 0 0; padding: 0; list-style: none; font-size: 0.88rem; color: var(--ink-2); }
@@ -215,27 +215,37 @@ td.dartr { color: var(--dartr-text); font-weight: 600; }
 .chart figcaption b { font-weight: 600; }
 .chart figcaption span { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-3); }
 
-.bars { --label: 92px; position: relative; }
+.charts + .chart { margin-top: 16px; }
+.bars { --label: 92px; --pad-r: 56px; position: relative; }
 @media (min-width: 480px) { .bars { --label: 104px; } }
+.bars.wide-val { --pad-r: 74px; }
+.bars + .bars { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--rule); }
 .bar-row { display: grid; grid-template-columns: var(--label) 1fr; align-items: center; gap: 10px; height: 28px; }
+.bar-row.multi { height: auto; padding: 4px 0; }
+.bar-row.multi + .bar-row.multi { border-top: 1px solid color-mix(in srgb, var(--rule) 55%, transparent); }
 .bar-row .lbl { font-family: var(--mono); font-size: 0.74rem; color: var(--ink-2); line-height: 1.15; }
+.bar-stack { display: grid; gap: 3px; }
 .track { position: relative; height: 100%; display: flex; align-items: center; }
-.fill { height: 18px; border-radius: 2px; min-width: 2px; flex: none; width: calc((100% - 56px) * var(--w, 0)); }
+.bar-stack .track { height: 20px; }
+.fill { height: 18px; border-radius: 2px; min-width: 2px; flex: none; width: calc((100% - var(--pad-r, 56px)) * var(--w, 0)); }
+.bar-stack .fill { height: 14px; }
 .fill.dart { background: var(--dart); }
 .fill.dartr { background: var(--dartr); box-shadow: inset 0 0 0 1px var(--dartr-edge); }
 .fill.ref { background: repeating-linear-gradient(135deg, var(--ref) 0 2px, transparent 2px 5px); box-shadow: inset 0 0 0 1px var(--ref); height: 12px; }
+.bar-stack .fill.ref { height: 11px; }
 .val { font-family: var(--mono); font-size: 0.78rem; font-weight: 600; margin-left: 8px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .val.dart { color: var(--dart-text); }
 .val.dartr { color: var(--dartr-text); }
 .val.ref { color: var(--ink-3); font-weight: 500; }
 
 .axis { display: grid; grid-template-columns: var(--label) 1fr; gap: 10px; margin-top: 4px; }
-.ticks { position: relative; height: 22px; border-top: 1px solid var(--rule-strong); margin-right: 56px; }
+.ticks { position: relative; height: 22px; border-top: 1px solid var(--rule-strong); margin-right: var(--pad-r, 56px); }
 .ticks span { position: absolute; top: 4px; transform: translateX(-50%); font-family: var(--mono); font-size: 0.7rem; color: var(--ink-3); white-space: nowrap; }
 .ticks span:first-child { transform: none; }
 .ticks span:last-child { transform: translateX(-100%); }
-.axis-title { grid-column: 2; font-family: var(--mono); font-size: 0.7rem; color: var(--ink-3); text-align: right; margin-right: 56px; line-height: 1.2; }
-.grid-lines { position: absolute; top: 0; bottom: 44px; left: calc(var(--label) + 10px); right: 56px; pointer-events: none; }
+@media (max-width: 440px) { .bars.wide-val .ticks span:nth-child(even) { display: none; } }
+.axis-title { grid-column: 2; font-family: var(--mono); font-size: 0.7rem; color: var(--ink-3); text-align: right; margin-right: var(--pad-r, 56px); line-height: 1.2; }
+.grid-lines { position: absolute; top: 0; bottom: 44px; left: calc(var(--label) + 10px); right: var(--pad-r, 56px); pointer-events: none; }
 .grid-lines i { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px dashed var(--rule); }
 
 /* Links */
