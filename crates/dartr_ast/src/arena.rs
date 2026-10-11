@@ -764,6 +764,80 @@ impl Ast {
             }
         }
     }
+
+    pub fn shrink_to_fit(&mut self) {
+        self.tokens.shrink_to_fit();
+        self.kinds.shrink_to_fit();
+        self.slots.shrink_to_fit();
+        self.parents.shrink_to_fit();
+        self.stores.shrink_to_fit();
+        self.lists.shrink_to_fit();
+        self.token_lists.shrink_to_fit();
+        self.scratch = Vec::new();
+    }
+
+    pub fn mem_stats(&self) -> AstMemStats {
+        use std::mem::size_of;
+        let (tokens_used, tokens_cap) = self.tokens.heap_bytes();
+        let spine_used = self.kinds.len() * size_of::<NodeKind>()
+            + self.slots.len() * size_of::<u32>()
+            + self.parents.len() * size_of::<Option<NodeId>>()
+            + self.lists.len() * size_of::<NodeId>()
+            + self.token_lists.len() * size_of::<TokenId>();
+        let spine_cap = self.kinds.capacity() * size_of::<NodeKind>()
+            + self.slots.capacity() * size_of::<u32>()
+            + self.parents.capacity() * size_of::<Option<NodeId>>()
+            + self.lists.capacity() * size_of::<NodeId>()
+            + self.token_lists.capacity() * size_of::<TokenId>()
+            + self.scratch.capacity() * size_of::<NodeId>();
+        let (stores_used, stores_cap) = self.stores.heap_bytes();
+        AstMemStats {
+            inline_bytes: size_of::<Self>(),
+            node_count: self.kinds.len(),
+            token_count: self.tokens.len(),
+            tokens_used,
+            tokens_cap,
+            spine_used,
+            spine_cap,
+            stores_used,
+            stores_cap,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AstMemStats {
+    pub inline_bytes: usize,
+    pub node_count: usize,
+    pub token_count: usize,
+    pub tokens_used: usize,
+    pub tokens_cap: usize,
+    pub spine_used: usize,
+    pub spine_cap: usize,
+    pub stores_used: usize,
+    pub stores_cap: usize,
+}
+
+impl AstMemStats {
+    pub fn total_used(&self) -> usize {
+        self.inline_bytes + self.tokens_used + self.spine_used + self.stores_used
+    }
+
+    pub fn total_cap(&self) -> usize {
+        self.inline_bytes + self.tokens_cap + self.spine_cap + self.stores_cap
+    }
+
+    pub fn add(&mut self, other: &AstMemStats) {
+        self.inline_bytes += other.inline_bytes;
+        self.node_count += other.node_count;
+        self.token_count += other.token_count;
+        self.tokens_used += other.tokens_used;
+        self.tokens_cap += other.tokens_cap;
+        self.spine_used += other.spine_used;
+        self.spine_cap += other.spine_cap;
+        self.stores_used += other.stores_used;
+        self.stores_cap += other.stores_cap;
+    }
 }
 
 impl<T: Concrete> std::ops::Index<Id<T>> for Ast {
@@ -787,42 +861,217 @@ impl<T: Concrete> std::ops::IndexMut<Id<T>> for Ast {
 /// fields of the node classes (`staticType`, `element`, ...).
 #[derive(Clone, Debug)]
 pub struct NodeMap<V> {
-    values: Vec<Option<V>>,
+    entries: Vec<(NodeId, Option<V>)>,
+    buckets: Vec<u32>,
+    len: usize,
+    sorted: bool,
 }
 
 impl<V> Default for NodeMap<V> {
     fn default() -> Self {
-        NodeMap { values: Vec::new() }
+        NodeMap {
+            entries: Vec::new(),
+            buckets: Vec::new(),
+            len: 0,
+            sorted: true,
+        }
+    }
+}
+
+pub enum NodeMapIter<'a, V> {
+    Sorted(std::slice::Iter<'a, (NodeId, Option<V>)>),
+    Unsorted(std::vec::IntoIter<(NodeId, &'a V)>),
+}
+
+impl<'a, V> Iterator for NodeMapIter<'a, V> {
+    type Item = (NodeId, &'a V);
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            NodeMapIter::Sorted(iter) => {
+                for (id, v) in iter.by_ref() {
+                    if let Some(v) = v.as_ref() {
+                        return Some((*id, v));
+                    }
+                }
+                None
+            }
+            NodeMapIter::Unsorted(iter) => iter.next(),
+        }
     }
 }
 
 impl<V> NodeMap<V> {
+    const SMALL_LIMIT: usize = 8;
+
     pub fn new() -> Self {
         Self::default()
     }
 
+    #[inline(always)]
+    fn hash(id: NodeId) -> usize {
+        (id.0.get() as u64)
+            .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+            .rotate_right(32) as usize
+    }
+
+    #[inline]
     pub fn get(&self, id: impl Into<NodeId>) -> Option<&V> {
-        self.values.get(id.into().index()).and_then(|v| v.as_ref())
+        let id = id.into();
+        if self.entries.is_empty() {
+            return None;
+        }
+        if self.buckets.is_empty() {
+            for (k, v) in &self.entries {
+                if *k == id {
+                    return v.as_ref();
+                }
+            }
+            return None;
+        }
+        let mask = self.buckets.len() - 1;
+        let mut slot = Self::hash(id) & mask;
+        loop {
+            let idx = self.buckets[slot];
+            if idx == 0 {
+                return None;
+            }
+            let (k, v) = &self.entries[idx as usize - 1];
+            if *k == id {
+                return v.as_ref();
+            }
+            slot = (slot + 1) & mask;
+        }
+    }
+
+    fn rehash(&mut self, new_cap: usize) {
+        self.buckets.clear();
+        self.buckets.resize(new_cap, 0);
+        let mask = new_cap - 1;
+        for (i, (k, _)) in self.entries.iter().enumerate() {
+            let mut slot = Self::hash(*k) & mask;
+            while self.buckets[slot] != 0 {
+                slot = (slot + 1) & mask;
+            }
+            self.buckets[slot] = (i + 1) as u32;
+        }
     }
 
     pub fn insert(&mut self, id: impl Into<NodeId>, value: V) -> Option<V> {
-        let i = id.into().index();
-        if i >= self.values.len() {
-            self.values.resize_with(i + 1, || None);
+        let id = id.into();
+        if self.buckets.is_empty() {
+            for (k, v) in &mut self.entries {
+                if *k == id {
+                    let old = v.replace(value);
+                    if old.is_none() {
+                        self.len += 1;
+                    }
+                    return old;
+                }
+            }
+            if self.entries.len() < Self::SMALL_LIMIT {
+                if self.sorted
+                    && let Some(&(last, _)) = self.entries.last()
+                    && id <= last
+                {
+                    self.sorted = false;
+                }
+                self.entries.push((id, Some(value)));
+                self.len += 1;
+                return None;
+            }
+            self.rehash(32);
         }
-        self.values[i].replace(value)
+        if (self.entries.len() + 1) * 2 > self.buckets.len() {
+            self.rehash((self.buckets.len() * 2).max(32));
+        }
+        let mask = self.buckets.len() - 1;
+        let mut slot = Self::hash(id) & mask;
+        loop {
+            let idx = self.buckets[slot];
+            if idx == 0 {
+                if self.sorted
+                    && let Some(&(last, _)) = self.entries.last()
+                    && id <= last
+                {
+                    self.sorted = false;
+                }
+                self.entries.push((id, Some(value)));
+                self.buckets[slot] = self.entries.len() as u32;
+                self.len += 1;
+                return None;
+            }
+            let (k, v) = &mut self.entries[idx as usize - 1];
+            if *k == id {
+                let old = v.replace(value);
+                if old.is_none() {
+                    self.len += 1;
+                }
+                return old;
+            }
+            slot = (slot + 1) & mask;
+        }
     }
 
     pub fn remove(&mut self, id: impl Into<NodeId>) -> Option<V> {
-        let i = id.into().index();
-        self.values.get_mut(i).and_then(|v| v.take())
+        let id = id.into();
+        if self.entries.is_empty() {
+            return None;
+        }
+        if self.buckets.is_empty() {
+            for (k, v) in &mut self.entries {
+                if *k == id {
+                    let old = v.take();
+                    if old.is_some() {
+                        self.len -= 1;
+                    }
+                    return old;
+                }
+            }
+            return None;
+        }
+        let mask = self.buckets.len() - 1;
+        let mut slot = Self::hash(id) & mask;
+        loop {
+            let idx = self.buckets[slot];
+            if idx == 0 {
+                return None;
+            }
+            let (k, v) = &mut self.entries[idx as usize - 1];
+            if *k == id {
+                let old = v.take();
+                if old.is_some() {
+                    self.len -= 1;
+                }
+                return old;
+            }
+            slot = (slot + 1) & mask;
+        }
     }
 
     /// The entries in node order.
-    pub fn iter(&self) -> impl Iterator<Item = (NodeId, &V)> {
-        self.values
-            .iter()
-            .enumerate()
-            .filter_map(|(i, v)| v.as_ref().map(|v| (NodeId::from_index(i), v)))
+    pub fn iter(&self) -> NodeMapIter<'_, V> {
+        if self.sorted {
+            NodeMapIter::Sorted(self.entries.iter())
+        } else {
+            let mut pairs: Vec<(NodeId, &V)> = self
+                .entries
+                .iter()
+                .filter_map(|(id, v)| v.as_ref().map(|v| (*id, v)))
+                .collect();
+            pairs.sort_unstable_by_key(|(id, _)| *id);
+            NodeMapIter::Unsorted(pairs.into_iter())
+        }
+    }
+
+    /// Returns `(entries, used_entry_bytes, allocated_capacity_bytes)`.
+    pub fn mem_bytes(&self) -> (usize, usize, usize) {
+        let elem_size = std::mem::size_of::<(NodeId, Option<V>)>();
+        (
+            self.len,
+            self.len * elem_size,
+            self.entries.capacity() * elem_size + self.buckets.capacity() * 4,
+        )
     }
 }

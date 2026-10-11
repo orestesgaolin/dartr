@@ -248,6 +248,36 @@ macro_rules! interner_api {
             pub fn type_count(&self) -> usize {
                 self.0.0.types.len()
             }
+
+            /// Returns `(total_items, used_bytes, capacity_bytes)`.
+            pub fn mem_bytes(&self) -> (usize, usize, usize) {
+                use std::mem::size_of;
+                let p = &self.0.0;
+                let mut count = 0usize;
+                let mut used = 0usize;
+                let mut cap = 0usize;
+                let mut add = |(c, u, k): (usize, usize, usize)| {
+                    count += c;
+                    used += u;
+                    cap += k;
+                };
+                add(p.types.mem_bytes(|_| 0));
+                add(p.type_lists.mem_bytes(|v| v.len() * size_of::<TypeId>()));
+                add(p
+                    .named_lists
+                    .mem_bytes(|v| v.len() * size_of::<NamedType>()));
+                add(p.param_lists.mem_bytes(|v| v.len() * size_of::<FnParam>()));
+                add(p
+                    .type_param_lists
+                    .mem_bytes(|v| v.len() * size_of::<EId<TypeParameterElement>>()));
+                add(p.substs.mem_bytes(|v| v.len() * size_of::<SubstPair>()));
+                add(p.members.mem_bytes(|_| 0));
+                add(p.aliases.mem_bytes(|_| 0));
+                let mt = p.member_types.lock();
+                used += mt.len() * size_of::<((u32, u8), TypeId)>();
+                cap += mt.len() * (size_of::<((u32, u8), TypeId)>() + 4);
+                (count, used, cap)
+            }
         }
     };
 }

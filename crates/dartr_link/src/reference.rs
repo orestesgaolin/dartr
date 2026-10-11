@@ -139,8 +139,6 @@ pub struct Reference {
     pub kind: ReferenceKind,
     /// Dart `Reference.element`.
     pub element: Option<ElementId>,
-    /// The members of a member container, per kind and key.
-    members: Vec<IndexMap<Arc<str>, RefId>>,
 }
 
 /// Dart `LibraryReference`: the references of one library.
@@ -149,6 +147,7 @@ pub struct LibraryReference {
     pub uri_string: Arc<str>,
     references: Vec<Reference>,
     top_levels_by_kind: Vec<IndexMap<Arc<str>, RefId>>,
+    members: IndexMap<(RefId, MemberReferenceKind), IndexMap<Arc<str>, RefId>>,
     built_ins: [Option<RefId>; 2],
 }
 
@@ -159,11 +158,17 @@ impl LibraryReference {
             references: vec![Reference {
                 kind: ReferenceKind::Library,
                 element: None,
-                members: Vec::new(),
             }],
             top_levels_by_kind: vec![IndexMap::new(); TopLevelReferenceKind::COUNT],
+            members: IndexMap::new(),
             built_ins: [None; 2],
         }
+    }
+
+    pub fn shrink_to_fit(&mut self) {
+        self.references.shrink_to_fit();
+        self.top_levels_by_kind = Vec::new();
+        self.members = IndexMap::new();
     }
 
     pub fn get(&self, id: RefId) -> &Reference {
@@ -176,16 +181,9 @@ impl LibraryReference {
 
     fn push(&mut self, kind: ReferenceKind) -> RefId {
         let id = RefId(self.references.len() as u32);
-        let members = match &kind {
-            ReferenceKind::TopLevel { kind, .. } if kind.has_members() => {
-                vec![IndexMap::new(); MemberReferenceKind::COUNT]
-            }
-            _ => Vec::new(),
-        };
         self.references.push(Reference {
             kind,
             element: None,
-            members,
         });
         id
     }
@@ -220,7 +218,11 @@ impl LibraryReference {
         kind: MemberReferenceKind,
         key: &str,
     ) -> RefId {
-        if self.references[container.0 as usize].members[kind as usize].contains_key(key) {
+        if self
+            .members
+            .get(&(container, kind))
+            .is_some_and(|m| m.contains_key(key))
+        {
             panic!("Duplicate reference key: {key}");
         }
         self.get_or_create_member(container, kind, key)
@@ -233,7 +235,11 @@ impl LibraryReference {
         kind: MemberReferenceKind,
         key: &str,
     ) -> RefId {
-        if let Some(&id) = self.references[container.0 as usize].members[kind as usize].get(key) {
+        if let Some(&id) = self
+            .members
+            .get(&(container, kind))
+            .and_then(|m| m.get(key))
+        {
             return id;
         }
         let key: Arc<str> = key.into();
@@ -242,7 +248,10 @@ impl LibraryReference {
             kind,
             key: key.clone(),
         });
-        self.references[container.0 as usize].members[kind as usize].insert(key, id);
+        self.members
+            .entry((container, kind))
+            .or_default()
+            .insert(key, id);
         id
     }
 
@@ -274,6 +283,39 @@ impl LibraryReference {
             ),
             ReferenceKind::BuiltIn(kind) => format!("{}::{}", self.uri_string, kind.identifier()),
         }
+    }
+
+    /// Returns `(ref_count, used_bytes, capacity_bytes)`.
+    pub fn mem_bytes(&self) -> (usize, usize, usize) {
+        use std::mem::size_of;
+        let ref_count = self.references.len();
+        let mut used = ref_count * size_of::<Reference>()
+            + self.top_levels_by_kind.len() * size_of::<IndexMap<Arc<str>, RefId>>()
+            + self.members.len()
+                * (size_of::<((RefId, MemberReferenceKind), IndexMap<Arc<str>, RefId>)>() + 8);
+        let mut cap = self.references.capacity() * size_of::<Reference>()
+            + self.top_levels_by_kind.capacity() * size_of::<IndexMap<Arc<str>, RefId>>()
+            + self.members.capacity()
+                * (size_of::<((RefId, MemberReferenceKind), IndexMap<Arc<str>, RefId>)>() + 8);
+        for map in &self.top_levels_by_kind {
+            used += map.len() * (size_of::<(Arc<str>, RefId)>() + 8);
+            cap += map.capacity() * (size_of::<(Arc<str>, RefId)>() + 8);
+        }
+        for map in self.members.values() {
+            used += map.len() * (size_of::<(Arc<str>, RefId)>() + 8);
+            cap += map.capacity() * (size_of::<(Arc<str>, RefId)>() + 8);
+        }
+        for r in &self.references {
+            let key_len = match &r.kind {
+                ReferenceKind::TopLevel { key, .. } | ReferenceKind::Member { key, .. } => {
+                    key.len() + 16
+                }
+                _ => 0,
+            };
+            used += key_len;
+            cap += key_len;
+        }
+        (ref_count, used, cap)
     }
 }
 

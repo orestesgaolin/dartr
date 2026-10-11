@@ -200,19 +200,24 @@ impl Token {
 pub struct Tokens {
     /// The source text (without a leading byte order mark).
     pub source: Arc<str>,
-    pub(crate) tokens: Vec<Token>,
-    pub(crate) owned_lexemes: Vec<Box<str>>,
-    pub(crate) errors: Vec<ErrorToken>,
+    pub(crate) tokens: Arc<Vec<Token>>,
+    pub(crate) owned_lexemes: Arc<Vec<Box<str>>>,
+    pub(crate) errors: Arc<Vec<ErrorToken>>,
 }
 
 impl Tokens {
     pub fn new(source: Arc<str>) -> Tokens {
         Tokens {
             source,
-            tokens: Vec::new(),
-            owned_lexemes: Vec::new(),
-            errors: Vec::new(),
+            tokens: Arc::new(Vec::new()),
+            owned_lexemes: Arc::new(Vec::new()),
+            errors: Arc::new(Vec::new()),
         }
+    }
+
+    #[inline(always)]
+    pub fn is_shared(&self) -> bool {
+        Arc::strong_count(&self.tokens) > 1
     }
 
     #[inline(always)]
@@ -232,7 +237,7 @@ impl Tokens {
 
     #[inline(always)]
     pub fn get_mut(&mut self, id: TokenId) -> &mut Token {
-        &mut self.tokens[id.index()]
+        &mut Arc::make_mut(&mut self.tokens)[id.index()]
     }
 
     #[inline(always)]
@@ -295,8 +300,9 @@ impl Tokens {
     /// Adds a token to the arena (not linked into the stream). Use this to
     /// insert synthetic tokens: push, then set `next`/`previous`.
     pub fn push(&mut self, token: Token) -> TokenId {
-        let id = TokenId(self.tokens.len() as u32);
-        self.tokens.push(token);
+        let tokens = Arc::make_mut(&mut self.tokens);
+        let id = TokenId(tokens.len() as u32);
+        tokens.push(token);
         id
     }
 
@@ -304,8 +310,9 @@ impl Tokens {
     pub fn push_with_lexeme(&mut self, mut token: Token, lexeme: &str) -> TokenId {
         token.flags |= flags::OWNED_LEXEME;
         token.flags &= !flags::FIXED_LEXEME;
-        token.lex_start = self.owned_lexemes.len() as u32;
-        self.owned_lexemes.push(lexeme.into());
+        let owned = Arc::make_mut(&mut self.owned_lexemes);
+        token.lex_start = owned.len() as u32;
+        owned.push(lexeme.into());
         self.push(token)
     }
 
@@ -330,9 +337,10 @@ impl Tokens {
             token.lex_start = 0;
             self.push(token)
         } else if token.flags & (flags::OWNED_LEXEME | flags::ERROR) == flags::ERROR {
-            token.lex_start = self.errors.len() as u32;
-            self.errors
-                .push(src.errors[src.get(id).lex_start as usize].clone());
+            let err = src.errors[src.get(id).lex_start as usize].clone();
+            let errors = Arc::make_mut(&mut self.errors);
+            token.lex_start = errors.len() as u32;
+            errors.push(err);
             self.push(token)
         } else {
             self.push_with_lexeme(token, src.lexeme(id))
@@ -447,10 +455,11 @@ impl Tokens {
 
     /// Dart `Token.setNext`: links `a.next = b`, `b.previous = a`.
     pub fn set_next(&mut self, a: TokenId, b: TokenId) {
-        self.tokens[a.index()].next = b;
-        self.tokens[b.index()].previous = a;
-        if self.tokens[b.index()].flags & flags::SYNTHETIC != 0 {
-            self.tokens[b.index()].before_synthetic = a;
+        let tokens = Arc::make_mut(&mut self.tokens);
+        tokens[a.index()].next = b;
+        tokens[b.index()].previous = a;
+        if tokens[b.index()].flags & flags::SYNTHETIC != 0 {
+            tokens[b.index()].before_synthetic = a;
         }
     }
 
@@ -473,9 +482,36 @@ impl Tokens {
     }
 
     pub(crate) fn truncate(&mut self, tokens: usize, owned: usize, errors: usize) {
-        self.tokens.truncate(tokens);
-        self.owned_lexemes.truncate(owned);
-        self.errors.truncate(errors);
+        Arc::make_mut(&mut self.tokens).truncate(tokens);
+        Arc::make_mut(&mut self.owned_lexemes).truncate(owned);
+        Arc::make_mut(&mut self.errors).truncate(errors);
+    }
+
+    /// Returns `(used_bytes, capacity_bytes)` of the token vectors (excluding `source`).
+    pub fn heap_bytes(&self) -> (usize, usize) {
+        use std::mem::size_of;
+        let owned_str_bytes: usize = self.owned_lexemes.iter().map(|s| s.len()).sum();
+        let used = self.tokens.len() * size_of::<Token>()
+            + self.owned_lexemes.len() * size_of::<Box<str>>()
+            + owned_str_bytes
+            + self.errors.len() * size_of::<ErrorToken>();
+        let cap = self.tokens.capacity() * size_of::<Token>()
+            + self.owned_lexemes.capacity() * size_of::<Box<str>>()
+            + owned_str_bytes
+            + self.errors.capacity() * size_of::<ErrorToken>();
+        (used, cap)
+    }
+
+    pub fn shrink_to_fit(&mut self) {
+        if let Some(tokens) = Arc::get_mut(&mut self.tokens) {
+            tokens.shrink_to_fit();
+        }
+        if let Some(owned) = Arc::get_mut(&mut self.owned_lexemes) {
+            owned.shrink_to_fit();
+        }
+        if let Some(errors) = Arc::get_mut(&mut self.errors) {
+            errors.shrink_to_fit();
+        }
     }
 }
 

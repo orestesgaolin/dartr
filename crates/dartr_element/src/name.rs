@@ -163,4 +163,8 @@ impl NamePool {
     pub fn is_empty(&self) -> bool {
         self.pool.is_empty()
     }
+
+    pub fn mem_bytes(&self) -> (usize, usize, usize) {
+        self.pool.mem_bytes(|s| s.len())
+    }
 }

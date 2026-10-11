@@ -101,4 +101,33 @@ impl ResolutionTables {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Returns `(total_entries, used_entry_bytes, allocated_capacity_bytes)`.
+    pub fn mem_bytes(&self) -> (usize, usize, usize) {
+        let mut entries = 0usize;
+        let mut used = 0usize;
+        let mut cap = 0usize;
+        let mut add = |(e, u, c): (usize, usize, usize)| {
+            entries += e;
+            used += u;
+            cap += c;
+        };
+        add(self.static_type.mem_bytes());
+        add(self.element.mem_bytes());
+        add(self.declared_fragment.mem_bytes());
+        add(self.invoke_type.mem_bytes());
+        add(self.type_arg_types.mem_bytes());
+        add(self.param_element.mem_bytes());
+        add(self.annotation_type.mem_bytes());
+        add(self.read_element.mem_bytes());
+        add(self.write_element.mem_bytes());
+        add(self.read_type.mem_bytes());
+        add(self.write_type.mem_bytes());
+        add(self.extended_type.mem_bytes());
+        add(self.method_name_type.mem_bytes());
+        add(self.resolved_uri.mem_bytes());
+        add(self.pattern_info.mem_bytes());
+        add(self.flags.mem_bytes());
+        (entries, used, cap)
+    }
 }
