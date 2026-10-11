@@ -6,6 +6,7 @@ pub mod assists2;
 pub mod assists3;
 pub mod assists4;
 pub mod assists5;
+pub mod bulk_lints;
 pub mod collections;
 pub mod convert_quotes;
 pub mod create;
@@ -268,6 +269,68 @@ pub fn generator(name: &str) -> Option<ProducerGenerator> {
         "RemoveUnusedLocalVariable.new" => |_: C| boxed(RemoveUnusedLocalVariable),
         "ReplaceFinalWithConst.new" => |_: C| boxed(ReplaceFinalWithConst),
         "ReplaceWithConditionalAssignment.new" => |_: C| boxed(ReplaceWithConditionalAssignment),
+        "AddTrailingComma.new" => |_: C| boxed(bulk_lints::AddTrailingComma),
+        "SortConstructorFirst.new" => |_: C| boxed(bulk_lints::SortConstructorFirst),
+        "SortUnnamedConstructorFirst.new" => |_: C| boxed(bulk_lints::SortUnnamedConstructorFirst),
+        "MakeRequiredNamedParametersFirst.new" => {
+            |_: C| boxed(bulk_lints::MakeRequiredNamedParametersFirst)
+        }
+        "ReplaceWithTearOff.new" => |_: C| boxed(bulk_lints::ReplaceWithTearOff),
+        "RemoveArgument.new" => |_: C| boxed(bulk_lints::RemoveArgument),
+        "RemoveUnnecessaryLibraryDirective.new" => {
+            |_: C| boxed(bulk_lints::RemoveUnnecessaryLibraryDirective)
+        }
+        "RemoveLibraryName.new" => |_: C| boxed(bulk_lints::RemoveLibraryName),
+        "SplitMultipleDeclarations.new" => |_: C| boxed(bulk_lints::SplitMultipleDeclarations),
+        "RemoveUnnecessaryRawString.new" => |_: C| boxed(bulk_lints::RemoveUnnecessaryRawString),
+        "ConvertToRawString.new" => |_: C| boxed(bulk_lints::ConvertToRawString),
+        "SortCombinators.new" => |_: C| boxed(bulk_lints::SortCombinators),
+        "RemoveKeyword.awaitKeyword" => |_: C| boxed(bulk_lints::RemoveAwait),
+        "RemoveLeadingUnderscore.new" => |_: C| boxed(bulk_lints::RemoveLeadingUnderscore),
+        "ConvertToBooleanExpression.new" => |_: C| boxed(bulk_lints::ConvertToBooleanExpression),
+        "InlineTypedef.new" => |_: C| boxed(bulk_lints::InlineTypedef),
+        "RemoveInvocation.new" => |_: C| boxed(bulk_lints::RemoveInvocation),
+        "RemoveBreak.new" => |_: C| boxed(bulk_lints::RemoveBreak),
+        "ConvertToIfNull.preferIfNull" => |_: C| {
+            boxed(bulk_lints::ConvertToIfNull {
+                prefer_if_null: true,
+            })
+        },
+        "ConvertToIfNull.useToConvertNullsToBools" => |_: C| {
+            boxed(bulk_lints::ConvertToIfNull {
+                prefer_if_null: false,
+            })
+        },
+        "ConvertForEachToForLoop.new" => |_: C| boxed(bulk_lints::ConvertForEachToForLoop),
+        "RemoveConst.new" => |_: C| boxed(bulk_lints::RemoveConstProducer { unnecessary: false }),
+        "RemoveUnnecessaryConst.new" => {
+            |_: C| boxed(bulk_lints::RemoveConstProducer { unnecessary: true })
+        }
+        "AddLeadingNewlineToString.new" => |_: C| boxed(bulk_lints::AddLeadingNewlineToString),
+        "ConvertToFunctionDeclaration.new" => {
+            |_: C| boxed(bulk_lints::ConvertToFunctionDeclaration)
+        }
+        "ReplaceWithInterpolation.new" => |_: C| boxed(bulk_lints::ReplaceWithInterpolation),
+        "RemoveComparison.new" => |_: C| {
+            boxed(bulk_lints::RemoveComparison {
+                is_type_check: false,
+            })
+        },
+        "RemoveComparison.typeCheck" => |_: C| {
+            boxed(bulk_lints::RemoveComparison {
+                is_type_check: true,
+            })
+        },
+        "RemoveUnusedParameter.new" => |_: C| boxed(bulk_lints::RemoveUnusedParameter),
+        "ReplaceReturnTypeFuture.new" => |_: C| boxed(bulk_lints::ReplaceReturnTypeFuture),
+        "MoveDocCommentToLibraryDirective.new" => {
+            |_: C| boxed(bulk_lints::MoveDocCommentToLibraryDirective)
+        }
+        "RemoveUnnecessaryCast.new" => |_: C| boxed(bulk_lints::RemoveUnnecessaryCast),
+        "RemoveUnnecessaryStringInterpolation.new" => {
+            |_: C| boxed(bulk_lints::RemoveUnnecessaryStringInterpolation)
+        }
+        "ReplaceWithDecoratedBox.new" => |_: C| boxed(bulk_lints::ReplaceWithDecoratedBox),
         _ => return None,
     };
     Some(g)

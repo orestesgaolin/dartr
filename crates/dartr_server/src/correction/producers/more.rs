@@ -139,7 +139,7 @@ assist!(
 );
 
 /// Dart `replaceTypeWithFuture`.
-fn replace_type_with_future(
+pub(crate) fn replace_type_with_future(
     c: &ProducerContext<'_>,
     b: &mut FileEditBuilder<'_, '_>,
     annotation: Option<Id<TypeAnnotation>>,
