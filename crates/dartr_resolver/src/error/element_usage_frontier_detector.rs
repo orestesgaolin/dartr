@@ -70,13 +70,28 @@ impl ElementUsageFrontierDetector {
 
     /// Dart `pushElement(element)`.
     pub fn push_element(&mut self, v: &UnitVerifier<'_>, element: Option<ElementId>) {
-        let usages = self.detector.usages_metadata_only.clone();
+        let usages = &self.detector.usages_metadata_only;
         let Some(stacks) = &mut self.detector.in_element_stacks else {
             return;
         };
+        let has_any = element.is_some_and(|e| {
+            let unit = Some(crate::element_metadata::UnitAst {
+                ast: v.ast,
+                tables: v.tables,
+            });
+            crate::element_metadata::element_has(
+                &v.ctx,
+                e,
+                super::element_usage_detector::USAGE_FLAGS,
+                unit,
+            )
+        });
         for (i, stack) in stacks.iter_mut().enumerate() {
             let mut new_value = stack.last().copied().unwrap_or(false);
-            if !new_value && let Some(element) = element {
+            if !new_value
+                && has_any
+                && let Some(element) = element
+            {
                 new_value = usages[i].get_tag_info(v, element).is_some();
             }
             stack.push(new_value);

@@ -255,6 +255,9 @@ fn check<'a, H: VerifierHost<'a>>(
     argument_list: Id<ArgumentList>,
     error_entity: ErrorEntity,
 ) {
+    if parameters.is_none() {
+        return;
+    }
     let arguments = arguments_of(host, Some(argument_list));
     check_arguments(
         host,
@@ -361,8 +364,9 @@ fn executable_parameters<'a, H: VerifierHost<'a>>(
 ) -> Option<Vec<Parameter<'a>>> {
     let ctx = host.ctx();
     let element = element?;
+    let base_elem = member::base_element(&ctx, element);
     if !matches!(
-        member::base_element(&ctx, element).tag(),
+        base_elem.tag(),
         Tag::Constructor
             | Tag::Method
             | Tag::Getter
@@ -372,15 +376,21 @@ fn executable_parameters<'a, H: VerifierHost<'a>>(
     ) {
         return None;
     }
+    let formal_params = &ctx
+        .executable(dartr_element::EId::<dartr_element::ExecutableElement>::from_raw(base_elem))
+        .formal_params;
+    if !formal_params
+        .iter()
+        .any(|&p| ctx.get(p).kind.is_required_named())
+    {
+        return None;
+    }
     Some(
-        member::formal_parameters(&ctx, element)
-            .into_iter()
-            .filter_map(|p| {
-                let base = member::base_element(&ctx, p).cast::<FormalParameterElement>()?;
-                Some(Parameter {
-                    name: ctx.element_name(base.raw()),
-                    kind: ctx.get(base).kind,
-                })
+        formal_params
+            .iter()
+            .map(|&base| Parameter {
+                name: ctx.element_name(base.raw()),
+                kind: ctx.get(base).kind,
             })
             .collect(),
     )
@@ -396,8 +406,12 @@ fn function_type_parameters<'a, H: VerifierHost<'a>>(
     let TypeKind::Function(f) = ctx.ty(ty) else {
         return None;
     };
+    let params = ctx.list(f.params);
+    if !params.iter().any(|p| p.kind.is_required_named()) {
+        return None;
+    }
     Some(
-        ctx.list(f.params)
+        params
             .iter()
             .map(|p: &FnParam| Parameter {
                 name: p.name.map(|n| ctx.name_str(n)),

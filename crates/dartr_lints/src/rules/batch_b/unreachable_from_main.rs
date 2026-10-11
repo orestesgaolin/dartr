@@ -148,6 +148,16 @@ fn visit_compilation_unit(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Dia
     if units.len() != c.resolved_units.len() {
         return;
     }
+    let has_any_entry_point = units.iter().enumerate().any(|(index, unit)| {
+        let root = c.resolved_units[index].unit;
+        unit.ast
+            .list_raw(unit.ast[Id::<CompilationUnit>::from_raw(root)].declarations)
+            .iter()
+            .any(|&d| is_entry_point(unit, index, d))
+    });
+    if !has_any_entry_point {
+        return;
+    }
     let mut declarations = IndexSet::new();
     for (index, unit) in units.iter().enumerate() {
         add_declarations(unit, index, c.resolved_units[index].unit, &mut declarations);

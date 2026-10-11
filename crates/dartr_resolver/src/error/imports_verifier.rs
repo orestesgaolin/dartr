@@ -90,10 +90,82 @@ pub fn has_diagnostic_reported_that_prevents_import_warnings(units: &[UnitVerifi
 /// (`None`: the imports without prefix).
 type ScopeKey = (FId<LibraryFragment>, Option<EId<PrefixElement>>);
 
-/// The getters or setters of an import scope with one name: each element
-/// with the indexes (in `LibraryFragment.library_imports`) of the imports
-/// that provide it.
-type ScopeEntry = IndexMap<ElementId, Vec<usize>>;
+#[derive(Clone, Copy)]
+enum ScopeMerged {
+    Single(ElementId),
+    Multiple,
+}
+
+impl ScopeMerged {
+    #[inline]
+    fn merge(ctx: &Ctx<'_>, existing: Option<ScopeMerged>, element: ElementId) -> ScopeMerged {
+        let is_sdk = |e: ElementId| {
+            matches!(e.tag(), Tag::Dynamic | Tag::Never)
+                || ctx
+                    .element_data(e)
+                    .and_then(|d| d.library)
+                    .is_some_and(|l| crate::scope::library_is_in_sdk(ctx, l))
+        };
+        match existing {
+            None => ScopeMerged::Single(element),
+            Some(ScopeMerged::Single(existing)) if existing == element => {
+                ScopeMerged::Single(existing)
+            }
+            Some(ScopeMerged::Single(existing)) => match (is_sdk(existing), is_sdk(element)) {
+                (true, false) => ScopeMerged::Single(element),
+                (false, true) => ScopeMerged::Single(existing),
+                _ => ScopeMerged::Multiple,
+            },
+            Some(ScopeMerged::Multiple) => ScopeMerged::Multiple,
+        }
+    }
+}
+
+#[derive(Clone)]
+enum ImportIndices {
+    One(usize),
+    Two(usize, usize),
+    Many(Vec<usize>),
+}
+
+impl ImportIndices {
+    #[inline]
+    fn push_unique(&mut self, index: usize) {
+        match self {
+            ImportIndices::One(a) => {
+                if *a != index {
+                    *self = ImportIndices::Two(*a, index);
+                }
+            }
+            ImportIndices::Two(a, b) => {
+                if *a != index && *b != index {
+                    *self = ImportIndices::Many(vec![*a, *b, index]);
+                }
+            }
+            ImportIndices::Many(v) => {
+                if !v.contains(&index) {
+                    v.push(index);
+                }
+            }
+        }
+    }
+
+    #[inline]
+    fn for_each(&self, mut f: impl FnMut(usize)) {
+        match self {
+            ImportIndices::One(a) => f(*a),
+            ImportIndices::Two(a, b) => {
+                f(*a);
+                f(*b);
+            }
+            ImportIndices::Many(v) => {
+                for &i in v {
+                    f(i);
+                }
+            }
+        }
+    }
+}
 
 /// Dart `ImportsTracking` of all fragments of a library: the tracking of
 /// each import scope (Dart `PrefixScope` with `ImportsTrackingOfPrefix`).
@@ -107,12 +179,12 @@ pub struct ImportsTracking {
 struct PrefixScopeTracking {
     /// Dart `PrefixScope.parent`.
     parent: Option<ScopeKey>,
-    /// The getters of the scope by name.
-    getters: IndexMap<String, ScopeEntry>,
+    /// The getters of the scope by interned `Name`.
+    getters: dartr_element::LookupMap<dartr_element::Name, ScopeMerged>,
     /// The setters of the scope by name (without `=`).
-    setters: IndexMap<String, ScopeEntry>,
+    setters: dartr_element::LookupMap<Box<str>, ScopeMerged>,
     /// Dart `_elementImports`: the imports that provide each element.
-    element_imports: IndexMap<ElementId, Vec<usize>>,
+    element_imports: dartr_element::LookupMap<ElementId, ImportIndices>,
     /// Dart `importToUsedElements`.
     import_to_used_elements: IndexMap<usize, IndexSet<ElementId>>,
     /// Dart `hasPrefixUsedInCommentReference`.
@@ -126,46 +198,18 @@ impl PrefixScopeTracking {
     /// Dart `lookupResult(element)` for the elements of a found name: a
     /// name with more than one element is a `MultiplyDefinedElement`, which
     /// is not recorded.
-    fn record(&mut self, ctx: &Ctx<'_>, found: Option<ScopeEntry>) {
-        let Some(found) = found else {
+    #[inline]
+    fn record(&mut self, found: Option<ScopeMerged>) {
+        let Some(ScopeMerged::Single(element)) = found else {
             return;
         };
-        // Dart `PrefixScope._addTo` / `_merge`, in the order of the imports:
-        // an SDK element yields to a non-SDK element; two different
-        // elements otherwise make a `MultiplyDefinedElement`.
-        enum Merged {
-            Single(ElementId),
-            Multiple,
-        }
-        let is_sdk = |e: ElementId| {
-            matches!(e.tag(), Tag::Dynamic | Tag::Never)
-                || ctx
-                    .element_data(e)
-                    .and_then(|d| d.library)
-                    .is_some_and(|l| crate::scope::library_is_in_sdk(ctx, l))
-        };
-        let mut merged: Option<Merged> = None;
-        for &element in found.keys() {
-            merged = Some(match merged {
-                None => Merged::Single(element),
-                Some(Merged::Single(existing)) if existing == element => Merged::Single(existing),
-                Some(Merged::Single(existing)) => match (is_sdk(existing), is_sdk(element)) {
-                    (true, false) => Merged::Single(element),
-                    (false, true) => Merged::Single(existing),
-                    _ => Merged::Multiple,
-                },
-                // A multiply defined element is not an SDK element.
-                Some(Merged::Multiple) => Merged::Multiple,
+        if let Some(imports) = self.element_imports.get(&element) {
+            imports.for_each(|import| {
+                self.import_to_used_elements
+                    .entry(import)
+                    .or_default()
+                    .insert(element);
             });
-        }
-        let Some(Merged::Single(element)) = merged else {
-            return;
-        };
-        for &import in &found[&element] {
-            self.import_to_used_elements
-                .entry(import)
-                .or_default()
-                .insert(element);
         }
     }
 }
@@ -196,6 +240,17 @@ impl ImportsTracking {
         if result.is_empty() {
             return result;
         }
+        let has_annotated_export = crate::scope::library_fragments(ctx, imported_library)
+            .into_iter()
+            .any(|(unit, _)| {
+                ctx.fragment(unit)
+                    .library_exports
+                    .iter()
+                    .any(|e| !e.directive.metadata.annotations.is_empty())
+            });
+        if !has_annotated_export {
+            return result;
+        }
         let Some(namespace) = ctx.get(imported_library).export_namespace.try_get() else {
             return result;
         };
@@ -211,6 +266,7 @@ impl ImportsTracking {
 
     /// Dart `PrefixScope.lookup(id)` of the scope [key] (and its parents).
     fn prefix_scope_lookup(&mut self, ctx: &Ctx<'_>, key: ScopeKey, id: &str) -> bool {
+        let name_id = ctx.name(id);
         let mut current = Some(key);
         while let Some(k) = current {
             let Some(scope) = self.scopes.get_mut(&k) else {
@@ -219,11 +275,15 @@ impl ImportsTracking {
             if scope.deferred && id == "loadLibrary" {
                 return true;
             }
-            let getter = scope.getters.get(id).cloned();
-            let setter = scope.setters.get(id).cloned();
+            let getter = scope.getters.get(&name_id).copied();
+            let setter = if scope.setters.is_empty() {
+                None
+            } else {
+                scope.setters.get(id).copied()
+            };
             if getter.is_some() || setter.is_some() {
-                scope.record(ctx, getter);
-                scope.record(ctx, setter);
+                scope.record(getter);
+                scope.record(setter);
                 return true;
             }
             current = scope.parent;
@@ -240,13 +300,13 @@ impl ImportsTracking {
                 return;
             };
             if let Some(imports) = scope.element_imports.get(&element).cloned() {
-                for import in imports {
+                imports.for_each(|import| {
                     scope
                         .import_to_used_elements
                         .entry(import)
                         .or_default()
                         .insert(element);
-                }
+                });
                 return;
             }
             // The element is from the accessible extensions of a parent.
@@ -368,25 +428,34 @@ fn build_prefix_scope(
             continue;
         };
         for (&name, &element) in &namespace.defined_names {
-            let name = ctx.name_str(name);
-            if !combinators_allow(ctx, &import.combinators, name) {
+            let name_str = ctx.name_str(name);
+            if !import.combinators.is_empty()
+                && !combinators_allow(ctx, &import.combinators, name_str)
+            {
                 continue;
             }
-            let imports = scope.element_imports.entry(element).or_default();
-            if !imports.contains(&index) {
-                imports.push(index);
+            if let Some(v) = scope.element_imports.get_mut(&element) {
+                v.push_unique(index);
+            } else {
+                scope
+                    .element_imports
+                    .insert(element, ImportIndices::One(index));
             }
-            let (map, id) = match name.strip_suffix('=') {
-                Some(id) => (&mut scope.setters, id),
-                None => (&mut scope.getters, name),
-            };
-            let imports = map
-                .entry(id.to_string())
-                .or_default()
-                .entry(element)
-                .or_default();
-            if !imports.contains(&index) {
-                imports.push(index);
+            match name_str.strip_suffix('=') {
+                Some(id) => {
+                    let existing = scope.setters.get(id).copied();
+                    let merged = ScopeMerged::merge(ctx, existing, element);
+                    if existing.is_none() {
+                        scope.setters.insert(id.into(), merged);
+                    } else if let Some(slot) = scope.setters.get_mut(id) {
+                        *slot = merged;
+                    }
+                }
+                None => {
+                    let existing = scope.getters.get(&name).copied();
+                    let merged = ScopeMerged::merge(ctx, existing, element);
+                    scope.getters.insert(name, merged);
+                }
             }
         }
     }
@@ -425,7 +494,7 @@ fn is_from_deprecated_export(
             };
             if !combinators_allow(ctx, &export.combinators, name_str) {
                 continue;
-            }
+            };
             let Some(ns) = ctx.get(exported_library).export_namespace.try_get() else {
                 continue;
             };
@@ -582,49 +651,49 @@ impl Replay<'_, '_, '_> {
         }
     }
 
+    #[inline]
+    fn check_one_extension_use(&mut self, node: NodeId, element: ElemRef) {
+        let ctx = self.v.ctx;
+        let base = member::base_element(&ctx, element);
+        if !matches!(base.tag(), Tag::Method | Tag::Getter | Tag::Setter) {
+            return;
+        }
+        let Some(extension) = ctx.element_data(base).and_then(|d| d.enclosing) else {
+            return;
+        };
+        let ast = self.v.ast;
+        if extension.tag() != Tag::Extension
+            || member::is_static(&ctx, ElemRef::Base(base))
+            || (ast.is::<SimpleIdentifier>(node)
+                && self
+                    .v
+                    .rt
+                    .scope_lookup_result
+                    .get(node)
+                    .is_some_and(|r| r.getter.is_some() || r.setter.is_some()))
+        {
+            return;
+        }
+        if receiver_is_extension_override(ast, node) {
+            return;
+        }
+        self.tracking
+            .notify_extension_used(self.v.fragment, extension);
+    }
+
     /// Dart `notifyExtensionUsed` of the extension member resolution: the
     /// element of [node] is an instance member of an extension, and the
     /// receiver is not an extension override.
+    #[inline]
     fn check_extension_use(&mut self, node: NodeId) {
-        let ast = self.v.ast;
-        let ctx = self.v.ctx;
-        for element in [
-            self.v.tables.element.get(node).copied(),
-            self.v.tables.read_element.get(node).copied(),
-            self.v.tables.write_element.get(node).copied(),
-        ]
-        .into_iter()
-        .flatten()
-        {
-            let base = member::base_element(&ctx, element);
-            if !matches!(base.tag(), Tag::Method | Tag::Getter | Tag::Setter) {
-                continue;
-            }
-            let Some(extension) = ctx.element_data(base).and_then(|d| d.enclosing) else {
-                continue;
-            };
-            // Dart notifies every extension that the extension member
-            // resolution picks, also one of this library (an import that
-            // re-exports this library provides it too). An unqualified name
-            // inside the extension is a lexical lookup, not an extension
-            // resolution.
-            if extension.tag() != Tag::Extension
-                || member::is_static(&ctx, ElemRef::Base(base))
-                || (ast.is::<SimpleIdentifier>(node)
-                    && self
-                        .v
-                        .rt
-                        .scope_lookup_result
-                        .get(node)
-                        .is_some_and(|r| r.getter.is_some() || r.setter.is_some()))
-            {
-                continue;
-            }
-            if receiver_is_extension_override(ast, node) {
-                continue;
-            }
-            self.tracking
-                .notify_extension_used(self.v.fragment, extension);
+        if let Some(&element) = self.v.tables.element.get(node) {
+            self.check_one_extension_use(node, element);
+        }
+        if let Some(&element) = self.v.tables.read_element.get(node) {
+            self.check_one_extension_use(node, element);
+        }
+        if let Some(&element) = self.v.tables.write_element.get(node) {
+            self.check_one_extension_use(node, element);
         }
     }
 }
@@ -725,15 +794,15 @@ impl AstVisitor for Replay<'_, '_, '_> {
             .flatten()
             .any(|e| !self.is_library_element(e));
         if from_imports {
-            let name = ast_ext::identifier_name(ast, node).to_string();
-            self.fragment_lookup(&name);
+            let name = ast_ext::identifier_name(ast, node);
+            self.fragment_lookup(name);
         }
     }
 
     fn visit_prefixed_identifier(&mut self, ast: &Ast, node: Id<PrefixedIdentifier>) {
         if let Some(prefix) = self.looked_up_prefix(ast[node].prefix) {
-            let name = ast_ext::identifier_name(ast, ast[node].identifier).to_string();
-            self.prefix_lookup(prefix, &name);
+            let name = ast_ext::identifier_name(ast, ast[node].identifier);
+            self.prefix_lookup(prefix, name);
         }
         self.check_extension_use(node.raw());
         ast.visit_children(node, self);
@@ -744,24 +813,24 @@ impl AstVisitor for Replay<'_, '_, '_> {
             && let Some(target) = ast.cast::<SimpleIdentifier>(target)
             && let Some(prefix) = self.looked_up_prefix(target)
         {
-            let name = ast_ext::identifier_name(ast, ast[node].method_name).to_string();
-            self.prefix_lookup(prefix, &name);
+            let name = ast_ext::identifier_name(ast, ast[node].method_name);
+            self.prefix_lookup(prefix, name);
         }
         self.check_extension_use(node.raw());
         ast.visit_children(node, self);
     }
 
     fn visit_named_type(&mut self, ast: &Ast, node: Id<NamedType>) {
-        let name = ast.tokens.lexeme(ast[node].name).to_string();
+        let name = ast.tokens.lexeme(ast[node].name);
         let element = self.v.tables.element.get(node).copied();
-        self.type_name(ast[node].import_prefix, &name, element);
+        self.type_name(ast[node].import_prefix, name, element);
         ast.visit_children(node, self);
     }
 
     fn visit_extension_override(&mut self, ast: &Ast, node: Id<ExtensionOverride>) {
-        let name = ast.tokens.lexeme(ast[node].name).to_string();
+        let name = ast.tokens.lexeme(ast[node].name);
         let element = self.v.tables.element.get(node).copied();
-        self.type_name(ast[node].import_prefix, &name, element);
+        self.type_name(ast[node].import_prefix, name, element);
         ast.visit_children(node, self);
     }
 }

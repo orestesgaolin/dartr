@@ -24,21 +24,24 @@ use crate::ast_ext::formal_parameter_parts;
 pub fn verify(v: &mut UnitVerifier<'_>) {
     let ast = v.ast;
     let unit = v.unit;
+    let inheritance = InheritanceManager3::new(v.ctx);
     let mut visitor = OverrideVerifier {
         host: v,
         current_class: None,
+        inheritance,
     };
     ast.accept(unit, &mut visitor);
 }
 
 /// Dart `OverrideVerifier`.
-pub struct OverrideVerifier<'v, H> {
+pub struct OverrideVerifier<'v, 'h, H> {
     host: &'v mut H,
     /// `_currentClass`: the current class, enum or mixin.
     current_class: Option<EId<InterfaceElement>>,
+    inheritance: InheritanceManager3<'h>,
 }
 
-impl<'h, H: VerifierHost<'h>> OverrideVerifier<'_, H> {
+impl<'h, H: VerifierHost<'h>> OverrideVerifier<'_, 'h, H> {
     fn with_class(&mut self, ast: &Ast, node: NodeId) {
         self.current_class =
             declared_element(self.host, node).and_then(|e| e.cast::<InterfaceElement>());
@@ -66,7 +69,7 @@ impl<'h, H: VerifierHost<'h>> OverrideVerifier<'_, H> {
 
     /// `_isOverride(member)`: whether [member] overrides a member from a
     /// superinterface.
-    fn is_override(&self, member: ElementId) -> bool {
+    fn is_override(&mut self, member: ElementId) -> bool {
         let Some(current_class) = self.current_class else {
             return false;
         };
@@ -79,13 +82,13 @@ impl<'h, H: VerifierHost<'h>> OverrideVerifier<'_, H> {
         let Some(name) = MemberName::for_element(&ctx, ElemRef::Base(member)) else {
             return true;
         };
-        InheritanceManager3::new(ctx)
+        self.inheritance
             .get_overridden(current_class, name)
             .is_some()
     }
 }
 
-impl<'h, H: VerifierHost<'h>> AstVisitor for OverrideVerifier<'_, H> {
+impl<'h, H: VerifierHost<'h>> AstVisitor for OverrideVerifier<'_, 'h, H> {
     fn visit_class_declaration(&mut self, ast: &Ast, node: Id<ClassDeclaration>) {
         self.with_class(ast, node.raw());
     }

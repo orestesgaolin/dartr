@@ -24,6 +24,9 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let arguments = c
         .ast
         .list_raw(c.ast[Id::<ArgumentList>::from_raw(node)].arguments);
+    if arguments.is_empty() {
+        return;
+    }
     if c.ast.parent(node).is_none_or(|parent| {
         !matches!(
             c.ast.kind(parent),
@@ -79,18 +82,18 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         let Some(formal) = base.cast::<FormalParameterElement>() else {
             continue;
         };
-        // Dart `param.metadata.hasRequired`.
-        if c.has_package_meta_getter(formal.raw(), "required")
-            || c.has_constructor_annotation(formal.raw(), "meta", "Required")
-        {
-            continue;
-        }
         let kind = r
             .ctx
             .get(EId::<FormalParameterElement>::from_raw(formal.raw()))
             .kind;
         if kind == dartr_ast::ParameterKind::NamedRequired
             || kind == dartr_ast::ParameterKind::Required
+        {
+            continue;
+        }
+        // Dart `param.metadata.hasRequired`.
+        if c.has_package_meta_getter(formal.raw(), "required")
+            || c.has_constructor_annotation(formal.raw(), "meta", "Required")
         {
             continue;
         }
@@ -136,10 +139,10 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             }
             continue;
         }
-        if let (Some(default), Some(value)) =
-            (c.default_value(parameter), c.constant_value(expression))
-            && default.has_known_value()
+        if let Some(value) = c.constant_value(expression)
             && value.has_known_value()
+            && let Some(default) = c.default_value(parameter)
+            && default.has_known_value()
             && value.dart_eq(&default, &ts)
         {
             c.report_node(out, &diag::AVOID_REDUNDANT_ARGUMENT_VALUES, expression, &[]);

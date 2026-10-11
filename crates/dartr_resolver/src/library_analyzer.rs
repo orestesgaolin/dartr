@@ -180,7 +180,7 @@ pub fn analyze_library_with_unignorable(
         constants: ConstantValues::default(),
     };
     compute_constants(input, &mut library);
-    compute_diagnostics(input, &mut library);
+    compute_diagnostics(input, &scopes, &library_features, &mut library);
     for (unit, unit_input) in library.units.iter_mut().zip(&input.units) {
         // Dart `RecordingDiagnosticListener` is a set: a diagnostic equal
         // to one already recorded (from any pass) is dropped.
@@ -357,25 +357,15 @@ fn panic_message(e: &(dyn std::any::Any + Send)) -> String {
 /// (`dartr_lints`), the SDK constraint verifier, `IgnoreValidator` and the
 /// ignore filtering (`dartr_cli`). Dart runs the warnings only when
 /// `analysisOptions.warning` is set (the default).
-fn compute_diagnostics(input: &LibraryAnalysisInput<'_>, library: &mut ResolvedLibrary) {
+fn compute_diagnostics(
+    input: &LibraryAnalysisInput<'_>,
+    scopes: &LibraryScopes,
+    library_features: &dartr_element::FeatureSet,
+    library: &mut ResolvedLibrary,
+) {
     use crate::error::*;
 
     let sink = NoopSink;
-    let library_features = {
-        let ctx = global_ctx(input, &sink);
-        ctx.get(input.library).feature_set.clone()
-    };
-    let scopes = {
-        let ctx = Ctx {
-            world: input.world,
-            current: None,
-            local: None,
-            tp: input.type_provider,
-            features: &library_features,
-            req: &sink,
-        };
-        LibraryScopes::build(&ctx, input.library)
-    };
     // Dart `_computeVerifyErrors` (per unit): the error verifier (D4–D7).
     let mut library_context = crate::error_verifier::LibraryVerificationContext::default();
     for (index, unit) in library.units.iter_mut().enumerate() {
@@ -386,8 +376,8 @@ fn compute_diagnostics(input: &LibraryAnalysisInput<'_>, library: &mut ResolvedL
         if let Err(e) = catch_unwind(AssertUnwindSafe(|| {
             crate::error_verifier::compute_verify_errors(
                 input,
-                &scopes,
-                &library_features,
+                scopes,
+                library_features,
                 unit,
                 &mut library_context,
             )

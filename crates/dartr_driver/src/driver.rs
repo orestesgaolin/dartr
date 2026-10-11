@@ -178,7 +178,7 @@ impl Driver {
 
     fn publish_linked_cycle(&mut self, c: CycleId, linked: Arc<LinkedCycle>) {
         let libraries = linked.libraries.iter().map(|l| (l.uri.clone(), l.element));
-        self.state.world = self.state.world.with_store(linked.store.clone(), libraries);
+        self.state.world.add_store(linked.store.clone(), libraries);
         for l in &linked.libraries {
             self.state
                 .registry
@@ -573,7 +573,7 @@ impl<'a> Job<'a> {
                 let mut shared = self.shared.lock().unwrap();
                 let (state, results) = &mut *shared;
                 let libraries = linked.libraries.iter().map(|l| (l.uri.clone(), l.element));
-                state.world = state.world.with_store(linked.store.clone(), libraries);
+                state.world.add_store(linked.store.clone(), libraries);
                 for l in &linked.libraries {
                     state.registry.libraries.insert(l.uri.clone(), l.clone());
                 }
