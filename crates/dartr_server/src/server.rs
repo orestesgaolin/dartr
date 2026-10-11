@@ -347,6 +347,7 @@ pub fn run(options: ServerOptions, input: Box<dyn Read + Send>, channel: Channel
 
 impl Server {
     fn new(options: ServerOptions, channel: Channel) -> Self {
+        let cache_dir = options.cache_dir();
         Server {
             channel,
             options,
@@ -369,7 +370,7 @@ impl Server {
             waiting_for_config: false,
             files_with_client_diagnostics: HashSet::new(),
             parsed: HashMap::new(),
-            session: DriverSession::default(),
+            session: DriverSession::with_cache_dir(cache_dir),
             indexes: HashMap::new(),
             search_scope: None,
             owned: search::OwnedFiles::default(),
@@ -1494,7 +1495,7 @@ impl Server {
             })
             .collect();
         // New contexts: new drivers.
-        self.session = DriverSession::default();
+        self.session = DriverSession::with_cache_dir(self.options.cache_dir());
         self.session.set_priority_files(&self.priority);
         self.indexes.clear();
         self.search_scope = None;

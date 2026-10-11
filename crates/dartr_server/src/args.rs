@@ -28,10 +28,14 @@ pub struct ServerOptions {
     pub protocol_traffic_log: Option<String>,
     /// `--dart-sdk` (alias `--sdk`).
     pub dart_sdk: Option<String>,
+    /// `--cache`.
+    pub cache: Option<String>,
     /// `--packages`.
     pub packages: Option<String>,
     /// `--enable-experiment`, all values.
     pub enabled_experiments: Vec<String>,
+    /// `--[no-]disable-file-byte-store`.
+    pub disable_file_byte_store: bool,
     pub disable_completion: bool,
     pub disable_search: bool,
     pub plugins: bool,
@@ -247,13 +251,21 @@ impl ServerOptions {
             protocol_traffic_log: text("protocol-traffic-log")
                 .or_else(|| text("instrumentation-log-file")),
             dart_sdk: text("dart-sdk").or_else(|| text("sdk")),
+            cache: text("cache"),
             packages: text("packages"),
             enabled_experiments,
+            disable_file_byte_store: flag("disable-file-byte-store").unwrap_or(false),
             disable_completion: flag("disable-server-feature-completion").unwrap_or(false),
             disable_search: flag("disable-server-feature-search").unwrap_or(false),
             plugins: flag("plugins").unwrap_or(true),
             help: flag("help").unwrap_or(false),
         })
+    }
+
+    /// Effective cache directory from `--cache` or `DARTR_CACHE_DIR` (`None`
+    /// when neither is set or when `--disable-file-byte-store` is set).
+    pub fn cache_dir(&self) -> Option<String> {
+        dartr_cli::args::resolve_cache_dir(self.cache.as_deref(), self.disable_file_byte_store)
     }
 }
 
@@ -360,5 +372,28 @@ mod tests {
         assert!(parse(&["--client-id"]).is_err());
         assert!(parse(&["--no-help"]).is_err());
         assert!(parse(&["--port=abc"]).is_err());
+    }
+
+    #[test]
+    fn cache_and_disable_file_byte_store_options() {
+        let o = parse(&["--cache=/tmp/server_cache"]).unwrap();
+        assert_eq!(o.cache.as_deref(), Some("/tmp/server_cache"));
+        assert!(!o.disable_file_byte_store);
+        assert_eq!(o.cache_dir().as_deref(), Some("/tmp/server_cache"));
+
+        let disabled = parse(&["--cache=/tmp/server_cache", "--disable-file-byte-store"]).unwrap();
+        assert_eq!(disabled.cache.as_deref(), Some("/tmp/server_cache"));
+        assert!(disabled.disable_file_byte_store);
+        assert_eq!(disabled.cache_dir(), None);
+
+        let reenabled = parse(&[
+            "--cache",
+            "/tmp/server_cache",
+            "--disable-file-byte-store",
+            "--no-disable-file-byte-store",
+        ])
+        .unwrap();
+        assert!(!reenabled.disable_file_byte_store);
+        assert_eq!(reenabled.cache_dir().as_deref(), Some("/tmp/server_cache"));
     }
 }
