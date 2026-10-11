@@ -26,7 +26,7 @@ use crate::file_state::{DirectiveUri, FileId, FileSystemState, RefreshData, SdkF
 use crate::library_graph::{CycleId, LibraryGraph};
 use crate::unlinked_data::UnlinkedCombinator;
 
-/// Cache key for a linked SDK (`dart:*`) library cycle within a [`Generation`].
+/// Cache key for a linked library cycle within a [`Generation`].
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub(crate) struct SdkCycleKey {
     pub sdk_path: String,
@@ -37,7 +37,7 @@ pub(crate) struct SdkCycleKey {
     pub dependency_stores: Vec<StoreId>,
 }
 
-/// Shared cache of parsed SDK (`dart:*`) files and linked SDK library cycles
+/// Shared cache of parsed files and linked library cycles
 /// across all [`Driver`]s that share the same [`Generation`].
 #[derive(Default)]
 pub(crate) struct SdkCache {
@@ -144,25 +144,7 @@ impl Driver {
         }
     }
 
-    /// Whether [c] is an SDK (`dart:*`) cycle whose transitive dependencies
-    /// are also SDK cycles.
-    fn is_sdk_cycle(&self, c: CycleId) -> bool {
-        if self.fs.source_factory.sdk.is_none() {
-            return false;
-        }
-        let cycle = self.graph.cycle(c);
-        !cycle.libraries.is_empty()
-            && cycle
-                .libraries
-                .iter()
-                .all(|&l| self.fs.file(l).uri_properties.is_dart)
-            && cycle
-                .direct_dependencies
-                .iter()
-                .all(|&d| self.is_sdk_cycle(d))
-    }
-
-    /// Computes the [`SdkCycleKey`] of an SDK cycle whose direct dependencies
+    /// Computes the [`SdkCycleKey`] of a cycle whose direct dependencies
     /// are already linked in [`Self::cycles`].
     fn sdk_cycle_key(&self, c: CycleId) -> SdkCycleKey {
         let sdk_path = self
@@ -249,13 +231,12 @@ impl Driver {
         }
         let mut remaining_order: IndexSet<CycleId> = IndexSet::new();
         for &c in &order {
-            if self.is_sdk_cycle(c)
-                && self
-                    .graph
-                    .cycle(c)
-                    .direct_dependencies
-                    .iter()
-                    .all(|d| self.cycles.contains_key(d))
+            if self
+                .graph
+                .cycle(c)
+                .direct_dependencies
+                .iter()
+                .all(|d| self.cycles.contains_key(d))
             {
                 let key = self.sdk_cycle_key(c);
                 if let Some(linked) = self.sdk_cache.get_cycle(&key) {
@@ -318,10 +299,8 @@ impl Driver {
             let c = order[i];
             let linked = result.expect("cycle linked");
             self.cycles.insert(c, linked.clone());
-            if self.is_sdk_cycle(c) {
-                let key = self.sdk_cycle_key(c);
-                self.sdk_cache.insert_cycle(key, linked);
-            }
+            let key = self.sdk_cycle_key(c);
+            self.sdk_cache.insert_cycle(key, linked);
         }
     }
 

@@ -29,7 +29,7 @@ SDK tests, Flutter, `analyzer`, a 1.5 million line application).
 | `dartr analyze` | Same options, formats and exit codes as `dart analyze` |
 | `dartr format` | Same output as `dart format` on the `dart_style` test data and corpora |
 | `dartr fix` | Same output, exit codes and edits as `dart fix` on the fixture and on copies of the corpora; the pubspec fixes (`missing_dependency`) are not ported yet |
-| `dartr language-server` | Diagnostics, outline, closing labels, folding, selection ranges, document symbols, formatting; navigation (definition, type definition, implementation, references, document highlight), hover, signature help, semantic tokens, inlay hints, call and type hierarchy, workspace symbols. completion; code actions (quick fixes, assists, fix all, organize imports, sort members); rename; refactorings (extract method, local variable and widget, inline local and method, convert getter/method, move file); completion in pubspec.yaml, analysis_options.yaml and fix_data.yaml; document colors, document links, code lens, inline values; Flutter outline; files changed on disk are re-analyzed. analyzer plugins (diagnostics, fixes and assists). **Known issue:** an API change in an open file does not update dependent files yet |
+| `dartr language-server` | Diagnostics, outline, closing labels, folding, selection ranges, document symbols, formatting; navigation (definition, type definition, implementation, references, document highlight), hover, signature help, semantic tokens, inlay hints, call and type hierarchy, workspace symbols. completion; code actions (quick fixes, assists, fix all, organize imports, sort members); rename; refactorings (extract method, local variable and widget, inline local and method, convert getter/method, move file); completion in pubspec.yaml, analysis_options.yaml and fix_data.yaml; document colors, document links, code lens, inline values; Flutter outline; files changed on disk are re-analyzed. analyzer plugins (diagnostics, fixes and assists). |
 | Legacy protocol | All 59 requests and 22 notifications of the protocol, including errors, hover, navigation, search, completion, quick fixes, assists, refactorings, bulk fixes, Flutter outline and `lsp.handle` |
 
 `docs/PLAN.md` has the plan and `docs/TIMELINE.md` the project history. This is
@@ -122,12 +122,10 @@ Open an issue at <https://github.com/orestesgaolin/dartr/issues> with:
 
 ## Known limitations
 
-- Language server: an API change in an open file (for example renaming a public method) does not
-  update the diagnostics of dependent files yet. Extract/inline refactorings and move file are missing.
-  Hover and completion are slower than in Dart (tens to hundreds of ms), and the first references
-  search on a large package is slow.
-- Legacy analysis server protocol: partial.
-- Memory use is about 3 times Dart's after the first analysis of a package. There is no disk
+- Language server: hover and completion are slower than in Dart (tens to hundreds of ms), and the
+  first references search on a large package is slow.
+- Memory use is higher than Dart's: peak RSS of `dartr analyze` is 0.8 GB on `analyzer`, 1.6 GB on
+  Flutter and 6.0 GB on the 1.56 million line application (after a 40 to 48% reduction). There is no disk
   cache yet.
 - macOS arm64 and Linux x86_64 only. No Windows or Intel macOS builds.
 

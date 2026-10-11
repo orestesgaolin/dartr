@@ -149,6 +149,7 @@ fn parse_impl(
     // `Scanner.tokenize`: fasta pretends there is an additional line at
     // EOF, so the last line start is skipped.
     line_starts.pop();
+    line_starts.shrink_to_fit();
     let line_info = LineInfo::new(line_starts);
     let override_ = override_version.map(|(major, minor)| (major as u32, minor as u32));
     let (language_version, feature_set) = match package {
@@ -194,6 +195,11 @@ fn parse_impl(
     for d in std::mem::take(&mut builder.diagnostic_reporter.diagnostic_reporter.diagnostics) {
         collector.on_diagnostic(d);
     }
+
+    builder.ast.shrink_to_fit();
+    collector.diagnostics.shrink_to_fit();
+    builder.invalid_nodes.shrink_to_fit();
+    builder.dot_shorthands.shrink_to_fit();
 
     ParsedUnit {
         ast: builder.ast,

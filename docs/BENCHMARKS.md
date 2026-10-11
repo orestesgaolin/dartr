@@ -132,3 +132,18 @@ average 2 to 4 on 15 cores. Same diagnostics from both tools on all four project
 Compared with 2026-10-10 evening (main db36afb, busy machine): dartr went from 7.380 s to 2.975 s on
 flutter and from 3.665 s to 0.805 s on flutter_tools; its system time on flutter went from 38.8 s to
 1.3 s.
+
+## Tried and not merged: persistent disk cache of the linked SDK (2026-10-11)
+
+Branch `gm-opt4` (pushed): linked SDK library cycles and SDK file summaries are written to a cache
+directory (`DARTR_CACHE_DIR`, atomic writes, build fingerprint, corrupt entries ignored). `hyperfine
+-w 1 -r 5` on a quiet machine:
+
+| corpus | cache disabled | warm cache |
+|---|---|---|
+| flutter | 3.522 s | 3.285 s (-0.24 s) |
+| visible-app | 17.849 s | 18.341 s (no gain; within noise) |
+
+The SDK is already linked only once per run (shared across analysis contexts), so the cache saves only
+the first link of the SDK (~0.3 s). The gain does not justify a persistent cache by default (stale or
+corrupt data risk, a cache directory in the user's home). Not merged.

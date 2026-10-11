@@ -415,6 +415,9 @@ impl DriverSession {
                 &dartr_project::fs::read_string,
             ));
         }
+        if std::env::var_os("DARTR_MEM_STATS").is_some() {
+            self.print_mem_stats("after_diagnostics");
+        }
         (result, indexed)
     }
 
@@ -537,6 +540,378 @@ impl DriverSession {
                 }
                 (Vec::new(), Vec::new())
             }
+        }
+    }
+
+    pub fn print_mem_stats(&self, phase: &str) {
+        use std::collections::{HashMap, HashSet};
+        use std::mem::size_of;
+
+        let mut total_file_states = 0usize;
+        let mut total_file_contents = 0usize;
+        let mut unique_parsed_ptrs = HashSet::new();
+        let mut total_ast = dartr_ast::AstMemStats::default();
+        let mut unique_ast = dartr_ast::AstMemStats::default();
+        let mut total_source_bytes = 0usize;
+        let mut unique_source_ptrs = HashSet::new();
+        let mut unique_source_ptr_bytes = 0usize;
+        let mut unique_source_contents: HashMap<&str, usize> = HashMap::new();
+        let mut total_line_info_cap = 0usize;
+        let mut unique_line_info_cap = 0usize;
+        let mut total_unlinked_info_used = 0usize;
+        let mut total_unlinked_info_cap = 0usize;
+        let mut unique_unlinked_info_cap = 0usize;
+        let mut fs_maps_cap = 0usize;
+
+        let mut total_store_refs = 0usize;
+        let mut unique_store_ptrs = HashSet::new();
+        let mut elem_count = 0usize;
+        let mut elem_used = 0usize;
+        let mut elem_cap = 0usize;
+        let mut frag_count = 0usize;
+        let mut frag_used = 0usize;
+        let mut frag_cap = 0usize;
+        let mut store_inline_bytes = 0usize;
+
+        let mut unique_const_ptrs = HashSet::new();
+        let mut const_ast = dartr_ast::AstMemStats::default();
+        let const_node_info_cap = 0usize;
+
+        let mut unique_lib_ptrs = HashSet::new();
+        let mut export_entries_count = 0usize;
+        let mut export_entries_cap = 0usize;
+        let mut ref_count = 0usize;
+        let mut ref_used = 0usize;
+        let mut ref_cap = 0usize;
+
+        let mut all_str_instances = 0usize;
+        let mut all_str_bytes = 0usize;
+        let mut unique_str_ptrs = HashSet::new();
+        let mut unique_str_ptr_bytes = 0usize;
+        let mut unique_str_text = HashSet::new();
+        let mut unique_str_text_bytes = 0usize;
+        let mut record_arc_str = |s: &Arc<str>| {
+            all_str_instances += 1;
+            all_str_bytes += s.len();
+            if unique_str_ptrs.insert(Arc::as_ptr(s) as *const u8 as usize) {
+                unique_str_ptr_bytes += s.len();
+            }
+            if unique_str_text.insert(s.as_ref().to_owned()) {
+                unique_str_text_bytes += s.len();
+            }
+        };
+
+        for driver in self.drivers.values() {
+            total_file_states += driver.fs.files().len();
+            fs_maps_cap +=
+                driver.fs.files().len() * (size_of::<dartr_driver::file_state::FileState>() + 64);
+            for f in driver.fs.files() {
+                record_arc_str(&f.path);
+                record_arc_str(&f.uri_str);
+                if let Some(c) = &f.content {
+                    total_file_contents += 1;
+                    record_arc_str(&c.parsed.ast.tokens.source);
+                    let src_len = c.parsed.ast.tokens.source.len();
+                    total_source_bytes += src_len;
+                    if unique_source_ptrs
+                        .insert(Arc::as_ptr(&c.parsed.ast.tokens.source) as *const u8 as usize)
+                    {
+                        unique_source_ptr_bytes += src_len;
+                    }
+                    unique_source_contents.insert(&c.parsed.ast.tokens.source, src_len);
+
+                    let m = c.parsed.ast.mem_stats();
+                    total_ast.add(&m);
+                    let li_cap = c.parsed.line_info.line_starts.capacity() * 4;
+                    total_line_info_cap += li_cap;
+                    let ui_used = c.unlinked.line_starts.len() * 4
+                        + c.unlinked
+                            .top_level_declarations
+                            .iter()
+                            .map(|s| s.len() + size_of::<String>())
+                            .sum::<usize>();
+                    let ui_cap = c.unlinked.line_starts.capacity() * 4
+                        + c.unlinked.top_level_declarations.capacity() * (size_of::<String>() + 8)
+                        + c.unlinked
+                            .top_level_declarations
+                            .iter()
+                            .map(|s| s.capacity())
+                            .sum::<usize>();
+                    total_unlinked_info_used += ui_used;
+                    total_unlinked_info_cap += ui_cap;
+
+                    if unique_parsed_ptrs.insert(Arc::as_ptr(&c.parsed) as usize) {
+                        unique_ast.add(&m);
+                        unique_line_info_cap += li_cap;
+                        unique_unlinked_info_cap += ui_cap;
+                    }
+                }
+            }
+
+            for store_opt in &driver.state.world.stores {
+                let Some(store) = store_opt else {
+                    continue;
+                };
+                total_store_refs += 1;
+                if unique_store_ptrs.insert(Arc::as_ptr(store) as usize) {
+                    store_inline_bytes += size_of::<dartr_element::ElementStore>();
+                    let (ec, eu, ek) = store.elements.mem_bytes();
+                    let (fc, fu, fk) = store.fragments.mem_bytes();
+                    elem_count += ec;
+                    elem_used += eu;
+                    elem_cap += ek;
+                    frag_count += fc;
+                    frag_used += fu;
+                    frag_cap += fk;
+                }
+            }
+
+            for ce in driver.state.registry.const_exprs.values() {
+                if unique_const_ptrs.insert(Arc::as_ptr(ce) as usize) {
+                    const_ast.add(&ce.ast.mem_stats());
+                }
+            }
+
+            for lib in driver.state.registry.libraries.values() {
+                if unique_lib_ptrs.insert(Arc::as_ptr(lib) as usize) {
+                    export_entries_count += lib.export_entries.len();
+                    export_entries_cap += lib.export_entries.capacity()
+                        * size_of::<dartr_link::export::ExportEntry>();
+                    for e in &lib.export_entries {
+                        record_arc_str(&e.name);
+                    }
+                    let (rc, ru, rk) = lib.reference.mem_bytes();
+                    ref_count += rc;
+                    ref_used += ru;
+                    ref_cap += rk;
+                }
+            }
+        }
+
+        let (
+            gen_intern_count,
+            gen_intern_used,
+            gen_intern_cap,
+            gen_name_count,
+            gen_name_used,
+            gen_name_cap,
+            syn_used,
+            syn_cap,
+        ) = if let Some(g) = &self.generation {
+            let (ic, iu, ik) = g.interner.mem_bytes();
+            let (nc, nu, nk) = g.names.mem_bytes();
+            let (_, seu, sek) = g.synthetic.elements.mem_bytes();
+            let (_, sfu, sfk) = g.synthetic.fragments.mem_bytes();
+            (
+                ic,
+                iu,
+                ik,
+                nc,
+                nu,
+                nk,
+                seu + sfu,
+                size_of::<dartr_element::ElementStore>() + sek + sfk,
+            )
+        } else {
+            (0, 0, 0, 0, 0, 0, 0, 0)
+        };
+
+        let mut res_lib_count = 0usize;
+        let mut res_unit_count = 0usize;
+        let mut res_ast = dartr_ast::AstMemStats::default();
+        let mut res_tables_entries = 0usize;
+        let mut res_tables_used = 0usize;
+        let mut res_tables_cap = 0usize;
+        let mut rt_tables_entries = 0usize;
+        let mut rt_tables_used = 0usize;
+        let mut rt_tables_cap = 0usize;
+        let mut res_local_used = 0usize;
+        let mut res_local_cap = 0usize;
+        for r in self.resolved.values() {
+            res_lib_count += 1;
+            for u in &r.library.units {
+                res_unit_count += 1;
+                res_ast.add(&u.ast.mem_stats());
+                let (re, ru, rc) = u.tables.mem_bytes();
+                let (rte, rtu, rtc) = u.rt.mem_bytes();
+                let (_, eu, ec) = u.local.store.elements.mem_bytes();
+                let (_, fu, fc) = u.local.store.fragments.mem_bytes();
+                let (_, ou, oc) = u.local.types.mem_bytes();
+                res_tables_entries += re;
+                res_tables_used += ru;
+                res_tables_cap += rc;
+                rt_tables_entries += rte;
+                rt_tables_used += rtu;
+                rt_tables_cap += rtc;
+                res_local_used += eu + fu + ou;
+                res_local_cap += size_of::<dartr_element::LocalArena>() + ec + fc + oc;
+            }
+        }
+
+        let unique_source_dedup_bytes: usize = unique_source_contents.values().sum();
+        let mb = |b: usize| b as f64 / (1024.0 * 1024.0);
+        use std::fmt::Write as _;
+        let mut out = String::new();
+        let _ = writeln!(
+            out,
+            "=== DARTR_MEM_STATS ({phase}) drivers={} ===",
+            self.drivers.len()
+        );
+        let _ = writeln!(
+            out,
+            "  1. FileSystemState & ParsedUnits: file_states={} contents={} unique_parsed={} fs_maps={:.2} MiB",
+            total_file_states,
+            total_file_contents,
+            unique_parsed_ptrs.len(),
+            mb(fs_maps_cap)
+        );
+        let _ = writeln!(
+            out,
+            "     - AST total (across drivers): nodes={} tokens={} used={:.2} MiB cap={:.2} MiB (inline={:.2} tokens={:.2}/{:.2} spine={:.2}/{:.2} stores={:.2}/{:.2})",
+            total_ast.node_count,
+            total_ast.token_count,
+            mb(total_ast.total_used()),
+            mb(total_ast.total_cap()),
+            mb(total_ast.inline_bytes),
+            mb(total_ast.tokens_used),
+            mb(total_ast.tokens_cap),
+            mb(total_ast.spine_used),
+            mb(total_ast.spine_cap),
+            mb(total_ast.stores_used),
+            mb(total_ast.stores_cap),
+        );
+        let _ = writeln!(
+            out,
+            "     - AST unique (in memory):     nodes={} tokens={} used={:.2} MiB cap={:.2} MiB (inline={:.2} tokens={:.2}/{:.2} spine={:.2}/{:.2} stores={:.2}/{:.2})",
+            unique_ast.node_count,
+            unique_ast.token_count,
+            mb(unique_ast.total_used()),
+            mb(unique_ast.total_cap()),
+            mb(unique_ast.inline_bytes),
+            mb(unique_ast.tokens_used),
+            mb(unique_ast.tokens_cap),
+            mb(unique_ast.spine_used),
+            mb(unique_ast.spine_cap),
+            mb(unique_ast.stores_used),
+            mb(unique_ast.stores_cap),
+        );
+        let _ = writeln!(
+            out,
+            "     - Source text: total={:.2} MiB unique_arc={:.2} MiB unique_content={:.2} MiB | LineInfo cap={:.2} MiB (unique {:.2} MiB) | Unlinked informative={:.2}/{:.2} MiB (unique {:.2} MiB)",
+            mb(total_source_bytes),
+            mb(unique_source_ptr_bytes),
+            mb(unique_source_dedup_bytes),
+            mb(total_line_info_cap),
+            mb(unique_line_info_cap),
+            mb(total_unlinked_info_used),
+            mb(total_unlinked_info_cap),
+            mb(unique_unlinked_info_cap),
+        );
+        let _ = writeln!(
+            out,
+            "  2. ElementStores & LinkedLibraries: store_refs={} unique_stores={} unique_libs={}",
+            total_store_refs,
+            unique_store_ptrs.len(),
+            unique_lib_ptrs.len()
+        );
+        let _ = writeln!(
+            out,
+            "     - ElementStore inline={:.2} MiB | elements={} used={:.2} MiB boxcar_cap={:.2} MiB | fragments={} used={:.2} MiB boxcar_cap={:.2} MiB",
+            mb(store_inline_bytes),
+            elem_count,
+            mb(elem_used),
+            mb(elem_cap),
+            frag_count,
+            mb(frag_used),
+            mb(frag_cap),
+        );
+        let _ = writeln!(
+            out,
+            "     - ConstExprs (unique={}): nodes={} tokens={} used={:.2} MiB cap={:.2} MiB (inline={:.2} stores={:.2}/{:.2}) node_info={:.2} MiB",
+            unique_const_ptrs.len(),
+            const_ast.node_count,
+            const_ast.token_count,
+            mb(const_ast.total_used()),
+            mb(const_ast.total_cap()),
+            mb(const_ast.inline_bytes),
+            mb(const_ast.stores_used),
+            mb(const_ast.stores_cap),
+            mb(const_node_info_cap),
+        );
+        let _ = writeln!(
+            out,
+            "     - LinkedLibrary: export_entries={} ({:.2} MiB) | LibraryReference refs={} used={:.2} MiB cap={:.2} MiB",
+            export_entries_count,
+            mb(export_entries_cap),
+            ref_count,
+            mb(ref_used),
+            mb(ref_cap),
+        );
+        let _ = writeln!(
+            out,
+            "  3. Generation (Interner & NamePool): interner_items={} used={:.2} MiB cap={:.2} MiB | names={} used={:.2} MiB cap={:.2} MiB | synthetic={:.2}/{:.2} MiB",
+            gen_intern_count,
+            mb(gen_intern_used),
+            mb(gen_intern_cap),
+            gen_name_count,
+            mb(gen_name_used),
+            mb(gen_name_cap),
+            mb(syn_used),
+            mb(syn_cap),
+        );
+        let _ = writeln!(
+            out,
+            "  4. Session Cached ResolvedLibraries: libs={} units={} total_cap={:.2} MiB (ast={:.2}/{:.2} MiB, res_tables={} entries {:.2}/{:.2} MiB, rt_tables={} entries {:.2}/{:.2} MiB, local_arena={:.2}/{:.2} MiB)",
+            res_lib_count,
+            res_unit_count,
+            mb(res_ast.total_cap() + res_tables_cap + rt_tables_cap + res_local_cap),
+            mb(res_ast.total_used()),
+            mb(res_ast.total_cap()),
+            res_tables_entries,
+            mb(res_tables_used),
+            mb(res_tables_cap),
+            rt_tables_entries,
+            mb(rt_tables_used),
+            mb(rt_tables_cap),
+            mb(res_local_used),
+            mb(res_local_cap),
+        );
+        let _ = writeln!(
+            out,
+            "  5. Strings (Arc<str> sampled): instances={} total={:.2} MiB unique_arc={} ({:.2} MiB) unique_text={} ({:.2} MiB)",
+            all_str_instances,
+            mb(all_str_bytes),
+            unique_str_ptrs.len(),
+            mb(unique_str_ptr_bytes),
+            unique_str_text.len(),
+            mb(unique_str_text_bytes),
+        );
+        let accounted_unique_cap = unique_ast.total_cap()
+            + unique_source_ptr_bytes
+            + unique_line_info_cap
+            + unique_unlinked_info_cap
+            + fs_maps_cap
+            + store_inline_bytes
+            + elem_cap
+            + frag_cap
+            + const_ast.total_cap()
+            + const_node_info_cap
+            + export_entries_cap
+            + ref_cap
+            + gen_intern_cap
+            + gen_name_cap
+            + syn_cap
+            + res_ast.total_cap()
+            + res_tables_cap
+            + rt_tables_cap
+            + res_local_cap;
+        let _ = writeln!(
+            out,
+            "  => TOTAL ACCOUNTED RETAINED CAPACITY: {:.2} MiB",
+            mb(accounted_unique_cap)
+        );
+        if let Ok(mut err) = std::fs::OpenOptions::new().write(true).open("/dev/stderr") {
+            let _ = std::io::Write::write_all(&mut err, out.as_bytes());
         }
     }
 
@@ -674,6 +1049,9 @@ impl DriverSession {
         match result {
             Ok(r) => {
                 self.drivers.insert(context, driver);
+                if std::env::var_os("DARTR_MEM_STATS").is_some() {
+                    self.print_mem_stats("after_resolved_library");
+                }
                 r
             }
             Err(e) => {

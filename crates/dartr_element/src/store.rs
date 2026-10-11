@@ -42,10 +42,40 @@ macro_rules! stores {
             $(pub $e_field: Arena<$e_data>,)*
         }
 
+        impl ElementArenas {
+            pub fn mem_bytes(&self) -> (usize, usize, usize) {
+                let mut count = 0usize;
+                let mut used = 0usize;
+                let mut cap = 0usize;
+                $(
+                    let (c, u, k) = self.$e_field.mem_bytes();
+                    count += c;
+                    used += u;
+                    cap += k;
+                )*
+                (count, used, cap)
+            }
+        }
+
         /// The fragments of one store, per kind.
         #[derive(Debug, Default)]
         pub struct FragmentStore {
             $(pub $f_field: Arena<$f_data>,)*
+        }
+
+        impl FragmentStore {
+            pub fn mem_bytes(&self) -> (usize, usize, usize) {
+                let mut count = 0usize;
+                let mut used = 0usize;
+                let mut cap = 0usize;
+                $(
+                    let (c, u, k) = self.$f_field.mem_bytes();
+                    count += c;
+                    used += u;
+                    cap += k;
+                )*
+                (count, used, cap)
+            }
         }
 
         stores!(@impl_e $($e_marker [$($e_tag)|+] => $e_data in $e_field;)*);

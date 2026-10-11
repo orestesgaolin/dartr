@@ -1,0 +1,3 @@
+plugins:
+  my_plugin:
+    path: ../my_plugin

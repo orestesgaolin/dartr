@@ -117,8 +117,14 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
                     r.ctx
                         .element_data(executable)
                         .and_then(|d| d.enclosing)
-                        .and_then(|owner| owner.cast::<dartr_element::InterfaceElement>())
-                        .is_some_and(|owner| !r.ctx.interface_type_parameters(owner).is_empty())
+                        .is_some_and(|owner| {
+                            owner
+                                .cast::<dartr_element::InterfaceElement>()
+                                .is_some_and(|i| !r.ctx.interface_type_parameters(i).is_empty())
+                                || owner
+                                    .cast::<dartr_element::ExtensionElement>()
+                                    .is_some_and(|e| !r.ctx.get(e).type_params.is_empty())
+                        })
                         && dartr_constant::has_type_parameter_reference(
                             &r.ctx,
                             member::type_(&r.ctx, ElemRef::Base(executable)),

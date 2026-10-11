@@ -181,6 +181,34 @@ impl ImportsTracking {
             .unwrap_or_default()
     }
 
+    /// Dart `ImportsTrackingOfPrefix.elementsOf2(import)`: the subset of
+    /// used elements of the import with [index] in [key] for which
+    /// [imported_library] does not export the element only through
+    /// deprecated `export` directives.
+    fn elements_of_2(
+        &self,
+        ctx: &Ctx<'_>,
+        key: ScopeKey,
+        index: usize,
+        imported_library: EId<LibraryElement>,
+    ) -> IndexSet<ElementId> {
+        let mut result = self.elements_of(key, index);
+        if result.is_empty() {
+            return result;
+        }
+        let Some(namespace) = ctx.get(imported_library).export_namespace.try_get() else {
+            return result;
+        };
+        for (&name, &element) in &namespace.defined_names {
+            if result.contains(&element)
+                && is_from_deprecated_export(ctx, imported_library, name, element)
+            {
+                result.shift_remove(&element);
+            }
+        }
+        result
+    }
+
     /// Dart `PrefixScope.lookup(id)` of the scope [key] (and its parents).
     fn prefix_scope_lookup(&mut self, ctx: &Ctx<'_>, key: ScopeKey, id: &str) -> bool {
         let mut current = Some(key);
@@ -373,6 +401,50 @@ fn combinators_allow(ctx: &Ctx<'_>, combinators: &[NamespaceCombinator], name: &
         NamespaceCombinator::Show { shown_names, .. } => matches(shown_names),
         NamespaceCombinator::Hide { hidden_names, .. } => !matches(hidden_names),
     })
+}
+
+/// Dart `LibraryElementImpl.isFromDeprecatedExport(entry)`: whether [element]
+/// (exported under [name] by [imported_library]) is not declared in
+/// [imported_library] and every `export` directive of [imported_library] that
+/// provides it has `@deprecated` / `@Deprecated`.
+fn is_from_deprecated_export(
+    ctx: &Ctx<'_>,
+    imported_library: EId<LibraryElement>,
+    name: dartr_element::Name,
+    element: ElementId,
+) -> bool {
+    if ctx.element_data(element).and_then(|d| d.library) == Some(imported_library) {
+        return false;
+    }
+    let name_str = ctx.name_str(name);
+    let mut found_export = false;
+    for (unit, _) in crate::scope::library_fragments(ctx, imported_library) {
+        for export in &ctx.fragment(unit).library_exports {
+            let Some(exported_library) = directive_library(&export.directive.uri) else {
+                continue;
+            };
+            if !combinators_allow(ctx, &export.combinators, name_str) {
+                continue;
+            }
+            let Some(ns) = ctx.get(exported_library).export_namespace.try_get() else {
+                continue;
+            };
+            if ns.defined_names.get(&name) != Some(&element) {
+                continue;
+            }
+            found_export = true;
+            let flags = crate::element_metadata::metadata_flags(
+                ctx,
+                &export.directive.metadata,
+                unit.raw().store(),
+                None,
+            );
+            if flags & crate::element_metadata::flags::DEPRECATED == 0 {
+                return false;
+            }
+        }
+    }
+    found_export
 }
 
 /// Replays the import scope lookups of one resolved unit.
@@ -879,12 +951,23 @@ impl ImportsVerifier {
                 else {
                     continue;
                 };
+                let Some(second_imported_library) =
+                    directive_library(&second_element.directive.uri)
+                else {
+                    continue;
+                };
                 // Must be the same import prefix, so the same tracker.
                 if tracker_of(&ctx, v.fragment, second_element, tracking) != Some(tracker) {
                     continue;
                 }
-                let first_set = tracking.elements_of(tracker, first_directive.index);
-                let second_set = tracking.elements_of(tracker, second_directive.index);
+                let first_set =
+                    tracking.elements_of_2(&ctx, tracker, first_directive.index, imported_library);
+                let second_set = tracking.elements_of_2(
+                    &ctx,
+                    tracker,
+                    second_directive.index,
+                    second_imported_library,
+                );
                 // The second must provide all elements of the first.
                 if !first_set.iter().all(|e| second_set.contains(e)) {
                     continue;

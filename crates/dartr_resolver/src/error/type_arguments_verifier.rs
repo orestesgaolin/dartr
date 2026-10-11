@@ -763,17 +763,15 @@ fn check_type_argument_count<'a, H: VerifierHost<'a>>(
 /// generic type whose type arguments were not supplied from inference or a
 /// non-dynamic default instantiation.
 ///
-/// Dart returns `false` when the element is annotated with
-/// `@optionalTypeArgs`; the metadata of elements is not resolved in the
-/// element model yet, so this is not checked.
+/// Returns `false` if the element is annotated with `@optionalTypeArgs`.
 fn is_missing_type_arguments<'a, H: VerifierHost<'a>>(
     host: &H,
     ty: TypeId,
     element: Option<ElemRef>,
 ) -> bool {
-    if element.is_none() {
+    let Some(element) = element else {
         return false;
-    }
+    };
     let ctx = host.ctx();
     let type_arguments: Vec<TypeId> = if let Some(alias) = ctx.type_alias(ty) {
         ctx.list(ctx.alias(alias).args).to_vec()
@@ -785,9 +783,26 @@ fn is_missing_type_arguments<'a, H: VerifierHost<'a>>(
 
     // Check if this type has type arguments and at least one is dynamic.
     // If so, we may need to issue a strict-raw-types warning.
-    type_arguments
+    if type_arguments
         .iter()
         .any(|&t| matches!(ctx.ty(t), TypeKind::Dynamic))
+    {
+        let base = dartr_typesystem::member::base_element(&ctx, element);
+        let unit = Some(crate::element_metadata::UnitAst {
+            ast: host.ast(),
+            tables: host.tables(),
+        });
+        if crate::element_metadata::element_has(
+            &ctx,
+            base,
+            crate::element_metadata::flags::OPTIONAL_TYPE_ARGS,
+            unit,
+        ) {
+            return false;
+        }
+        return true;
+    }
+    false
 }
 
 /// Dart `_shouldAllowSuperBoundedTypes(namedType)`: whether [named_type]

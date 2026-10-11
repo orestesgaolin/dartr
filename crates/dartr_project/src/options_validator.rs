@@ -1297,7 +1297,12 @@ fn quoted(values: &[&str], conjunction: &str) -> String {
 }
 
 fn at(text: &str, span: Span, diagnostic: LocatableDiagnostic) -> Diagnostic {
-    let (offset, length) = utf16_span(text, span);
+    let start = span.start.min(text.len());
+    let mut end = span.end.min(text.len()).max(start);
+    while end > start && matches!(text.as_bytes()[end - 1], b'\n' | b'\r') {
+        end -= 1;
+    }
+    let (offset, length) = utf16_span(text, Span { start, end, ..span });
     diagnostic.to_diagnostic(offset, length)
 }
 

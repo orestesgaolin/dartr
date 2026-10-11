@@ -99,6 +99,9 @@ at each merge; the final process report is written from it.
 | 10-11 00:55 | 296a817 | YAML completion over LSP, legacy protocol 59/59, stripped release binaries | Gemini 4 (Antigravity) | YAML completion 32/32 positions identical; batch: 5,593 tests (1 known flaky step), all 4 corpora identical |
 | 10-11 02:00 | 2d0f037 | analyzer plugins in the language server: plugin manager, merged diagnostics, plugin fixes and assists | Gemini 4 (Antigravity) | lsp_plugins parity with `dart language-server`; visible-app design_system: all 7 jaspr_lints diagnostics; `dartr analyze` on visible-app unchanged (20/20); 5,595 tests |
 | 10-11 04:10 | c77fa2c | dart.edit.codeAction.apply and interactive resolve of code actions: every capability of `dart language-server` is registered | Gemini 4 (Antigravity) | 29 steps identical; missing_capabilities.txt empty; 5,596 tests |
+| 10-11 06:30 | bdabf32 | language server: API changes in open files reach dependent files (API signature, transitive invalidation, resolved cache), progress begin before diagnostics, showTodos, LSP tests wait for events | Gemini 4 (Antigravity) | new parity test renames a documented method in an open file; idle CPU 0 (a 200 ms polling loop was rejected: 2.66 s per 30 s); 5,599 tests |
+| 10-11 07:40 | b021ba7 | memory round 3: compact node maps and arenas, smaller retained units; DARTR_MEM_STATS hang fixed | Gemini 4 (Antigravity) | peak RSS flutter 2.75 -> 1.60 GB, visible-app 10.9 -> 6.0 GB; 4 corpora identical, no hang; 5,596 tests (branch) |
+| 10-11 07:55 | 9137d50 | six parity fixes from a sweep over 65 real pub packages | Gemini 4 (Antigravity) | 59/65 -> 65/65 packages identical to `dart analyze` (14,846 diagnostics); 4 corpora identical; 5,598 tests (branch) |
 
 ## Incidents and lessons
 
@@ -223,3 +226,8 @@ at each merge; the final process report is written from it.
   waited for `dartr analyze` on flutter, which never finished with its changes: the coordinator ran the binary
   with a time limit and it printed nothing after "Analyzing flutter..." for 120 s (normal: 3 s). Gemini task files
   now require a time limit on every dartr command.
+- **Shared build folder gave stale builds (10-11 05:40):** to save time, the coordinator's merge checks used one
+  cargo target directory for all worktrees. Cargo then did not rebuild a changed crate (dartr_syntax), because
+  its dependency info pointed at another worktree's unchanged files; a merge failed to compile for that reason.
+  Checks since 23:30 may have tested partly stale code, so main was re-verified with its own target directory
+  (5,595 tests, all four corpora identical). Each worktree builds in its own target directory again.

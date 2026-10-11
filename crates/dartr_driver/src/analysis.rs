@@ -130,7 +130,23 @@ impl Driver {
                 .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
                 .unwrap_or_else(|| "panic".to_string())
         };
-        jobs.par_iter()
+        let mem_stats = std::env::var_os("DARTR_MEM_STATS").is_some();
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let stat_units = AtomicUsize::new(0);
+        let stat_ast_used = AtomicUsize::new(0);
+        let stat_ast_cap = AtomicUsize::new(0);
+        let stat_res_entries = AtomicUsize::new(0);
+        let stat_res_used = AtomicUsize::new(0);
+        let stat_res_cap = AtomicUsize::new(0);
+        let stat_rt_entries = AtomicUsize::new(0);
+        let stat_rt_used = AtomicUsize::new(0);
+        let stat_rt_cap = AtomicUsize::new(0);
+        let stat_local_used = AtomicUsize::new(0);
+        let stat_local_cap = AtomicUsize::new(0);
+        let stat_peak_lib = AtomicUsize::new(0);
+
+        let out: Vec<T> = jobs
+            .par_iter()
             .map(
                 |((file, options, unignorable, rules), job, doc_imports, pkg_info)| {
                     let Some((library, units)) = job else {
@@ -154,6 +170,37 @@ impl Driver {
                         analyze_library_with_unignorable(&input, unignorable)
                     }))
                     .map_err(panic_message);
+                    if mem_stats && let Ok(resolved) = &result {
+                        let mut lib_cap = 0usize;
+                        for u in &resolved.units {
+                            let mut ast_m = u.ast.mem_stats();
+                            if u.ast.tokens.is_shared() {
+                                ast_m.tokens_used = 0;
+                                ast_m.tokens_cap = 0;
+                            }
+                            let (re, ru, rc) = u.tables.mem_bytes();
+                            let (rte, rtu, rtc) = u.rt.mem_bytes();
+                            let (_, eu, ec) = u.local.store.elements.mem_bytes();
+                            let (_, fu, fc) = u.local.store.fragments.mem_bytes();
+                            let (_, ou, oc) = u.local.types.mem_bytes();
+                            let lu = eu + fu + ou;
+                            let lc =
+                                std::mem::size_of::<dartr_element::LocalArena>() + ec + fc + oc;
+                            stat_units.fetch_add(1, Ordering::Relaxed);
+                            stat_ast_used.fetch_add(ast_m.total_used(), Ordering::Relaxed);
+                            stat_ast_cap.fetch_add(ast_m.total_cap(), Ordering::Relaxed);
+                            stat_res_entries.fetch_add(re, Ordering::Relaxed);
+                            stat_res_used.fetch_add(ru, Ordering::Relaxed);
+                            stat_res_cap.fetch_add(rc, Ordering::Relaxed);
+                            stat_rt_entries.fetch_add(rte, Ordering::Relaxed);
+                            stat_rt_used.fetch_add(rtu, Ordering::Relaxed);
+                            stat_rt_cap.fetch_add(rtc, Ordering::Relaxed);
+                            stat_local_used.fetch_add(lu, Ordering::Relaxed);
+                            stat_local_cap.fetch_add(lc, Ordering::Relaxed);
+                            lib_cap += ast_m.total_cap() + rc + rtc + lc;
+                        }
+                        stat_peak_lib.fetch_max(lib_cap, Ordering::Relaxed);
+                    }
                     let lints = match &result {
                         Ok(resolved) if !rules.is_empty() => {
                             let enabled: Vec<&str> = rules.iter().map(String::as_str).collect();
@@ -172,7 +219,76 @@ impl Driver {
                     f(*file, units, result, lints)
                 },
             )
-            .collect()
+            .collect();
+
+        if mem_stats && !libraries.is_empty() {
+            let ext_units = external.resolved_units();
+            let mut ext_ast_used = 0usize;
+            let mut ext_ast_cap = 0usize;
+            let mut ext_res_entries = 0usize;
+            let mut ext_res_used = 0usize;
+            let mut ext_res_cap = 0usize;
+            let mut ext_rt_entries = 0usize;
+            let mut ext_rt_used = 0usize;
+            let mut ext_rt_cap = 0usize;
+            let mut ext_local_used = 0usize;
+            let mut ext_local_cap = 0usize;
+            for u in &ext_units {
+                let mut ast_m = u.ast.mem_stats();
+                if u.ast.tokens.is_shared() {
+                    ast_m.tokens_used = 0;
+                    ast_m.tokens_cap = 0;
+                }
+                let (re, ru, rc) = u.tables.mem_bytes();
+                let (rte, rtu, rtc) = u.rt.mem_bytes();
+                let (_, eu, ec) = u.local.store.elements.mem_bytes();
+                let (_, fu, fc) = u.local.store.fragments.mem_bytes();
+                let (_, ou, oc) = u.local.types.mem_bytes();
+                ext_ast_used += ast_m.total_used();
+                ext_ast_cap += ast_m.total_cap();
+                ext_res_entries += re;
+                ext_res_used += ru;
+                ext_res_cap += rc;
+                ext_rt_entries += rte;
+                ext_rt_used += rtu;
+                ext_rt_cap += rtc;
+                ext_local_used += eu + fu + ou;
+                ext_local_cap += std::mem::size_of::<dartr_element::LocalArena>() + ec + fc + oc;
+            }
+            let mb = |b: usize| b as f64 / (1024.0 * 1024.0);
+            let msg = format!(
+                "[mem:analyze_pass] analyzed_libs={} analyzed_units={} peak_single_lib={:.2} MiB | transient_cumulative(ast={:.2}/{:.2} MiB, res_tables={} entries {:.2}/{:.2} MiB, rt_tables={} entries {:.2}/{:.2} MiB, local_arena={:.2}/{:.2} MiB) | external_cache_retained(units={}, total={:.2} MiB: ast={:.2}/{:.2} MiB, res_tables={} entries {:.2}/{:.2} MiB, rt_tables={} entries {:.2}/{:.2} MiB, local_arena={:.2}/{:.2} MiB)\n",
+                libraries.len(),
+                stat_units.load(Ordering::Relaxed),
+                mb(stat_peak_lib.load(Ordering::Relaxed)),
+                mb(stat_ast_used.load(Ordering::Relaxed)),
+                mb(stat_ast_cap.load(Ordering::Relaxed)),
+                stat_res_entries.load(Ordering::Relaxed),
+                mb(stat_res_used.load(Ordering::Relaxed)),
+                mb(stat_res_cap.load(Ordering::Relaxed)),
+                stat_rt_entries.load(Ordering::Relaxed),
+                mb(stat_rt_used.load(Ordering::Relaxed)),
+                mb(stat_rt_cap.load(Ordering::Relaxed)),
+                mb(stat_local_used.load(Ordering::Relaxed)),
+                mb(stat_local_cap.load(Ordering::Relaxed)),
+                ext_units.len(),
+                mb(ext_ast_cap + ext_res_cap + ext_rt_cap + ext_local_cap),
+                mb(ext_ast_used),
+                mb(ext_ast_cap),
+                ext_res_entries,
+                mb(ext_res_used),
+                mb(ext_res_cap),
+                ext_rt_entries,
+                mb(ext_rt_used),
+                mb(ext_rt_cap),
+                mb(ext_local_used),
+                mb(ext_local_cap),
+            );
+            if let Ok(mut err) = std::fs::OpenOptions::new().write(true).open("/dev/stderr") {
+                let _ = std::io::Write::write_all(&mut err, msg.as_bytes());
+            }
+        }
+        out
     }
 
     /// Dart `library.docLibraryImports` with a library file
