@@ -142,6 +142,10 @@ pub struct ConstantValues {
     pub constructors_evaluated: IndexSet<ElementId>,
     /// The constructors with Dart `isCycleFree == false`.
     pub not_cycle_free: IndexSet<ElementId>,
+    /// Cached values of top-level constant constructor invocations in the
+    /// library's own units `(unit_index, node)` that succeeded without
+    /// diagnostics.
+    pub constructor_calls: IndexMap<(u32, NodeId), DartObjectImpl>,
 }
 
 // ---------------------------------------------------------------------------
@@ -159,6 +163,7 @@ pub struct ConstantEvaluationEngine<'a> {
     pub declared_variables: &'a DeclaredVariables,
     external: Option<&'a dyn ExternalUnits>,
     sink: NoopSink,
+    local_unit_count: u32,
     units: RefCell<UnitRegistry<'a>>,
     pub values: RefCell<ConstantValues>,
 }
@@ -190,6 +195,7 @@ impl<'a> ConstantEvaluationEngine<'a> {
             declared_variables,
             external,
             sink: NoopSink,
+            local_unit_count: units.len() as u32,
             units: RefCell::new(registry),
             values: RefCell::new(ConstantValues::default()),
         }
@@ -574,6 +580,99 @@ impl<'a> ConstantEvaluationEngine<'a> {
     /// computes the constants that [node] references, then evaluates [node];
     /// `None` when an `INVALID_CONSTANT` is reported or the result is not a value.
     pub fn compute_expression_constant_value(&self, node: NodeRef) -> Option<DartObjectImpl> {
+        let mut target = node.node;
+        {
+            let u = self.unit(node.unit);
+            let ast = &u.ast;
+            while let Some(p) = ast.cast::<ParenthesizedExpression>(target) {
+                target = ast[p].expression.raw();
+            }
+            if let Some(n) = ast.cast::<NamedArgument>(target) {
+                target = ast[n].argument_expression.raw();
+                while let Some(p) = ast.cast::<ParenthesizedExpression>(target) {
+                    target = ast[p].expression.raw();
+                }
+            }
+            if node.unit < self.local_unit_count
+                && matches!(
+                    ast.kind(target),
+                    NodeKind::InstanceCreationExpression
+                        | NodeKind::DotShorthandConstructorInvocation
+                )
+                && let Some(cached) = self
+                    .values
+                    .borrow()
+                    .constructor_calls
+                    .get(&(node.unit, target))
+                    .cloned()
+            {
+                return Some(cached);
+            }
+            match ast.kind(target) {
+                NodeKind::BooleanLiteral
+                | NodeKind::DoubleLiteral
+                | NodeKind::IntegerLiteral
+                | NodeKind::NullLiteral
+                | NodeKind::SimpleStringLiteral
+                | NodeKind::SymbolLiteral
+                | NodeKind::GenericFunctionType
+                | NodeKind::RecordTypeAnnotation => {
+                    let visitor = ConstantVisitor::new(self, self.unit_library(node.unit), None);
+                    return match visitor.evaluate_constant(node.with(target)) {
+                        Constant::Value(v) => Some(v),
+                        _ => None,
+                    };
+                }
+                NodeKind::InstanceCreationExpression => {
+                    if !ast_ext::instance_creation_is_const(ast, Id::from_raw(target)) {
+                        return None;
+                    }
+                }
+                NodeKind::DotShorthandConstructorInvocation => {
+                    if !dot_shorthand_constructor_invocation_is_const(ast, Id::from_raw(target)) {
+                        return None;
+                    }
+                }
+                NodeKind::ListLiteral => {
+                    if !list_literal_is_const(ast, Id::from_raw(target)) {
+                        return None;
+                    }
+                }
+                NodeKind::SetOrMapLiteral => {
+                    if !set_or_map_literal_is_const(ast, Id::from_raw(target)) {
+                        return None;
+                    }
+                }
+                NodeKind::DotShorthandInvocation => return None,
+                NodeKind::MethodInvocation => {
+                    let m = Id::<MethodInvocation>::from_raw(target);
+                    if ast.tokens.lexeme(ast[ast[m].method_name].token) != "identical" {
+                        return None;
+                    }
+                }
+                NodeKind::AdjacentStrings
+                | NodeKind::AsExpression
+                | NodeKind::BinaryExpression
+                | NodeKind::ConditionalExpression
+                | NodeKind::ConstructorReference
+                | NodeKind::DotShorthandPropertyAccess
+                | NodeKind::FunctionReference
+                | NodeKind::InterpolationExpression
+                | NodeKind::InterpolationString
+                | NodeKind::IsExpression
+                | NodeKind::NamedArgument
+                | NodeKind::NamedType
+                | NodeKind::ParenthesizedExpression
+                | NodeKind::PrefixedIdentifier
+                | NodeKind::PrefixExpression
+                | NodeKind::PropertyAccess
+                | NodeKind::RecordLiteral
+                | NodeKind::SimpleIdentifier
+                | NodeKind::StringInterpolation
+                | NodeKind::TypeLiteral => {}
+                _ => return None,
+            }
+        }
         let mut dependencies = Vec::new();
         crate::constant::utilities::find_references(self, node, &mut |t| dependencies.push(t));
         crate::constant::compute::compute_constants(self, &dependencies);
@@ -1075,6 +1174,39 @@ impl<'a> ConstantEvaluationEngine<'a> {
         constant_visitor: &ConstantVisitor<'_, 'a>,
         invocation: Option<Arc<ConstructorInvocationImpl>>,
     ) -> Constant {
+        let cacheable = node.unit < self.local_unit_count
+            && invocation.is_none()
+            && constant_visitor.is_top_level()
+            && library == self.unit_library(node.unit)
+            && {
+                let u = self.unit(node.unit);
+                let ast = &u.ast;
+                match ast.kind(node.node) {
+                    NodeKind::InstanceCreationExpression => ast_ext::instance_creation_is_const(
+                        ast,
+                        Id::<InstanceCreationExpression>::from_raw(node.node),
+                    ),
+                    NodeKind::DotShorthandConstructorInvocation => {
+                        ast_ext::dot_shorthand_constructor_invocation_is_const(
+                            ast,
+                            Id::<DotShorthandConstructorInvocation>::from_raw(node.node),
+                        )
+                    }
+                    NodeKind::EnumConstantDeclaration | NodeKind::Annotation => true,
+                    _ => false,
+                }
+            };
+        if cacheable
+            && let Some(cached) = self
+                .values
+                .borrow()
+                .constructor_calls
+                .get(&(node.unit, node.node))
+                .cloned()
+        {
+            return Constant::Value(cached);
+        }
+        let prev_had_diag = constant_visitor.had_diagnostic.replace(false);
         let result = InstanceCreationEvaluator::evaluate(
             self,
             library,
@@ -1086,7 +1218,22 @@ impl<'a> ConstantEvaluationEngine<'a> {
             invocation,
             &IndexMap::new(),
         );
+        let call_had_diag = constant_visitor.had_diagnostic.get();
+        constant_visitor
+            .had_diagnostic
+            .set(prev_had_diag || call_had_diag);
         let Constant::Invalid(result) = result else {
+            if cacheable
+                && !call_had_diag
+                && !ast_ext::has_any_temporary_const_keyword()
+                && !crate::constant::potentially_constant::has_any_temporary_const_constructor()
+                && let Constant::Value(v) = &result
+            {
+                self.values
+                    .borrow_mut()
+                    .constructor_calls
+                    .insert((node.unit, node.node), v.clone());
+            }
             return result;
         };
 
@@ -1723,6 +1870,7 @@ pub struct ConstantVisitor<'e, 'a> {
     substitution: Option<MapSubstitution>,
     /// Dart `_diagnosticReporter` (`None`: the diagnostics are dropped).
     diagnostics: Option<&'e RefCell<Vec<Diagnostic>>>,
+    had_diagnostic: std::cell::Cell<bool>,
 }
 
 impl<'e, 'a> ConstantVisitor<'e, 'a> {
@@ -1739,7 +1887,14 @@ impl<'e, 'a> ConstantVisitor<'e, 'a> {
             lexical_type_environment: None,
             substitution: None,
             diagnostics,
+            had_diagnostic: std::cell::Cell::new(false),
         }
+    }
+
+    fn is_top_level(&self) -> bool {
+        self.lexical_environment.is_none()
+            && self.lexical_type_environment.is_none()
+            && self.substitution.is_none()
     }
 
     fn features(&self) -> &'a FeatureSet {
@@ -1747,6 +1902,7 @@ impl<'e, 'a> ConstantVisitor<'e, 'a> {
     }
 
     fn report(&self, unit: u32, invalid: &InvalidConstant) {
+        self.had_diagnostic.set(true);
         if let Some(diagnostics) = self.diagnostics {
             let _ = unit;
             diagnostics
@@ -3873,6 +4029,7 @@ impl<'e, 'a> InstanceCreationEvaluator<'e, 'a> {
                 self.defining_type(),
             )),
             diagnostics: None,
+            had_diagnostic: std::cell::Cell::new(false),
         }
     }
 

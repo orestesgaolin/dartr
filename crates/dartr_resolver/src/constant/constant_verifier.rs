@@ -176,14 +176,16 @@ pub fn can_be_const(engine: &ConstantEvaluationEngine<'_>, node: NodeRef) -> boo
     };
     match ast.kind(node.node) {
         NodeKind::InstanceCreationExpression | NodeKind::DotShorthandConstructorInvocation => {
-            let constructor_name = match ast.kind(node.node) {
-                NodeKind::InstanceCreationExpression => ast
-                    [Id::<dartr_ast::InstanceCreationExpression>::from_raw(node.node)]
-                .constructor_name
-                .raw(),
-                _ => ast[Id::<dartr_ast::DotShorthandConstructorInvocation>::from_raw(node.node)]
-                    .constructor_name
-                    .raw(),
+            let (constructor_name, argument_list) = match ast.kind(node.node) {
+                NodeKind::InstanceCreationExpression => {
+                    let n = &ast[Id::<dartr_ast::InstanceCreationExpression>::from_raw(node.node)];
+                    (n.constructor_name.raw(), n.argument_list)
+                }
+                _ => {
+                    let n = &ast
+                        [Id::<dartr_ast::DotShorthandConstructorInvocation>::from_raw(node.node)];
+                    (n.constructor_name.raw(), n.argument_list)
+                }
             };
             let Some(element) = handle.tables.element.get(constructor_name).copied() else {
                 return false;
@@ -194,11 +196,30 @@ pub fn can_be_const(engine: &ConstantEvaluationEngine<'_>, node: NodeRef) -> boo
             }
             // Dart `element.baseElement.computeConstantDependencies()`.
             crate::constant::compute::compute_constants(engine, &[ConstantTarget::Element(base)]);
+            if engine.is_cycle_free(base)
+                && ast
+                    .list_raw(ast[argument_list].arguments)
+                    .iter()
+                    .any(|&arg| {
+                        is_obviously_non_const_expr(
+                            engine,
+                            &ctx,
+                            &handle,
+                            argument_expression(ast, arg),
+                            2,
+                        )
+                    })
+            {
+                return false;
+            }
             ast_ext::with_temporary_const_keyword(ast, node.node, || {
                 !has_constant_verifier_error(engine, node)
             })
         }
         NodeKind::ListLiteral | NodeKind::SetOrMapLiteral | NodeKind::RecordLiteral => {
+            if is_obviously_non_const_literal(engine, &ctx, &handle, node.node) {
+                return false;
+            }
             ast_ext::with_temporary_const_keyword(ast, node.node, || {
                 !has_constant_verifier_error(engine, node)
             })
@@ -222,6 +243,255 @@ pub fn can_be_const(engine: &ConstantEvaluationEngine<'_>, node: NodeRef) -> boo
                     !has_constant_verifier_error(engine, node)
                 })
             })
+        }
+        _ => false,
+    }
+}
+
+fn is_obviously_non_const_literal(
+    engine: &ConstantEvaluationEngine<'_>,
+    ctx: &Ctx<'_>,
+    unit: &ResolvedUnit,
+    node: NodeId,
+) -> bool {
+    let ast = &unit.ast;
+    match ast.kind(node) {
+        NodeKind::ListLiteral => {
+            if unit
+                .tables
+                .static_type
+                .get(node)
+                .and_then(|&t| ctx.type_arguments(t).first())
+                .is_none()
+            {
+                return false;
+            }
+            let elements = ast[Id::<ListLiteral>::from_raw(node)].elements;
+            ast.list_raw(elements)
+                .iter()
+                .any(|&el| is_obviously_non_const_collection_element(engine, ctx, unit, el, false))
+        }
+        NodeKind::SetOrMapLiteral => {
+            let n = Id::<SetOrMapLiteral>::from_raw(node);
+            let (is_set, is_map) = set_or_map_kind(unit, ctx, n);
+            if is_set {
+                if unit
+                    .tables
+                    .static_type
+                    .get(node)
+                    .and_then(|&t| ctx.type_arguments(t).first())
+                    .is_none()
+                {
+                    return false;
+                }
+                ast.list_raw(ast[n].elements).iter().any(|&el| {
+                    is_obviously_non_const_collection_element(engine, ctx, unit, el, false)
+                })
+            } else if is_map {
+                if !unit
+                    .tables
+                    .static_type
+                    .get(node)
+                    .is_some_and(|&t| ctx.type_arguments(t).len() >= 2)
+                {
+                    return false;
+                }
+                ast.list_raw(ast[n].elements).iter().any(|&el| {
+                    is_obviously_non_const_collection_element(engine, ctx, unit, el, true)
+                })
+            } else {
+                false
+            }
+        }
+        NodeKind::RecordLiteral => {
+            let fields = ast[Id::<RecordLiteral>::from_raw(node)].fields;
+            ast.list_raw(fields).iter().any(|&f| {
+                let expr = match ast.cast::<RecordLiteralNamedField>(f) {
+                    Some(named) => ast[named].field_expression.raw(),
+                    None => f,
+                };
+                is_obviously_non_const_expr(engine, ctx, unit, expr, 2)
+            })
+        }
+        _ => false,
+    }
+}
+
+fn is_obviously_non_const_collection_element(
+    engine: &ConstantEvaluationEngine<'_>,
+    ctx: &Ctx<'_>,
+    unit: &ResolvedUnit,
+    element: NodeId,
+    is_map: bool,
+) -> bool {
+    let ast = &unit.ast;
+    if ast.kind(element) == NodeKind::ForElement {
+        return true;
+    }
+    if is_map {
+        if let Some(entry) = ast.cast::<MapLiteralEntry>(element) {
+            return is_obviously_non_const_expr(engine, ctx, unit, ast[entry].key.raw(), 2)
+                || is_obviously_non_const_expr(engine, ctx, unit, ast[entry].value.raw(), 2);
+        }
+        false
+    } else if Expression::test(ast.kind(element)) {
+        is_obviously_non_const_expr(engine, ctx, unit, element, 2)
+    } else {
+        false
+    }
+}
+
+fn is_obviously_non_const_expr(
+    engine: &ConstantEvaluationEngine<'_>,
+    ctx: &Ctx<'_>,
+    unit: &ResolvedUnit,
+    mut expr: NodeId,
+    depth: u8,
+) -> bool {
+    let ast = &unit.ast;
+    while let Some(p) = ast.cast::<dartr_ast::ParenthesizedExpression>(expr) {
+        expr = ast[p].expression.raw();
+    }
+    let Some(ty) = unit.tables.static_type.get(expr).copied() else {
+        return false;
+    };
+    if ty == TypeId::INVALID {
+        return false;
+    }
+    match ast.kind(expr) {
+        NodeKind::FunctionExpression
+        | NodeKind::ThisExpression
+        | NodeKind::ThrowExpression
+        | NodeKind::AwaitExpression
+        | NodeKind::CascadeExpression
+        | NodeKind::AssignmentExpression
+        | NodeKind::FunctionExpressionInvocation
+        | NodeKind::PostfixExpression => true,
+        NodeKind::MethodInvocation => {
+            let mi = &ast[Id::<dartr_ast::MethodInvocation>::from_raw(expr)];
+            ast.tokens.lexeme(ast[mi.method_name].token) != "identical"
+        }
+        NodeKind::SimpleIdentifier => {
+            let Some(element) = unit.tables.element.get(expr).copied() else {
+                return false;
+            };
+            let base = member::base_element(ctx, element);
+            match base.tag() {
+                Tag::FormalParameter | Tag::FieldFormalParameter | Tag::SuperFormalParameter => {
+                    true
+                }
+                Tag::LocalVariable | Tag::TopLevelVariable | Tag::Field => {
+                    !crate::element_ext::is_const(ctx, base)
+                }
+                Tag::Getter => match member::variable(ctx, element) {
+                    Some(v) => {
+                        let vbase = member::base_element(ctx, v);
+                        vbase.is::<dartr_element::VariableElement>()
+                            && !crate::element_ext::is_const(ctx, vbase)
+                    }
+                    None => {
+                        let id = Id::<dartr_ast::SimpleIdentifier>::from_raw(expr);
+                        ast.tokens.lexeme(ast[id].token) != "length"
+                    }
+                },
+                Tag::Setter => true,
+                _ => false,
+            }
+        }
+        NodeKind::PrefixedIdentifier => {
+            let pi = &ast[Id::<dartr_ast::PrefixedIdentifier>::from_raw(expr)];
+            if ast.tokens.lexeme(ast[pi.identifier].token) == "length" {
+                return false;
+            }
+            let Some(prefix_ty) = unit.tables.static_type.get(pi.prefix).copied() else {
+                return false;
+            };
+            if prefix_ty == TypeId::INVALID && unit.tables.element.get(pi.prefix).is_none() {
+                return false;
+            }
+            let Some(element) = unit.tables.element.get(pi.identifier).copied() else {
+                return false;
+            };
+            let base = member::base_element(ctx, element);
+            match base.tag() {
+                Tag::LocalVariable | Tag::TopLevelVariable | Tag::Field => {
+                    !crate::element_ext::is_const(ctx, base)
+                }
+                Tag::Getter => match member::variable(ctx, element) {
+                    Some(v) => {
+                        let vbase = member::base_element(ctx, v);
+                        vbase.is::<dartr_element::VariableElement>()
+                            && !crate::element_ext::is_const(ctx, vbase)
+                    }
+                    None => true,
+                },
+                Tag::Setter => true,
+                _ => false,
+            }
+        }
+        NodeKind::PropertyAccess => {
+            let pa = &ast[Id::<dartr_ast::PropertyAccess>::from_raw(expr)];
+            if ast.tokens.lexeme(ast[pa.property_name].token) == "length" {
+                return false;
+            }
+            let Some(target) = pa.target else {
+                return false;
+            };
+            let Some(target_ty) = unit.tables.static_type.get(target).copied() else {
+                return false;
+            };
+            if target_ty == TypeId::INVALID {
+                return false;
+            }
+            let Some(element) = unit.tables.element.get(pa.property_name).copied() else {
+                return false;
+            };
+            let base = member::base_element(ctx, element);
+            match base.tag() {
+                Tag::Getter => match member::variable(ctx, element) {
+                    Some(v) => {
+                        let vbase = member::base_element(ctx, v);
+                        vbase.is::<dartr_element::VariableElement>()
+                            && !crate::element_ext::is_const(ctx, vbase)
+                    }
+                    None => true,
+                },
+                Tag::Setter => true,
+                _ => false,
+            }
+        }
+        NodeKind::InstanceCreationExpression => {
+            let ic = &ast[Id::<dartr_ast::InstanceCreationExpression>::from_raw(expr)];
+            if ic.keyword.is_some_and(|k| ast.tokens.lexeme(k) == "new") {
+                return true;
+            }
+            let Some(ctor) = unit.tables.element.get(ic.constructor_name).copied() else {
+                return false;
+            };
+            let base = member::base_element(ctx, ctor);
+            if base.tag() != Tag::Constructor || !is_const_constructor(ctx, base) {
+                return true;
+            }
+            if depth > 0
+                && engine.is_constant_evaluated(
+                    crate::constant::evaluation::ConstantTarget::Element(base),
+                )
+                && engine.is_cycle_free(base)
+            {
+                return ast
+                    .list_raw(ast[ic.argument_list].arguments)
+                    .iter()
+                    .any(|&arg| {
+                        is_obviously_non_const_expr(
+                            engine,
+                            ctx,
+                            unit,
+                            argument_expression(ast, arg),
+                            depth - 1,
+                        )
+                    });
+            }
+            false
         }
         _ => false,
     }

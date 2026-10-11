@@ -142,7 +142,9 @@ impl ElementMetadata for EngineMetadata<'_> {
             ("meta", "protected") => flags::PROTECTED,
             ("meta", "redeclare") => flags::REDECLARE,
             ("meta", "reopen") => flags::REOPEN,
+            ("meta", "required") => flags::REQUIRED,
             ("meta", "sealed") => flags::SEALED,
+            ("meta", "useResult") => flags::USE_RESULT,
             ("meta", "visibleForOverriding") => flags::VISIBLE_FOR_OVERRIDING,
             ("meta", "visibleForTesting") => flags::VISIBLE_FOR_TESTING,
             ("angular.meta", "visibleForTemplate") => flags::VISIBLE_FOR_TEMPLATE,
@@ -167,6 +169,10 @@ impl ElementMetadata for EngineMetadata<'_> {
         use dartr_resolver::element_metadata::flags;
         let flag = match (library_name, class_name) {
             ("meta_meta", "Target") => flags::TARGET,
+            ("meta", "Required") => flags::REQUIRED,
+            ("meta", "Immutable") => flags::IMMUTABLE,
+            ("meta", "UseResult") => flags::USE_RESULT,
+            ("dart.core", "Deprecated") => flags::DEPRECATED,
             _ => return None,
         };
         let ctx = self.0.global_ctx();

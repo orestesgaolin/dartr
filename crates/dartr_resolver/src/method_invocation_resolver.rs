@@ -611,7 +611,7 @@ impl Resolver<'_> {
             .get(name_node)
             .copied()
             .unwrap_or_default();
-        // Dart `reportDeprecatedExportUseGetter(...)` (wave D).
+        rv.report_deprecated_export_use_getter(scope_lookup_result, rv.ast[name_node].token);
 
         if let Some(mut element) = scope_lookup_result.getter {
             rv.set_element(name_node, Some(base(element)));
@@ -704,7 +704,7 @@ impl Resolver<'_> {
         // `loadLibrary` of a deferred import: the prefix scope answers the
         // `loadLibrary` function of the imported library.
         let scope_lookup_result = rv.unit.scopes.prefix_lookup(&ctx, prefix, self.name);
-        // Dart `reportDeprecatedExportUseGetter(...)` (wave D).
+        rv.report_deprecated_export_use_getter(scope_lookup_result, rv.ast[self.name_node].token);
 
         let mut element = scope_lookup_result.getter;
         rv.set_element(self.name_node, element.map(base));

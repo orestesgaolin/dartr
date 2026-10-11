@@ -648,7 +648,7 @@ impl DriverSession {
                 }
             }
 
-            for store_opt in &driver.state.world.stores {
+            for store_opt in driver.state.world.stores.iter() {
                 let Some(store) = store_opt else {
                     continue;
                 };

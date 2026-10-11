@@ -42,10 +42,10 @@ fn name_is_dart_core_object(c: &LinterContext<'_>, element: dartr_element::Eleme
 
 fn dot_shorthand(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let n = &c.ast[Id::<DotShorthandConstructorInvocation>::from_raw(node)];
-    if n.const_keyword.is_some() || in_constant_context(c, node) {
+    if n.const_keyword.is_some() {
         return;
     }
-    if const_constructor(c, n.constructor_name.raw()).is_none() {
+    if const_constructor(c, n.constructor_name.raw()).is_none() || in_constant_context(c, node) {
         return;
     }
     if c.can_be_const(node) {
@@ -56,7 +56,13 @@ fn dot_shorthand(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>)
 fn creation(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let Some(ctx) = rctx(c) else { return };
     let n = &c.ast[Id::<InstanceCreationExpression>::from_raw(node)];
-    if n.keyword.is_some_and(|k| lexeme(c, k) == "const") || in_constant_context(c, node) {
+    if n.keyword.is_some_and(|k| lexeme(c, k) == "const") {
+        return;
+    }
+    let Some(element) = const_constructor(c, n.constructor_name.raw()) else {
+        return;
+    };
+    if in_constant_context(c, node) {
         return;
     }
     let named_type = c.ast[n.constructor_name].type_;
@@ -68,9 +74,6 @@ fn creation(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     {
         return;
     }
-    let Some(element) = const_constructor(c, n.constructor_name.raw()) else {
-        return;
-    };
     let interface = enclosing(c, element).and_then(|e| e.cast::<dartr_element::InterfaceElement>());
     if let Some(interface) = interface
         && !ctx.interface_type_parameters(interface).is_empty()

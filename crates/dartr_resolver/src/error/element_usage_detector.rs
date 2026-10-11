@@ -36,7 +36,9 @@ use super::{
     experimental_member_use_verifier as experimental,
 };
 use crate::ast_ext::formal_parameter_parts;
-use crate::element_metadata::{UnitAst, WorkspacePackage, accessor_variable};
+use crate::element_metadata::{UnitAst, WorkspacePackage, accessor_variable, element_has, flags};
+
+pub const USAGE_FLAGS: u32 = flags::DEPRECATED | flags::EXPERIMENTAL | flags::DO_NOT_SUBMIT;
 
 /// One `UsageSetAndReporter` of the analyzer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -178,6 +180,13 @@ impl ElementUsageDetector {
         if let Some(p) = element.cast::<FormalParameterElement>()
             && dartr_typesystem::type_ext::is_required(v.ctx.get(p).kind)
         {
+            return;
+        }
+        let unit = Some(UnitAst {
+            ast: v.ast,
+            tables: v.tables,
+        });
+        if !element_has(&v.ctx, element, USAGE_FLAGS, unit) {
             return;
         }
 
@@ -555,6 +564,10 @@ impl ElementUsageDetector {
         let Some(element) = element else {
             return;
         };
+        let arg_slice = v.ast.list(v.ast[arguments].arguments);
+        if arg_slice.is_empty() {
+            return;
+        }
         if !matches!(
             element.tag(),
             Tag::Constructor
@@ -567,16 +580,24 @@ impl ElementUsageDetector {
             return;
         }
         let ctx = v.ctx;
-        let parameters: Vec<ElementId> = member::formal_parameters(&ctx, element.into())
-            .into_iter()
-            .map(|p| member::base_element(&ctx, p))
-            .collect();
-        let args: Vec<NodeId> = v
-            .ast
-            .list(v.ast[arguments].arguments)
+        let exec = &ctx
+            .executable(dartr_element::EId::<dartr_element::ExecutableElement>::from_raw(element))
+            .formal_params;
+        if exec.is_empty() {
+            return;
+        }
+        let unit = Some(UnitAst {
+            ast: v.ast,
+            tables: v.tables,
+        });
+        if !exec
             .iter()
-            .map(|a| a.raw())
-            .collect();
+            .any(|&p| element_has(&ctx, p.raw(), USAGE_FLAGS, unit))
+        {
+            return;
+        }
+        let parameters: Vec<ElementId> = exec.iter().map(|p| p.raw()).collect();
+        let args: Vec<NodeId> = arg_slice.iter().map(|a| a.raw()).collect();
         self.visit_parameters_and_arguments(v, &parameters, &args);
     }
 

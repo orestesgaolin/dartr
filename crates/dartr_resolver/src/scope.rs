@@ -72,6 +72,8 @@ use indexmap::{IndexMap, IndexSet};
 pub struct ScopeLookupResult {
     pub getter: Option<ElementId>,
     pub setter: Option<ElementId>,
+    pub getter_is_from_deprecated_export: bool,
+    pub setter_is_from_deprecated_export: bool,
 }
 
 impl ScopeLookupResult {
@@ -158,6 +160,10 @@ struct PrefixScopeData {
     imported_libraries: Vec<EId<LibraryElement>>,
     getters: IndexMap<Box<str>, ScopeEntry>,
     setters: IndexMap<Box<str>, ScopeEntry>,
+    /// Dart `_gettersFromDeprecatedExport`.
+    getters_from_deprecated_export: IndexSet<Box<str>>,
+    /// Dart `_settersFromDeprecatedExport`.
+    setters_from_deprecated_export: IndexSet<Box<str>>,
     /// Dart `_extensions`.
     extensions: IndexSet<EId<ExtensionElement>>,
     /// Dart `_deferredLibrary`.
@@ -328,6 +334,7 @@ impl LibraryScopes {
         ScopeLookupResult {
             getter: self.doc_import_getters.get(id).copied(),
             setter: self.doc_import_setters.get(id).copied(),
+            ..ScopeLookupResult::default()
         }
     }
 
@@ -440,9 +447,14 @@ impl LibraryScopes {
             }
             let imported_library = *imported_library;
             scope.imported_libraries.push(imported_library);
+            let has_deprecated_export =
+                crate::error::imports_verifier::library_has_deprecated_export(
+                    ctx,
+                    imported_library,
+                );
             if let Some(namespace) = ctx.get(imported_library).export_namespace.try_get() {
-                for (&name, &element) in &namespace.defined_names {
-                    let name = ctx.name_str(name);
+                for (&name_id, &element) in &namespace.defined_names {
+                    let name = ctx.name_str(name_id);
                     if !combinators_allow(ctx, &import.combinators, name) {
                         continue;
                     }
@@ -454,7 +466,21 @@ impl LibraryScopes {
                     {
                         continue;
                     }
-                    self.add_to_prefix_scope(ctx, fragment, &mut scope, name, element);
+                    let is_from_deprecated_export = has_deprecated_export
+                        && crate::error::imports_verifier::is_from_deprecated_export(
+                            ctx,
+                            imported_library,
+                            name_id,
+                            element,
+                        );
+                    self.add_to_prefix_scope(
+                        ctx,
+                        fragment,
+                        &mut scope,
+                        name,
+                        element,
+                        is_from_deprecated_export,
+                    );
                 }
             }
             if let Some(pf) = import.prefix {
@@ -475,6 +501,7 @@ impl LibraryScopes {
         scope: &mut PrefixScopeData,
         name: &str,
         element: ElementId,
+        is_from_deprecated_export: bool,
     ) {
         let is_setter = element.tag() == Tag::Setter;
         // Dart `element.displayName`: the name without `=`.
@@ -484,25 +511,45 @@ impl LibraryScopes {
                 scope.extensions.insert(e);
             }
         }
-        let map = if is_setter {
-            &mut scope.setters
+        let (map, deprecated_set) = if is_setter {
+            (
+                &mut scope.setters,
+                &mut scope.setters_from_deprecated_export,
+            )
         } else {
-            &mut scope.getters
+            (
+                &mut scope.getters,
+                &mut scope.getters_from_deprecated_export,
+            )
         };
         let entry = ScopeEntry::Element(element);
         match map.get(id).copied() {
             None => {
                 map.insert(id.into(), entry);
+                if is_from_deprecated_export {
+                    deprecated_set.insert(id.into());
+                }
             }
-            Some(existing) if existing == entry => {}
+            Some(existing) if existing == entry => {
+                if !is_from_deprecated_export {
+                    deprecated_set.swap_remove(id);
+                }
+            }
             Some(existing) => {
                 let merged = self.merge(ctx, fragment, existing, element);
-                let map = if is_setter {
-                    &mut scope.setters
+                let (map, deprecated_set) = if is_setter {
+                    (
+                        &mut scope.setters,
+                        &mut scope.setters_from_deprecated_export,
+                    )
                 } else {
-                    &mut scope.getters
+                    (
+                        &mut scope.getters,
+                        &mut scope.getters_from_deprecated_export,
+                    )
                 };
                 map.insert(id.into(), merged);
+                deprecated_set.swap_remove(id);
             }
         }
     }
@@ -601,18 +648,6 @@ impl LibraryScopes {
         element.raw()
     }
 
-    fn result(
-        &self,
-        ctx: &Ctx<'_>,
-        getter: Option<ScopeEntry>,
-        setter: Option<ScopeEntry>,
-    ) -> ScopeLookupResult {
-        ScopeLookupResult {
-            getter: getter.map(|e| self.entry_element(ctx, e)),
-            setter: setter.map(|e| self.entry_element(ctx, e)),
-        }
-    }
-
     /// Dart `PrefixScope.lookup` of the prefix scope [scope].
     fn prefix_scope_lookup(&self, ctx: &Ctx<'_>, scope: u32, id: &str) -> ScopeLookupResult {
         let mut current = Some(scope);
@@ -624,6 +659,7 @@ impl LibraryScopes {
                         return ScopeLookupResult {
                             getter: Some(f.raw()),
                             setter: None,
+                            ..ScopeLookupResult::default()
                         };
                     }
                 }
@@ -631,7 +667,16 @@ impl LibraryScopes {
             let getter = data.getters.get(id).copied();
             let setter = data.setters.get(id).copied();
             if getter.is_some() || setter.is_some() {
-                return self.result(ctx, getter, setter);
+                return ScopeLookupResult {
+                    getter: getter.map(|e| self.entry_element(ctx, e)),
+                    setter: setter.map(|e| self.entry_element(ctx, e)),
+                    getter_is_from_deprecated_export: data
+                        .getters_from_deprecated_export
+                        .contains(id),
+                    setter_is_from_deprecated_export: data
+                        .setters_from_deprecated_export
+                        .contains(id),
+                };
             }
             current = data.parent;
         }
@@ -649,7 +694,11 @@ impl LibraryScopes {
         let getter = self.declarations.getters.get(id).copied();
         let setter = self.declarations.setters.get(id).copied();
         if getter.is_some() || setter.is_some() {
-            return ScopeLookupResult { getter, setter };
+            return ScopeLookupResult {
+                getter,
+                setter,
+                ..ScopeLookupResult::default()
+            };
         }
         self.lookup_combined(ctx, fragment, id).unwrap_or_default()
     }
@@ -669,6 +718,7 @@ impl LibraryScopes {
                 return Some(ScopeLookupResult {
                     getter: Some(prefix.raw()),
                     setter: None,
+                    ..ScopeLookupResult::default()
                 });
             }
         }
@@ -1041,11 +1091,19 @@ impl<'a> EnclosedScope<'a> {
                 })
             };
             if is_static(getter) || is_static(setter) {
-                return EnclosedLookup::Found(ScopeLookupResult { getter, setter });
+                return EnclosedLookup::Found(ScopeLookupResult {
+                    getter,
+                    setter,
+                    ..ScopeLookupResult::default()
+                });
             }
             return EnclosedLookup::Found(ScopeLookupResult::default());
         }
-        EnclosedLookup::Found(ScopeLookupResult { getter, setter })
+        EnclosedLookup::Found(ScopeLookupResult {
+            getter,
+            setter,
+            ..ScopeLookupResult::default()
+        })
     }
 }
 

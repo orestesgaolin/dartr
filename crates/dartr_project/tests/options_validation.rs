@@ -179,6 +179,36 @@ fn local_enabled_rules_override_disabled_canonical_duplicates() {
 }
 
 #[test]
+fn local_disabled_rule_suppresses_incompatible_with_included() {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!(
+        "dartr-options-local-disabled-{}-{nonce}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(root.join("lib")).unwrap();
+    let root = root.canonicalize().unwrap();
+    write(&root.join("pubspec.yaml"), "name: local_disabled\n");
+    write(
+        &root.join("analysis_options.yaml"),
+        "include: included.yaml\nlinter:\n  rules:\n    always_use_package_imports: true\n    prefer_relative_imports: false\n",
+    );
+    write(
+        &root.join("included.yaml"),
+        "linter:\n  rules:\n    - prefer_relative_imports\n",
+    );
+    write(&root.join("lib/main.dart"), "void main() {}\n");
+
+    let (oracle, actual) = options_diagnostics(&root);
+    assert_eq!(actual, oracle);
+    assert!(actual.is_empty());
+
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn sdk_constraint_lower_bound_shapes_match_dart_analyze() {
     for (index, (constraint, expected_count)) in [
         ("3.13.0", 1),

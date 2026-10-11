@@ -424,15 +424,22 @@ pub fn with_temporary_const_keyword<R>(ast: &Ast, node: NodeId, f: impl FnOnce()
     f()
 }
 
+/// Whether any node currently has a temporary `const` keyword set by `canBeConst`.
+#[inline]
+pub fn has_any_temporary_const_keyword() -> bool {
+    TEMPORARY_CONST_NODES.with(|s| !s.borrow().is_empty())
+}
+
 /// Whether [node] of [ast] has a `const` keyword: [keyword] is the keyword
 /// token of the node (any keyword for nodes whose keyword can only be
 /// `const`), or the linter set one temporarily.
 pub fn has_const_keyword(ast: &Ast, node: NodeId, keyword: Option<TokenId>) -> bool {
     keyword.is_some()
         || TEMPORARY_CONST_NODES.with(|s| {
-            s.borrow()
-                .iter()
-                .any(|&(a, n)| a == ast as *const Ast as usize && n == node)
+            let s = s.borrow();
+            !s.is_empty()
+                && s.iter()
+                    .any(|&(a, n)| a == ast as *const Ast as usize && n == node)
         })
 }
 

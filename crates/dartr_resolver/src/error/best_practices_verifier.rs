@@ -81,6 +81,7 @@ pub fn verify(v: &mut UnitVerifier<'_>) {
 /// Dart `BestPracticesVerifier` (with its `_InvalidAccessVerifier`).
 struct BestPracticesVerifier<'v, 'a> {
     v: &'v mut UnitVerifier<'a>,
+    inheritance: InheritanceManager3<'a>,
     /// Dart `_enclosingClass` (also `_InvalidAccessVerifier._enclosingClass`).
     enclosing_class: Option<ElementId>,
     /// Dart `_inDoNotStoreMember`.
@@ -126,10 +127,12 @@ impl<'v, 'a> BestPracticesVerifier<'v, 'a> {
         detector.push_element(v, Some(v.library.raw()));
         let in_do_not_store_member =
             element_has(&v.ctx, v.library.raw(), flags::DO_NOT_STORE, None);
+        let inheritance = InheritanceManager3::new(v.ctx);
         BestPracticesVerifier {
             strict_inference: v.options.strict_inference,
             in_template_source: library_path.contains(".template"),
             v,
+            inheritance,
             enclosing_class: None,
             in_do_not_store_member,
             annotation_verifier,
@@ -312,16 +315,18 @@ impl AstVisitor for BestPracticesVerifier<'_, '_> {
     }
 
     fn visit_constructor_declaration(&mut self, ast: &Ast, node: Id<ConstructorDeclaration>) {
-        let initializers: Vec<NodeId> = ast
-            .list(ast[node].initializers)
-            .iter()
-            .map(|i| i.raw())
-            .collect();
-        self.check_strict_inference_in_parameters(
-            Some(ast[node].parameters),
-            Some(&initializers),
-            Some(ast[node].body.raw()),
-        );
+        if self.strict_inference {
+            let initializers: Vec<NodeId> = ast
+                .list(ast[node].initializers)
+                .iter()
+                .map(|i| i.raw())
+                .collect();
+            self.check_strict_inference_in_parameters(
+                Some(ast[node].parameters),
+                Some(&initializers),
+                Some(ast[node].body.raw()),
+            );
+        }
         let element = self.declared(node);
         self.push_element(element);
         self.element_usage_frontier_detector
@@ -431,8 +436,7 @@ impl AstVisitor for BestPracticesVerifier<'_, '_> {
                 continue;
             };
             let name_obj = Name::for_library(&ctx, Some(self.v.library), name);
-            let im = InheritanceManager3::new(ctx);
-            let map = im.get_inherited_concrete_map(enclosing);
+            let map = self.inheritance.get_inherited_concrete_map(enclosing);
             let overridden = map
                 .get(&name_obj)
                 .or_else(|| map.get(&name_obj.for_setter(&ctx)))
@@ -471,28 +475,31 @@ impl AstVisitor for BestPracticesVerifier<'_, '_> {
         if element.is_some_and(|e| self.has(e, flags::DO_NOT_STORE)) {
             self.in_do_not_store_member = true;
         }
-        // Return types are inferred only on non-recursive local functions.
-        let is_setter = ast[node]
-            .property_keyword
-            .is_some_and(|k| ast.tokens.lexeme(k) == "set");
-        if ast
-            .parent(node)
-            .is_some_and(|p| ast.is::<CompilationUnit>(p))
-            && !is_setter
-        {
-            let name = ast.tokens.lexeme(ast[node].name).to_string();
-            self.check_strict_inference_return_type(
-                ast[node].return_type.map(|t| t.raw()),
-                node.raw(),
-                &name,
+        if self.strict_inference {
+            // Return types are inferred only on non-recursive local functions.
+            let is_setter = ast[node]
+                .property_keyword
+                .is_some_and(|k| ast.tokens.lexeme(k) == "set");
+            if ast
+                .parent(node)
+                .is_some_and(|p| ast.is::<CompilationUnit>(p))
+                && !is_setter
+                && ast[node].return_type.is_none()
+            {
+                let name = ast.tokens.lexeme(ast[node].name).to_string();
+                self.check_strict_inference_return_type(
+                    ast[node].return_type.map(|t| t.raw()),
+                    node.raw(),
+                    &name,
+                );
+            }
+            let function = ast[node].function_expression;
+            self.check_strict_inference_in_parameters(
+                ast[function].parameters,
+                None,
+                Some(ast[function].body.raw()),
             );
         }
-        let function = ast[node].function_expression;
-        self.check_strict_inference_in_parameters(
-            ast[function].parameters,
-            None,
-            Some(ast[function].body.raw()),
-        );
         ast.visit_children(node, self);
         self.pop_element();
         self.in_do_not_store_member = was_in_do_not_store_member;
@@ -510,14 +517,20 @@ impl AstVisitor for BestPracticesVerifier<'_, '_> {
 
     fn visit_function_expression(&mut self, ast: &Ast, node: Id<FunctionExpression>) {
         let body = ast[node].body;
-        let was_function_type_supplied = self
-            .v
-            .tables
-            .flags
-            .get(node.raw())
-            .is_some_and(|f| f.contains(NodeFlags::FUNCTION_TYPE_SUPPLIED));
-        if !was_function_type_supplied {
-            self.check_strict_inference_in_parameters(ast[node].parameters, None, Some(body.raw()));
+        if self.strict_inference {
+            let was_function_type_supplied = self
+                .v
+                .tables
+                .flags
+                .get(node.raw())
+                .is_some_and(|f| f.contains(NodeFlags::FUNCTION_TYPE_SUPPLIED));
+            if !was_function_type_supplied {
+                self.check_strict_inference_in_parameters(
+                    ast[node].parameters,
+                    None,
+                    Some(body.raw()),
+                );
+            }
         }
         self.check_for_unnecessary_set_literal(body.raw(), node);
         ast.visit_children(node, self);
@@ -534,13 +547,17 @@ impl AstVisitor for BestPracticesVerifier<'_, '_> {
     }
 
     fn visit_function_type_alias(&mut self, ast: &Ast, node: Id<FunctionTypeAlias>) {
-        let name = ast.tokens.lexeme(ast[node].name).to_string();
-        self.check_strict_inference_return_type(
-            ast[node].return_type.map(|t| t.raw()),
-            node.raw(),
-            &name,
-        );
-        self.check_strict_inference_in_parameters(Some(ast[node].parameters), None, None);
+        if self.strict_inference {
+            if ast[node].return_type.is_none() {
+                let name = ast.tokens.lexeme(ast[node].name).to_string();
+                self.check_strict_inference_return_type(
+                    ast[node].return_type.map(|t| t.raw()),
+                    node.raw(),
+                    &name,
+                );
+            }
+            self.check_strict_inference_in_parameters(Some(ast[node].parameters), None, None);
+        }
         let element = self.declared(node);
         self.push_element(element);
         ast.visit_children(node, self);
@@ -550,9 +567,11 @@ impl AstVisitor for BestPracticesVerifier<'_, '_> {
     fn visit_generic_function_type(&mut self, ast: &Ast, node: Id<GenericFunctionType>) {
         // GenericTypeAlias is handled in [visitGenericTypeAlias], where a
         // proper name can be reported in any message.
-        if !ast
-            .parent(node)
-            .is_some_and(|p| ast.is::<GenericTypeAlias>(p))
+        if self.strict_inference
+            && ast[node].return_type.is_none()
+            && !ast
+                .parent(node)
+                .is_some_and(|p| ast.is::<GenericTypeAlias>(p))
         {
             let name = dartr_ast::to_source::to_source(ast, node.raw());
             self.check_strict_inference_return_type(
@@ -565,7 +584,10 @@ impl AstVisitor for BestPracticesVerifier<'_, '_> {
     }
 
     fn visit_generic_type_alias(&mut self, ast: &Ast, node: Id<GenericTypeAlias>) {
-        if let Some(function_type) = ast.cast::<GenericFunctionType>(ast[node].type_) {
+        if self.strict_inference
+            && let Some(function_type) = ast.cast::<GenericFunctionType>(ast[node].type_)
+            && ast[function_type].return_type.is_none()
+        {
             let name = ast.tokens.lexeme(ast[node].name).to_string();
             self.check_strict_inference_return_type(
                 ast[function_type].return_type.map(|t| t.raw()),
@@ -743,16 +765,20 @@ impl AstVisitor for BestPracticesVerifier<'_, '_> {
 
     fn visit_regular_formal_parameter(&mut self, ast: &Ast, node: Id<RegularFormalParameter>) {
         self.check_for_colon_default_value(node.raw());
-        if let Some(suffix) = ast[node].function_typed_suffix {
-            let name = ast[node]
-                .name
-                .map(|n| ast.tokens.lexeme(n).to_string())
-                .unwrap_or_default();
-            self.check_strict_inference_return_type(
-                ast[node].type_.map(|t| t.raw()),
-                node.raw(),
-                &name,
-            );
+        if self.strict_inference
+            && let Some(suffix) = ast[node].function_typed_suffix
+        {
+            if ast[node].type_.is_none() {
+                let name = ast[node]
+                    .name
+                    .map(|n| ast.tokens.lexeme(n).to_string())
+                    .unwrap_or_default();
+                self.check_strict_inference_return_type(
+                    ast[node].type_.map(|t| t.raw()),
+                    node.raw(),
+                    &name,
+                );
+            }
             self.check_strict_inference_in_parameters(
                 Some(ast[suffix].formal_parameters),
                 None,
@@ -849,36 +875,38 @@ impl BestPracticesVerifier<'_, '_> {
             return;
         };
         let enclosing = enclosing_of(&ctx, element).and_then(|e| e.cast::<InterfaceElement>());
-        let im = InheritanceManager3::new(ctx);
 
-        let mut element_is_override = false;
-        if let Some(enclosing) = enclosing
-            && matches!(element.tag(), Tag::Method | Tag::Getter | Tag::Setter)
-        {
-            element_is_override = im.get_overridden(enclosing, name).is_some();
-        }
+        if self.strict_inference {
+            let mut element_is_override = false;
+            if let Some(enclosing) = enclosing
+                && matches!(element.tag(), Tag::Method | Tag::Getter | Tag::Setter)
+            {
+                element_is_override = self.inheritance.get_overridden(enclosing, name).is_some();
+            }
 
-        let is_setter = ast[node]
-            .property_keyword
-            .is_some_and(|k| ast.tokens.lexeme(k) == "set");
-        if !is_setter && !element_is_override {
-            let name_text = ast.tokens.lexeme(name_token).to_string();
-            self.check_strict_inference_return_type(
-                ast[node].return_type.map(|t| t.raw()),
-                node.raw(),
-                &name_text,
-            );
-        }
-        if !element_is_override {
-            self.check_strict_inference_in_parameters(
-                ast[node].parameters,
-                None,
-                Some(ast[node].body.raw()),
-            );
+            let is_setter = ast[node]
+                .property_keyword
+                .is_some_and(|k| ast.tokens.lexeme(k) == "set");
+            if !is_setter && !element_is_override && ast[node].return_type.is_none() {
+                let name_text = ast.tokens.lexeme(name_token).to_string();
+                self.check_strict_inference_return_type(
+                    ast[node].return_type.map(|t| t.raw()),
+                    node.raw(),
+                    &name_text,
+                );
+            }
+            if !element_is_override {
+                self.check_strict_inference_in_parameters(
+                    ast[node].parameters,
+                    None,
+                    Some(ast[node].body.raw()),
+                );
+            }
         }
 
         let overridden = enclosing.and_then(|enclosing| {
-            im.get_inherited_concrete_map(enclosing)
+            self.inheritance
+                .get_inherited_concrete_map(enclosing)
                 .get(&name)
                 .map(|&e| member::base_element(&ctx, e))
         });
@@ -1921,9 +1949,17 @@ impl BestPracticesVerifier<'_, '_> {
             return;
         }
 
+        let has_visible_for_overriding = self.has_visible_for_overriding(element);
+        if !has_protected
+            && !is_visible_for_template_applied
+            && !has_visible_for_testing
+            && !has_visible_for_overriding
+        {
+            return;
+        }
+
         let (name, error_entity) = identifier_name_and_error_entity(&ctx, ast, node, element);
 
-        let has_visible_for_overriding = self.has_visible_for_overriding(element);
         if has_visible_for_overriding && let Some(parent) = ast.parent(node) {
             let super_target = if let Some(m) = ast.cast::<MethodInvocation>(parent) {
                 ast[m].target.is_some_and(|t| ast.is::<SuperExpression>(t))

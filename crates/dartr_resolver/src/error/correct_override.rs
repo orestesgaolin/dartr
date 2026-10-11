@@ -443,8 +443,11 @@ pub(crate) fn is_augmentation_without_augmented_declaration(ctx: &Ctx<'_>, e: El
 }
 
 /// Dart `element.displayName`: the name (the name without `=` for a
-/// setter), `<unnamed>` without a name.
+/// setter, `unary-` for unary minus), `<unnamed>` without a name.
 pub(crate) fn display_name(ctx: &Ctx<'_>, e: ElementId) -> String {
+    if e.tag() == Tag::Method {
+        return lookup_name(ctx, e).unwrap_or_else(|| "<unnamed>".to_string());
+    }
     match ctx.element_name(e) {
         Some(name) => name.to_string(),
         None => "<unnamed>".to_string(),

@@ -53,16 +53,21 @@ fn report_when_matching_constant(c: &LinterContext<'_>, node: NodeId, out: &mut 
         return;
     }
     let library = resolved.library;
-    let value = c.constant_value(node);
+    let mut value = None;
     for &field in &ctx.instance(element.upcast()).fields {
         let field = field.raw();
         let flags = flags(c, field);
         if !(is_static(c, field) && flags.contains(FragmentFlags::VARIABLE_FRAGMENT_IS_CONST)) {
             continue;
         }
-        if member::is_accessible_in(&ctx, ElemRef::Base(field), library)
-            && constant_values_equal(c, &element_constant_value(c, field), &value)
-        {
+        if !member::is_accessible_in(&ctx, ElemRef::Base(field), library) {
+            continue;
+        }
+        let val = value.get_or_insert_with(|| c.constant_value(node));
+        if val.is_none() {
+            return;
+        }
+        if constant_values_equal(c, &element_constant_value(c, field), val) {
             let text = format!(
                 "{}.{}",
                 name(c, element.raw()).unwrap_or(""),

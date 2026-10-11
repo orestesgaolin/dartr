@@ -24,10 +24,10 @@ fn check(c: &LinterContext<'_>, literal: NodeId, out: &mut Vec<Diagnostic>) {
         NodeKind::ListLiteral => c.ast[Id::<ListLiteral>::from_raw(literal)].const_keyword,
         _ => c.ast[Id::<SetOrMapLiteral>::from_raw(literal)].const_keyword,
     };
-    if keyword.is_some() || in_constant_context(c, literal) {
+    if keyword.is_some() {
         return;
     }
-    let mut node = Some(literal);
+    let mut node = c.ast.parent(literal);
     while let Some(n) = node {
         if matches!(
             kind(c, n),
@@ -65,7 +65,10 @@ fn check(c: &LinterContext<'_>, literal: NodeId, out: &mut Vec<Diagnostic>) {
         }
         current = ctx.superclass(t);
     }
-    if immutable && c.can_be_const(literal) {
+    if !immutable || in_constant_context(c, literal) {
+        return;
+    }
+    if c.can_be_const(literal) {
         c.report_node(
             out,
             &diag::PREFER_CONST_LITERALS_TO_CREATE_IMMUTABLES,
