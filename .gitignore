@@ -5,3 +5,4 @@
 /bench/results/*.log
 /bench/corpus/
 /target.noindex/
+__pycache__/
