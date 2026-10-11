@@ -105,6 +105,7 @@ at each merge; the final process report is written from it.
 | 10-11 09:10 | f99ae51 | language-server latency: resolved units of open files reused, incremental search index, cached completion inputs | Gemini 4 (Antigravity) | flutter_tools: hover 38 -> <0.5 ms, completion after '.' 83 -> 1 ms, first references 2.9 -> 0.16 s; visible-app: hover 137 -> <0.5 ms, completion 283 -> 3 ms; 5,598 tests |
 | 10-11 10:00 | d753fb5 | six parity fixes from a sweep over 315 more real pub packages | Gemini 4 (Antigravity) | 309/315 -> 315/315 packages identical to `dart analyze` (64,953 diagnostics); 4 corpora identical; 5,598 tests |
 | 10-11 11:20 | a80a408 | four parity fixes from a sweep over the remaining pub-cache packages and 6 Flutter SDK packages | Gemini 4 (Antigravity) | 287/291 -> 291/291 packages identical (26,178 diagnostics); 671 real packages identical over three sweeps; 5,599 tests |
+| 10-11 12:00 | d41dae6 | CPU round 5: flat element-store vector, memoized constant constructor calls, fewer AST scans, scopes built once | Gemini 4 (Antigravity) | flutter: user CPU on 1 thread 14.3 -> 8.2 s, wall on all cores 4.0 -> 1.8 s; 4 corpora identical; 5,598 tests |
 
 ## Incidents and lessons
 
