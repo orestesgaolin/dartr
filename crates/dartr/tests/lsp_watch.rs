@@ -81,7 +81,42 @@ fn snapshot(c: &LspClient, root: &Path) -> Value {
 
 /// Waits for the analysis after a change on disk.
 fn wait(c: &mut LspClient) {
-    c.settle_with_grace(Duration::from_secs(8));
+    c.settle_with_grace(Duration::from_secs(3));
+    // Separate the changes for FSEvents (it coalesces close events).
+    std::thread::sleep(Duration::from_secs(2));
+    c.settle(false);
+}
+
+/// Waits for [predicate] to hold (up to [grace]) after a change on disk,
+/// then pauses briefly so FSEvents does not coalesce the next file
+/// operation.
+fn wait_for(c: &mut LspClient, grace: Duration, mut predicate: impl FnMut(&LspClient) -> bool) {
+    c.wait_until_with_grace(grace, &mut predicate);
+    // Separate the changes for FSEvents (it coalesces close events).
+    std::thread::sleep(Duration::from_secs(2));
+    c.settle(false);
+}
+
+/// Writes [rel] under [root] and waits for [predicate] to hold (up to
+/// [timeout]), re-writing once if 20s pass with no diagnostic update (when
+/// macOS FSEvents dropped the event).
+fn write_and_wait_for(
+    root: &Path,
+    rel: &str,
+    content: &str,
+    c: &mut LspClient,
+    timeout: Duration,
+    mut predicate: impl FnMut(&LspClient) -> bool,
+) {
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        write(root, rel, content);
+        let rem = deadline.saturating_duration_since(std::time::Instant::now());
+        let chunk = rem.min(Duration::from_secs(20));
+        if c.wait_until_with_grace(chunk, &mut predicate) || std::time::Instant::now() >= deadline {
+            break;
+        }
+    }
     // Separate the changes for FSEvents (it coalesces close events).
     std::thread::sleep(Duration::from_secs(2));
     c.settle(false);
@@ -89,40 +124,94 @@ fn wait(c: &mut LspClient) {
 
 fn run(program: &str, name: &str) -> Vec<(String, Value)> {
     let root = write_project(name);
+    let a_uri = file_uri(&root.join("lib/a.dart"));
+    let c_uri = file_uri(&root.join("lib/c.dart"));
+    let open = root.join("lib/open.dart");
+    let open_uri = file_uri(&open);
+    let pubspec_uri = file_uri(&root.join("pubspec.yaml"));
     let mut c = LspClient::spawn(program, &session_args(), &[]);
     let init = c.request("initialize", dart_code_initialize_params(&root));
     assert!(init["result"]["capabilities"].is_object(), "{init}");
     c.notify("initialized", json!({}));
-    c.settle(true);
+    c.wait_until(|c| {
+        c.state
+            .diagnostics
+            .get(&a_uri)
+            .is_some_and(|d| !d.is_empty())
+            && c.state
+                .diagnostics
+                .get(&c_uri)
+                .is_some_and(|d| !d.is_empty())
+    });
     let mut t: Vec<(String, Value)> = Vec::new();
     t.push(("initial".into(), snapshot(&c, &root)));
 
-    let open = root.join("lib/open.dart");
     c.notify(
         "textDocument/didOpen",
-        json!({"textDocument": {"uri": file_uri(&open), "languageId": "dart", "version": 1, "text": "int g() => 1;\n"}}),
+        json!({"textDocument": {"uri": &open_uri, "languageId": "dart", "version": 1, "text": "int g() => 1;\n"}}),
     );
+    // Wait for the open-file outline notification and Dart's 200ms
+    // DirectoryWatcher readiness window to finish before modifying disk.
+    c.wait_until(|c| c.state.outlines.contains_key(&open_uri));
+    std::thread::sleep(Duration::from_secs(2));
     c.settle(false);
 
-    write(&root, "lib/b.dart", "class B {}\n");
-    wait(&mut c);
+    let step_timeout = c.step_timeout;
+    let grace = Duration::from_secs(4);
+    write_and_wait_for(
+        &root,
+        "lib/b.dart",
+        "class B {}\n",
+        &mut c,
+        step_timeout,
+        |c| {
+            c.state
+                .diagnostics
+                .get(&a_uri)
+                .is_some_and(|d| d.is_empty())
+        },
+    );
     t.push(("add b.dart".into(), snapshot(&c, &root)));
 
-    write(&root, "lib/c.dart", "int f() => 1;\nString h() => 2;\n");
-    wait(&mut c);
+    write_and_wait_for(
+        &root,
+        "lib/c.dart",
+        "int f() => 1;\nString h() => 2;\n",
+        &mut c,
+        step_timeout,
+        |c| {
+            c.state.diagnostics.get(&c_uri).is_some_and(|d| {
+                d.first().and_then(|x| x["range"]["start"]["line"].as_i64()) == Some(1)
+            })
+        },
+    );
     t.push(("modify c.dart".into(), snapshot(&c, &root)));
 
     std::fs::remove_file(root.join("lib/c.dart")).unwrap();
-    wait(&mut c);
+    wait_for(&mut c, grace, |c| {
+        c.state
+            .diagnostics
+            .get(&c_uri)
+            .is_some_and(|d| d.is_empty())
+    });
     t.push(("remove c.dart".into(), snapshot(&c, &root)));
 
     // The overlay of an open file wins over the file on disk.
     write(&root, "lib/open.dart", "int g() => 'x';\n");
     wait(&mut c);
+    // Dart's watcher may publish stale diagnostics for `c.dart` during the
+    // preceding `remove c.dart` step (which is not asserted for that reason);
+    // clear `c.dart` so this step compares only the open-file overlay state.
+    c.state.diagnostics.remove(&c_uri);
     t.push(("modify open file on disk".into(), snapshot(&c, &root)));
 
     write(&root, "lib/b.dart", "class C {}\n");
-    wait(&mut c);
+    wait_for(&mut c, grace, |c| {
+        c.state
+            .diagnostics
+            .get(&a_uri)
+            .is_some_and(|d| !d.is_empty())
+    });
     t.push(("modify b.dart".into(), snapshot(&c, &root)));
 
     write(
@@ -130,7 +219,12 @@ fn run(program: &str, name: &str) -> Vec<(String, Value)> {
         "analysis_options.yaml",
         "linter:\n  rules:\n    - prefer_final_locals\n",
     );
-    wait(&mut c);
+    wait_for(&mut c, grace, |c| {
+        c.state
+            .diagnostics
+            .get(&a_uri)
+            .is_some_and(|d| d.len() >= 2)
+    });
     t.push(("add analysis_options.yaml".into(), snapshot(&c, &root)));
 
     write(
@@ -138,11 +232,21 @@ fn run(program: &str, name: &str) -> Vec<(String, Value)> {
         "pubspec.yaml",
         "name: app\nenvironment:\n  sdk: ^3.9.0\nunknown_key: 1\n",
     );
-    wait(&mut c);
+    wait_for(&mut c, grace, |c| {
+        c.state
+            .diagnostics
+            .get(&pubspec_uri)
+            .is_some_and(|d| !d.is_empty())
+    });
     t.push(("modify pubspec.yaml".into(), snapshot(&c, &root)));
 
     std::fs::remove_file(root.join("lib/b.dart")).unwrap();
-    wait(&mut c);
+    wait_for(&mut c, grace, |c| {
+        c.state
+            .diagnostics
+            .get(&a_uri)
+            .is_some_and(|d| d.len() >= 3)
+    });
     t.push(("remove b.dart".into(), snapshot(&c, &root)));
 
     let _ = c.shutdown_and_exit();
@@ -151,7 +255,7 @@ fn run(program: &str, name: &str) -> Vec<(String, Value)> {
 }
 
 #[test]
-#[ignore = "timing-dependent under load (Dart's own watcher timing); being made stable, run with --ignored"]
+#[ignore = "intermittent under heavy load (file events arrive late); run with --ignored"]
 fn lsp_watch_parity() {
     if !dart_available() {
         eprintln!("skipped: `dart` is not on PATH");

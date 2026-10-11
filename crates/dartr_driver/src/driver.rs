@@ -391,24 +391,22 @@ impl Driver {
     }
 
     /// The library of [file] (or the file) and the libraries of the files
-    /// that reference it.
+    /// that transitively reference it (Dart `FileSystemState.collectAffected`).
     fn change_seeds(&mut self, file: FileId, seeds: &mut IndexSet<FileId>) {
-        if let Some(l) = self.fs.library_of(file) {
-            seeds.insert(l);
+        let mut affected: IndexSet<FileId> = IndexSet::new();
+        let mut stack = vec![file];
+        while let Some(f) = stack.pop() {
+            if !affected.insert(f) {
+                continue;
+            }
+            stack.extend(self.fs.file(f).referencing_files.iter().copied());
         }
-        if self.fs.file(file).kind().is_library() {
-            seeds.insert(file);
-        }
-        let referencing: Vec<FileId> = self
-            .fs
-            .file(file)
-            .referencing_files
-            .iter()
-            .copied()
-            .collect();
-        for r in referencing {
-            if let Some(l) = self.fs.library_of(r) {
+        for f in affected {
+            if let Some(l) = self.fs.library_of(f) {
                 seeds.insert(l);
+            }
+            if self.fs.file(f).kind().is_library() {
+                seeds.insert(f);
             }
         }
     }

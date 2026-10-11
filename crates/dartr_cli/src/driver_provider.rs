@@ -775,6 +775,9 @@ impl DriverSession {
                 continue;
             }
             let change = driver.change_file(path);
+            if change.api_changed {
+                self.resolved.retain(|&(ctx, _), _| ctx != context);
+            }
             for library in change.libraries {
                 // The resolved library is not valid anymore (Dart: the
                 // library signature changed).

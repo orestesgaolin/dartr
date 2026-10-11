@@ -5,6 +5,9 @@
 //! `LspClientConfiguration`). dartr reads only the settings of the features
 //! it implements.
 
+use std::collections::BTreeSet;
+
+use dartr_diagnostics::{Diagnostic, DiagnosticSeverity, DiagnosticType};
 use serde_json::{Map, Value};
 
 /// Dart `LspClientConfiguration`: the global settings and the settings of
@@ -99,6 +102,43 @@ impl LspResourceClientConfiguration<'_> {
                     .and_then(|f| f.get("lineLength"))
                     .and_then(Value::as_i64)
             })
+    }
+
+    /// Dart `showAllTodos`: `_settings['showTodos'] is bool && _settings['showTodos'] as bool`
+    /// (default `false`).
+    pub fn show_all_todos(&self) -> bool {
+        self.setting("showTodos")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    }
+
+    /// Dart `showTodoTypes`: uppercase strings when `showTodos` is a `List`,
+    /// otherwise empty.
+    pub fn show_todo_types(&self) -> BTreeSet<String> {
+        self.setting("showTodos")
+            .and_then(Value::as_array)
+            .map(|list| {
+                list.iter()
+                    .filter_map(Value::as_str)
+                    .map(|k| k.to_uppercase())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Dart `LspAnalysisServer._shouldSendError`.
+    pub fn should_send_diagnostic(&self, d: &Diagnostic, severity: DiagnosticSeverity) -> bool {
+        if d.code.diagnostic_type != DiagnosticType::Todo {
+            return true;
+        }
+        if severity != DiagnosticSeverity::Info {
+            return true;
+        }
+        if self.show_all_todos() {
+            return true;
+        }
+        self.show_todo_types()
+            .contains(&d.code.lower_case_name().to_uppercase())
     }
 
     /// Dart `experimentalRefactors` (default `false`).

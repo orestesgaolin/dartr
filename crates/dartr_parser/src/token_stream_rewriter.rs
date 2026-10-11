@@ -60,7 +60,7 @@ pub fn undo(tokens: &mut Tokens, changes: &mut Vec<TokenStreamChange>) {
                 tokens.get_mut(set_on).offset = offset;
             }
             TokenStreamChange::PrecedingComments { set_on, comment } => {
-                tokens.get_mut(set_on).preceding_comments = comment;
+                tokens.set_preceding_comments(set_on, comment);
             }
             TokenStreamChange::Previous { set_on, previous } => {
                 tokens.get_mut(set_on).previous = previous;
@@ -407,7 +407,7 @@ impl<'a> TokenStreamRewriter<'a> {
                 comment: self.tokens.get(set_on).preceding_comments,
             });
         }
-        self.tokens.get_mut(set_on).preceding_comments = comment;
+        self.tokens.set_preceding_comments(set_on, comment);
     }
 
     /// Dart `_setPrevious`.

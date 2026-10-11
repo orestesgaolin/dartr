@@ -270,14 +270,24 @@ fn run_session(mut c: LspClient, root: &Path) -> (Transcript, i32) {
         snapshot(&c, &root_uri),
     ));
 
+    let before = c.server_requests.len();
     c.notify(
         "workspace/didChangeConfiguration",
         json!({"settings": null}),
     );
-    c.settle(false);
+    c.wait_until(|c| {
+        c.server_requests[before..]
+            .iter()
+            .any(|(m, _)| m == "workspace/configuration")
+    });
     t.push((
         "didChangeConfiguration: server requests".into(),
-        json!(c.server_requests.last().map(|r| r.0.clone())),
+        json!(
+            c.server_requests[before..]
+                .iter()
+                .find(|(m, _)| m == "workspace/configuration")
+                .map(|r| r.0.clone())
+        ),
     ));
 
     t.push((
@@ -857,6 +867,7 @@ fn server_requests_since(c: &LspClient, from: usize) -> Value {
     Value::Array(
         c.server_requests[from..]
             .iter()
+            .filter(|(m, _)| m != "window/workDoneProgress/create")
             .map(|(m, p)| match m.as_str() {
                 "client/registerCapability" => json!([m, formatting(&p["registrations"])]),
                 "client/unregisterCapability" => json!([m, formatting(&p["unregisterations"])]),
@@ -875,6 +886,11 @@ fn run_format_session(mut c: LspClient, root: &Path, with_formatter: bool) -> (T
     assert!(init["result"]["capabilities"].is_object(), "{init}");
     c.notify("initialized", json!({}));
     c.settle(true);
+    c.wait_until(|c| {
+        c.server_requests
+            .iter()
+            .any(|(m, _)| m == "client/registerCapability")
+    });
     t.push((
         "registrations after initialized".into(),
         server_requests_since(&c, 0)
@@ -1032,12 +1048,17 @@ fn run_format_session(mut c: LspClient, root: &Path, with_formatter: bool) -> (T
         ));
         // `dart.lineLength` from `workspace/configuration` (global and
         // workspace folder); the analysis options of `wide` win.
+        let before = c.server_requests.len();
         c.configuration = json!({"lineLength": 40});
         c.notify(
             "workspace/didChangeConfiguration",
             json!({"settings": null}),
         );
-        c.settle(false);
+        c.wait_until(|c| {
+            c.server_requests[before..]
+                .iter()
+                .any(|(m, _)| m == "workspace/configuration")
+        });
         t.push((
             "formatting with dart.lineLength 40".into(),
             c.request("textDocument/formatting", formatting_params(&needs)),
@@ -1056,7 +1077,11 @@ fn run_format_session(mut c: LspClient, root: &Path, with_formatter: bool) -> (T
         "workspace/didChangeConfiguration",
         json!({"settings": null}),
     );
-    c.settle(false);
+    c.wait_until(|c| {
+        c.server_requests[before..]
+            .iter()
+            .any(|(m, _)| m == "client/unregisterCapability")
+    });
     t.push((
         "enableSdkFormatter false: server requests".into(),
         server_requests_since(&c, before),
@@ -1078,7 +1103,11 @@ fn run_format_session(mut c: LspClient, root: &Path, with_formatter: bool) -> (T
         "workspace/didChangeConfiguration",
         json!({"settings": null}),
     );
-    c.settle(false);
+    c.wait_until(|c| {
+        c.server_requests[before..]
+            .iter()
+            .any(|(m, _)| m == "client/registerCapability")
+    });
     t.push((
         "enableSdkFormatter default: server requests".into(),
         server_requests_since(&c, before),
@@ -1283,5 +1312,207 @@ fn lsp_driver_diagnostics_and_invalidation() {
         assert!(count >= 1, "expected diagnostics in step {name}: {value}");
     }
     let failures = report("driver diagnostics and invalidation", &dart, &dartr);
+    assert_eq!(failures, 0, "LSP session differs from dart language-server");
+}
+
+fn write_overlay_api_project() -> std::path::PathBuf {
+    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("lsp_overlay_api");
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("lib")).unwrap();
+    std::fs::create_dir_all(root.join(".dart_tool")).unwrap();
+    let root = root.canonicalize().unwrap();
+    let write = |rel: &str, content: &str| std::fs::write(root.join(rel), content).unwrap();
+    write("pubspec.yaml", "name: p\nenvironment:\n  sdk: ^3.9.0\n");
+    write(
+        ".dart_tool/package_config.json",
+        "{\"configVersion\":2,\"packages\":[{\"name\":\"p\",\"rootUri\":\"../\",\"packageUri\":\"lib/\",\"languageVersion\":\"3.13\"}]}",
+    );
+    write(
+        "lib/reporter.dart",
+        "/// A diagnostic reporter.\nclass Reporter {\n  /// Reports at [node].\n  int atNode(int node) => node + 1;\n\n  int selfCall(int x) => atNode(x);\n}\n",
+    );
+    write(
+        "lib/caller.dart",
+        "import 'reporter.dart';\n\n// TODO: check caller\n// FIXME: fix caller\nint callReporter(Reporter r) => r.atNode(42);\n",
+    );
+    root
+}
+
+/// Checks that in `c.log[from..]`, `$/progress` `begin` was sent before the
+/// first `textDocument/publishDiagnostics` and `$/progress` `end` was sent
+/// after the last `textDocument/publishDiagnostics`.
+fn progress_wraps_diagnostics(c: &LspClient, from: usize) -> Value {
+    let slice = &c.log[from..];
+    let begin = slice.iter().position(|m| {
+        m.get("method") == Some(&json!("$/progress"))
+            && m.pointer("/params/value/kind") == Some(&json!("begin"))
+    });
+    let first_diag = slice
+        .iter()
+        .position(|m| m.get("method") == Some(&json!("textDocument/publishDiagnostics")));
+    let last_diag = slice
+        .iter()
+        .rposition(|m| m.get("method") == Some(&json!("textDocument/publishDiagnostics")));
+    let end = slice.iter().rposition(|m| {
+        m.get("method") == Some(&json!("$/progress"))
+            && m.pointer("/params/value/kind") == Some(&json!("end"))
+    });
+    let begin_before = match (begin, first_diag) {
+        (Some(b), Some(d)) => b < d,
+        _ => false,
+    };
+    let end_after = match (last_diag, end) {
+        (Some(d), Some(e)) => d < e,
+        _ => false,
+    };
+    json!({
+        "beginBeforeFirstDiagnostics": begin_before,
+        "endAfterLastDiagnostics": end_after,
+    })
+}
+
+fn run_overlay_api_session(mut c: LspClient, root: &Path) -> (Transcript, Value, i32) {
+    let root_uri = format!("{}/", file_uri(root));
+    let uri = |rel: &str| format!("{root_uri}{rel}");
+    let read = |rel: &str| std::fs::read_to_string(root.join(rel)).unwrap();
+    let snap = |c: &LspClient| snapshot_where(c, &root_uri, |_| true);
+    let hover = |c: &mut LspClient, rel: &str, line: u32, character: u32| {
+        c.request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": uri(rel)},
+                "position": position(line, character),
+            }),
+        )
+    };
+    let mut t: Transcript = Vec::new();
+    let init = c.request("initialize", dart_code_initialize_params(root));
+    assert!(init["result"]["capabilities"].is_object(), "{init}");
+    c.notify("initialized", json!({}));
+    c.settle(true);
+    // By default `showTodos` is off, so no TODO/FIXME diagnostics are published.
+    t.push(("initial analysis (todos off by default)".into(), snap(&c)));
+
+    for rel in ["lib/reporter.dart", "lib/caller.dart"] {
+        c.notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {"uri": uri(rel), "languageId": "dart", "version": 1, "text": read(rel)}}),
+        );
+    }
+    c.settle(true);
+    t.push(("open reporter and caller".into(), snap(&c)));
+    t.push((
+        "hover call site in caller.dart before rename".into(),
+        hover(&mut c, "lib/caller.dart", 4, 36),
+    ));
+
+    // Rename documented public method `atNode` -> `atNodeX` in open file.
+    let log_before_rename = c.log.len();
+    let renamed = read("lib/reporter.dart").replace("int atNode(", "int atNodeX(");
+    c.notify(
+        "textDocument/didChange",
+        json!({
+            "textDocument": {"uri": uri("lib/reporter.dart"), "version": 2},
+            "contentChanges": [{"text": renamed}],
+        }),
+    );
+    c.settle(true);
+    let progress_order = progress_wraps_diagnostics(&c, log_before_rename);
+    t.push(("rename atNode -> atNodeX: diagnostics".into(), snap(&c)));
+    t.push((
+        "hover call site in caller.dart after rename".into(),
+        hover(&mut c, "lib/caller.dart", 4, 36),
+    ));
+    t.push((
+        "hover call site in reporter.dart after rename".into(),
+        hover(&mut c, "lib/reporter.dart", 5, 26),
+    ));
+
+    // Undo the edit (`atNodeX` -> `atNode`) and compare again.
+    c.notify(
+        "textDocument/didChange",
+        json!({
+            "textDocument": {"uri": uri("lib/reporter.dart"), "version": 3},
+            "contentChanges": [{"text": read("lib/reporter.dart")}],
+        }),
+    );
+    c.settle(true);
+    t.push(("undo rename: diagnostics".into(), snap(&c)));
+    t.push((
+        "hover call site in caller.dart after undo".into(),
+        hover(&mut c, "lib/caller.dart", 4, 36),
+    ));
+
+    // Enable `showTodos: true`: both TODO and FIXME are published.
+    c.configuration = json!({"showTodos": true});
+    c.notify(
+        "workspace/didChangeConfiguration",
+        json!({"settings": null}),
+    );
+    c.settle(true);
+    t.push(("showTodos: true".into(), snap(&c)));
+
+    // Restrict `showTodos: ["fixme"]`: only FIXME is published.
+    c.configuration = json!({"showTodos": ["fixme"]});
+    c.notify(
+        "workspace/didChangeConfiguration",
+        json!({"settings": null}),
+    );
+    c.settle(true);
+    t.push(("showTodos: [fixme]".into(), snap(&c)));
+
+    // Disable `showTodos: false`: TODOs cleared.
+    c.configuration = json!({"showTodos": false});
+    c.notify(
+        "workspace/didChangeConfiguration",
+        json!({"settings": null}),
+    );
+    c.settle(true);
+    t.push(("showTodos: false".into(), snap(&c)));
+
+    let (response, code) = c.shutdown_and_exit();
+    t.push(("shutdown".into(), response));
+    (t, progress_order, code)
+}
+
+#[test]
+fn lsp_overlay_api_change_todo_and_progress_parity() {
+    if !dart_available() {
+        eprintln!("skipped: `dart` is not on PATH");
+        return;
+    }
+    let root = write_overlay_api_project();
+    let mut args = vec!["language-server", "--protocol=lsp"];
+    args.extend(session_args());
+    let (dart, _, dart_code) = run_overlay_api_session(LspClient::spawn("dart", &args, &[]), &root);
+    let (dartr, dartr_progress_order, dartr_code) =
+        run_overlay_api_session(LspClient::spawn(dartr_bin(), &args, &[]), &root);
+    assert_eq!(dart_code, 0);
+    assert_eq!(dartr_code, 0);
+
+    // Verify that rename reported undefined_method in both files and progress wrapped diagnostics.
+    let renamed_diags = &dart
+        .iter()
+        .find(|(n, _)| n == "rename atNode -> atNodeX: diagnostics")
+        .unwrap()
+        .1["diagnostics"];
+    assert_eq!(
+        renamed_diags["lib/reporter.dart"][0]["code"],
+        json!("undefined_method")
+    );
+    assert_eq!(
+        renamed_diags["lib/caller.dart"][0]["code"],
+        json!("undefined_method")
+    );
+    assert_eq!(
+        dartr_progress_order,
+        json!({"beginBeforeFirstDiagnostics": true, "endAfterLastDiagnostics": true})
+    );
+
+    let failures = report(
+        "overlay API change, hover, progress order, and showTodos",
+        &dart,
+        &dartr,
+    );
     assert_eq!(failures, 0, "LSP session differs from dart language-server");
 }

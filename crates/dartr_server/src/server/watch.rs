@@ -23,17 +23,24 @@ use super::Server;
 /// type `add`, `modify` or `remove` (Dart `ChangeType`).
 pub(super) const WATCH_EVENT: &str = "$/dartr/watchEvent";
 
-/// The files under the watched roots and the start of the watch: raw
-/// events are checked against the file system, like Dart's
-/// `package:watcher` (an event of a file that did not change since the
-/// start, a removal of a file that was never seen, and the replayed events
-/// of FSEvents are dropped).
+type FileStamp = (std::time::SystemTime, u64);
+
+/// The files under the watched roots and their last seen modification
+/// times and sizes: raw events are checked against the file system, like
+/// Dart's `package:watcher` (an event of a file whose modification time did
+/// not change, a removal of a file that was never seen, duplicate callbacks
+/// from a single multi-flag FSEvent, and replayed events of FSEvents are
+/// dropped).
 struct Known {
-    files: std::collections::HashSet<PathBuf>,
-    start: std::time::SystemTime,
+    files: std::collections::HashMap<PathBuf, Option<FileStamp>>,
 }
 
-fn list_files(path: &Path, out: &mut std::collections::HashSet<PathBuf>) {
+fn stamp(path: &Path) -> Option<FileStamp> {
+    let m = std::fs::metadata(path).ok()?;
+    Some((m.modified().ok()?, m.len()))
+}
+
+fn list_files(path: &Path, out: &mut std::collections::HashMap<PathBuf, Option<FileStamp>>) {
     if path.is_dir() {
         if let Ok(entries) = std::fs::read_dir(path) {
             for e in entries.flatten() {
@@ -41,7 +48,7 @@ fn list_files(path: &Path, out: &mut std::collections::HashSet<PathBuf>) {
             }
         }
     } else if path.is_file() {
-        out.insert(path.to_path_buf());
+        out.insert(path.to_path_buf(), stamp(path));
     }
 }
 
@@ -50,59 +57,73 @@ fn watch_events(known: &mut Known, paths: &[PathBuf]) -> Vec<(PathBuf, &'static 
     let mut out = Vec::new();
     for path in paths {
         if path.is_dir() {
-            let mut now = std::collections::HashSet::new();
+            let mut now = std::collections::HashMap::new();
             list_files(path, &mut now);
-            let mut added: Vec<&PathBuf> =
-                now.iter().filter(|f| !known.files.contains(*f)).collect();
-            added.sort();
-            for f in added {
-                out.push((f.clone(), "add"));
+            let mut added: Vec<(PathBuf, Option<FileStamp>)> = now
+                .iter()
+                .filter(|(f, _)| !known.files.contains_key(*f))
+                .map(|(f, &t)| (f.clone(), t))
+                .collect();
+            let mut modified: Vec<(PathBuf, Option<FileStamp>)> = now
+                .iter()
+                .filter_map(|(f, &t)| {
+                    let prev = known.files.get(f)?;
+                    let changed = match (*prev, t) {
+                        (Some(p), Some(c)) => c != p,
+                        _ => true,
+                    };
+                    changed.then(|| (f.clone(), t))
+                })
+                .collect();
+            added.sort_by(|(a, _), (b, _)| a.cmp(b));
+            for (f, t) in added {
+                known.files.insert(f.clone(), t);
+                out.push((f, "add"));
+            }
+            modified.sort_by(|(a, _), (b, _)| a.cmp(b));
+            for (f, t) in modified {
+                known.files.insert(f.clone(), t);
+                out.push((f, "modify"));
             }
             let mut removed: Vec<PathBuf> = known
                 .files
-                .iter()
-                .filter(|f| f.starts_with(path) && !now.contains(*f))
+                .keys()
+                .filter(|f| f.starts_with(path) && !now.contains_key(*f))
                 .cloned()
                 .collect();
             removed.sort();
             for f in removed {
+                known.files.remove(&f);
                 out.push((f, "remove"));
             }
         } else if path.is_file() {
-            if known.files.contains(path) {
-                let changed = std::fs::metadata(path)
-                    .and_then(|m| m.modified())
-                    .map(|t| t >= known.start)
-                    .unwrap_or(true);
+            let current = stamp(path);
+            if let Some(prev) = known.files.get_mut(path) {
+                let changed = match (*prev, current) {
+                    (Some(p), Some(c)) => c != p,
+                    _ => true,
+                };
+                *prev = current;
                 if changed {
                     out.push((path.clone(), "modify"));
                 }
             } else {
+                known.files.insert(path.clone(), current);
                 out.push((path.clone(), "add"));
             }
         } else {
             // Removed: the known files at or under the path.
             let mut removed: Vec<PathBuf> = known
                 .files
-                .iter()
+                .keys()
                 .filter(|f| f.starts_with(path))
                 .cloned()
                 .collect();
             removed.sort();
             for f in removed {
+                known.files.remove(&f);
                 out.push((f, "remove"));
             }
-        }
-    }
-    for (p, kind) in &out {
-        match *kind {
-            "add" => {
-                known.files.insert(p.clone());
-            }
-            "remove" => {
-                known.files.remove(p);
-            }
-            _ => {}
         }
     }
     out
@@ -128,12 +149,14 @@ impl Server {
         }
         self.watcher = None;
         self.watched = roots.clone();
+        if roots.is_empty() {
+            return;
+        }
         let Some(tx) = self.watch_tx.clone() else {
             return;
         };
         let mut known = Known {
-            files: std::collections::HashSet::new(),
-            start: std::time::SystemTime::now(),
+            files: std::collections::HashMap::new(),
         };
         for root in &roots {
             list_files(Path::new(root), &mut known.files);
@@ -189,9 +212,6 @@ impl Server {
             .get("type")
             .and_then(Value::as_str)
             .unwrap_or("modify");
-        if std::env::var_os("DARTR_DEBUG_WATCH").is_some() {
-            eprintln!("WATCH {kind} {path}");
-        }
         let file_kind = FileKind::of(&path);
         let is_package_config = path.ends_with("/.dart_tool/package_config.json");
         if matches!(file_kind, FileKind::AnalysisOptions | FileKind::Pubspec) || is_package_config {
