@@ -27,10 +27,10 @@ xychart-beta horizontal
     %% -100 = no bar: one series per measurement gives each its own color
     title "dartr analyze vs dart analyze, large projects: wall time (s)"
     x-axis ["app, dart warm", "app, dart empty", "app, dartr", "flutter, dart warm", "flutter, dart empty", "flutter, dartr"]
-    y-axis "seconds" 0 --> 104.6
-    bar [70.3, -100, -100, 3.68, -100, -100]
-    bar [-100, 95.1, -100, -100, 19.2, -100]
-    bar [-100, -100, 17.9, -100, -100, 2.97]
+    y-axis "seconds" 0 --> 89.8
+    bar [62.7, -100, -100, 5.98, -100, -100]
+    bar [-100, 81.7, -100, -100, 19.8, -100]
+    bar [-100, -100, 22.0, -100, -100, 1.75]
 ```
 
 ```mermaid
@@ -46,10 +46,10 @@ xychart-beta horizontal
     %% -100 = no bar: one series per measurement gives each its own color
     title "dartr analyze vs dart analyze, smaller packages: wall time (s)"
     x-axis ["analyzer, dart warm", "analyzer, dart empty", "analyzer, dartr", "flutter_tools, dart warm", "flutter_tools, dart empty", "flutter_tools, dartr"]
-    y-axis "seconds" 0 --> 8.27
-    bar [3.46, -100, -100, 2.03, -100, -100]
-    bar [-100, 6.59, -100, -100, 7.52, -100]
-    bar [-100, -100, 0.856, -100, -100, 0.805]
+    y-axis "seconds" 0 --> 13.3
+    bar [3.06, -100, -100, 1.63, -100, -100]
+    bar [-100, 8.66, -100, -100, 12.1, -100]
+    bar [-100, -100, 0.84, -100, -100, 0.871]
 ```
 
 ### Language server against `dart language-server`
@@ -69,10 +69,10 @@ xychart-beta horizontal
     %% -100 = no bar: one series per measurement gives each its own color
     title "Language server startup, large projects (s)"
     x-axis ["app, dart cold", "app, dart warm", "app, dartr", "flutter, dart cold", "flutter, dart warm", "flutter, dartr"]
-    y-axis "seconds" 0 --> 162.4
-    bar [95.7, -100, -100, 23.9, -100, -100]
-    bar [-100, 147.6, -100, -100, 4.89, -100]
-    bar [-100, -100, 128.0, -100, -100, 5.21]
+    y-axis "seconds" 0 --> 95.3
+    bar [77.4, -100, -100, 20.9, -100, -100]
+    bar [-100, 86.7, -100, -100, 3.95, -100]
+    bar [-100, -100, 48.0, -100, -100, 3.86]
 ```
 
 ```mermaid
@@ -88,10 +88,10 @@ xychart-beta horizontal
     %% -100 = no bar: one series per measurement gives each its own color
     title "Language server startup, smaller packages (s)"
     x-axis ["analyzer, dart cold", "analyzer, dart warm", "analyzer, dartr", "flutter_tools, dart cold", "flutter_tools, dart warm", "flutter_tools, dartr"]
-    y-axis "seconds" 0 --> 10.9
-    bar [9.72, -100, -100, 9.88, -100, -100]
-    bar [-100, 2.75, -100, -100, 1.83, -100]
-    bar [-100, -100, 2.35, -100, -100, 2.53]
+    y-axis "seconds" 0 --> 9.91
+    bar [9.01, -100, -100, 8.51, -100, -100]
+    bar [-100, 8.14, -100, -100, 1.59, -100]
+    bar [-100, -100, 1.26, -100, -100, 1.78]
 ```
 
 ```mermaid
@@ -107,9 +107,9 @@ xychart-beta horizontal
     %% -100 = no bar: one series per measurement gives each its own color
     title "Completion after a dot, median (ms)"
     x-axis ["app, dart", "app, dartr", "flutter, dart", "flutter, dartr", "analyzer, dart", "analyzer, dartr", "flutter_tools, dart", "flutter_tools, dartr"]
-    y-axis "ms" 0 --> 5.03
-    bar [4.57, -100, 3.45, -100, 2.23, -100, 3.44, -100]
-    bar [-100, 1.78, -100, 1.67, -100, 0.928, -100, 1.27]
+    y-axis "ms" 0 --> 6.38
+    bar [5.8, -100, 2.73, -100, 2.07, -100, 2.69, -100]
+    bar [-100, 2.29, -100, 1.52, -100, 0.69, -100, 1.11]
 ```
 
 ```mermaid
@@ -125,9 +125,9 @@ xychart-beta horizontal
     %% -100 = no bar: one series per measurement gives each its own color
     title "Completion at statement start, median (ms)"
     x-axis ["app, dart", "app, dartr", "flutter, dart", "flutter, dartr", "analyzer, dart", "analyzer, dartr", "flutter_tools, dart", "flutter_tools, dartr"]
-    y-axis "ms" 0 --> 54.2
-    bar [49.2, -100, 45.6, -100, 21.3, -100, 31.8, -100]
-    bar [-100, 47.8, -100, 40.3, -100, 17.9, -100, 29.4]
+    y-axis "ms" 0 --> 62.8
+    bar [57.1, -100, 44.7, -100, 18.8, -100, 29.8, -100]
+    bar [-100, 42.6, -100, 31.6, -100, 14.3, -100, 23.7]
 ```
 
 ```mermaid
@@ -143,9 +143,9 @@ xychart-beta horizontal
     %% -100 = no bar: one series per measurement gives each its own color
     title "References, median of repeated requests (ms)"
     x-axis ["app, dart", "app, dartr", "flutter, dart", "flutter, dartr", "analyzer, dart", "analyzer, dartr", "flutter_tools, dart", "flutter_tools, dartr"]
-    y-axis "ms" 0 --> 220.4
-    bar [40.9, -100, 200.3, -100, 14.2, -100, 55.0, -100]
-    bar [-100, 14.0, -100, 79.0, -100, 2.13, -100, 18.4]
+    y-axis "ms" 0 --> 186.5
+    bar [90.4, -100, 169.5, -100, 12.8, -100, 45.4, -100]
+    bar [-100, 13.2, -100, 57.6, -100, 1.7, -100, 16.7]
 ```
 
 ```mermaid
@@ -161,9 +161,9 @@ xychart-beta horizontal
     %% -100 = no bar: one series per measurement gives each its own color
     title "First references request (ms)"
     x-axis ["app, dart", "app, dartr", "flutter, dart", "flutter, dartr", "analyzer, dart", "analyzer, dartr", "flutter_tools, dart", "flutter_tools, dartr"]
-    y-axis "ms" 0 --> 5809.7
-    bar [5281.6, -100, 3543.3, -100, 17.3, -100, 74.2, -100]
-    bar [-100, 2194.3, -100, 1738.6, -100, 39.9, -100, 204.0]
+    y-axis "ms" 0 --> 3193.3
+    bar [2458.3, -100, 2903.0, -100, 16.3, -100, 74.9, -100]
+    bar [-100, 1999.8, -100, 1200.6, -100, 33.7, -100, 181.5]
 ```
 
 ```mermaid
@@ -179,31 +179,32 @@ xychart-beta horizontal
     %% -100 = no bar: one series per measurement gives each its own color
     title "Memory after startup (GB)"
     x-axis ["app, dart", "app, dartr", "flutter, dart", "flutter, dartr", "analyzer, dart", "analyzer, dartr", "flutter_tools, dart", "flutter_tools, dartr"]
-    y-axis "GB" 0 --> 7.29
-    bar [6.63, -100, 0.791, -100, 0.524, -100, 0.503, -100]
-    bar [-100, 4.99, -100, 1.63, -100, 0.897, -100, 0.955]
+    y-axis "GB" 0 --> 7.28
+    bar [6.61, -100, 0.803, -100, 0.598, -100, 0.534, -100]
+    bar [-100, 5.15, -100, 1.61, -100, 0.888, -100, 0.94]
 ```
 
 ### `dartr analyze` over time
 
-Light orange: 10-10 19:45 (busy machine). Dark orange: 10-11 03:00 (quiet machine, after the optimization rounds).
+One bar per measurement, oldest first: 10-10 19:45 (busy machine), 10-11 03:00 (quiet machine), 10-11 13:00 (busy machine, after CPU round 5).
 
 ```mermaid
 ---
 config:
   xyChart:
-    height: 272
+    height: 408
   themeVariables:
     xyChart:
-      plotColorPalette: "#DEA584, #8A4F2A"
+      plotColorPalette: "#DEA584, #8A4F2A, #C0602A"
 ---
 xychart-beta horizontal
     %% -100 = no bar: one series per measurement gives each its own color
     title "dartr analyze wall time over the port (s)"
-    x-axis ["app, 10-10 19:45", "app, 10-11 03:00", "flutter, 10-10 19:45", "flutter, 10-11 03:00", "analyzer, 10-10 19:45", "analyzer, 10-11 03:00", "flutter_tools, 10-10 19:45", "flutter_tools, 10-11 03:00"]
+    x-axis ["app, 10-10 19:45", "app, 10-11 03:00", "app, 10-11 13:00", "flutter, 10-10 19:45", "flutter, 10-11 03:00", "flutter, 10-11 13:00", "analyzer, 10-10 19:45", "analyzer, 10-11 03:00", "analyzer, 10-11 13:00", "flutter_tools, 10-10 19:45", "flutter_tools, 10-11 03:00", "flutter_tools, 10-11 13:00"]
     y-axis "seconds" 0 --> 27.4
-    bar [24.9, -100, 7.38, -100, 1.42, -100, 3.67, -100]
-    bar [-100, 17.9, -100, 2.98, -100, 0.856, -100, 0.805]
+    bar [24.9, -100, -100, 7.38, -100, -100, 1.42, -100, -100, 3.67, -100, -100]
+    bar [-100, 17.9, -100, -100, 2.98, -100, -100, 0.856, -100, -100, 0.805, -100]
+    bar [-100, -100, 22.0, -100, -100, 1.75, -100, -100, 0.84, -100, -100, 0.871]
 ```
 
 ### Thread scaling of `dartr analyze`
@@ -453,3 +454,31 @@ initialize to the end of the first analysis. Memory = RSS after startup.
 dartr has no disk cache, so cold and warm startup are the same. With plugins, dartr publishes the same
 diagnostics as Dart on visible-app (11 files, 1 error, 19 infos). Known difference: one references request
 on flutter_tools returns 589 results in dartr and 588 in Dart.
+
+## After CPU round 5 and the plugin fix (2026-10-11 13:00–14:00, busy machine)
+
+Main at eafe5e3. Load average 5 to 11 (three agents building). `dart analyze` with its own warm cache
+(`compare.sh`) and an empty cache; `hyperfine -i -N -w 1 -r 3`. Language server: `bench/lsp_bench.py`
+(before the own-cache change for dart; dart's warm numbers use the shared cache).
+
+| corpus | dart, warm | dart, empty | dartr |
+|---|---|---|---|
+| visible-app | 62.662 s | 81.660 s | 22.007 s |
+| flutter | 5.979 s | 19.759 s | 1.752 s (user 14.3 s) |
+| analyzer-9.0.0 | 3.059 s | 8.658 s | 0.840 s |
+| flutter_tools | 1.634 s | 12.052 s | 0.871 s |
+
+| project | server | startup cold | startup warm | hover | completion `.` | completion stmt | references (median / first) | RSS |
+|---|---|---|---|---|---|---|---|---|
+| flutter_tools | dart | 8.5 s | 1.5–1.7 s | 0.1 ms | 2.7 ms | 30 ms | 45 / 75 ms | 546 MB |
+| | dartr | 1.3–2.2 s | – | 0.0 ms | 1.1 ms | 24 ms | 17 / 181 ms | 962 MB |
+| analyzer-9.0.0 | dart | 9.0 s | 4.7–11.6 s | 0.1 ms | 2.1 ms | 19 ms | 13 / 16 ms | 612 MB |
+| | dartr | 1.0–1.5 s | – | 0.0 ms | 0.7 ms | 14 ms | 2 / 34 ms | 910 MB |
+| flutter | dart | 20.9 s | 3.8–4.2 s | 0.1 ms | 2.7 ms | 45 ms | 170 / 2,903 ms | 823 MB |
+| | dartr | 3.6–4.2 s | – | 0.1 ms | 1.5 ms | 32 ms | 58 / 1,201 ms | 1,652 MB |
+| visible-app | dart | 77.4 s | 84.7–88.7 s | 0.2 ms | 5.8 ms | 57 ms | 90 / 2,458 ms | 6,773 MB |
+| | dartr | 26.0 s (70.0 s on the first start after a new build: plugin preparation) | – | 0.1 ms | 2.3 ms | 43 ms | 13 / 2,000 ms | 5,270 MB |
+
+Published diagnostics are identical to Dart's on all four projects (visible-app with the jaspr_lints plugin:
+11 files, 1 error, 19 infos).
+

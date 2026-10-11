@@ -27,8 +27,9 @@ LSP_PROJECTS = [("app", "app"), ("flutter", "flutter"), ("analyzer", "analyzer")
 HISTORY = [
     ("10-10 19:45 (busy)", {"app": 24.945, "flutter": 7.380, "analyzer": 1.424, "flutter_tools": 3.665}),
     ("10-11 03:00 (quiet)", {"app": 17.919, "flutter": 2.975, "analyzer": 0.856, "flutter_tools": 0.805}),
+    ("10-11 13:00 (busy)", {"app": 22.007, "flutter": 1.752, "analyzer": 0.840, "flutter_tools": 0.871}),
 ]
-COLORS = ["#0175C2", "#9CC8EA", "#DEA584", "#8A4F2A"]
+COLORS = ["#0175C2", "#9CC8EA", "#DEA584", "#8A4F2A", "#C0602A"]
 
 
 def load(name):
@@ -186,11 +187,11 @@ def history_chart():
               for _, name in CORPORA]
     series = [[values[name] for _, name in CORPORA] for _, values in HISTORY]
     top = max(v for s in series for v in s) * 1.1
-    return ["### `dartr analyze` over time\n\nLight orange: 10-10 19:45 (busy machine). "
-            "Dark orange: 10-11 03:00 (quiet machine, after the optimization rounds).",
+    return ["### `dartr analyze` over time\n\nOne bar per measurement, oldest first: 10-10 19:45 "
+            "(busy machine), 10-11 03:00 (quiet machine), 10-11 13:00 (busy machine, after CPU round 5).",
             chart("dartr analyze wall time over the port (s)", "seconds", labels, series, top)
-            .replace(f'plotColorPalette: "{COLORS[0]}, {COLORS[1]}"',
-                     f'plotColorPalette: "{COLORS[2]}, {COLORS[3]}"')]
+            .replace(f'plotColorPalette: "{COLORS[0]}, {COLORS[1]}, {COLORS[2]}"',
+                     f'plotColorPalette: "{COLORS[2]}, {COLORS[3]}, {COLORS[4]}"')]
 
 
 def main():
