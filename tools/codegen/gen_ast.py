@@ -238,6 +238,24 @@ pub enum NodeKind {
     for n in nodes:
         out.append('    pub %s: Vec<%s>,\n' % (snake(n['name']), n['name']))
     out.append('}\n\n')
+    out.append('impl Stores {\n')
+    out.append('    pub fn shrink_to_fit(&mut self) {\n')
+    for n in nodes:
+        out.append('        self.%s.shrink_to_fit();\n' % snake(n['name']))
+    out.append('    }\n\n')
+    out.append('    /// Returns `(used_bytes, capacity_bytes)` across all node vectors.\n')
+    out.append('    pub fn heap_bytes(&self) -> (usize, usize) {\n')
+    out.append('        use std::mem::size_of;\n')
+    out.append('        let mut used = 0usize;\n')
+    out.append('        let mut cap = 0usize;\n')
+    for n in nodes:
+        s = snake(n['name'])
+        t = n['name']
+        out.append('        used += self.%s.len() * size_of::<%s>();\n' % (s, t))
+        out.append('        cap += self.%s.capacity() * size_of::<%s>();\n' % (s, t))
+    out.append('        (used, cap)\n')
+    out.append('    }\n')
+    out.append('}\n\n')
 
     # Reflection.
     out.append('''/// The kind of a field of a node.
