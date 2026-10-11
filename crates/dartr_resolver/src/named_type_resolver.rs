@@ -174,11 +174,17 @@ impl NamedTypeResolver {
 
             if let Some(prefix) = prefix_element.cast::<PrefixElement>() {
                 let name = ast.tokens.lexeme(name_token).to_string();
-                let element = env
+                let scope_lookup_result = env
                     .scope
                     .library_scopes()
-                    .prefix_lookup(&env.ctx, prefix, &name)
-                    .getter;
+                    .prefix_lookup(&env.ctx, prefix, &name);
+                if scope_lookup_result.getter_is_from_deprecated_export {
+                    let offset = ast.tokens.offset(name_token) as usize;
+                    let length =
+                        (token_end(ast, name_token) - ast.tokens.offset(name_token)) as usize;
+                    env.report(diag::deprecated_export_use(&name).at_offset(offset, length));
+                }
+                let element = scope_lookup_result.getter;
                 self.resolve_to_element(env, ast, node, element);
                 return;
             }
@@ -195,7 +201,13 @@ impl NamedTypeResolver {
                 return;
             }
             let name = ast.tokens.lexeme(name_token).to_string();
-            let element = env.scope.lookup(&name).getter;
+            let scope_lookup_result = env.scope.lookup(&name);
+            if scope_lookup_result.getter_is_from_deprecated_export {
+                let offset = ast.tokens.offset(name_token) as usize;
+                let length = (token_end(ast, name_token) - ast.tokens.offset(name_token)) as usize;
+                env.report(diag::deprecated_export_use(&name).at_offset(offset, length));
+            }
+            let element = scope_lookup_result.getter;
             self.resolve_to_element(env, ast, node, element);
         }
     }

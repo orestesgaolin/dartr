@@ -748,6 +748,7 @@ impl Validator<'_> {
         for (_, semantics) in included {
             apply_rules(&mut effective, &semantics.rules);
         }
+        effective.retain(|old| !local.iter().any(|r| r.canonical == old.canonical));
         for rule in local.iter().filter(|r| r.enabled) {
             let conflicts: Vec<_> = incompatible_rules(rule.canonical)
                 .iter()

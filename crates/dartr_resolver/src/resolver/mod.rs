@@ -254,6 +254,51 @@ impl<'a> ResolverVisitor<'a> {
         diagnostic.at_offset(t.offset as usize, (t.end() - t.offset) as usize)
     }
 
+    /// Dart `ScopeHelpers.reportDeprecatedExportUse(...)`.
+    pub fn report_deprecated_export_use(
+        &mut self,
+        scope_lookup_result: crate::scope::ScopeLookupResult,
+        name_token: dartr_syntax::TokenId,
+        has_read: bool,
+        has_write: bool,
+    ) {
+        if has_read && scope_lookup_result.getter_is_from_deprecated_export {
+            self.report_deprecated_export_use_at(name_token);
+        } else if has_write && scope_lookup_result.setter_is_from_deprecated_export {
+            self.report_deprecated_export_use_at(name_token);
+        }
+    }
+
+    /// Dart `ScopeHelpers.reportDeprecatedExportUseGetter(...)`.
+    pub fn report_deprecated_export_use_getter(
+        &mut self,
+        scope_lookup_result: crate::scope::ScopeLookupResult,
+        name_token: dartr_syntax::TokenId,
+    ) {
+        if scope_lookup_result.getter_is_from_deprecated_export {
+            self.report_deprecated_export_use_at(name_token);
+        }
+    }
+
+    /// Dart `ScopeHelpers.reportDeprecatedExportUseSetter(...)`.
+    pub fn report_deprecated_export_use_setter(
+        &mut self,
+        scope_lookup_result: crate::scope::ScopeLookupResult,
+        name_token: dartr_syntax::TokenId,
+    ) {
+        if scope_lookup_result.setter_is_from_deprecated_export {
+            self.report_deprecated_export_use_at(name_token);
+        }
+    }
+
+    fn report_deprecated_export_use_at(&mut self, name_token: dartr_syntax::TokenId) {
+        let d = self.at_token(
+            dartr_diagnostics::diag::deprecated_export_use(self.lexeme(name_token)),
+            name_token,
+        );
+        self.report(d);
+    }
+
     /// Converts the errors that the shared type analyzer reported since the
     /// last call into diagnostics.
     pub fn flush_type_analyzer_errors(&mut self) {
