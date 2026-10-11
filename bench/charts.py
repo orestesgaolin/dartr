@@ -3,8 +3,9 @@
 
     python3 -I bench/charts.py
 
-Reads bench/results/ (written by bench/compare.sh and bench/lsp_bench.py; git-ignored):
+Reads bench/results/ (written by bench/compare.sh, bench/memory.sh and bench/lsp_bench.py; git-ignored):
   compare-<corpus>.json, compare-<corpus>-cold.json   dart (warm, empty cache) vs dartr analyze
+  memory-<corpus>.json                                peak RSS of dart (warm) vs dartr analyze
   threads-<corpus>.json                               dartr with 1, 4 and all threads
   lsp2-<project>-<server>.json                        language server benchmark
 and replaces the text between the markers <!-- charts:begin --> and <!-- charts:end -->.
@@ -84,6 +85,16 @@ def mean_of(data, command):
     return None
 
 
+def median_gb_of(data, command):
+    for r in (data or {}).get("results", []):
+        if r["command"] == command:
+            if "median_gb" in r:
+                return r["median_gb"]
+            if "median_bytes" in r:
+                return r["median_bytes"] / (1024 ** 3)
+    return None
+
+
 def analyze_charts():
     out = []
     rows = []
@@ -103,9 +114,24 @@ def analyze_charts():
         top = max(v for s in series for v in s if v is not None) * 1.1
         out.append(chart(f"dartr analyze vs dart analyze, {group.lower()}: wall time (s)",
                          "seconds", labels, series, top))
+    mem = []
+    for corpus, short in CORPORA:
+        m = load(f"memory-{corpus}.json")
+        if m:
+            mem.append((short, median_gb_of(m, "dart"), median_gb_of(m, "dartr")))
+    mem = [r for r in mem if r[1] is not None and r[2] is not None]
+    if mem:
+        labels = [(f"{s}, dart", f"{s}, dartr") for s, _, _ in mem]
+        series = [[r[1] for r in mem], [r[2] for r in mem]]
+        top = max(v for s in series for v in s) * 1.1
+        out.append(chart("Peak memory of dartr analyze vs dart analyze (GB)", "GB", labels,
+                         series, top).replace(
+            f'plotColorPalette: "{COLORS[0]}, {COLORS[1]}"',
+            f'plotColorPalette: "{COLORS[0]}, {COLORS[2]}"'))
     if out:
         out.insert(0, "### `dartr analyze` against `dart analyze`\n\nDark blue: dart, warm cache. "
-                      "Light blue: dart, empty cache. Orange: dartr. Source: `bench/compare.sh`.")
+                      "Light blue: dart, empty cache. Orange: dartr. Source: `bench/compare.sh`, "
+                      "`bench/memory.sh`.")
     return out
 
 
