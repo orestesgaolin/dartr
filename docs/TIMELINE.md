@@ -107,7 +107,7 @@ at each merge; the final process report is written from it.
 | 10-11 11:20 | a80a408 | four parity fixes from a sweep over the remaining pub-cache packages and 6 Flutter SDK packages | Gemini 4 (Antigravity) | 287/291 -> 291/291 packages identical (26,178 diagnostics); 671 real packages identical over three sweeps; 5,599 tests |
 | 10-11 12:00 | d41dae6 | CPU round 5: flat element-store vector, memoized constant constructor calls, fewer AST scans, scopes built once | Gemini 4 (Antigravity) | flutter: user CPU on 1 thread 14.3 -> 8.2 s, wall on all cores 4.0 -> 1.8 s; 4 corpora identical; 5,598 tests |
 | 10-11 12:50 | dd96ea7 | analyzer plugins start without blocking the language server (no 60 s wait for a past status, async start, pub upgrade only when needed) | Gemini 4 (Antigravity) | visible-app language-server startup with jaspr_lints 104-134 s -> 25-28 s (dart: 96 s cold); diagnostics identical; 5,599 tests |
-| 10-11 14:20 | 69fe06f | simpler landing page (numbers, comparison tables, known differences, guide links) and an editor-setup guide for Homebrew and the shim | Gemini 4 (Antigravity) | page 591 -> 270 lines of HTML and CSS changed; fits a 390 px phone without horizontal scroll |
+| 10-11 14:20 | 69fe06f | simpler landing page (numbers, comparison tables, known differences, guide links) and an editor-setup guide for Homebrew and the shim | Gemini 4 (Antigravity) | 522 lines removed and 203 added (page, style, guide); fits a 390 px phone without horizontal scroll |
 
 ## Incidents and lessons
 
