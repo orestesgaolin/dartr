@@ -344,7 +344,19 @@ fn check_fixture_projects(fixtures: &Path, scratch_name: &str) {
         .collect();
     names.sort();
     for name in &names {
-        copy_dir(&fixtures.join(name), &base.join(name));
+        let dst = base.join(name);
+        copy_dir(&fixtures.join(name), &dst);
+        if scratch_name == "driver_exact"
+            && dst.join("pubspec.yaml").exists()
+            && !dst.join(".dart_tool/package_config.json").exists()
+        {
+            fs::create_dir_all(dst.join(".dart_tool")).unwrap();
+            fs::write(
+                dst.join(".dart_tool/package_config.json"),
+                package_config("2.12"),
+            )
+            .unwrap();
+        }
     }
     // Each `dart analyze` start takes seconds: run the projects in parallel.
     let count = names.len() * 3;
