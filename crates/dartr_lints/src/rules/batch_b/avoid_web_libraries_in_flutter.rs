@@ -2,65 +2,15 @@
 use crate::{LinterContext, RuleVisitorRegistry};
 use dartr_ast::*;
 use dartr_diagnostics::{Diagnostic, diag};
-use dartr_project::yaml::NodeKind as YamlNodeKind;
 
 pub fn register(r: &mut RuleVisitorRegistry, c: &LinterContext<'_>) {
-    if has_flutter_dep(c) {
+    if c.has_flutter_dep() {
         r.add(
             NodeKind::ImportDirective,
             "avoid_web_libraries_in_flutter",
             check,
         );
     }
-}
-
-/// Dart `AvoidWebLibrariesInFlutter.hasFlutterDep`.
-fn has_flutter_dep(c: &LinterContext<'_>) -> bool {
-    static CACHE: std::sync::OnceLock<
-        std::sync::RwLock<std::collections::HashMap<std::path::PathBuf, bool>>,
-    > = std::sync::OnceLock::new();
-    let Some(root) = c.package_root() else {
-        return false;
-    };
-    let pubspec_path = root.join("pubspec.yaml");
-    if !dartr_project::fs::has_overlays() {
-        let cache = CACHE.get_or_init(Default::default);
-        if let Some(&cached) = cache.read().unwrap().get(&pubspec_path) {
-            return cached;
-        }
-        let result = compute_has_flutter_dep(&pubspec_path);
-        cache.write().unwrap().insert(pubspec_path, result);
-        return result;
-    }
-    compute_has_flutter_dep(&pubspec_path)
-}
-
-fn compute_has_flutter_dep(pubspec_path: &std::path::Path) -> bool {
-    let Some(content) = pubspec_path
-        .to_str()
-        .and_then(dartr_project::fs::read_string_strict)
-    else {
-        return false;
-    };
-    let Ok(parsed_pubspec) = dartr_project::yaml::load_yaml_node(&content) else {
-        return false;
-    };
-    if !matches!(parsed_pubspec.kind, YamlNodeKind::Map(_)) {
-        return false;
-    }
-    let Some(deps) = parsed_pubspec.value_at("dependencies") else {
-        return false;
-    };
-    if !matches!(deps.kind, YamlNodeKind::Map(_)) || deps.value_at("flutter").is_none() {
-        return false;
-    }
-    let is_web_plugin = parsed_pubspec
-        .value_at("flutter")
-        .and_then(|n| n.value_at("plugin"))
-        .and_then(|n| n.value_at("platforms"))
-        .and_then(|n| n.value_at("web"))
-        .is_some_and(|w| !w.is_null_scalar());
-    !is_web_plugin
 }
 
 fn is_web_uri(uri: Option<&str>) -> bool {

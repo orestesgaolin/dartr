@@ -236,6 +236,11 @@ impl DriverSession {
         }
         let mut result = Vec::new();
         let mut fallback = Vec::new();
+        let timings = std::env::var_os("DARTR_TIMINGS").is_some();
+        let mut total_discover = std::time::Duration::ZERO;
+        let mut total_link = std::time::Duration::ZERO;
+        let mut total_resolve = std::time::Duration::ZERO;
+        let num_contexts = by_context.len();
         for (context, files) in by_context {
             let options = ContextOptions::new(collection, context);
             let mut driver = self.drivers.shift_remove(&context).unwrap_or_else(|| {
@@ -247,7 +252,20 @@ impl DriverSession {
                 }))
             });
             match outcome {
-                Ok(outcomes) => {
+                Ok((outcomes, (t_discover, t_link, t_resolve))) => {
+                    total_discover += t_discover;
+                    total_link += t_link;
+                    total_resolve += t_resolve;
+                    if timings {
+                        eprintln!(
+                            "[driver] context {context}: discover {:?} ({} known files), link {:?} ({} stores), resolve+lint {:?}",
+                            t_discover,
+                            driver.fs.files().len(),
+                            t_link,
+                            driver.state.world.stores.len(),
+                            t_resolve,
+                        );
+                    }
                     for o in outcomes {
                         match o {
                             Outcome::Done(d) => result.push(d),
@@ -268,6 +286,12 @@ impl DriverSession {
                     fallback.extend(files);
                 }
             }
+        }
+        if timings && num_contexts > 1 {
+            eprintln!(
+                "[driver] total ({num_contexts} contexts): discover {:?}, link {:?}, resolve+lint {:?}",
+                total_discover, total_link, total_resolve,
+            );
         }
         if !fallback.is_empty() {
             if debug() {
@@ -776,12 +800,21 @@ fn analyze_context(
     driver: &mut Driver,
     options: &ContextOptions,
     files: &[AnalyzedFile],
-) -> Vec<Outcome> {
+) -> (
+    Vec<Outcome>,
+    (
+        std::time::Duration,
+        std::time::Duration,
+        std::time::Duration,
+    ),
+) {
+    let t0 = std::time::Instant::now();
     let ids: Vec<FileId> = files
         .iter()
         .map(|f| driver.fs.get_file_for_path(&f.path))
         .collect();
     driver.fs.discover();
+    let t_discover = t0.elapsed();
 
     let mut outcomes = Vec::new();
     // The requested files of each library (defining unit).
@@ -802,7 +835,9 @@ fn analyze_context(
         }
     }
     let library_ids: Vec<FileId> = libraries.keys().copied().collect();
+    let t_before_link = t0.elapsed();
     driver.link_libraries(&library_ids);
+    let t_link = t0.elapsed() - t_before_link;
 
     // The unignorable codes of each library: the library analyzer keeps
     // them in its ignore filtering, like `finish_file` does.
@@ -839,8 +874,18 @@ fn analyze_context(
             (l, options.for_path(path).1, &names[..], resolved_rules)
         })
         .collect();
+    let mut pkg_cache = dartr_lints::LintPackageCache::default();
+    let pkg_infos: HashMap<FileId, Arc<dartr_lints::LintPackageInfo>> = library_ids
+        .iter()
+        .map(|&l| {
+            let path = &driver.fs.file(l).path;
+            (l, pkg_cache.for_defining_path(path))
+        })
+        .collect();
     let requested = &requested;
     let libraries = &libraries;
+    let pkg_infos = &pkg_infos;
+    let t_before_resolve = t0.elapsed();
     let analyzed = driver.analyze_libraries_with_lints(&jobs, |library, units, result, lints| {
         library_outcomes(
             options,
@@ -849,10 +894,12 @@ fn analyze_context(
             units,
             result,
             lints,
+            pkg_infos.get(&library).map(|p| &**p),
         )
     });
+    let t_resolve = t0.elapsed() - t_before_resolve;
     outcomes.extend(analyzed.into_iter().flatten());
-    outcomes
+    (outcomes, (t_discover, t_link, t_resolve))
 }
 
 /// The diagnostics of the [wanted] units of one analyzed library.
@@ -863,6 +910,7 @@ fn library_outcomes(
     units: &[UnitInput],
     result: Result<ResolvedLibrary, String>,
     resolved_lints: Vec<Vec<Diagnostic>>,
+    package_info: Option<&dartr_lints::LintPackageInfo>,
 ) -> Vec<Outcome> {
     let fallback = || {
         wanted
@@ -899,6 +947,8 @@ fn library_outcomes(
                 parsed: &u.parsed,
                 source: &u.parsed.ast.tokens.source,
                 path: &u.path,
+                source_uri: Some(&u.uri),
+                package_info,
             })
             .collect();
         lint_library_unfiltered(&context_units, &parsed_lint_rules)

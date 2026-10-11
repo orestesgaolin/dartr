@@ -35,4 +35,11 @@ void deprecations(Box box) {
   box.resize(1, height: 2);
   print(box.length);
   print(Box.old(1));
+  paint(color: 'red', fill: true);
+  paint(color: 'blue');
+  configure(enabled: true);
+  configure(enabled: false);
+  setLabel(null, 1);
+  setLabel();
 }
+

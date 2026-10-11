@@ -1,26 +1,26 @@
 // Dart source: pkg/analysis_server/lib/src/handler/legacy/edit_get_available_refactorings.dart
 // Dart source: pkg/analysis_server/lib/src/handler/legacy/edit_get_refactoring.dart
 // Dart source: pkg/analysis_server/lib/src/services/refactoring/legacy/refactoring_manager.dart
-// Dart source: pkg/analysis_server/lib/src/services/refactoring/legacy/rename.dart
-// Dart source: pkg/analysis_server/lib/src/services/refactoring/legacy/extract_local.dart
-// Dart source: pkg/analysis_server/lib/src/services/refactoring/legacy/inline_local.dart
-// Dart source: pkg/analysis_server/lib/src/services/refactoring/legacy/convert_method_to_getter.dart
-// Dart source: pkg/analysis_server/lib/src/services/refactoring/legacy/convert_getter_to_method.dart
-// Dart source: pkg/analysis_server/lib/src/services/refactoring/legacy/extract_method.dart
 
-use dartr_ast::{
-    AssignmentExpression, Ast, Block, CompilationUnit, ExportDirective, Expression,
-    ExpressionFunctionBody, FunctionBody, FunctionDeclaration, Id, ImportDirective,
-    MethodDeclaration, MethodInvocation, NodeId, NodeKind, PartDirective, PrefixedIdentifier,
-    PropertyAccess, SimpleIdentifier, Statement, VariableDeclaration, VariableDeclarationList,
-    VariableDeclarationStatement,
+//! Legacy `edit.getAvailableRefactorings` and `edit.getRefactoring` handlers,
+//! backed by the unified refactoring engine in `dartr_server::refactoring`.
+
+use dartr_element::Tag;
+use dartr_server::refactoring::convert::is_method_to_getter_available_in_unit;
+use dartr_server::refactoring::extract_local::ExtractLocal;
+use dartr_server::refactoring::extract_method::{ExtractMethod, MethodParameter};
+use dartr_server::refactoring::extract_widget::ExtractWidget;
+use dartr_server::refactoring::inline_local::InlineLocal;
+use dartr_server::refactoring::inline_method::InlineMethod;
+use dartr_server::refactoring::move_file::MoveFile;
+use dartr_server::refactoring::rename::{
+    Engine, create_rename_for_target, element_to_rename_in_unit,
 };
-use dartr_element::{AnyElement, Ctx, ElementId, NoopSink, Tag, TypeKind};
-use dartr_server::completion::candidate::display_name;
+use dartr_server::refactoring::status::RefactoringStatus;
 use serde_json::Value;
 
 use crate::protocol;
-use crate::search::{ResolvedUnitRef, SElem, SearchEngine};
+use crate::search::{ResolvedUnitRef, SearchEngine};
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct RefactoringResponse {
@@ -47,333 +47,30 @@ pub fn get_available_refactorings(
     if let Some(resolved) = resolved
         && let (Ok(off), Ok(len)) = (u32::try_from(offset), u32::try_from(length))
     {
-        let sink = NoopSink;
-        let ctx = resolved.ctx(&sink);
-        let unit = resolved.unit();
-        let u = dartr_server::element_locator::Unit {
-            ctx: &ctx,
-            ast: &unit.ast,
-            tables: &unit.tables,
+        let unit = dartr_server::server::ResolvedUnitRef {
+            library: resolved.library.clone(),
+            index: resolved.index,
         };
-        if is_extract_local_available(&u, unit.unit, off, len) {
+        if ExtractLocal::is_available(&unit, off, len) {
             kinds.push(protocol::RefactoringKind::ExtractLocalVariable);
         }
-        if is_extract_method_available(&u, unit.unit, off, len) {
+        if ExtractMethod::is_available(&unit, off, len) {
             kinds.push(protocol::RefactoringKind::ExtractMethod);
         }
-        if is_extract_widget_available(&u, unit.unit, off, len) {
+        if ExtractWidget::new(&unit, off, len).is_available() {
             kinds.push(protocol::RefactoringKind::ExtractWidget);
         }
-        if is_convert_method_to_getter_available(&u, unit.unit, off) {
+        if is_method_to_getter_available_in_unit(&unit, off) {
             kinds.push(protocol::RefactoringKind::ConvertMethodToGetter);
         }
-        if find_rename_target(&u, unit.unit, off).is_some() {
+        if element_to_rename_in_unit(&unit, off)
+            .and_then(|(target, _, _)| create_rename_for_target(&unit, target))
+            .is_some()
+        {
             kinds.push(protocol::RefactoringKind::RENAME);
         }
     }
     protocol::EditGetAvailableRefactoringsResult { kinds }
-}
-
-fn is_extract_local_available(
-    u: &dartr_server::element_locator::Unit<'_, '_>,
-    root: Id<CompilationUnit>,
-    offset: u32,
-    length: u32,
-) -> bool {
-    let ast = u.ast;
-    let src_len = ast.tokens.source.len() as u32;
-    if offset == 0 || offset + length >= src_len {
-        return false;
-    }
-    let Some(covering) = ast.node_covering(root, offset, length) else {
-        return false;
-    };
-    let mut has_fn_body = false;
-    let mut p = Some(covering);
-    while let Some(n) = p {
-        if ast.is::<FunctionBody>(n) {
-            has_fn_body = true;
-            break;
-        }
-        p = ast.parent(n);
-    }
-    if !has_fn_body {
-        return false;
-    }
-    let mut single_expr: Option<NodeId> = None;
-    let mut has_covering_expr = false;
-    let mut cur = Some(covering);
-    while let Some(node) = cur {
-        let parent = ast.parent(node);
-        if matches!(
-            ast.kind(node),
-            NodeKind::ArgumentList
-                | NodeKind::AssignmentExpression
-                | NodeKind::NamedArgument
-                | NodeKind::TypeArgumentList
-        ) {
-            cur = parent;
-            continue;
-        }
-        if matches!(
-            ast.kind(node),
-            NodeKind::ConstructorName | NodeKind::Label | NodeKind::NamedType
-        ) {
-            single_expr = None;
-            has_covering_expr = false;
-            cur = parent;
-            continue;
-        }
-        if let Some(p_id) = parent {
-            if let Some(pi) = ast.cast::<PrefixedIdentifier>(p_id)
-                && ast[pi].identifier.raw() == node
-            {
-                cur = parent;
-                continue;
-            }
-            if let Some(pa) = ast.cast::<PropertyAccess>(p_id)
-                && ast[pa].property_name.raw() == node
-            {
-                cur = parent;
-                continue;
-            }
-        }
-        if !ast.is::<Expression>(node) {
-            break;
-        }
-        if ast.is::<MethodInvocation>(node)
-            && let Some(&ty) = u.tables.static_type.get(node)
-            && matches!(u.ctx.ty(ty), TypeKind::Void)
-        {
-            if single_expr.is_none() {
-                return false;
-            }
-            break;
-        }
-        if !has_covering_expr {
-            if let Some(sid) = ast.cast::<SimpleIdentifier>(node)
-                && let Some(el) = u.element(sid)
-                && matches!(
-                    el.tag(),
-                    Tag::LocalFunction | Tag::Method | Tag::TopLevelFunction
-                )
-            {
-                cur = parent;
-                continue;
-            }
-            if let Some(p_id) = parent
-                && let Some(assign) = ast.cast::<AssignmentExpression>(p_id)
-                && ast[assign].left_hand_side.raw() == node
-            {
-                return false;
-            }
-        }
-        if single_expr.is_none() {
-            single_expr = Some(node);
-        }
-        has_covering_expr = true;
-        cur = parent;
-    }
-    single_expr.is_some()
-}
-
-fn is_extract_method_available(
-    u: &dartr_server::element_locator::Unit<'_, '_>,
-    root: Id<CompilationUnit>,
-    offset: u32,
-    length: u32,
-) -> bool {
-    is_extract_local_available(u, root, offset, length)
-}
-
-fn is_extract_widget_available(
-    u: &dartr_server::element_locator::Unit<'_, '_>,
-    root: Id<CompilationUnit>,
-    offset: u32,
-    length: u32,
-) -> bool {
-    find_extract_widget_creation(u, root, offset, length).is_some()
-}
-
-fn find_extract_widget_creation(
-    u: &dartr_server::element_locator::Unit<'_, '_>,
-    root: Id<CompilationUnit>,
-    offset: u32,
-    length: u32,
-) -> Option<Id<dartr_ast::InstanceCreationExpression>> {
-    let ast = u.ast;
-    let mut node = ast.node_covering(root, offset, length)?;
-    if let Some(ret) = ast.cast::<dartr_ast::ReturnStatement>(node) {
-        node = ast[ret].expression?.raw();
-    }
-    let creation = crate::flutter_outline::find_instance_creation_expression(ast, node)?;
-    let ctor = crate::flutter_outline::constructor_of_creation(u.ctx, ast, u.tables, creation)?;
-    let enc = u
-        .ctx
-        .get(ctor)
-        .enclosing?
-        .cast::<dartr_element::InterfaceElement>()?;
-    if crate::flutter_outline::is_widget_interface(u.ctx, enc) {
-        Some(creation)
-    } else {
-        None
-    }
-}
-
-fn is_convert_method_to_getter_available(
-    u: &dartr_server::element_locator::Unit<'_, '_>,
-    root: Id<CompilationUnit>,
-    offset: u32,
-) -> bool {
-    let ast = u.ast;
-    let Some(node) = ast.node_covering(root, offset, 0) else {
-        return false;
-    };
-    let mut cur = Some(node);
-    while let Some(n) = cur {
-        if let Some(md) = ast.cast::<MethodDeclaration>(n) {
-            let d = &ast[md];
-            if d.property_keyword.is_some() || d.operator_keyword.is_some() {
-                return false;
-            }
-            let body_start = ast.offset(d.body.raw());
-            if offset >= body_start {
-                return false;
-            }
-            let has_empty_params = match d.parameters {
-                Some(pl) => ast[pl].parameters.is_empty(),
-                None => false,
-            };
-            if !has_empty_params {
-                return false;
-            }
-            if let Some(el) = u.declared_element(md)
-                && let AnyElement::Method(m) = u.ctx.any(el)
-                && let Some(ret) = m.return_type.get()
-            {
-                return !matches!(u.ctx.ty(ret), TypeKind::Void);
-            }
-            return false;
-        }
-        if let Some(fd) = ast.cast::<FunctionDeclaration>(n) {
-            let d = &ast[fd];
-            if d.property_keyword.is_some() {
-                return false;
-            }
-            let fe = d.function_expression;
-            let body_start = ast.offset(ast[fe].body.raw());
-            if offset >= body_start {
-                return false;
-            }
-            let has_empty_params = match ast[fe].parameters {
-                Some(pl) => ast[pl].parameters.is_empty(),
-                None => false,
-            };
-            if !has_empty_params {
-                return false;
-            }
-            if let Some(el) = u.declared_element(fd)
-                && let AnyElement::TopLevelFunction(f) = u.ctx.any(el)
-                && let Some(ret) = f.return_type.get()
-            {
-                return !matches!(u.ctx.ty(ret), TypeKind::Void);
-            }
-            return false;
-        }
-        cur = ast.parent(n);
-    }
-    false
-}
-
-pub struct RenameTarget {
-    pub element: ElementId,
-    pub node_offset: u32,
-    pub node_length: u32,
-    pub old_name: String,
-    pub element_kind_name: String,
-}
-
-pub fn find_rename_target(
-    u: &dartr_server::element_locator::Unit<'_, '_>,
-    root: Id<CompilationUnit>,
-    offset: u32,
-) -> Option<RenameTarget> {
-    let ast = u.ast;
-    let node = ast.node_covering(root, offset, 0).or_else(|| {
-        if offset > 0 {
-            ast.node_covering(root, offset - 1, 0)
-        } else {
-            None
-        }
-    })?;
-    let mut element = dartr_server::element_locator::get_element(u, node)?;
-    if element.tag() == Tag::FieldFormalParameter
-        && let AnyElement::FormalParameter(p) = u.ctx.any(element)
-        && let Some(field) = p.field.get()
-    {
-        element = field.raw();
-    }
-    if matches!(element.tag(), Tag::Getter | Tag::Setter)
-        && let Some(var) = dartr_resolver::element_metadata::accessor_variable_any(u.ctx, element)
-    {
-        element = var;
-    }
-    if matches!(element.tag(), Tag::Library) {
-        return None;
-    }
-    let old_name = display_name(u.ctx, element);
-    let (node_offset, node_length) = find_name_range_at(ast, node, offset, &old_name)?;
-    let element_kind_name = element.kind().display_name().to_string();
-    Some(RenameTarget {
-        element,
-        node_offset,
-        node_length,
-        old_name,
-        element_kind_name,
-    })
-}
-
-fn find_name_range_at(
-    ast: &Ast,
-    node: NodeId,
-    offset: u32,
-    expected_name: &str,
-) -> Option<(u32, u32)> {
-    if let Some(sid) = ast.cast::<SimpleIdentifier>(node) {
-        let tok = ast.tokens.get(ast[sid].token);
-        return Some((tok.offset, tok.end() - tok.offset));
-    }
-    let mut tok_id = ast.begin_token(node);
-    let end_tok = ast.end_token(node);
-    loop {
-        let tok = ast.tokens.get(tok_id);
-        let tok_end = tok.end();
-        if tok.offset <= offset && offset <= tok_end {
-            let lex = ast.tokens.lexeme(tok_id);
-            if !lex.is_empty() && (lex == expected_name || tok.is_identifier()) {
-                return Some((tok.offset, tok_end - tok.offset));
-            }
-        }
-        if tok_id == end_tok || tok.ty == dartr_syntax::TokenType::EOF {
-            break;
-        }
-        tok_id = tok.next;
-    }
-    let start = ast.offset(node);
-    let len = ast.length(node);
-    if len > 0 { Some((start, len)) } else { None }
-}
-
-fn is_valid_identifier(name: &str) -> bool {
-    if name.is_empty() {
-        return false;
-    }
-    let mut chars = name.chars();
-    let first = chars.next().unwrap();
-    if !(first.is_ascii_alphabetic() || first == '_' || first == '$') {
-        return false;
-    }
-    chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -395,39 +92,60 @@ pub fn get_refactoring(
     };
     let len = u32::try_from(length.max(0)).unwrap_or(0);
 
+    let unit = dartr_server::server::ResolvedUnitRef {
+        library: resolved.library.clone(),
+        index: resolved.index,
+    };
+
     match kind {
         protocol::RefactoringKind::RENAME => {
-            compute_rename_refactoring(&resolved, search_engine, file, off, validate_only, options)
+            compute_rename_refactoring(&unit, search_engine, off, validate_only, options)
         }
-        protocol::RefactoringKind::ExtractLocalVariable => {
-            compute_extract_local_refactoring(&resolved, file, off, len, validate_only, options)
-        }
-        protocol::RefactoringKind::InlineLocalVariable => {
-            compute_inline_local_refactoring(&resolved, file, off, validate_only)
-        }
-        protocol::RefactoringKind::ConvertMethodToGetter => {
-            compute_convert(&resolved, search_engine, off, validate_only, true)
-        }
-        protocol::RefactoringKind::ConvertGetterToMethod => {
-            compute_convert(&resolved, search_engine, off, validate_only, false)
-        }
-        protocol::RefactoringKind::ExtractMethod => {
-            compute_extract_method_refactoring(&resolved, file, off, len, validate_only, options)
-        }
-        protocol::RefactoringKind::ExtractWidget => {
-            compute_extract_widget_refactoring(&resolved, file, off, len, validate_only, options)
-        }
-        protocol::RefactoringKind::InlineMethod => compute_inline_method_refactoring(
-            &resolved,
+        protocol::RefactoringKind::ExtractLocalVariable => compute_extract_local_refactoring(
+            &unit,
             search_engine,
-            file,
             off,
+            len,
             validate_only,
             options,
         ),
+        protocol::RefactoringKind::InlineLocalVariable => {
+            compute_inline_local_refactoring(&unit, search_engine, off, validate_only)
+        }
+        protocol::RefactoringKind::ConvertMethodToGetter => {
+            compute_convert(&unit, search_engine, off, validate_only, true)
+        }
+        protocol::RefactoringKind::ConvertGetterToMethod => {
+            compute_convert(&unit, search_engine, off, validate_only, false)
+        }
+        protocol::RefactoringKind::ExtractMethod => compute_extract_method_refactoring(
+            &unit,
+            search_engine,
+            off,
+            len,
+            validate_only,
+            options,
+        ),
+        protocol::RefactoringKind::ExtractWidget => {
+            compute_extract_widget_refactoring(&unit, off, len, validate_only, options)
+        }
+        protocol::RefactoringKind::InlineMethod => {
+            compute_inline_method_refactoring(&unit, search_engine, off, validate_only, options)
+        }
         protocol::RefactoringKind::MoveFile => {
             compute_move_file_refactoring(search_engine, file, validate_only, options)
         }
+    }
+}
+
+fn empty_response() -> RefactoringResponse {
+    RefactoringResponse {
+        initial_problems: Vec::new(),
+        options_problems: Vec::new(),
+        final_problems: Vec::new(),
+        feedback: None,
+        change: None,
+        potential_edits: None,
     }
 }
 
@@ -438,49 +156,30 @@ fn fatal_initial_problem(message: impl Into<String>) -> RefactoringResponse {
             message: message.into(),
             location: None,
         }],
-        options_problems: Vec::new(),
-        final_problems: Vec::new(),
-        feedback: None,
-        change: None,
-        potential_edits: None,
+        ..empty_response()
     }
 }
 
-/// Dart `RefactoringManager` for `RENAME`, with the rename refactorings of
-/// `dartr_server`.
 fn compute_rename_refactoring(
-    resolved: &ResolvedUnitRef,
+    unit: &dartr_server::server::ResolvedUnitRef,
     search_engine: Option<SearchEngine<'_>>,
-    _file: &str,
     offset: u32,
     validate_only: bool,
     options: Option<&Value>,
 ) -> std::result::Result<RefactoringResponse, (&'static str, String)> {
-    use dartr_server::refactoring::rename::Engine;
     let Some(mut search_engine) = search_engine else {
         return Ok(fatal_initial_problem("Unable to create a refactoring"));
-    };
-    let unit = dartr_server::server::ResolvedUnitRef {
-        library: resolved.library.clone(),
-        index: resolved.index,
     };
     let mut engine = Engine {
         host: &mut search_engine,
     };
-    let Some((target, name_offset, name_length)) = engine.element_to_rename(&unit, offset) else {
+    let Some((target, name_offset, name_length)) = engine.element_to_rename(unit, offset) else {
         return Ok(fatal_initial_problem("Unable to create a refactoring"));
     };
-    let Some(mut rename) = engine.create_rename(&unit, target) else {
+    let Some(mut rename) = engine.create_rename(unit, target) else {
         return Ok(fatal_initial_problem("Unable to create a refactoring"));
     };
-    let mut response = RefactoringResponse {
-        initial_problems: Vec::new(),
-        options_problems: Vec::new(),
-        final_problems: Vec::new(),
-        feedback: None,
-        change: None,
-        potential_edits: None,
-    };
+    let mut response = empty_response();
     let initial = engine.check_initial_conditions(&mut rename);
     response.initial_problems = crate::refactoring_host::problems(&initial);
     if initial.has_fatal_error() {
@@ -519,422 +218,117 @@ fn compute_rename_refactoring(
     Ok(response)
 }
 
-fn find_selected_expression(
-    ast: &Ast,
-    root: Id<CompilationUnit>,
-    offset: u32,
-    length: u32,
-) -> Option<NodeId> {
-    if length == 0 {
-        return None;
-    }
-    let end = offset + length;
-    let node = ast.node_covering(root, offset, length)?;
-    let mut cur = Some(node);
-    while let Some(n) = cur {
-        if ast.is::<Expression>(n) && ast.offset(n) == offset && ast.end(n) == end {
-            // Check not LHS of assignment or declaration name
-            if let Some(p) = ast.parent(n)
-                && let Some(assign) = ast.cast::<AssignmentExpression>(p)
-                && ast[assign].left_hand_side.raw() == n
-            {
-                return None;
-            }
-            return Some(n);
-        }
-        cur = ast.parent(n);
-    }
-    if ast.is::<Expression>(node) {
-        Some(node)
-    } else {
-        None
-    }
-}
-
 fn compute_extract_local_refactoring(
-    resolved: &ResolvedUnitRef,
-    file: &str,
+    unit: &dartr_server::server::ResolvedUnitRef,
+    search_engine: Option<SearchEngine<'_>>,
     offset: u32,
     length: u32,
     validate_only: bool,
     options: Option<&Value>,
 ) -> std::result::Result<RefactoringResponse, (&'static str, String)> {
-    let sink = NoopSink;
-    let ctx = resolved.ctx(&sink);
-    let unit = resolved.unit();
-    let ast = &unit.ast;
-    let source = &ast.tokens.source;
-
-    let Some(expr) = find_selected_expression(ast, unit.unit, offset, length) else {
-        return Ok(fatal_initial_problem(
-            "Expression must be selected to activate this refactoring.",
-        ));
+    let Some(mut search_engine) = search_engine else {
+        return Ok(fatal_initial_problem("Unable to create a refactoring"));
     };
-    if let Some(&ty) = unit.tables.static_type.get(expr)
-        && matches!(ctx.ty(ty), TypeKind::Void)
-    {
-        return Ok(fatal_initial_problem("Cannot extract the void expression."));
+    let mut refactoring = ExtractLocal::new(unit, offset, length);
+    let mut response = empty_response();
+    let initial = refactoring.check_initial_conditions();
+    response.initial_problems = crate::refactoring_host::problems(&initial);
+    if initial.has_fatal_error() {
+        return Ok(response);
     }
-
-    // Find enclosing statement
-    let mut stmt = Some(expr);
-    while let Some(n) = stmt {
-        if ast.is::<Statement>(n) && !ast.is::<Block>(n) {
-            break;
-        }
-        stmt = ast.parent(n);
-    }
-    let Some(enclosing_stmt) = stmt else {
-        return Ok(fatal_initial_problem(
-            "Expression must be inside a function body.",
-        ));
-    };
-
-    let expr_start = ast.offset(expr) as usize;
-    let expr_end = ast.end(expr) as usize;
-    let expr_text = &source[expr_start..expr_end];
-
-    // Suggest names
-    let names = suggest_expression_names(&ctx, ast, &unit.tables, expr);
-
-    let feedback = serde_json::to_value(protocol::ExtractLocalVariableFeedback {
-        covering_expression_offsets: Some(vec![expr_start as i64]),
-        covering_expression_lengths: Some(vec![(expr_end - expr_start) as i64]),
-        names: names.clone(),
-        offsets: vec![expr_start as i64],
-        lengths: vec![(expr_end - expr_start) as i64],
+    response.feedback = serde_json::to_value(protocol::ExtractLocalVariableFeedback {
+        covering_expression_offsets: Some(
+            refactoring
+                .covering_expression_offsets
+                .iter()
+                .map(|&v| v as i64)
+                .collect(),
+        ),
+        covering_expression_lengths: Some(
+            refactoring
+                .covering_expression_lengths
+                .iter()
+                .map(|&v| v as i64)
+                .collect(),
+        ),
+        names: refactoring.names.clone(),
+        offsets: refactoring.offsets.iter().map(|&v| v as i64).collect(),
+        lengths: refactoring.lengths.iter().map(|&v| v as i64).collect(),
     })
     .ok();
 
-    let mut options_problems = Vec::new();
-    let var_name = options.and_then(|o| o.get("name")).and_then(Value::as_str);
-    let _extract_all = options
-        .and_then(|o| o.get("extractAll"))
-        .and_then(Value::as_bool)
-        .unwrap_or(true);
-
-    if let Some(name) = var_name {
-        if name.is_empty() {
-            options_problems.push(protocol::RefactoringProblem {
-                severity: protocol::RefactoringProblemSeverity::FATAL,
-                message: "Variable name must not be empty.".to_string(),
-                location: None,
-            });
-        } else if !is_valid_identifier(name) {
-            options_problems.push(protocol::RefactoringProblem {
-                severity: protocol::RefactoringProblemSeverity::FATAL,
-                message: "Variable name must be a valid identifier.".to_string(),
-                location: None,
-            });
-        }
+    let Some(opts) = options else {
+        return Ok(response);
+    };
+    if let Some(name) = opts.get("name").and_then(Value::as_str) {
+        refactoring.name = name.to_string();
     }
-
-    let has_fatal = options_problems
-        .iter()
-        .any(|p| matches!(p.severity, protocol::RefactoringProblemSeverity::FATAL));
-
-    let mut change = None;
-    if !validate_only
-        && !has_fatal
-        && let Some(name) = var_name
-    {
-        let stmt_offset = ast.offset(enclosing_stmt) as usize;
-        let line_start = source[..stmt_offset].rfind('\n').map_or(0, |p| p + 1);
-        let indent: String = source[line_start..stmt_offset]
-            .chars()
-            .take_while(|&c| c == ' ' || c == '\t')
-            .collect();
-        let eol = if source.contains("\r\n") {
-            "\r\n"
-        } else {
-            "\n"
-        };
-        let decl_str = format!("var {name} = {expr_text};{eol}{indent}");
-        let decl_len = decl_str.len();
-
-        let edits = vec![
-            protocol::SourceEdit {
-                offset: expr_start as i64,
-                length: (expr_end - expr_start) as i64,
-                replacement: name.to_string(),
-                id: None,
-                description: None,
-            },
-            protocol::SourceEdit {
-                offset: stmt_offset as i64,
-                length: 0,
-                replacement: decl_str,
-                id: None,
-                description: None,
-            },
-        ];
-
-        let linked_edit_groups = vec![protocol::LinkedEditGroup {
-            positions: vec![
-                protocol::Position {
-                    file: file.to_string(),
-                    offset: (stmt_offset + 4) as i64,
-                },
-                protocol::Position {
-                    file: file.to_string(),
-                    offset: (expr_start + decl_len) as i64,
-                },
-            ],
-            length: name.len() as i64,
-            suggestions: names
-                .iter()
-                .map(|n| protocol::LinkedEditSuggestion {
-                    value: n.clone(),
-                    kind: protocol::LinkedEditSuggestionKind::VARIABLE,
-                })
-                .collect(),
-        }];
-
-        change = Some(protocol::SourceChange {
-            message: "Extract Local Variable".to_string(),
-            edits: vec![protocol::SourceFileEdit {
-                file: file.to_string(),
-                file_stamp: 0,
-                edits,
-            }],
-            linked_edit_groups,
-            selection: None,
-            selection_length: None,
-            id: None,
-        });
+    if let Some(extract_all) = opts.get("extractAll").and_then(Value::as_bool) {
+        refactoring.extract_all = extract_all;
     }
-
-    Ok(RefactoringResponse {
-        initial_problems: Vec::new(),
-        options_problems,
-        final_problems: Vec::new(),
-        feedback,
-        change,
-        potential_edits: None,
-    })
-}
-
-fn suggest_expression_names(
-    ctx: &Ctx<'_>,
-    ast: &Ast,
-    tables: &dartr_element::ResolutionTables,
-    expr: NodeId,
-) -> Vec<String> {
-    let mut names = Vec::new();
-    if let Some(mi) = ast.cast::<MethodInvocation>(expr) {
-        let m_name = ast.tokens.lexeme(ast[ast[mi].method_name].token);
-        if !m_name.is_empty() {
-            names.push(m_name.to_string());
-        }
-    } else if let Some(pa) = ast.cast::<PropertyAccess>(expr) {
-        let p_name = ast.tokens.lexeme(ast[ast[pa].property_name].token);
-        if !p_name.is_empty() {
-            names.push(p_name.to_string());
-        }
-    } else if let Some(pi) = ast.cast::<PrefixedIdentifier>(expr) {
-        let p_name = ast.tokens.lexeme(ast[ast[pi].identifier].token);
-        if !p_name.is_empty() {
-            names.push(p_name.to_string());
-        }
+    let options_status = refactoring.check_name();
+    response.options_problems = crate::refactoring_host::problems(&options_status);
+    if options_status.has_fatal_error() || validate_only {
+        return Ok(response);
     }
-    if let Some(ty) = tables.static_type.get(expr).copied() {
-        let ty_str = dartr_element::display_string::type_display_string_with(
-            ctx,
-            ty,
-            dartr_element::display_string::DisplayOptions::default(),
-        );
-        if ty_str == "int" && !names.iter().any(|n| n == "i") {
-            names.push("i".to_string());
-        } else if ty_str == "double" && !names.iter().any(|n| n == "d") {
-            names.push("d".to_string());
-        } else if ty_str == "String" && !names.iter().any(|n| n == "s") {
-            names.push("s".to_string());
-        }
+    let final_status = refactoring.check_final_conditions();
+    response.final_problems = crate::refactoring_host::problems(&final_status);
+    if final_status.has_fatal_error() {
+        return Ok(response);
     }
-    if names.is_empty() {
-        names.push("res".to_string());
-        names.push("object".to_string());
-    }
-    names
+    let change = refactoring.create_change(&mut search_engine);
+    response.change = Some(crate::refactoring_host::change(&change));
+    Ok(response)
 }
 
 fn compute_inline_local_refactoring(
-    resolved: &ResolvedUnitRef,
-    file: &str,
+    unit: &dartr_server::server::ResolvedUnitRef,
+    search_engine: Option<SearchEngine<'_>>,
     offset: u32,
     validate_only: bool,
 ) -> std::result::Result<RefactoringResponse, (&'static str, String)> {
-    let sink = NoopSink;
-    let ctx = resolved.ctx(&sink);
-    let unit = resolved.unit();
-    let ast = &unit.ast;
-    let source = &ast.tokens.source;
-    let u = dartr_server::element_locator::Unit {
-        ctx: &ctx,
-        ast,
-        tables: &unit.tables,
+    let Some(mut search_engine) = search_engine else {
+        return Ok(fatal_initial_problem("Unable to create a refactoring"));
     };
-
-    let Some(node) = ast.node_covering(unit.unit, offset, 0) else {
-        return Ok(fatal_initial_problem(
-            "Local variable declaration or reference must be selected to activate this refactoring.",
-        ));
-    };
-    let Some(element) = dartr_server::element_locator::get_element(&u, node) else {
-        return Ok(fatal_initial_problem(
-            "Local variable declaration or reference must be selected to activate this refactoring.",
-        ));
-    };
-    if element.tag() != Tag::LocalVariable {
-        return Ok(fatal_initial_problem(
-            "Local variable declaration or reference must be selected to activate this refactoring.",
-        ));
+    let mut refactoring = InlineLocal::new(unit, offset);
+    let mut response = empty_response();
+    let initial = refactoring.check_initial_conditions();
+    response.initial_problems = crate::refactoring_host::problems(&initial);
+    if initial.has_fatal_error() {
+        return Ok(response);
     }
-    let var_name = display_name(&ctx, element);
-
-    // Find the VariableDeclarationStatement and all references in the enclosing function body
-    let mut fn_body = Some(node);
-    while let Some(n) = fn_body {
-        if ast.is::<FunctionBody>(n) {
-            break;
-        }
-        fn_body = ast.parent(n);
-    }
-    let Some(fn_body) = fn_body else {
-        return Ok(fatal_initial_problem(
-            "Local variable declaration or reference must be selected to activate this refactoring.",
-        ));
-    };
-
-    // Walk AST inside fn_body to find the VariableDeclaration and SimpleIdentifier references
-    let mut decl_node: Option<Id<VariableDeclaration>> = None;
-    let mut ref_nodes: Vec<Id<SimpleIdentifier>> = Vec::new();
-    let mut stack = vec![fn_body];
-    while let Some(cur) = stack.pop() {
-        if let Some(vd) = ast.cast::<VariableDeclaration>(cur)
-            && u.declared_element(vd) == Some(element)
-        {
-            decl_node = Some(vd);
-        } else if let Some(sid) = ast.cast::<SimpleIdentifier>(cur)
-            && u.element(sid) == Some(element)
-        {
-            ref_nodes.push(sid);
-        }
-        for child in ast.children(cur) {
-            stack.push(child);
-        }
-    }
-
-    let Some(vd) = decl_node else {
-        return Ok(fatal_initial_problem(
-            "Local variable declaration or reference must be selected to activate this refactoring.",
-        ));
-    };
-    let Some(init_expr) = ast[vd].initializer else {
-        return Ok(fatal_initial_problem(format!(
-            "Local variable '{var_name}' is not initialized at declaration."
-        )));
-    };
-    let init_text =
-        source[ast.offset(init_expr.raw()) as usize..ast.end(init_expr.raw()) as usize].to_string();
-
-    let feedback = serde_json::to_value(protocol::InlineLocalVariableFeedback {
-        name: var_name.clone(),
-        occurrences: ref_nodes.len() as i64,
+    response.feedback = serde_json::to_value(protocol::InlineLocalVariableFeedback {
+        name: refactoring.variable_name.clone().unwrap_or_default(),
+        occurrences: refactoring.reference_count as i64,
     })
     .ok();
-
-    let mut change = None;
-    if !validate_only {
-        let mut edits = Vec::new();
-        for sid in &ref_nodes {
-            let tok = ast.tokens.get(ast[*sid].token);
-            edits.push(protocol::SourceEdit {
-                offset: tok.offset as i64,
-                length: (tok.end() - tok.offset) as i64,
-                replacement: init_text.clone(),
-                id: None,
-                description: None,
-            });
-        }
-        // Remove the VariableDeclarationStatement
-        if let Some(vdl) = ast
-            .parent(vd)
-            .and_then(|p| ast.cast::<VariableDeclarationList>(p))
-            && let Some(vds) = ast
-                .parent(vdl)
-                .and_then(|p| ast.cast::<VariableDeclarationStatement>(p))
-        {
-            let stmt_start = ast.offset(vds.raw()) as usize;
-            let stmt_end = ast.end(vds.raw()) as usize;
-            // Remove leading whitespace on the same line and trailing newline if on its own line
-            let line_start = source[..stmt_start].rfind('\n').map_or(0, |p| p + 1);
-            let del_start = if source[line_start..stmt_start].trim().is_empty() {
-                line_start
-            } else {
-                stmt_start
-            };
-            let mut del_end = stmt_end;
-            if source[del_end..].starts_with("\r\n") {
-                del_end += 2;
-            } else if source[del_end..].starts_with('\n') {
-                del_end += 1;
-            }
-            edits.push(protocol::SourceEdit {
-                offset: del_start as i64,
-                length: (del_end - del_start) as i64,
-                replacement: String::new(),
-                id: None,
-                description: None,
-            });
-        }
-        edits.sort_by(|a, b| b.offset.cmp(&a.offset));
-        change = Some(protocol::SourceChange {
-            message: "Inline Local Variable".to_string(),
-            edits: vec![protocol::SourceFileEdit {
-                file: file.to_string(),
-                file_stamp: 0,
-                edits,
-            }],
-            linked_edit_groups: Vec::new(),
-            selection: None,
-            selection_length: None,
-            id: None,
-        });
+    if validate_only {
+        return Ok(response);
     }
-
-    Ok(RefactoringResponse {
-        initial_problems: Vec::new(),
-        options_problems: Vec::new(),
-        final_problems: Vec::new(),
-        feedback,
-        change,
-        potential_edits: None,
-    })
+    let final_status = refactoring.check_final_conditions();
+    response.final_problems = crate::refactoring_host::problems(&final_status);
+    if final_status.has_fatal_error() {
+        return Ok(response);
+    }
+    let change = refactoring.create_change(&mut search_engine);
+    response.change = Some(crate::refactoring_host::change(&change));
+    Ok(response)
 }
 
-/// Dart `RefactoringManager` for `CONVERT_METHOD_TO_GETTER` and
-/// `CONVERT_GETTER_TO_METHOD`, with the refactorings of `dartr_server`.
 fn compute_convert(
-    resolved: &ResolvedUnitRef,
+    unit: &dartr_server::server::ResolvedUnitRef,
     search_engine: Option<SearchEngine<'_>>,
     offset: u32,
     validate_only: bool,
     to_getter: bool,
 ) -> std::result::Result<RefactoringResponse, (&'static str, String)> {
-    use dartr_server::refactoring::rename::Engine;
     let Some(mut search_engine) = search_engine else {
         return Ok(fatal_initial_problem("Unable to create a refactoring"));
-    };
-    let unit = dartr_server::server::ResolvedUnitRef {
-        library: resolved.library.clone(),
-        index: resolved.index,
     };
     let mut engine = Engine {
         host: &mut search_engine,
     };
-    let element = engine.element_at(&unit, offset);
-    let element = element.filter(|e| {
+    let element = engine.element_at(unit, offset).filter(|e| {
         if to_getter {
             dartr_server::element_locator::is_executable(e.id)
         } else {
@@ -944,14 +338,7 @@ fn compute_convert(
     let Some(element) = element else {
         return Ok(fatal_initial_problem("Unable to create a refactoring"));
     };
-    let mut response = RefactoringResponse {
-        initial_problems: Vec::new(),
-        options_problems: Vec::new(),
-        final_problems: Vec::new(),
-        feedback: None,
-        change: None,
-        potential_edits: None,
-    };
+    let mut response = empty_response();
     let initial = if to_getter {
         engine.method_to_getter_initial(&element)
     } else {
@@ -962,7 +349,7 @@ fn compute_convert(
         return Ok(response);
     }
     let final_status = if to_getter {
-        dartr_server::refactoring::status::RefactoringStatus::new()
+        RefactoringStatus::new()
     } else {
         engine.getter_to_method_final(&element)
     };
@@ -980,498 +367,185 @@ fn compute_convert(
 }
 
 fn compute_extract_method_refactoring(
-    resolved: &ResolvedUnitRef,
-    file: &str,
+    unit: &dartr_server::server::ResolvedUnitRef,
+    search_engine: Option<SearchEngine<'_>>,
     offset: u32,
     length: u32,
     validate_only: bool,
     options: Option<&Value>,
 ) -> std::result::Result<RefactoringResponse, (&'static str, String)> {
-    let sink = NoopSink;
-    let ctx = resolved.ctx(&sink);
-    let unit = resolved.unit();
-    let ast = &unit.ast;
-    let source = &ast.tokens.source;
-
-    if length == 0 {
-        return Ok(fatal_initial_problem(
-            "Can only extract a single expression or a set of statements.",
-        ));
+    let Some(mut search_engine) = search_engine else {
+        return Ok(fatal_initial_problem("Unable to create a refactoring"));
+    };
+    let mut refactoring = ExtractMethod::new(unit, offset, length);
+    let mut response = empty_response();
+    let initial = refactoring.check_initial_conditions();
+    response.initial_problems = crate::refactoring_host::problems(&initial);
+    if initial.has_fatal_error() {
+        return Ok(response);
     }
-    let expr = find_selected_expression(ast, unit.unit, offset, length);
-    let return_type = expr
-        .and_then(|e| unit.tables.static_type.get(e).copied())
-        .map(|ty| {
-            dartr_element::display_string::type_display_string_with(
-                &ctx,
-                ty,
-                dartr_element::display_string::DisplayOptions::default(),
-            )
-        })
-        .unwrap_or_else(|| "void".to_string());
-
-    let names = expr
-        .map(|e| suggest_expression_names(&ctx, ast, &unit.tables, e))
-        .unwrap_or_else(|| vec!["res".to_string()]);
-
-    let feedback = serde_json::to_value(protocol::ExtractMethodFeedback {
-        offset: offset as i64,
-        length: length as i64,
-        return_type: return_type.clone(),
-        names,
-        can_create_getter: true,
-        parameters: Vec::new(),
-        offsets: vec![offset as i64],
-        lengths: vec![length as i64],
-    })
-    .ok();
-
-    let mut options_problems = Vec::new();
-    let method_name = options.and_then(|o| o.get("name")).and_then(Value::as_str);
-    let create_getter = options
-        .and_then(|o| o.get("createGetter"))
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    let opt_return_type = options
-        .and_then(|o| o.get("returnType"))
-        .and_then(Value::as_str)
-        .unwrap_or(&return_type);
-
-    if let Some(name) = method_name {
-        if name.is_empty() {
-            options_problems.push(protocol::RefactoringProblem {
-                severity: protocol::RefactoringProblemSeverity::FATAL,
-                message: "Method name must not be empty.".to_string(),
-                location: None,
-            });
-        } else if !is_valid_identifier(name) {
-            options_problems.push(protocol::RefactoringProblem {
-                severity: protocol::RefactoringProblemSeverity::FATAL,
-                message: "Method name must be a valid identifier.".to_string(),
-                location: None,
-            });
-        }
-    }
-
-    let has_fatal = options_problems
+    let parameters = refactoring
+        .parameters
         .iter()
-        .any(|p| matches!(p.severity, protocol::RefactoringProblemSeverity::FATAL));
+        .map(|p| {
+            serde_json::json!({
+                "id": p.id,
+                "kind": p.kind,
+                "type": p.r#type,
+                "name": p.name,
+                "parameters": p.parameters,
+            })
+        })
+        .collect::<Vec<_>>();
+    response.feedback = Some(serde_json::json!({
+        "offset": refactoring.selection_offset as i64,
+        "length": refactoring.selection_length as i64,
+        "returnType": refactoring.return_type,
+        "names": refactoring.names,
+        "canCreateGetter": refactoring.can_create_getter,
+        "parameters": parameters,
+        "offsets": refactoring.offsets.iter().map(|&v| v as i64).collect::<Vec<_>>(),
+        "lengths": refactoring.lengths.iter().map(|&v| v as i64).collect::<Vec<_>>(),
+    }));
 
-    let mut change = None;
-    if !validate_only
-        && !has_fatal
-        && let Some(name) = method_name
-    {
-        // Find enclosing declaration (MethodDeclaration or FunctionDeclaration)
-        let start_node = expr.or_else(|| ast.node_covering(unit.unit, offset, length));
-        let mut enclosing_decl = start_node;
-        while let Some(n) = enclosing_decl {
-            if matches!(
-                ast.kind(n),
-                NodeKind::MethodDeclaration | NodeKind::FunctionDeclaration
-            ) {
-                break;
-            }
-            enclosing_decl = ast.parent(n);
-        }
-        if let Some(decl) = enclosing_decl {
-            let decl_end = ast.end(decl) as usize;
-            let decl_offset = ast.offset(decl) as usize;
-            let line_start = source[..decl_offset].rfind('\n').map_or(0, |p| p + 1);
-            let indent: String = source[line_start..decl_offset]
-                .chars()
-                .take_while(|&c| c == ' ' || c == '\t')
-                .collect();
-            let eol = if source.contains("\r\n") {
-                "\r\n"
-            } else {
-                "\n"
-            };
-            let sel_text = &source[offset as usize..(offset + length) as usize];
-            let call_text = if create_getter {
-                name.to_string()
-            } else {
-                format!("{name}()")
-            };
-            let new_decl = if expr.is_some() {
-                if create_getter {
-                    format!("{eol}{eol}{indent}{opt_return_type} get {name} => {sel_text};")
-                } else {
-                    format!("{eol}{eol}{indent}{opt_return_type} {name}() => {sel_text};")
-                }
-            } else if create_getter {
-                format!(
-                    "{eol}{eol}{indent}{opt_return_type} get {name} {{{eol}{indent}  {sel_text}{eol}{indent}}}"
-                )
-            } else {
-                format!(
-                    "{eol}{eol}{indent}{opt_return_type} {name}() {{{eol}{indent}  {sel_text}{eol}{indent}}}"
-                )
-            };
-
-            let edits = vec![
-                protocol::SourceEdit {
-                    offset: decl_end as i64,
-                    length: 0,
-                    replacement: new_decl,
-                    id: None,
-                    description: None,
-                },
-                protocol::SourceEdit {
-                    offset: offset as i64,
-                    length: length as i64,
-                    replacement: call_text,
-                    id: None,
-                    description: None,
-                },
-            ];
-            change = Some(protocol::SourceChange {
-                message: "Extract Method".to_string(),
-                edits: vec![protocol::SourceFileEdit {
-                    file: file.to_string(),
-                    file_stamp: 0,
-                    edits,
-                }],
-                linked_edit_groups: Vec::new(),
-                selection: None,
-                selection_length: None,
-                id: None,
-            });
-        }
+    let Some(opts) = options else {
+        return Ok(response);
+    };
+    if let Some(return_type) = opts.get("returnType").and_then(Value::as_str) {
+        refactoring.return_type = return_type.to_string();
+    }
+    if let Some(create_getter) = opts.get("createGetter").and_then(Value::as_bool) {
+        refactoring.create_getter = create_getter;
+    }
+    if let Some(name) = opts.get("name").and_then(Value::as_str) {
+        refactoring.name = name.to_string();
+    }
+    if let Some(extract_all) = opts.get("extractAll").and_then(Value::as_bool) {
+        refactoring.extract_all = extract_all;
+    }
+    if let Some(params) = opts.get("parameters").and_then(Value::as_array) {
+        refactoring.parameters = params
+            .iter()
+            .filter_map(|p| {
+                let kind = match p.get("kind").and_then(Value::as_str)? {
+                    "POSITIONAL" => "POSITIONAL",
+                    "NAMED" => "NAMED",
+                    _ => "REQUIRED",
+                };
+                Some(MethodParameter {
+                    id: p
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                    kind,
+                    r#type: p.get("type")?.as_str()?.to_string(),
+                    name: p.get("name")?.as_str()?.to_string(),
+                    parameters: p
+                        .get("parameters")
+                        .and_then(Value::as_str)
+                        .map(str::to_string),
+                })
+            })
+            .collect();
     }
 
-    Ok(RefactoringResponse {
-        initial_problems: Vec::new(),
-        options_problems,
-        final_problems: Vec::new(),
-        feedback,
-        change,
-        potential_edits: None,
-    })
+    let options_status = refactoring.check_name();
+    response.options_problems = crate::refactoring_host::problems(&options_status);
+    if options_status.has_fatal_error() || validate_only {
+        return Ok(response);
+    }
+    let final_status = refactoring.check_final_conditions();
+    response.final_problems = crate::refactoring_host::problems(&final_status);
+    if final_status.has_fatal_error() {
+        return Ok(response);
+    }
+    let change = refactoring.create_change(&mut search_engine);
+    response.change = Some(crate::refactoring_host::change(&change));
+    Ok(response)
 }
 
 fn compute_extract_widget_refactoring(
-    resolved: &ResolvedUnitRef,
-    file: &str,
+    unit: &dartr_server::server::ResolvedUnitRef,
     offset: u32,
     length: u32,
     validate_only: bool,
     options: Option<&Value>,
 ) -> std::result::Result<RefactoringResponse, (&'static str, String)> {
-    let mut options_problems = Vec::new();
-    let widget_name = options.and_then(|o| o.get("name")).and_then(Value::as_str);
-    if let Some(name) = widget_name {
-        if name.is_empty() {
-            options_problems.push(protocol::RefactoringProblem {
-                severity: protocol::RefactoringProblemSeverity::FATAL,
-                message: "Class name must not be empty.".to_string(),
-                location: None,
-            });
-        } else if !is_valid_identifier(name) {
-            options_problems.push(protocol::RefactoringProblem {
-                severity: protocol::RefactoringProblemSeverity::FATAL,
-                message: "Class name must be a valid identifier.".to_string(),
-                location: None,
-            });
-        }
+    let mut refactoring = ExtractWidget::new(unit, offset, length);
+    let mut response = empty_response();
+    let initial = refactoring.check_initial_conditions();
+    response.initial_problems = crate::refactoring_host::problems(&initial);
+    if initial.has_fatal_error() {
+        return Ok(response);
     }
+    response.feedback = Some(serde_json::json!({}));
 
-    let sink = NoopSink;
-    let ctx = resolved.ctx(&sink);
-    let unit = resolved.unit();
-    let ast = &unit.ast;
-    let source = &ast.tokens.source;
-    let u = dartr_server::element_locator::Unit {
-        ctx: &ctx,
-        ast,
-        tables: &unit.tables,
+    let Some(opts) = options else {
+        return Ok(response);
     };
-
-    let Some(creation) = find_extract_widget_creation(&u, unit.unit, offset, length) else {
-        return Ok(RefactoringResponse {
-            initial_problems: vec![protocol::RefactoringProblem {
-                severity: protocol::RefactoringProblemSeverity::FATAL,
-                message: "Can only extract a widget expression or a method returning widget."
-                    .to_string(),
-                location: None,
-            }],
-            options_problems,
-            final_problems: Vec::new(),
-            feedback: None,
-            change: None,
-            potential_edits: None,
-        });
-    };
-
-    let mut enclosing_unit_member = Some(creation.raw());
-    while let Some(n) = enclosing_unit_member {
-        if ast.parent(n) == Some(unit.unit.raw()) {
-            break;
-        }
-        enclosing_unit_member = ast.parent(n);
+    if let Some(name) = opts.get("name").and_then(Value::as_str) {
+        refactoring.name = name.to_string();
     }
-
-    let has_fatal = options_problems
-        .iter()
-        .any(|p| matches!(p.severity, protocol::RefactoringProblemSeverity::FATAL));
-
-    let mut change = None;
-    if !validate_only
-        && !has_fatal
-        && let Some(name) = widget_name
-        && let Some(member) = enclosing_unit_member
-    {
-        let expr_start = ast.offset(creation.raw()) as usize;
-        let expr_end = ast.end(creation.raw()) as usize;
-        let line_start = source[..expr_start].rfind('\n').map_or(0, |p| p + 1);
-        let indent_old: String = source[line_start..expr_start]
-            .chars()
-            .take_while(|&c| c == ' ' || c == '\t')
-            .collect();
-        let indent_new = "    ";
-        let raw_code = &source[expr_start..expr_end];
-        let eol = if source.contains("\r\n") {
-            "\r\n"
-        } else {
-            "\n"
-        };
-        let mut reindented = String::new();
-        for (idx, line) in raw_code.split(eol).enumerate() {
-            if idx == 0 {
-                reindented.push_str(line);
-            } else {
-                reindented.push_str(eol);
-                if let Some(stripped) = line.strip_prefix(&indent_old) {
-                    reindented.push_str(indent_new);
-                    reindented.push_str(stripped);
-                } else {
-                    reindented.push_str(line);
-                }
-            }
-        }
-        let member_end = ast.end(member) as usize;
-        let class_code = format!(
-            "{eol}{eol}class {name} extends StatelessWidget {{{eol}  const {name}({{{eol}    super.key,{eol}  }});{eol}{eol}  @override{eol}  Widget build(BuildContext context) {{{eol}    return {reindented};{eol}  }}{eol}}}"
-        );
-        let edits = vec![
-            protocol::SourceEdit {
-                offset: member_end as i64,
-                length: 0,
-                replacement: class_code,
-                id: None,
-                description: None,
-            },
-            protocol::SourceEdit {
-                offset: expr_start as i64,
-                length: (expr_end - expr_start) as i64,
-                replacement: format!("{name}()"),
-                id: None,
-                description: None,
-            },
-        ];
-        change = Some(protocol::SourceChange {
-            message: "Extract Widget".to_string(),
-            edits: vec![protocol::SourceFileEdit {
-                file: file.to_string(),
-                file_stamp: 0,
-                edits,
-            }],
-            linked_edit_groups: Vec::new(),
-            selection: None,
-            selection_length: None,
-            id: None,
-        });
+    let options_status = refactoring.check_name();
+    response.options_problems = crate::refactoring_host::problems(&options_status);
+    if options_status.has_fatal_error() || validate_only {
+        return Ok(response);
     }
-
-    Ok(RefactoringResponse {
-        initial_problems: Vec::new(),
-        options_problems,
-        final_problems: Vec::new(),
-        feedback: Some(serde_json::json!({})),
-        change,
-        potential_edits: None,
-    })
+    let final_status = refactoring.check_final_conditions();
+    response.final_problems = crate::refactoring_host::problems(&final_status);
+    if final_status.has_fatal_error() {
+        return Ok(response);
+    }
+    let change = refactoring.create_change();
+    response.change = Some(crate::refactoring_host::change(&change));
+    Ok(response)
 }
 
 fn compute_inline_method_refactoring(
-    resolved: &ResolvedUnitRef,
+    unit: &dartr_server::server::ResolvedUnitRef,
     search_engine: Option<SearchEngine<'_>>,
-    file: &str,
     offset: u32,
     validate_only: bool,
     options: Option<&Value>,
 ) -> std::result::Result<RefactoringResponse, (&'static str, String)> {
-    let (element, method_name, class_name, is_declaration, body_expr_text, decl_range) = {
-        let sink = NoopSink;
-        let ctx = resolved.ctx(&sink);
-        let unit = resolved.unit();
-        let ast = &unit.ast;
-        let source = &ast.tokens.source;
-        let u = dartr_server::element_locator::Unit {
-            ctx: &ctx,
-            ast,
-            tables: &unit.tables,
-        };
-        let Some(node) = ast.node_covering(unit.unit, offset, 0) else {
-            return Ok(fatal_initial_problem(
-                "Method declaration or reference must be selected to activate this refactoring.",
-            ));
-        };
-        let Some(element) = dartr_server::element_locator::get_element(&u, node) else {
-            return Ok(fatal_initial_problem(
-                "Method declaration or reference must be selected to activate this refactoring.",
-            ));
-        };
-        if !matches!(
-            element.tag(),
-            Tag::Method | Tag::TopLevelFunction | Tag::Getter | Tag::Setter
-        ) {
-            return Ok(fatal_initial_problem(
-                "Method declaration or reference must be selected to activate this refactoring.",
-            ));
-        }
-        let method_name = display_name(&ctx, element);
-        let class_name = ctx
-            .element_data(element)
-            .and_then(|d| d.enclosing)
-            .filter(|e| e.tag() != Tag::Library)
-            .map(|e| display_name(&ctx, e));
-        let is_declaration =
-            ast.is::<MethodDeclaration>(node) || ast.is::<FunctionDeclaration>(node);
-        let mut cur = Some(node);
-        let mut body_expr_text = None;
-        let mut decl_range = None;
-        while let Some(n) = cur {
-            if let Some(md) = ast.cast::<MethodDeclaration>(n) {
-                decl_range = Some((ast.offset(n), ast.length(n)));
-                if let Some(efb) = ast.cast::<ExpressionFunctionBody>(ast[md].body) {
-                    let expr = ast[efb].expression.raw();
-                    body_expr_text =
-                        Some(source[ast.offset(expr) as usize..ast.end(expr) as usize].to_string());
-                }
-                break;
-            }
-            if let Some(fd) = ast.cast::<FunctionDeclaration>(n) {
-                decl_range = Some((ast.offset(n), ast.length(n)));
-                let fe = ast[fd].function_expression;
-                if let Some(efb) = ast.cast::<ExpressionFunctionBody>(ast[fe].body) {
-                    let expr = ast[efb].expression.raw();
-                    body_expr_text =
-                        Some(source[ast.offset(expr) as usize..ast.end(expr) as usize].to_string());
-                }
-                break;
-            }
-            cur = ast.parent(n);
-        }
-        (
-            element,
-            method_name,
-            class_name,
-            is_declaration,
-            body_expr_text,
-            decl_range,
-        )
+    let Some(mut search_engine) = search_engine else {
+        return Ok(fatal_initial_problem("Unable to create a refactoring"));
     };
-    let feedback = serde_json::to_value(protocol::InlineMethodFeedback {
-        class_name,
-        method_name,
-        is_declaration,
+    let mut refactoring = InlineMethod::new(unit, offset);
+    let mut response = empty_response();
+    let initial = refactoring.check_initial_conditions(&mut search_engine);
+    response.initial_problems = crate::refactoring_host::problems(&initial);
+    if initial.has_fatal_error() {
+        return Ok(response);
+    }
+    response.feedback = serde_json::to_value(protocol::InlineMethodFeedback {
+        class_name: refactoring.class_name.clone(),
+        method_name: refactoring.method_name.clone().unwrap_or_default(),
+        is_declaration: refactoring.is_declaration,
     })
     .ok();
 
-    let mut change = None;
-    if !validate_only && let Some(body_text) = body_expr_text {
-        let delete_source = options
-            .and_then(|o| o.get("deleteSource"))
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
-        let mut file_edits: indexmap::IndexMap<String, Vec<protocol::SourceEdit>> =
-            indexmap::IndexMap::new();
-        if delete_source && let Some((d_off, d_len)) = decl_range {
-            file_edits
-                .entry(file.to_string())
-                .or_default()
-                .push(protocol::SourceEdit {
-                    offset: d_off as i64,
-                    length: d_len as i64,
-                    replacement: String::new(),
-                    id: None,
-                    description: None,
-                });
-        }
-        if let Some(mut engine) = search_engine {
-            let selem = SElem {
-                lib: resolved.library.clone(),
-                unit: resolved.index,
-                id: element,
-            };
-            let refs = engine.find_element_references(&selem, false);
-            for r in refs {
-                let loc = r.location;
-                if let Some(src) = dartr_project::fs::read_string(&loc.file) {
-                    let name_start = loc.offset as usize;
-                    let name_end = (loc.offset + loc.length) as usize;
-                    let call_end = if src.get(name_end..name_end + 2) == Some("()") {
-                        name_end + 2
-                    } else {
-                        name_end
-                    };
-                    let (rep_start, replacement) =
-                        if name_start > 0 && src.as_bytes().get(name_start - 1) == Some(&b'.') {
-                            let mut t_start = name_start - 1;
-                            while t_start > 0 {
-                                let b = src.as_bytes()[t_start - 1];
-                                if b.is_ascii_alphanumeric() || b == b'_' || b == b'$' {
-                                    t_start -= 1;
-                                } else {
-                                    break;
-                                }
-                            }
-                            let target_str = &src[t_start..name_start - 1];
-                            (t_start, format!("{target_str}.{body_text}"))
-                        } else {
-                            (name_start, body_text.clone())
-                        };
-                    file_edits
-                        .entry(loc.file)
-                        .or_default()
-                        .push(protocol::SourceEdit {
-                            offset: rep_start as i64,
-                            length: (call_end - rep_start) as i64,
-                            replacement,
-                            id: None,
-                            description: None,
-                        });
-                }
-            }
-        }
-        let mut edits_list = Vec::new();
-        for (f, mut edits) in file_edits {
-            edits.sort_by(|a, b| b.offset.cmp(&a.offset));
-            edits_list.push(protocol::SourceFileEdit {
-                file: f,
-                file_stamp: 0,
-                edits,
-            });
-        }
-        change = Some(protocol::SourceChange {
-            message: "Inline Method".to_string(),
-            edits: edits_list,
-            linked_edit_groups: Vec::new(),
-            selection: None,
-            selection_length: None,
-            id: None,
-        });
+    let Some(opts) = options else {
+        return Ok(response);
+    };
+    if let Some(delete_source) = opts.get("deleteSource").and_then(Value::as_bool) {
+        refactoring.delete_source = delete_source;
     }
-
-    Ok(RefactoringResponse {
-        initial_problems: Vec::new(),
-        options_problems: Vec::new(),
-        final_problems: Vec::new(),
-        feedback,
-        change,
-        potential_edits: None,
-    })
+    if let Some(inline_all) = opts.get("inlineAll").and_then(Value::as_bool) {
+        refactoring.inline_all = inline_all;
+    }
+    if validate_only {
+        return Ok(response);
+    }
+    let final_status = refactoring.check_final_conditions(&mut search_engine);
+    response.final_problems = crate::refactoring_host::problems(&final_status);
+    if final_status.has_fatal_error() {
+        return Ok(response);
+    }
+    let change = refactoring.create_change();
+    response.change = Some(crate::refactoring_host::change(&change));
+    Ok(response)
 }
 
 fn compute_move_file_refactoring(
@@ -1480,99 +554,28 @@ fn compute_move_file_refactoring(
     validate_only: bool,
     options: Option<&Value>,
 ) -> std::result::Result<RefactoringResponse, (&'static str, String)> {
+    let Some(mut search_engine) = search_engine else {
+        return Ok(fatal_initial_problem("Unable to create a refactoring"));
+    };
     let Some(new_file) = options
         .and_then(|o| o.get("newFile"))
         .and_then(Value::as_str)
     else {
-        return Ok(fatal_initial_problem("Unable to create a refactoring"));
+        return Ok(empty_response());
     };
-    let change = if validate_only {
-        None
-    } else {
-        let mut edits_list = Vec::new();
-        if let Some(mut engine) = search_engine {
-            let old_path = std::path::Path::new(file);
-            let new_path = std::path::Path::new(new_file);
-            let scope = engine.search_scope();
-            for (context, owned) in scope.iter() {
-                for f in owned {
-                    if f == file {
-                        continue;
-                    }
-                    let Some(f_parent) = std::path::Path::new(f).parent() else {
-                        continue;
-                    };
-                    let Some(resolved_f) = engine.resolved_unit_in(f, Some(*context)) else {
-                        continue;
-                    };
-                    let unit_f = resolved_f.unit();
-                    let ast_f = &unit_f.ast;
-                    let src_f = &ast_f.tokens.source;
-                    let mut file_edits = Vec::new();
-                    for &d in ast_f.list_raw(ast_f[unit_f.unit].directives) {
-                        let uri_node = if let Some(imp) = ast_f.cast::<ImportDirective>(d) {
-                            Some(ast_f[imp].uri.raw())
-                        } else if let Some(exp) = ast_f.cast::<ExportDirective>(d) {
-                            Some(ast_f[exp].uri.raw())
-                        } else if let Some(part) = ast_f.cast::<PartDirective>(d) {
-                            Some(ast_f[part].uri.raw())
-                        } else {
-                            None
-                        };
-                        let Some(u_node) = uri_node else {
-                            continue;
-                        };
-                        let u_start = ast_f.offset(u_node) as usize;
-                        let u_end = ast_f.end(u_node) as usize;
-                        let Some(raw_lit) = src_f.get(u_start..u_end) else {
-                            continue;
-                        };
-                        let unquoted = raw_lit.trim_matches(|c| c == '\'' || c == '"');
-                        if unquoted.starts_with("dart:") || unquoted.starts_with("package:") {
-                            continue;
-                        }
-                        if f_parent.join(unquoted) == old_path {
-                            let new_rel = new_path
-                                .strip_prefix(f_parent)
-                                .ok()
-                                .and_then(|p| p.to_str())
-                                .or_else(|| new_path.file_name().and_then(|n| n.to_str()))
-                                .unwrap_or(unquoted);
-                            file_edits.push(protocol::SourceEdit {
-                                offset: u_start as i64,
-                                length: (u_end - u_start) as i64,
-                                replacement: format!("'{new_rel}'"),
-                                id: None,
-                                description: None,
-                            });
-                        }
-                    }
-                    if !file_edits.is_empty() {
-                        file_edits.sort_by(|a, b| b.offset.cmp(&a.offset));
-                        edits_list.push(protocol::SourceFileEdit {
-                            file: f.clone(),
-                            file_stamp: 0,
-                            edits: file_edits,
-                        });
-                    }
-                }
-            }
-        }
-        Some(protocol::SourceChange {
-            message: "Move File".to_string(),
-            edits: edits_list,
-            linked_edit_groups: Vec::new(),
-            selection: None,
-            selection_length: None,
-            id: None,
-        })
-    };
-    Ok(RefactoringResponse {
-        initial_problems: Vec::new(),
-        options_problems: Vec::new(),
-        final_problems: Vec::new(),
-        feedback: None,
-        change,
-        potential_edits: None,
-    })
+    let refactoring = MoveFile::new(file, new_file);
+    let mut response = empty_response();
+    let initial = refactoring.check_initial_conditions();
+    response.initial_problems = crate::refactoring_host::problems(&initial);
+    if initial.has_fatal_error() || validate_only {
+        return Ok(response);
+    }
+    let final_status = refactoring.check_final_conditions(&mut search_engine);
+    response.final_problems = crate::refactoring_host::problems(&final_status);
+    if final_status.has_fatal_error() {
+        return Ok(response);
+    }
+    let change = refactoring.create_change(&mut search_engine);
+    response.change = Some(crate::refactoring_host::change(&change));
+    Ok(response)
 }

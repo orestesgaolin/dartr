@@ -32,13 +32,15 @@ use crate::search::{
 };
 use crate::transport::{Channel, LineReader};
 
-/// The supported subset of the pinned spec. Notifications are not requests.
+/// The supported requests and notifications from the pinned 1.40.1 specification.
 pub const IMPLEMENTED_REQUESTS: &[&str] = &[
     "server.getVersion",
     "server.shutdown",
     "server.setSubscriptions",
     "server.cancelRequest",
     "server.setClientCapabilities",
+    "server.openUrlRequest",
+    "server.showMessageRequest",
     "analysis.getErrors",
     "analysis.getHover",
     "analysis.getImportedElements",
@@ -54,6 +56,7 @@ pub const IMPLEMENTED_REQUESTS: &[&str] = &[
     "analysis.updateContent",
     "analysis.updateOptions",
     "completion.getSuggestions2",
+    "completion.registerLibraryPaths",
     "completion.getSuggestionDetails2",
     "search.findElementReferences",
     "search.findMemberDeclarations",
@@ -62,19 +65,19 @@ pub const IMPLEMENTED_REQUESTS: &[&str] = &[
     "search.getElementDeclarations",
     "search.getTypeHierarchy",
     "edit.format",
+    "edit.formatIfEnabled",
     "edit.getAssists",
     "edit.getAvailableRefactorings",
+    "edit.bulkFixes",
     "edit.getFixes",
     "edit.getPostfixCompletion",
     "edit.getRefactoring",
     "edit.getStatementCompletion",
-    "edit.importElements",
     "edit.isPostfixCompletionApplicable",
     "edit.listPostfixCompletionTemplates",
-    "edit.organizeDirectives",
+    "edit.importElements",
     "edit.sortMembers",
-    "edit.formatIfEnabled",
-    "edit.bulkFixes",
+    "edit.organizeDirectives",
     "execution.createContext",
     "execution.deleteContext",
     "execution.getSuggestions",
@@ -109,6 +112,7 @@ pub const IMPLEMENTED_NOTIFICATIONS: &[&str] = &[
     "analysis.occurrences",
     "analysis.outline",
     "analysis.overrides",
+    "completion.existingImports",
     "search.results",
     "execution.launchData",
     "flutter.outline",
@@ -1184,6 +1188,15 @@ impl<W: Write> Server<W> {
                 let lsp_message = field(params, "lspMessage")?;
                 let result = self.handle_lsp(lsp_message)?;
                 self.response(id, Some(wire(result)))?;
+            }
+            "server.openUrlRequest"
+            | "server.showMessageRequest"
+            | "completion.registerLibraryPaths" => {
+                // Server-initiated requests (`server.openUrlRequest`, `server.showMessageRequest`)
+                // and deprecated/removed `completion.registerLibraryPaths` have no client->server
+                // handler in Dart 3.13.3 (`LegacyAnalysisServer.handleRequest` returns
+                // `Response.unknownRequest(request)`).
+                return Err(RequestFailure::new("UNKNOWN_REQUEST", "Unknown request"));
             }
             _ => return Err(RequestFailure::new("UNKNOWN_REQUEST", "Unknown request")),
         }
@@ -5937,4 +5950,20 @@ fn decode_imported_elements_list(
 
 fn wire(value: impl serde::Serialize) -> Value {
     serde_json::to_value(value).expect("protocol types have JSON-compatible fields")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn implemented_surface_matches_full_pinned_protocol_spec() {
+        assert_eq!(IMPLEMENTED_REQUESTS.len(), protocol::REQUEST_COUNT);
+        assert_eq!(IMPLEMENTED_REQUESTS, protocol::REQUEST_METHODS);
+        assert_eq!(
+            IMPLEMENTED_NOTIFICATIONS.len(),
+            protocol::NOTIFICATION_COUNT
+        );
+        assert_eq!(IMPLEMENTED_NOTIFICATIONS, protocol::NOTIFICATION_EVENTS);
+    }
 }

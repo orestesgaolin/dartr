@@ -5,8 +5,15 @@
 //! are in [`crate::server::rename`] and [`crate::server::refactor`].
 
 pub mod convert;
+pub mod extract_local;
+pub mod extract_method;
+pub mod extract_widget;
 pub mod host;
+pub mod inline_local;
+pub mod inline_method;
+pub mod move_file;
 pub mod naming;
+pub mod producer;
 pub mod rename;
 pub mod status;
 
@@ -67,27 +74,42 @@ impl RefactoringKind {
 pub enum Refactoring {
     ConvertGetterToMethod(SElem),
     ConvertMethodToGetter(SElem),
+    ExtractLocal(extract_local::ExtractLocal),
+    ExtractMethod(extract_method::ExtractMethod),
+    ExtractWidget(extract_widget::ExtractWidget),
+    InlineLocal(inline_local::InlineLocal),
+    InlineMethod(inline_method::InlineMethod),
 }
 
 impl Engine<'_> {
     /// Dart `Refactoring.checkInitialConditions`.
-    pub fn initial_conditions(&mut self, r: &Refactoring) -> RefactoringStatus {
+    pub fn initial_conditions(&mut self, r: &mut Refactoring) -> RefactoringStatus {
         match r {
             Refactoring::ConvertGetterToMethod(e) => self.getter_to_method_initial(e),
             Refactoring::ConvertMethodToGetter(e) => self.method_to_getter_initial(e),
+            Refactoring::ExtractLocal(r) => r.check_initial_conditions(),
+            Refactoring::ExtractMethod(r) => r.check_initial_conditions(),
+            Refactoring::ExtractWidget(r) => r.check_initial_conditions(),
+            Refactoring::InlineLocal(r) => r.check_initial_conditions(),
+            Refactoring::InlineMethod(r) => r.check_initial_conditions(self.host),
         }
     }
 
     /// Dart `Refactoring.checkFinalConditions`.
-    pub fn final_conditions(&mut self, r: &Refactoring) -> RefactoringStatus {
+    pub fn final_conditions(&mut self, r: &mut Refactoring) -> RefactoringStatus {
         match r {
             Refactoring::ConvertGetterToMethod(e) => self.getter_to_method_final(e),
             Refactoring::ConvertMethodToGetter(_) => RefactoringStatus::new(),
+            Refactoring::ExtractLocal(r) => r.check_final_conditions(),
+            Refactoring::ExtractMethod(r) => r.check_final_conditions(),
+            Refactoring::ExtractWidget(r) => r.check_final_conditions(),
+            Refactoring::InlineLocal(r) => r.check_final_conditions(),
+            Refactoring::InlineMethod(r) => r.check_final_conditions(self.host),
         }
     }
 
     /// Dart `Refactoring.checkAllConditions`.
-    pub fn all_conditions(&mut self, r: &Refactoring) -> RefactoringStatus {
+    pub fn all_conditions(&mut self, r: &mut Refactoring) -> RefactoringStatus {
         let mut result = self.initial_conditions(r);
         if result.has_fatal_error() {
             return result;
@@ -97,10 +119,15 @@ impl Engine<'_> {
     }
 
     /// Dart `Refactoring.createChange`.
-    pub fn change(&mut self, r: &Refactoring) -> SourceChange {
+    pub fn change(&mut self, r: &mut Refactoring) -> SourceChange {
         match r {
             Refactoring::ConvertGetterToMethod(e) => self.getter_to_method_change(e),
             Refactoring::ConvertMethodToGetter(e) => self.method_to_getter_change(e),
+            Refactoring::ExtractLocal(r) => r.create_change(self.host),
+            Refactoring::ExtractMethod(r) => r.create_change(self.host),
+            Refactoring::ExtractWidget(r) => r.create_change(),
+            Refactoring::InlineLocal(r) => r.create_change(self.host),
+            Refactoring::InlineMethod(r) => r.create_change(),
         }
     }
 

@@ -22,6 +22,7 @@ dartr_resolver.workspace = true
 dartr_typesystem.workspace = true
 dartr_driver.workspace = true
 dartr_lints.workspace = true
+dartr_plugins.workspace = true
 dartr_yaml.workspace = true
 indexmap.workspace = true
 notify.workspace = true

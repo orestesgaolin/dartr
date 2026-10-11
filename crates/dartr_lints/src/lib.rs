@@ -22,11 +22,253 @@ pub use dartr_parser::experimental_flags::ExperimentalFlag;
 pub use registry::*;
 pub use rule_metadata::ALL_RULES;
 pub type LintDiagnostic = Diagnostic;
+
+#[derive(Clone, Debug, Default)]
+pub struct PubspecDeps {
+    pub name: String,
+    pub dependencies: Vec<String>,
+    pub dev_dependencies: Vec<String>,
+}
+
+/// Package and pubspec metadata for a library's defining unit, computed
+/// once per package in an analysis context instead of via process-wide
+/// static caches.
+#[derive(Clone, Debug, Default)]
+pub struct LintPackageInfo {
+    /// Nearest ancestor directory of the defining unit with a `pubspec.yaml`.
+    pub package_root: Option<std::path::PathBuf>,
+    /// Whether `.dart_tool/package_config.json` exists at or above `package_root`.
+    pub is_pub_package: bool,
+    /// `AvoidWebLibrariesInFlutter.hasFlutterDep` for `package_root/pubspec.yaml`.
+    pub has_flutter_dep: bool,
+    /// `RemoveDeprecationsInBreakingVersion` for `package_root/pubspec.yaml` (when `is_pub_package`).
+    pub has_breaking_version: bool,
+    /// `DependOnReferencedPackages` dependencies for `package_root/pubspec.yaml` (when `is_pub_package`).
+    pub pubspec_deps: Option<std::sync::Arc<PubspecDeps>>,
+}
+
+impl LintPackageInfo {
+    /// Computes package and pubspec metadata for the defining unit at [path].
+    pub fn for_defining_path(path: &str) -> Self {
+        let Some(parent) = std::path::Path::new(path).parent() else {
+            return Self::default();
+        };
+        let package_root = parent
+            .ancestors()
+            .find(|root| {
+                root.join("pubspec.yaml")
+                    .to_str()
+                    .is_some_and(dartr_project::fs::file_exists)
+            })
+            .map(std::path::Path::to_path_buf);
+        Self::from_package_root(package_root)
+    }
+
+    pub fn from_package_root(package_root: Option<std::path::PathBuf>) -> Self {
+        let Some(root) = package_root else {
+            return Self::default();
+        };
+        let is_pub_package = root.ancestors().any(|dir| {
+            dir.join(".dart_tool/package_config.json")
+                .to_str()
+                .is_some_and(dartr_project::fs::file_exists)
+        });
+        let pubspec_path = root.join("pubspec.yaml");
+        let (has_flutter_dep, has_breaking_version, pubspec_deps) =
+            parse_lint_pubspec(&pubspec_path, is_pub_package);
+        Self {
+            package_root: Some(root),
+            is_pub_package,
+            has_flutter_dep,
+            has_breaking_version,
+            pubspec_deps,
+        }
+    }
+}
+
+/// Per-analysis-pass cache for [`LintPackageInfo`] keyed by parent directory
+/// and package root. Scoped to a single analysis run so overlays are always
+/// respected without global locks or `has_overlays()` checks.
+#[derive(Default)]
+pub struct LintPackageCache {
+    by_dir: std::collections::HashMap<std::path::PathBuf, std::sync::Arc<LintPackageInfo>>,
+    by_root: std::collections::HashMap<Option<std::path::PathBuf>, std::sync::Arc<LintPackageInfo>>,
+}
+
+impl LintPackageCache {
+    pub fn for_defining_path(&mut self, path: &str) -> std::sync::Arc<LintPackageInfo> {
+        let Some(parent) = std::path::Path::new(path).parent() else {
+            return std::sync::Arc::new(LintPackageInfo::default());
+        };
+        if let Some(cached) = self.by_dir.get(parent) {
+            return cached.clone();
+        }
+        let mut package_root = None;
+        for anc in parent.ancestors() {
+            if let Some(cached) = self.by_dir.get(anc) {
+                let info = cached.clone();
+                self.by_dir.insert(parent.to_path_buf(), info.clone());
+                return info;
+            }
+            if anc
+                .join("pubspec.yaml")
+                .to_str()
+                .is_some_and(dartr_project::fs::file_exists)
+            {
+                package_root = Some(anc.to_path_buf());
+                break;
+            }
+        }
+        let info = self
+            .by_root
+            .entry(package_root.clone())
+            .or_insert_with(|| {
+                std::sync::Arc::new(LintPackageInfo::from_package_root(package_root))
+            })
+            .clone();
+        self.by_dir.insert(parent.to_path_buf(), info.clone());
+        info
+    }
+}
+
+fn parse_lint_pubspec(
+    pubspec_path: &std::path::Path,
+    is_pub_package: bool,
+) -> (bool, bool, Option<std::sync::Arc<PubspecDeps>>) {
+    use dartr_project::yaml::{NodeKind as YamlNodeKind, Scalar, YamlNode};
+
+    fn scalar_text(node: &YamlNode) -> Option<String> {
+        match &node.kind {
+            YamlNodeKind::Scalar(Scalar::Null) => None,
+            YamlNodeKind::Scalar(s) => Some(s.to_dart_string()),
+            _ => None,
+        }
+    }
+
+    fn process_dependencies(node: &YamlNode) -> Option<Vec<String>> {
+        let YamlNodeKind::Map(entries) = &node.kind else {
+            return None;
+        };
+        Some(entries.iter().filter_map(|(k, _)| scalar_text(k)).collect())
+    }
+
+    let Some(content) = pubspec_path
+        .to_str()
+        .and_then(dartr_project::fs::read_string_strict)
+    else {
+        return (false, false, None);
+    };
+    let Ok(yaml) = dartr_project::yaml::load_yaml_node(&content) else {
+        return (false, false, None);
+    };
+    let YamlNodeKind::Map(entries) = &yaml.kind else {
+        return (false, false, None);
+    };
+
+    let has_flutter_dep = yaml.value_at("dependencies").is_some_and(|deps| {
+        matches!(deps.kind, YamlNodeKind::Map(_)) && deps.value_at("flutter").is_some()
+    }) && !yaml
+        .value_at("flutter")
+        .and_then(|n| n.value_at("plugin"))
+        .and_then(|n| n.value_at("platforms"))
+        .and_then(|n| n.value_at("web"))
+        .is_some_and(|w| !w.is_null_scalar());
+
+    if !is_pub_package {
+        return (has_flutter_dep, false, None);
+    }
+
+    let mut name: Option<String> = None;
+    let mut dependencies: Option<Vec<String>> = None;
+    let mut dev_dependencies: Option<Vec<String>> = None;
+    let mut version_text: Option<String> = None;
+    for (k, v) in entries {
+        let Some(key) = scalar_text(k) else {
+            continue;
+        };
+        match key.as_str() {
+            "name" => name = scalar_text(v),
+            "dependencies" => dependencies = process_dependencies(v),
+            "dev_dependencies" => dev_dependencies = process_dependencies(v),
+            "version" => version_text = scalar_text(v),
+            _ => {}
+        }
+    }
+
+    let has_breaking_version = version_text.as_deref().is_some_and(is_breaking_version_str);
+
+    let pubspec_deps = name.map(|name| {
+        std::sync::Arc::new(PubspecDeps {
+            name,
+            dependencies: dependencies.unwrap_or_default(),
+            dev_dependencies: dev_dependencies.unwrap_or_default(),
+        })
+    });
+
+    (has_flutter_dep, has_breaking_version, pubspec_deps)
+}
+
+/// Dart `Version.parse` + `RemoveDeprecationsInBreakingVersion.isBreakingVersion`.
+fn is_breaking_version_str(version: &str) -> bool {
+    let numeric_end = version
+        .find(|c: char| !c.is_ascii_digit() && c != '.')
+        .unwrap_or(version.len());
+    let suffix = &version[numeric_end..];
+    let valid_identifiers = |text: &str| {
+        !text.is_empty()
+            && text.split('.').all(|identifier| {
+                !identifier.is_empty()
+                    && identifier
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '-')
+            })
+    };
+    let has_build = if let Some(rest) = suffix.strip_prefix('-') {
+        if let Some((pre, build)) = rest.split_once('+') {
+            if !valid_identifiers(pre) || !valid_identifiers(build) || build.contains('+') {
+                return false;
+            }
+            true
+        } else {
+            if !valid_identifiers(rest) {
+                return false;
+            }
+            false
+        }
+    } else if let Some(build) = suffix.strip_prefix('+') {
+        if !valid_identifiers(build) || build.contains('+') {
+            return false;
+        }
+        true
+    } else if suffix.is_empty() {
+        false
+    } else {
+        return false;
+    };
+    if has_build {
+        return false;
+    }
+    let parts: Vec<_> = version[..numeric_end].split('.').collect();
+    if parts.len() != 3 || parts.iter().any(|part| part.is_empty()) {
+        return false;
+    }
+    let (Ok(major), Ok(minor), Ok(patch)) = (
+        parts[0].parse::<u64>(),
+        parts[1].parse::<u64>(),
+        parts[2].parse::<u64>(),
+    ) else {
+        return false;
+    };
+    (minor == 0 && patch == 0) || (major == 0 && patch == 0)
+}
+
 #[derive(Clone, Copy)]
 pub struct RuleContextUnit<'a> {
     pub parsed: &'a ParsedUnit,
     pub source: &'a str,
     pub path: &'a str,
+    pub source_uri: Option<&'a str>,
+    pub package_info: Option<&'a LintPackageInfo>,
 }
 /// Semantic results of the visited unit. Its local arena must remain alive.
 #[derive(Clone, Copy)]
@@ -144,6 +386,8 @@ pub struct ResolvedRuleContextUnit<'a> {
     pub unit: NodeId,
     pub source: &'a str,
     pub path: &'a str,
+    pub source_uri: Option<&'a str>,
+    pub package_info: Option<&'a LintPackageInfo>,
     pub resolved: Option<ResolvedLintContext<'a>>,
 }
 #[derive(Clone, Copy)]
@@ -156,6 +400,8 @@ pub struct LinterContext<'a> {
     pub current_unit: usize,
     pub resolved: Option<ResolvedLintContext<'a>>,
     pub resolved_units: &'a [ResolvedRuleContextUnit<'a>],
+    pub package_info: Option<&'a LintPackageInfo>,
+    pub lazy_package_info: Option<&'a std::cell::OnceCell<LintPackageInfo>>,
 }
 pub type RuleContext<'a> = LinterContext<'a>;
 impl<'a> LinterContext<'a> {
@@ -446,90 +692,65 @@ impl<'a> LinterContext<'a> {
     pub fn defining_unit(&self) -> &RuleContextUnit<'a> {
         &self.all_units[0]
     }
+    pub fn package_info(&self) -> Option<&LintPackageInfo> {
+        if let Some(info) = self.package_info {
+            return Some(info);
+        }
+        if let Some(info) = self.all_units.first().and_then(|u| u.package_info) {
+            return Some(info);
+        }
+        let cell = self.lazy_package_info?;
+        let path = self.all_units.first()?.path;
+        Some(cell.get_or_init(|| LintPackageInfo::for_defining_path(path)))
+    }
     /// Workspace package root for the defining unit, if a pubspec exists.
     pub fn package_root(&self) -> Option<std::path::PathBuf> {
-        static CACHE: std::sync::OnceLock<
-            std::sync::RwLock<
-                std::collections::HashMap<std::path::PathBuf, Option<std::path::PathBuf>>,
-            >,
-        > = std::sync::OnceLock::new();
-        let path = self.all_units.first()?.path;
-        let parent = std::path::Path::new(path).parent()?;
-        if !dartr_project::fs::has_overlays() {
-            let cache = CACHE.get_or_init(Default::default);
-            if let Some(cached) = cache.read().unwrap().get(parent) {
-                return cached.clone();
-            }
-            let found = parent
-                .ancestors()
-                .find(|root| {
-                    root.join("pubspec.yaml")
-                        .to_str()
-                        .is_some_and(dartr_project::fs::file_exists)
-                })
-                .map(std::path::Path::to_path_buf);
-            cache
-                .write()
-                .unwrap()
-                .insert(parent.to_path_buf(), found.clone());
-            return found;
-        }
-        parent
-            .ancestors()
-            .find(|root| {
-                root.join("pubspec.yaml")
-                    .to_str()
-                    .is_some_and(dartr_project::fs::file_exists)
-            })
-            .map(std::path::Path::to_path_buf)
+        self.package_info()?.package_root.clone()
     }
     /// Package root when the Dart workspace package is a `PubPackage`: the
     /// analyzer builds a pub workspace only when a
     /// `.dart_tool/package_config.json` exists at or above the package.
     pub fn pub_package_root(&self) -> Option<std::path::PathBuf> {
-        static CACHE: std::sync::OnceLock<
-            std::sync::RwLock<std::collections::HashMap<std::path::PathBuf, bool>>,
-        > = std::sync::OnceLock::new();
-        let root = self.package_root()?;
-        if !dartr_project::fs::has_overlays() {
-            let cache = CACHE.get_or_init(Default::default);
-            if let Some(&has_config) = cache.read().unwrap().get(&root) {
-                return has_config.then_some(root);
-            }
-            let has_config = root.ancestors().any(|dir| {
-                dir.join(".dart_tool/package_config.json")
-                    .to_str()
-                    .is_some_and(dartr_project::fs::file_exists)
-            });
-            cache.write().unwrap().insert(root.clone(), has_config);
-            return has_config.then_some(root);
-        }
-        let has_config = root.ancestors().any(|dir| {
-            dir.join(".dart_tool/package_config.json")
-                .to_str()
-                .is_some_and(dartr_project::fs::file_exists)
-        });
-        has_config.then_some(root)
+        let info = self.package_info()?;
+        info.is_pub_package
+            .then(|| info.package_root.clone())
+            .flatten()
+    }
+    pub fn has_flutter_dep(&self) -> bool {
+        self.package_info().is_some_and(|info| info.has_flutter_dep)
+    }
+    pub fn has_breaking_version(&self) -> bool {
+        self.package_info()
+            .is_some_and(|info| info.has_breaking_version)
+    }
+    pub fn pubspec_deps(&self) -> Option<&std::sync::Arc<PubspecDeps>> {
+        self.package_info()?.pubspec_deps.as_ref()
     }
     pub fn is_in_lib_dir(&self) -> bool {
-        self.package_root().is_some_and(|root| {
-            std::path::Path::new(self.all_units[0].path).starts_with(root.join("lib"))
-        })
+        self.package_info()
+            .and_then(|info| info.package_root.as_deref())
+            .is_some_and(|root| {
+                std::path::Path::new(self.all_units[0].path).starts_with(root.join("lib"))
+            })
     }
     pub fn is_in_public_dir(&self) -> bool {
-        self.package_root().is_some_and(|root| {
-            let cu_path = std::path::Path::new(self.all_units[0].path);
-            let hook = root.join("hook");
-            cu_path.starts_with(root.join("lib"))
-                || cu_path.starts_with(root.join("bin"))
-                || cu_path == hook.join("build.dart")
-                || cu_path == hook.join("link.dart")
-        })
+        self.package_info()
+            .and_then(|info| info.package_root.as_deref())
+            .is_some_and(|root| {
+                let cu_path = std::path::Path::new(self.all_units[0].path);
+                let hook = root.join("hook");
+                cu_path.starts_with(root.join("lib"))
+                    || cu_path.starts_with(root.join("bin"))
+                    || cu_path == hook.join("build.dart")
+                    || cu_path == hook.join("link.dart")
+            })
     }
     pub fn is_in_test_directory(&self) -> bool {
-        self.package_root().is_some_and(|root| {
-            std::path::Path::new(self.all_units[0].path).starts_with(root.join("test"))
-        })
+        self.package_info()
+            .and_then(|info| info.package_root.as_deref())
+            .is_some_and(|root| {
+                std::path::Path::new(self.all_units[0].path).starts_with(root.join("test"))
+            })
     }
     pub fn is_feature_enabled(&self, feature: ExperimentalFlag) -> bool {
         self.defining_unit()
@@ -540,131 +761,14 @@ impl<'a> LinterContext<'a> {
     /// The visited unit's source URI. The analyzer uses a
     /// package URI for files mapped by package_config, and a file URI otherwise.
     pub fn source_uri(&self) -> String {
-        type PackageList = std::sync::Arc<Vec<(String, std::path::PathBuf)>>;
-        static URI_CACHE: std::sync::OnceLock<
-            std::sync::RwLock<std::collections::HashMap<String, String>>,
-        > = std::sync::OnceLock::new();
-        static DIR_CACHE: std::sync::OnceLock<
-            std::sync::RwLock<std::collections::HashMap<std::path::PathBuf, Option<PackageList>>>,
-        > = std::sync::OnceLock::new();
-        static CONFIG_CACHE: std::sync::OnceLock<
-            std::sync::RwLock<std::collections::HashMap<std::path::PathBuf, Option<PackageList>>>,
-        > = std::sync::OnceLock::new();
-
-        let use_cache = !dartr_project::fs::has_overlays();
-        if use_cache
-            && let Some(cached) = URI_CACHE
-                .get_or_init(Default::default)
-                .read()
-                .unwrap()
-                .get(self.path)
+        if let Some(uri) = self
+            .all_units
+            .get(self.current_unit)
+            .and_then(|u| u.source_uri)
         {
-            return cached.clone();
+            return uri.to_owned();
         }
-        let file = std::path::Path::new(self.path);
-        let packages = if let Some(dir) = file.parent() {
-            if use_cache
-                && let Some(cached) = DIR_CACHE
-                    .get_or_init(Default::default)
-                    .read()
-                    .unwrap()
-                    .get(dir)
-            {
-                cached.clone()
-            } else {
-                let mut found: Option<PackageList> = None;
-                for root in dir.ancestors() {
-                    let config = root.join(".dart_tool/package_config.json");
-                    if use_cache
-                        && let Some(cached_cfg) = CONFIG_CACHE
-                            .get_or_init(Default::default)
-                            .read()
-                            .unwrap()
-                            .get(&config)
-                    {
-                        found = cached_cfg.clone();
-                        break;
-                    }
-                    let Ok(content) = std::fs::read_to_string(&config) else {
-                        continue;
-                    };
-                    let parsed = serde_json::from_str::<serde_json::Value>(&content)
-                        .ok()
-                        .map(|config_value| {
-                            let mut list = Vec::new();
-                            if let Some(packages) = config_value["packages"].as_array() {
-                                for package in packages {
-                                    let (Some(name), Some(root_uri)) =
-                                        (package["name"].as_str(), package["rootUri"].as_str())
-                                    else {
-                                        continue;
-                                    };
-                                    let package_root =
-                                        if let Some(path) = root_uri.strip_prefix("file://") {
-                                            std::path::PathBuf::from(path)
-                                        } else if root_uri.contains(':') {
-                                            continue;
-                                        } else {
-                                            config.parent().unwrap().join(root_uri)
-                                        };
-                                    let package_dir = package_root
-                                        .join(package["packageUri"].as_str().unwrap_or(""));
-                                    if let Ok(package_dir) = package_dir.canonicalize() {
-                                        list.push((name.to_owned(), package_dir));
-                                    }
-                                }
-                            }
-                            std::sync::Arc::new(list)
-                        });
-                    if use_cache {
-                        CONFIG_CACHE
-                            .get_or_init(Default::default)
-                            .write()
-                            .unwrap()
-                            .insert(config, parsed.clone());
-                    }
-                    found = parsed;
-                    break;
-                }
-                if use_cache {
-                    DIR_CACHE
-                        .get_or_init(Default::default)
-                        .write()
-                        .unwrap()
-                        .insert(dir.to_path_buf(), found.clone());
-                }
-                found
-            }
-        } else {
-            None
-        };
-        let mut result = None;
-        if let Some(packages) = packages {
-            for (name, package_dir) in packages.iter() {
-                if let Ok(relative) = file.strip_prefix(package_dir) {
-                    result = Some(format!(
-                        "package:{name}/{}",
-                        relative.to_string_lossy().replace('\\', "/")
-                    ));
-                    break;
-                }
-            }
-        }
-        let uri = result.unwrap_or_else(|| {
-            if file.is_absolute() {
-                format!("file://{}", self.path.replace('\\', "/"))
-            } else {
-                self.path.replace('\\', "/")
-            }
-        });
-        if use_cache {
-            URI_CACHE
-                .get_or_init(Default::default)
-                .write()
-                .unwrap()
-                .insert(self.path.to_owned(), uri.clone());
-        }
-        uri
+        compute_source_uri(self.path)
     }
     pub fn report_node(
         &self,
@@ -757,6 +861,53 @@ impl<'a> LinterContext<'a> {
         )
     }
 }
+
+fn compute_source_uri(path: &str) -> String {
+    let file = std::path::Path::new(path);
+    if let Some(dir) = file.parent() {
+        for root in dir.ancestors() {
+            let config = root.join(".dart_tool/package_config.json");
+            let Ok(content) = std::fs::read_to_string(&config) else {
+                continue;
+            };
+            if let Ok(config_value) = serde_json::from_str::<serde_json::Value>(&content)
+                && let Some(packages) = config_value["packages"].as_array()
+            {
+                for package in packages {
+                    let (Some(name), Some(root_uri)) =
+                        (package["name"].as_str(), package["rootUri"].as_str())
+                    else {
+                        continue;
+                    };
+                    let package_root = if let Some(p) = root_uri.strip_prefix("file://") {
+                        std::path::PathBuf::from(p)
+                    } else if root_uri.contains(':') {
+                        continue;
+                    } else {
+                        config.parent().unwrap().join(root_uri)
+                    };
+                    let package_dir =
+                        package_root.join(package["packageUri"].as_str().unwrap_or(""));
+                    if let Ok(package_dir) = package_dir.canonicalize()
+                        && let Ok(relative) = file.strip_prefix(&package_dir)
+                    {
+                        return format!(
+                            "package:{name}/{}",
+                            relative.to_string_lossy().replace('\\', "/")
+                        );
+                    }
+                }
+            }
+            break;
+        }
+    }
+    if file.is_absolute() {
+        format!("file://{}", path.replace('\\', "/"))
+    } else {
+        path.replace('\\', "/")
+    }
+}
+
 pub type NodeProcessor = fn(&LinterContext<'_>, NodeId, &mut Vec<Diagnostic>);
 pub type AfterLibraryProcessor = fn(&LinterContext<'_>, &mut Vec<Diagnostic>);
 #[derive(Default)]
@@ -790,6 +941,8 @@ pub fn lint(parsed: &ParsedUnit, source: &str, path: &str, enabled: &[&str]) -> 
             parsed,
             source,
             path,
+            source_uri: None,
+            package_info: None,
         }],
         enabled,
     )
@@ -800,6 +953,8 @@ pub fn lint(parsed: &ParsedUnit, source: &str, path: &str, enabled: &[&str]) -> 
 /// The first unit is the defining unit. All units must exist and be parsed.
 pub fn lint_library(units: &[RuleContextUnit<'_>], enabled: &[&str]) -> Vec<Vec<Diagnostic>> {
     let mut out = lint_library_unfiltered(units, enabled);
+    let lazy_package_info = std::cell::OnceCell::new();
+    let package_info = units.first().and_then(|u| u.package_info);
     for (index, diagnostics) in out.iter_mut().enumerate() {
         let ctx = LinterContext {
             parsed: units[index].parsed,
@@ -810,6 +965,8 @@ pub fn lint_library(units: &[RuleContextUnit<'_>], enabled: &[&str]) -> Vec<Vec<
             current_unit: index,
             resolved: None,
             resolved_units: &[],
+            package_info,
+            lazy_package_info: Some(&lazy_package_info),
         };
         let ignores = IgnoreInfo::for_dart(&ctx);
         diagnostics.retain(|diagnostic| !ignores.ignored(&ctx, diagnostic));
@@ -824,9 +981,11 @@ pub fn lint_library_unfiltered(
     units: &[RuleContextUnit<'_>],
     enabled: &[&str],
 ) -> Vec<Vec<Diagnostic>> {
-    let Some(_) = units.first() else {
+    let Some(first) = units.first() else {
         return vec![];
     };
+    let lazy_package_info = std::cell::OnceCell::new();
+    let package_info = first.package_info;
     let context = |index: usize| {
         let unit = &units[index];
         LinterContext {
@@ -838,6 +997,8 @@ pub fn lint_library_unfiltered(
             current_unit: index,
             resolved: None,
             resolved_units: &[],
+            package_info,
+            lazy_package_info: Some(&lazy_package_info),
         }
     };
     let mut registry = RuleVisitorRegistry::default();
@@ -871,12 +1032,16 @@ pub fn lint_resolved_library_unfiltered(
     if units.is_empty() {
         return vec![];
     }
+    let lazy_package_info = std::cell::OnceCell::new();
+    let package_info = units[0].package_info;
     let parsed_units: Vec<_> = units
         .iter()
         .map(|unit| RuleContextUnit {
             parsed: unit.parsed,
             source: unit.source,
             path: unit.path,
+            source_uri: unit.source_uri,
+            package_info: unit.package_info,
         })
         .collect();
     let context = |index: usize| {
@@ -890,6 +1055,8 @@ pub fn lint_resolved_library_unfiltered(
             current_unit: index,
             resolved: unit.resolved,
             resolved_units: units,
+            package_info,
+            lazy_package_info: Some(&lazy_package_info),
         }
     };
     let mut registry = RuleVisitorRegistry::default();
@@ -931,12 +1098,16 @@ pub fn lint_resolved_library(
     enabled: &[&str],
 ) -> Vec<Vec<Diagnostic>> {
     let mut out = lint_resolved_library_unfiltered(units, enabled);
+    let lazy_package_info = std::cell::OnceCell::new();
+    let package_info = units.first().and_then(|u| u.package_info);
     let parsed_units: Vec<_> = units
         .iter()
         .map(|unit| RuleContextUnit {
             parsed: unit.parsed,
             source: unit.source,
             path: unit.path,
+            source_uri: unit.source_uri,
+            package_info: unit.package_info,
         })
         .collect();
     for (index, diagnostics) in out.iter_mut().enumerate() {
@@ -950,6 +1121,8 @@ pub fn lint_resolved_library(
             current_unit: index,
             resolved: unit.resolved,
             resolved_units: units,
+            package_info,
+            lazy_package_info: Some(&lazy_package_info),
         };
         let ignores = IgnoreInfo::for_dart(&ctx);
         diagnostics.retain(|diagnostic| !ignores.ignored(&ctx, diagnostic));

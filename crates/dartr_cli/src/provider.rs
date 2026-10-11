@@ -105,6 +105,8 @@ pub fn read_from_disk(path: &str) -> Option<String> {
 #[derive(Clone)]
 struct ParseTask {
     path: String,
+    uri: String,
+    package_info: Arc<dartr_lints::LintPackageInfo>,
     package_version: (u32, u32),
     settings: Arc<FileSettings>,
     packages: Arc<Packages>,
@@ -181,6 +183,7 @@ impl FileSettings {
 struct TaskCache {
     settings: HashMap<*const AnalysisOptions, Arc<FileSettings>>,
     packages: HashMap<usize, Arc<Packages>>,
+    pkg_cache: dartr_lints::LintPackageCache,
 }
 
 impl TaskCache {
@@ -204,8 +207,11 @@ impl TaskCache {
             .entry(context_index)
             .or_insert_with(|| Arc::new(context.packages.clone()))
             .clone();
+        let package_info = self.pkg_cache.for_defining_path(path);
         ParseTask {
             path: path.to_string(),
+            uri: info.uri,
+            package_info,
             package_version: (info.language_version.major, info.language_version.minor),
             settings,
             packages,
@@ -442,6 +448,8 @@ fn classify(read: ContentReader<'_>, task: &ParseTask) -> Classified {
                 parsed: &unit.parsed,
                 source: &unit.content,
                 path: &unit.path,
+                source_uri: Some(&task.uri),
+                package_info: Some(&task.package_info),
             }],
             rules,
         )
@@ -493,6 +501,8 @@ fn run_library(
             parsed: &u.parsed,
             source: &u.content,
             path: &u.path,
+            source_uri: requested.get(&u.path).map(|t| t.uri.as_str()),
+            package_info: Some(&root.package_info),
         })
         .collect();
     let mut lints = lint_library_unfiltered(&context_units, &root.settings.lint_rules);
@@ -516,6 +526,8 @@ fn run_library(
                             parsed: &unit.parsed,
                             source: &unit.content,
                             path: &unit.path,
+                            source_uri: Some(&task.uri),
+                            package_info: Some(&task.package_info),
                         }],
                         &task.settings.lint_rules,
                     )

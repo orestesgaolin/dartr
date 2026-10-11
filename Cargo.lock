@@ -508,6 +508,7 @@ dependencies = [
  "dartr_format",
  "dartr_lints",
  "dartr_parser",
+ "dartr_plugins",
  "dartr_project",
  "dartr_resolver",
  "dartr_syntax",

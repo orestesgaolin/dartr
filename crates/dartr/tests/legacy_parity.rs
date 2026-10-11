@@ -2370,6 +2370,53 @@ fn run_extended_session(program: &Path, args: &[&str], root: &Path) -> ExtendedT
             "edit.bulkFixes:updatePubspec".to_string(),
             normalize_paths(bulk_pubspec, &root_str),
         );
+
+        let pubspec_proj = root.parent().unwrap().join(format!(
+            "{}-pubspec-dev",
+            root.file_name().unwrap().to_string_lossy()
+        ));
+        let _ = std::fs::remove_dir_all(&pubspec_proj);
+        std::fs::create_dir_all(pubspec_proj.join(".dart_tool")).unwrap();
+        std::fs::create_dir_all(pubspec_proj.join("lib")).unwrap();
+        std::fs::write(
+            pubspec_proj.join(".dart_tool/package_config.json"),
+            r#"{"configVersion":2,"packages":[{"name":"p","rootUri":"../","packageUri":"lib/","languageVersion":"3.5"}]}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            pubspec_proj.join("lib/a.dart"),
+            "import 'package:foo/foo.dart';\nimport 'package:bar/bar.dart';\n",
+        )
+        .unwrap();
+        std::fs::write(
+            pubspec_proj.join("pubspec.yaml"),
+            "name: p\nenvironment:\n  sdk: ^3.5.0\ndev_dependencies:\n  foo: any\n",
+        )
+        .unwrap();
+        let pubspec_proj_str = pubspec_proj.to_string_lossy().to_string();
+        let bulk_pubspec_remove_all_dev = client.request(
+            "edit.bulkFixes",
+            json!({"included": [&pubspec_proj], "updatePubspec": true}),
+        );
+        steps.insert(
+            "edit.bulkFixes:updatePubspec_remove_all_dev".to_string(),
+            normalize_paths(bulk_pubspec_remove_all_dev, &pubspec_proj_str),
+        );
+
+        std::fs::write(
+            pubspec_proj.join("pubspec.yaml"),
+            "name: p\nenvironment:\n  sdk: ^3.5.0\ndev_dependencies:\n  keep_before: any\n  foo: any\n  keep_after: any\n",
+        )
+        .unwrap();
+        let bulk_pubspec_remove_one_dev = client.request(
+            "edit.bulkFixes",
+            json!({"included": [&pubspec_proj], "updatePubspec": true}),
+        );
+        steps.insert(
+            "edit.bulkFixes:updatePubspec_remove_one_dev".to_string(),
+            normalize_paths(bulk_pubspec_remove_one_dev, &pubspec_proj_str),
+        );
+        let _ = std::fs::remove_dir_all(&pubspec_proj);
     }
 
     // 22. lsp.handle: textDocument/completion, completionItem/resolve, textDocument/codeAction

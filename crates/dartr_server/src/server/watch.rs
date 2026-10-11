@@ -216,6 +216,7 @@ impl Server {
         let is_package_config = path.ends_with("/.dart_tool/package_config.json");
         if matches!(file_kind, FileKind::AnalysisOptions | FileKind::Pubspec) || is_package_config {
             // `_createAnalysisContexts`.
+            self.plugins.mark_restart_needed();
             self.roots_dirty = true;
             return;
         }
@@ -240,6 +241,7 @@ impl Server {
                 _ => {
                     // `driver.removeFile` and `applyFileRemoved`.
                     self.file_changed(&path);
+                    self.clear_results_for_file(&path);
                     if self.analyzed.remove(&path) {
                         self.dirty.remove(&path);
                         self.publish_diagnostics(&path, Vec::new());
@@ -247,6 +249,7 @@ impl Server {
                 }
             }
         }
+        self.plugins.broadcast_watch_event(kind, &path);
         // `_checkForAndroidManifestXmlUpdate`.
         if kind != "remove"
             && file_kind == FileKind::AndroidManifest

@@ -140,6 +140,27 @@ impl LspResourceClientConfiguration<'_> {
         self.show_todo_types()
             .contains(&d.code.lower_case_name().to_uppercase())
     }
+
+    /// Dart `experimentalRefactors` (default `false`).
+    pub fn experimental_refactors(&self) -> bool {
+        self.setting("experimentalRefactors")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    }
+
+    /// Dart `renameFilesWithClasses` (`"always"`, `"prompt"`, or `"never"`, default `"never"`).
+    pub fn rename_files_with_classes(&self) -> &str {
+        self.setting("renameFilesWithClasses")
+            .and_then(Value::as_str)
+            .unwrap_or("never")
+    }
+
+    /// Dart `updateImportsOnRename` (default `true`).
+    pub fn update_imports_on_rename(&self) -> bool {
+        self.setting("updateImportsOnRename")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
+    }
 }
 
 /// Dart `InlayHintsParameterNamesMode`.
@@ -273,6 +294,14 @@ impl LspClientConfiguration {
             settings: &self.global,
             fallback: None,
         }
+    }
+
+    pub fn experimental_refactors(&self) -> bool {
+        self.global().experimental_refactors()
+    }
+
+    pub fn rename_files_with_classes(&self) -> String {
+        self.global().rename_files_with_classes().to_string()
     }
 
     /// The raw global settings.

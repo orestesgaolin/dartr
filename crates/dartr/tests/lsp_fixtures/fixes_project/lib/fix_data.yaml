@@ -105,3 +105,55 @@ transforms:
           uris: ['src/helpers.dart']
           constructor: ''
           inClass: 'Box'
+  - title: 'Migrate paint'
+    date: 2024-01-01
+    element:
+      uris: ['src/helpers.dart']
+      function: 'paint'
+    variables:
+      color:
+        kind: 'fragment'
+        value: 'arguments[color]'
+      fill:
+        kind: 'fragment'
+        value: 'arguments[fill]'
+    oneOf:
+      - if: "color != '' && fill == 'true'"
+        changes:
+          - kind: 'rename'
+            newName: 'paintFilled'
+          - kind: 'removeParameter'
+            name: 'fill'
+      - if: "color != ''"
+        changes:
+          - kind: 'rename'
+            newName: 'paintColored'
+  - title: 'Add mode when enabled'
+    date: 2024-01-01
+    element:
+      uris: ['src/helpers.dart']
+      function: 'configure'
+    changes:
+      - kind: 'addParameter'
+        index: 1
+        name: 'mode'
+        style: optional_named
+        argumentValue:
+          expression: "'fast'"
+          requiredIf: "enabled == 'true'"
+          variables:
+            enabled:
+              kind: 'fragment'
+              value: 'arguments[enabled]'
+  - title: 'Make label non-null'
+    date: 2024-01-01
+    element:
+      uris: ['src/helpers.dart']
+      function: 'setLabel'
+    changes:
+      - kind: 'changeParameterType'
+        index: 0
+        nullability: non_null
+        argumentValue:
+          expression: "'default'"
+

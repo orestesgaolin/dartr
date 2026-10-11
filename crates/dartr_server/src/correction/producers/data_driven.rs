@@ -8,11 +8,10 @@
 //! Data-driven fixes (`fix_data.yaml`, as `dart fix` applies them).
 //!
 //! Ported: the element transforms with the changes `rename`,
-//! `renameParameter`, `addParameter`, `removeParameter`, `addTypeParameter`
-//! and `replacedBy` (code templates with `fragment` and `import`
-//! variables). Not ported: `oneOf` selectors, `requiredIf`,
-//! `changeParameterType` and `library` transforms (the transform gives no
-//! fix).
+//! `renameParameter`, `addParameter`, `removeParameter`, `changeParameterType`,
+//! `addTypeParameter` and `replacedBy` (code templates with `fragment` and
+//! `import` variables, `oneOf` / `if` selectors, and `requiredIf`).
+//! Not ported: `library` transforms (the transform gives no fix).
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -92,14 +91,20 @@ struct ElementDescriptor {
     components: Vec<String>,
 }
 
-/// Dart `Transform` (with rename changes only).
+/// Dart `ChangesSelector`.
+#[derive(Clone, Debug)]
+pub enum ChangesSelector {
+    Unconditional(Vec<Change>),
+    Conditional(Vec<(ConditionExpr, Vec<Change>)>),
+}
+
+/// Dart `Transform`.
 #[derive(Clone, Debug)]
 pub struct Transform {
     title: String,
     bulk_apply: bool,
     element: ElementDescriptor,
-    /// The changes (Dart `UnconditionalChangesSelector`).
-    changes: Vec<Change>,
+    changes_selector: ChangesSelector,
 }
 
 fn map_value<'a>(node: &'a YamlNode, key: &str) -> Option<&'a YamlNode> {
@@ -117,8 +122,7 @@ fn string_of(node: Option<&YamlNode>) -> Option<String> {
     }
 }
 
-/// Dart `TransformSetParser.parse` (element transforms with rename
-/// changes).
+/// Dart `TransformSetParser.parse` (element transforms).
 fn parse_transforms(text: &str, package_name: Option<&str>) -> Vec<Transform> {
     let Ok(root) = dartr_project::yaml::load_yaml_node(text) else {
         return Vec::new();
@@ -131,7 +135,7 @@ fn parse_transforms(text: &str, package_name: Option<&str>) -> Vec<Transform> {
         let Some(title) = string_of(map_value(t, "title")) else {
             continue;
         };
-        if map_value(t, "date").is_none() || map_value(t, "oneOf").is_some() {
+        if map_value(t, "date").is_none() {
             continue;
         }
         let bulk_apply = map_value(t, "bulkApply")
@@ -182,33 +186,12 @@ fn parse_transforms(text: &str, package_name: Option<&str>) -> Vec<Transform> {
                 }
             }
         }
-        let Some(changes) = map_value(t, "changes").and_then(|c| c.as_list()) else {
+        let transform_scope = parse_variables(map_value(t, "variables"), &[], package_name);
+        let Some(changes_selector) =
+            parse_changes_selector(t, kind, &components, &transform_scope, package_name)
+        else {
             continue;
         };
-        let transform_scope = parse_variables(map_value(t, "variables"), &[], package_name);
-        let mut parsed: Vec<Change> = Vec::new();
-        let mut modifications: Vec<ParameterModification> = Vec::new();
-        let mut supported = true;
-        for change in changes {
-            match parse_change(
-                change,
-                kind,
-                &components,
-                &transform_scope,
-                package_name,
-                &mut modifications,
-            ) {
-                Ok(Some(c)) => parsed.push(c),
-                Ok(None) => {}
-                Err(()) => supported = false,
-            }
-        }
-        if !supported {
-            continue;
-        }
-        if !modifications.is_empty() {
-            parsed.push(Change::ModifyParameters(modifications));
-        }
         out.push(Transform {
             title,
             bulk_apply,
@@ -217,10 +200,68 @@ fn parse_transforms(text: &str, package_name: Option<&str>) -> Vec<Transform> {
                 kind,
                 components,
             },
-            changes: parsed,
+            changes_selector,
         });
     }
     out
+}
+
+fn parse_change_list(
+    changes: &[YamlNode],
+    kind: Kind,
+    components: &[String],
+    scope: &Scope,
+    package_name: Option<&str>,
+) -> Option<Vec<Change>> {
+    let mut parsed: Vec<Change> = Vec::new();
+    let mut modifications: Vec<ParameterModification> = Vec::new();
+    for change in changes {
+        match parse_change(
+            change,
+            kind,
+            components,
+            scope,
+            package_name,
+            &mut modifications,
+        ) {
+            Ok(Some(c)) => parsed.push(c),
+            Ok(None) => {}
+            Err(()) => return None,
+        }
+    }
+    if !modifications.is_empty() {
+        parsed.push(Change::ModifyParameters(modifications));
+    }
+    Some(parsed)
+}
+
+/// Dart `_translateChangesSelector`.
+fn parse_changes_selector(
+    t: &YamlNode,
+    kind: Kind,
+    components: &[String],
+    scope: &Scope,
+    package_name: Option<&str>,
+) -> Option<ChangesSelector> {
+    if map_value(t, "changes").is_some() && map_value(t, "oneOf").is_some() {
+        return None;
+    }
+    if let Some(changes) = map_value(t, "changes").and_then(|c| c.as_list()) {
+        let parsed = parse_change_list(changes, kind, components, scope, package_name)?;
+        return Some(ChangesSelector::Unconditional(parsed));
+    }
+    if let Some(one_of) = map_value(t, "oneOf").and_then(|o| o.as_list()) {
+        let mut table = Vec::new();
+        for entry in one_of {
+            let cond_str = string_of(map_value(entry, "if"))?;
+            let cond = parse_condition(&cond_str, scope)?;
+            let changes = map_value(entry, "changes")?.as_list()?;
+            let parsed = parse_change_list(changes, kind, components, scope, package_name)?;
+            table.push((cond, parsed));
+        }
+        return Some(ChangesSelector::Conditional(table));
+    }
+    None
 }
 
 /// A variable scope (Dart `VariableScope`): the generators by name.
@@ -253,6 +294,115 @@ fn parse_accessors(text: &str) -> Option<Vec<Accessor>> {
         }
     }
     (!out.is_empty()).then_some(out)
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum CondToken {
+    And,
+    Equal,
+    NotEqual,
+    Ident(String),
+    Literal(String),
+}
+
+fn scan_condition_tokens(content: &str) -> Option<Vec<CondToken>> {
+    let bytes = content.as_bytes();
+    let len = bytes.len();
+    let mut i = 0;
+    let mut tokens = Vec::new();
+    while i < len {
+        if matches!(bytes[i], b' ' | b'\n' | b'\r' | b'\t') {
+            i += 1;
+            continue;
+        }
+        if bytes[i..].starts_with(b"&&") {
+            tokens.push(CondToken::And);
+            i += 2;
+        } else if bytes[i..].starts_with(b"==") {
+            tokens.push(CondToken::Equal);
+            i += 2;
+        } else if bytes[i..].starts_with(b"!=") {
+            tokens.push(CondToken::NotEqual);
+            i += 2;
+        } else if bytes[i] == b'\'' {
+            let start = i + 1;
+            let rel_end = content[start..].find('\'')?;
+            let end = start + rel_end;
+            tokens.push(CondToken::Literal(content[start..end].to_string()));
+            i = end + 1;
+        } else if bytes[i].is_ascii_alphabetic() || bytes[i] == b'_' {
+            let start = i;
+            i += 1;
+            while i < len && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+                i += 1;
+            }
+            tokens.push(CondToken::Ident(content[start..i].to_string()));
+        } else {
+            return None;
+        }
+    }
+    Some(tokens)
+}
+
+fn parse_cond_primary(
+    tokens: &[CondToken],
+    pos: &mut usize,
+    scope: &Scope,
+) -> Option<ConditionExpr> {
+    match tokens.get(*pos)? {
+        CondToken::Ident(name) => {
+            *pos += 1;
+            let (_, generator) = scope.iter().find(|(n, _)| n == name)?;
+            Some(ConditionExpr::Variable(generator.clone()))
+        }
+        CondToken::Literal(s) => {
+            *pos += 1;
+            Some(ConditionExpr::LiteralString(s.clone()))
+        }
+        _ => None,
+    }
+}
+
+fn parse_cond_equality(
+    tokens: &[CondToken],
+    pos: &mut usize,
+    scope: &Scope,
+) -> Option<ConditionExpr> {
+    let left = parse_cond_primary(tokens, pos, scope)?;
+    match tokens.get(*pos) {
+        Some(CondToken::Equal) => {
+            *pos += 1;
+            let right = parse_cond_primary(tokens, pos, scope)?;
+            Some(ConditionExpr::Binary(
+                ConditionOp::Equal,
+                Box::new(left),
+                Box::new(right),
+            ))
+        }
+        Some(CondToken::NotEqual) => {
+            *pos += 1;
+            let right = parse_cond_primary(tokens, pos, scope)?;
+            Some(ConditionExpr::Binary(
+                ConditionOp::NotEqual,
+                Box::new(left),
+                Box::new(right),
+            ))
+        }
+        _ => Some(left),
+    }
+}
+
+/// Dart `CodeFragmentParser.parseCondition`.
+fn parse_condition(content: &str, scope: &Scope) -> Option<ConditionExpr> {
+    let tokens = scan_condition_tokens(content)?;
+    let mut pos = 0;
+    let mut left = parse_cond_equality(&tokens, &mut pos, scope)?;
+    while tokens.get(pos) == Some(&CondToken::And) {
+        pos += 1;
+        let right = parse_cond_equality(&tokens, &mut pos, scope)?;
+        left = ConditionExpr::Binary(ConditionOp::And, Box::new(left), Box::new(right));
+    }
+    (pos == tokens.len()).then_some(left)
 }
 
 /// Dart `_translateTemplateVariables`.
@@ -297,21 +447,33 @@ fn parse_variables(
     scope
 }
 
-/// Dart `_translateCodeTemplate` (`requiredIf` makes the template
-/// unsupported).
+/// Dart `_translateCodeTemplate`.
 fn parse_code_template(
     node: Option<&YamlNode>,
     scope: &Scope,
     package_name: Option<&str>,
+    can_be_conditionally_required: bool,
 ) -> Result<Option<CodeTemplate>, ()> {
     let Some(node) = node else { return Ok(None) };
-    if map_value(node, "requiredIf").is_some() {
-        return Err(());
-    }
     let Some(template) = string_of(map_value(node, "expression")) else {
         return Err(());
     };
     let scope = parse_variables(map_value(node, "variables"), scope, package_name);
+    let required_if = match map_value(node, "requiredIf") {
+        Some(req_node) => {
+            if !can_be_conditionally_required {
+                return Err(());
+            }
+            let Some(req_str) = string_of(Some(req_node)) else {
+                return Err(());
+            };
+            let Some(cond) = parse_condition(&req_str, &scope) else {
+                return Err(());
+            };
+            Some(cond)
+        }
+        None => None,
+    };
     // Dart `_extractTemplateComponents`.
     let mut parts = Vec::new();
     let mut text_start = 0;
@@ -321,7 +483,7 @@ fn parse_code_template(
             parts.push(TemplatePart::Text(template[text_start..start].to_string()));
         }
         let Some(end) = template[start + 2..].find("%}").map(|e| e + start + 2) else {
-            return Ok(Some(CodeTemplate { parts }));
+            return Ok(Some(CodeTemplate { parts, required_if }));
         };
         let name = template[start + 2..end].trim();
         if let Some((_, g)) = scope.iter().find(|(n, _)| n == name) {
@@ -333,7 +495,7 @@ fn parse_code_template(
     if text_start < template.len() {
         parts.push(TemplatePart::Text(template[text_start..].to_string()));
     }
-    Ok(Some(CodeTemplate { parts }))
+    Ok(Some(CodeTemplate { parts, required_if }))
 }
 
 fn parameter_reference(change: &YamlNode) -> Option<ParameterReference> {
@@ -403,9 +565,20 @@ fn parse_change(
             }
             let is_required = style.starts_with("required_");
             let is_positional = style.ends_with("_positional");
-            let argument_value =
-                parse_code_template(map_value(change, "argumentValue"), scope, package_name)?;
+            let argument_value = parse_code_template(
+                map_value(change, "argumentValue"),
+                scope,
+                package_name,
+                true,
+            )?;
             if is_required && argument_value.is_none() {
+                return Ok(None);
+            }
+            if style != "optional_named"
+                && argument_value
+                    .as_ref()
+                    .is_some_and(|v| v.required_if.is_some())
+            {
                 return Ok(None);
             }
             modifications.push(ParameterModification::Add {
@@ -423,15 +596,44 @@ fn parse_change(
             }
             Ok(None)
         }
+        "changeParameterType" => {
+            if map_value(change, "index").is_some() && map_value(change, "name").is_some() {
+                return Ok(None);
+            }
+            let Some(reference) = parameter_reference(change) else {
+                return Ok(None);
+            };
+            let Some(nullability) = string_of(map_value(change, "nullability")) else {
+                return Ok(None);
+            };
+            if nullability != "non_null" {
+                return Ok(None);
+            }
+            let argument_value = parse_code_template(
+                map_value(change, "argumentValue"),
+                scope,
+                package_name,
+                false,
+            )?;
+            modifications.push(ParameterModification::ChangeType {
+                reference,
+                argument_value,
+            });
+            Ok(None)
+        }
         "addTypeParameter" => {
             let index = map_value(change, "index")
                 .and_then(|i| i.scalar())
                 .and_then(|s| s.to_dart_string().parse::<usize>().ok());
             let name = string_of(map_value(change, "name"));
             let extended_type =
-                parse_code_template(map_value(change, "extends"), scope, package_name)?;
-            let argument_value =
-                parse_code_template(map_value(change, "argumentValue"), scope, package_name)?;
+                parse_code_template(map_value(change, "extends"), scope, package_name, false)?;
+            let argument_value = parse_code_template(
+                map_value(change, "argumentValue"),
+                scope,
+                package_name,
+                false,
+            )?;
             let (Some(index), Some(name), Some(argument_value)) = (index, name, argument_value)
             else {
                 return Ok(None);
@@ -459,7 +661,7 @@ fn parse_change(
             let mut arguments = Vec::new();
             if let Some(list) = map_value(change, "arguments").and_then(|l| l.as_list()) {
                 for a in list {
-                    if let Some(t) = parse_code_template(Some(a), scope, package_name)? {
+                    if let Some(t) = parse_code_template(Some(a), scope, package_name, false)? {
                         arguments.push(t);
                     }
                 }
@@ -998,8 +1200,23 @@ impl CorrectionProducer for DataDrivenFix {
             Replaced(ReplacedByData, NewElement, bool, Vec<CodeTemplate>),
         }
         let transform = &self.transform;
+        let changes: &[Change] = match &transform.changes_selector {
+            ChangesSelector::Unconditional(changes) => changes.as_slice(),
+            ChangesSelector::Conditional(table) => {
+                let context = invocation_of(c.ast, c.node);
+                let Some(changes) = table.iter().find_map(|(cond, changes)| {
+                    (cond.evaluate_bool(c, context) == Some(true)).then_some(changes.as_slice())
+                }) else {
+                    return;
+                };
+                changes
+            }
+        };
+        if changes.is_empty() {
+            return;
+        }
         let mut data: Vec<Data> = Vec::new();
-        for change in &transform.changes {
+        for change in changes {
             match change {
                 Change::Rename(new_name) => {
                     let Some(edit) = rename(c, transform.element.kind, new_name) else {

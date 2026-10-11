@@ -29,8 +29,8 @@ SDK tests, Flutter, `analyzer`, a 1.5 million line application).
 | `dartr analyze` | Same options, formats and exit codes as `dart analyze` |
 | `dartr format` | Same output as `dart format` on the `dart_style` test data and corpora |
 | `dartr fix` | Same output, exit codes and edits as `dart fix` on the fixture and on copies of the corpora; the pubspec fixes (`missing_dependency`) are not ported yet |
-| `dartr language-server` | Diagnostics, outline, closing labels, folding, selection ranges, document symbols, formatting; navigation (definition, type definition, implementation, references, document highlight), hover, signature help, semantic tokens, inlay hints, call and type hierarchy, workspace symbols. completion; code actions (quick fixes, assists, fix all, organize imports, sort members). **Missing:** rename, refactorings, some fixes and assists |
-| Legacy protocol | 56 of 59 requests and 22 of 22 notifications, including errors, hover, navigation, search, completion, quick fixes, assists, refactorings, bulk fixes, Flutter outline and `lsp.handle`. Some refactorings are checked only on a small fixture (see `docs/legacy-protocol.md`) |
+| `dartr language-server` | Diagnostics, outline, closing labels, folding, selection ranges, document symbols, formatting; navigation (definition, type definition, implementation, references, document highlight), hover, signature help, semantic tokens, inlay hints, call and type hierarchy, workspace symbols. completion; code actions (quick fixes, assists, fix all, organize imports, sort members); rename; refactorings (extract method, local variable and widget, inline local and method, convert getter/method, move file); completion in pubspec.yaml, analysis_options.yaml and fix_data.yaml; document colors, document links, code lens, inline values; Flutter outline; files changed on disk are re-analyzed. analyzer plugins (diagnostics, fixes and assists). **Known issue:** an API change in an open file does not update dependent files yet |
+| Legacy protocol | All 59 requests and 22 notifications of the protocol, including errors, hover, navigation, search, completion, quick fixes, assists, refactorings, bulk fixes, Flutter outline and `lsp.handle` |
 
 `docs/PLAN.md` has the plan and `docs/TIMELINE.md` the project history. This is
 early software: if dartr and `dart analyze` differ, dartr is wrong. Please report it
@@ -122,11 +122,13 @@ Open an issue at <https://github.com/orestesgaolin/dartr/issues> with:
 
 ## Known limitations
 
-- Language server: no rename or refactorings yet, and some quick fixes and assists are missing. Files that change
-  on disk are not watched yet.
+- Language server: an API change in an open file (for example renaming a public method) does not
+  update the diagnostics of dependent files yet. Extract/inline refactorings and move file are missing.
+  Hover and completion are slower than in Dart (tens to hundreds of ms), and the first references
+  search on a large package is slow.
 - Legacy analysis server protocol: partial.
-- Cold analysis of a large package can be slower than `dart analyze` today (resolved
-  lints, search index). See the benchmarks.
+- Memory use is about 3 times Dart's after the first analysis of a package. There is no disk
+  cache yet.
 - macOS arm64 and Linux x86_64 only. No Windows or Intel macOS builds.
 
 ## Benchmarks
@@ -151,9 +153,9 @@ xychart-beta horizontal
     title "Large projects: wall time (s), lower is better"
     x-axis ["app, dart warm", "app, dart empty", "app, dartr", "flutter, dart warm", "flutter, dart empty", "flutter, dartr"]
     y-axis "seconds" 0 --> 100
-    bar [78.8, -100, -100, 4.3, -100, -100]
-    bar [-100, 97.1, -100, -100, 28, -100]
-    bar [-100, -100, 24.9, -100, -100, 7.4]
+    bar [70.3, -100, -100, 3.7, -100, -100]
+    bar [-100, 95.1, -100, -100, 19.2, -100]
+    bar [-100, -100, 17.9, -100, -100, 3]
 ```
 
 ```mermaid
@@ -169,10 +171,10 @@ xychart-beta horizontal
     %% -100 = no bar: one series per measurement gives each its own color
     title "Smaller packages: wall time (s), lower is better"
     x-axis ["analyzer, dart warm", "analyzer, dart empty", "analyzer, dartr", "flutter_tools, dart warm", "flutter_tools, dart empty", "flutter_tools, dartr"]
-    y-axis "seconds" 0 --> 10
-    bar [3.3, -100, -100, 2.7, -100, -100]
-    bar [-100, 8.7, -100, -100, 9.5, -100]
-    bar [-100, -100, 1.4, -100, -100, 3.7]
+    y-axis "seconds" 0 --> 8
+    bar [3.5, -100, -100, 2, -100, -100]
+    bar [-100, 6.6, -100, -100, 7.5, -100]
+    bar [-100, -100, 0.86, -100, -100, 0.8]
 ```
 
 Dark blue: `dart analyze` with a warm cache. Light blue: `dart analyze` with an empty cache.
@@ -181,21 +183,20 @@ analyzer plugins).
 
 | project | Dart lines | `dart analyze`, warm cache | `dart analyze`, empty cache | `dartr analyze` |
 |---|---|---|---|---|
-| application (pub workspace, analyzer plugins) | 1,559,637 | 78.8 s (57.1 to 93.5) | 97.1 s | 24.9 s |
-| Flutter `packages/flutter` | 1,309,663 | 4.3 s | 28.0 s | 7.4 s |
-| `analyzer` 9.0.0 (pub) | 909,249 | 3.3 s (2.3 to 5.0) | 8.7 s | 1.4 s |
-| `flutter_tools` | 455,099 | 2.7 s | 9.5 s | 3.7 s |
+| application (pub workspace, analyzer plugins) | 1,559,637 | 70.3 s (60.3 to 87.4) | 95.1 s | 17.9 s |
+| Flutter `packages/flutter` | 1,309,663 | 3.7 s (3.2 to 4.2) | 19.2 s | 3.0 s |
+| `analyzer` 9.0.0 (pub) | 909,249 | 3.5 s (2.8 to 4.3) | 6.6 s | 0.86 s |
+| `flutter_tools` | 455,099 | 2.0 s (1.3 to 2.4) | 7.5 s | 0.80 s |
 
-dartr is faster than Dart with an empty cache on all four projects. With a warm Dart cache, dartr
-is faster on the application and on `analyzer`, and slower on Flutter and `flutter_tools`. dartr
-also uses much more CPU time than wall time, mostly system time (39 s on Flutter in a 7.4 s run).
-That is the current optimization target.
+dartr is faster than `dart analyze` on all four projects, with or without Dart's cache. Most of the
+speed comes from analyzing files in parallel: on one thread dartr does about as much work as Dart (see
+the thread-scaling section in [docs/BENCHMARKS.md](docs/BENCHMARKS.md)). dartr uses more CPU time
+in total (for example 21.5 s of user time on Flutter in a 3.0 s run).
 
-**Caveat:** measured on 2026-10-10 between 19:45 and 20:30 with `hyperfine` (1 warm-up run, 3
-measured runs) on an Apple M5 Pro with 15 cores, while build agents used the machine (load average
-8 to 18). Dart's times varied more than dartr's. A comparison on an idle machine is still to come.
-To repeat the measurement: `bench/compare.sh` (`COLD=1` adds the empty-cache runs). Details and
-earlier measurements: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+**Method:** measured on 2026-10-11 between 03:00 and 03:35 with `hyperfine` (1 warm-up run, 3 measured
+runs) on an Apple M5 Pro with 15 cores, with no builds running (load average 2 to 4). Dart's warm-cache
+times vary more than dartr's. To repeat it: `bench/compare.sh` (`COLD=1` adds the empty-cache runs).
+The language server (editor use) is measured separately with `bench/lsp_bench.py`.
 
 ## License
 

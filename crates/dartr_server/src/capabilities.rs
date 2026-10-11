@@ -116,6 +116,19 @@ impl ClientCapabilities {
             .and_then(Value::as_array)
             .is_some_and(|list| list.iter().any(|v| v.as_str() == Some("dart.goToLocation")))
     }
+
+    /// Dart `LspClientCapabilities.supportedInteractiveFormInputTypes`:
+    /// `experimental.interactiveResolve.inputTypes`.
+    pub fn supported_interactive_form_input_types(&self) -> Vec<String> {
+        self.get(&["experimental", "interactiveResolve", "inputTypes"])
+            .and_then(Value::as_array)
+            .map(|list| {
+                list.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
 }
 
 /// A Dart LSP feature (Dart `FeatureRegistration`).
@@ -217,7 +230,7 @@ pub const DART_FEATURES: &[Feature] = &[
         Some("typeHierarchyProvider"),
         true,
     ),
-    feature("WillRenameFilesRegistrations", None, false),
+    feature("WillRenameFilesRegistrations", None, true),
     feature("WorkspaceDidChangeConfigurationRegistrations", None, true),
     feature(
         "WorkspaceSymbolRegistrations",
@@ -434,16 +447,25 @@ pub fn server_capabilities(client: &ClientCapabilities, config: &LspClientConfig
     if !client.text_document_dynamic("selectionRange") {
         c.insert("selectionRangeProvider".into(), json!(true));
     }
-    // `fileOperations` is only for `willRenameFiles`, which dartr does not
-    // implement.
-    c.insert(
-        "workspace".into(),
-        json!({"workspaceFolders": {"supported": true, "changeNotifications": true}}),
+    let mut workspace = Map::new();
+    workspace.insert(
+        "workspaceFolders".into(),
+        json!({"supported": true, "changeNotifications": true}),
     );
+    if config.global().update_imports_on_rename() && !client.workspace_dynamic("fileOperations") {
+        workspace.insert(
+            "fileOperations".into(),
+            json!({"willRename": file_operation_registration_options()}),
+        );
+    }
+    c.insert("workspace".into(), Value::Object(workspace));
     c.insert(
         "experimental".into(),
         json!({
             "updateDiagnosticInformation": {},
+            "interactiveResolveProvider": {
+                "kinds": ["command"],
+            },
             "textDocument": {
                 "super": {},
                 "augmented": {},
@@ -452,6 +474,15 @@ pub fn server_capabilities(client: &ClientCapabilities, config: &LspClientConfig
         }),
     );
     Value::Object(c)
+}
+
+fn file_operation_registration_options() -> Value {
+    json!({
+        "filters": [
+            {"pattern": {"glob": "**/*.dart", "matches": "file"}, "scheme": "file"},
+            {"pattern": {"glob": "**/", "matches": "folder"}, "scheme": "file"},
+        ]
+    })
 }
 
 /// A dynamic registration: the method and its options.
@@ -657,6 +688,12 @@ pub fn dynamic_registrations(
         out.push(reg(
             "textDocument/prepareTypeHierarchy",
             json!({"documentSelector": dart_files()}),
+        ));
+    }
+    if config.global().update_imports_on_rename() && client.workspace_dynamic("fileOperations") {
+        out.push(reg(
+            "workspace/willRenameFiles",
+            file_operation_registration_options(),
         ));
     }
     if client.workspace_dynamic("didChangeConfiguration") {

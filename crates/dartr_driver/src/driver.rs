@@ -10,10 +10,11 @@
 //! are linked (a DAG scheduler on rayon), and each linked cycle is
 //! published into the [`WorldSnapshot`].
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex, RwLock, Weak};
 
-use dartr_element::{Generation, WorldSnapshot};
+use dartr_element::{Generation, StoreId, WorldSnapshot};
 use dartr_link::input::{
     LinkCombinator, LinkDirectiveUri, LinkExport, LinkImport, LinkImportPrefix, LinkLibraryInput,
     LinkPart, LinkPartUri, LinkUnitInput,
@@ -21,9 +22,67 @@ use dartr_link::input::{
 use dartr_link::link::{ConstExprs, LinkedCycle, LinkedLibraries, LinkedLibrary, link_cycle};
 use indexmap::{IndexMap, IndexSet};
 
-use crate::file_state::{DirectiveUri, FileId, FileSystemState};
+use crate::file_state::{DirectiveUri, FileId, FileSystemState, RefreshData, SdkFileKey};
 use crate::library_graph::{CycleId, LibraryGraph};
 use crate::unlinked_data::UnlinkedCombinator;
+
+/// Cache key for a linked SDK (`dart:*`) library cycle within a [`Generation`].
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub(crate) struct SdkCycleKey {
+    pub sdk_path: String,
+    pub api_signature: String,
+    pub manifest_signature: String,
+    pub non_transitive_api_signature: String,
+    pub unlinked_signatures: Vec<[u8; 16]>,
+    pub dependency_stores: Vec<StoreId>,
+}
+
+/// Shared cache of parsed SDK (`dart:*`) files and linked SDK library cycles
+/// across all [`Driver`]s that share the same [`Generation`].
+#[derive(Default)]
+pub(crate) struct SdkCache {
+    files: RwLock<HashMap<SdkFileKey, Arc<RefreshData>>>,
+    cycles: RwLock<HashMap<SdkCycleKey, Arc<LinkedCycle>>>,
+}
+
+impl SdkCache {
+    pub(crate) fn for_generation(generation: &Arc<Generation>) -> Arc<SdkCache> {
+        static TABLE: LazyLock<Mutex<Vec<(Weak<Generation>, Arc<SdkCache>)>>> =
+            LazyLock::new(|| Mutex::new(Vec::new()));
+        let mut table = TABLE.lock().unwrap();
+        table.retain(|(weak, _)| weak.strong_count() > 0);
+        for (weak, cache) in table.iter() {
+            if let Some(existing) = weak.upgrade()
+                && Arc::ptr_eq(&existing, generation)
+            {
+                return cache.clone();
+            }
+        }
+        let cache = Arc::new(SdkCache::default());
+        table.push((Arc::downgrade(generation), cache.clone()));
+        cache
+    }
+
+    pub(crate) fn get_file(&self, key: &SdkFileKey) -> Option<Arc<RefreshData>> {
+        self.files.read().unwrap().get(key).cloned()
+    }
+
+    pub(crate) fn insert_file(&self, key: SdkFileKey, data: Arc<RefreshData>) {
+        self.files.write().unwrap().insert(key, data);
+    }
+
+    pub(crate) fn invalidate_file(&self, path: &str) {
+        self.files.write().unwrap().retain(|k, _| &*k.path != path);
+    }
+
+    pub(crate) fn get_cycle(&self, key: &SdkCycleKey) -> Option<Arc<LinkedCycle>> {
+        self.cycles.read().unwrap().get(key).cloned()
+    }
+
+    pub(crate) fn insert_cycle(&self, key: SdkCycleKey, cycle: Arc<LinkedCycle>) {
+        self.cycles.write().unwrap().insert(key, cycle);
+    }
+}
 
 /// The libraries linked so far, by URI (lookups only).
 #[derive(Clone, Default)]
@@ -66,10 +125,13 @@ pub struct Driver {
     pub graph: LibraryGraph,
     pub state: LinkState,
     pub cycles: IndexMap<CycleId, Arc<LinkedCycle>>,
+    sdk_cache: Arc<SdkCache>,
 }
 
 impl Driver {
-    pub fn new(fs: FileSystemState, generation: Arc<Generation>) -> Driver {
+    pub fn new(mut fs: FileSystemState, generation: Arc<Generation>) -> Driver {
+        let sdk_cache = SdkCache::for_generation(&generation);
+        fs.sdk_cache = Some(sdk_cache.clone());
         Driver {
             fs,
             graph: LibraryGraph::default(),
@@ -78,7 +140,74 @@ impl Driver {
                 registry: LinkedRegistry::default(),
             },
             cycles: IndexMap::new(),
+            sdk_cache,
         }
+    }
+
+    /// Whether [c] is an SDK (`dart:*`) cycle whose transitive dependencies
+    /// are also SDK cycles.
+    fn is_sdk_cycle(&self, c: CycleId) -> bool {
+        if self.fs.source_factory.sdk.is_none() {
+            return false;
+        }
+        let cycle = self.graph.cycle(c);
+        !cycle.libraries.is_empty()
+            && cycle
+                .libraries
+                .iter()
+                .all(|&l| self.fs.file(l).uri_properties.is_dart)
+            && cycle
+                .direct_dependencies
+                .iter()
+                .all(|&d| self.is_sdk_cycle(d))
+    }
+
+    /// Computes the [`SdkCycleKey`] of an SDK cycle whose direct dependencies
+    /// are already linked in [`Self::cycles`].
+    fn sdk_cycle_key(&self, c: CycleId) -> SdkCycleKey {
+        let sdk_path = self
+            .fs
+            .source_factory
+            .sdk
+            .as_ref()
+            .map(|s| s.path().to_string())
+            .unwrap_or_default();
+        let cycle = self.graph.cycle(c);
+        let mut unlinked_signatures = Vec::new();
+        for &l in &cycle.libraries {
+            for f in self.fs.library_files(l) {
+                unlinked_signatures.push(self.fs.file(f).c().unlinked_signature);
+            }
+        }
+        let dependency_stores = cycle
+            .direct_dependencies
+            .iter()
+            .map(|d| self.cycles[d].store.id)
+            .collect();
+        SdkCycleKey {
+            sdk_path,
+            api_signature: cycle.api_signature.clone(),
+            manifest_signature: cycle.manifest_signature.clone(),
+            non_transitive_api_signature: cycle.non_transitive_api_signature.clone(),
+            unlinked_signatures,
+            dependency_stores,
+        }
+    }
+
+    fn publish_linked_cycle(&mut self, c: CycleId, linked: Arc<LinkedCycle>) {
+        let libraries = linked.libraries.iter().map(|l| (l.uri.clone(), l.element));
+        self.state.world = self.state.world.with_store(linked.store.clone(), libraries);
+        for l in &linked.libraries {
+            self.state
+                .registry
+                .libraries
+                .insert(l.uri.clone(), l.clone());
+        }
+        self.state
+            .registry
+            .const_exprs
+            .insert(linked.store.id.raw(), linked.const_exprs.clone());
+        self.cycles.insert(c, linked);
     }
 
     /// Links the cycles of [libraries] and of everything they depend on.
@@ -115,6 +244,28 @@ impl Driver {
         for &t in &targets {
             visit(&self.graph, &self.cycles, t, &mut order);
         }
+        if order.is_empty() {
+            return;
+        }
+        let mut remaining_order: IndexSet<CycleId> = IndexSet::new();
+        for &c in &order {
+            if self.is_sdk_cycle(c)
+                && self
+                    .graph
+                    .cycle(c)
+                    .direct_dependencies
+                    .iter()
+                    .all(|d| self.cycles.contains_key(d))
+            {
+                let key = self.sdk_cycle_key(c);
+                if let Some(linked) = self.sdk_cache.get_cycle(&key) {
+                    self.publish_linked_cycle(c, linked);
+                    continue;
+                }
+            }
+            remaining_order.insert(c);
+        }
+        let order = remaining_order;
         if order.is_empty() {
             return;
         }
@@ -164,7 +315,13 @@ impl Driver {
         let (state, results) = shared.into_inner().unwrap();
         self.state = state;
         for (i, result) in results.into_iter().enumerate() {
-            self.cycles.insert(order[i], result.expect("cycle linked"));
+            let c = order[i];
+            let linked = result.expect("cycle linked");
+            self.cycles.insert(c, linked.clone());
+            if self.is_sdk_cycle(c) {
+                let key = self.sdk_cycle_key(c);
+                self.sdk_cache.insert_cycle(key, linked);
+            }
         }
     }
 
@@ -453,5 +610,69 @@ impl<'a> Job<'a> {
                 }
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::file_state::{FileConfig, SourceFactory};
+    use crate::uri::Uri;
+    use dartr_parser::experimental_flags::ExperimentalFlag;
+    use dartr_project::package_config::Packages;
+    use dartr_project::{DartSdk, Workspace};
+
+    #[test]
+    fn shares_sdk_cycles_across_drivers_with_same_sdk_and_options() {
+        let Some(sdk) = DartSdk::find() else {
+            return;
+        };
+        let generation = Arc::new(Generation::new(0));
+        let make_driver = |experiments: Vec<ExperimentalFlag>| {
+            let sf = SourceFactory {
+                workspace: Workspace::basic(Packages::empty(), "/tmp"),
+                sdk: Some(sdk.clone()),
+            };
+            let fs = FileSystemState::new(
+                sf,
+                Box::new(move |_, _| FileConfig {
+                    package_language_version: (3, 7),
+                    experiments: experiments.clone(),
+                }),
+            );
+            Driver::new(fs, generation.clone())
+        };
+
+        let core_uri = Uri::try_parse("dart:core").unwrap();
+        let mut d1 = make_driver(Vec::new());
+        let c1 = d1.fs.get_file_for_uri(&core_uri).unwrap();
+        d1.fs.discover();
+        d1.link_libraries(&[c1]);
+
+        let mut d2 = make_driver(Vec::new());
+        let c2 = d2.fs.get_file_for_uri(&core_uri).unwrap();
+        d2.fs.discover();
+        d2.link_libraries(&[c2]);
+
+        // ParsedUnit and LinkedCycle for dart:core are shared by pointer when SDK and options match.
+        assert!(Arc::ptr_eq(
+            &d1.fs.file(c1).c().parsed,
+            &d2.fs.file(c2).c().parsed
+        ));
+        let cycle1 = d1.graph.cycle_of_library[&c1];
+        let cycle2 = d2.graph.cycle_of_library[&c2];
+        assert!(Arc::ptr_eq(&d1.cycles[&cycle1], &d2.cycles[&cycle2]));
+        assert_eq!(
+            d1.state.world.libraries["dart:core"],
+            d2.state.world.libraries["dart:core"]
+        );
+
+        // Different experiment flags produce a distinct linked cycle.
+        let mut d3 = make_driver(vec![ExperimentalFlag::Macros]);
+        let c3 = d3.fs.get_file_for_uri(&core_uri).unwrap();
+        d3.fs.discover();
+        d3.link_libraries(&[c3]);
+        let cycle3 = d3.graph.cycle_of_library[&c3];
+        assert!(!Arc::ptr_eq(&d1.cycles[&cycle1], &d3.cycles[&cycle3]));
     }
 }
