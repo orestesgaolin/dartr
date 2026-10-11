@@ -83,6 +83,7 @@ pub mod error_handler_verifier;
 pub mod inference_error;
 pub mod language_version_override_verifier;
 pub mod nullable_dereference_verifier;
+pub mod sdk_constraint_verifier;
 pub mod unicode_text_verifier;
 
 /// What a verifier reads and where it reports (Dart: the resolved AST, the

@@ -162,10 +162,26 @@ pub fn visit_super_constructor_invocation(
         rv.set_element(name, Some(element));
     }
     rv.set_element(node, Some(element));
-    // Dart: if the extended type is an undefined name that the library
-    // fragment ignores (`shouldIgnoreUndefinedNamedType`), the arguments are
-    // not resolved to parameters. Not ported (it needs the ignored
-    // undefined names of the library fragment).
+    let mut cur = rv.ast.parent(node);
+    let mut extended_named_type = None;
+    while let Some(p) = cur {
+        if let Some(cls) = rv.ast.cast::<dartr_ast::ClassDeclaration>(p) {
+            extended_named_type = rv.ast[cls].extends_clause.map(|e| rv.ast[e].superclass);
+            break;
+        }
+        cur = rv.ast.parent(p);
+    }
+    if let Some(extended_named_type) = extended_named_type
+        && crate::named_type_resolver::should_ignore_undefined_named_type(
+            &rv.ctx,
+            rv.unit.scopes,
+            rv.unit.fragment,
+            rv.ast,
+            extended_named_type,
+        )
+    {
+        return;
+    }
     let argument_list = rv.ast[node].argument_list;
     // Dart `node.parent.tryCast<ConstructorDeclarationImpl>()?.parameters ??
     // node.parent.tryCast<PrimaryConstructorBodyImpl>()?.declaration

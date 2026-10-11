@@ -1485,7 +1485,10 @@ impl BestPracticesVerifier<'_, '_> {
             return;
         };
         let ctx = self.v.ctx;
-        let parameter_type = corresponding_parameter(&ctx, ast, self.v.tables, node.raw())
+        let parameter_type = ast
+            .parent(node)
+            .filter(|&p| ast.is::<dartr_ast::ArgumentList>(p))
+            .and_then(|_| corresponding_parameter(&ctx, ast, self.v.tables, node.raw()))
             .map(|p| member::type_(&ctx, p.into()));
         let return_type = match parameter_type.map(|t| ctx.ty(t)) {
             Some(TypeKind::Function(f)) => Some(f.ret),

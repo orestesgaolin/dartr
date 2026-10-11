@@ -860,8 +860,30 @@ fn resolve_super_constructors_of(lk: &Linker<'_>, ctx: &Ctx<'_>, interface: EId<
         while let Some(f) = fragment {
             if let Some(&(lib, unit, node)) = lk.core.fragment_nodes.get(&f) {
                 let ast = crate::types::unit_ast(lk, lib as u32, unit as u32);
-                if let Some(c) = ast.cast::<ConstructorDeclaration>(node) {
-                    for &init in ast.list(ast.get(c).initializers) {
+                let initializers = if let Some(c) = ast.cast::<ConstructorDeclaration>(node) {
+                    Some(ast.get(c).initializers)
+                } else if ast.is::<PrimaryConstructorDeclaration>(node) {
+                    ast.parent(node)
+                        .and_then(|parent| {
+                            let members = if let Some(c) = ast.cast::<ClassDeclaration>(parent) {
+                                crate::ast_util::class_body_members(ast, ast.get(c).body)
+                            } else if let Some(e) = ast.cast::<EnumDeclaration>(parent) {
+                                crate::ast_util::enum_body_members(ast, ast.get(e).body)
+                            } else if let Some(e) = ast.cast::<ExtensionTypeDeclaration>(parent) {
+                                crate::ast_util::class_body_members(ast, ast.get(e).body)
+                            } else {
+                                Vec::new()
+                            };
+                            members
+                                .into_iter()
+                                .find_map(|m| ast.cast::<PrimaryConstructorBody>(m.raw()))
+                        })
+                        .map(|body| ast.get(body).initializers)
+                } else {
+                    None
+                };
+                if let Some(initializers) = initializers {
+                    for &init in ast.list(initializers) {
                         if ast.is::<RedirectingConstructorInvocation>(init.raw()) {
                             invokes_default = false;
                         } else if let Some(s) = ast.cast::<SuperConstructorInvocation>(init.raw()) {

@@ -122,8 +122,9 @@ Open an issue at <https://github.com/orestesgaolin/dartr/issues> with:
 
 ## Known limitations
 
-- Language server: hover and completion are slower than in Dart (tens to hundreds of ms), and the
-  first references search on a large package is slow.
+- Language server: startup with analyzer plugins is slow (122 to 134 s on the 1.56 million line
+  application with `jaspr_lints`, Dart: 96 s; 36 s without plugins). Requests (hover, completion,
+  definition, references) are as fast as Dart's or faster (`bench/lsp_bench.py`, 2026-10-11).
 - Memory use is higher than Dart's: peak RSS of `dartr analyze` is 0.8 GB on `analyzer`, 1.6 GB on
   Flutter and 6.0 GB on the 1.56 million line application (after a 40 to 48% reduction). There is no disk
   cache yet.

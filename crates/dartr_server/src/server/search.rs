@@ -235,6 +235,16 @@ pub(crate) struct OwnedFiles {
 }
 
 impl OwnedFiles {
+    pub(crate) fn contains(&self, path: &str) -> bool {
+        self.added.contains_key(path) || self.known.contains_key(path)
+    }
+
+    pub(crate) fn remove(&mut self, path: &str) -> bool {
+        let a = self.added.shift_remove(path).is_some();
+        let k = self.known.shift_remove(path).is_some();
+        a || k
+    }
+
     /// Dart `addKnown`; returns whether the file is new.
     fn add_known(&mut self, path: String, context: usize) -> bool {
         if self.added.contains_key(&path) || self.known.contains_key(&path) {
@@ -277,12 +287,13 @@ impl Server {
                     .into_iter()
                     .filter(|f| f.ends_with(".dart") && !self.is_excluded(f))
                     .collect();
+                let files_set: HashSet<&str> = files.iter().map(String::as_str).collect();
                 // Dart creates the library of a part with a URI before the
                 // part is known (`_newFile` calls `onNewFile` after
                 // `refresh`).
                 for f in &files {
                     if let Some(library) = self.session.part_of_uri_library(index, f) {
-                        if files.contains(&library) {
+                        if files_set.contains(library.as_str()) {
                             self.owned.added.entry(library).or_insert(index);
                         }
                     }
@@ -360,18 +371,85 @@ impl Server {
             .map(|(index, _)| *index)
     }
 
+    /// Populates `self.search_words` in parallel for any files in [owned]
+    /// that do not yet have cached words.
+    fn ensure_search_words(&mut self, owned: &[String]) {
+        let missing: Vec<&String> = owned
+            .iter()
+            .filter(|f| !self.search_words.contains_key(*f))
+            .collect();
+        if missing.len() <= 8 {
+            return;
+        }
+        use rayon::prelude::*;
+        let inputs: Vec<(String, Option<Arc<str>>)> = missing
+            .into_iter()
+            .map(|p| {
+                let content = if let Some(d) = self.overlays.get(p.as_str()) {
+                    Some(Arc::<str>::from(d.content.as_str()))
+                } else {
+                    self.session.file_content(p)
+                };
+                (p.clone(), content)
+            })
+            .collect();
+        let computed: Vec<(String, Arc<HashSet<String>>)> = inputs
+            .into_par_iter()
+            .map(|(p, cached)| {
+                let w = match cached {
+                    Some(c) => words(&c),
+                    None => words(&dartr_project::fs::read_string(&p).unwrap_or_default()),
+                };
+                (p, Arc::new(w))
+            })
+            .collect();
+        for (p, w) in computed {
+            self.search_words.insert(p, w);
+        }
+    }
+
     /// Whether [content] of [path] has one of [names] (Dart
     /// `FileState.referencedNames`); cached until a file changes.
     pub(crate) fn mentions_any(&mut self, path: &str, names: &[String]) -> bool {
-        let words = match self.search_words.get(path) {
-            Some(w) => w.clone(),
-            None => {
-                let w = Arc::new(words(&self.content(path).unwrap_or_default()));
-                self.search_words.insert(path.to_string(), w.clone());
-                w
-            }
+        if let Some(w) = self.search_words.get(path) {
+            return names.iter().any(|n| w.contains(n));
+        }
+        let w = if !self.overlays.contains_key(path)
+            && let Some(c) = self.session.file_content(path)
+        {
+            Arc::new(words(&c))
+        } else {
+            Arc::new(words(&self.content(path).unwrap_or_default()))
         };
-        names.iter().any(|n| words.contains(n))
+        let found = names.iter().any(|n| w.contains(n));
+        self.search_words.insert(path.to_string(), w);
+        found
+    }
+
+    /// Resolves and indexes [paths] in [context] in parallel, updating
+    /// `self.owned` and `self.indexes`.
+    fn ensure_units_indexed(&mut self, context: usize, paths: &[String]) {
+        let Some(collection) = &self.collection else {
+            return;
+        };
+        let (indexed, unit_paths) =
+            self.session
+                .index_files_in(collection, context, paths, &|ctx, unit| {
+                    crate::index::index_unit(ctx, &unit.ast, &unit.tables, unit.unit)
+                });
+        let mut grew = false;
+        for p in unit_paths {
+            grew |= self.owned.add_known(p, context);
+        }
+        for f in self.session.known_files(context) {
+            grew |= self.owned.add_known(f, context);
+        }
+        if grew {
+            self.search_scope = None;
+        }
+        for (key, idx) in indexed {
+            self.indexes.insert(key, Arc::new(idx));
+        }
     }
 
     /// The index of the unit [path] in the driver of [context] (cached
@@ -457,24 +535,36 @@ impl Server {
         let scope = self.search_scope();
         for (context, owned) in scope.iter() {
             let mut files: Vec<String> = Vec::new();
+            let mut in_files: HashSet<String> = HashSet::new();
+            let owned_set: HashSet<&str> = owned.iter().map(String::as_str).collect();
             for lib in &library_files {
-                if lib.first().is_some_and(|f| owned.contains(f)) {
+                if lib.first().is_some_and(|f| owned_set.contains(f.as_str())) {
                     for f in lib {
-                        if !files.contains(f) {
+                        if in_files.insert(f.clone()) {
                             files.push(f.clone());
                         }
                     }
                 }
             }
             if !name.starts_with('_') {
+                self.ensure_search_words(owned);
                 for f in owned {
-                    if files.contains(f) {
+                    if in_files.contains(f.as_str()) {
                         continue;
                     }
                     if self.mentions_any(f, &reference_names) {
+                        in_files.insert(f.clone());
                         files.push(f.clone());
                     }
                 }
+            }
+            let missing: Vec<String> = files
+                .iter()
+                .filter(|f| !self.indexes.contains_key(&(*context, (*f).clone())))
+                .cloned()
+                .collect();
+            if !missing.is_empty() {
+                self.ensure_units_indexed(*context, &missing);
             }
             for f in files {
                 let Some(index) = self.unit_index(&f, *context) else {
@@ -539,7 +629,9 @@ impl Server {
         let mut seen: Vec<(usize, ElementKey)> = interface.identity().into_iter().collect();
         let mut pending = vec![interface.clone()];
         while let Some(element) = pending.pop() {
-            for m in self.search_index(&element, REFERENCES) {
+            let matches = self.search_index(&element, REFERENCES);
+            self.warm_match_libraries(&matches);
+            for m in matches {
                 let Ok(resolved) = self.require_resolved_unit_in(&m.path, Some(m.context)) else {
                     continue;
                 };
@@ -875,6 +967,27 @@ impl Server {
             .collect()
     }
 
+    fn warm_match_libraries(&mut self, matches: &[Match]) {
+        if matches.len() <= 1 {
+            return;
+        }
+        let Some(collection) = &self.collection else {
+            return;
+        };
+        let mut by_context: std::collections::HashMap<usize, Vec<String>> =
+            std::collections::HashMap::new();
+        for m in matches {
+            by_context
+                .entry(m.context)
+                .or_default()
+                .push(m.path.clone());
+        }
+        for (ctx, paths) in by_context {
+            self.session
+                .warm_resolved_libraries_in(collection, ctx, &paths);
+        }
+    }
+
     /// Dart `searchSubtypes`: the matches of [direct_subtypes] with the
     /// relation of each (extends, implements, with, on).
     pub(crate) fn direct_subtypes_with_kinds(
@@ -882,6 +995,7 @@ impl Server {
         class: &SElem,
     ) -> Vec<(SElem, RelationKind)> {
         let matches = self.search_index(class, SUBTYPES);
+        self.warm_match_libraries(&matches);
         let mut out = Vec::new();
         for m in matches {
             let Ok(resolved) = self.require_resolved_unit_in(&m.path, Some(m.context)) else {

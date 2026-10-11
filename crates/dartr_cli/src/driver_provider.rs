@@ -124,12 +124,23 @@ pub struct DriverSession {
     generation: Option<Arc<Generation>>,
     /// By context index of the collection.
     drivers: IndexMap<usize, Driver>,
-    /// Resolved libraries for the navigation features, by the path of the
-    /// defining unit (Dart `AnalysisDriver.getResolvedLibrary` results);
-    /// cleared when a file changes.
+    /// Resolved libraries for the priority (open) files, by the path of the
+    /// defining unit (Dart `AnalysisDriver._priorityResults` /
+    /// `_resolvedLibraryCache`); cleared for a library when it or a
+    /// dependency changes.
     resolved: HashMap<(usize, String), Arc<ResolvedLibraryResult>>,
+    /// The priority (open) file paths (Dart `AnalysisDriver.priorityFiles`).
+    priority_files: std::collections::HashSet<String>,
+    /// Bounded LRU cache of resolved non-priority libraries (Dart
+    /// `AnalysisDriver._resolvedLibraryCache`), invalidated when a library or
+    /// one of its dependencies changes.
+    non_priority_cache: IndexMap<(usize, String), Arc<ResolvedLibraryResult>>,
     /// The contexts whose driver ran `discoverAvailableFiles`.
     discovered: std::collections::HashSet<usize>,
+    /// Cached `(driver_files_len, WorldSnapshot, ordered_known_libraries)` per
+    /// context for `link_known_libraries_ordered`.
+    known_libraries_cache:
+        HashMap<usize, (usize, dartr_element::WorldSnapshot, Arc<Vec<KnownLibrary>>)>,
 }
 
 /// A library file that a driver knows (Dart `FileSystemState.knownFiles`
@@ -219,6 +230,66 @@ enum Outcome {
 }
 
 impl DriverSession {
+    /// Updates the priority (open) files (Dart `AnalysisDriver.priorityFiles=`).
+    /// Evicts cached resolved libraries that no longer contain any priority file.
+    pub fn set_priority_files(&mut self, files: &[String]) {
+        self.priority_files = files.iter().cloned().collect();
+        let priority = &self.priority_files;
+        self.resolved.retain(|_, lib| {
+            lib.library
+                .units
+                .iter()
+                .any(|u| priority.contains(&*u.path))
+        });
+    }
+
+    /// Returns true if any driver already knows [path] with the exact [text].
+    pub fn file_has_content(&self, path: &str, text: &str) -> bool {
+        for driver in self.drivers.values() {
+            if let Some(id) = driver.fs.get_existing_from_path(path)
+                && let Some(content) = driver.fs.file(id).content.as_ref()
+                && content.exists
+                && content.parsed.ast.tokens.source.as_ref() == text
+            {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Returns the cached `LineInfo` of [path] from any driver if present
+    /// (when [expected_content] is `Some`, only if the driver's content matches).
+    pub fn line_info_matching(
+        &self,
+        path: &str,
+        expected_content: Option<&str>,
+    ) -> Option<dartr_syntax::LineInfo> {
+        for driver in self.drivers.values() {
+            if let Some(id) = driver.fs.get_existing_from_path(path)
+                && let Some(content) = driver.fs.file(id).content.as_ref()
+                && content.exists
+                && expected_content
+                    .is_none_or(|exp| content.parsed.ast.tokens.source.as_ref() == exp)
+            {
+                return Some(content.parsed.line_info.clone());
+            }
+        }
+        None
+    }
+
+    /// Returns the cached content of [path] from any driver if present.
+    pub fn file_content(&self, path: &str) -> Option<Arc<str>> {
+        for driver in self.drivers.values() {
+            if let Some(id) = driver.fs.get_existing_from_path(path)
+                && let Some(content) = driver.fs.file(id).content.as_ref()
+                && content.exists
+            {
+                return Some(content.parsed.ast.tokens.source.clone());
+            }
+        }
+        None
+    }
+
     /// The diagnostics of [files], in any order. Files that cannot be read
     /// give no result.
     pub fn diagnostics(
@@ -226,6 +297,26 @@ impl DriverSession {
         collection: &AnalysisContextCollection,
         files: &[AnalyzedFile],
     ) -> Vec<FileDiagnostics> {
+        self.diagnostics_with_index::<
+            (),
+            fn(&dartr_element::Ctx<'_>, &dartr_resolver::library_analyzer::ResolvedUnit),
+        >(collection, files, None)
+            .0
+    }
+
+    /// Like [Self::diagnostics], and optionally computes an index entry `I`
+    /// in parallel on each resolved unit while caching `ResolvedLibraryResult`
+    /// for priority files.
+    pub fn diagnostics_with_index<I, F>(
+        &mut self,
+        collection: &AnalysisContextCollection,
+        files: &[AnalyzedFile],
+        index_fn: Option<&F>,
+    ) -> (Vec<FileDiagnostics>, Vec<((usize, String), I)>)
+    where
+        I: Send,
+        F: Fn(&dartr_element::Ctx<'_>, &dartr_resolver::library_analyzer::ResolvedUnit) -> I + Sync,
+    {
         let generation = self
             .generation
             .get_or_insert_with(|| Arc::new(Generation::new(0)))
@@ -235,12 +326,14 @@ impl DriverSession {
             by_context.entry(f.context).or_default().push(f.clone());
         }
         let mut result = Vec::new();
+        let mut indexed = Vec::new();
         let mut fallback = Vec::new();
         let timings = std::env::var_os("DARTR_TIMINGS").is_some();
         let mut total_discover = std::time::Duration::ZERO;
         let mut total_link = std::time::Duration::ZERO;
         let mut total_resolve = std::time::Duration::ZERO;
         let num_contexts = by_context.len();
+        let priority_files = &self.priority_files;
         for (context, files) in by_context {
             let options = ContextOptions::new(collection, context);
             let mut driver = self.drivers.shift_remove(&context).unwrap_or_else(|| {
@@ -248,11 +341,23 @@ impl DriverSession {
             });
             let outcome = pool().install(|| {
                 catch_unwind(AssertUnwindSafe(|| {
-                    analyze_context(&mut driver, &options, &files)
+                    analyze_context(
+                        context,
+                        &mut driver,
+                        &options,
+                        &files,
+                        priority_files,
+                        index_fn,
+                    )
                 }))
             });
             match outcome {
-                Ok((outcomes, (t_discover, t_link, t_resolve))) => {
+                Ok((
+                    outcomes,
+                    priority_resolved,
+                    context_indexed,
+                    (t_discover, t_link, t_resolve),
+                )) => {
                     total_discover += t_discover;
                     total_link += t_link;
                     total_resolve += t_resolve;
@@ -272,6 +377,10 @@ impl DriverSession {
                             Outcome::Fallback(f) => fallback.push(f),
                         }
                     }
+                    for (key, entry) in priority_resolved {
+                        self.resolved.insert(key, entry);
+                    }
+                    indexed.extend(context_indexed);
                     self.drivers.insert(context, driver);
                 }
                 Err(e) => {
@@ -309,7 +418,129 @@ impl DriverSession {
         if std::env::var_os("DARTR_MEM_STATS").is_some() {
             self.print_mem_stats("after_diagnostics");
         }
-        result
+        (result, indexed)
+    }
+
+    /// Resolves the unique libraries of [paths] in [context] in parallel and
+    /// computes `index_fn` for every unit without retaining non-priority
+    /// `ResolvedLibraryResult`s in memory. Returns the indexed units and the
+    /// unit paths of the resolved libraries.
+    pub fn index_files_in<I, F>(
+        &mut self,
+        collection: &AnalysisContextCollection,
+        context: usize,
+        paths: &[String],
+        index_fn: &F,
+    ) -> (Vec<((usize, String), I)>, Vec<String>)
+    where
+        I: Send,
+        F: Fn(&dartr_element::Ctx<'_>, &dartr_resolver::library_analyzer::ResolvedUnit) -> I + Sync,
+    {
+        if context >= collection.contexts.len() || paths.is_empty() {
+            return (Vec::new(), Vec::new());
+        }
+        let generation = self
+            .generation
+            .get_or_insert_with(|| Arc::new(Generation::new(0)))
+            .clone();
+        let mut driver = self.drivers.shift_remove(&context).unwrap_or_else(|| {
+            dartr_driver::project::context_driver(collection, context, generation.clone())
+        });
+        let options = ContextOptions::new(collection, context);
+        let outcome = pool().install(|| {
+            catch_unwind(AssertUnwindSafe(|| {
+                let ids: Vec<FileId> = paths
+                    .iter()
+                    .map(|p| driver.fs.get_file_for_path(p))
+                    .collect();
+                driver.fs.discover();
+                let mut library_ids: indexmap::IndexSet<FileId> = indexmap::IndexSet::new();
+                for id in ids {
+                    if !driver.fs.file(id).exists() {
+                        continue;
+                    }
+                    if let Some(lib) = driver.fs.library_of(id) {
+                        library_ids.insert(lib);
+                    }
+                }
+                let library_ids: Vec<FileId> = library_ids.into_iter().collect();
+                if library_ids.is_empty() {
+                    return (Vec::new(), Vec::new());
+                }
+                driver.link_libraries(&library_ids);
+                let unignorable: Vec<(Vec<String>, ResolverOptions)> = library_ids
+                    .iter()
+                    .map(|&l| {
+                        let (settings, opts) = options.for_path(&driver.fs.file(l).path);
+                        let mut names: Vec<String> =
+                            settings.unignorable_names.iter().cloned().collect();
+                        names.sort();
+                        (names, opts)
+                    })
+                    .collect();
+                let jobs: Vec<(FileId, ResolverOptions, &[String])> = library_ids
+                    .iter()
+                    .zip(&unignorable)
+                    .map(|(&l, (names, opts))| (l, *opts, &names[..]))
+                    .collect();
+                let world = driver.state.world.clone();
+                let type_provider = dartr_link::types_builder::world_type_provider(&world);
+                let analyzed = driver.analyze_libraries(&jobs, |_, units, result| {
+                    let Ok(resolved) = result else {
+                        return (Vec::new(), Vec::new());
+                    };
+                    let sink = dartr_element::NoopSink;
+                    let default_features = dartr_element::FeatureSet::default();
+                    let base_ctx = dartr_element::Ctx {
+                        world: &world,
+                        current: None,
+                        local: None,
+                        tp: &type_provider,
+                        features: &default_features,
+                        req: &sink,
+                    };
+                    let features = base_ctx.get(resolved.library).feature_set.clone();
+                    let unit_paths: Vec<String> =
+                        units.iter().map(|u| u.path.to_string()).collect();
+                    let mut out = Vec::with_capacity(resolved.units.len());
+                    for unit in &resolved.units {
+                        let unit_ctx = dartr_element::Ctx {
+                            world: &world,
+                            current: None,
+                            local: Some(&unit.local),
+                            tp: &type_provider,
+                            features: &features,
+                            req: &sink,
+                        };
+                        let idx = index_fn(&unit_ctx, unit);
+                        out.push(((context, unit.path.to_string()), idx));
+                    }
+                    (out, unit_paths)
+                });
+                let mut indexed = Vec::new();
+                let mut unit_paths = Vec::new();
+                for (i, u) in analyzed {
+                    indexed.extend(i);
+                    unit_paths.extend(u);
+                }
+                (indexed, unit_paths)
+            }))
+        });
+        match outcome {
+            Ok(r) => {
+                self.drivers.insert(context, driver);
+                r
+            }
+            Err(e) => {
+                if debug() {
+                    eprintln!(
+                        "dartr: driver panic in context {context}: {}",
+                        panic_message(&*e)
+                    );
+                }
+                (Vec::new(), Vec::new())
+            }
+        }
     }
 
     pub fn print_mem_stats(&self, phase: &str) {
@@ -711,6 +942,30 @@ impl DriverSession {
         if context >= collection.contexts.len() {
             return None;
         }
+        // Fast path: if `path`'s defining library is already cached in
+        // `self.resolved` or `self.non_priority_cache`, return it without
+        // rebuilding `ContextOptions` or walking `discover()`.
+        let key_guess = (context, path.to_string());
+        if let Some(r) = self.resolved.get(&key_guess) {
+            return Some(r.clone());
+        }
+        if let Some(r) = self.non_priority_cache.get(&key_guess) {
+            return Some(r.clone());
+        }
+        if let Some((_, r)) = self
+            .resolved
+            .iter()
+            .find(|((c, _), r)| *c == context && r.library.units.iter().any(|u| &*u.path == path))
+        {
+            return Some(r.clone());
+        }
+        if let Some((_, r)) = self
+            .non_priority_cache
+            .iter()
+            .find(|((c, _), r)| *c == context && r.library.units.iter().any(|u| &*u.path == path))
+        {
+            return Some(r.clone());
+        }
         let generation = self
             .generation
             .get_or_insert_with(|| Arc::new(Generation::new(0)))
@@ -720,10 +975,14 @@ impl DriverSession {
         });
         let options = ContextOptions::new(collection, context);
         let resolved = &mut self.resolved;
+        let priority_files = &self.priority_files;
+        let non_priority_cache = &mut self.non_priority_cache;
         let result = pool().install(|| {
             catch_unwind(AssertUnwindSafe(|| {
                 let id = driver.fs.get_file_for_path(path);
-                driver.fs.discover();
+                if driver.fs.file(id).content.is_none() {
+                    driver.fs.discover();
+                }
                 if !driver.fs.file(id).exists() {
                     return None;
                 }
@@ -731,6 +990,9 @@ impl DriverSession {
                 let library_path = driver.fs.file(library).path.to_string();
                 let key = (context, library_path.clone());
                 if let Some(r) = resolved.get(&key) {
+                    return Some(r.clone());
+                }
+                if let Some(r) = non_priority_cache.get(&key) {
                     return Some(r.clone());
                 }
                 driver.link_libraries(&[library]);
@@ -761,6 +1023,10 @@ impl DriverSession {
                     };
                     ctx.get(library.library).feature_set.clone()
                 };
+                let is_priority = library
+                    .units
+                    .iter()
+                    .any(|u| priority_files.contains(&*u.path));
                 let entry = Arc::new(ResolvedLibraryResult {
                     context,
                     world,
@@ -769,7 +1035,14 @@ impl DriverSession {
                     library,
                     inputs,
                 });
-                resolved.insert(key, entry.clone());
+                if is_priority {
+                    resolved.insert(key, entry.clone());
+                } else {
+                    if non_priority_cache.len() >= 128 && !non_priority_cache.contains_key(&key) {
+                        non_priority_cache.shift_remove_index(0);
+                    }
+                    non_priority_cache.insert(key, entry.clone());
+                }
                 Some(entry)
             }))
         });
@@ -791,6 +1064,152 @@ impl DriverSession {
                 None
             }
         }
+    }
+
+    /// Resolves any libraries of [paths] in [context] that are not yet cached
+    /// in `self.resolved` or `self.non_priority_cache` in parallel, inserting
+    /// them into the cache.
+    pub fn warm_resolved_libraries_in(
+        &mut self,
+        collection: &AnalysisContextCollection,
+        context: usize,
+        paths: &[String],
+    ) {
+        if context >= collection.contexts.len() || paths.len() <= 1 {
+            return;
+        }
+        let missing: Vec<&String> = paths
+            .iter()
+            .filter(|p| {
+                let key = (context, (*p).clone());
+                !self.resolved.contains_key(&key) && !self.non_priority_cache.contains_key(&key)
+            })
+            .collect();
+        if missing.len() <= 1 {
+            return;
+        }
+        let generation = self
+            .generation
+            .get_or_insert_with(|| Arc::new(Generation::new(0)))
+            .clone();
+        let mut driver = self.drivers.shift_remove(&context).unwrap_or_else(|| {
+            dartr_driver::project::context_driver(collection, context, generation.clone())
+        });
+        let options = ContextOptions::new(collection, context);
+        let resolved = &mut self.resolved;
+        let priority_files = &self.priority_files;
+        let non_priority_cache = &mut self.non_priority_cache;
+        let result = pool().install(|| {
+            catch_unwind(AssertUnwindSafe(|| {
+                let mut need_discover = false;
+                let mut ids = Vec::with_capacity(missing.len());
+                for p in &missing {
+                    let id = driver.fs.get_file_for_path(p);
+                    if driver.fs.file(id).content.is_none() {
+                        need_discover = true;
+                    }
+                    ids.push(id);
+                }
+                if need_discover {
+                    driver.fs.discover();
+                }
+                let mut library_ids: indexmap::IndexSet<FileId> = indexmap::IndexSet::new();
+                for id in ids {
+                    if !driver.fs.file(id).exists() {
+                        continue;
+                    }
+                    if let Some(lib) = driver.fs.library_of(id) {
+                        let key = (context, driver.fs.file(lib).path.to_string());
+                        if !resolved.contains_key(&key) && !non_priority_cache.contains_key(&key) {
+                            library_ids.insert(lib);
+                        }
+                    }
+                }
+                let library_ids: Vec<FileId> = library_ids.into_iter().take(128).collect();
+                if library_ids.is_empty() {
+                    return;
+                }
+                driver.link_libraries(&library_ids);
+                let unignorable: Vec<(Vec<String>, ResolverOptions)> = library_ids
+                    .iter()
+                    .map(|&l| {
+                        let (settings, opts) = options.for_path(&driver.fs.file(l).path);
+                        let mut names: Vec<String> =
+                            settings.unignorable_names.iter().cloned().collect();
+                        names.sort();
+                        (names, opts)
+                    })
+                    .collect();
+                let jobs: Vec<(FileId, ResolverOptions, &[String])> = library_ids
+                    .iter()
+                    .zip(&unignorable)
+                    .map(|(&l, (names, opts))| (l, *opts, &names[..]))
+                    .collect();
+                let world = driver.state.world.clone();
+                let out = driver.analyze_libraries(&jobs, |_, units, res| {
+                    res.ok().map(|library| (library, units.to_vec()))
+                });
+                for (lib_id, item) in library_ids.into_iter().zip(out) {
+                    let Some((library, inputs)) = item else {
+                        continue;
+                    };
+                    let library_path = driver.fs.file(lib_id).path.to_string();
+                    let key = (context, library_path);
+                    let type_provider = dartr_link::types_builder::world_type_provider(&world);
+                    let features = {
+                        let sink = dartr_element::NoopSink;
+                        let features = dartr_element::FeatureSet::default();
+                        let ctx = dartr_element::Ctx {
+                            world: &world,
+                            current: None,
+                            local: None,
+                            tp: &type_provider,
+                            features: &features,
+                            req: &sink,
+                        };
+                        ctx.get(library.library).feature_set.clone()
+                    };
+                    let is_priority = library
+                        .units
+                        .iter()
+                        .any(|u| priority_files.contains(&*u.path));
+                    let entry = Arc::new(ResolvedLibraryResult {
+                        context,
+                        world: world.clone(),
+                        type_provider,
+                        features,
+                        library,
+                        inputs,
+                    });
+                    if is_priority {
+                        resolved.insert(key, entry);
+                    } else {
+                        if non_priority_cache.len() >= 128 && !non_priority_cache.contains_key(&key)
+                        {
+                            non_priority_cache.shift_remove_index(0);
+                        }
+                        non_priority_cache.insert(key, entry);
+                    }
+                }
+            }))
+        });
+        if result.is_ok() {
+            self.drivers.insert(context, driver);
+        }
+    }
+
+    /// Returns `(context_index, driver_files_len)` for the context of [path],
+    /// if a driver exists for that context.
+    pub fn context_files_count(
+        &self,
+        collection: &AnalysisContextCollection,
+        path: &str,
+    ) -> Option<(usize, usize)> {
+        let context = collection
+            .context_for(path)
+            .and_then(|c| collection.contexts.iter().position(|x| std::ptr::eq(x, c)))?;
+        let driver = self.drivers.get(&context)?;
+        Some((context, driver.fs.files().len()))
     }
 
     /// The parsed units of all files that the driver of the context of
@@ -885,6 +1304,13 @@ impl DriverSession {
         if context >= collection.contexts.len() {
             return None;
         }
+        if let Some(driver) = self.drivers.get(&context)
+            && self.discovered.contains(&context)
+            && let Some((files_len, world, ordered)) = self.known_libraries_cache.get(&context)
+            && driver.fs.files().len() == *files_len
+        {
+            return Some((world.clone(), (**ordered).clone()));
+        }
         let generation = self
             .generation
             .get_or_insert_with(|| Arc::new(Generation::new(0)))
@@ -961,6 +1387,45 @@ impl DriverSession {
         }
     }
 
+    /// Links all known libraries in [context] and returns the `WorldSnapshot`
+    /// together with the known libraries sorted in `dart_known_order`, caching
+    /// the result across requests until a file's API changes or new files are
+    /// discovered in the driver.
+    pub fn link_known_libraries_ordered(
+        &mut self,
+        collection: &AnalysisContextCollection,
+        context: usize,
+        added_and_available: impl FnOnce(
+            &AnalysisContextCollection,
+            usize,
+        ) -> (Vec<String>, Vec<String>),
+    ) -> Option<(dartr_element::WorldSnapshot, Arc<Vec<KnownLibrary>>)> {
+        if let Some(driver) = self.drivers.get(&context)
+            && self.discovered.contains(&context)
+            && let Some((files_len, world, ordered)) = self.known_libraries_cache.get(&context)
+            && driver.fs.files().len() == *files_len
+        {
+            return Some((world.clone(), ordered.clone()));
+        }
+        let (world, mut libraries) = self.link_known_libraries(collection, context)?;
+        let (added, available) = added_and_available(collection, context);
+        let order = self.dart_known_order(context, &added, &available);
+        let rank: HashMap<&str, usize> = order
+            .iter()
+            .enumerate()
+            .map(|(i, p)| (p.as_str(), i))
+            .collect();
+        libraries.sort_by_key(|l| rank.get(l.path.as_str()).copied().unwrap_or(usize::MAX));
+        let ordered = Arc::new(libraries);
+        if let Some(driver) = self.drivers.get(&context) {
+            self.known_libraries_cache.insert(
+                context,
+                (driver.fs.files().len(), world.clone(), ordered.clone()),
+            );
+        }
+        Some((world, ordered))
+    }
+
     /// Dart `VariableElement.computeConstantValue()` of [elements] with the
     /// driver of [context] (the units of other libraries are resolved on
     /// demand), each mapped with [f]; `None` for a variable without a valid
@@ -1028,6 +1493,8 @@ impl DriverSession {
     ) {
         if self.linked_library_in(collection, context, path).is_some() {
             self.resolved.retain(|(c, _), _| *c != context);
+            self.non_priority_cache.retain(|(c, _), _| *c != context);
+            self.known_libraries_cache.remove(&context);
         }
     }
 
@@ -1148,22 +1615,25 @@ impl DriverSession {
     /// of the units of the libraries to analyze again.
     pub fn change_file(&mut self, path: &str) -> Vec<String> {
         let mut result: Vec<String> = Vec::new();
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
         for (&context, driver) in self.drivers.iter_mut() {
             if driver.fs.get_existing_from_path(path).is_none() {
                 continue;
             }
             let change = driver.change_file(path);
             if change.api_changed {
-                self.resolved.retain(|&(ctx, _), _| ctx != context);
+                self.known_libraries_cache.remove(&context);
             }
             for library in change.libraries {
-                // The resolved library is not valid anymore (Dart: the
-                // library signature changed).
-                self.resolved
-                    .remove(&(context, driver.fs.file(library).path.to_string()));
+                // `change.libraries` already contains the changed library and,
+                // when `api_changed` is true, every transitively affected
+                // library in this driver. Evict only those libraries.
+                let lib_key = (context, driver.fs.file(library).path.to_string());
+                self.resolved.remove(&lib_key);
+                self.non_priority_cache.shift_remove(&lib_key);
                 for unit in driver.fs.library_file_kinds(library) {
                     let p = driver.fs.file(unit).path.to_string();
-                    if !result.contains(&p) {
+                    if seen.insert(p.clone()) {
                         result.push(p);
                     }
                 }
@@ -1174,18 +1644,27 @@ impl DriverSession {
 }
 
 /// Analyzes the requested [files] of one context with its [driver].
-fn analyze_context(
+fn analyze_context<I, F>(
+    context: usize,
     driver: &mut Driver,
     options: &ContextOptions,
     files: &[AnalyzedFile],
+    priority_files: &std::collections::HashSet<String>,
+    index_fn: Option<&F>,
 ) -> (
     Vec<Outcome>,
+    Vec<((usize, String), Arc<ResolvedLibraryResult>)>,
+    Vec<((usize, String), I)>,
     (
         std::time::Duration,
         std::time::Duration,
         std::time::Duration,
     ),
-) {
+)
+where
+    I: Send,
+    F: Fn(&dartr_element::Ctx<'_>, &dartr_resolver::library_analyzer::ResolvedUnit) -> I + Sync,
+{
     let t0 = std::time::Instant::now();
     let ids: Vec<FileId> = files
         .iter()
@@ -1260,12 +1739,21 @@ fn analyze_context(
             (l, pkg_cache.for_defining_path(path))
         })
         .collect();
+    let world_and_tp = if index_fn.is_some() || !priority_files.is_empty() {
+        let world = driver.state.world.clone();
+        let tp = dartr_link::types_builder::world_type_provider(&world);
+        Some((world, tp))
+    } else {
+        None
+    };
     let requested = &requested;
     let libraries = &libraries;
     let pkg_infos = &pkg_infos;
+    let world_and_tp = world_and_tp.as_ref();
     let t_before_resolve = t0.elapsed();
     let analyzed = driver.analyze_libraries_with_lints(&jobs, |library, units, result, lints| {
         library_outcomes(
+            context,
             options,
             &libraries[&library],
             requested,
@@ -1273,15 +1761,35 @@ fn analyze_context(
             result,
             lints,
             pkg_infos.get(&library).map(|p| &**p),
+            priority_files,
+            world_and_tp,
+            index_fn,
         )
     });
     let t_resolve = t0.elapsed() - t_before_resolve;
-    outcomes.extend(analyzed.into_iter().flatten());
-    (outcomes, (t_discover, t_link, t_resolve))
+    let mut priority_resolved = Vec::new();
+    let mut indexed = Vec::new();
+    for (lib_outcomes, prio_lib, unit_indexes) in analyzed {
+        outcomes.extend(lib_outcomes);
+        if let Some(p) = prio_lib {
+            priority_resolved.push(p);
+        }
+        indexed.extend(unit_indexes);
+    }
+    (
+        outcomes,
+        priority_resolved,
+        indexed,
+        (t_discover, t_link, t_resolve),
+    )
 }
 
-/// The diagnostics of the [wanted] units of one analyzed library.
-fn library_outcomes(
+/// The diagnostics of the [wanted] units of one analyzed library, plus
+/// optional cached `ResolvedLibraryResult` (when a unit is in `priority_files`)
+/// and per-unit index entries.
+#[allow(clippy::too_many_arguments)]
+fn library_outcomes<I, F>(
+    context: usize,
     options: &ContextOptions,
     wanted: &[FileId],
     requested: &HashMap<FileId, &AnalyzedFile>,
@@ -1289,12 +1797,27 @@ fn library_outcomes(
     result: Result<ResolvedLibrary, String>,
     resolved_lints: Vec<Vec<Diagnostic>>,
     package_info: Option<&dartr_lints::LintPackageInfo>,
-) -> Vec<Outcome> {
+    priority_files: &std::collections::HashSet<String>,
+    world_and_tp: Option<&(dartr_element::WorldSnapshot, dartr_element::TypeProvider)>,
+    index_fn: Option<&F>,
+) -> (
+    Vec<Outcome>,
+    Option<((usize, String), Arc<ResolvedLibraryResult>)>,
+    Vec<((usize, String), I)>,
+)
+where
+    I: Send,
+    F: Fn(&dartr_element::Ctx<'_>, &dartr_resolver::library_analyzer::ResolvedUnit) -> I + Sync,
+{
     let fallback = || {
-        wanted
-            .iter()
-            .map(|id| Outcome::Fallback(requested[id].clone()))
-            .collect()
+        (
+            wanted
+                .iter()
+                .map(|id| Outcome::Fallback(requested[id].clone()))
+                .collect(),
+            None,
+            Vec::new(),
+        )
     };
     let Some(first) = units.first() else {
         return fallback();
@@ -1308,6 +1831,40 @@ fn library_outcomes(
             return fallback();
         }
     };
+    let keep_priority =
+        !priority_files.is_empty() && units.iter().any(|u| priority_files.contains(&*u.path));
+    let mut unit_indexes = Vec::new();
+    let mut features_opt = None;
+    if let Some((world, tp)) = world_and_tp
+        && (keep_priority || index_fn.is_some())
+    {
+        let sink = dartr_element::NoopSink;
+        let default_features = dartr_element::FeatureSet::default();
+        let base_ctx = dartr_element::Ctx {
+            world,
+            current: None,
+            local: None,
+            tp,
+            features: &default_features,
+            req: &sink,
+        };
+        let features = base_ctx.get(resolved.library).feature_set.clone();
+        if let Some(f) = index_fn {
+            unit_indexes.reserve(resolved.units.len());
+            for unit in &resolved.units {
+                let unit_ctx = dartr_element::Ctx {
+                    world,
+                    current: None,
+                    local: Some(&unit.local),
+                    tp,
+                    features: &features,
+                    req: &sink,
+                };
+                unit_indexes.push(((context, unit.path.to_string()), f(&unit_ctx, unit)));
+            }
+        }
+        features_opt = Some(features);
+    }
     let (library_settings, _) = options.for_path(&first.path);
     let parsed_rules = dartr_lints::rules::parsed_rules();
     let parsed_lint_rules: Vec<&str> = library_settings
@@ -1351,20 +1908,42 @@ fn library_outcomes(
         }
         let parsed = &units[index].parsed;
         let (settings, _) = options.for_path(&file.path);
-        outcomes.push(Outcome::Done(finish_file(
-            &file.path,
-            &parsed.ast.tokens.source,
-            parsed,
+        let diags = if keep_priority {
+            [unit.diagnostics.clone(), unit.ignored_diagnostics.clone()].concat()
+        } else {
             [
                 std::mem::take(&mut unit.diagnostics),
                 std::mem::take(&mut unit.ignored_diagnostics),
             ]
-            .concat(),
+            .concat()
+        };
+        outcomes.push(Outcome::Done(finish_file(
+            &file.path,
+            &parsed.ast.tokens.source,
+            parsed,
+            diags,
             lints.get(index).cloned().unwrap_or_default(),
             settings,
         )));
     }
-    outcomes
+    let priority_entry = if keep_priority
+        && let Some((world, _)) = world_and_tp
+        && let Some(features) = features_opt
+    {
+        let key = (context, first.path.to_string());
+        let entry = Arc::new(ResolvedLibraryResult {
+            context,
+            world: world.clone(),
+            type_provider: dartr_link::types_builder::world_type_provider(world),
+            features,
+            library: resolved,
+            inputs: units.to_vec(),
+        });
+        Some((key, entry))
+    } else {
+        None
+    };
+    (outcomes, priority_entry, unit_indexes)
 }
 
 fn panic_message(e: &(dyn std::any::Any + Send)) -> String {

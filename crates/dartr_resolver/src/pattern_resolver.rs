@@ -569,26 +569,18 @@ fn infer_type_arguments(
         rv.ast.offset(error_node) as usize,
         rv.ast.length(error_node) as usize,
     );
-    let mut reported = Vec::new();
-    let result = {
-        let mut listener = |d: dartr_diagnostics::Diagnostic| reported.push(d);
-        let mut reporter = dartr_diagnostics::DiagnosticReporter::new(&mut listener);
-        let mut inferrer = GenericInferrer::new(
-            rv.type_system,
-            type_parameters,
-            Some(&mut reporter),
-            Some(entity),
-            flags,
-            rv.flow_analysis.type_operations,
-            None,
-        );
-        inferrer.constrain_return_type(declared_type, context_type, None);
-        inferrer.choose_final_types()
-    };
+    let mut inferrer = GenericInferrer::new(
+        rv.type_system,
+        type_parameters,
+        None,
+        Some(entity),
+        flags,
+        rv.flow_analysis.type_operations,
+        None,
+    );
+    inferrer.constrain_return_type(declared_type, context_type, None);
+    let result = inferrer.choose_final_types();
     rv.flush_type_analyzer_errors();
-    if rv.lock_level == 0 {
-        rv.diagnostics.extend(reported);
-    }
     result
 }
 

@@ -498,6 +498,7 @@ fn compute_diagnostics(
             imports_verifier::verify(v, &imports_tracking);
         }
         unused_local_elements_verifier::verify(v, &used);
+        sdk_constraint_verifier::verify(v);
     });
 
     // Dart `_checkForInconsistentLanguageVersionOverride`.

@@ -230,15 +230,28 @@ pub struct Server {
     /// The analysis drivers of the contexts of [Self::collection] (full
     /// diagnostics; design §4.2 invalidation on file changes).
     session: DriverSession,
-    /// The search index of each unit (`textDocument/references`), until a
-    /// file changes.
+    /// The search index of each unit (`textDocument/references`), invalidated
+    /// per affected unit when a file changes.
     indexes: HashMap<(usize, String), std::sync::Arc<crate::index::UnitIndex>>,
-    /// The files of a search by driver, until a file changes.
+    /// The files of a search by driver, invalidated when the set of owned
+    /// files changes.
     search_scope: Option<std::sync::Arc<search::SearchScope>>,
     /// The owner of each file of a search, until the roots change.
     owned: search::OwnedFiles,
-    /// The words of each file of a search, until a file changes.
+    /// The words of each file of a search, invalidated for the edited file
+    /// when a file changes.
     search_words: HashMap<String, std::sync::Arc<HashSet<String>>>,
+    /// Cached `{@template}` entries per file path.
+    file_templates_cache: HashMap<String, Vec<(String, String)>>,
+    /// Cached merged dartdoc templates per context `(files_len, templates)`.
+    dartdoc_templates_cache: HashMap<usize, (usize, std::sync::Arc<HashMap<String, String>>)>,
+    /// Cached filtered `KnownLibrary` list per `(context, package_root, in_lib)`.
+    completion_known_cache: HashMap<
+        (usize, Option<String>, bool),
+        (usize, std::sync::Arc<Vec<crate::completion::KnownLibrary>>),
+    >,
+    /// Cached evaluated color hex strings per `(context, ElementId)`.
+    color_hex_cache: HashMap<(usize, dartr_element::ElementId), Option<String>>,
     /// `DARTR_PARSE_ONLY=1`: the parse-only diagnostics (for comparison).
     parse_only: bool,
     next_request_id: i64,
@@ -361,6 +374,10 @@ impl Server {
             search_scope: None,
             owned: search::OwnedFiles::default(),
             search_words: HashMap::new(),
+            file_templates_cache: HashMap::new(),
+            dartdoc_templates_cache: HashMap::new(),
+            completion_known_cache: HashMap::new(),
+            color_hex_cache: HashMap::new(),
             parse_only: std::env::var_os("DARTR_PARSE_ONLY").is_some(),
             next_request_id: 1,
             pending: HashMap::new(),
@@ -1084,6 +1101,7 @@ impl Server {
         let text = dartr_syntax::strip_bom(text).to_string();
         let disk_content = read_file(&path);
         let changed_from_disk = disk_content.as_deref() != Some(text.as_str());
+        let already_known = !changed_from_disk && self.session.file_has_content(&path, &text);
         dartr_project::fs::set_overlay(&path, Some(text.clone()));
         let version = params
             .pointer("/textDocument/version")
@@ -1096,10 +1114,10 @@ impl Server {
             },
         );
         self.plugins.overlay_added(&path, &text, changed_from_disk);
-        self.file_changed(&path);
         if !self.priority.contains(&path) {
             self.priority.push(path.clone());
             self.plugins.set_priority_files(&self.priority);
+            self.session.set_priority_files(&self.priority);
             // Open files get closing labels and outlines.
             if path.ends_with(".dart") {
                 self.dirty.insert(path.clone());
@@ -1107,6 +1125,11 @@ impl Server {
             if self.workspace_folders.is_empty() {
                 self.roots_dirty = true;
             }
+        }
+        if !already_known {
+            self.file_changed(&path);
+        } else if self.analyzed.contains(&path) || path.ends_with(".dart") {
+            self.dirty.insert(path);
         }
         Ok(())
     }
@@ -1135,8 +1158,12 @@ impl Server {
         dartr_project::fs::set_overlay(&path, Some(new_content.clone()));
         if changed {
             self.plugins.overlay_changed(&path, &new_content, edits);
+            self.file_changed(&path);
+        } else if self.analyzed.contains(&path)
+            || (path.ends_with(".dart") && self.priority.iter().any(|p| p == &path))
+        {
+            self.dirty.insert(path.clone());
         }
-        self.file_changed(&path);
         // Checked with `dart language-server`: a change of an open
         // `analysis_options.yaml` creates the contexts again and analyzes all
         // non-Dart files again. Changes of an open pubspec or manifest do
@@ -1155,9 +1182,14 @@ impl Server {
         let changed_from_disk = old_overlay.as_deref() != disk_content.as_deref();
         dartr_project::fs::set_overlay(&path, None);
         self.plugins.overlay_removed(&path, changed_from_disk);
-        self.file_changed(&path);
         self.priority.retain(|p| *p != path);
         self.plugins.set_priority_files(&self.priority);
+        self.session.set_priority_files(&self.priority);
+        if changed_from_disk {
+            self.file_changed(&path);
+        } else if self.analyzed.contains(&path) {
+            self.dirty.insert(path);
+        }
         if self.workspace_folders.is_empty() {
             self.roots_dirty = true;
         }
@@ -1166,22 +1198,38 @@ impl Server {
 
     fn file_changed(&mut self, path: &str) {
         self.parsed.remove(path);
-        // The search data of the file and of the units of the libraries
-        // that the change affects.
-        self.indexes.retain(|(_, p), _| p != path);
-        self.search_scope = None;
+        self.file_templates_cache.remove(path);
+        self.dartdoc_templates_cache.clear();
+        self.color_hex_cache.clear();
+        if !path.ends_with(".dart") {
+            self.completion_known_cache.clear();
+        }
+        // Keep `search_scope` when the edited file is already owned; only
+        // invalidate the edited file's words and the affected unit indexes.
+        if !self.owned.contains(path) {
+            self.search_scope = None;
+        }
         self.search_words.remove(path);
         if path.ends_with(".dart") && !self.parse_only {
             // Dart `AnalysisDriver.changeFile`: the units of the libraries
             // to analyze again (only the library of the file when only
             // function bodies changed; after an API change the relinked
             // libraries too).
-            for affected in self.session.change_file(path) {
-                self.indexes.retain(|(_, p), _| *p != affected);
+            let affected = self.session.change_file(path);
+            let mut to_remove: HashSet<&str> = HashSet::with_capacity(affected.len() + 1);
+            to_remove.insert(path);
+            for a in &affected {
+                to_remove.insert(a.as_str());
+            }
+            self.indexes
+                .retain(|(_, p), _| !to_remove.contains(p.as_str()));
+            for affected in affected {
                 if self.analyzed.contains(&affected) || self.priority.contains(&affected) {
                     self.dirty.insert(affected);
                 }
             }
+        } else {
+            self.indexes.retain(|(_, p), _| p != path);
         }
         if self.analyzed.contains(path)
             || (path.ends_with(".dart") && self.priority.iter().any(|p| p == path))
@@ -1447,9 +1495,14 @@ impl Server {
             .collect();
         // New contexts: new drivers.
         self.session = DriverSession::default();
+        self.session.set_priority_files(&self.priority);
         self.indexes.clear();
         self.search_scope = None;
         self.search_words.clear();
+        self.file_templates_cache.clear();
+        self.dartdoc_templates_cache.clear();
+        self.completion_known_cache.clear();
+        self.color_hex_cache.clear();
         self.owned = search::OwnedFiles::default();
         self.collection = if included.is_empty() {
             None
@@ -1648,7 +1701,20 @@ impl Server {
         } else {
             // The driver reads open documents through the overlays of
             // `dartr_project::fs`.
-            self.session.diagnostics(collection, &files)
+            let (diags, indexed) = self.session.diagnostics_with_index(
+                collection,
+                &files,
+                Some(
+                    &|ctx: &dartr_element::Ctx<'_>,
+                      unit: &dartr_resolver::library_analyzer::ResolvedUnit| {
+                        crate::index::index_unit(ctx, &unit.ast, &unit.tables, unit.unit)
+                    },
+                ),
+            );
+            for (key, idx) in indexed {
+                self.indexes.insert(key, std::sync::Arc::new(idx));
+            }
+            diags
         };
         let global_config = self.client_configuration.global();
         let mut by_path: HashMap<String, Vec<Value>> = HashMap::new();
@@ -1660,7 +1726,9 @@ impl Server {
                     let mut d = d.clone();
                     d.severity = severity;
                     mapping::to_diagnostic(&file.line_info, &file.path, &d, options, &|f| {
-                        read_file(f).map(|c| LineInfo::from_content(&c))
+                        self.session
+                            .line_info_matching(f, None)
+                            .or_else(|| read_file(f).map(|c| LineInfo::from_content(&c)))
                     })
                 })
                 .collect();

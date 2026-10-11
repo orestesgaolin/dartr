@@ -235,12 +235,17 @@ impl Server {
                     if analyzed_by_context && !self.is_excluded(&path) {
                         self.analyzed.insert(path.clone());
                     }
+                    self.owned.added.clear();
+                    self.search_scope = None;
                     self.file_changed(&path);
                 }
                 "modify" => self.file_changed(&path),
                 _ => {
                     // `driver.removeFile` and `applyFileRemoved`.
                     self.file_changed(&path);
+                    if self.owned.remove(&path) {
+                        self.search_scope = None;
+                    }
                     self.clear_results_for_file(&path);
                     if self.analyzed.remove(&path) {
                         self.dirty.remove(&path);
