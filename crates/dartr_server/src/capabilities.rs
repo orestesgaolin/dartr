@@ -116,6 +116,19 @@ impl ClientCapabilities {
             .and_then(Value::as_array)
             .is_some_and(|list| list.iter().any(|v| v.as_str() == Some("dart.goToLocation")))
     }
+
+    /// Dart `LspClientCapabilities.supportedInteractiveFormInputTypes`:
+    /// `experimental.interactiveResolve.inputTypes`.
+    pub fn supported_interactive_form_input_types(&self) -> Vec<String> {
+        self.get(&["experimental", "interactiveResolve", "inputTypes"])
+            .and_then(Value::as_array)
+            .map(|list| {
+                list.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
 }
 
 /// A Dart LSP feature (Dart `FeatureRegistration`).
@@ -450,6 +463,9 @@ pub fn server_capabilities(client: &ClientCapabilities, config: &LspClientConfig
         "experimental".into(),
         json!({
             "updateDiagnosticInformation": {},
+            "interactiveResolveProvider": {
+                "kinds": ["command"],
+            },
             "textDocument": {
                 "super": {},
                 "augmented": {},

@@ -214,7 +214,7 @@ fn producer_availability(
                 "parameterTitle": "Select a file to move to",
                 "actionLabel": "Move",
                 "defaultValue": default_uri,
-                "kind": "save_uri",
+                "kind": "saveUri",
                 "filters": {
                     "Dart": ["dart"]
                 }
@@ -252,6 +252,317 @@ fn producer_availability(
         }
         _ => None,
     }
+}
+
+pub fn producer_is_available(
+    command: &str,
+    unit_ref: &ResolvedUnitRef,
+    selection_offset: u32,
+    selection_length: u32,
+    supports_file_creation: bool,
+) -> bool {
+    producer_availability(
+        command,
+        unit_ref,
+        selection_offset,
+        selection_length,
+        supports_file_creation,
+    )
+    .is_some()
+}
+
+struct FormFieldDef {
+    id: &'static str,
+    description: &'static str,
+    required: bool,
+    default_value: Option<Value>,
+    type_kind: &'static str,
+    type_json: Value,
+    validator: Option<fn(&Value) -> Option<String>>,
+}
+
+fn validate_ctor_name_value(value: &Value) -> Option<String> {
+    let s = value.as_str()?;
+    let status = super::naming::validate_constructor_name(s);
+    if status.has_fatal_error() {
+        Some(status.message().unwrap_or("invalid value").to_string())
+    } else {
+        None
+    }
+}
+
+fn validate_import_prefix_value(value: &Value) -> Option<String> {
+    let s = value.as_str()?;
+    let status = super::naming::validate_import_prefix_name(s);
+    if status.has_fatal_error() {
+        Some(status.message().unwrap_or("invalid value").to_string())
+    } else {
+        None
+    }
+}
+
+fn is_valid_file_uri(s: &str) -> bool {
+    if s.len() < 5 || !s[..5].eq_ignore_ascii_case("file:") {
+        return false;
+    }
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if b <= b' '
+            || matches!(
+                b,
+                b'<' | b'>' | b'"' | b'`' | b'{' | b'}' | b'|' | b'\\' | b'^' | 0x7f
+            )
+        {
+            return false;
+        }
+        if b == b'%' {
+            if i + 2 >= bytes.len()
+                || !bytes[i + 1].is_ascii_hexdigit()
+                || !bytes[i + 2].is_ascii_hexdigit()
+            {
+                return false;
+            }
+            i += 3;
+        } else {
+            i += 1;
+        }
+    }
+    true
+}
+
+/// Resolves a `ParameterizedRefactoringProducer` command via `InteractiveForm`
+/// (Dart `RefactorCommandResolver.handleRefactor`). Returns `None` if the
+/// command is not a `ParameterizedRefactoringProducer`.
+pub fn resolve_framework_refactor_command(
+    command: &str,
+    unit_ref: &ResolvedUnitRef,
+    selection_offset: u32,
+    selection_length: u32,
+    supports_file_creation: bool,
+    supported_input_types: &[String],
+    params: &Value,
+) -> Option<Value> {
+    let fields: Vec<FormFieldDef> = match command {
+        commands::ADD_CONSTRUCTOR_NAME => {
+            let ctor_el = find_constructor_at_selection(
+                unit_ref,
+                selection_offset,
+                selection_length,
+                false,
+                true,
+            )?;
+            let default_name = compute_default_constructor_name(&ctor_el);
+            vec![FormFieldDef {
+                id: "name",
+                description: "Constructor Name",
+                required: true,
+                default_value: Some(Value::String(default_name)),
+                type_kind: "string",
+                type_json: json!({"kind": "string"}),
+                validator: Some(validate_ctor_name_value),
+            }]
+        }
+        commands::ADD_IMPORT_PREFIX => {
+            let (_, import_id) = find_import_at_selection(
+                unit_ref,
+                selection_offset,
+                selection_length,
+                false,
+                true,
+                false,
+            )?;
+            let default_prefix = compute_default_import_prefix(unit_ref, import_id);
+            vec![FormFieldDef {
+                id: "name",
+                description: "Import Prefix",
+                required: true,
+                default_value: Some(Value::String(default_prefix)),
+                type_kind: "string",
+                type_json: json!({"kind": "string"}),
+                validator: Some(validate_import_prefix_value),
+            }]
+        }
+        commands::MOVE_TOP_LEVEL_TO_FILE => {
+            if !supports_file_creation {
+                return None;
+            }
+            let members = members_to_move(unit_ref, selection_offset, selection_length)?;
+            let default_uri = path_to_uri(&members.default_file_path());
+            vec![FormFieldDef {
+                id: "destinationUri",
+                description: "Move to file",
+                required: true,
+                default_value: Some(Value::String(default_uri)),
+                type_kind: "file",
+                type_json: json!({"filters": ["dart"], "kind": "file", "type": 1}),
+                validator: None,
+            }]
+        }
+        _ => return None,
+    };
+
+    let is_supported = |field: &FormFieldDef| -> bool {
+        supported_input_types.iter().any(|k| k == field.type_kind)
+    };
+
+    let mut answers_map: BTreeMap<&'static str, Value> = BTreeMap::new();
+    let mut complete_ids: BTreeSet<&'static str> = BTreeSet::new();
+    for field in &fields {
+        if let Some(def) = &field.default_value {
+            answers_map.insert(field.id, def.clone());
+        }
+        if !is_supported(field) {
+            if field.default_value.is_none() {
+                panic!(
+                    "Cannot handle fields of type '{}' which are not supported by the client and do not have default values",
+                    field.type_kind
+                );
+            }
+            complete_ids.insert(field.id);
+        }
+    }
+
+    let mut client_answers: Vec<Value> = Vec::new();
+    let mut validation_errors: BTreeMap<&'static str, String> = BTreeMap::new();
+
+    if let Some(form_answers) = params.get("formAnswers").and_then(Value::as_array) {
+        let mut seen_ids = BTreeSet::new();
+        for ans in form_answers {
+            let id = ans.get("id").and_then(Value::as_str).unwrap_or("");
+            if !seen_ids.insert(id) {
+                panic!("Cannot process responses with duplicate IDs");
+            }
+            if !fields.iter().any(|f| f.id == id) {
+                panic!("Cannot process response with unknown ID");
+            }
+            let val = ans.get("value").cloned().unwrap_or(Value::Null);
+            client_answers.push(json!({"id": id, "value": val}));
+        }
+
+        validation_errors.clear();
+        complete_ids.clear();
+
+        for field in &fields {
+            if !is_supported(field) {
+                complete_ids.insert(field.id);
+                continue;
+            }
+            let answer_val = form_answers
+                .iter()
+                .find(|a| a.get("id").and_then(Value::as_str) == Some(field.id))
+                .and_then(|a| a.get("value"));
+            let is_null = answer_val.is_none_or(Value::is_null);
+            let err = if is_null && !field.required {
+                None
+            } else {
+                let type_err = match field.type_kind {
+                    "bool" => {
+                        if answer_val.is_some_and(Value::is_boolean) {
+                            None
+                        } else {
+                            Some("Must be a valid boolean".to_string())
+                        }
+                    }
+                    "file" => {
+                        if answer_val
+                            .and_then(Value::as_str)
+                            .is_some_and(is_valid_file_uri)
+                        {
+                            None
+                        } else {
+                            Some("Must be a valid file:// URI".to_string())
+                        }
+                    }
+                    "number" => {
+                        if answer_val.is_some_and(Value::is_number) {
+                            None
+                        } else {
+                            Some("Must be a valid number".to_string())
+                        }
+                    }
+                    "string" => {
+                        if answer_val.is_some_and(Value::is_string) {
+                            None
+                        } else {
+                            Some("Must be a valid string".to_string())
+                        }
+                    }
+                    _ => None,
+                };
+                match type_err {
+                    Some(e) => Some(e),
+                    None => match (field.validator, answer_val) {
+                        (Some(v), Some(val)) => v(val),
+                        _ => None,
+                    },
+                }
+            };
+            if let Some(err_msg) = err {
+                validation_errors.insert(field.id, err_msg);
+            } else {
+                answers_map.insert(field.id, answer_val.cloned().unwrap_or(Value::Null));
+                complete_ids.insert(field.id);
+            }
+        }
+    }
+
+    let is_complete = fields.iter().all(|f| complete_ids.contains(f.id));
+    let client_fields: Vec<Value> = if is_complete {
+        Vec::new()
+    } else {
+        fields
+            .iter()
+            .filter(|f| is_supported(f))
+            .map(|f| {
+                let mut m = serde_json::Map::new();
+                if let Some(def) = &f.default_value
+                    && !def.is_null()
+                {
+                    m.insert("default".to_string(), def.clone());
+                }
+                m.insert("description".to_string(), json!(f.description));
+                if let Some(err) = validation_errors.get(f.id) {
+                    m.insert("error".to_string(), json!(err));
+                }
+                m.insert("id".to_string(), json!(f.id));
+                m.insert("required".to_string(), json!(f.required));
+                m.insert("type".to_string(), f.type_json.clone());
+                Value::Object(m)
+            })
+            .collect()
+    };
+
+    let answers: Vec<Value> = fields
+        .iter()
+        .map(|f| answers_map.get(f.id).cloned().unwrap_or(Value::Null))
+        .collect();
+
+    let mut out = serde_json::Map::new();
+    out.insert(
+        "arguments".to_string(),
+        json!([{
+            "filePath": unit_ref.path(),
+            "selectionOffset": selection_offset,
+            "selectionLength": selection_length,
+            "arguments": answers,
+        }]),
+    );
+    out.insert("command".to_string(), json!(command));
+    if let Some(data) = params.get("data").filter(|v| !v.is_null()) {
+        out.insert("data".to_string(), data.clone());
+    }
+    if !client_answers.is_empty() {
+        out.insert("formAnswers".to_string(), Value::Array(client_answers));
+    }
+    if !client_fields.is_empty() {
+        out.insert("formFields".to_string(), Value::Array(client_fields));
+    }
+    if let Some(token) = params.get("workDoneToken").filter(|v| !v.is_null()) {
+        out.insert("workDoneToken".to_string(), token.clone());
+    }
+    Some(Value::Object(out))
 }
 
 pub fn execute_framework_refactor(
