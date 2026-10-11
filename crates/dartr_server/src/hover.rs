@@ -1091,6 +1091,9 @@ fn video_uri(line: &str) -> Option<String> {
 /// Dart `DartdocDirectiveInfo.extractTemplate(comment)`: adds the templates
 /// of [comment] to [templates].
 pub fn extract_templates(comment: &str, templates: &mut HashMap<String, String>) {
+    if comment.len() < 28 || !comment.contains("{@template") {
+        return;
+    }
     let chars: Vec<char> = comment.chars().collect();
     let end = chars.len();
     if end < 28 {
@@ -1216,6 +1219,9 @@ pub fn extract_templates_from_unit(
     unit: Id<CompilationUnit>,
     templates: &mut HashMap<String, String>,
 ) {
+    if !ast.tokens.source.contains("{@template") {
+        return;
+    }
     let comment_text = |node: NodeId| -> Option<String> {
         let comment = match ast.child_entities(node).first() {
             Some(Entity::Node(n)) => ast.cast::<Comment>(*n)?,
