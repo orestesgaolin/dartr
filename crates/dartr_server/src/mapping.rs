@@ -34,6 +34,7 @@ pub mod codes {
     pub const CLIENT_FAILED_TO_APPLY_EDIT: i64 = -32009;
     pub const RENAME_NOT_VALID: i64 = -32010;
     pub const REFACTORING_COMPUTE_STATUS_FAILURE: i64 = -32014;
+    pub const STATE_ERROR: i64 = -32015;
     pub const CLIENT_SERVER_INCONSISTENT_STATE: i64 = -32099;
 }
 

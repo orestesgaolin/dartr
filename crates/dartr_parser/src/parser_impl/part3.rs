@@ -819,7 +819,8 @@ impl<L: Listener> Parser<L> {
                 offset,
                 byte_offset,
             );
-            self.tokens_mut().get_mut(begin).preceding_comments = preceding_comments;
+            self.tokens_mut()
+                .set_preceding_comments(begin, preceding_comments);
             let end = self.tokens_mut().push_synthetic(
                 TokenType::CLOSE_SQUARE_BRACKET,
                 offset,

@@ -542,3 +542,656 @@ fn code_actions_corpus() {
     let label = format!("{} ({} files)", root.display(), files.len());
     let _ = run_both(&label, &root, &files);
 }
+
+#[derive(Clone)]
+struct ParityStep {
+    label: &'static str,
+    method: &'static str,
+    params: Value,
+    expect_server_requests: bool,
+}
+
+fn sorted_workspace_edit(v: &Value) -> Value {
+    let mut v = v.clone();
+    for ptr in [
+        "/result/documentChanges",
+        "/edit/documentChanges",
+        "/documentChanges",
+    ] {
+        if let Some(changes) = v.pointer_mut(ptr).and_then(Value::as_array_mut) {
+            changes.sort_by_key(|c| {
+                c.pointer("/textDocument/uri")
+                    .or(c.get("uri"))
+                    .or(c.get("oldUri"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string()
+            });
+        }
+    }
+    v
+}
+
+fn run_parity_session(
+    program: &str,
+    init: Value,
+    files: &[OpenFile],
+    steps: &[ParityStep],
+    out: &mut Vec<Value>,
+) {
+    let mut c = LspClient::spawn(program, &session_args(), &[]);
+    let init_resp = c.request("initialize", init);
+    assert!(
+        init_resp["result"]["capabilities"].is_object(),
+        "{init_resp}"
+    );
+    c.notify("initialized", json!({}));
+    c.settle_with_grace(std::time::Duration::from_secs(120));
+    for f in files {
+        c.notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {
+                "uri": file_uri(&f.path),
+                "languageId": "dart",
+                "version": 1,
+                "text": f.content,
+            }}),
+        );
+    }
+    c.settle_with_grace(std::time::Duration::from_secs(60));
+
+    for step in steps {
+        let before = c.server_requests.len();
+        let response = c.request(step.method, step.params.clone());
+        let server_requests: Vec<Value> = c.server_requests[before..]
+            .iter()
+            .filter(|(m, p)| {
+                !(m == "window/workDoneProgress/create"
+                    && p.get("token") == Some(&json!("ANALYZING")))
+            })
+            .map(|(m, p)| {
+                json!({
+                    "method": m,
+                    "params": sorted_workspace_edit(p),
+                })
+            })
+            .collect();
+        out.push(json!({
+            "label": step.label,
+            "expect_server_requests": step.expect_server_requests,
+            "response": sorted_workspace_edit(&response),
+            "server_requests": server_requests,
+        }));
+    }
+    let _ = c.shutdown_and_exit();
+}
+
+fn utf16_offset_of(text: &str, needle: &str, delta: usize) -> usize {
+    let byte = text
+        .find(needle)
+        .unwrap_or_else(|| panic!("missing {needle:?}"));
+    text[..byte].encode_utf16().count() + delta
+}
+
+fn run_apply_and_interactive_resolve(program: &str, root: &Path) -> Vec<Value> {
+    let warnings_path = root.join("lib").join("warnings.dart");
+    let warnings_content = std::fs::read_to_string(&warnings_path).unwrap();
+    let warnings_uri = file_uri(&warnings_path);
+    let warnings_path_str = warnings_path.display().to_string();
+
+    let assists_path = root.join("lib").join("assists.dart");
+    let assists_content = std::fs::read_to_string(&assists_path).unwrap();
+    let assists_path_str = assists_path.display().to_string();
+
+    let ctor_offset = utf16_offset_of(&warnings_content, "C(this.name);", 0);
+    let import_offset = utf16_offset_of(&warnings_content, "import 'src/helpers.dart';", 0);
+    let class_offset = utf16_offset_of(&warnings_content, "class C {", 6);
+    let fn_offset = utf16_offset_of(&assists_content, "int compute(int x, int y)", 4);
+    let moved_c_uri = file_uri(&root.join("lib").join("moved_c.dart"));
+
+    let warnings_files = vec![OpenFile {
+        path: warnings_path.clone(),
+        content: warnings_content.clone(),
+    }];
+    let both_files = vec![
+        OpenFile {
+            path: warnings_path.clone(),
+            content: warnings_content,
+        },
+        OpenFile {
+            path: assists_path,
+            content: assists_content,
+        },
+    ];
+
+    let mut out = Vec::new();
+
+    // 1. Session without codeActionLiteralSupport: produces and executes dart.edit.codeAction.apply.
+    let mut non_literal_init = dart_code_initialize_params(root);
+    non_literal_init["capabilities"]["textDocument"]["codeAction"]
+        .as_object_mut()
+        .unwrap()
+        .remove("codeActionLiteralSupport");
+    let unused_range = json!({
+        "start": {"line": 4, "character": 6},
+        "end": {"line": 4, "character": 12},
+    });
+    let assist_range = json!({
+        "start": {"line": 4, "character": 6},
+        "end": {"line": 4, "character": 6},
+    });
+    let non_literal_steps = vec![
+        ParityStep {
+            label: "codeAction:non_literal_quickfix",
+            method: "textDocument/codeAction",
+            params: json!({
+                "textDocument": {"uri": warnings_uri},
+                "range": unused_range,
+                "context": {"diagnostics": [], "only": ["quickfix.remove.unusedLocalVariable"]},
+            }),
+            expect_server_requests: false,
+        },
+        ParityStep {
+            label: "codeAction:non_literal_assist",
+            method: "textDocument/codeAction",
+            params: json!({
+                "textDocument": {"uri": warnings_uri},
+                "range": assist_range,
+                "context": {"diagnostics": [], "only": ["refactor.add.typeAnnotation"]},
+            }),
+            expect_server_requests: false,
+        },
+        ParityStep {
+            label: "executeCommand:applyCodeAction:quickfix",
+            method: "workspace/executeCommand",
+            params: json!({
+                "command": "dart.edit.codeAction.apply",
+                "arguments": [{
+                    "textDocument": {"uri": warnings_uri, "version": 1},
+                    "range": unused_range,
+                    "kind": "quickfix.remove.unusedLocalVariable",
+                    "loggedAction": "dart.fix.remove.unusedLocalVariable",
+                }],
+            }),
+            expect_server_requests: true,
+        },
+        ParityStep {
+            label: "executeCommand:applyCodeAction:assist",
+            method: "workspace/executeCommand",
+            params: json!({
+                "command": "dart.edit.codeAction.apply",
+                "arguments": [{
+                    "textDocument": {"uri": warnings_uri, "version": 1},
+                    "range": assist_range,
+                    "kind": "refactor.add.typeAnnotation",
+                    "loggedAction": "dart.assist.add.typeAnnotation",
+                }],
+            }),
+            expect_server_requests: true,
+        },
+        ParityStep {
+            label: "executeCommand:applyCodeAction:not_valid",
+            method: "workspace/executeCommand",
+            params: json!({
+                "command": "dart.edit.codeAction.apply",
+                "arguments": [{
+                    "textDocument": {"uri": warnings_uri, "version": 1},
+                    "range": unused_range,
+                    "kind": "quickfix.NotValid",
+                }],
+            }),
+            expect_server_requests: false,
+        },
+        ParityStep {
+            label: "executeCommand:applyCodeAction:invalid_args",
+            method: "workspace/executeCommand",
+            params: json!({
+                "command": "dart.edit.codeAction.apply",
+                "arguments": [{
+                    "textDocument": 123,
+                    "range": 123,
+                    "kind": 123,
+                    "loggedAction": 123,
+                }],
+            }),
+            expect_server_requests: false,
+        },
+        ParityStep {
+            label: "executeCommand:applyCodeAction:content_modified",
+            method: "workspace/executeCommand",
+            params: json!({
+                "command": "dart.edit.codeAction.apply",
+                "arguments": [{
+                    "textDocument": {"uri": warnings_uri, "version": 99},
+                    "range": unused_range,
+                    "kind": "quickfix.remove.unusedLocalVariable",
+                }],
+            }),
+            expect_server_requests: false,
+        },
+    ];
+    run_parity_session(
+        program,
+        non_literal_init,
+        &warnings_files,
+        &non_literal_steps,
+        &mut out,
+    );
+
+    // 2. Session without workspace.applyEdit: dart.edit.codeAction.apply returns stateError (-32015).
+    let mut no_apply_edit_init = dart_code_initialize_params(root);
+    no_apply_edit_init["capabilities"]["workspace"]["applyEdit"] = json!(false);
+    let no_apply_edit_steps = vec![ParityStep {
+        label: "executeCommand:applyCodeAction:no_apply_edit",
+        method: "workspace/executeCommand",
+        params: json!({
+            "command": "dart.edit.codeAction.apply",
+            "arguments": [{
+                "textDocument": {"uri": warnings_uri, "version": 1},
+                "range": unused_range,
+                "kind": "quickfix.remove.unusedLocalVariable",
+            }],
+        }),
+        expect_server_requests: false,
+    }];
+    run_parity_session(
+        program,
+        no_apply_edit_init,
+        &warnings_files,
+        &no_apply_edit_steps,
+        &mut out,
+    );
+
+    // 3. Session with interactiveResolve enabled: codeAction, command/resolve, and workspace/executeCommand.
+    let interactive_init = dart_code_initialize_params(root);
+    let class_range = json!({
+        "start": {"line": 9, "character": 6},
+        "end": {"line": 9, "character": 6},
+    });
+    let ctor_range = json!({
+        "start": {"line": 13, "character": 2},
+        "end": {"line": 13, "character": 2},
+    });
+    let import_range = json!({
+        "start": {"line": 1, "character": 0},
+        "end": {"line": 1, "character": 0},
+    });
+    let interactive_steps = vec![
+        ParityStep {
+            label: "codeAction:interactive_move_top_level",
+            method: "textDocument/codeAction",
+            params: json!({
+                "textDocument": {"uri": warnings_uri},
+                "range": class_range,
+                "context": {"diagnostics": [], "only": ["refactor.move"]},
+            }),
+            expect_server_requests: false,
+        },
+        ParityStep {
+            label: "codeAction:interactive_add_ctor_name",
+            method: "textDocument/codeAction",
+            params: json!({
+                "textDocument": {"uri": warnings_uri},
+                "range": ctor_range,
+                "context": {"diagnostics": [], "only": ["refactor.add"]},
+            }),
+            expect_server_requests: false,
+        },
+        ParityStep {
+            label: "codeAction:interactive_add_import_prefix",
+            method: "textDocument/codeAction",
+            params: json!({
+                "textDocument": {"uri": warnings_uri},
+                "range": import_range,
+                "context": {"diagnostics": [], "only": ["refactor.add"]},
+            }),
+            expect_server_requests: false,
+        },
+        ParityStep {
+            label: "command/resolve:add_constructor_name:initial",
+            method: "command/resolve",
+            params: json!({
+                "command": "dart.refactor.add_constructor_name",
+                "arguments": [{
+                    "filePath": warnings_path_str,
+                    "selectionOffset": ctor_offset,
+                    "selectionLength": 0,
+                    "arguments": [],
+                }],
+            }),
+            expect_server_requests: false,
+        },
+        ParityStep {
+            label: "command/resolve:add_constructor_name:invalid_value",
+            method: "command/resolve",
+            params: json!({
+                "command": "dart.refactor.add_constructor_name",
+                "arguments": [{
+                    "filePath": warnings_path_str,
+                    "selectionOffset": ctor_offset,
+                    "selectionLength": 0,
+                    "arguments": ["name1"],
+                }],
+                "formAnswers": [{"id": "name", "value": "invalid name"}],
+            }),
+            expect_server_requests: false,
+        },
+        ParityStep {
+            label: "command/resolve:add_constructor_name:invalid_type",
+            method: "command/resolve",
+            params: json!({
+                "command": "dart.refactor.add_constructor_name",
+                "arguments": [{
+                    "filePath": warnings_path_str,
+                    "selectionOffset": ctor_offset,
+                    "selectionLength": 0,
+                    "arguments": ["name1"],
+                }],
+                "formAnswers": [{"id": "name", "value": 123}],
+            }),
+            expect_server_requests: false,
+        },
+        ParityStep {
+            label: "command/resolve:add_constructor_name:valid",
+            method: "command/resolve",
+            params: json!({
+                "command": "dart.refactor.add_constructor_name",
+                "arguments": [{
+                    "filePath": warnings_path_str,
+                    "selectionOffset": ctor_offset,
+                    "selectionLength": 0,
+                    "arguments": ["name1"],
+                }],
+                "formAnswers": [{"id": "name", "value": "named"}],
+            }),
+            expect_server_requests: false,
+        },
+        ParityStep {
+            label: "executeCommand:add_constructor_name:resolved",
+            method: "workspace/executeCommand",
+            params: json!({
+                "command": "dart.refactor.add_constructor_name",
+                "workDoneToken": "progress-ctor",
+                "arguments": [{
+                    "filePath": warnings_path_str,
+                    "selectionOffset": ctor_offset,
+                    "selectionLength": 0,
+                    "arguments": ["named"],
+                }],
+            }),
+            expect_server_requests: true,
+        },
+        ParityStep {
+            label: "command/resolve:add_import_prefix:initial",
+            method: "command/resolve",
+            params: json!({
+                "command": "dart.refactor_add.import_prefix",
+                "arguments": [{
+                    "filePath": warnings_path_str,
+                    "selectionOffset": import_offset,
+                    "selectionLength": 0,
+                    "arguments": [],
+                }],
+            }),
+            expect_server_requests: false,
+        },
+        ParityStep {
+            label: "command/resolve:add_import_prefix:invalid_value",
+            method: "command/resolve",
+            params: json!({
+                "command": "dart.refactor_add.import_prefix",
+                "arguments": [{
+                    "filePath": warnings_path_str,
+                    "selectionOffset": import_offset,
+                    "selectionLength": 0,
+                    "arguments": ["helpers"],
+                }],
+                "formAnswers": [{"id": "name", "value": "invalid prefix"}],
+            }),
+            expect_server_requests: false,
+        },
+        ParityStep {
+            label: "command/resolve:add_import_prefix:valid",
+            method: "command/resolve",
+            params: json!({
+                "command": "dart.refactor_add.import_prefix",
+                "arguments": [{
+                    "filePath": warnings_path_str,
+                    "selectionOffset": import_offset,
+                    "selectionLength": 0,
+                    "arguments": ["helpers"],
+                }],
+                "formAnswers": [{"id": "name", "value": "hlp"}],
+            }),
+            expect_server_requests: false,
+        },
+        ParityStep {
+            label: "executeCommand:add_import_prefix:resolved",
+            method: "workspace/executeCommand",
+            params: json!({
+                "command": "dart.refactor_add.import_prefix",
+                "workDoneToken": "progress-import",
+                "arguments": [{
+                    "filePath": warnings_path_str,
+                    "selectionOffset": import_offset,
+                    "selectionLength": 0,
+                    "arguments": ["hlp"],
+                }],
+            }),
+            expect_server_requests: true,
+        },
+        ParityStep {
+            label: "command/resolve:move_top_level_to_file:initial",
+            method: "command/resolve",
+            params: json!({
+                "command": "dart.refactor.move_top_level_to_file",
+                "arguments": [{
+                    "filePath": warnings_path_str,
+                    "selectionOffset": class_offset,
+                    "selectionLength": 0,
+                    "arguments": [],
+                }],
+            }),
+            expect_server_requests: false,
+        },
+        ParityStep {
+            label: "command/resolve:move_top_level_to_file:invalid_uri",
+            method: "command/resolve",
+            params: json!({
+                "command": "dart.refactor.move_top_level_to_file",
+                "arguments": [{
+                    "filePath": warnings_path_str,
+                    "selectionOffset": class_offset,
+                    "selectionLength": 0,
+                    "arguments": [],
+                }],
+                "formAnswers": [{"id": "destinationUri", "value": "https://example.com/c.dart"}],
+            }),
+            expect_server_requests: false,
+        },
+        ParityStep {
+            label: "command/resolve:move_top_level_to_file:valid",
+            method: "command/resolve",
+            params: json!({
+                "command": "dart.refactor.move_top_level_to_file",
+                "arguments": [{
+                    "filePath": warnings_path_str,
+                    "selectionOffset": class_offset,
+                    "selectionLength": 0,
+                    "arguments": [],
+                }],
+                "formAnswers": [{"id": "destinationUri", "value": moved_c_uri}],
+            }),
+            expect_server_requests: false,
+        },
+        ParityStep {
+            label: "executeCommand:move_top_level_to_file:resolved",
+            method: "workspace/executeCommand",
+            params: json!({
+                "command": "dart.refactor.move_top_level_to_file",
+                "workDoneToken": "progress-move",
+                "arguments": [{
+                    "filePath": warnings_path_str,
+                    "selectionOffset": class_offset,
+                    "selectionLength": 0,
+                    "arguments": [moved_c_uri],
+                }],
+            }),
+            expect_server_requests: true,
+        },
+        ParityStep {
+            label: "command/resolve:non_parameterized_refactor",
+            method: "command/resolve",
+            params: json!({
+                "command": "dart.refactor.convert_all_formal_parameters_to_named",
+                "arguments": [{
+                    "filePath": assists_path_str,
+                    "selectionOffset": fn_offset,
+                    "selectionLength": 0,
+                    "arguments": [],
+                }],
+            }),
+            expect_server_requests: false,
+        },
+        ParityStep {
+            label: "command/resolve:unknown_command",
+            method: "command/resolve",
+            params: json!({
+                "command": "my_unknown_command",
+                "arguments": [{"a": 1}],
+            }),
+            expect_server_requests: false,
+        },
+        ParityStep {
+            label: "command/resolve:invalid_location",
+            method: "command/resolve",
+            params: json!({
+                "command": "dart.refactor.add_constructor_name",
+                "arguments": [{
+                    "filePath": warnings_path_str,
+                    "selectionOffset": 0,
+                    "selectionLength": 0,
+                    "arguments": [],
+                }],
+            }),
+            expect_server_requests: false,
+        },
+    ];
+    run_parity_session(
+        program,
+        interactive_init,
+        &both_files,
+        &interactive_steps,
+        &mut out,
+    );
+
+    // 4. Session without interactiveResolve: MoveTopLevelToFile includes data.parameters, and command/resolve auto-fills defaults.
+    let mut non_interactive_init = dart_code_initialize_params(root);
+    non_interactive_init["capabilities"]["experimental"]
+        .as_object_mut()
+        .unwrap()
+        .remove("interactiveResolve");
+    let non_interactive_steps = vec![
+        ParityStep {
+            label: "codeAction:non_interactive_move_top_level",
+            method: "textDocument/codeAction",
+            params: json!({
+                "textDocument": {"uri": warnings_uri},
+                "range": class_range,
+                "context": {"diagnostics": [], "only": ["refactor.move"]},
+            }),
+            expect_server_requests: false,
+        },
+        ParityStep {
+            label: "command/resolve:unsupported_input_type",
+            method: "command/resolve",
+            params: json!({
+                "command": "dart.refactor.add_constructor_name",
+                "arguments": [{
+                    "filePath": warnings_path_str,
+                    "selectionOffset": ctor_offset,
+                    "selectionLength": 0,
+                    "arguments": [],
+                }],
+            }),
+            expect_server_requests: false,
+        },
+    ];
+    run_parity_session(
+        program,
+        non_interactive_init,
+        &warnings_files,
+        &non_interactive_steps,
+        &mut out,
+    );
+
+    out
+}
+
+#[test]
+fn apply_code_action_and_interactive_resolve_match_dart_language_server() {
+    if !dart_available() {
+        eprintln!("skipped: `dart` is not on PATH");
+        return;
+    }
+    let root = fixtures().join("fixes_project");
+    let dart = run_apply_and_interactive_resolve("dart", &root);
+    let dartr = run_apply_and_interactive_resolve(dartr_bin(), &root);
+
+    assert!(!dart.is_empty(), "dart steps must not be empty");
+    assert_eq!(dart.len(), dartr.len(), "step count mismatch");
+
+    let mut diffs = Vec::new();
+    for (d, r) in dart.iter().zip(&dartr) {
+        let label = d["label"].as_str().unwrap_or("?");
+        assert_eq!(
+            d["label"], r["label"],
+            "step label mismatch: dart={} dartr={}",
+            d["label"], r["label"]
+        );
+        let expect_reqs = d["expect_server_requests"] == json!(true);
+        let server_reqs = d["server_requests"].as_array().unwrap();
+        if expect_reqs {
+            assert!(
+                !server_reqs.is_empty(),
+                "Dart returned empty server_requests for {label}: {d}"
+            );
+        } else {
+            let has_result =
+                !d["response"]["result"].is_null() && d["response"]["result"] != json!([]);
+            let has_error = !d["response"]["error"].is_null();
+            assert!(
+                has_result || has_error,
+                "Dart returned empty answer for {label}: {d}"
+            );
+        }
+        if d != r {
+            diffs.push(label.to_string());
+            eprintln!("DIFF {label}");
+            if d["response"] != r["response"] {
+                eprintln!(
+                    "  response:\n    dart:  {}\n    dartr: {}",
+                    truncate(&d["response"]),
+                    truncate(&r["response"])
+                );
+            }
+            if d["server_requests"] != r["server_requests"] {
+                eprintln!(
+                    "  server_requests:\n    dart:  {}\n    dartr: {}",
+                    truncate(&d["server_requests"]),
+                    truncate(&r["server_requests"])
+                );
+            }
+        }
+    }
+    eprintln!(
+        "apply_code_action + interactive_resolve parity: {}/{} steps identical",
+        dart.len() - diffs.len(),
+        dart.len()
+    );
+    assert!(
+        diffs.is_empty(),
+        "parity test had {} differing steps: {diffs:?}",
+        diffs.len()
+    );
+}

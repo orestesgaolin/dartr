@@ -18,6 +18,7 @@ use crate::refactoring::inline_local::InlineLocal;
 use crate::refactoring::inline_method::InlineMethod;
 use crate::refactoring::producer::{
     ComputeStatus, execute_framework_refactor, framework_refactor_actions,
+    is_framework_refactor_command, producer_is_available, resolve_framework_refactor_command,
 };
 use crate::refactoring::rename::Engine;
 use crate::refactoring::{Refactoring, RefactoringKind};
@@ -30,6 +31,16 @@ const CANCEL: &str = "Cancel";
 const CONTENT_MODIFIED: i64 = -32801;
 
 impl Server {
+    fn supports_file_creation(&self) -> bool {
+        self.client_flag("/workspace/workspaceEdit/documentChanges")
+            && self
+                .client
+                .raw
+                .pointer("/workspace/workspaceEdit/resourceOperations")
+                .and_then(Value::as_array)
+                .is_some_and(|a| a.iter().any(|v| v.as_str() == Some("create")))
+    }
+
     /// Dart `DartCodeActionsProducer.getRefactorActions` (framework + legacy
     /// refactorings).
     pub(crate) fn refactor_actions(
@@ -48,19 +59,11 @@ impl Server {
 
         // 1. Framework refactorings (`RefactoringProcessor`).
         let include_experimental = self.client_configuration.experimental_refactors();
-        let supports_file_creation = self.client_flag("/workspace/workspaceEdit/documentChanges")
-            && self
-                .client
-                .raw
-                .pointer("/workspace/workspaceEdit/resourceOperations")
-                .and_then(Value::as_array)
-                .is_some_and(|a| a.iter().any(|v| v.as_str() == Some("create")));
-        let interactive_forms_enabled = self
+        let supports_file_creation = self.supports_file_creation();
+        let interactive_forms_enabled = !self
             .client
-            .raw
-            .pointer("/experimental/interactiveForms/inputTypes")
-            .and_then(Value::as_array)
-            .is_some_and(|a| !a.is_empty());
+            .supported_interactive_form_input_types()
+            .is_empty();
         let framework = framework_refactor_actions(
             resolved,
             offset,
@@ -160,6 +163,95 @@ impl Server {
             }
         }
         actions
+    }
+
+    /// Dart `CommandResolveHandler.handle` and `RefactorCommandResolver.handle`.
+    pub(crate) fn command_resolve(&mut self, params: &Value) -> ErrorOr<Value> {
+        let Some(obj) = params.as_object() else {
+            return Err(ResponseError::new(
+                codes::INVALID_PARAMS,
+                "Invalid params for command/resolve:\nparams must be of type InteractiveExecuteCommandParams",
+            ));
+        };
+        let Some(command) = obj.get("command").and_then(Value::as_str) else {
+            return Err(ResponseError::new(
+                codes::INVALID_PARAMS,
+                "Invalid params for command/resolve:\nparams.command must not be undefined",
+            ));
+        };
+        if let Some(args) = obj.get("arguments")
+            && !args.is_null()
+            && !args.is_array()
+        {
+            return Err(ResponseError::new(
+                codes::INVALID_PARAMS,
+                "Invalid params for command/resolve:\nparams.arguments must be of type List<Object?>",
+            ));
+        }
+
+        let normalized_input = normalize_interactive_command_params(params);
+
+        if !is_framework_refactor_command(command) {
+            return Ok(normalized_input);
+        }
+
+        let Some(args) = obj.get("arguments").and_then(Value::as_array) else {
+            return Err(ResponseError::new(
+                codes::INVALID_PARAMS,
+                "Refactor commands should always have exactly one argument, which is a map",
+            ));
+        };
+        if args.len() != 1 || !args[0].is_object() {
+            return Err(ResponseError::new(
+                codes::INVALID_PARAMS,
+                "Refactor commands should always have exactly one argument, which is a map",
+            ));
+        }
+        let parameters = &args[0];
+        let file_path = parameters.get("filePath").and_then(Value::as_str);
+        let offset = parameters.get("selectionOffset").and_then(Value::as_u64);
+        let length = parameters.get("selectionLength").and_then(Value::as_u64);
+        let arguments = parameters.get("arguments").and_then(Value::as_array);
+        let (Some(file_path), Some(offset), Some(length), Some(_arguments)) =
+            (file_path, offset, length, arguments)
+        else {
+            return Err(ResponseError::new(
+                codes::INVALID_COMMAND_ARGUMENTS,
+                "Refactoring operations require 4 parameters: filePath: String, offset: int, length: int, arguments: List",
+            ));
+        };
+
+        let file_path = file_path.to_string();
+        let command = command.to_string();
+        let resolved = self.require_resolved_unit(&file_path)?;
+        let supports_file_creation = self.supports_file_creation();
+        if !producer_is_available(
+            &command,
+            &resolved,
+            offset as u32,
+            length as u32,
+            supports_file_creation,
+        ) {
+            return Err(ResponseError::new(
+                codes::INVALID_PARAMS,
+                "Refactor command is no longer valid at this location",
+            ));
+        }
+
+        let supported_input_types = self.client.supported_interactive_form_input_types();
+        if let Some(resolved_cmd) = resolve_framework_refactor_command(
+            &command,
+            &resolved,
+            offset as u32,
+            length as u32,
+            supports_file_creation,
+            &supported_input_types,
+            params,
+        ) {
+            Ok(resolved_cmd)
+        } else {
+            Ok(normalized_input)
+        }
     }
 
     /// Dart `RefactorCommandExecutor.handle`.
@@ -437,8 +529,13 @@ impl Server {
 
     /// Dart `fileHasBeenModified(path, docVersion)`.
     pub(crate) fn file_has_been_modified(&self, path: &str, version: Option<i64>) -> bool {
-        let Some(version) = version else { return false };
-        self.overlays.get(path).and_then(|d| d.version) != Some(version)
+        let Some(client_version) = version else {
+            return false;
+        };
+        let Some(server_version) = self.overlays.get(path).and_then(|d| d.version) else {
+            return false;
+        };
+        client_version != server_version
     }
 
     /// The progress of a command (Dart `ProgressReporter`): the token of
@@ -475,6 +572,25 @@ impl Server {
             );
         }
     }
+}
+
+fn normalize_interactive_command_params(params: &Value) -> Value {
+    let mut out = serde_json::Map::new();
+    for key in [
+        "arguments",
+        "command",
+        "data",
+        "formAnswers",
+        "formFields",
+        "workDoneToken",
+    ] {
+        if let Some(val) = params.get(key)
+            && !val.is_null()
+        {
+            out.insert(key.to_string(), val.clone());
+        }
+    }
+    Value::Object(out)
 }
 
 fn invalid_arguments(command_name: &str) -> ResponseError {

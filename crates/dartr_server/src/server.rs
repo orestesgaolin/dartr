@@ -220,6 +220,8 @@ pub struct Server {
     non_dart_analyzed: BTreeSet<String>,
     /// Files to analyze.
     dirty: BTreeSet<String>,
+    pending_removed: Vec<String>,
+    pending_non_dart: Option<BTreeSet<String>>,
     roots_dirty: bool,
     /// Analysis waits for the first configuration response.
     waiting_for_config: bool,
@@ -348,6 +350,8 @@ impl Server {
             analyzed: BTreeSet::new(),
             non_dart_analyzed: BTreeSet::new(),
             dirty: BTreeSet::new(),
+            pending_removed: Vec::new(),
+            pending_non_dart: None,
             roots_dirty: false,
             waiting_for_config: false,
             files_with_client_diagnostics: HashSet::new(),
@@ -601,6 +605,7 @@ impl Server {
             "workspace/symbol" => self.catching(method, |s| s.workspace_symbol(&params)),
             "workspace/willRenameFiles" => self.catching(method, |s| s.will_rename_files(&params)),
             "textDocument/codeAction" => self.catching(method, |s| s.code_action(&params)),
+            "command/resolve" => self.catching(method, |s| s.command_resolve(&params)),
             "textDocument/documentColor" => self.catching(method, |s| s.document_color(&params)),
             "textDocument/colorPresentation" => {
                 self.catching(method, |s| s.color_presentation(&params))
@@ -651,7 +656,15 @@ impl Server {
             // for the end of analysis. Messages are handled after the
             // analysis of earlier changes, so analysis is complete here.
             "dart/workspace/analysis/complete" => {
-                self.run_analysis();
+                if self.state == State::Initialized && !self.waiting_for_config {
+                    if self.roots_dirty {
+                        self.refresh_roots();
+                    }
+                    if !self.dirty.is_empty() {
+                        self.begin_progress();
+                        self.analyze_dirty();
+                    }
+                }
                 Ok(Value::Null)
             }
             _ => Err(ResponseError::new(
@@ -737,10 +750,18 @@ impl Server {
                         let new_global = list.last().cloned().unwrap_or(Value::Null);
                         let old_excluded =
                             excluded_folders(&self.client_configuration.global_value());
+                        let old_show_all_todos =
+                            self.client_configuration.global().show_all_todos();
+                        let old_show_todo_types =
+                            self.client_configuration.global().show_todo_types();
                         self.client_configuration
                             .replace(&new_global, &workspace_folder_config);
                         if excluded_folders(&self.client_configuration.global_value())
                             != old_excluded
+                            || self.client_configuration.global().show_all_todos()
+                                != old_show_all_todos
+                            || self.client_configuration.global().show_todo_types()
+                                != old_show_todo_types
                         {
                             self.roots_dirty = true;
                         }
@@ -880,6 +901,7 @@ impl Server {
             let path = normalize(&path);
             self.workspace_folders.retain(|p| *p != path);
         }
+        self.waiting_for_config = self.client.configuration();
         self.fetch_configuration_and_register();
         self.roots_dirty = true;
     }
@@ -1462,13 +1484,11 @@ impl Server {
         }
         // Dart `flushResults` for files that are no longer analyzed.
         let removed: Vec<String> = self.analyzed.difference(&analyzed).cloned().collect();
-        for path in removed {
-            self.server_diagnostics.remove(&path);
-            self.plugin_diagnostics.remove(&path);
-            self.publish_diagnostics(&path, Vec::new());
-            self.parsed.remove(&path);
+        for path in &removed {
+            self.server_diagnostics.remove(path);
+            self.plugin_diagnostics.remove(path);
+            self.parsed.remove(path);
         }
-        self.publish_non_dart_diagnostics(non_dart_analyzed);
         // Open files outside of the roots are analyzed too when they are in
         // a context root (for example an open file that is not under a
         // folder, without workspace folders).
@@ -1510,6 +1530,15 @@ impl Server {
             }
         }
         self.watch_roots();
+        if self.dirty.is_empty() {
+            for path in removed {
+                self.publish_diagnostics(&path, Vec::new());
+            }
+            self.publish_non_dart_diagnostics(non_dart_analyzed);
+        } else {
+            self.pending_removed.extend(removed);
+            self.pending_non_dart = Some(non_dart_analyzed);
+        }
     }
 
     /// Dart `ContextManager._analyzeAnalysisOptionsYaml`,
@@ -1621,10 +1650,12 @@ impl Server {
             // `dartr_project::fs`.
             self.session.diagnostics(collection, &files)
         };
+        let global_config = self.client_configuration.global();
         let mut by_path: HashMap<String, Vec<Value>> = HashMap::new();
         for file in &results {
             let values = processed_diagnostics(collection, file)
                 .into_iter()
+                .filter(|(d, severity)| global_config.should_send_diagnostic(d, *severity))
                 .map(|(d, severity)| {
                     let mut d = d.clone();
                     d.severity = severity;
@@ -1654,6 +1685,19 @@ impl Server {
             return;
         }
         self.begin_progress();
+        if self.progress.as_ref().is_some_and(|p| p.began.is_none()) {
+            return;
+        }
+        self.analyze_dirty();
+    }
+
+    fn analyze_dirty(&mut self) {
+        for path in std::mem::take(&mut self.pending_removed) {
+            self.publish_diagnostics(&path, Vec::new());
+        }
+        if let Some(non_dart) = self.pending_non_dart.take() {
+            self.publish_non_dart_diagnostics(non_dart);
+        }
         let dirty: Vec<String> = std::mem::take(&mut self.dirty).into_iter().collect();
         let options = self.client.diagnostic_options();
         let results: Vec<(String, Vec<Value>)> = if dirty.is_empty() {
@@ -2059,15 +2103,50 @@ mod tests {
             .find(|m| m["method"] == json!("window/workDoneProgress/create"))
             .expect("create request");
         assert!(!messages.iter().any(|m| m["method"] == json!("$/progress")));
-        // The client creates the token: begin and end follow.
+        assert!(
+            !messages
+                .iter()
+                .any(|m| m["method"] == json!("textDocument/publishDiagnostics"))
+        );
+        // The client creates the token: begin is sent before analysis runs.
         s.handle_message(json!({"jsonrpc": "2.0", "id": create["id"], "result": null}));
-        let kinds: Vec<Value> = out
-            .messages()
-            .into_iter()
+        let messages_after_begin = out.messages();
+        let kinds_after_begin: Vec<Value> = messages_after_begin
+            .iter()
             .filter(|m| m["method"] == json!("$/progress"))
             .map(|m| m["params"]["value"]["kind"].clone())
             .collect();
-        assert_eq!(kinds, [json!("begin"), json!("end")]);
+        assert_eq!(kinds_after_begin, [json!("begin")]);
+        assert!(
+            !messages_after_begin
+                .iter()
+                .any(|m| m["method"] == json!("textDocument/publishDiagnostics"))
+        );
+        // Analysis now runs and publishes diagnostics before sending end.
+        s.run_analysis();
+        let all_messages = out.messages();
+        let begin_pos = all_messages
+            .iter()
+            .position(|m| {
+                m["method"] == json!("$/progress") && m["params"]["value"]["kind"] == json!("begin")
+            })
+            .expect("begin notification");
+        let first_diag_pos = all_messages
+            .iter()
+            .position(|m| m["method"] == json!("textDocument/publishDiagnostics"))
+            .expect("diagnostics notification");
+        let last_diag_pos = all_messages
+            .iter()
+            .rposition(|m| m["method"] == json!("textDocument/publishDiagnostics"))
+            .expect("diagnostics notification");
+        let end_pos = all_messages
+            .iter()
+            .position(|m| {
+                m["method"] == json!("$/progress") && m["params"]["value"]["kind"] == json!("end")
+            })
+            .expect("end notification");
+        assert!(begin_pos < first_diag_pos);
+        assert!(last_diag_pos < end_pos);
     }
 
     #[test]
