@@ -83,7 +83,7 @@ pub struct LocalArena {
 pub struct WorldSnapshot {
     pub generation: Arc<Generation>,
     /// Frozen cycle stores, indexed by [`StoreId::raw`].
-    pub stores: imbl::Vector<Option<Arc<ElementStore>>>,
+    pub stores: Arc<Vec<Option<Arc<ElementStore>>>>,
     /// Libraries by URI (lookups only; never iterate for output).
     pub libraries: imbl::HashMap<Arc<str>, EId<LibraryElement>>,
     /// Set once the `dart:core` / `dart:async` cycle is frozen.
@@ -94,9 +94,32 @@ impl WorldSnapshot {
     pub fn new(generation: Arc<Generation>) -> WorldSnapshot {
         WorldSnapshot {
             generation,
-            stores: imbl::Vector::new(),
+            stores: Arc::new(Vec::new()),
             libraries: imbl::HashMap::new(),
             type_provider: None,
+        }
+    }
+
+    /// Publishes the frozen [store] and its [libraries] (URI, element) into
+    /// this snapshot, cloning the underlying store table only if shared.
+    pub fn add_store(
+        &mut self,
+        store: Arc<ElementStore>,
+        libraries: impl IntoIterator<Item = (Arc<str>, EId<LibraryElement>)>,
+    ) {
+        assert_eq!(
+            store.id.kind(),
+            StoreKind::Cycle,
+            "only cycle stores are published"
+        );
+        let index = store.id.raw() as usize;
+        let stores = Arc::make_mut(&mut self.stores);
+        if stores.len() <= index {
+            stores.resize_with(index + 1, || None);
+        }
+        stores[index] = Some(store);
+        for (uri, library) in libraries {
+            self.libraries.insert(uri, library);
         }
     }
 
@@ -107,24 +130,13 @@ impl WorldSnapshot {
         store: Arc<ElementStore>,
         libraries: impl IntoIterator<Item = (Arc<str>, EId<LibraryElement>)>,
     ) -> WorldSnapshot {
-        assert_eq!(
-            store.id.kind(),
-            StoreKind::Cycle,
-            "only cycle stores are published"
-        );
         let mut next = self.clone();
-        let index = store.id.raw() as usize;
-        while next.stores.len() <= index {
-            next.stores.push_back(None);
-        }
-        next.stores.set(index, Some(store));
-        for (uri, library) in libraries {
-            next.libraries.insert(uri, library);
-        }
+        next.add_store(store, libraries);
         next
     }
 
     /// The frozen store [id], or the synthetic store.
+    #[inline]
     pub fn store(&self, id: StoreId) -> Option<&ElementStore> {
         match id.kind() {
             StoreKind::Synthetic => Some(&self.generation.synthetic),
@@ -435,27 +447,33 @@ impl<'a> Ctx<'a> {
     }
 
     /// `ElementImpl` data; `None` for `dynamic` and `Never`.
+    #[inline]
     pub fn element_data(&self, id: ElementId) -> Option<&'a ElementData> {
         self.store(id.store()).element_data(id)
     }
 
     /// `FragmentImpl` data; `None` for `dynamic` and `Never`.
+    #[inline]
     pub fn fragment_data(&self, id: FragmentId) -> Option<&'a FragmentData> {
         self.store(id.store()).fragment_data(id)
     }
 
+    #[inline]
     pub fn instance(&self, id: EId<InstanceElement>) -> &'a InstanceElementData {
         self.store(id.store()).instance(id)
     }
 
+    #[inline]
     pub fn interface(&self, id: EId<InterfaceElement>) -> &'a InterfaceElementData {
         self.store(id.store()).interface(id)
     }
 
+    #[inline]
     pub fn executable(&self, id: EId<ExecutableElement>) -> &'a ExecutableElementData {
         self.store(id.store()).executable(id)
     }
 
+    #[inline]
     pub fn property_accessor(
         &self,
         id: EId<PropertyAccessorElement>,
@@ -463,10 +481,12 @@ impl<'a> Ctx<'a> {
         self.store(id.store()).property_accessor(id)
     }
 
+    #[inline]
     pub fn variable(&self, id: EId<VariableElement>) -> &'a VariableElementData {
         self.store(id.store()).variable(id)
     }
 
+    #[inline]
     pub fn property_inducing(
         &self,
         id: EId<PropertyInducingElement>,
@@ -475,6 +495,7 @@ impl<'a> Ctx<'a> {
     }
 
     /// The library with [uri], when it is in the world.
+    #[inline]
     pub fn library_by_uri(&self, uri: &str) -> Option<EId<LibraryElement>> {
         self.world.libraries.get(uri).copied()
     }

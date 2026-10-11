@@ -26,7 +26,7 @@ SDK tests, Flutter, `analyzer`, a 1.5 million line application).
 | Element model, types, resolution, constants | At parity on Flutter, `flutter_tools` and `analyzer` |
 | Error and warning verifiers | At parity on the SDK tests (a few known differences) |
 | Lints | All rules ported; compared with `dart analyze` on the corpora |
-| `dartr analyze` | Same options, formats and exit codes as `dart analyze` |
+| `dartr analyze` | Same options, formats and exit codes as `dart analyze`. Same diagnostics on Flutter, `flutter_tools`, `analyzer` 9.0.0, a 1.56 million line application and 671 packages from the pub cache and the Flutter SDK (checked with `tools/analyze_compare.py`) |
 | `dartr format` | Same output as `dart format` on the `dart_style` test data and corpora |
 | `dartr fix` | Same output, exit codes and edits as `dart fix` on the fixture and on copies of the corpora; the pubspec fixes (`missing_dependency`) are not ported yet |
 | `dartr language-server` | Diagnostics, outline, closing labels, folding, selection ranges, document symbols, formatting; navigation (definition, type definition, implementation, references, document highlight), hover, signature help, semantic tokens, inlay hints, call and type hierarchy, workspace symbols. completion; code actions (quick fixes, assists, fix all, organize imports, sort members); rename; refactorings (extract method, local variable and widget, inline local and method, convert getter/method, move file); completion in pubspec.yaml, analysis_options.yaml and fix_data.yaml; document colors, document links, code lens, inline values; Flutter outline; files changed on disk are re-analyzed. analyzer plugins (diagnostics, fixes and assists). |
@@ -122,8 +122,9 @@ Open an issue at <https://github.com/orestesgaolin/dartr/issues> with:
 
 ## Known limitations
 
-- Language server: hover and completion are slower than in Dart (tens to hundreds of ms), and the
-  first references search on a large package is slow.
+- Language server: startup with analyzer plugins is slow (122 to 134 s on the 1.56 million line
+  application with `jaspr_lints`, Dart: 96 s; 36 s without plugins). Requests (hover, completion,
+  definition, references) are as fast as Dart's or faster (`bench/lsp_bench.py`, 2026-10-11).
 - Memory use is higher than Dart's: peak RSS of `dartr analyze` is 0.8 GB on `analyzer`, 1.6 GB on
   Flutter and 6.0 GB on the 1.56 million line application (after a 40 to 48% reduction). There is no disk
   cache yet.

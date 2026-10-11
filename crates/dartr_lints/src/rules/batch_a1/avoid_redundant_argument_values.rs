@@ -24,6 +24,9 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
     let arguments = c
         .ast
         .list_raw(c.ast[Id::<ArgumentList>::from_raw(node)].arguments);
+    if arguments.is_empty() {
+        return;
+    }
     if c.ast.parent(node).is_none_or(|parent| {
         !matches!(
             c.ast.kind(parent),
@@ -79,12 +82,6 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         let Some(formal) = base.cast::<FormalParameterElement>() else {
             continue;
         };
-        // Dart `param.metadata.hasRequired`.
-        if c.has_package_meta_getter(formal.raw(), "required")
-            || c.has_constructor_annotation(formal.raw(), "meta", "Required")
-        {
-            continue;
-        }
         let kind = r
             .ctx
             .get(EId::<FormalParameterElement>::from_raw(formal.raw()))
@@ -94,41 +91,81 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
         {
             continue;
         }
-        // The parameters of a function type that substitution changed are
-        // synthetic copies (`FormalParameterElementMixinExtension.copyWith`)
-        // whose `computeConstantValue()` is `null`: a method invoked on a
-        // receiver (the member is substituted with the receiver type) whose
-        // declared type references a type parameter.
+        // Dart `param.metadata.hasRequired`.
+        if c.has_package_meta_getter(formal.raw(), "required")
+            || c.has_constructor_annotation(formal.raw(), "meta", "Required")
+        {
+            continue;
+        }
+        // The parameters of a function type that substitution or LUB/GLB
+        // changed are synthetic copies
+        // (`FormalParameterElementMixinExtension.copyWith`) whose
+        // `computeConstantValue()` is `null`.
+        let is_substituted_generic_member = |executable: dartr_element::ElementId| {
+            r.ctx
+                .element_data(executable)
+                .and_then(|d| d.enclosing)
+                .is_some_and(|owner| {
+                    owner
+                        .cast::<dartr_element::InterfaceElement>()
+                        .is_some_and(|i| !r.ctx.interface_type_parameters(i).is_empty())
+                        || owner
+                            .cast::<dartr_element::ExtensionElement>()
+                            .is_some_and(|e| !r.ctx.get(e).type_params.is_empty())
+                })
+                && dartr_constant::has_type_parameter_reference(
+                    &r.ctx,
+                    member::type_(&r.ctx, ElemRef::Base(executable)),
+                )
+        };
         let synthetic = redirected.is_none()
-            && c.ast.parent(node).is_some_and(|parent| {
-                c.ast
-                    .cast::<MethodInvocation>(parent)
-                    .is_some_and(|invocation| {
-                        c.ast[invocation].target.is_some()
-                            || c.ast[invocation]
-                                .operator
-                                .is_some_and(|op| matches!(c.ast.tokens.lexeme(op), ".." | "?.."))
-                    })
-            })
             && r.ctx
                 .element_data(base)
                 .and_then(|d| d.enclosing)
                 .is_some_and(|executable| {
-                    r.ctx
-                        .element_data(executable)
-                        .and_then(|d| d.enclosing)
-                        .is_some_and(|owner| {
-                            owner
-                                .cast::<dartr_element::InterfaceElement>()
-                                .is_some_and(|i| !r.ctx.interface_type_parameters(i).is_empty())
-                                || owner
-                                    .cast::<dartr_element::ExtensionElement>()
-                                    .is_some_and(|e| !r.ctx.get(e).type_params.is_empty())
-                        })
-                        && dartr_constant::has_type_parameter_reference(
-                            &r.ctx,
-                            member::type_(&r.ctx, ElemRef::Base(executable)),
-                        )
+                    c.ast.parent(node).is_some_and(|parent| {
+                        if let Some(invocation) = c.ast.cast::<MethodInvocation>(parent) {
+                            (c.ast[invocation].target.is_some()
+                                || c.ast[invocation].operator.is_some_and(|op| {
+                                    matches!(c.ast.tokens.lexeme(op), ".." | "?..")
+                                }))
+                                && is_substituted_generic_member(executable)
+                        } else if let Some(invocation) =
+                            c.ast
+                                .cast::<dartr_ast::FunctionExpressionInvocation>(parent)
+                        {
+                            if is_substituted_generic_member(executable) {
+                                true
+                            } else if c.element(invocation).is_none() {
+                                let fn_ty = c.static_type(c.ast[invocation].function).map(|t| {
+                                    dartr_typesystem::TypeSystem::new(r.ctx).resolve_to_bound(t)
+                                });
+                                let exec_ty = member::type_(&r.ctx, ElemRef::Base(executable));
+                                if let Some(fn_ty) = fn_ty
+                                    && let (
+                                        dartr_element::TypeKind::Function(fn_f),
+                                        dartr_element::TypeKind::Function(exec_f),
+                                    ) = (r.ctx.ty(fn_ty), r.ctx.ty(exec_ty))
+                                {
+                                    r.ctx.list(fn_f.type_params).len()
+                                        == r.ctx.list(exec_f.type_params).len()
+                                        && r.ctx.with_nullability(
+                                            fn_ty,
+                                            dartr_element::Nullability::None,
+                                        ) != r.ctx.with_nullability(
+                                            exec_ty,
+                                            dartr_element::Nullability::None,
+                                        )
+                                } else {
+                                    false
+                                }
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    })
                 });
         if synthetic {
             if kind == dartr_ast::ParameterKind::Positional {
@@ -136,10 +173,10 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             }
             continue;
         }
-        if let (Some(default), Some(value)) =
-            (c.default_value(parameter), c.constant_value(expression))
-            && default.has_known_value()
+        if let Some(value) = c.constant_value(expression)
             && value.has_known_value()
+            && let Some(default) = c.default_value(parameter)
+            && default.has_known_value()
             && value.dart_eq(&default, &ts)
         {
             c.report_node(out, &diag::AVOID_REDUNDANT_ARGUMENT_VALUES, expression, &[]);

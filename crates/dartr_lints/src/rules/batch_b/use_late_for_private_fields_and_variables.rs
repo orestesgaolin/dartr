@@ -22,11 +22,98 @@ struct State {
     nullable_access: IndexSet<ElementId>,
 }
 
+fn has_lateable_declarations(c: &LinterContext<'_>, root: NodeId) -> bool {
+    let mut state = State {
+        lateables: vec![Vec::new()],
+        nullable_access: IndexSet::new(),
+    };
+    fn scan(c: &LinterContext<'_>, node: NodeId, state: &mut State) {
+        match kind(c, node) {
+            NodeKind::ClassDeclaration => {
+                let n = &c.ast[Id::<ClassDeclaration>::from_raw(node)];
+                if let Some(body) = c.ast.cast::<BlockClassBody>(n.body.raw()) {
+                    for &member in c.ast.list_raw(c.ast[body].members) {
+                        if c.ast
+                            .cast::<ConstructorDeclaration>(member)
+                            .is_some_and(|m| c.ast[m].const_keyword.is_some())
+                        {
+                            return;
+                        }
+                    }
+                }
+                if let Some(primary) = c
+                    .ast
+                    .cast::<PrimaryConstructorDeclaration>(n.name_part.raw())
+                    && c.ast[primary].const_keyword.is_some()
+                {
+                    return;
+                }
+            }
+            NodeKind::EnumDeclaration
+            | NodeKind::MethodDeclaration
+            | NodeKind::ConstructorDeclaration
+            | NodeKind::FunctionDeclaration
+            | NodeKind::ImportDirective
+            | NodeKind::ExportDirective
+            | NodeKind::PartDirective
+            | NodeKind::PartOfDirective
+            | NodeKind::LibraryDirective
+            | NodeKind::Annotation => return,
+            NodeKind::FieldDeclaration => {
+                let n = &c.ast[Id::<FieldDeclaration>::from_raw(node)];
+                let parent = c.ast.parent(node).and_then(|p| c.ast.parent(p));
+                if parent.is_some_and(|p| kind(c, p) == NodeKind::ExtensionTypeDeclaration)
+                    && n.static_keyword.is_none()
+                {
+                    return;
+                }
+                if let Some(parent) = parent {
+                    let variables = c.ast.list(c.ast[n.fields].variables);
+                    if kind(c, parent) == NodeKind::ExtensionDeclaration
+                        && c.declared_element(parent).is_some_and(|e| {
+                            name(c, e).is_none_or(|n| n.is_empty() || n.starts_with('_'))
+                        })
+                    {
+                        for &variable in variables {
+                            visit_variable(c, variable, 0, state);
+                        }
+                    } else {
+                        for &variable in variables {
+                            if lexeme(c, c.ast[variable].name).starts_with('_') {
+                                visit_variable(c, variable, 0, state);
+                            }
+                        }
+                    }
+                }
+                return;
+            }
+            NodeKind::TopLevelVariableDeclaration => {
+                let list = c.ast[Id::<TopLevelVariableDeclaration>::from_raw(node)].variables;
+                for &variable in c.ast.list(c.ast[list].variables) {
+                    if lexeme(c, c.ast[variable].name).starts_with('_') {
+                        visit_variable(c, variable, 0, state);
+                    }
+                }
+                return;
+            }
+            _ => {}
+        }
+        for child in c.ast.children(node) {
+            scan(c, child, state);
+            if !state.lateables[0].is_empty() {
+                return;
+            }
+        }
+    }
+    scan(c, root, &mut state);
+    !state.lateables[0].is_empty()
+}
+
 /// Dart reports in `afterLibrary` into the unit of each variable. This port
 /// visits all units of the library from the processor of each unit and
 /// reports the lateables of the current unit.
-fn visit_compilation_unit(c: &LinterContext<'_>, _: NodeId, out: &mut Vec<Diagnostic>) {
-    if c.resolved.is_none() {
+fn visit_compilation_unit(c: &LinterContext<'_>, root: NodeId, out: &mut Vec<Diagnostic>) {
+    if c.resolved.is_none() || !has_lateable_declarations(c, root) {
         return;
     }
     let mut state = State::default();

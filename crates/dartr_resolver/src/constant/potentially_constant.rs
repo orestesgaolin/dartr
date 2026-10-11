@@ -89,9 +89,19 @@ pub fn with_temporary_const_constructor<R>(constructor: ElementId, f: impl FnOnc
     f()
 }
 
+/// Whether any constructor is currently marked as temporarily `const`.
+#[inline]
+pub fn has_any_temporary_const_constructor() -> bool {
+    TEMPORARY_CONST_CONSTRUCTOR_ELEMENTS.with(|s| !s.borrow().is_empty())
+}
+
 /// Dart `temporaryConstConstructorElements[constructor] ?? false`.
+#[inline]
 pub fn is_temporary_const_constructor(constructor: ElementId) -> bool {
-    TEMPORARY_CONST_CONSTRUCTOR_ELEMENTS.with(|s| s.borrow().contains(&constructor))
+    TEMPORARY_CONST_CONSTRUCTOR_ELEMENTS.with(|s| {
+        let s = s.borrow();
+        !s.is_empty() && s.contains(&constructor)
+    })
 }
 
 /// Dart `getNotPotentiallyConstants(node, featureSet:)`: checks if the

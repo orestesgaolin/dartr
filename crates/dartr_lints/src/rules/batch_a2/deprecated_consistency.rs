@@ -196,6 +196,17 @@ fn check_parameter(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diag
     {
         return;
     }
+    let parameter_metadata =
+        context.ast[context.ast.cast::<FieldFormalParameter>(node).unwrap()].metadata;
+    let parameter_deprecated = has_deprecated(context, parameter_metadata);
+    let field_has_annotations = resolved
+        .ctx
+        .element_data(field.raw())
+        .and_then(|d| resolved.ctx.fragment_data(d.first_fragment))
+        .is_some_and(|f| !f.metadata.annotations.is_empty());
+    if !parameter_deprecated && !field_has_annotations {
+        return;
+    }
     let Some(field_node) =
         (0..context.ast.node_count())
             .map(NodeId::from_index)
@@ -209,9 +220,6 @@ fn check_parameter(context: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diag
     let field_deprecated = super::helpers::ancestors(context.ast, field_node)
         .find_map(|ancestor| context.ast.cast::<FieldDeclaration>(ancestor))
         .is_some_and(|declaration| has_deprecated(context, context.ast[declaration].metadata));
-    let parameter_metadata =
-        context.ast[context.ast.cast::<FieldFormalParameter>(node).unwrap()].metadata;
-    let parameter_deprecated = has_deprecated(context, parameter_metadata);
     if field_deprecated && !parameter_deprecated {
         context.report_node(out, &diag::DEPRECATED_CONSISTENCY_PARAMETER, node, &[]);
     } else if parameter_deprecated && !field_deprecated {

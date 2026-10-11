@@ -91,7 +91,19 @@ fn check(c: &LinterContext<'_>, node: NodeId, out: &mut Vec<Diagnostic>) {
             }
             _ => {}
         }
-        stack.extend(c.ast.children(n).into_iter().rev());
+        if matches!(
+            kind(c, n),
+            NodeKind::CompilationUnit
+                | NodeKind::ClassDeclaration
+                | NodeKind::MixinDeclaration
+                | NodeKind::ExtensionDeclaration
+                | NodeKind::ExtensionTypeDeclaration
+                | NodeKind::EnumDeclaration
+                | NodeKind::BlockClassBody
+                | NodeKind::BlockEnumBody
+        ) {
+            stack.extend(c.ast.children(n).into_iter().rev());
+        }
     }
     if fields.is_empty() && fields_from_parameters.is_empty() {
         return;
