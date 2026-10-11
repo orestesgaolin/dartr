@@ -98,6 +98,7 @@ at each merge; the final process report is written from it.
 | 10-11 00:55 | a9e05ee | optimization round 2: package data through the analysis context, SDK linked once per run | Gemini 4 (Antigravity) | language server first analysis of flutter: system CPU 40.3 s -> 0.9 s; visible-app peak RSS 12.5 -> 8.8 GB |
 | 10-11 00:55 | 296a817 | YAML completion over LSP, legacy protocol 59/59, stripped release binaries | Gemini 4 (Antigravity) | YAML completion 32/32 positions identical; batch: 5,593 tests (1 known flaky step), all 4 corpora identical |
 | 10-11 02:00 | 2d0f037 | analyzer plugins in the language server: plugin manager, merged diagnostics, plugin fixes and assists | Gemini 4 (Antigravity) | lsp_plugins parity with `dart language-server`; visible-app design_system: all 7 jaspr_lints diagnostics; `dartr analyze` on visible-app unchanged (20/20); 5,595 tests |
+| 10-11 04:10 | c77fa2c | dart.edit.codeAction.apply and interactive resolve of code actions: every capability of `dart language-server` is registered | Gemini 4 (Antigravity) | 29 steps identical; missing_capabilities.txt empty; 5,596 tests |
 
 ## Incidents and lessons
 
@@ -218,3 +219,7 @@ at each merge; the final process report is written from it.
   deleted after each command, while inline commands waited on the open file with `-k`. A waiter on the deleted
   file and a command that created a new file could both run. Gemini's log showed it ("the previous lock holder
   unlinked it"). All lock calls keep the file now.
+- **Gemini sessions ended by a hang (10-11 04:05):** the memory-optimization session ended five times. Each time it
+  waited for `dartr analyze` on flutter, which never finished with its changes: the coordinator ran the binary
+  with a time limit and it printed nothing after "Analyzing flutter..." for 120 s (normal: 3 s). Gemini task files
+  now require a time limit on every dartr command.
