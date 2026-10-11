@@ -119,4 +119,29 @@ impl<T: Hash + Eq> Pool<T> {
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
     }
+
+    /// Returns `(count, used_bytes, capacity_bytes)`.
+    pub fn mem_bytes(&self, extra_fn: impl Fn(&T) -> usize) -> (usize, usize, usize) {
+        let count = self.items.count();
+        let elem_size = std::mem::size_of::<T>();
+        let extra: usize = self.items.iter().map(|(_, v)| extra_fn(v)).sum();
+        let table_cap: usize = self
+            .shards
+            .iter()
+            .map(|s| s.lock().capacity() * (std::mem::size_of::<(u64, u32)>() + 1))
+            .sum();
+        let shard_header = self.shards.len() * std::mem::size_of::<Shard>();
+        let bucket_cap = if count == 0 {
+            0
+        } else {
+            let buckets = usize::BITS - ((count + 31) >> 5).leading_zeros();
+            let cap_slots = (32usize << buckets) - 32;
+            cap_slots * (elem_size + std::mem::align_of::<T>().max(1))
+        };
+        (
+            count,
+            count * elem_size + extra,
+            bucket_cap + extra + table_cap + shard_header,
+        )
+    }
 }

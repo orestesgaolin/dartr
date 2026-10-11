@@ -82,4 +82,29 @@ impl ResolverTables {
     pub fn is_dot_shorthand(&self, node: NodeId) -> bool {
         self.dot_shorthand.get(node).is_some()
     }
+
+    /// Returns `(total_entries, used_entry_bytes, allocated_capacity_bytes)`.
+    pub fn mem_bytes(&self) -> (usize, usize, usize) {
+        let mut entries = self.potentially_mutated_in_scope.len();
+        let mut used = entries * std::mem::size_of::<ElementId>();
+        let mut cap =
+            self.potentially_mutated_in_scope.capacity() * (std::mem::size_of::<ElementId>() + 8);
+        let mut add = |(e, u, c): (usize, usize, usize)| {
+            entries += e;
+            used += u;
+            cap += c;
+        };
+        add(self.this_scope_lookup.mem_bytes());
+        add(self.scope_lookup_result.mem_bytes());
+        add(self.element_annotation.mem_bytes());
+        add(self.break_continue_target.mem_bytes());
+        add(self.guarded_pattern_variables.mem_bytes());
+        add(self.switch_case_group_variables.mem_bytes());
+        add(self.pattern_variable_declaration_elements.mem_bytes());
+        add(self.for_each_pattern_variables.mem_bytes());
+        add(self.dot_shorthand.mem_bytes());
+        add(self.body_context.mem_bytes());
+        add(self.corresponding_parameter_type.mem_bytes());
+        (entries, used, cap)
+    }
 }

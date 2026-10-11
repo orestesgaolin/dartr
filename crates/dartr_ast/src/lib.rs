@@ -39,7 +39,8 @@ pub mod sort;
 pub mod token;
 
 pub use arena::{
-    Ast, Concrete, Entity, Id, NodeId, NodeList, NodeMap, NodeType, SubtypeOf, TokenList,
+    Ast, AstMemStats, Concrete, Entity, Id, NodeId, NodeList, NodeMap, NodeType, SubtypeOf,
+    TokenList,
 };
 pub use copy::{AstCopier, copy_subtree};
 pub use generated::children::{FieldValue, build_node};
