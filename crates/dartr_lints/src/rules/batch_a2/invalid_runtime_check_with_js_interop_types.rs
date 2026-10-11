@@ -53,13 +53,20 @@ fn declaration_metadata<'a>(
     context: &LinterContext<'a>,
     element: ElementId,
 ) -> Option<(LinterContext<'a>, NodeList<Annotation>)> {
+    let resolved = context.resolved?;
+    if resolved.ctx.element_data(element).and_then(|d| d.library) != Some(resolved.library) {
+        return None;
+    }
     for unit in std::iter::once(*context).chain(
         (0..context.resolved_units.len())
             .filter(|&index| index != context.current_unit)
             .filter_map(|index| context.resolved_unit(index)),
     ) {
-        let declaration = (0..unit.ast.node_count())
-            .map(NodeId::from_index)
+        let declaration = unit
+            .ast
+            .list_raw(unit.ast[unit.parsed.unit].declarations)
+            .iter()
+            .copied()
             .find(|&node| unit.declared_element(node) == Some(element));
         let Some(class) = declaration.and_then(|node| unit.ast.cast::<ClassDeclaration>(node))
         else {

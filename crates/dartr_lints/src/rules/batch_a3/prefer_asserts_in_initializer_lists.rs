@@ -18,8 +18,10 @@ pub fn register(r: &mut RuleVisitorRegistry) {
 /// last class declaration that starts before [node] in visit order.
 fn last_visited_class(ctx: &LinterContext<'_>, node: NodeId) -> Option<NodeId> {
     let offset = ctx.ast.offset(node);
-    (0..ctx.ast.node_count())
-        .map(NodeId::from_index)
+    ctx.ast
+        .list_raw(ctx.ast[ctx.parsed.unit].declarations)
+        .iter()
+        .copied()
         .filter(|&n| ctx.ast.kind(n) == NodeKind::ClassDeclaration && ctx.ast.offset(n) <= offset)
         .max_by_key(|&n| ctx.ast.offset(n))
 }
