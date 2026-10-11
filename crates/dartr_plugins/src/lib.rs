@@ -224,15 +224,16 @@ fn plugin_state_folder(path: &str) -> PathBuf {
 }
 
 /// Writes [content] to [path] when it differs (Dart keeps the modification
-/// time of unchanged files).
-fn write_if_changed(path: &Path, content: &str) -> std::io::Result<()> {
+/// time of unchanged files). Returns `true` when the file was written.
+fn write_if_changed(path: &Path, content: &str) -> std::io::Result<bool> {
     if std::fs::read_to_string(path).ok().as_deref() == Some(content) {
-        return Ok(());
+        return Ok(false);
     }
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(path, content)
+    std::fs::write(path, content)?;
+    Ok(true)
 }
 
 /// Recursively copies [src] directory to [dst].
@@ -257,9 +258,38 @@ fn plugin_error_message(message: &str) -> String {
     format!("An error occurred while executing an analyzer plugin: {message}\n")
 }
 
+/// Groups [jobs] so that contexts sharing the same legacy plugin path or the
+/// same new-plugin configuration (`sdk_path` and `plugins`) share one
+/// prepared plugin package and one plugin isolate.
+fn group_jobs(jobs: &[PluginJob]) -> Vec<(String, Vec<&PluginJob>)> {
+    let mut grouped: Vec<(String, Vec<&PluginJob>)> = Vec::new();
+    for job in jobs {
+        if let Some((_, list)) = grouped.iter_mut().find(|(id, list)| {
+            let first = list[0];
+            if job.is_legacy() || first.is_legacy() {
+                *id == job.plugin_id()
+            } else {
+                first.sdk_path == job.sdk_path && first.plugins == job.plugins
+            }
+        }) {
+            list.push(job);
+        } else {
+            grouped.push((job.plugin_id(), vec![job]));
+        }
+    }
+    grouped
+}
+
 /// Prepares the plugin execution entrypoint and `package_config.json` for [job]
 /// (Dart `_addPlugins` + `PluginManager.filesFor` + `_computeFiles`).
-fn prepare_plugin_files(job: &PluginJob, dart: &str) -> Result<(PathBuf, PathBuf), String> {
+/// When `force_pub` is `false` and the prepared package already exists with
+/// unchanged `pubspec.yaml`, `bin/plugin.dart`, and `.dart_tool/package_config.json`,
+/// reuses it without running `dart pub upgrade`.
+fn prepare_plugin_files(
+    job: &PluginJob,
+    dart: &str,
+    force_pub: bool,
+) -> Result<(PathBuf, PathBuf), String> {
     if let Some(plugin_path) = &job.legacy_plugin_path {
         let plugin_folder = Path::new(plugin_path);
         let pubspec_file = plugin_folder.join("pubspec.yaml");
@@ -283,6 +313,13 @@ fn prepare_plugin_files(job: &PluginJob, dart: &str) -> Result<(PathBuf, PathBuf
             .and_then(|n| n.to_str())
             .unwrap_or("analyzer_plugin");
         let execution_folder = parent_folder.join(short_name);
+        let entrypoint_path = execution_folder.join("bin").join("plugin.dart");
+        let package_config = execution_folder
+            .join(".dart_tool")
+            .join("package_config.json");
+        if !force_pub && entrypoint_path.is_file() && package_config.is_file() {
+            return Ok((entrypoint_path, package_config));
+        }
         let pub_command = if parent_folder.is_dir() {
             "upgrade"
         } else {
@@ -303,15 +340,23 @@ fn prepare_plugin_files(job: &PluginJob, dart: &str) -> Result<(PathBuf, PathBuf
     let pubspec =
         generator::generate_pubspec(configurations, job.plugins.dependency_overrides.as_deref());
     let entrypoint = generator::generate_entrypoint(configurations);
+    let pubspec_path = folder.join("pubspec.yaml");
     let entrypoint_path = folder.join("bin").join("plugin.dart");
-    write_if_changed(&folder.join("pubspec.yaml"), &pubspec)
-        .and_then(|_| write_if_changed(&entrypoint_path, &entrypoint))
+    let package_config = folder.join(".dart_tool").join("package_config.json");
+    let pubspec_changed = write_if_changed(&pubspec_path, &pubspec)
+        .and_then(|changed| {
+            write_if_changed(&entrypoint_path, &entrypoint)?;
+            Ok(changed)
+        })
         .map_err(|e| {
             format!(
                 "cannot write the plugin package at {}: {e}",
                 folder.display()
             )
         })?;
+    if !force_pub && !pubspec_changed && entrypoint_path.is_file() && package_config.is_file() {
+        return Ok((entrypoint_path, package_config));
+    }
     run_pub_and_check(&folder, dart, "upgrade")
 }
 
@@ -371,11 +416,12 @@ pub fn run_plugins(jobs: &[PluginJob], roots: &[String], dart: &str) -> PluginOu
         )));
         return output;
     }
+    let grouped = group_jobs(jobs);
     // The isolates run in parallel, like the server's.
     let results: Vec<Result<PluginSessionOutput, String>> = std::thread::scope(|scope| {
-        let handles: Vec<_> = jobs
+        let handles: Vec<_> = grouped
             .iter()
-            .map(|job| scope.spawn(|| run_job(job, roots, dart, &bridge)))
+            .map(|(_, group)| scope.spawn(|| run_job_group(group, roots, dart, &bridge)))
             .collect();
         handles
             .into_iter()
@@ -443,16 +489,17 @@ struct PluginSessionOutput {
 }
 
 /// Dart `_addPlugins` + `PluginManager.addPluginToContextRoot` + a plugin
-/// session for one context root.
-fn run_job(
-    job: &PluginJob,
+/// session for one plugin isolate across its context roots.
+fn run_job_group(
+    group: &[&PluginJob],
     roots: &[String],
     dart: &str,
     bridge: &Path,
 ) -> Result<PluginSessionOutput, String> {
-    let (entrypoint_path, package_config) = prepare_plugin_files(job, dart)?;
+    let first = group[0];
+    let (entrypoint_path, package_config) = prepare_plugin_files(first, dart, false)?;
     let mut session = Session::start(dart, bridge, &entrypoint_path, &package_config, None)?;
-    let result = session.analyze(job, roots);
+    let result = session.analyze(group, roots);
     session.shutdown();
     result
 }
@@ -487,12 +534,8 @@ fn debug_log(line: &str) {
             .append(true)
             .open(path)
     {
-        let elapsed = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis())
-            .unwrap_or(0);
         let text: String = line.chars().take(400).collect();
-        let _ = writeln!(file, "{elapsed} {text}");
+        let _ = writeln!(file, "{text}");
     }
 }
 
@@ -739,13 +782,19 @@ impl Session {
     }
 
     /// Waits for `plugin.status` (`isAnalyzing: true` -> `isAnalyzing: false`).
+    /// Returns immediately if `self.analyzing` is already `Some(false)` (the
+    /// plugin already started and finished analyzing before this wait began).
     fn wait_for_analysis_idle(&mut self, start_wait: Duration) -> Result<(), String> {
+        self.poll_nonblocking();
+        if self.analyzing == Some(false) {
+            return Ok(());
+        }
         let started = Instant::now();
-        let mut seen_busy = self.analyzing == Some(true);
         loop {
-            if seen_busy && self.analyzing == Some(false) {
+            if self.analyzing == Some(false) {
                 break;
             }
+            let seen_busy = self.analyzing == Some(true);
             let wait = if seen_busy {
                 timeout()
             } else {
@@ -757,9 +806,6 @@ impl Session {
             match self.next_message(wait) {
                 Ok(Some(message)) => {
                     self.handle(message);
-                    if self.analyzing == Some(true) {
-                        seen_busy = true;
-                    }
                 }
                 Ok(None) => break,
                 Err(e) if seen_busy => return Err(e),
@@ -781,15 +827,16 @@ impl Session {
     /// `plugin.versionCheck`, the roots, then wait until the plugin is idle.
     fn analyze(
         &mut self,
-        job: &PluginJob,
+        group: &[&PluginJob],
         roots: &[String],
     ) -> Result<PluginSessionOutput, String> {
+        let first = group[0];
         let byte_store = state_location().join(".plugin_manager").join("byte_store");
         let result = self.request(
             "plugin.versionCheck",
             json!({
                 "byteStorePath": byte_store.to_string_lossy(),
-                "sdkPath": job.sdk_path,
+                "sdkPath": first.sdk_path,
                 "version": "1.0.0-alpha.0",
             }),
         )?;
@@ -798,24 +845,31 @@ impl Session {
         }
         // Dart `PluginIsolate._updatePluginRoots`: the context roots, then
         // the analysis roots of the client (new plugins use only these).
-        let mut context_root = json!({
-            "root": job.context_root,
-            "exclude": job.excluded,
-        });
-        if let Some(options) = &job.options_file {
-            context_root["optionsFile"] = json!(options);
-        }
-        if job.is_legacy() {
-            self.request("analysis.setContextRoots", json!({"roots": [context_root]}))?;
+        let context_roots: Vec<Value> = group
+            .iter()
+            .map(|job| {
+                let mut context_root = json!({
+                    "root": job.context_root,
+                    "exclude": job.excluded,
+                });
+                if let Some(options) = &job.options_file {
+                    context_root["optionsFile"] = json!(options);
+                }
+                context_root
+            })
+            .collect();
+        self.analyzing = None;
+        if first.is_legacy() {
+            self.request("analysis.setContextRoots", json!({"roots": context_roots}))?;
             if self.analyzing == Some(true) {
                 self.wait_for_analysis_idle(Duration::from_millis(200))?;
             }
         } else {
-            self.send("analysis.setContextRoots", json!({"roots": [context_root]}));
-            self.request(
+            self.send("analysis.setContextRoots", json!({"roots": context_roots}));
+            self.send(
                 "analysis.setAnalysisRoots",
                 json!({"included": roots, "excluded": []}),
-            )?;
+            );
             self.wait_for_analysis_idle(idle_start_timeout())?;
         }
         Ok(PluginSessionOutput {
@@ -918,12 +972,26 @@ impl ManagedIsolate {
     }
 }
 
+/// A plugin isolate being prepared and started on a background thread in
+/// parallel with the server's own analysis.
+struct StartingIsolate {
+    plugin_id: String,
+    is_legacy: bool,
+    sdk_path: String,
+    plugins_options: PluginsOptions,
+    context_roots: Vec<IsolateContextRoot>,
+    pending_analysis: bool,
+    initial_pending: bool,
+    handle: std::thread::JoinHandle<Option<(Session, Vec<String>)>>,
+}
+
 /// Persistent plugin manager for `dartr language-server` (ports Dart's
 /// `PluginManager` and `PluginWatcher`).
 #[derive(Default)]
 pub struct PluginManager {
     wakeup: Option<Sender<Option<Value>>>,
     isolates: Vec<ManagedIsolate>,
+    starting: Vec<StartingIsolate>,
     overlays: BTreeMap<String, String>,
     priority_files: Vec<String>,
     included_roots: Vec<String>,
@@ -939,17 +1007,38 @@ impl PluginManager {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.isolates.is_empty()
+        self.isolates.is_empty() && self.starting.is_empty()
     }
 
     pub fn has_pending(&self) -> bool {
         self.isolates.iter().any(|i| i.pending_analysis)
+            || self.starting.iter().any(|s| s.pending_analysis)
     }
 
     /// Marks all running plugins to be restarted on the next `sync_contexts`
     /// (when `analysis_options.yaml` or `package_config.json` changed).
     pub fn mark_restart_needed(&mut self) {
         self.force_restart = true;
+    }
+
+    /// Waits for any background startup threads to finish and moves their
+    /// started sessions into `self.isolates`.
+    fn finish_starting(&mut self) {
+        for starting in self.starting.drain(..) {
+            if let Ok(Some((session, interesting_globs))) = starting.handle.join() {
+                self.isolates.push(ManagedIsolate {
+                    plugin_id: starting.plugin_id,
+                    is_legacy: starting.is_legacy,
+                    sdk_path: starting.sdk_path,
+                    plugins_options: starting.plugins_options,
+                    context_roots: starting.context_roots,
+                    interesting_globs,
+                    session,
+                    pending_analysis: starting.pending_analysis,
+                    initial_pending: starting.initial_pending,
+                });
+            }
+        }
     }
 
     /// Synchronizes the running plugin isolates with [jobs] for the current
@@ -964,21 +1053,13 @@ impl PluginManager {
         priority_files: &[String],
         has_analyzed_dart_files: &dyn Fn(&str) -> bool,
     ) -> Vec<String> {
+        self.finish_starting();
         self.included_roots = included.to_vec();
         self.excluded_roots = excluded.to_vec();
         self.priority_files = priority_files.to_vec();
         let force_restart = std::mem::replace(&mut self.force_restart, false);
 
-        // Group jobs by plugin_id, preserving order.
-        let mut grouped: Vec<(String, Vec<&PluginJob>)> = Vec::new();
-        for job in jobs {
-            let id = job.plugin_id();
-            if let Some((_, list)) = grouped.iter_mut().find(|(k, _)| *k == id) {
-                list.push(job);
-            } else {
-                grouped.push((id, vec![job]));
-            }
-        }
+        let grouped = group_jobs(jobs);
 
         let mut removed_ids = Vec::new();
         let Some(dart) = dart else {
@@ -1036,69 +1117,24 @@ impl PluginManager {
         for (plugin_id, group) in grouped {
             if let Some(existing) = self.isolates.iter_mut().find(|i| i.plugin_id == plugin_id) {
                 if !existing.is_legacy {
-                    let _ = existing.session.request(
-                        "analysis.setAnalysisRoots",
-                        json!({"included": included, "excluded": excluded}),
-                    );
-                    if existing
+                    let has_files = existing
                         .context_roots
                         .iter()
-                        .any(|r| has_analyzed_dart_files(&r.root))
-                    {
+                        .any(|r| has_analyzed_dart_files(&r.root));
+                    if has_files {
+                        existing.session.analyzing = None;
                         existing.pending_analysis = true;
                         existing.initial_pending = true;
                     }
+                    existing.session.send(
+                        "analysis.setAnalysisRoots",
+                        json!({"included": included, "excluded": excluded}),
+                    );
                 }
                 continue;
             }
 
-            let first = group[0];
-            let Ok((entrypoint, package_config)) = prepare_plugin_files(first, dart) else {
-                continue;
-            };
-            let Ok(mut session) = Session::start(
-                dart,
-                &bridge,
-                &entrypoint,
-                &package_config,
-                self.wakeup.clone(),
-            ) else {
-                continue;
-            };
-
-            let byte_store = state_location().join(".plugin_manager").join("byte_store");
-            let Ok(vc) = session.request(
-                "plugin.versionCheck",
-                json!({
-                    "byteStorePath": byte_store.to_string_lossy(),
-                    "sdkPath": first.sdk_path,
-                    "version": "1.0.0-alpha.0",
-                }),
-            ) else {
-                session.shutdown();
-                continue;
-            };
-            if vc.get("isCompatible").and_then(Value::as_bool) == Some(false) {
-                session.shutdown();
-                continue;
-            }
-            let interesting_globs: Vec<String> = vc
-                .get("interestingFiles")
-                .and_then(Value::as_array)
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(Value::as_str)
-                        .map(|g| {
-                            if g.starts_with("**/") {
-                                g.to_string()
-                            } else {
-                                format!("**/{g}")
-                            }
-                        })
-                        .collect()
-                })
-                .unwrap_or_else(|| vec!["**/*.dart".to_string()]);
-
+            let first = group[0].clone();
             let context_roots: Vec<IsolateContextRoot> = group
                 .iter()
                 .map(|j| IsolateContextRoot {
@@ -1107,52 +1143,113 @@ impl PluginManager {
                     options_file: j.options_file.clone(),
                 })
                 .collect();
-
-            // Send existing overlays first so the initial context collection
-            // in the plugin sees the open document contents immediately.
-            if !self.overlays.is_empty() {
-                let mut files = serde_json::Map::new();
-                for (path, content) in &self.overlays {
-                    files.insert(path.clone(), json!({"type": "add", "content": content}));
-                }
-                let _ = session.request("analysis.updateContent", json!({"files": files}));
-            }
-
             let roots_json: Vec<Value> = context_roots.iter().map(|r| r.to_json()).collect();
             let has_files = context_roots
                 .iter()
                 .any(|r| has_analyzed_dart_files(&r.root));
-            if first.is_legacy() {
-                let _ = session.request("analysis.setContextRoots", json!({"roots": roots_json}));
-            } else {
-                session.send("analysis.setContextRoots", json!({"roots": roots_json}));
-                let _ = session.request(
-                    "analysis.setAnalysisRoots",
-                    json!({"included": included, "excluded": excluded}),
-                );
-            }
+            let dart_owned = dart.to_string();
+            let bridge_owned = bridge.clone();
+            let wakeup = self.wakeup.clone();
+            let overlays = self.overlays.clone();
+            let priority_files_owned = self.priority_files.clone();
+            let included_owned = included.to_vec();
+            let excluded_owned = excluded.to_vec();
+            let is_legacy = first.is_legacy();
+            let sdk_path = first.sdk_path.clone();
+            let plugins_options = first.plugins.clone();
 
-            if !self.priority_files.is_empty() {
-                session.send(
-                    "analysis.setSubscriptions",
-                    subscriptions_json(&self.priority_files),
-                );
-                let _ = session.request(
-                    "analysis.setPriorityFiles",
-                    json!({"files": self.priority_files}),
-                );
-            }
+            let handle = std::thread::spawn(move || -> Option<(Session, Vec<String>)> {
+                let Ok((entrypoint, package_config)) =
+                    prepare_plugin_files(&first, &dart_owned, force_restart)
+                else {
+                    return None;
+                };
+                let Ok(mut session) = Session::start(
+                    &dart_owned,
+                    &bridge_owned,
+                    &entrypoint,
+                    &package_config,
+                    wakeup,
+                ) else {
+                    return None;
+                };
 
-            self.isolates.push(ManagedIsolate {
+                let byte_store = state_location().join(".plugin_manager").join("byte_store");
+                let Ok(vc) = session.request(
+                    "plugin.versionCheck",
+                    json!({
+                        "byteStorePath": byte_store.to_string_lossy(),
+                        "sdkPath": first.sdk_path,
+                        "version": "1.0.0-alpha.0",
+                    }),
+                ) else {
+                    session.shutdown();
+                    return None;
+                };
+                if vc.get("isCompatible").and_then(Value::as_bool) == Some(false) {
+                    session.shutdown();
+                    return None;
+                }
+                let interesting_globs: Vec<String> = vc
+                    .get("interestingFiles")
+                    .and_then(Value::as_array)
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(Value::as_str)
+                            .map(|g| {
+                                if g.starts_with("**/") {
+                                    g.to_string()
+                                } else {
+                                    format!("**/{g}")
+                                }
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_else(|| vec!["**/*.dart".to_string()]);
+
+                // Send existing overlays first so the initial context collection
+                // in the plugin sees the open document contents immediately.
+                if !overlays.is_empty() {
+                    let mut files = serde_json::Map::new();
+                    for (path, content) in &overlays {
+                        files.insert(path.clone(), json!({"type": "add", "content": content}));
+                    }
+                    session.send("analysis.updateContent", json!({"files": files}));
+                }
+
+                session.analyzing = None;
+                if first.is_legacy() {
+                    session.send("analysis.setContextRoots", json!({"roots": roots_json}));
+                } else {
+                    session.send("analysis.setContextRoots", json!({"roots": roots_json}));
+                    session.send(
+                        "analysis.setAnalysisRoots",
+                        json!({"included": included_owned, "excluded": excluded_owned}),
+                    );
+                }
+
+                if !priority_files_owned.is_empty() {
+                    session.send(
+                        "analysis.setSubscriptions",
+                        subscriptions_json(&priority_files_owned),
+                    );
+                    session.send(
+                        "analysis.setPriorityFiles",
+                        json!({"files": priority_files_owned}),
+                    );
+                }
+                Some((session, interesting_globs))
+            });
+
+            self.starting.push(StartingIsolate {
                 plugin_id,
-                is_legacy: first.is_legacy(),
-                sdk_path: first.sdk_path.clone(),
-                plugins_options: first.plugins.clone(),
+                is_legacy,
+                sdk_path,
+                plugins_options,
                 context_roots,
-                interesting_globs,
-                session,
                 pending_analysis: has_files,
                 initial_pending: has_files,
+                handle,
             });
         }
 
@@ -1162,6 +1259,7 @@ impl PluginManager {
     /// Updates priority files and subscriptions on all running plugins
     /// (Dart `_updateDriversAndPluginsPriorityFiles`).
     pub fn set_priority_files(&mut self, priority_files: &[String]) {
+        self.finish_starting();
         self.priority_files = priority_files.to_vec();
         if self.isolates.is_empty() {
             return;
@@ -1180,6 +1278,7 @@ impl PluginManager {
 
     /// Sends `AddContentOverlay` to all running plugins (`onOverlayCreated`).
     pub fn overlay_added(&mut self, path: &str, content: &str, changed_from_disk: bool) {
+        self.finish_starting();
         self.overlays.insert(path.to_string(), content.to_string());
         if self.isolates.is_empty() {
             return;
@@ -1193,20 +1292,22 @@ impl PluginManager {
             }
         });
         for isolate in &mut self.isolates {
+            let will_analyze = isolate.is_analyzing(path)
+                && path.ends_with(".dart")
+                && (changed_from_disk || isolate.is_legacy);
+            if will_analyze {
+                isolate.session.analyzing = None;
+                isolate.pending_analysis = true;
+            }
             let _ = isolate
                 .session
                 .request("analysis.updateContent", params.clone());
-            if isolate.is_analyzing(path)
-                && path.ends_with(".dart")
-                && (changed_from_disk || isolate.is_legacy)
-            {
-                isolate.pending_analysis = true;
-            }
         }
     }
 
     /// Sends `ChangeContentOverlay` to all running plugins (`onOverlayUpdated`).
     pub fn overlay_changed(&mut self, path: &str, new_content: &str, edits: Vec<Value>) {
+        self.finish_starting();
         self.overlays
             .insert(path.to_string(), new_content.to_string());
         if self.isolates.is_empty() {
@@ -1221,17 +1322,20 @@ impl PluginManager {
             }
         });
         for isolate in &mut self.isolates {
+            let will_analyze = isolate.is_analyzing(path) && path.ends_with(".dart");
+            if will_analyze {
+                isolate.session.analyzing = None;
+                isolate.pending_analysis = true;
+            }
             let _ = isolate
                 .session
                 .request("analysis.updateContent", params.clone());
-            if isolate.is_analyzing(path) && path.ends_with(".dart") {
-                isolate.pending_analysis = true;
-            }
         }
     }
 
     /// Sends `RemoveContentOverlay` to all running plugins (`onOverlayDestroyed`).
     pub fn overlay_removed(&mut self, path: &str, changed_from_disk: bool) {
+        self.finish_starting();
         self.overlays.remove(path);
         if self.isolates.is_empty() {
             return;
@@ -1244,21 +1348,23 @@ impl PluginManager {
             }
         });
         for isolate in &mut self.isolates {
+            let will_analyze = isolate.is_analyzing(path)
+                && path.ends_with(".dart")
+                && (changed_from_disk || isolate.is_legacy);
+            if will_analyze {
+                isolate.session.analyzing = None;
+                isolate.pending_analysis = true;
+            }
             let _ = isolate
                 .session
                 .request("analysis.updateContent", params.clone());
-            if isolate.is_analyzing(path)
-                && path.ends_with(".dart")
-                && (changed_from_disk || isolate.is_legacy)
-            {
-                isolate.pending_analysis = true;
-            }
         }
     }
 
     /// Broadcasts a file system watch event (`add`, `modify`, `remove`) to
     /// matching plugins (Dart `PluginManager.broadcastWatchEvent`).
     pub fn broadcast_watch_event(&mut self, kind: &str, path: &str) {
+        self.finish_starting();
         if self.isolates.is_empty() {
             return;
         }
@@ -1278,18 +1384,21 @@ impl PluginManager {
             if !isolate.is_analyzing(path) || !isolate.matches_interesting_file(path) {
                 continue;
             }
+            let will_analyze = path.ends_with(".dart") && kind != "remove" && !isolate.is_legacy;
+            if will_analyze {
+                isolate.session.analyzing = None;
+                isolate.pending_analysis = true;
+            }
             let _ = isolate
                 .session
                 .request("analysis.handleWatchEvents", params.clone());
-            if path.ends_with(".dart") && kind != "remove" && !isolate.is_legacy {
-                isolate.pending_analysis = true;
-            }
         }
     }
 
     /// Waits for any pending plugin analysis passes and drains all
     /// `(plugin_id, file_path, errors)` notifications collected so far.
     pub fn wait_for_pending(&mut self) -> Vec<(String, String, Vec<PluginError>)> {
+        self.finish_starting();
         for isolate in &mut self.isolates {
             if isolate.pending_analysis {
                 isolate.pending_analysis = false;
@@ -1314,6 +1423,27 @@ impl PluginManager {
     /// Non-blockingly polls all running plugin isolates and drains any new
     /// `(plugin_id, file_path, errors)` notifications.
     pub fn poll(&mut self) -> Vec<(String, String, Vec<PluginError>)> {
+        let mut still_starting = Vec::new();
+        for starting in self.starting.drain(..) {
+            if starting.handle.is_finished() {
+                if let Ok(Some((session, interesting_globs))) = starting.handle.join() {
+                    self.isolates.push(ManagedIsolate {
+                        plugin_id: starting.plugin_id,
+                        is_legacy: starting.is_legacy,
+                        sdk_path: starting.sdk_path,
+                        plugins_options: starting.plugins_options,
+                        context_roots: starting.context_roots,
+                        interesting_globs,
+                        session,
+                        pending_analysis: starting.pending_analysis,
+                        initial_pending: starting.initial_pending,
+                    });
+                }
+            } else {
+                still_starting.push(starting);
+            }
+        }
+        self.starting = still_starting;
         for isolate in &mut self.isolates {
             isolate.session.poll_nonblocking();
         }
@@ -1338,6 +1468,7 @@ impl PluginManager {
         file: &str,
         offset: u32,
     ) -> Vec<PluginErrorFixes> {
+        self.finish_starting();
         let mut out = Vec::new();
         let params = json!({"file": file, "offset": offset});
         for isolate in &mut self.isolates {
@@ -1381,6 +1512,7 @@ impl PluginManager {
         offset: u32,
         length: u32,
     ) -> Vec<PrioritizedSourceChangeJson> {
+        self.finish_starting();
         let mut out = Vec::new();
         let params = json!({"file": file, "offset": offset, "length": length});
         for isolate in &mut self.isolates {
@@ -1407,6 +1539,7 @@ impl PluginManager {
 
     /// Stops all running plugin isolates.
     pub fn stop_all(&mut self) {
+        self.finish_starting();
         for mut isolate in self.isolates.drain(..) {
             isolate.session.shutdown();
         }
