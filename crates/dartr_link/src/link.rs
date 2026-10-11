@@ -297,8 +297,11 @@ pub fn link_cycle(
 
     let Linker { core, builders, .. } = linker;
     let LinkerCore {
-        store, const_exprs, ..
+        store,
+        mut const_exprs,
+        ..
     } = core;
+    const_exprs.ast.shrink_to_fit();
     let const_exprs = Arc::new(const_exprs);
     store.const_ast.set_once(ConstAst(const_exprs.clone()));
     LinkedCycle {
@@ -307,11 +310,15 @@ pub fn link_cycle(
         libraries: builders
             .into_iter()
             .map(|b| {
+                let mut export_entries = b.export_scope.to_export_entries();
+                export_entries.shrink_to_fit();
+                let mut reference = b.references.reference;
+                reference.shrink_to_fit();
                 Arc::new(LinkedLibrary {
                     uri: b.uri.clone(),
                     element: b.element,
-                    export_entries: b.export_scope.to_export_entries(),
-                    reference: b.references.reference,
+                    export_entries,
+                    reference,
                 })
             })
             .collect(),

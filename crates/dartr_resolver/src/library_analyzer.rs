@@ -845,11 +845,22 @@ impl<'w> ExternalUnitCache<'w> {
             directive_diagnostics: Vec::new(),
             resolved_uris: dartr_ast::NodeMap::new(),
         };
-        let resolved = resolve_file(&input, &scopes, &features, &unit);
+        let mut resolved = resolve_file(&input, &scopes, &features, &unit);
         if resolved.panic.is_some() {
             return None;
         }
+        resolved.ast.shrink_to_fit();
+        resolved.diagnostics = Vec::new();
         Some(Arc::new(resolved))
+    }
+
+    pub fn resolved_units(&self) -> Vec<Arc<ResolvedUnit>> {
+        self.units
+            .lock()
+            .unwrap()
+            .values()
+            .filter_map(|cell| cell.get().and_then(|u| u.clone()))
+            .collect()
     }
 }
 

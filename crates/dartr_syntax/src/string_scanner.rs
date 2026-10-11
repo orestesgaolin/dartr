@@ -364,8 +364,9 @@ impl<'a, 'c> AbstractScanner<'a, 'c> {
             let mut value = String::with_capacity(end.byte - start.byte + synthetic_chars.len());
             value.push_str(std::str::from_utf8(&self.src[start.byte..end.byte]).unwrap_or(""));
             value.push_str(synthetic_chars);
-            let index = self.arena.owned_lexemes.len();
-            self.arena.owned_lexemes.push(value.into_boxed_str());
+            let owned = std::sync::Arc::make_mut(&mut self.arena.owned_lexemes);
+            let index = owned.len();
+            owned.push(value.into_boxed_str());
             self.push_token(
                 ty,
                 flags::SYNTHETIC | flags::OWNED_LEXEME,
@@ -409,7 +410,8 @@ impl<'a, 'c> AbstractScanner<'a, 'c> {
         _minor: i64,
     ) -> TokenId {
         let token = self.create_comment_token(TokenType::SINGLE_LINE_COMMENT, start, true, 0);
-        self.arena.tokens[token.index()].flags |= flags::LANGUAGE_VERSION;
+        std::sync::Arc::make_mut(&mut self.arena.tokens)[token.index()].flags |=
+            flags::LANGUAGE_VERSION;
         token
     }
 }

@@ -134,7 +134,7 @@ impl<'a, 'c> AbstractScanner<'a, 'c> {
         // LineStarts: the first line starts at character offset 0.
         s.line_starts.reserve(1 + source.len() / 22);
         // About one token (or comment) per 10 bytes in typical code.
-        s.arena.tokens.reserve(16 + source.len() / 8);
+        std::sync::Arc::make_mut(&mut s.arena.tokens).reserve(16 + source.len() / 8);
         s.line_starts.push(0);
         s.set_configuration(configuration);
         s
@@ -148,8 +148,9 @@ impl<'a, 'c> AbstractScanner<'a, 'c> {
     ) -> Self {
         // Dart `new Token.eof(-1)`: points to itself. The offset -1 is
         // `u32::MAX` (`offset as i32 == -1`).
-        let head = TokenId(arena.tokens.len() as u32);
-        arena.tokens.push(Token {
+        let tokens = std::sync::Arc::make_mut(&mut arena.tokens);
+        let head = TokenId(tokens.len() as u32);
+        tokens.push(Token {
             ty: TokenType::EOF,
             flags: flags::FIXED_LEXEME,
             offset: u32::MAX,
@@ -248,7 +249,7 @@ impl<'a, 'c> AbstractScanner<'a, 'c> {
 
     #[inline(always)]
     fn tok_mut(&mut self, id: TokenId) -> &mut Token {
-        &mut self.arena.tokens[id.index()]
+        &mut std::sync::Arc::make_mut(&mut self.arena.tokens)[id.index()]
     }
 
     #[inline(always)]
@@ -267,8 +268,9 @@ impl<'a, 'c> AbstractScanner<'a, 'c> {
         lex_end: usize,
         preceding_comments: TokenId,
     ) -> TokenId {
-        let id = TokenId(self.arena.tokens.len() as u32);
-        self.arena.tokens.push(Token {
+        let tokens = std::sync::Arc::make_mut(&mut self.arena.tokens);
+        let id = TokenId(tokens.len() as u32);
+        tokens.push(Token {
             ty,
             flags: token_flags,
             offset: offset as u32,
@@ -306,10 +308,11 @@ impl<'a, 'c> AbstractScanner<'a, 'c> {
     }
 
     fn new_error_token(&mut self, error: ErrorToken) -> TokenId {
-        let index = self.arena.errors.len();
+        let errors = std::sync::Arc::make_mut(&mut self.arena.errors);
+        let index = errors.len();
         let offset = error.char_offset as i64;
         let length = error.length() as i64;
-        self.arena.errors.push(error);
+        errors.push(error);
         self.push_token(
             TokenType::BAD_INPUT,
             flags::ERROR,

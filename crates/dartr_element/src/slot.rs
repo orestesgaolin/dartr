@@ -6,20 +6,31 @@ use std::any::Any;
 use std::fmt;
 use std::sync::OnceLock;
 
-/// An append-only vector with stable references (a `boxcar::Vec`).
+use parking_lot::Mutex;
+use std::sync::atomic::{AtomicPtr, AtomicU32, Ordering};
+
+/// An append-only vector with stable references and compact initial buckets
+/// (capacities `1, 2, 4, 8, ...`, with bucket 0 stored directly in `b0` so
+/// 0-element and 1-element arenas have zero bucket-table overhead).
 ///
 /// - A builder phase that owns the store adds with [`Arena::push`] and
 ///   changes structural data with [`Arena::get_mut`] (`&mut`).
 /// - The synthetic store of a generation and the store of a [`crate::LocalArena`]
 ///   add through a shared reference (`&self`), while other code reads.
 pub struct Arena<T> {
-    items: boxcar::Vec<T>,
+    b0: AtomicPtr<T>,
+    more: AtomicPtr<[AtomicPtr<T>; 24]>,
+    len: AtomicU32,
+    lock: Mutex<()>,
 }
 
 impl<T> Default for Arena<T> {
     fn default() -> Self {
         Arena {
-            items: boxcar::Vec::new(),
+            b0: AtomicPtr::new(std::ptr::null_mut()),
+            more: AtomicPtr::new(std::ptr::null_mut()),
+            len: AtomicU32::new(0),
+            lock: Mutex::new(()),
         }
     }
 }
@@ -28,39 +39,154 @@ impl<T> Arena<T> {
     /// Adds [value] and returns its index.
     #[inline]
     pub fn push(&self, value: T) -> u32 {
-        u32::try_from(self.items.push(value)).expect("arena overflow")
+        let _guard = self.lock.lock();
+        let i = self.len.load(Ordering::Relaxed);
+        if i == 0 {
+            let ptr = Box::into_raw(Box::new(value));
+            self.b0.store(ptr, Ordering::Release);
+            self.len.store(1, Ordering::Release);
+            return 0;
+        }
+        let x = i + 1;
+        let b = (31 - x.leading_zeros()) as usize;
+        let off = (x ^ (1 << b)) as usize;
+        assert!(b >= 1 && b <= 24, "arena overflow");
+        let mut more = self.more.load(Ordering::Relaxed);
+        if more.is_null() {
+            let table: Box<[AtomicPtr<T>; 24]> =
+                Box::new(std::array::from_fn(
+                    |_| AtomicPtr::new(std::ptr::null_mut()),
+                ));
+            more = Box::into_raw(table);
+            self.more.store(more, Ordering::Release);
+        }
+        let slot_atomic = unsafe { &(&*more)[b - 1] };
+        let mut bucket = slot_atomic.load(Ordering::Relaxed);
+        if bucket.is_null() {
+            let cap = 1usize << b;
+            let mut vec: Vec<std::mem::MaybeUninit<T>> = Vec::with_capacity(cap);
+            bucket = vec.as_mut_ptr().cast::<T>();
+            std::mem::forget(vec);
+            slot_atomic.store(bucket, Ordering::Release);
+        }
+        unsafe {
+            bucket.add(off).write(value);
+        }
+        self.len.store(i + 1, Ordering::Release);
+        i
     }
 
     #[inline]
     pub fn get(&self, index: u32) -> &T {
-        &self.items[index as usize]
+        let len = self.len.load(Ordering::Acquire);
+        assert!(index < len, "arena index {index} out of bounds {len}");
+        if index == 0 {
+            let ptr = self.b0.load(Ordering::Acquire);
+            return unsafe { &*ptr };
+        }
+        let x = index + 1;
+        let b = (31 - x.leading_zeros()) as usize;
+        let off = (x ^ (1 << b)) as usize;
+        let more = self.more.load(Ordering::Acquire);
+        let bucket = unsafe { (&*more)[b - 1].load(Ordering::Acquire) };
+        unsafe { &*bucket.add(off) }
     }
 
     #[inline]
     pub fn get_mut(&mut self, index: u32) -> &mut T {
-        self.items.get_mut(index as usize).expect("arena index")
+        let len = *self.len.get_mut();
+        assert!(index < len, "arena index {index} out of bounds {len}");
+        if index == 0 {
+            let ptr = *self.b0.get_mut();
+            return unsafe { &mut *ptr };
+        }
+        let x = index + 1;
+        let b = (31 - x.leading_zeros()) as usize;
+        let off = (x ^ (1 << b)) as usize;
+        let more = *self.more.get_mut();
+        let bucket = unsafe { *(&mut *more)[b - 1].get_mut() };
+        unsafe { &mut *bucket.add(off) }
     }
 
     /// The number of items.
     pub fn len(&self) -> usize {
-        self.items.count()
+        self.len.load(Ordering::Acquire) as usize
     }
 
     pub fn is_empty(&self) -> bool {
-        self.items.is_empty()
+        self.len() == 0
     }
 
     /// The items with their index, in insertion order.
     pub fn iter(&self) -> impl Iterator<Item = (u32, &T)> {
-        self.items.iter().map(|(i, v)| (i as u32, v))
+        let len = self.len.load(Ordering::Acquire);
+        (0..len).map(move |i| (i, self.get(i)))
+    }
+
+    /// Returns `(count, used_element_bytes, allocated_capacity_bytes)`.
+    pub fn mem_bytes(&self) -> (usize, usize, usize) {
+        let count = self.len.load(Ordering::Relaxed) as usize;
+        let elem_size = std::mem::size_of::<T>();
+        if count == 0 {
+            return (0, 0, 0);
+        }
+        if count == 1 {
+            return (1, elem_size, elem_size);
+        }
+        let max_b = (31 - (count as u32).leading_zeros()) as usize;
+        let cap_slots = (1usize << (max_b + 1)) - 1;
+        let table_bytes = 24 * std::mem::size_of::<AtomicPtr<T>>();
+        (
+            count,
+            count * elem_size,
+            cap_slots * elem_size + table_bytes,
+        )
     }
 }
 
+impl<T> Drop for Arena<T> {
+    fn drop(&mut self) {
+        let len = *self.len.get_mut();
+        let b0 = *self.b0.get_mut();
+        if !b0.is_null() && len > 0 {
+            unsafe {
+                drop(Box::from_raw(b0));
+            }
+        }
+        let more = *self.more.get_mut();
+        if !more.is_null() {
+            let table = unsafe { Box::from_raw(more) };
+            for (idx, slot) in table.into_iter().enumerate() {
+                let b = idx + 1;
+                let bucket = slot.into_inner();
+                if !bucket.is_null() {
+                    let cap = 1usize << b;
+                    let start_index = (1u32 << b) - 1;
+                    let init_count = if len > start_index {
+                        ((len - start_index) as usize).min(cap)
+                    } else {
+                        0
+                    };
+                    unsafe {
+                        let slice = std::ptr::slice_from_raw_parts_mut(bucket, init_count);
+                        std::ptr::drop_in_place(slice);
+                        let _ =
+                            Vec::<std::mem::MaybeUninit<T>>::from_raw_parts(bucket.cast(), 0, cap);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// SAFETY: `Arena<T>` owns its `T` elements and synchronizes concurrent pushes
+// with `lock` and `Release`/`Acquire` atomic orderings.
+unsafe impl<T: Send> Send for Arena<T> {}
+unsafe impl<T: Send + Sync> Sync for Arena<T> {}
+
 impl<T: fmt::Debug> fmt::Debug for Arena<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_list()
-            .entries(self.items.iter().map(|(_, v)| v))
-            .finish()
+        f.debug_list().entries(self.iter().map(|(_, v)| v)).finish()
     }
 }
 

@@ -378,8 +378,8 @@ impl FileSystemState {
             let sdk_cache_ref = sdk_cache.as_deref();
             let results: Vec<(FileId, RefreshData)> = jobs
                 .into_par_iter()
-                .map(|(id, path, is_dart, is_dart_core, config, salt)| {
-                    if is_dart && let Some(cache) = sdk_cache_ref {
+                .map(|(id, path, _is_dart, is_dart_core, config, salt)| {
+                    if let Some(cache) = sdk_cache_ref {
                         let key = SdkFileKey {
                             path: path.clone(),
                             is_dart_core,
@@ -414,9 +414,7 @@ impl FileSystemState {
             return true;
         }
         let f = self.file(file);
-        if f.uri_properties.is_dart
-            && let Some(cache) = &self.sdk_cache
-        {
+        if let Some(cache) = &self.sdk_cache {
             cache.invalidate_file(&f.path);
         }
         let is_dart_core = &*f.uri_str == "dart:core";
