@@ -361,9 +361,12 @@ impl Tokens {
         byte_offset: u32,
         preceding_comments: TokenId,
     ) -> TokenId {
-        let mut token = Token::fixed(ty, offset, byte_offset, false);
-        token.preceding_comments = preceding_comments;
-        self.push(token)
+        let token = Token::fixed(ty, offset, byte_offset, false);
+        let id = self.push(token);
+        if preceding_comments.is_some() {
+            self.set_preceding_comments(id, preceding_comments);
+        }
+        id
     }
 
     /// Dart `new SyntheticToken(type, offset)`, `new SyntheticBeginToken`,
@@ -443,6 +446,25 @@ impl Tokens {
         } else {
             None
         }
+    }
+
+    /// Dart `SimpleToken.precedingComments=`: sets `preceding_comments` on
+    /// `parent` and `parent` (`end_group`) on each comment token in the chain.
+    pub fn set_preceding_comments(&mut self, parent: TokenId, mut comment: TokenId) {
+        self.tokens[parent.index()].preceding_comments = comment;
+        while comment.is_some() {
+            let c = &mut self.tokens[comment.index()];
+            c.end_group = parent;
+            comment = c.next;
+        }
+    }
+
+    /// Dart `CommentToken.parent`.
+    #[inline(always)]
+    pub fn comment_parent(&self, id: TokenId) -> TokenId {
+        let t = &self.tokens[id.index()];
+        debug_assert!(t.is_comment());
+        t.end_group
     }
 
     /// Dart `Token.setNext`: links `a.next = b`, `b.previous = a`.

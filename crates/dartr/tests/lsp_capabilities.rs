@@ -74,11 +74,23 @@ fn registration_key(r: &Value) -> String {
     }
 }
 
-fn capabilities_of(program: &str, args: &[&str], init: Value) -> Capabilities {
+fn capabilities_of(
+    program: &str,
+    args: &[&str],
+    init: Value,
+    expect_dynamic: bool,
+) -> Capabilities {
     let mut c = LspClient::spawn(program, args, &[]);
     let result = c.request("initialize", init);
     c.notify("initialized", json!({}));
     c.settle(true);
+    if expect_dynamic {
+        c.wait_until(|c| {
+            c.server_requests
+                .iter()
+                .any(|(m, _)| m == "client/registerCapability")
+        });
+    }
     let mut caps = Capabilities::default();
     flatten("", &result["result"]["capabilities"], &mut caps.statics);
     for (method, params) in &c.server_requests {
@@ -116,12 +128,21 @@ fn capabilities_match_dart_language_server() {
 
     let mut problems = Vec::new();
     let mut missing = Vec::new();
-    for (client, init) in [("dart-code", &dynamic_init), ("static", &static_init)] {
-        let dart = capabilities_of("dart", &["language-server", "--protocol=lsp"], init.clone());
+    for (client, init, expect_dynamic) in [
+        ("dart-code", &dynamic_init, true),
+        ("static", &static_init, false),
+    ] {
+        let dart = capabilities_of(
+            "dart",
+            &["language-server", "--protocol=lsp"],
+            init.clone(),
+            expect_dynamic,
+        );
         let dartr = capabilities_of(
             env!("CARGO_BIN_EXE_dartr"),
             &["language-server", "--protocol=lsp"],
             init.clone(),
+            expect_dynamic,
         );
         for (kind, d, r) in [
             ("static", &dart.statics, &dartr.statics),

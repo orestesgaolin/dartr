@@ -578,7 +578,14 @@ impl UnitApiSignatureComputer<'_> {
     /// Dart `_addTokens`: the tokens from [begin] to [end], stopping at EOF.
     fn add_tokens(&mut self, begin: TokenId, end: TokenId) {
         let tokens = &self.ast.tokens;
-        let mut token = begin;
+        let mut token = if tokens.get(begin).is_comment() {
+            tokens.comment_parent(begin)
+        } else {
+            begin
+        };
+        if token.is_none() {
+            return;
+        }
         loop {
             self.add_token(Some(token));
             if token == end {
@@ -608,5 +615,31 @@ impl UnitApiSignatureComputer<'_> {
                 self.add_node(v.initializer.map(|i| i.raw()));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compute_unlinked_api_signature;
+    use dartr_ast_builder::parse_file;
+
+    #[test]
+    fn api_signature_changes_when_documented_member_renamed() {
+        let before = parse_file(
+            "/// Class doc.\nclass A {\n  /// Method doc.\n  int foo(int x) => x;\n}\n",
+            "/test.dart",
+            (3, 7),
+            &[],
+        );
+        let after = parse_file(
+            "/// Class doc.\nclass A {\n  /// Method doc.\n  int fooX(int x) => x;\n}\n",
+            "/test.dart",
+            (3, 7),
+            &[],
+        );
+        assert_ne!(
+            compute_unlinked_api_signature(&before),
+            compute_unlinked_api_signature(&after)
+        );
     }
 }

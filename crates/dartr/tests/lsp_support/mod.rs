@@ -264,6 +264,42 @@ impl LspClient {
         analyzed
     }
 
+    /// Waits until `predicate(self)` is true, then settles until no progress
+    /// is open and the server is quiet.
+    #[track_caller]
+    pub fn wait_until(&mut self, mut predicate: impl FnMut(&Self) -> bool) {
+        let deadline = Instant::now() + self.step_timeout;
+        while !predicate(self) {
+            assert!(
+                Instant::now() < deadline,
+                "timed out waiting for condition: program={} caller={} open_progress={} progress_ends={}",
+                self.program,
+                std::panic::Location::caller(),
+                self.open_progress,
+                self.progress_ends,
+            );
+            self.next_message(Instant::now() + QUIET);
+        }
+        self.settle(false);
+    }
+
+    /// Like `wait_until`, but waits at most [grace] for `predicate(self)` to
+    /// become true before settling.
+    #[track_caller]
+    pub fn wait_until_with_grace(
+        &mut self,
+        grace: Duration,
+        mut predicate: impl FnMut(&Self) -> bool,
+    ) -> bool {
+        let deadline = Instant::now() + grace;
+        while !predicate(self) && Instant::now() < deadline {
+            self.next_message(Instant::now() + QUIET);
+        }
+        let matched = predicate(self);
+        self.settle(false);
+        matched
+    }
+
     /// The next message (handled), or `None` at [deadline].
     fn next_message(&mut self, deadline: Instant) -> Option<Value> {
         let timeout = deadline.saturating_duration_since(Instant::now());

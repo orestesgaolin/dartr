@@ -277,10 +277,13 @@ impl<'a, 'c> AbstractScanner<'a, 'c> {
             lex_end: lex_end as u32,
             next: TokenId::NONE,
             previous: TokenId::NONE,
-            preceding_comments,
+            preceding_comments: TokenId::NONE,
             end_group: TokenId::NONE,
             before_synthetic: TokenId::NONE,
         });
+        if preceding_comments.is_some() {
+            self.arena.set_preceding_comments(id, preceding_comments);
+        }
         id
     }
 
