@@ -38,7 +38,9 @@ pub fn visit_simple_identifier(
     rv.check_unreachable_node(node);
     let element = rv.element(node);
     rv.check_read_of_not_assigned_local_variable(node, element);
-    // Dart `_reportDeprecatedExportUse(node)` (wave D).
+    if let Some(&scope_lookup_result) = rv.rt.scope_lookup_result.get(node) {
+        rv.report_deprecated_export_use_getter(scope_lookup_result, rv.ast[node].token);
+    }
     let mut already_resolved = false;
     let property_result = resolve1(rv, node, context_type, &mut already_resolved);
     if !already_resolved {

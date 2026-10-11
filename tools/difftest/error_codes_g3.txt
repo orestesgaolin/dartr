@@ -1,6 +1,7 @@
 assignment_of_do_not_store
 cast_from_null_always_fails
 deprecated_colon_for_default_value
+deprecated_export_use
 deprecated_extend
 deprecated_factory_method
 deprecated_implement
