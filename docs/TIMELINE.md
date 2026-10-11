@@ -108,6 +108,7 @@ at each merge; the final process report is written from it.
 | 10-11 12:00 | d41dae6 | CPU round 5: flat element-store vector, memoized constant constructor calls, fewer AST scans, scopes built once | Gemini 4 (Antigravity) | flutter: user CPU on 1 thread 14.3 -> 8.2 s, wall on all cores 4.0 -> 1.8 s; 4 corpora identical; 5,598 tests |
 | 10-11 12:50 | dd96ea7 | analyzer plugins start without blocking the language server (no 60 s wait for a past status, async start, pub upgrade only when needed) | Gemini 4 (Antigravity) | visible-app language-server startup with jaspr_lints 104-134 s -> 25-28 s (dart: 96 s cold); diagnostics identical; 5,599 tests |
 | 10-11 14:20 | 69fe06f | simpler landing page (numbers, comparison tables, known differences, guide links) and an editor-setup guide for Homebrew and the shim | Gemini 4 (Antigravity) | 522 lines removed and 203 added (page, style, guide); fits a 390 px phone without horizontal scroll |
+| 10-11 14:40 | 261158c | site: language-server charts (startup, completion, first references, memory) and peak-memory chart; bench/memory.sh | Gemini 4 (Antigravity) | dartr analyze peak RSS vs dart: app 5.5 vs 5.8 GB, flutter 1.46 vs 0.89 GB, analyzer 0.77 vs 0.48 GB, flutter_tools 0.90 vs 0.48 GB |
 
 ## Incidents and lessons
 
