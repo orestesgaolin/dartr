@@ -11,8 +11,11 @@ One invocation benchmarks one server on one project:
                           `dartr language-server` (DARTR, default: target/release/dartr)
     --cold-runs N         startups with an empty cache (dart: a new temporary `--cache` dir;
                           dartr has no disk cache, so a cold run is the same as a warm run)
-    --warm-runs N         startups with the normal cache; one uncounted start comes first
-    --full-runs N         sessions that also run the edit and request phases (normal cache)
+    --warm-runs N         startups with the benchmark cache (`--dart-cache`, not ~/.dartServer);
+                          one uncounted start warms it first
+    --full-runs N         sessions that also run the edit and request phases (benchmark cache)
+    --dart-cache DIR      cache directory for warm `dart` runs
+                          (default: $TMPDIR/dartr-lsp-bench-cache)
     --reps N              repetitions of each edit (default 5)
     --trace               print every message (first 200 chars) to stderr
 
@@ -574,7 +577,8 @@ def request_phase(c, root, target, n):
 
 
 def session(args, root, cold, full):
-    cache = tempfile.mkdtemp(prefix="lspbench-cache-") if cold and args.server == "dart" else None
+    temp_cache = tempfile.mkdtemp(prefix="lspbench-cache-") if cold and args.server == "dart" else None
+    cache = temp_cache if cold else (args.dart_cache if args.server == "dart" else None)
     load_before = loadavg()
     t0 = time.monotonic()
     c = Client(server_argv(args, cache), trace=args.trace)
@@ -609,8 +613,8 @@ def session(args, root, cold, full):
     finally:
         sampler.stop.set()
         c.shutdown()
-        if cache:
-            shutil.rmtree(cache, ignore_errors=True)
+        if temp_cache:
+            shutil.rmtree(temp_cache, ignore_errors=True)
     return res
 
 
@@ -682,6 +686,9 @@ def main():
     ap.add_argument("--cold-runs", type=int, default=0)
     ap.add_argument("--warm-runs", type=int, default=0)
     ap.add_argument("--full-runs", type=int, default=1)
+    ap.add_argument("--dart-cache", default=os.path.join(
+        os.environ.get("TMPDIR", "/tmp"), "dartr-lsp-bench-cache"),
+        help="cache directory for warm dart runs (default: $TMPDIR/dartr-lsp-bench-cache)")
     ap.add_argument("--reps", type=int, default=5)
     ap.add_argument("--positions", type=int, default=20)
     ap.add_argument("--timeout", type=float, default=900)
@@ -694,7 +701,7 @@ def main():
     for _ in range(args.cold_runs):
         report["cold"].append(session(args, root, cold=True, full=False))
     if args.warm_runs or args.full_runs:
-        # Uncounted start: fills the normal Dart cache and the file system cache.
+        # Uncounted start: fills the benchmark's Dart cache (--dart-cache) and the file system cache.
         report["warmup"] = session(args, root, cold=False, full=False)
     for _ in range(args.warm_runs):
         report["warm"].append(session(args, root, cold=False, full=False))
