@@ -147,3 +147,24 @@ directory (`DARTR_CACHE_DIR`, atomic writes, build fingerprint, corrupt entries 
 The SDK is already linked only once per run (shared across analysis contexts), so the cache saves only
 the first link of the SDK (~0.3 s). The gain does not justify a persistent cache by default (stale or
 corrupt data risk, a cache directory in the user's home). Not merged.
+
+## Language server: `dartr language-server` against `dart language-server` (2026-10-11 09:00–09:50)
+
+`bench/lsp_bench.py`, main at ff66972 (after the latency work), load average 7 to 11 (agents building).
+Median of 20 positions per request kind (references: 7 to 10), first request separate. Startup = from
+initialize to the end of the first analysis. Memory = RSS after startup.
+
+| project | server | startup cold | startup warm | hover | completion `.` | completion stmt | references (median / first) | leaf edit | API edit | RSS |
+|---|---|---|---|---|---|---|---|---|---|---|
+| flutter_tools | dart | 9.9 s | 1.8 s | 0.1 ms | 3.4 ms | 32 ms | 55 ms / 74 ms | 6 ms | 1,314 ms | 515 MB |
+| | dartr | 2.5 s | – | 0.1 ms | 1.3 ms | 29 ms | 18 ms / 204 ms | 8 ms | 407 ms | 978 MB |
+| analyzer-9.0.0 | dart | 9.7 s | 2.8 s | 0.1 ms | 2.2 ms | 21 ms | 14 ms / 17 ms | 14 ms | 1,592 ms | 536 MB |
+| | dartr | 2.3 s | – | 0.0 ms | 0.9 ms | 18 ms | 2 ms / 40 ms | 8 ms | 722 ms | 918 MB |
+| flutter | dart | 23.9 s | 4.9 s | 0.1 ms | 3.4 ms | 46 ms | 200 ms / 3,543 ms | 963 ms | 3,017 ms | 810 MB |
+| | dartr | 5.2 s | – | 0.1 ms | 1.7 ms | 40 ms | 79 ms / 1,739 ms | 65 ms | 3,335 ms | 1,667 MB |
+| visible-app | dart | 95.7 s | 139–156 s | 0.1 ms | 4.6 ms | 49 ms | 41 ms / 5,282 ms | 47 ms | 8,561 ms | 6,785 MB |
+| | dartr | 122–134 s (36 s without plugins) | – | 0.1 ms | 1.8 ms | 48 ms | 14 ms / 2,194 ms | 53 ms | 2,358 ms | 5,113 MB |
+
+dartr has no disk cache, so cold and warm startup are the same. With plugins, dartr publishes the same
+diagnostics as Dart on visible-app (11 files, 1 error, 19 infos). Known difference: one references request
+on flutter_tools returns 589 results in dartr and 588 in Dart.
