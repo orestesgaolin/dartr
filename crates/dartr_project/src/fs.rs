@@ -29,6 +29,15 @@ pub fn has_overlays() -> bool {
     HAS_OVERLAYS.load(Ordering::Acquire)
 }
 
+/// Returns `true` if `path` currently has an in-memory overlay.
+#[inline]
+pub fn has_overlay(path: &str) -> bool {
+    if !has_overlays() {
+        return false;
+    }
+    overlays().read().unwrap().contains_key(path)
+}
+
 /// Sets (or, with `None`, removes) the overlay of [path].
 pub fn set_overlay(path: &str, content: Option<String>) {
     let mut map = overlays().write().unwrap();

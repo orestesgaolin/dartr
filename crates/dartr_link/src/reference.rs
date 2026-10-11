@@ -152,6 +152,40 @@ pub struct LibraryReference {
 }
 
 impl LibraryReference {
+    pub fn raw_parts(
+        &self,
+    ) -> (
+        &Arc<str>,
+        &[Reference],
+        &[IndexMap<Arc<str>, RefId>],
+        &IndexMap<(RefId, MemberReferenceKind), IndexMap<Arc<str>, RefId>>,
+        &[Option<RefId>; 2],
+    ) {
+        (
+            &self.uri_string,
+            &self.references,
+            &self.top_levels_by_kind,
+            &self.members,
+            &self.built_ins,
+        )
+    }
+
+    pub fn from_raw_parts(
+        uri_string: Arc<str>,
+        references: Vec<Reference>,
+        top_levels_by_kind: Vec<IndexMap<Arc<str>, RefId>>,
+        members: IndexMap<(RefId, MemberReferenceKind), IndexMap<Arc<str>, RefId>>,
+        built_ins: [Option<RefId>; 2],
+    ) -> LibraryReference {
+        LibraryReference {
+            uri_string,
+            references,
+            top_levels_by_kind,
+            members,
+            built_ins,
+        }
+    }
+
     pub fn new(uri_string: Arc<str>) -> LibraryReference {
         LibraryReference {
             uri_string,

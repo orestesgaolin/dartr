@@ -207,6 +207,78 @@ pub struct FileState {
     pub referencing_files: IndexSet<FileId>,
 }
 
+/// Lazily or eagerly parsed unit of a [`FileContent`].
+///
+/// Dereferences to [`Arc<ParsedUnit>`], parsing the file on demand on first
+/// access when loaded from the on-disk unlinked summary cache.
+pub struct LazyParsed {
+    cell: Arc<std::sync::OnceLock<Arc<ParsedUnit>>>,
+    loader: Option<(Arc<str>, FileConfig)>,
+}
+
+impl std::fmt::Debug for LazyParsed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.cell.get() {
+            Some(p) => std::fmt::Debug::fmt(p, f),
+            None => f.write_str("<unparsed SDK unit>"),
+        }
+    }
+}
+
+impl LazyParsed {
+    pub fn ready(parsed: Arc<ParsedUnit>) -> Self {
+        let cell = Arc::new(std::sync::OnceLock::new());
+        let _ = cell.set(parsed);
+        LazyParsed { cell, loader: None }
+    }
+
+    pub fn lazy(path: Arc<str>, config: FileConfig) -> Self {
+        LazyParsed {
+            cell: Arc::new(std::sync::OnceLock::new()),
+            loader: Some((path, config)),
+        }
+    }
+
+    #[inline]
+    pub fn get_if_ready(&self) -> Option<&Arc<ParsedUnit>> {
+        self.cell.get()
+    }
+
+    #[inline]
+    pub fn get(&self) -> &Arc<ParsedUnit> {
+        self.cell.get_or_init(|| {
+            let (path, config) = self
+                .loader
+                .as_ref()
+                .expect("LazyParsed without loader must be initialized");
+            let content = dartr_project::fs::read_string_strict(path).unwrap_or_default();
+            let content = content.strip_prefix('\u{feff}').unwrap_or(&content);
+            Arc::new(parse_file(
+                content,
+                path,
+                config.package_language_version,
+                &config.experiments,
+            ))
+        })
+    }
+
+    pub(crate) fn clone_lazy(&self) -> Self {
+        LazyParsed {
+            cell: self.cell.clone(),
+            loader: self.loader.clone(),
+        }
+    }
+}
+
+impl std::ops::Deref for LazyParsed {
+    type Target = Arc<ParsedUnit>;
+
+    #[inline]
+    fn deref(&self) -> &Arc<ParsedUnit> {
+        self.get()
+    }
+}
+
 /// The data computed from the content of a file.
 #[derive(Debug)]
 pub struct FileContent {
@@ -215,7 +287,7 @@ pub struct FileContent {
     pub content_hash: String,
     /// Dart `unlinkedKey` (without the `.unlinked2` suffix).
     pub unlinked_signature: [u8; 16],
-    pub parsed: Arc<ParsedUnit>,
+    pub parsed: LazyParsed,
     pub unlinked: UnlinkedUnit,
     pub kind: FileKind,
     /// Dart `FileKind.libraryImports`.
@@ -356,9 +428,14 @@ impl FileSystemState {
     /// repeats until no file is pending. Dart does the same lazily
     /// (`refresh`, `discoverReferencedFiles`).
     pub fn discover(&mut self) {
-        let sdk_cache = (!dartr_project::fs::has_overlays())
-            .then(|| self.sdk_cache.clone())
-            .flatten();
+        let sdk_cache = self.sdk_cache.clone();
+        let has_any_overlays = dartr_project::fs::has_overlays();
+        let disk_dir = crate::disk_cache::cache_dir();
+        let mut new_disk_summaries: Vec<(
+            FileConfig,
+            Vec<u32>,
+            crate::disk_cache::CachedSdkFileSummary,
+        )> = Vec::new();
         while !self.pending.is_empty() {
             let pending = std::mem::take(&mut self.pending);
             let jobs: Vec<ParseJob> = pending
@@ -376,10 +453,24 @@ impl FileSystemState {
                 })
                 .collect();
             let sdk_cache_ref = sdk_cache.as_deref();
-            let results: Vec<(FileId, RefreshData)> = jobs
+            let disk_dir_ref = disk_dir.as_deref();
+            let results: Vec<(
+                FileId,
+                RefreshData,
+                Option<(
+                    FileConfig,
+                    Vec<u32>,
+                    crate::disk_cache::CachedSdkFileSummary,
+                )>,
+            )> = jobs
                 .into_par_iter()
-                .map(|(id, path, _is_dart, is_dart_core, config, salt)| {
-                    if let Some(cache) = sdk_cache_ref {
+                .map(|(id, path, is_dart, is_dart_core, config, salt)| {
+                    let allow_cache = if is_dart {
+                        !dartr_project::fs::has_overlay(&path)
+                    } else {
+                        !has_any_overlays
+                    };
+                    if allow_cache && let Some(cache) = sdk_cache_ref {
                         let key = SdkFileKey {
                             path: path.clone(),
                             is_dart_core,
@@ -387,18 +478,56 @@ impl FileSystemState {
                             salt: salt.clone(),
                         };
                         if let Some(cached) = cache.get_file(&key) {
-                            return (id, (*cached).clone());
+                            return (id, (*cached).clone(), None);
+                        }
+                        if is_dart
+                            && let Some(dir) = disk_dir_ref
+                            && let Some(data) = cache.get_disk_sdk_file(dir, &key)
+                        {
+                            cache.insert_file(key, Arc::new(data.clone()));
+                            return (id, data, None);
                         }
                         let data = refresh_data(&path, is_dart_core, &config, &salt);
                         cache.insert_file(key, Arc::new(data.clone()));
-                        return (id, data);
+                        let disk_summary = if is_dart && disk_dir_ref.is_some() {
+                            crate::disk_cache::file_stamp(&path).map(
+                                |(mtime_secs, mtime_nanos, file_size)| {
+                                    (
+                                        config,
+                                        salt,
+                                        crate::disk_cache::CachedSdkFileSummary {
+                                            path,
+                                            is_dart_core,
+                                            mtime_secs,
+                                            mtime_nanos,
+                                            file_size,
+                                            exists: data.exists,
+                                            content_hash: data.content_hash.clone(),
+                                            unlinked_signature: data.unlinked_signature,
+                                            unlinked: data.unlinked.clone(),
+                                        },
+                                    )
+                                },
+                            )
+                        } else {
+                            None
+                        };
+                        return (id, data, disk_summary);
                     }
-                    (id, refresh_data(&path, is_dart_core, &config, &salt))
+                    (id, refresh_data(&path, is_dart_core, &config, &salt), None)
                 })
                 .collect();
-            for (id, data) in results {
+            for (id, data, disk_summary) in results {
+                if let Some(s) = disk_summary {
+                    new_disk_summaries.push(s);
+                }
                 self.apply_refresh(id, data);
             }
+        }
+        if !new_disk_summaries.is_empty()
+            && let (Some(cache), Some(dir)) = (sdk_cache.as_deref(), disk_dir.as_deref())
+        {
+            cache.save_disk_sdk_files(dir, new_disk_summaries);
         }
     }
 
@@ -882,13 +1011,24 @@ impl FileSystemState {
 
 /// The result of reading and parsing one file (the first half of Dart
 /// `FileState.refresh`), computed in parallel.
-#[derive(Clone)]
 pub(crate) struct RefreshData {
-    exists: bool,
-    content_hash: String,
-    unlinked_signature: [u8; 16],
-    parsed: Arc<ParsedUnit>,
-    unlinked: UnlinkedUnit,
+    pub(crate) exists: bool,
+    pub(crate) content_hash: String,
+    pub(crate) unlinked_signature: [u8; 16],
+    pub(crate) parsed: LazyParsed,
+    pub(crate) unlinked: UnlinkedUnit,
+}
+
+impl Clone for RefreshData {
+    fn clone(&self) -> Self {
+        RefreshData {
+            exists: self.exists,
+            content_hash: self.content_hash.clone(),
+            unlinked_signature: self.unlinked_signature,
+            parsed: self.parsed.clone_lazy(),
+            unlinked: self.unlinked.clone(),
+        }
+    }
 }
 
 /// Reads [path] like Dart `FileContentCache` (a missing or unreadable file
@@ -936,7 +1076,7 @@ fn refresh_data(path: &str, is_dart_core: bool, config: &FileConfig, salt: &[u32
         exists,
         content_hash,
         unlinked_signature,
-        parsed: Arc::new(parsed),
+        parsed: LazyParsed::ready(Arc::new(parsed)),
         unlinked,
     }
 }

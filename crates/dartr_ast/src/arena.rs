@@ -46,6 +46,19 @@ pub struct NodeId(NonZeroU32);
 
 impl NodeId {
     #[inline(always)]
+    pub const fn raw(self) -> u32 {
+        self.0.get()
+    }
+
+    #[inline(always)]
+    pub const fn from_raw(raw: u32) -> Option<NodeId> {
+        match NonZeroU32::new(raw) {
+            Some(v) => Some(NodeId(v)),
+            None => None,
+        }
+    }
+
+    #[inline(always)]
     pub fn index(self) -> usize {
         (self.0.get() - 1) as usize
     }
@@ -183,6 +196,20 @@ impl<T: ?Sized> NodeList<T> {
         self.len == 0
     }
 
+    #[inline(always)]
+    pub fn raw_parts(self) -> (u32, u32) {
+        (self.start, self.len)
+    }
+
+    #[inline(always)]
+    pub fn from_raw_parts(start: u32, len: u32) -> NodeList<T> {
+        NodeList {
+            start,
+            len,
+            _t: PhantomData,
+        }
+    }
+
     /// The same range with another element type (no check).
     #[inline(always)]
     pub fn cast<U: ?Sized>(self) -> NodeList<U> {
@@ -234,8 +261,8 @@ impl<T: ?Sized> fmt::Debug for NodeList<T> {
 /// range in the token list pool of the [`Ast`].
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct TokenList {
-    start: u32,
-    len: u32,
+    pub(crate) start: u32,
+    pub(crate) len: u32,
 }
 
 impl TokenList {
@@ -245,6 +272,16 @@ impl TokenList {
 
     pub fn is_empty(self) -> bool {
         self.len == 0
+    }
+
+    #[inline(always)]
+    pub fn raw_parts(self) -> (u32, u32) {
+        (self.start, self.len)
+    }
+
+    #[inline(always)]
+    pub fn from_raw_parts(start: u32, len: u32) -> TokenList {
+        TokenList { start, len }
     }
 }
 

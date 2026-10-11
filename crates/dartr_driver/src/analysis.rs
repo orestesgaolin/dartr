@@ -16,8 +16,8 @@ use dartr_element::{
     Ctx, DirectiveUri, EId, FId, FeatureSet, LibraryElement, LibraryFragment, NoopSink,
 };
 use dartr_resolver::library_analyzer::{
-    ExternalUnitCache, LibraryAnalysisInput, ResolvedLibrary, UnitInput, analyze_library,
-    analyze_library_with_unignorable,
+    ExternalUnitCache, LibraryAnalysisInput, ResolvedLibrary, UnitInput, UnitSource,
+    analyze_library, analyze_library_with_unignorable,
 };
 use dartr_resolver::options::AnalysisOptions;
 
@@ -45,7 +45,7 @@ impl Driver {
         let world = &self.state.world;
         let tp = dartr_link::types_builder::world_type_provider(world);
         let (library, units) = self.library_units_with_tp(file, &tp)?;
-        let external = ExternalUnitCache::new(world, &tp, options, self.unit_sources());
+        let external = ExternalUnitCache::new(world, &tp, options, self.lazy_unit_sources());
         let input = LibraryAnalysisInput {
             world,
             type_provider: &tp,
@@ -108,8 +108,12 @@ impl Driver {
 
         let world = &self.state.world;
         let tp = dartr_link::types_builder::world_type_provider(world);
-        let external =
-            ExternalUnitCache::new(world, &tp, AnalysisOptions::default(), self.unit_sources());
+        let external = ExternalUnitCache::new(
+            world,
+            &tp,
+            AnalysisOptions::default(),
+            self.lazy_unit_sources(),
+        );
         let mut pkg_cache = dartr_lints::LintPackageCache::default();
         let jobs: Vec<_> = libraries
             .iter()
@@ -334,6 +338,25 @@ impl Driver {
             .filter_map(|f| {
                 let content = f.content.as_ref()?;
                 Some((f.path.clone(), (f.uri_str.clone(), content.parsed.clone())))
+            })
+            .collect()
+    }
+
+    /// Like [`Self::unit_sources`], but keeps unparsed SDK units lazy so they
+    /// are only parsed if [`ExternalUnitCache`] needs to resolve them.
+    pub fn lazy_unit_sources(&self) -> IndexMap<Arc<str>, (Arc<str>, UnitSource)> {
+        self.fs
+            .files()
+            .iter()
+            .filter_map(|f| {
+                let content = f.content.as_ref()?;
+                let source = if let Some(ready) = content.parsed.get_if_ready() {
+                    UnitSource::Ready(ready.clone())
+                } else {
+                    let lazy = content.parsed.clone_lazy();
+                    UnitSource::Lazy(Arc::new(move || lazy.get().clone()))
+                };
+                Some((f.path.clone(), (f.uri_str.clone(), source)))
             })
             .collect()
     }

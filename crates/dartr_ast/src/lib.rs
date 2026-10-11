@@ -35,6 +35,7 @@ pub mod doc_comment;
 pub mod generated;
 pub mod node_impl;
 pub mod precedence;
+pub mod serialize;
 pub mod sort;
 pub mod token;
 

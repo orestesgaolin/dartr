@@ -379,20 +379,6 @@ impl DriverSession {
                 record_arc_str(&f.uri_str);
                 if let Some(c) = &f.content {
                     total_file_contents += 1;
-                    record_arc_str(&c.parsed.ast.tokens.source);
-                    let src_len = c.parsed.ast.tokens.source.len();
-                    total_source_bytes += src_len;
-                    if unique_source_ptrs
-                        .insert(Arc::as_ptr(&c.parsed.ast.tokens.source) as *const u8 as usize)
-                    {
-                        unique_source_ptr_bytes += src_len;
-                    }
-                    unique_source_contents.insert(&c.parsed.ast.tokens.source, src_len);
-
-                    let m = c.parsed.ast.mem_stats();
-                    total_ast.add(&m);
-                    let li_cap = c.parsed.line_info.line_starts.capacity() * 4;
-                    total_line_info_cap += li_cap;
                     let ui_used = c.unlinked.line_starts.len() * 4
                         + c.unlinked
                             .top_level_declarations
@@ -409,9 +395,28 @@ impl DriverSession {
                     total_unlinked_info_used += ui_used;
                     total_unlinked_info_cap += ui_cap;
 
-                    if unique_parsed_ptrs.insert(Arc::as_ptr(&c.parsed) as usize) {
-                        unique_ast.add(&m);
-                        unique_line_info_cap += li_cap;
+                    if let Some(parsed) = c.parsed.get_if_ready() {
+                        record_arc_str(&parsed.ast.tokens.source);
+                        let src_len = parsed.ast.tokens.source.len();
+                        total_source_bytes += src_len;
+                        if unique_source_ptrs
+                            .insert(Arc::as_ptr(&parsed.ast.tokens.source) as *const u8 as usize)
+                        {
+                            unique_source_ptr_bytes += src_len;
+                        }
+                        unique_source_contents.insert(&parsed.ast.tokens.source, src_len);
+
+                        let m = parsed.ast.mem_stats();
+                        total_ast.add(&m);
+                        let li_cap = parsed.line_info.line_starts.capacity() * 4;
+                        total_line_info_cap += li_cap;
+
+                        if unique_parsed_ptrs.insert(Arc::as_ptr(parsed) as usize) {
+                            unique_ast.add(&m);
+                            unique_line_info_cap += li_cap;
+                            unique_unlinked_info_cap += ui_cap;
+                        }
+                    } else {
                         unique_unlinked_info_cap += ui_cap;
                     }
                 }

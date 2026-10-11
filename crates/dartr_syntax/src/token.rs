@@ -84,8 +84,8 @@ pub struct Token {
     /// Byte range of the lexeme in the source text (when the lexeme is a
     /// substring of the source), or an index into a side table (see
     /// [`flags::OWNED_LEXEME`] and [`flags::ERROR`]).
-    pub(crate) lex_start: u32,
-    pub(crate) lex_end: u32,
+    pub lex_start: u32,
+    pub lex_end: u32,
     pub next: TokenId,
     pub previous: TokenId,
     /// First comment before this token (Dart `precedingComments`). Comment
@@ -206,6 +206,29 @@ pub struct Tokens {
 }
 
 impl Tokens {
+    pub fn raw_parts(&self) -> (&Arc<str>, &[Token], &[Box<str>], &[ErrorToken]) {
+        (
+            &self.source,
+            &self.tokens,
+            &self.owned_lexemes,
+            &self.errors,
+        )
+    }
+
+    pub fn from_raw_parts(
+        source: Arc<str>,
+        tokens: Vec<Token>,
+        owned_lexemes: Vec<Box<str>>,
+        errors: Vec<ErrorToken>,
+    ) -> Tokens {
+        Tokens {
+            source,
+            tokens: Arc::new(tokens),
+            owned_lexemes: Arc::new(owned_lexemes),
+            errors: Arc::new(errors),
+        }
+    }
+
     pub fn new(source: Arc<str>) -> Tokens {
         Tokens {
             source,

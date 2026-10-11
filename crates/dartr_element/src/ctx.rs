@@ -154,6 +154,11 @@ impl FeatureSet {
     pub fn is_enabled(&self, name: &str) -> bool {
         self.enabled.binary_search_by(|e| (**e).cmp(name)).is_ok()
     }
+
+    /// All enabled experiment flags in sorted order.
+    pub fn enabled(&self) -> &[Arc<str>] {
+        &self.enabled
+    }
 }
 
 /// One requirement record (`RequirementsManifest.record_*`,

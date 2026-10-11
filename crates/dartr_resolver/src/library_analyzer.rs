@@ -744,6 +744,31 @@ fn resolve_file(
     }
 }
 
+/// Either an already-parsed unit or a lazy loader that parses the unit on
+/// demand when [`ExternalUnitCache`] needs to resolve it.
+#[derive(Clone)]
+pub enum UnitSource {
+    Ready(Arc<ParsedUnit>),
+    Lazy(Arc<dyn Fn() -> Arc<ParsedUnit> + Send + Sync>),
+}
+
+impl UnitSource {
+    #[inline]
+    pub fn get(&self) -> Arc<ParsedUnit> {
+        match self {
+            UnitSource::Ready(p) => p.clone(),
+            UnitSource::Lazy(f) => f(),
+        }
+    }
+}
+
+impl From<Arc<ParsedUnit>> for UnitSource {
+    #[inline]
+    fn from(p: Arc<ParsedUnit>) -> Self {
+        UnitSource::Ready(p)
+    }
+}
+
 /// [`ExternalUnits`] that resolves the units of other libraries on demand
 /// and keeps them (shared by the analyses of many libraries).
 pub struct ExternalUnitCache<'w> {
@@ -751,7 +776,7 @@ pub struct ExternalUnitCache<'w> {
     tp: &'w TypeProvider,
     options: AnalysisOptions,
     /// The parsed units by path, with their URIs.
-    sources: IndexMap<Arc<str>, (Arc<str>, Arc<ParsedUnit>)>,
+    sources: IndexMap<Arc<str>, (Arc<str>, UnitSource)>,
     scopes: Mutex<IndexMap<EId<LibraryElement>, Arc<LibraryScopes>>>,
     units: Mutex<IndexMap<FId<LibraryFragment>, Arc<OnceLock<Option<Arc<ResolvedUnit>>>>>>,
 }
@@ -759,12 +784,16 @@ pub struct ExternalUnitCache<'w> {
 impl<'w> ExternalUnitCache<'w> {
     /// A cache over [world]; [sources] maps the path of every unit that may
     /// be resolved to its URI and parsed unit.
-    pub fn new(
+    pub fn new<S: Into<UnitSource>>(
         world: &'w WorldSnapshot,
         tp: &'w TypeProvider,
         options: AnalysisOptions,
-        sources: IndexMap<Arc<str>, (Arc<str>, Arc<ParsedUnit>)>,
+        sources: IndexMap<Arc<str>, (Arc<str>, S)>,
     ) -> ExternalUnitCache<'w> {
+        let sources = sources
+            .into_iter()
+            .map(|(k, (uri, s))| (k, (uri, s.into())))
+            .collect();
         ExternalUnitCache {
             world,
             tp,
@@ -828,7 +857,9 @@ impl<'w> ExternalUnitCache<'w> {
             let f = ctx.fragment(fragment);
             (f.library, f.source.path.clone())
         };
-        let (uri, parsed) = self.sources.get(&path)?.clone();
+        let (uri, source) = self.sources.get(&path)?;
+        let uri = uri.clone();
+        let parsed = source.get();
         let scopes = self.library_scopes(library);
         let input = self.input(library);
         let features = {
