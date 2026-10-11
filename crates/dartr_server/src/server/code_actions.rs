@@ -63,6 +63,7 @@ pub mod commands {
     /// The commands that dartr executes (a subset of Dart
     /// `Commands.serverSupportedCommands`, in Dart order).
     pub const SUPPORTED: &[&str] = &[
+        APPLY_CODE_ACTION,
         SORT_MEMBERS,
         ORGANIZE_IMPORTS,
         FIX_ALL,
@@ -485,19 +486,31 @@ pub(crate) struct KindFilter {
 impl KindFilter {
     /// Dart `shouldIncludeAnyOfKind`.
     pub(crate) fn include_any_of_kind(&self, kind: &str) -> bool {
-        match &self.only {
-            Some(only) => only
-                .iter()
-                .any(|wanted| wanted == kind || wanted.starts_with(&format!("{kind}."))),
-            None => true,
+        let is_match = |wanted: &String| {
+            wanted == kind
+                || wanted.starts_with(&format!("{kind}."))
+                || kind.starts_with(&format!("{wanted}."))
+        };
+        if let Some(only) = &self.only {
+            if !only.iter().any(is_match) {
+                return false;
+            }
         }
+        if let Some(supported) = &self.supported {
+            return supported.iter().any(is_match);
+        }
+        true
     }
 
     /// Dart `shouldIncludeKind`.
     pub(crate) fn include_kind(&self, kind: &str) -> bool {
         let is_match = |wanted: &String| kind == wanted || kind.starts_with(&format!("{wanted}."));
         if let Some(only) = &self.only {
-            return only.iter().any(is_match);
+            if !only.iter().any(is_match) {
+                return false;
+            }
+        } else if kind == "source.dart" || kind.starts_with("source.dart.") {
+            return false;
         }
         if let Some(supported) = &self.supported {
             return supported.iter().any(is_match);
@@ -561,7 +574,7 @@ impl Server {
         // Dart reports the lints after the other diagnostics, in the order
         // of one traversal of the unit (the rules of a node in name order);
         // the offset order is close to it.
-        lints.sort_by(|a, b| a.offset.cmp(&b.offset).then(a.code.name.cmp(b.code.name)));
+        lints.sort_by(|a, b| a.offset.cmp(&b.offset).then(a.code.name.cmp(&b.code.name)));
         out.extend(lints);
         out
     }
@@ -605,29 +618,44 @@ impl Server {
             == Some(2);
         let filter = KindFilter { only, supported };
         let range = params.get("range").cloned().unwrap_or(Value::Null);
+        let actions =
+            self.compute_code_actions(&path, &range, &filter, auto_triggered, literal, true);
+        Ok(Value::Array(actions))
+    }
+
+    /// Dart `CodeActionComputer.compute`.
+    pub(crate) fn compute_code_actions(
+        &mut self,
+        path: &str,
+        range: &Value,
+        filter: &KindFilter,
+        auto_triggered: bool,
+        literal: bool,
+        allow_snippets: bool,
+    ) -> Vec<Value> {
         let is_dart = path.ends_with(".dart");
         let resolved = if is_dart {
-            self.require_resolved_unit(&path).ok()
+            self.require_resolved_unit(path).ok()
         } else {
             None
         };
         let line_info = match &resolved {
             Some(r) => r.line_info().clone(),
-            None => match self.line_info_of(&path) {
+            None => match self.line_info_of(path) {
                 Some(l) => l,
-                None => return Ok(json!([])),
+                None => return Vec::new(),
             },
         };
         let start = range.get("start").and_then(mapping::read_position);
         let end = range.get("end").and_then(mapping::read_position);
         let (Some(start), Some(end)) = (start, end) else {
-            return Ok(json!([]));
+            return Vec::new();
         };
         let (Ok(start_offset), Ok(end_offset)) = (
             mapping::to_offset(&line_info, start.0, start.1, false),
             mapping::to_offset(&line_info, end.0, end.1, false),
         ) else {
-            return Ok(json!([]));
+            return Vec::new();
         };
         let mut actions: Vec<Value> = Vec::new();
         if resolved.is_some()
@@ -666,50 +694,60 @@ impl Server {
         }
         if filter.include_any_of_kind("quickfix") {
             let mut fixes = match &resolved {
-                Some(resolved) => self.fix_actions(&path, resolved, &range, &filter, literal),
+                Some(resolved) => {
+                    self.fix_actions(path, resolved, range, filter, literal, allow_snippets)
+                }
                 None => Vec::new(),
             };
             if literal {
-                fixes.extend(self.plugin_fix_actions(&path, start_offset, &line_info, &filter));
+                fixes.extend(self.plugin_fix_actions(
+                    path,
+                    start_offset,
+                    &line_info,
+                    filter,
+                    allow_snippets,
+                ));
             }
-            actions.extend(sort_actions(fixes, &range));
+            actions.extend(sort_actions(fixes, range));
         }
         if filter.include_any_of_kind("refactor") {
             let length = end_offset.saturating_sub(start_offset);
             let mut assists = match &resolved {
                 Some(resolved) => self.assist_actions(
-                    &path,
+                    path,
                     resolved,
-                    &range,
+                    range,
                     start_offset,
                     length,
-                    &filter,
+                    filter,
                     literal,
+                    allow_snippets,
                 ),
                 None => Vec::new(),
             };
             if literal {
                 assists.extend(self.plugin_assist_actions(
-                    &path,
+                    path,
                     start_offset,
                     length,
                     &line_info,
-                    &filter,
+                    filter,
+                    allow_snippets,
                 ));
             }
-            actions.extend(sort_actions(assists, &range));
+            actions.extend(sort_actions(assists, range));
             if let Some(resolved) = &resolved {
                 actions.extend(self.refactor_actions(
-                    &path,
+                    path,
                     resolved,
                     start_offset,
                     length,
-                    &filter,
+                    filter,
                     literal,
                 ));
             }
         }
-        Ok(Value::Array(actions))
+        actions
     }
 
     /// Dart `DartCodeActionsProducer.getFixActions`.
@@ -720,6 +758,7 @@ impl Server {
         range: &Value,
         filter: &KindFilter,
         literal: bool,
+        allow_snippets: bool,
     ) -> Vec<ActionWithPriority> {
         let diagnostics = self.unit_diagnostics(path);
         let Some(collection) = &self.collection else {
@@ -805,6 +844,7 @@ impl Server {
                     range,
                     &line_info,
                     literal,
+                    allow_snippets,
                     Some(lsp_diagnostic.clone()),
                 );
                 actions.push(ActionWithPriority {
@@ -826,6 +866,7 @@ impl Server {
         range: &Value,
         line_info: &LineInfo,
         literal: bool,
+        allow_snippets: bool,
         diagnostic: Option<Value>,
     ) -> Value {
         if literal {
@@ -845,7 +886,7 @@ impl Server {
             }
             m.insert(
                 "edit".into(),
-                self.create_workspace_edit(change, true, path, line_info),
+                self.create_workspace_edit(change, allow_snippets, path, line_info),
             );
             Value::Object(m)
         } else {
@@ -873,6 +914,7 @@ impl Server {
         length: u32,
         filter: &KindFilter,
         literal: bool,
+        allow_snippets: bool,
     ) -> Vec<ActionWithPriority> {
         let diagnostics = self.unit_diagnostics(path);
         let Some(collection) = &self.collection else {
@@ -916,7 +958,16 @@ impl Server {
             if !filter.include_kind(&kind) {
                 continue;
             }
-            let action = self.change_action(change, &kind, path, range, &line_info, literal, None);
+            let action = self.change_action(
+                change,
+                &kind,
+                path,
+                range,
+                &line_info,
+                literal,
+                allow_snippets,
+                None,
+            );
             actions.push(ActionWithPriority {
                 action,
                 priority: assist.kind.priority,
@@ -932,6 +983,7 @@ impl Server {
         offset: u32,
         line_info: &LineInfo,
         filter: &KindFilter,
+        allow_snippets: bool,
     ) -> Vec<ActionWithPriority> {
         let context_root = self
             .collection
@@ -969,6 +1021,7 @@ impl Server {
                     "fix from plugin",
                     path,
                     line_info,
+                    allow_snippets,
                     Some(diagnostic.clone()),
                 );
                 actions.push(ActionWithPriority {
@@ -988,6 +1041,7 @@ impl Server {
         length: u32,
         line_info: &LineInfo,
         filter: &KindFilter,
+        allow_snippets: bool,
     ) -> Vec<ActionWithPriority> {
         let context_root = self
             .collection
@@ -1005,13 +1059,14 @@ impl Server {
             let kind = to_code_action_kind(change.id.as_deref(), "refactor");
             if !filter.include_kind(&kind) {
                 continue;
-            }
+            };
             let action = self.plugin_change_action(
                 &change,
                 &kind,
                 "assist from plugin",
                 path,
                 line_info,
+                allow_snippets,
                 None,
             );
             actions.push(ActionWithPriority {
@@ -1023,6 +1078,7 @@ impl Server {
     }
 
     /// Dart `PluginCodeActionsProducer._createAction`.
+    #[allow(clippy::too_many_arguments)]
     fn plugin_change_action(
         &self,
         change: &SourceChange,
@@ -1030,6 +1086,7 @@ impl Server {
         logged_action: &str,
         path: &str,
         line_info: &LineInfo,
+        allow_snippets: bool,
         diagnostic: Option<Value>,
     ) -> Value {
         let mut m = Map::new();
@@ -1049,7 +1106,7 @@ impl Server {
         );
         m.insert(
             "edit".into(),
-            self.create_workspace_edit(change, true, path, line_info),
+            self.create_workspace_edit(change, allow_snippets, path, line_info),
         );
         Value::Object(m)
     }
@@ -1196,6 +1253,7 @@ impl Server {
             )));
         };
         match command {
+            commands::APPLY_CODE_ACTION => self.apply_code_action_command(id, &parameters),
             commands::LOG_ACTION => Some(Ok(Value::Null)),
             commands::ORGANIZE_IMPORTS => self.organize_imports_command(id, &parameters),
             commands::SORT_MEMBERS => self.sort_members_command(id, &parameters),
@@ -1220,6 +1278,129 @@ impl Server {
                 self.framework_refactor_command(id, c, &parameters, progress_token)
             }
             _ => Some(Ok(Value::Null)),
+        }
+    }
+
+    /// Dart `ApplyCodeActionCommandHandler.handle`.
+    fn apply_code_action_command(
+        &mut self,
+        id: &Value,
+        parameters: &Value,
+    ) -> Option<ErrorOr<Value>> {
+        if !self.editor_supports_apply_edit() {
+            return Some(Err(ResponseError::new(
+                codes::STATE_ERROR,
+                "The editor does not support workspace/applyEdit",
+            )));
+        }
+
+        let mut errors = Vec::new();
+        let text_document = parameters.get("textDocument");
+        let valid_text_doc = text_document.and_then(Value::as_object).is_some_and(|obj| {
+            let valid_uri = obj
+                .get("uri")
+                .and_then(Value::as_str)
+                .is_some_and(|u| !u.contains(' '));
+            let valid_version = match obj.get("version") {
+                None | Some(Value::Null) => true,
+                Some(v) => v.is_i64() || v.is_u64(),
+            };
+            valid_uri && valid_version
+        });
+        if !valid_text_doc {
+            errors.push("textDocument was not a valid OptionalVersionedTextDocumentIdentifier");
+        }
+
+        let range = parameters.get("range");
+        let valid_range = range.and_then(Value::as_object).is_some_and(|obj| {
+            let valid_pos = |p: Option<&Value>| {
+                p.and_then(Value::as_object).is_some_and(|pos| {
+                    pos.get("line").is_some_and(|v| v.is_i64() || v.is_u64())
+                        && pos
+                            .get("character")
+                            .is_some_and(|v| v.is_i64() || v.is_u64())
+                })
+            };
+            valid_pos(obj.get("start")) && valid_pos(obj.get("end"))
+        });
+        if !valid_range {
+            errors.push("range was not a valid Range");
+        }
+
+        let kind = parameters.get("kind").and_then(Value::as_str);
+        if kind.is_none() {
+            errors.push("kind was not a valid String");
+        }
+
+        let valid_logged_action = matches!(
+            parameters.get("loggedAction"),
+            None | Some(Value::Null) | Some(Value::String(_))
+        );
+        if !valid_logged_action {
+            errors.push("loggedAction was not a valid String");
+        }
+
+        if !errors.is_empty() {
+            return Some(Err(ResponseError::new(
+                codes::INVALID_COMMAND_ARGUMENTS,
+                format!(
+                    "{} requires 3 parameters: \
+                     textDocument: Map<String, Object?> (OptionalVersionedTextDocumentIdentifier), \
+                     range: Map<String, Object?> (Range), \
+                     kind: String (CodeActionKind) \
+                     but {}",
+                    commands::APPLY_CODE_ACTION,
+                    errors.join(", ")
+                ),
+            )));
+        }
+
+        let text_document = text_document.unwrap();
+        let uri = text_document["uri"].as_str().unwrap();
+        let version = text_document.get("version").and_then(Value::as_i64);
+        let range = range.unwrap().clone();
+        let kind = kind.unwrap().to_string();
+
+        let path = match self.path_of_uri(uri) {
+            Ok(p) => p,
+            Err(e) => return Some(Err(e)),
+        };
+        if self.file_has_been_modified(&path, version) {
+            return Some(Err(ResponseError::new(
+                codes::CONTENT_MODIFIED,
+                "Document was modified before operation completed",
+            )));
+        }
+
+        let filter = KindFilter {
+            only: Some(vec![kind.clone()]),
+            supported: None,
+        };
+        let actions = if self.is_analyzed(&path) && uri.starts_with("file:") {
+            self.compute_code_actions(&path, &range, &filter, false, true, false)
+        } else {
+            Vec::new()
+        };
+
+        match actions.as_slice() {
+            [] => Some(Err(ResponseError::new(
+                codes::INVALID_COMMAND_ARGUMENTS,
+                format!("The code action {kind} is not valid at this location"),
+            ))),
+            [action] => {
+                if let Some(edit) = action.get("edit").filter(|v| !v.is_null()).cloned() {
+                    self.send_workspace_edit_to_client(id, "Apply Code Action", edit)
+                } else {
+                    Some(Err(ResponseError::new(
+                        codes::INTERNAL_ERROR,
+                        "Server computed a Command instead of a CodeActionLiteral",
+                    )))
+                }
+            }
+            _ => Some(Err(ResponseError::new(
+                codes::INVALID_COMMAND_ARGUMENTS,
+                format!("The code action {kind} is ambigious at this location"),
+            ))),
         }
     }
 

@@ -601,6 +601,7 @@ impl Server {
             "workspace/symbol" => self.catching(method, |s| s.workspace_symbol(&params)),
             "workspace/willRenameFiles" => self.catching(method, |s| s.will_rename_files(&params)),
             "textDocument/codeAction" => self.catching(method, |s| s.code_action(&params)),
+            "command/resolve" => self.catching(method, |s| s.command_resolve(&params)),
             "textDocument/documentColor" => self.catching(method, |s| s.document_color(&params)),
             "textDocument/colorPresentation" => {
                 self.catching(method, |s| s.color_presentation(&params))
