@@ -459,9 +459,10 @@ impl Tokens {
     /// Dart `SimpleToken.precedingComments=`: sets `preceding_comments` on
     /// `parent` and `parent` (`end_group`) on each comment token in the chain.
     pub fn set_preceding_comments(&mut self, parent: TokenId, mut comment: TokenId) {
-        self.tokens[parent.index()].preceding_comments = comment;
+        let tokens = Arc::make_mut(&mut self.tokens);
+        tokens[parent.index()].preceding_comments = comment;
         while comment.is_some() {
-            let c = &mut self.tokens[comment.index()];
+            let c = &mut tokens[comment.index()];
             c.end_group = parent;
             comment = c.next;
         }
