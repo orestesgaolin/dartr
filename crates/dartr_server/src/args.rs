@@ -34,6 +34,7 @@ pub struct ServerOptions {
     pub enabled_experiments: Vec<String>,
     pub disable_completion: bool,
     pub disable_search: bool,
+    pub plugins: bool,
     pub help: bool,
 }
 
@@ -250,6 +251,7 @@ impl ServerOptions {
             enabled_experiments,
             disable_completion: flag("disable-server-feature-completion").unwrap_or(false),
             disable_search: flag("disable-server-feature-search").unwrap_or(false),
+            plugins: flag("plugins").unwrap_or(true),
             help: flag("help").unwrap_or(false),
         })
     }

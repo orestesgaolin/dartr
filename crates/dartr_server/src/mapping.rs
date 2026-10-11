@@ -207,6 +207,72 @@ pub fn to_diagnostic(
     Value::Object(m)
 }
 
+/// Dart `pluginToDiagnostic` for a [`dartr_plugins::PluginError`].
+pub fn plugin_to_diagnostic(
+    error: &dartr_plugins::PluginError,
+    options: &DiagnosticOptions,
+    get_line_info: &dyn Fn(&str) -> Option<LineInfo>,
+) -> Option<Value> {
+    let loc = &error.location;
+    let range =
+        if loc.start_line >= 1 && loc.start_column >= 1 && loc.end_line >= 1 && loc.end_column >= 1
+        {
+            json!({
+                "start": {"line": loc.start_line - 1, "character": loc.start_column - 1},
+                "end": {"line": loc.end_line - 1, "character": loc.end_column - 1},
+            })
+        } else {
+            let info = get_line_info(&loc.file)?;
+            to_range(&info, loc.offset as u32, loc.length as u32)
+        };
+    let sev = match error.severity.as_str() {
+        "ERROR" => 1,
+        "WARNING" => 2,
+        _ => 3,
+    };
+    let mut m = Map::new();
+    m.insert("range".into(), range);
+    m.insert("severity".into(), json!(sev));
+    m.insert("code".into(), json!(error.code));
+    m.insert("source".into(), json!("dart"));
+    let message = match &error.correction {
+        Some(c) => format!("{}\n{}", error.message, c),
+        None => error.message.clone(),
+    };
+    m.insert("message".into(), json!(message));
+    if let Some(supported) = &options.supported_tags {
+        let tags: Vec<i64> = diagnostic_tags(&error.code)
+            .iter()
+            .copied()
+            .filter(|t| supported.contains(t))
+            .collect();
+        if !tags.is_empty() {
+            m.insert("tags".into(), json!(tags));
+        }
+    }
+    if !error.context_messages.is_empty() {
+        let mut related = Vec::new();
+        for c in &error.context_messages {
+            if let Some(info) = get_line_info(&c.location.file) {
+                related.push(json!({
+                    "location": {
+                        "uri": path_to_uri(&c.location.file),
+                        "range": to_range(&info, c.location.offset as u32, c.location.length as u32),
+                    },
+                    "message": c.message,
+                }));
+            }
+        }
+        m.insert("relatedInformation".into(), Value::Array(related));
+    }
+    if options.code_description
+        && let Some(url) = &error.url
+    {
+        m.insert("codeDescription".into(), json!({"href": url}));
+    }
+    Some(Value::Object(m))
+}
+
 /// The analysis server `ElementKind` (`analyzer_plugin` protocol).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ElementKind {
