@@ -50,11 +50,25 @@ use crate::provider::{
 #[derive(Clone, Debug, Default)]
 pub struct DriverProvider {
     pub cache_dir: Option<String>,
+    pub cache_salt: Option<dartr_driver::cache_store::Hash128>,
 }
 
 impl DriverProvider {
     pub fn new(cache_dir: Option<String>) -> Self {
-        Self { cache_dir }
+        Self {
+            cache_dir,
+            cache_salt: None,
+        }
+    }
+
+    pub fn with_salt(
+        cache_dir: Option<String>,
+        cache_salt: Option<dartr_driver::cache_store::Hash128>,
+    ) -> Self {
+        Self {
+            cache_dir,
+            cache_salt,
+        }
     }
 }
 
@@ -86,7 +100,9 @@ impl DiagnosticsProvider for DriverProvider {
         let cache = cache_dir
             .map(str::to_owned)
             .or_else(|| self.cache_dir.clone());
-        DriverSession::one_shot_with_cache_dir(cache).diagnostics(collection, files)
+        let mut session = DriverSession::one_shot_with_cache_dir(cache);
+        session.cache_salt = self.cache_salt;
+        session.diagnostics(collection, files)
     }
 }
 
@@ -98,31 +114,51 @@ fn debug() -> bool {
 /// (Dart `AnalysisOptionsMap.getOptions`), owned so that the analysis
 /// threads can read them.
 struct ContextOptions {
-    /// The options folders, deepest first, with their settings.
-    folders: Vec<(String, Arc<FileSettings>, ResolverOptions)>,
-    default: (Arc<FileSettings>, ResolverOptions),
+    /// The options folders, deepest first, with their settings, resolver
+    /// options, and precomputed cache options signature.
+    folders: Vec<(
+        String,
+        Arc<FileSettings>,
+        ResolverOptions,
+        dartr_driver::cache_store::Hash128,
+    )>,
+    default: (
+        Arc<FileSettings>,
+        ResolverOptions,
+        dartr_driver::cache_store::Hash128,
+    ),
 }
 
 impl ContextOptions {
     fn new(collection: &AnalysisContextCollection, context: usize) -> ContextOptions {
         let map = collection.options_map(&collection.contexts[context]);
         let settings = |o: &dartr_project::AnalysisOptions| {
-            (
-                Arc::new(FileSettings::new(o)),
-                ResolverOptions {
-                    strict_casts: o.strict_casts,
-                    strict_inference: o.strict_inference,
-                    strict_raw_types: o.strict_raw_types,
-                },
-            )
+            let fs = Arc::new(FileSettings::new(o));
+            let ro = ResolverOptions {
+                strict_casts: o.strict_casts,
+                strict_inference: o.strict_inference,
+                strict_raw_types: o.strict_raw_types,
+            };
+            let unimpl: Vec<String> = fs.unimplemented_lint_rules.iter().cloned().collect();
+            let unignorable: Vec<String> = fs.unignorable_names.iter().cloned().collect();
+            let sig = dartr_driver::cache_store::library_options_core_signature(
+                o.strict_casts,
+                o.strict_inference,
+                o.strict_raw_types,
+                &fs.experiments,
+                &fs.lint_rules,
+                &unimpl,
+                &unignorable,
+            );
+            (fs, ro, sig)
         };
         ContextOptions {
             folders: map
                 .entries()
                 .iter()
                 .map(|(folder, o)| {
-                    let (s, r) = settings(o);
-                    (folder.clone(), s, r)
+                    let (s, r, sig) = settings(o);
+                    (folder.clone(), s, r, sig)
                 })
                 .collect(),
             default: settings(map.default_options()),
@@ -130,12 +166,21 @@ impl ContextOptions {
     }
 
     fn for_path(&self, path: &str) -> (&Arc<FileSettings>, ResolverOptions) {
-        for (folder, settings, options) in &self.folders {
+        for (folder, settings, options, _) in &self.folders {
             if paths::is_within(folder, path) {
                 return (settings, *options);
             }
         }
         (&self.default.0, self.default.1)
+    }
+
+    fn core_signature_for_path(&self, path: &str) -> dartr_driver::cache_store::Hash128 {
+        for (folder, _, _, sig) in &self.folders {
+            if paths::is_within(folder, path) {
+                return *sig;
+            }
+        }
+        self.default.2
     }
 }
 
@@ -161,6 +206,8 @@ pub struct DriverSession {
     retain_drivers: bool,
     /// Optional persistent result cache directory (`--cache` / `DARTR_CACHE_DIR`).
     cache_dir: Option<String>,
+    /// Optional explicit cache version salt override (for testing).
+    pub cache_salt: Option<dartr_driver::cache_store::Hash128>,
 }
 
 impl Default for DriverSession {
@@ -174,6 +221,7 @@ impl Default for DriverSession {
             known_libraries_cache: HashMap::new(),
             retain_drivers: true,
             cache_dir: None,
+            cache_salt: None,
         }
     }
 }
@@ -416,8 +464,32 @@ impl DriverSession {
         let num_contexts = by_context.len();
         let context_order: Vec<usize> = by_context.keys().copied().collect();
         let priority_files = &self.priority_files;
+        let disk_cache: Option<dartr_driver::cache_store::DiskCache> =
+            if index_fn.is_none() && priority_files.is_empty() {
+                self.cache_dir.as_deref().map(|dir| {
+                    let sdk = collection
+                        .sdk
+                        .as_ref()
+                        .or_else(|| collection.contexts.iter().find_map(|c| c.sdk.as_ref()));
+                    match self.cache_salt {
+                        Some(salt) => dartr_driver::cache_store::DiskCache::with_salt(
+                            dir,
+                            dartr_driver::cache_store::configured_max_size_bytes(),
+                            salt,
+                        ),
+                        None => dartr_driver::cache_store::DiskCache::new(dir, sdk.map(|v| &**v)),
+                    }
+                })
+            } else {
+                None
+            };
         for (idx, (context, files)) in by_context.into_iter().enumerate() {
             let options = ContextOptions::new(collection, context);
+            let packages_sig = if disk_cache.is_some() {
+                context_packages_signature(&collection.contexts[context])
+            } else {
+                [0u8; 16]
+            };
             let mut driver = self.drivers.shift_remove(&context).unwrap_or_else(|| {
                 dartr_driver::project::context_driver(collection, context, generation.clone())
             });
@@ -425,6 +497,7 @@ impl DriverSession {
                 driver.fs.sdk_cache_lookup_only = true;
                 driver.clear_sdk_cache_after_lookup = true;
             }
+            let disk_cache_ref = disk_cache.as_ref();
             let outcome = pool().install(|| {
                 catch_unwind(AssertUnwindSafe(|| {
                     analyze_context(
@@ -434,6 +507,8 @@ impl DriverSession {
                         &files,
                         priority_files,
                         index_fn,
+                        disk_cache_ref,
+                        &packages_sig,
                     )
                 }))
             });
@@ -1900,7 +1975,105 @@ fn unit_has_subtype_of(parsed: &dartr_ast_builder::ParsedUnit, names: &[String])
     false
 }
 
+/// Computes a 128-bit signature of the package configuration of [ac].
+fn context_packages_signature(
+    ac: &dartr_project::AnalysisContext,
+) -> dartr_driver::cache_store::Hash128 {
+    let mut sig = dartr_driver::api_signature::ApiSignature::new();
+    let pkgs = ac.packages.packages();
+    sig.add_int(pkgs.len() as u32);
+    for pkg in pkgs {
+        sig.add_string(&pkg.name);
+        sig.add_string(&pkg.root);
+        sig.add_string(&pkg.lib);
+        match pkg.language_version {
+            Some(lv) => {
+                sig.add_bool(true);
+                sig.add_language_version(lv.major, lv.minor);
+            }
+            None => sig.add_bool(false),
+        }
+    }
+    sig.to_byte_list()
+}
+
+/// Computes the Tier B [`dartr_driver::cache_store::Hash128`] key for [library].
+fn compute_library_result_key(
+    driver: &Driver,
+    options: &ContextOptions,
+    library: FileId,
+    pkg_info: Option<&dartr_lints::LintPackageInfo>,
+    pubspec_hashes: &HashMap<std::path::PathBuf, Option<dartr_driver::cache_store::Hash128>>,
+    context_env_sig: &dartr_driver::cache_store::Hash128,
+    salt: &dartr_driver::cache_store::Hash128,
+) -> dartr_driver::cache_store::Hash128 {
+    let mut cycle_sig_builder = dartr_driver::api_signature::ApiSignature::new();
+    let c_id = driver.graph.cycle_of_library[&library];
+    let cycle = driver.graph.cycle(c_id);
+    cycle_sig_builder.add_string(&cycle.api_signature);
+    cycle_sig_builder.add_string(&cycle.manifest_signature);
+    cycle_sig_builder.add_string(&cycle.non_transitive_api_signature);
+    if driver.fs.file(library).kind().is_library() {
+        let doc_imports = driver.doc_import_files(library);
+        cycle_sig_builder.add_int(doc_imports.len() as u32);
+        for doc_import in doc_imports {
+            if let Some(&doc_c_id) = driver.graph.cycle_of_library.get(&doc_import) {
+                let doc_cycle = driver.graph.cycle(doc_c_id);
+                cycle_sig_builder.add_string(&doc_cycle.api_signature);
+                cycle_sig_builder.add_string(&doc_cycle.manifest_signature);
+                cycle_sig_builder.add_string(&doc_cycle.non_transitive_api_signature);
+            }
+        }
+    } else {
+        cycle_sig_builder.add_int(0);
+    }
+    let cycle_sig = cycle_sig_builder.to_byte_list();
+
+    let unit_ids = driver.fs.library_file_kinds(library);
+    let mut unit_inputs = Vec::with_capacity(unit_ids.len());
+    for u_id in unit_ids {
+        let uf = driver.fs.file(u_id);
+        let uc = uf.c();
+        let is_gen = crate::ignore_validator::is_generated(&uf.path)
+            || dartr_driver::directives::is_generated(&uf.path);
+        unit_inputs.push(dartr_driver::cache_store::LibraryUnitKeyInput {
+            path: &uf.path,
+            uri_str: &uf.uri_str,
+            content_hash: uc.content_hash_bytes,
+            unlinked_signature: uc.unlinked_signature,
+            directives_signature: driver.fs.unit_directives_signature(u_id),
+            unit_options_signature: options.core_signature_for_path(&uf.path),
+            is_generated: is_gen,
+        });
+    }
+
+    let lib_path = &driver.fs.file(library).path;
+    let pubspec_content_hash = pkg_info
+        .and_then(|pi| pi.package_root.as_deref())
+        .and_then(|root| pubspec_hashes.get(root).copied().flatten());
+    let packages_signature = match pkg_info {
+        Some(pi) => {
+            let mut sig = dartr_driver::api_signature::ApiSignature::new();
+            sig.add_bytes(context_env_sig);
+            sig.add_bool(pi.is_pub_package);
+            sig.add_bool(pi.has_flutter_dep);
+            sig.add_bool(pi.has_breaking_version);
+            sig.to_byte_list()
+        }
+        None => *context_env_sig,
+    };
+    let opts_input = dartr_driver::cache_store::LibraryOptionsKeyInput {
+        precomputed_core_signature: Some(options.core_signature_for_path(lib_path)),
+        pubspec_content_hash,
+        packages_signature,
+        ..Default::default()
+    };
+
+    dartr_driver::cache_store::library_result_key(salt, &cycle_sig, &unit_inputs, &opts_input)
+}
+
 /// Analyzes the requested [files] of one context with its [driver].
+#[allow(clippy::too_many_arguments)]
 fn analyze_context<I, F>(
     context: usize,
     driver: &mut Driver,
@@ -1908,6 +2081,8 @@ fn analyze_context<I, F>(
     files: &[AnalyzedFile],
     priority_files: &std::collections::HashSet<String>,
     index_fn: Option<&F>,
+    disk_cache: Option<&dartr_driver::cache_store::DiskCache>,
+    packages_signature: &dartr_driver::cache_store::Hash128,
 ) -> (
     Vec<Outcome>,
     Vec<((usize, String), Arc<ResolvedLibraryResult>)>,
@@ -1949,13 +2124,147 @@ where
         }
     }
     let library_ids: Vec<FileId> = libraries.keys().copied().collect();
+    if library_ids.is_empty() {
+        driver.fs.clear_all_parsed();
+        return (
+            outcomes,
+            Vec::new(),
+            Vec::new(),
+            (
+                t_discover,
+                std::time::Duration::ZERO,
+                std::time::Duration::ZERO,
+            ),
+        );
+    }
+
+    let mut pkg_cache = dartr_lints::LintPackageCache::default();
+    let pkg_infos: HashMap<FileId, Arc<dartr_lints::LintPackageInfo>> = library_ids
+        .iter()
+        .map(|&l| {
+            let path = &driver.fs.file(l).path;
+            (l, pkg_cache.for_defining_path(path))
+        })
+        .collect();
+
     let t_before_link = t0.elapsed();
-    driver.link_libraries(&library_ids);
+    let mut missing_library_ids = Vec::new();
+    let mut key_by_library: HashMap<FileId, dartr_driver::cache_store::Hash128> = HashMap::new();
+
+    if let Some(cache) = disk_cache {
+        driver.fs.discover_doc_imports(&library_ids);
+        for &library in &library_ids {
+            driver.graph.library_cycle(&driver.fs, library);
+            if driver.fs.file(library).kind().is_library() {
+                for doc_import in driver.doc_import_files(library) {
+                    driver.graph.library_cycle(&driver.fs, doc_import);
+                }
+            }
+        }
+
+        let mut pubspec_hashes: HashMap<
+            std::path::PathBuf,
+            Option<dartr_driver::cache_store::Hash128>,
+        > = HashMap::new();
+        for info in pkg_infos.values() {
+            if let Some(root) = &info.package_root
+                && !pubspec_hashes.contains_key(root)
+            {
+                let pubspec_path = root.join("pubspec.yaml");
+                let hash = dartr_project::fs::read_string_strict(&pubspec_path.to_string_lossy())
+                    .map(|text| dartr_driver::cache_store::content_hash(&text));
+                pubspec_hashes.insert(root.clone(), hash);
+            }
+        }
+
+        let context_env_sig = if driver.fs.declared_variables.is_empty() {
+            *packages_signature
+        } else {
+            let mut sig = dartr_driver::api_signature::ApiSignature::new();
+            sig.add_bytes(packages_signature);
+            sig.add_int(driver.fs.declared_variables.len() as u32);
+            for (k, v) in &driver.fs.declared_variables {
+                sig.add_string(k);
+                sig.add_string(v);
+            }
+            sig.to_byte_list()
+        };
+
+        let salt = cache.salt();
+        let library_keys: Vec<(FileId, dartr_driver::cache_store::Hash128)> = library_ids
+            .iter()
+            .map(|&library| {
+                let key = compute_library_result_key(
+                    driver,
+                    options,
+                    library,
+                    pkg_infos.get(&library).map(|p| &**p),
+                    &pubspec_hashes,
+                    &context_env_sig,
+                    salt,
+                );
+                (library, key)
+            })
+            .collect();
+
+        use rayon::prelude::*;
+        let lookup_results: Vec<(
+            FileId,
+            dartr_driver::cache_store::Hash128,
+            Option<dartr_driver::cache_store::LibraryAnalysisCacheEntry>,
+        )> = library_keys
+            .into_par_iter()
+            .map(|(library, key)| {
+                let hit = cache.get_library_diagnostics(&key);
+                (library, key, hit)
+            })
+            .collect();
+
+        for (library, key, hit) in lookup_results {
+            if let Some(entry) = hit {
+                let mut by_path: HashMap<&str, &dartr_driver::cache_store::CachedUnitDiagnostics> =
+                    HashMap::with_capacity(entry.units.len());
+                for u in &entry.units {
+                    by_path.entry(u.path.as_str()).or_insert(u);
+                }
+                for &wanted_id in &libraries[&library] {
+                    let file = requested[&wanted_id];
+                    if let Some(u) = by_path.get(file.path.as_str()) {
+                        outcomes.push(Outcome::Done(FileDiagnostics {
+                            path: u.path.clone(),
+                            line_info: u.line_info.clone(),
+                            diagnostics: u.diagnostics.clone(),
+                        }));
+                    } else {
+                        outcomes.push(Outcome::Fallback(file.clone()));
+                    }
+                }
+            } else {
+                missing_library_ids.push(library);
+                key_by_library.insert(library, key);
+            }
+        }
+    } else {
+        missing_library_ids = library_ids;
+    }
+
+    if missing_library_ids.is_empty() {
+        driver.fs.clear_all_parsed();
+        let t_link = t0.elapsed() - t_before_link;
+        return (
+            outcomes,
+            Vec::new(),
+            Vec::new(),
+            (t_discover, t_link, std::time::Duration::ZERO),
+        );
+    }
+
+    driver.link_libraries(&missing_library_ids);
     let t_link = t0.elapsed() - t_before_link;
 
     // The unignorable codes of each library: the library analyzer keeps
     // them in its ignore filtering, like `finish_file` does.
-    let unignorable: Vec<Vec<String>> = library_ids
+    let unignorable: Vec<Vec<String>> = missing_library_ids
         .iter()
         .map(|&l| {
             let mut names: Vec<String> = options
@@ -1972,7 +2281,7 @@ where
     // The rules that need resolution run on the resolved units (Dart
     // `_computeLints`); the parse-only rules keep running on the parsed units.
     let parsed_rules = dartr_lints::rules::parsed_rules();
-    let jobs: Vec<dartr_driver::analysis::LintJob<'_>> = library_ids
+    let jobs: Vec<dartr_driver::analysis::LintJob<'_>> = missing_library_ids
         .iter()
         .zip(&unignorable)
         .map(|(&l, names)| {
@@ -1988,14 +2297,6 @@ where
             (l, options.for_path(path).1, &names[..], resolved_rules)
         })
         .collect();
-    let mut pkg_cache = dartr_lints::LintPackageCache::default();
-    let pkg_infos: HashMap<FileId, Arc<dartr_lints::LintPackageInfo>> = library_ids
-        .iter()
-        .map(|&l| {
-            let path = &driver.fs.file(l).path;
-            (l, pkg_cache.for_defining_path(path))
-        })
-        .collect();
     let world_and_tp = if index_fn.is_some() || !priority_files.is_empty() {
         let world = driver.state.world.clone();
         let tp = dartr_link::types_builder::world_type_provider(&world);
@@ -2006,9 +2307,11 @@ where
     let requested = &requested;
     let libraries = &libraries;
     let pkg_infos = &pkg_infos;
+    let key_by_library = &key_by_library;
     let world_and_tp = world_and_tp.as_ref();
     let t_before_resolve = t0.elapsed();
     let analyzed = driver.analyze_libraries_with_lints(&jobs, |library, units, result, lints| {
+        let cache_write = disk_cache.and_then(|c| key_by_library.get(&library).map(|k| (c, k)));
         library_outcomes(
             context,
             options,
@@ -2021,6 +2324,7 @@ where
             priority_files,
             world_and_tp,
             index_fn,
+            cache_write,
         )
     });
     let t_resolve = t0.elapsed() - t_before_resolve;
@@ -2057,6 +2361,10 @@ fn library_outcomes<I, F>(
     priority_files: &std::collections::HashSet<String>,
     world_and_tp: Option<&(dartr_element::WorldSnapshot, dartr_element::TypeProvider)>,
     index_fn: Option<&F>,
+    cache_write: Option<(
+        &dartr_driver::cache_store::DiskCache,
+        &dartr_driver::cache_store::Hash128,
+    )>,
 ) -> (
     Vec<Outcome>,
     Option<((usize, String), Arc<ResolvedLibraryResult>)>,
@@ -2184,6 +2492,68 @@ where
     for (unit_lints, resolved) in lints.iter_mut().zip(resolved_lints) {
         unit_lints.extend(resolved);
     }
+
+    if let Some((cache, key)) = cache_write {
+        let mut finished_by_path: HashMap<String, FileDiagnostics> =
+            HashMap::with_capacity(units.len());
+        let mut cached_units = Vec::with_capacity(units.len());
+        for (index, unit_input) in units.iter().enumerate() {
+            if finished_by_path.contains_key(&*unit_input.path) {
+                continue;
+            }
+            let diags = if let Some((_, prio)) = &priority_entry {
+                let unit = &prio.library.units[index];
+                if let Some(panic) = &unit.panic
+                    && debug()
+                {
+                    eprintln!("dartr: resolver panic in {}: {panic}", unit.path);
+                }
+                [unit.diagnostics.clone(), unit.ignored_diagnostics.clone()].concat()
+            } else if let Some((panic, diags)) = non_prio_unit_diags.get_mut(index) {
+                if let Some(panic) = panic
+                    && debug()
+                {
+                    eprintln!("dartr: resolver panic in {}: {panic}", unit_input.path);
+                }
+                std::mem::take(diags)
+            } else {
+                Vec::new()
+            };
+            let parsed = &unit_input.parsed;
+            let (settings, _) = options.for_path(&unit_input.path);
+            let fd = finish_file(
+                &unit_input.path,
+                &parsed.ast.tokens.source,
+                parsed,
+                diags,
+                lints.get_mut(index).map(std::mem::take).unwrap_or_default(),
+                settings,
+            );
+            cached_units.push(dartr_driver::cache_store::CachedUnitDiagnostics {
+                path: fd.path.clone(),
+                line_info: fd.line_info.clone(),
+                diagnostics: fd.diagnostics.clone(),
+            });
+            finished_by_path.insert(fd.path.clone(), fd);
+        }
+        cache.put_library_diagnostics(
+            key,
+            &dartr_driver::cache_store::LibraryAnalysisCacheEntry {
+                units: cached_units,
+            },
+        );
+        let mut outcomes = Vec::with_capacity(wanted.len());
+        for &id in wanted {
+            let file = requested[&id];
+            if let Some(fd) = finished_by_path.remove(&file.path) {
+                outcomes.push(Outcome::Done(fd));
+            } else {
+                outcomes.push(Outcome::Fallback(file.clone()));
+            }
+        }
+        return (outcomes, priority_entry, unit_indexes);
+    }
+
     let mut outcomes = Vec::new();
     for &id in wanted {
         let file = requested[&id];
