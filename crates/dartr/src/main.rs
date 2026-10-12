@@ -85,8 +85,8 @@ fn main() -> anyhow::Result<()> {
     // and messages), so it is parsed by dartr_cli and not by clap.
     let argv: Vec<String> = std::env::args().skip(1).collect();
     if argv.first().map(String::as_str) == Some("analyze") {
-        let stdout = std::io::stdout();
-        let stderr = std::io::stderr();
+        let mut stdout = std::io::stdout();
+        let mut stderr = std::io::stderr();
         // Hidden: `--dartr-parse-only` uses the parse-only provider (parse
         // diagnostics, AST-only lints), for comparison with the driver.
         let parse_only = argv.iter().any(|a| a == "--dartr-parse-only");
@@ -105,8 +105,8 @@ fn main() -> anyhow::Result<()> {
             &args,
             provider,
             dartr_cli::Terminal::detect(),
-            &mut stdout.lock(),
-            &mut stderr.lock(),
+            &mut stdout,
+            &mut stderr,
         );
         std::process::exit(code);
     }
@@ -138,10 +138,9 @@ fn main() -> anyhow::Result<()> {
     }
     // `fix` has the command line of `dart fix`.
     if argv.first().map(String::as_str) == Some("fix") {
-        let stdout = std::io::stdout();
-        let stderr = std::io::stderr();
-        let code =
-            dartr_server::server::fix_cli::run(&argv[1..], &mut stdout.lock(), &mut stderr.lock());
+        let mut stdout = std::io::stdout();
+        let mut stderr = std::io::stderr();
+        let code = dartr_server::server::fix_cli::run(&argv[1..], &mut stdout, &mut stderr);
         std::process::exit(code);
     }
     let cli = Cli::parse();

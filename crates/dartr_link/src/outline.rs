@@ -509,11 +509,11 @@ fn build_mixin_app(lk: &mut Linker<'_>, tp: &TypeProvider, index: usize, class: 
 /// into the `ConstExprs` of this cycle.
 fn copy_const_expr(lk: &mut Linker<'_>, store: StoreId, expr: ConstExprId) -> Option<ConstExprId> {
     if store == lk.core.store.id {
-        let src = lk.core.const_exprs.ast.clone();
-        return Some(lk.core.const_exprs.copy(&src, expr.0));
+        let src = lk.core.const_exprs.clone();
+        return Some(lk.core.const_exprs.copy_from_const_exprs(&src, expr.0));
     }
     let exprs = lk.core.deps.const_exprs(store)?;
-    Some(lk.core.const_exprs.copy(&exprs.ast, expr.0))
+    Some(lk.core.const_exprs.copy_from_const_exprs(&exprs, expr.0))
 }
 
 /// Dart `LibraryBuilder.buildEnumChildren`.
@@ -1231,9 +1231,31 @@ fn resolve_redirected_constructors(lk: &Linker<'_>, ctx: &Ctx<'_>) {
                         });
                         let name = constructor_name.unwrap_or("new");
                         let target = interface_element.and_then(|i| named(i, name));
-                        ctx.get(constructor)
-                            .redirected_constructor
-                            .set(target.map(ElemRef::Base));
+                        let target_ref = target.map(|target_base| {
+                            if let Some(elem) = element
+                                && let Some(redirect_type) = instantiate_redirect_target(
+                                    ctx,
+                                    &scopes,
+                                    unit_fragment,
+                                    &ctx.interface(interface).type_params,
+                                    ast,
+                                    elem,
+                                    t.type_arguments,
+                                    Nullability::None,
+                                )
+                                && ctx.interface_element(redirect_type).is_some()
+                                && !ctx.type_arguments(redirect_type).is_empty()
+                            {
+                                dartr_typesystem::member::constructor_from2(
+                                    ctx,
+                                    target_base,
+                                    redirect_type,
+                                )
+                            } else {
+                                ElemRef::Base(target_base)
+                            }
+                        });
+                        ctx.get(constructor).redirected_constructor.set(target_ref);
                     } else {
                         for &init in ast.list(c.initializers) {
                             if let Some(r) =
@@ -1245,9 +1267,19 @@ fn resolve_redirected_constructors(lk: &Linker<'_>, ctx: &Ctx<'_>) {
                                     .map(|n| ast.tokens.lexeme(ast.get(n).token))
                                     .unwrap_or("new");
                                 let target = named(interface, name);
-                                ctx.get(constructor)
-                                    .redirected_constructor
-                                    .set(target.map(ElemRef::Base));
+                                let target_ref = target.map(|target_base| {
+                                    if !ctx.interface(interface).type_params.is_empty() {
+                                        let this_t = crate::dump::this_type(ctx, interface);
+                                        dartr_typesystem::member::constructor_from2(
+                                            ctx,
+                                            target_base,
+                                            this_t,
+                                        )
+                                    } else {
+                                        ElemRef::Base(target_base)
+                                    }
+                                });
+                                ctx.get(constructor).redirected_constructor.set(target_ref);
                             }
                         }
                     }
@@ -1255,6 +1287,140 @@ fn resolve_redirected_constructors(lk: &Linker<'_>, ctx: &Ctx<'_>) {
             }
         }
     }
+}
+
+fn instantiate_redirect_target(
+    ctx: &Ctx<'_>,
+    scopes: &crate::scope::LibraryScopes,
+    unit_fragment: FId<LibraryFragment>,
+    enclosing_tps: &[EId<TypeParameterElement>],
+    ast: &dartr_ast::Ast,
+    elem: ElementId,
+    tal: Option<dartr_ast::Id<dartr_ast::TypeArgumentList>>,
+    nullability: Nullability,
+) -> Option<TypeId> {
+    if let Some(ie) = elem.cast::<InterfaceElement>() {
+        let tps = &ctx.interface(ie).type_params;
+        let args: Vec<TypeId> = if tps.is_empty() {
+            Vec::new()
+        } else if let Some(tal) = tal {
+            let raw_args = ast.list(ast.get(tal).arguments);
+            if raw_args.len() == tps.len() {
+                raw_args
+                    .iter()
+                    .map(|&a| {
+                        resolve_redirect_type_arg(ctx, scopes, unit_fragment, enclosing_tps, ast, a)
+                    })
+                    .collect()
+            } else {
+                vec![TypeId::DYNAMIC; tps.len()]
+            }
+        } else {
+            tps.iter()
+                .map(|&tp| ctx.get(tp).default_type.get().unwrap_or(TypeId::DYNAMIC))
+                .collect()
+        };
+        Some(ctx.intern(TypeKind::Interface {
+            element: ie,
+            args: ctx.intern_list(&args),
+            nullability,
+            alias: None,
+        }))
+    } else if let Some(ta) = elem.cast::<TypeAliasElement>() {
+        let aliased = ctx.get(ta).aliased_type.get()?;
+        let tps = &ctx.get(ta).type_params;
+        let args: Vec<TypeId> = if tps.is_empty() {
+            Vec::new()
+        } else if let Some(tal) = tal {
+            let raw_args = ast.list(ast.get(tal).arguments);
+            if raw_args.len() == tps.len() {
+                raw_args
+                    .iter()
+                    .map(|&a| {
+                        resolve_redirect_type_arg(ctx, scopes, unit_fragment, enclosing_tps, ast, a)
+                    })
+                    .collect()
+            } else {
+                vec![TypeId::DYNAMIC; tps.len()]
+            }
+        } else {
+            tps.iter()
+                .map(|&tp| ctx.get(tp).default_type.get().unwrap_or(TypeId::DYNAMIC))
+                .collect()
+        };
+        let sub = dartr_typesystem::MapSubstitution::from_pairs(tps, &args);
+        let substituted = sub.substitute_type(ctx, aliased);
+        Some(ctx.with_nullability(substituted, nullability))
+    } else {
+        None
+    }
+}
+
+fn resolve_redirect_type_arg(
+    ctx: &Ctx<'_>,
+    scopes: &crate::scope::LibraryScopes,
+    unit_fragment: FId<LibraryFragment>,
+    enclosing_tps: &[EId<TypeParameterElement>],
+    ast: &dartr_ast::Ast,
+    arg: dartr_ast::Id<dartr_ast::TypeAnnotation>,
+) -> TypeId {
+    let Some(nt) = ast.cast::<dartr_ast::NamedType>(arg.raw()) else {
+        return TypeId::DYNAMIC;
+    };
+    let nt = ast.get(nt);
+    let nullability = if nt.question.is_some() {
+        Nullability::Question
+    } else {
+        Nullability::None
+    };
+    let name = ast.tokens.lexeme(nt.name);
+    if nt.import_prefix.is_none() {
+        if let Some(&tp) = enclosing_tps
+            .iter()
+            .find(|&&tp| ctx.get(tp).name.map(|n| ctx.name_str(n)) == Some(name))
+        {
+            return ctx.intern(TypeKind::TypeParameter {
+                param: tp,
+                nullability,
+                promoted_bound: None,
+                alias: None,
+            });
+        }
+        match name {
+            "dynamic" => return TypeId::DYNAMIC,
+            "void" => return TypeId::VOID,
+            "Never" => {
+                return ctx.with_nullability(TypeId::NEVER, nullability);
+            }
+            _ => {}
+        }
+    }
+    let scope_elem = match nt.import_prefix {
+        Some(p) => {
+            let prefix = ast.tokens.lexeme(ast.get(p).name);
+            match scopes.lookup(unit_fragment, prefix).getter {
+                Some(crate::scope::ScopeElement::Prefix(_, s)) => {
+                    scopes.prefix_lookup(s, name).getter
+                }
+                _ => None,
+            }
+        }
+        None => scopes.lookup(unit_fragment, name).getter,
+    };
+    let Some(elem) = scope_elem.and_then(|e| e.element()) else {
+        return TypeId::INVALID;
+    };
+    instantiate_redirect_target(
+        ctx,
+        scopes,
+        unit_fragment,
+        enclosing_tps,
+        ast,
+        elem,
+        nt.type_arguments,
+        nullability,
+    )
+    .unwrap_or(TypeId::INVALID)
 }
 
 /// Dart `SuperFormalParameterElementImpl.superConstructorParameter` (the

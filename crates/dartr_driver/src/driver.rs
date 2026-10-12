@@ -42,7 +42,7 @@ pub(crate) struct SdkCycleKey {
 #[derive(Default)]
 pub(crate) struct SdkCache {
     files: RwLock<HashMap<SdkFileKey, Arc<RefreshData>>>,
-    cycles: RwLock<HashMap<SdkCycleKey, Arc<LinkedCycle>>>,
+    cycles: RwLock<HashMap<SdkCycleKey, (Arc<str>, Arc<LinkedCycle>)>>,
 }
 
 impl SdkCache {
@@ -76,17 +76,81 @@ impl SdkCache {
     }
 
     pub(crate) fn get_cycle(&self, key: &SdkCycleKey) -> Option<Arc<LinkedCycle>> {
-        self.cycles.read().unwrap().get(key).cloned()
+        self.cycles
+            .read()
+            .unwrap()
+            .get(key)
+            .map(|(_, cycle)| cycle.clone())
     }
 
-    pub(crate) fn insert_cycle(&self, key: SdkCycleKey, cycle: Arc<LinkedCycle>) {
-        self.cycles.write().unwrap().insert(key, cycle);
+    pub(crate) fn insert_cycle(
+        &self,
+        key: SdkCycleKey,
+        first_path: Arc<str>,
+        cycle: Arc<LinkedCycle>,
+    ) {
+        self.cycles
+            .write()
+            .unwrap()
+            .insert(key, (first_path, cycle));
+    }
+
+    pub(crate) fn invalidate_store(&self, store: StoreId) {
+        self.cycles
+            .write()
+            .unwrap()
+            .retain(|k, (_, v)| v.store.id != store && !k.dependency_stores.contains(&store));
+    }
+
+    pub(crate) fn retain_for_roots(&self, roots: &[String]) {
+        let in_roots = |path: &str| {
+            roots
+                .iter()
+                .any(|r| dartr_project::paths::is_within(r, path))
+        };
+        self.files.write().unwrap().retain(|k, _| in_roots(&k.path));
+        let mut cycles = self.cycles.write().unwrap();
+        cycles.retain(|_, (path, _)| in_roots(path));
+        loop {
+            let live: std::collections::HashSet<StoreId> =
+                cycles.values().map(|(_, v)| v.store.id).collect();
+            let before = cycles.len();
+            cycles.retain(|k, _| k.dependency_stores.iter().all(|d| live.contains(d)));
+            if cycles.len() == before {
+                break;
+            }
+        }
+    }
+
+    pub(crate) fn clear(&self) {
+        self.files.write().unwrap().clear();
+        self.cycles.write().unwrap().clear();
+    }
+
+    pub(crate) fn clear_files(&self) {
+        self.files.write().unwrap().clear();
+    }
+
+    pub(crate) fn drop_all_parsed(&self) {
+        let mut files = self.files.write().unwrap();
+        for data in files.values_mut() {
+            if data.parsed.is_some() {
+                let mut cloned = (**data).clone();
+                cloned.parsed = None;
+                *data = Arc::new(cloned);
+            }
+        }
     }
 }
 
 /// Invalidates cached parsed file data for [path] in [generation].
 pub fn invalidate_cached_file(generation: &Arc<Generation>, path: &str) {
     SdkCache::for_generation(generation).invalidate_file(path);
+}
+
+/// Drops any cached [` dartr_ast_builder::ParsedUnit`] ASTs in [generation]'s shared cache.
+pub fn drop_cached_parsed(generation: &Arc<Generation>) {
+    SdkCache::for_generation(generation).drop_all_parsed();
 }
 
 /// The libraries linked so far, by URI (lookups only).
@@ -131,6 +195,7 @@ pub struct Driver {
     pub state: LinkState,
     pub cycles: IndexMap<CycleId, Arc<LinkedCycle>>,
     sdk_cache: Arc<SdkCache>,
+    pub clear_sdk_cache_after_lookup: bool,
 }
 
 impl Driver {
@@ -146,7 +211,14 @@ impl Driver {
             },
             cycles: IndexMap::new(),
             sdk_cache,
+            clear_sdk_cache_after_lookup: false,
         }
+    }
+
+    /// Evicts cached SDK/package files and cycles that do not reside under any
+    /// folder in [roots].
+    pub fn retain_sdk_cache_for_roots(&self, roots: &[String]) {
+        self.sdk_cache.retain_for_roots(roots);
     }
 
     /// Computes the [`SdkCycleKey`] of a cycle whose direct dependencies
@@ -197,9 +269,30 @@ impl Driver {
         self.cycles.insert(c, linked);
     }
 
+    fn finish_link_parsed(&self, libraries: &[FileId], keep_targets: bool) {
+        if keep_targets {
+            let keep: std::collections::HashSet<FileId> = libraries
+                .iter()
+                .flat_map(|&l| self.fs.library_file_kinds(l))
+                .collect();
+            self.fs.drop_parsed_except_ids(&keep);
+        } else {
+            self.fs.clear_all_parsed();
+        }
+        if crate::analysis::keep_parsed_in_sdk_cache() {
+            self.sdk_cache.drop_all_parsed();
+        }
+    }
+
     /// Links the cycles of [libraries] and of everything they depend on.
     /// The files must be discovered ([`FileSystemState::discover`]).
     pub fn link_libraries(&mut self, libraries: &[FileId]) {
+        self.link_libraries_with_keep(libraries, crate::analysis::keep_parsed_in_link());
+    }
+
+    /// Like [`Self::link_libraries`], and drops the cached [`ParsedUnit`] of
+    /// target [libraries] as well when [keep_targets] is `false`.
+    pub fn link_libraries_with_keep(&mut self, libraries: &[FileId], keep_targets: bool) {
         self.fs.discover_doc_imports(libraries);
         // Library graph and cycles: sequential.
         let mut targets = Vec::new();
@@ -233,6 +326,7 @@ impl Driver {
             visit(&self.graph, &self.cycles, t, &mut order);
         }
         if order.is_empty() {
+            self.finish_link_parsed(libraries, keep_targets);
             return;
         }
         let mut remaining_order: IndexSet<CycleId> = IndexSet::new();
@@ -253,22 +347,28 @@ impl Driver {
             remaining_order.insert(c);
         }
         let order = remaining_order;
+        if self.clear_sdk_cache_after_lookup {
+            self.sdk_cache.clear();
+        }
         if order.is_empty() {
+            self.finish_link_parsed(libraries, keep_targets);
             return;
         }
-        // The link inputs: built here, because the file state is not
-        // shared between threads.
-        let inputs: Vec<Vec<LinkLibraryInput>> = order
-            .iter()
-            .map(|&c| {
-                self.graph
-                    .cycle(c)
-                    .libraries
-                    .iter()
-                    .map(|&l| self.link_input(l))
-                    .collect()
-            })
-            .collect();
+        let keep_files: std::collections::HashSet<FileId> = if keep_targets {
+            libraries
+                .iter()
+                .flat_map(|&l| self.fs.library_file_kinds(l))
+                .collect()
+        } else {
+            std::collections::HashSet::new()
+        };
+        let mut needed_or_keep = keep_files.clone();
+        for &c in &order {
+            for &l in &self.graph.cycle(c).libraries {
+                needed_or_keep.extend(self.fs.library_file_kinds(l));
+            }
+        }
+        self.fs.drop_parsed_except_ids(&needed_or_keep);
         let position: IndexMap<CycleId, usize> =
             order.iter().enumerate().map(|(i, &c)| (c, i)).collect();
         // Dependencies that are not linked yet, and the users of each cycle.
@@ -296,15 +396,25 @@ impl Driver {
         let ready: Vec<usize> = (0..order.len())
             .filter(|&i| remaining[i].load(Ordering::Relaxed) == 0)
             .collect();
+        let max_workers = crate::analysis::max_parallel_libraries()
+            .min(rayon::current_num_threads().max(1))
+            .min(order.len())
+            .max(1);
+        let initial_workers = max_workers.min(ready.len());
+        let sched = Mutex::new((std::collections::VecDeque::from(ready), initial_workers));
         let job = Job {
-            inputs: &inputs,
+            driver: self,
+            order: &order,
+            keep_files: &keep_files,
             remaining: &remaining,
             users: &users,
             shared: &shared,
+            sched: &sched,
+            max_workers,
         };
         rayon::scope(|scope| {
-            for i in ready {
-                job.spawn(scope, i);
+            for _ in 0..initial_workers {
+                job.spawn_worker(scope);
             }
         });
         let (state, results) = shared.into_inner().unwrap();
@@ -313,9 +423,20 @@ impl Driver {
             let c = order[i];
             let linked = result.expect("cycle linked");
             self.cycles.insert(c, linked.clone());
-            let key = self.sdk_cycle_key(c);
-            self.sdk_cache.insert_cycle(key, linked);
+            if !self.clear_sdk_cache_after_lookup {
+                let cycle_libs = &self.graph.cycle(c).libraries;
+                let is_shared = cycle_libs.iter().all(|&l| {
+                    let p = &self.fs.file(l).uri_properties;
+                    p.is_dart || p.package_name.is_some()
+                });
+                if is_shared && let Some(&first_lib) = cycle_libs.first() {
+                    let first_path = self.fs.file(first_lib).path.clone();
+                    let key = self.sdk_cycle_key(c);
+                    self.sdk_cache.insert_cycle(key, first_path, linked);
+                }
+            }
         }
+        self.finish_link_parsed(libraries, keep_targets);
     }
 
     /// Dart `AnalysisDriver.changeFile` with the v1 invalidation of design
@@ -370,7 +491,17 @@ impl Driver {
             self.graph.cycle_of_library.shift_remove(l);
         }
         for c in &invalid {
-            self.cycles.shift_remove(c);
+            if let Some(linked) = self.cycles.shift_remove(c) {
+                let store_id = linked.store.id;
+                self.state
+                    .world
+                    .remove_store(store_id, linked.libraries.iter().map(|l| &l.uri));
+                self.state.registry.const_exprs.remove(&store_id.raw());
+                for l in &linked.libraries {
+                    self.state.registry.libraries.remove(&l.uri);
+                }
+                self.sdk_cache.invalidate_store(store_id);
+            }
         }
         libraries.extend(seeds);
         let libraries = libraries
@@ -418,7 +549,18 @@ impl Driver {
     pub fn link_input(&self, library: FileId) -> LinkLibraryInput {
         let mut visited = IndexSet::new();
         LinkLibraryInput {
-            unit: self.unit_input(library, true, &mut visited),
+            unit: self.unit_input(library, true, &mut visited, None),
+        }
+    }
+
+    fn link_input_for_cycle(
+        &self,
+        library: FileId,
+        keep_files: &std::collections::HashSet<FileId>,
+    ) -> LinkLibraryInput {
+        let mut visited = IndexSet::new();
+        LinkLibraryInput {
+            unit: self.unit_input(library, true, &mut visited, Some(keep_files)),
         }
     }
 
@@ -427,6 +569,7 @@ impl Driver {
         file: FileId,
         is_library: bool,
         visited: &mut IndexSet<FileId>,
+        keep_files: Option<&std::collections::HashSet<FileId>>,
     ) -> LinkUnitInput {
         visited.insert(file);
         let fs = &self.fs;
@@ -472,7 +615,7 @@ impl Driver {
                     ) if !visited.contains(&part) => LinkPartUri::Unit {
                         relative_uri_string: relative_uri_str.clone(),
                         relative_uri: relative_uri.clone(),
-                        unit: Box::new(self.unit_input(part, false, visited)),
+                        unit: Box::new(self.unit_input(part, false, visited, keep_files)),
                     },
                     (
                         DirectiveUri::WithFile {
@@ -498,11 +641,15 @@ impl Driver {
                 }
             })
             .collect();
+        let parsed = match keep_files {
+            Some(keep) if !keep.contains(&file) => f.take_or_parse(),
+            _ => f.parsed(),
+        };
         LinkUnitInput {
             path: f.path.clone(),
             uri: f.uri_str.clone(),
             exists: c.exists,
-            parsed: c.parsed.clone(),
+            parsed,
             imports,
             exports,
             parts,
@@ -561,46 +708,85 @@ fn combinators(list: &[UnlinkedCombinator]) -> Vec<LinkCombinator> {
 
 /// The shared data of the scheduler.
 struct Job<'a> {
-    inputs: &'a [Vec<LinkLibraryInput>],
+    driver: &'a Driver,
+    order: &'a IndexSet<CycleId>,
+    keep_files: &'a std::collections::HashSet<FileId>,
     remaining: &'a [AtomicUsize],
     users: &'a [Vec<usize>],
     shared: &'a Mutex<(LinkState, Vec<Option<Arc<LinkedCycle>>>)>,
+    sched: &'a Mutex<(std::collections::VecDeque<usize>, usize)>,
+    max_workers: usize,
 }
 
 impl<'a> Job<'a> {
-    fn spawn<'s>(&'s self, scope: &rayon::Scope<'s>, i: usize)
+    fn spawn_worker<'s>(&'s self, scope: &rayon::Scope<'s>)
     where
         'a: 's,
     {
         scope.spawn(move |scope| {
-            // A snapshot that has all direct dependencies (they published
-            // before this cycle became ready).
-            let state = self.shared.lock().unwrap().0.clone();
-            let linked = link_cycle(
-                &state.world,
-                &state.registry,
-                &crate::link_resolver::ResolverForLinking,
-                &self.inputs[i],
-            );
-            drop(state);
-            let linked = Arc::new(linked);
-            {
-                let mut shared = self.shared.lock().unwrap();
-                let (state, results) = &mut *shared;
-                let libraries = linked.libraries.iter().map(|l| (l.uri.clone(), l.element));
-                state.world.add_store(linked.store.clone(), libraries);
-                for l in &linked.libraries {
-                    state.registry.libraries.insert(l.uri.clone(), l.clone());
+            loop {
+                let i = {
+                    let mut g = self.sched.lock().unwrap();
+                    match g.0.pop_front() {
+                        Some(i) => i,
+                        None => {
+                            g.1 -= 1;
+                            return;
+                        }
+                    }
+                };
+                // A snapshot that has all direct dependencies (they published
+                // before this cycle became ready).
+                let state = self.shared.lock().unwrap().0.clone();
+                let c = self.order[i];
+                let cycle_inputs: Vec<LinkLibraryInput> = self
+                    .driver
+                    .graph
+                    .cycle(c)
+                    .libraries
+                    .iter()
+                    .map(|&l| self.driver.link_input_for_cycle(l, self.keep_files))
+                    .collect();
+                let linked = link_cycle(
+                    &state.world,
+                    &state.registry,
+                    &crate::link_resolver::ResolverForLinking,
+                    &cycle_inputs,
+                );
+                drop(cycle_inputs);
+                drop(state);
+                let linked = Arc::new(linked);
+                {
+                    let mut shared = self.shared.lock().unwrap();
+                    let (state, results) = &mut *shared;
+                    let libraries = linked.libraries.iter().map(|l| (l.uri.clone(), l.element));
+                    state.world.add_store(linked.store.clone(), libraries);
+                    for l in &linked.libraries {
+                        state.registry.libraries.insert(l.uri.clone(), l.clone());
+                    }
+                    state
+                        .registry
+                        .const_exprs
+                        .insert(linked.store.id.raw(), linked.const_exprs.clone());
+                    results[i] = Some(linked);
                 }
-                state
-                    .registry
-                    .const_exprs
-                    .insert(linked.store.id.raw(), linked.const_exprs.clone());
-                results[i] = Some(linked);
-            }
-            for &user in &self.users[i] {
-                if self.remaining[user].fetch_sub(1, Ordering::AcqRel) == 1 {
-                    self.spawn(scope, user);
+                let mut newly_ready = Vec::new();
+                for &user in &self.users[i] {
+                    if self.remaining[user].fetch_sub(1, Ordering::AcqRel) == 1 {
+                        newly_ready.push(user);
+                    }
+                }
+                if !newly_ready.is_empty() {
+                    let to_spawn = {
+                        let mut g = self.sched.lock().unwrap();
+                        g.0.extend(newly_ready);
+                        let can_spawn = (self.max_workers - g.1).min(g.0.len().saturating_sub(1));
+                        g.1 += can_spawn;
+                        can_spawn
+                    };
+                    for _ in 0..to_spawn {
+                        self.spawn_worker(scope);
+                    }
                 }
             }
         });
@@ -648,10 +834,10 @@ mod tests {
         d2.fs.discover();
         d2.link_libraries(&[c2]);
 
-        // ParsedUnit and LinkedCycle for dart:core are shared by pointer when SDK and options match.
+        // Source text and LinkedCycle for dart:core are shared by pointer when SDK and options match.
         assert!(Arc::ptr_eq(
-            &d1.fs.file(c1).c().parsed,
-            &d2.fs.file(c2).c().parsed
+            &d1.fs.file(c1).c().source,
+            &d2.fs.file(c2).c().source
         ));
         let cycle1 = d1.graph.cycle_of_library[&c1];
         let cycle2 = d2.graph.cycle_of_library[&c2];
@@ -725,8 +911,8 @@ mod tests {
         d2.link_libraries(&[f2]);
 
         assert!(Arc::ptr_eq(
-            &d1.fs.file(f1).c().parsed,
-            &d2.fs.file(f2).c().parsed
+            &d1.fs.file(f1).c().source,
+            &d2.fs.file(f2).c().source
         ));
         assert!(Arc::ptr_eq(
             &d1.fs.file(f1).c().unlinked,
@@ -750,14 +936,18 @@ mod tests {
         assert!(!Arc::ptr_eq(&d1.cycles[&new_cycle1], &old_linked));
         assert!(Arc::ptr_eq(&d2.cycles[&cycle2], &old_linked));
 
-        // Once d2 is notified of the file change, it reuses the new parsed unit and linked cycle.
+        // Once d2 is notified of the file change, it reuses the new source, unlinked unit, and linked cycle.
         let change2 = d2.change_file(shared_path);
         assert!(change2.api_changed);
         d2.link_libraries(&[f2]);
         let new_cycle2 = d2.graph.cycle_of_library[&f2];
         assert!(Arc::ptr_eq(
-            &d1.fs.file(f1).c().parsed,
-            &d2.fs.file(f2).c().parsed
+            &d1.fs.file(f1).c().source,
+            &d2.fs.file(f2).c().source
+        ));
+        assert!(Arc::ptr_eq(
+            &d1.fs.file(f1).c().unlinked,
+            &d2.fs.file(f2).c().unlinked
         ));
         assert!(Arc::ptr_eq(
             &d1.cycles[&new_cycle1],

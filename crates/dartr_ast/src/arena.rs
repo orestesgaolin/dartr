@@ -861,9 +861,8 @@ impl<T: Concrete> std::ops::IndexMut<Id<T>> for Ast {
 /// fields of the node classes (`staticType`, `element`, ...).
 #[derive(Clone, Debug)]
 pub struct NodeMap<V> {
-    entries: Vec<(NodeId, Option<V>)>,
+    entries: Vec<(NodeId, V)>,
     buckets: Vec<u32>,
-    len: usize,
     sorted: bool,
 }
 
@@ -872,14 +871,13 @@ impl<V> Default for NodeMap<V> {
         NodeMap {
             entries: Vec::new(),
             buckets: Vec::new(),
-            len: 0,
             sorted: true,
         }
     }
 }
 
 pub enum NodeMapIter<'a, V> {
-    Sorted(std::slice::Iter<'a, (NodeId, Option<V>)>),
+    Sorted(std::slice::Iter<'a, (NodeId, V)>),
     Unsorted(std::vec::IntoIter<(NodeId, &'a V)>),
 }
 
@@ -889,14 +887,7 @@ impl<'a, V> Iterator for NodeMapIter<'a, V> {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            NodeMapIter::Sorted(iter) => {
-                for (id, v) in iter.by_ref() {
-                    if let Some(v) = v.as_ref() {
-                        return Some((*id, v));
-                    }
-                }
-                None
-            }
+            NodeMapIter::Sorted(iter) => iter.next().map(|(id, v)| (*id, v)),
             NodeMapIter::Unsorted(iter) => iter.next(),
         }
     }
@@ -923,12 +914,19 @@ impl<V> NodeMap<V> {
             return None;
         }
         if self.buckets.is_empty() {
-            for (k, v) in &self.entries {
-                if *k == id {
-                    return v.as_ref();
+            if self.entries.len() <= Self::SMALL_LIMIT || !self.sorted {
+                for (k, v) in &self.entries {
+                    if *k == id {
+                        return Some(v);
+                    }
                 }
+                return None;
             }
-            return None;
+            return self
+                .entries
+                .binary_search_by_key(&id, |(k, _)| *k)
+                .ok()
+                .map(|i| &self.entries[i].1);
         }
         let mask = self.buckets.len() - 1;
         let mut slot = Self::hash(id) & mask;
@@ -939,7 +937,7 @@ impl<V> NodeMap<V> {
             }
             let (k, v) = &self.entries[idx as usize - 1];
             if *k == id {
-                return v.as_ref();
+                return Some(v);
             }
             slot = (slot + 1) & mask;
         }
@@ -961,27 +959,27 @@ impl<V> NodeMap<V> {
     pub fn insert(&mut self, id: impl Into<NodeId>, value: V) -> Option<V> {
         let id = id.into();
         if self.buckets.is_empty() {
-            for (k, v) in &mut self.entries {
-                if *k == id {
-                    let old = v.replace(value);
-                    if old.is_none() {
-                        self.len += 1;
+            if self.entries.len() <= Self::SMALL_LIMIT || !self.sorted {
+                for (k, v) in &mut self.entries {
+                    if *k == id {
+                        return Some(std::mem::replace(v, value));
                     }
-                    return old;
                 }
-            }
-            if self.entries.len() < Self::SMALL_LIMIT {
-                if self.sorted
-                    && let Some(&(last, _)) = self.entries.last()
-                    && id <= last
-                {
-                    self.sorted = false;
+                if self.entries.len() < Self::SMALL_LIMIT {
+                    if self.sorted
+                        && let Some(&(last, _)) = self.entries.last()
+                        && id <= last
+                    {
+                        self.sorted = false;
+                    }
+                    self.entries.push((id, value));
+                    return None;
                 }
-                self.entries.push((id, Some(value)));
-                self.len += 1;
-                return None;
+            } else if let Ok(i) = self.entries.binary_search_by_key(&id, |(k, _)| *k) {
+                return Some(std::mem::replace(&mut self.entries[i].1, value));
             }
-            self.rehash(32);
+            let cap = ((self.entries.len() + 1) * 2).next_power_of_two().max(32);
+            self.rehash(cap);
         }
         if (self.entries.len() + 1) * 2 > self.buckets.len() {
             self.rehash((self.buckets.len() * 2).max(32));
@@ -997,18 +995,13 @@ impl<V> NodeMap<V> {
                 {
                     self.sorted = false;
                 }
-                self.entries.push((id, Some(value)));
+                self.entries.push((id, value));
                 self.buckets[slot] = self.entries.len() as u32;
-                self.len += 1;
                 return None;
             }
             let (k, v) = &mut self.entries[idx as usize - 1];
             if *k == id {
-                let old = v.replace(value);
-                if old.is_none() {
-                    self.len += 1;
-                }
-                return old;
+                return Some(std::mem::replace(v, value));
             }
             slot = (slot + 1) & mask;
         }
@@ -1020,16 +1013,12 @@ impl<V> NodeMap<V> {
             return None;
         }
         if self.buckets.is_empty() {
-            for (k, v) in &mut self.entries {
-                if *k == id {
-                    let old = v.take();
-                    if old.is_some() {
-                        self.len -= 1;
-                    }
-                    return old;
-                }
+            if self.sorted && self.entries.len() > Self::SMALL_LIMIT {
+                let i = self.entries.binary_search_by_key(&id, |(k, _)| *k).ok()?;
+                return Some(self.entries.remove(i).1);
             }
-            return None;
+            let i = self.entries.iter().position(|(k, _)| *k == id)?;
+            return Some(self.entries.remove(i).1);
         }
         let mask = self.buckets.len() - 1;
         let mut slot = Self::hash(id) & mask;
@@ -1038,16 +1027,28 @@ impl<V> NodeMap<V> {
             if idx == 0 {
                 return None;
             }
-            let (k, v) = &mut self.entries[idx as usize - 1];
-            if *k == id {
-                let old = v.take();
-                if old.is_some() {
-                    self.len -= 1;
+            let entry_idx = idx as usize - 1;
+            if self.entries[entry_idx].0 == id {
+                let (_, old) = self.entries.swap_remove(entry_idx);
+                if entry_idx < self.entries.len() {
+                    self.sorted = false;
                 }
-                return old;
+                self.rehash(self.buckets.len());
+                return Some(old);
             }
             slot = (slot + 1) & mask;
         }
+    }
+
+    /// Drops the hash bucket table, sorts the entries by `NodeId`, and shrinks
+    /// the entry vector to fit. Lookups after `compact()` use binary search.
+    pub fn compact(&mut self) {
+        self.buckets = Vec::new();
+        if !self.sorted {
+            self.entries.sort_unstable_by_key(|(id, _)| *id);
+            self.sorted = true;
+        }
+        self.entries.shrink_to_fit();
     }
 
     /// The entries in node order.
@@ -1055,11 +1056,8 @@ impl<V> NodeMap<V> {
         if self.sorted {
             NodeMapIter::Sorted(self.entries.iter())
         } else {
-            let mut pairs: Vec<(NodeId, &V)> = self
-                .entries
-                .iter()
-                .filter_map(|(id, v)| v.as_ref().map(|v| (*id, v)))
-                .collect();
+            let mut pairs: Vec<(NodeId, &V)> =
+                self.entries.iter().map(|(id, v)| (*id, v)).collect();
             pairs.sort_unstable_by_key(|(id, _)| *id);
             NodeMapIter::Unsorted(pairs.into_iter())
         }
@@ -1067,10 +1065,10 @@ impl<V> NodeMap<V> {
 
     /// Returns `(entries, used_entry_bytes, allocated_capacity_bytes)`.
     pub fn mem_bytes(&self) -> (usize, usize, usize) {
-        let elem_size = std::mem::size_of::<(NodeId, Option<V>)>();
+        let elem_size = std::mem::size_of::<(NodeId, V)>();
         (
-            self.len,
-            self.len * elem_size,
+            self.entries.len(),
+            self.entries.len() * elem_size,
             self.entries.capacity() * elem_size + self.buckets.capacity() * 4,
         )
     }

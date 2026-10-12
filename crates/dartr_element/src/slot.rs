@@ -22,6 +22,7 @@ pub struct Arena<T> {
     more: AtomicPtr<[AtomicPtr<T>; 24]>,
     len: AtomicU32,
     lock: Mutex<()>,
+    shrunk: bool,
 }
 
 impl<T> Default for Arena<T> {
@@ -31,6 +32,7 @@ impl<T> Default for Arena<T> {
             more: AtomicPtr::new(std::ptr::null_mut()),
             len: AtomicU32::new(0),
             lock: Mutex::new(()),
+            shrunk: false,
         }
     }
 }
@@ -39,6 +41,7 @@ impl<T> Arena<T> {
     /// Adds [value] and returns its index.
     #[inline]
     pub fn push(&self, value: T) -> u32 {
+        assert!(!self.shrunk, "cannot push to a shrunk Arena");
         let _guard = self.lock.lock();
         let i = self.len.load(Ordering::Relaxed);
         if i == 0 {
@@ -108,6 +111,33 @@ impl<T> Arena<T> {
         unsafe { &mut *bucket.add(off) }
     }
 
+    /// Shrinks the last allocated bucket of a frozen arena to exact capacity.
+    pub fn shrink_to_fit(&mut self) {
+        if self.shrunk {
+            return;
+        }
+        let len = *self.len.get_mut();
+        if len <= 1 {
+            self.shrunk = true;
+            return;
+        }
+        let b = (31 - len.leading_zeros()) as usize;
+        let cap = 1usize << b;
+        let start_index = (1u32 << b) - 1;
+        let init_count = (len - start_index) as usize;
+        if init_count < cap {
+            let more = *self.more.get_mut();
+            let slot = unsafe { &mut (&mut *more)[b - 1] };
+            let bucket = *slot.get_mut();
+            unsafe {
+                let vec = Vec::<T>::from_raw_parts(bucket, init_count, cap);
+                let boxed = vec.into_boxed_slice();
+                *slot.get_mut() = Box::into_raw(boxed).cast::<T>();
+            }
+        }
+        self.shrunk = true;
+    }
+
     /// The number of items.
     pub fn len(&self) -> usize {
         self.len.load(Ordering::Acquire) as usize
@@ -134,7 +164,11 @@ impl<T> Arena<T> {
             return (1, elem_size, elem_size);
         }
         let max_b = (31 - (count as u32).leading_zeros()) as usize;
-        let cap_slots = (1usize << (max_b + 1)) - 1;
+        let cap_slots = if self.shrunk {
+            count
+        } else {
+            (1usize << (max_b + 1)) - 1
+        };
         let table_bytes = 24 * std::mem::size_of::<AtomicPtr<T>>();
         (
             count,
@@ -169,9 +203,16 @@ impl<T> Drop for Arena<T> {
                     };
                     unsafe {
                         let slice = std::ptr::slice_from_raw_parts_mut(bucket, init_count);
-                        std::ptr::drop_in_place(slice);
-                        let _ =
-                            Vec::<std::mem::MaybeUninit<T>>::from_raw_parts(bucket.cast(), 0, cap);
+                        if self.shrunk && init_count < cap {
+                            drop(Box::from_raw(slice));
+                        } else {
+                            std::ptr::drop_in_place(slice);
+                            let _ = Vec::<std::mem::MaybeUninit<T>>::from_raw_parts(
+                                bucket.cast(),
+                                0,
+                                cap,
+                            );
+                        }
                     }
                 }
             }

@@ -403,20 +403,20 @@ impl ResolutionVisitor<'_, '_> {
 
 /// Replaces the local elements in a type by elements of the linked cycle
 /// (see the module documentation).
-struct Globalizer<'c, 'a> {
+pub(crate) struct Globalizer<'c, 'a> {
     ctx: &'c Ctx<'a>,
     type_parameters: IndexMap<EId<TypeParameterElement>, EId<TypeParameterElement>>,
 }
 
 impl<'c, 'a> Globalizer<'c, 'a> {
-    fn new(ctx: &'c Ctx<'a>) -> Self {
+    pub(crate) fn new(ctx: &'c Ctx<'a>) -> Self {
         Globalizer {
             ctx,
             type_parameters: IndexMap::new(),
         }
     }
 
-    fn globalize(&mut self, t: TypeId) -> TypeId {
+    pub(crate) fn globalize(&mut self, t: TypeId) -> TypeId {
         if !t.is_local() {
             return t;
         }
@@ -561,6 +561,35 @@ impl<'c, 'a> Globalizer<'c, 'a> {
         let a = *self.ctx.alias(alias);
         let args = self.list(a.args);
         self.ctx.intern_alias(dartr_element::AliasRef { args, ..a })
+    }
+
+    pub(crate) fn globalize_tables(&mut self, tables: &mut ResolutionTables) {
+        let mut update_map = |map: &mut dartr_ast::NodeMap<TypeId>| {
+            let entries: Vec<_> = map
+                .iter()
+                .filter(|(_, t)| t.is_local())
+                .map(|(n, &t)| (n, t))
+                .collect();
+            for (n, t) in entries {
+                map.insert(n, self.globalize(t));
+            }
+        };
+        update_map(&mut tables.static_type);
+        update_map(&mut tables.annotation_type);
+        update_map(&mut tables.invoke_type);
+        update_map(&mut tables.read_type);
+        update_map(&mut tables.write_type);
+        update_map(&mut tables.extended_type);
+        update_map(&mut tables.method_name_type);
+        let list_entries: Vec<_> = tables
+            .type_arg_types
+            .iter()
+            .filter(|(_, l)| l.is_local())
+            .map(|(n, &l)| (n, l))
+            .collect();
+        for (n, l) in list_entries {
+            tables.type_arg_types.insert(n, self.list(l));
+        }
     }
 }
 

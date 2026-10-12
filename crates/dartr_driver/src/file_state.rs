@@ -215,7 +215,8 @@ pub struct FileContent {
     pub content_hash: String,
     /// Dart `unlinkedKey` (without the `.unlinked2` suffix).
     pub unlinked_signature: [u8; 16],
-    pub parsed: Arc<ParsedUnit>,
+    pub source: Arc<str>,
+    parsed: std::sync::Mutex<Option<Arc<ParsedUnit>>>,
     pub unlinked: Arc<UnlinkedUnit>,
     pub kind: FileKind,
     /// Dart `FileKind.libraryImports`.
@@ -229,10 +230,60 @@ pub struct FileContent {
     pub(crate) doc_imports_discovered: bool,
 }
 
+impl FileContent {
+    /// Returns the currently cached [`ParsedUnit`], if retained.
+    pub fn cached_parsed(&self) -> Option<Arc<ParsedUnit>> {
+        self.parsed.lock().unwrap().clone()
+    }
+}
+
 impl FileState {
     /// The content data; panics before [`FileSystemState::discover`].
     pub fn c(&self) -> &FileContent {
         self.content.as_ref().expect("file is not discovered")
+    }
+
+    /// Returns the cached [`ParsedUnit`], or parses `self.c().source` on demand
+    /// and caches it until dropped.
+    pub fn parsed(&self) -> Arc<ParsedUnit> {
+        let c = self.c();
+        if let Some(p) = c.parsed.lock().unwrap().as_ref() {
+            return p.clone();
+        }
+        let parsed = Arc::new(parse_file(
+            &c.source,
+            &self.path,
+            self.config.package_language_version,
+            &self.config.experiments,
+        ));
+        let mut guard = c.parsed.lock().unwrap();
+        if let Some(existing) = guard.as_ref() {
+            return existing.clone();
+        }
+        *guard = Some(parsed.clone());
+        parsed
+    }
+
+    /// Takes the cached [`ParsedUnit`] out of this file state (leaving `None`),
+    /// or parses `self.c().source` on demand without caching it.
+    pub fn take_or_parse(&self) -> Arc<ParsedUnit> {
+        let c = self.c();
+        if let Some(p) = c.parsed.lock().unwrap().take() {
+            return p;
+        }
+        Arc::new(parse_file(
+            &c.source,
+            &self.path,
+            self.config.package_language_version,
+            &self.config.experiments,
+        ))
+    }
+
+    /// Drops the cached [`ParsedUnit`] if present.
+    pub fn drop_parsed(&self) {
+        if let Some(c) = &self.content {
+            *c.parsed.lock().unwrap() = None;
+        }
     }
 
     pub fn exists(&self) -> bool {
@@ -270,6 +321,9 @@ pub struct FileSystemState {
     /// Shared cache of SDK (`dart:*`) files and cycles for the current
     /// generation.
     pub(crate) sdk_cache: Option<Arc<crate::driver::SdkCache>>,
+    /// When true, `discover()` reads from `sdk_cache` without inserting new
+    /// entries and clears cached `files` once `discover()` finishes.
+    pub sdk_cache_lookup_only: bool,
 }
 
 impl FileSystemState {
@@ -286,6 +340,7 @@ impl FileSystemState {
             config_for,
             pending: Vec::new(),
             sdk_cache: None,
+            sdk_cache_lookup_only: false,
         }
     }
 
@@ -358,6 +413,7 @@ impl FileSystemState {
     /// (`refresh`, `discoverReferencedFiles`).
     pub fn discover(&mut self) {
         let sdk_cache = self.sdk_cache.clone();
+        let lookup_only = self.sdk_cache_lookup_only;
         while !self.pending.is_empty() {
             let pending = std::mem::take(&mut self.pending);
             let jobs: Vec<ParseJob> = pending
@@ -367,7 +423,7 @@ impl FileSystemState {
                     (
                         id,
                         f.path.clone(),
-                        f.uri_properties.is_dart,
+                        f.uri_properties.is_dart || f.uri_properties.package_name.is_some(),
                         &*f.uri_str == "dart:core",
                         f.config.clone(),
                         self.salt_for_unlinked.clone(),
@@ -377,16 +433,65 @@ impl FileSystemState {
             let sdk_cache_ref = sdk_cache.as_deref();
             let results: Vec<(FileId, RefreshData)> = jobs
                 .into_par_iter()
-                .map(|(id, path, _is_dart, is_dart_core, config, salt)| {
+                .map(|(id, path, _is_shared, is_dart_core, config, salt)| {
                     (
                         id,
-                        refresh_data_cached(&path, is_dart_core, &config, &salt, sdk_cache_ref),
+                        refresh_data_cached(
+                            &path,
+                            is_dart_core,
+                            &config,
+                            &salt,
+                            sdk_cache_ref,
+                            lookup_only,
+                        ),
                     )
                 })
                 .collect();
             for (id, data) in results {
                 self.apply_refresh(id, data);
             }
+        }
+        if lookup_only && let Some(cache) = sdk_cache {
+            cache.clear_files();
+        }
+    }
+
+    /// Ensures all files in [ids] have a cached [`ParsedUnit`], parsing any
+    /// missing ones in parallel.
+    pub fn ensure_parsed(&self, ids: &[FileId]) {
+        let mut missing: Vec<FileId> = ids
+            .iter()
+            .copied()
+            .filter(|&id| {
+                self.file(id)
+                    .content
+                    .as_ref()
+                    .is_some_and(|c| c.parsed.lock().unwrap().is_none())
+            })
+            .collect();
+        if missing.is_empty() {
+            return;
+        }
+        missing.sort_unstable();
+        missing.dedup();
+        missing.into_par_iter().for_each(|id| {
+            let _ = self.file(id).parsed();
+        });
+    }
+
+    /// Drops the cached [`ParsedUnit`] of every file except those in [keep].
+    pub fn drop_parsed_except_ids(&self, keep: &std::collections::HashSet<FileId>) {
+        for f in &self.files {
+            if !keep.contains(&f.id) {
+                f.drop_parsed();
+            }
+        }
+    }
+
+    /// Drops the cached [`ParsedUnit`] of every file.
+    pub fn clear_all_parsed(&self) {
+        for f in &self.files {
+            f.drop_parsed();
         }
     }
 
@@ -423,7 +528,7 @@ impl FileSystemState {
             };
             if cache
                 .get_file(&key)
-                .is_some_and(|c| Arc::ptr_eq(&c.parsed, &old.parsed))
+                .is_some_and(|c| Arc::ptr_eq(&c.source, &old.source))
             {
                 cache.invalidate_file(&f.path);
             }
@@ -434,6 +539,7 @@ impl FileSystemState {
             &f.config,
             &self.salt_for_unlinked,
             self.sdk_cache.as_deref(),
+            self.sdk_cache_lookup_only,
         );
         let had_doc_imports = old.doc_imports_discovered;
         let api_changed =
@@ -615,7 +721,8 @@ impl FileSystemState {
             exists: data.exists,
             content_hash: data.content_hash,
             unlinked_signature: data.unlinked_signature,
-            parsed: data.parsed,
+            source: data.source,
+            parsed: std::sync::Mutex::new(data.parsed),
             unlinked,
             kind,
             library_imports,
@@ -934,12 +1041,13 @@ impl FileSystemState {
 /// `FileState.refresh`), computed in parallel.
 #[derive(Clone)]
 pub(crate) struct RefreshData {
-    exists: bool,
-    from_overlay: bool,
-    content_hash: String,
-    unlinked_signature: [u8; 16],
-    parsed: Arc<ParsedUnit>,
-    unlinked: Arc<UnlinkedUnit>,
+    pub(crate) exists: bool,
+    pub(crate) from_overlay: bool,
+    pub(crate) content_hash: String,
+    pub(crate) unlinked_signature: [u8; 16],
+    pub(crate) source: Arc<str>,
+    pub(crate) parsed: Option<Arc<ParsedUnit>>,
+    pub(crate) unlinked: Arc<UnlinkedUnit>,
 }
 
 /// Reads [path] via the shared [`SdkCache`], falling back to [`refresh_data`].
@@ -949,6 +1057,7 @@ fn refresh_data_cached(
     config: &FileConfig,
     salt: &[u32],
     sdk_cache: Option<&crate::driver::SdkCache>,
+    lookup_only: bool,
 ) -> RefreshData {
     let Some(cache) = sdk_cache else {
         return refresh_data(path, is_dart_core, config, salt);
@@ -969,13 +1078,19 @@ fn refresh_data_cached(
             && let Some(text) = dartr_project::fs::read_string_strict(path)
         {
             let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
-            if cached.parsed.ast.tokens.source.as_ref() == text {
+            if cached.source.as_ref() == text {
                 return (*cached).clone();
             }
         }
     }
     let data = refresh_data(path, is_dart_core, config, salt);
-    cache.insert_file(key, Arc::new(data.clone()));
+    if !lookup_only {
+        let mut cached = data.clone();
+        if !crate::analysis::keep_parsed_in_sdk_cache() {
+            cached.parsed = None;
+        }
+        cache.insert_file(key, Arc::new(cached));
+    }
     data
 }
 
@@ -1020,13 +1135,16 @@ fn refresh_data(path: &str, is_dart_core: bool, config: &FileConfig, salt: &[u32
         config.package_language_version,
         &config.experiments,
     );
-    let unlinked = serialize_ast_unlinked2(&parsed, exists, is_dart_core);
+    let source = parsed.ast.tokens.source.clone();
+    let unlinked = Arc::new(serialize_ast_unlinked2(&parsed, exists, is_dart_core));
+    let parsed = crate::analysis::keep_parsed_in_discover().then(|| Arc::new(parsed));
     RefreshData {
         exists,
         from_overlay,
         content_hash,
         unlinked_signature,
-        parsed: Arc::new(parsed),
-        unlinked: Arc::new(unlinked),
+        source,
+        parsed,
+        unlinked,
     }
 }

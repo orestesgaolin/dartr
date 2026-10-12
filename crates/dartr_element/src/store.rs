@@ -43,6 +43,10 @@ macro_rules! stores {
         }
 
         impl ElementArenas {
+            pub fn shrink_to_fit(&mut self) {
+                $(self.$e_field.shrink_to_fit();)*
+            }
+
             pub fn mem_bytes(&self) -> (usize, usize, usize) {
                 let mut count = 0usize;
                 let mut used = 0usize;
@@ -64,6 +68,10 @@ macro_rules! stores {
         }
 
         impl FragmentStore {
+            pub fn shrink_to_fit(&mut self) {
+                $(self.$f_field.shrink_to_fit();)*
+            }
+
             pub fn mem_bytes(&self) -> (usize, usize, usize) {
                 let mut count = 0usize;
                 let mut used = 0usize;
@@ -232,13 +240,25 @@ pub struct ElementStore {
     pub const_ast: OnceSlot<ConstAst>,
 }
 
+/// Source of detached constant expression ASTs and dot-shorthand markers for a linked cycle.
+pub trait ConstAstSource: Send + Sync {
+    fn ast(&self) -> &dartr_ast::Ast;
+    fn is_dot_shorthand(&self, _node: dartr_ast::NodeId) -> bool {
+        false
+    }
+}
+
 /// The AST of the `ConstExprs` of a cycle (see [`ElementStore::const_ast`]).
 #[derive(Clone)]
-pub struct ConstAst(pub std::sync::Arc<dyn AsRef<dartr_ast::Ast> + Send + Sync>);
+pub struct ConstAst(pub std::sync::Arc<dyn ConstAstSource>);
 
 impl ConstAst {
     pub fn ast(&self) -> &dartr_ast::Ast {
-        (*self.0).as_ref()
+        self.0.ast()
+    }
+
+    pub fn is_dot_shorthand(&self, node: dartr_ast::NodeId) -> bool {
+        self.0.is_dot_shorthand(node)
     }
 }
 
@@ -287,6 +307,11 @@ impl ElementStore {
             fragments: FragmentStore::default(),
             const_ast: OnceSlot::new(),
         }
+    }
+
+    pub fn shrink_to_fit(&mut self) {
+        self.elements.shrink_to_fit();
+        self.fragments.shrink_to_fit();
     }
 
     /// Adds an element. Works through `&self`: the synthetic store and local

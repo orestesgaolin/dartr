@@ -140,15 +140,17 @@ impl LinkResolverSession for NoLinkResolver {
 
 /// The expressions of a cycle that linking copies from the units
 /// (design §2.2): detached subtrees in one [`Ast`].
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ConstExprs {
     pub ast: Ast,
+    pub dot_shorthands: indexmap::IndexSet<NodeId>,
 }
 
 impl ConstExprs {
     pub fn new() -> ConstExprs {
         ConstExprs {
             ast: Ast::new(Tokens::new(Arc::from(""))),
+            dot_shorthands: indexmap::IndexSet::new(),
         }
     }
 
@@ -156,11 +158,61 @@ impl ConstExprs {
     pub fn copy(&mut self, src: &Ast, node: impl Into<NodeId>) -> ConstExprId {
         ConstExprId(dartr_ast::copy_subtree(src, node, &mut self.ast))
     }
+
+    /// Copies [node] of [unit] and records any dot-shorthand markers in the copied subtree.
+    pub fn copy_from_unit(&mut self, unit: &ParsedUnit, node: impl Into<NodeId>) -> ConstExprId {
+        let src_node = node.into();
+        let id = self.copy(&unit.ast, src_node);
+        if !unit.dot_shorthands.is_empty() {
+            let mut stack = vec![(src_node, id.0)];
+            while let Some((s, d)) = stack.pop() {
+                if unit.dot_shorthands.contains(&s) {
+                    self.dot_shorthands.insert(d);
+                }
+                for (sc, dc) in unit.ast.children(s).into_iter().zip(self.ast.children(d)) {
+                    stack.push((sc, dc));
+                }
+            }
+        }
+        id
+    }
+
+    /// Copies [node] of [src] (`ConstExprs`) and records any dot-shorthand markers.
+    pub fn copy_from_const_exprs(
+        &mut self,
+        src: &ConstExprs,
+        node: impl Into<NodeId>,
+    ) -> ConstExprId {
+        let src_node = node.into();
+        let id = self.copy(&src.ast, src_node);
+        if !src.dot_shorthands.is_empty() {
+            let mut stack = vec![(src_node, id.0)];
+            while let Some((s, d)) = stack.pop() {
+                if src.dot_shorthands.contains(&s) {
+                    self.dot_shorthands.insert(d);
+                }
+                for (sc, dc) in src.ast.children(s).into_iter().zip(self.ast.children(d)) {
+                    stack.push((sc, dc));
+                }
+            }
+        }
+        id
+    }
 }
 
 impl AsRef<Ast> for ConstExprs {
     fn as_ref(&self) -> &Ast {
         &self.ast
+    }
+}
+
+impl ConstAstSource for ConstExprs {
+    fn ast(&self) -> &Ast {
+        &self.ast
+    }
+
+    fn is_dot_shorthand(&self, node: NodeId) -> bool {
+        self.dot_shorthands.contains(&node)
     }
 }
 
@@ -297,13 +349,14 @@ pub fn link_cycle(
 
     let Linker { core, builders, .. } = linker;
     let LinkerCore {
-        store,
+        mut store,
         mut const_exprs,
         ..
     } = core;
     const_exprs.ast.shrink_to_fit();
     let const_exprs = Arc::new(const_exprs);
     store.const_ast.set_once(ConstAst(const_exprs.clone()));
+    store.shrink_to_fit();
     LinkedCycle {
         store: Arc::new(store),
         const_exprs,

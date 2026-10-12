@@ -480,10 +480,11 @@ fn validate_override_context(rv: &mut ResolverVisitor<'_>, node: Id<ExtensionOve
 fn is_null_aware(rv: &ResolverVisitor<'_>, node: Id<ExtensionOverride>) -> bool {
     let end = rv.ast.end_token(rv.ast[node].argument_list);
     let next = rv.ast.tokens.next(end);
-    matches!(
-        rv.ast.tokens.ty(next),
-        dartr_syntax::TokenType::QUESTION_PERIOD | dartr_syntax::TokenType::QUESTION
-    )
+    !next.is_none()
+        && matches!(
+            rv.ast.tokens.ty(next),
+            dartr_syntax::TokenType::QUESTION_PERIOD | dartr_syntax::TokenType::QUESTION
+        )
 }
 
 fn is_cascade_target(rv: &ResolverVisitor<'_>, node: Id<ExtensionOverride>) -> bool {

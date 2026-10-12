@@ -135,7 +135,7 @@ fn c1_passes_do_not_panic_on_corpus() {
             let Some(unit_file) = driver.fs.get_existing_from_path(&path) else {
                 continue;
             };
-            let parsed = driver.fs.file(unit_file).c().parsed.clone();
+            let parsed = driver.fs.file(unit_file).parsed();
             let local = world.generation.new_local_arena();
             let ctx = Ctx {
                 local: Some(&local),

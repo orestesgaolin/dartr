@@ -107,8 +107,9 @@ impl DirectivesResolver<'_, '_> {
     ) {
         // Dart `_parse`: records the file in `_libraryFiles`.
         self.library_files.insert(file);
-        let content = self.fs.file(file).c();
-        let parsed = content.parsed.clone();
+        let f = self.fs.file(file);
+        let content = f.c();
+        let parsed = f.parsed();
         let ast = &parsed.ast;
         let unit: Id<CompilationUnit> = parsed.unit;
 
