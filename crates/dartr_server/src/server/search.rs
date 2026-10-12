@@ -160,23 +160,33 @@ pub fn dart_hash_map_order(hashes: &[u32]) -> Vec<usize> {
     buckets.into_iter().flatten().collect()
 }
 
-/// The identifier-like words of [content] (a superset of Dart
-/// `FileState.referencedNames`). A word with `$` also gives its parts: in a
-/// string, `$name` is an interpolation of `name`.
-fn words(content: &str) -> HashSet<String> {
-    let mut out = HashSet::new();
-    for w in content.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$')) {
-        if w.is_empty() {
-            continue;
-        }
-        if w.contains('$') {
-            for part in w.split('$').filter(|p| !p.is_empty()) {
-                out.insert(part.to_string());
-            }
-        }
-        out.insert(w.to_string());
+fn is_word_boundary_byte(b: u8, word_has_dollar: bool) -> bool {
+    !(b.is_ascii_alphanumeric() || b == b'_' || (word_has_dollar && b == b'$'))
+}
+
+/// Whether [content] contains the identifier-like word [word] (a superset of
+/// Dart `FileState.referencedNames`). A word with `$` also matches its parts:
+/// in a string, `$name` is an interpolation of `name`.
+fn content_has_word(content: &str, word: &str) -> bool {
+    if word.is_empty() {
+        return false;
     }
-    out
+    let bytes = content.as_bytes();
+    let wlen = word.len();
+    let word_has_dollar = word.as_bytes().contains(&b'$');
+    for (idx, _) in content.match_indices(word) {
+        let before_ok = idx == 0 || is_word_boundary_byte(bytes[idx - 1], word_has_dollar);
+        let after_ok =
+            idx + wlen == bytes.len() || is_word_boundary_byte(bytes[idx + wlen], word_has_dollar);
+        if before_ok && after_ok {
+            return true;
+        }
+    }
+    false
+}
+
+fn content_mentions_any(content: &str, names: &[String]) -> bool {
+    names.iter().any(|n| content_has_word(content, n))
 }
 
 /// Dart `Folder.getChildren` recursively: the Dart files under [folder], in
@@ -275,18 +285,26 @@ impl Server {
         if let Some(scope) = &self.search_scope {
             return scope.clone();
         }
+        self.search_word_files.clear();
+        self.subtypes_indexed_words.clear();
         let Some(collection) = &self.collection else {
             return Arc::new(Vec::new());
         };
         let count = collection.contexts.len();
         if self.owned.added.is_empty() {
             for (index, context) in collection.contexts.iter().enumerate() {
-                let files: Vec<String> = context
-                    .root
-                    .analyzed_files()
-                    .into_iter()
-                    .filter(|f| f.ends_with(".dart") && !self.is_excluded(f))
-                    .collect();
+                let files: Vec<String> = self
+                    .context_added_files
+                    .get(index)
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        context
+                            .root
+                            .analyzed_files()
+                            .into_iter()
+                            .filter(|f| f.ends_with(".dart") && !self.is_excluded(f))
+                            .collect()
+                    });
                 let files_set: HashSet<&str> = files.iter().map(String::as_str).collect();
                 // Dart creates the library of a part with a URI before the
                 // part is known (`_newFile` calls `onNewFile` after
@@ -360,6 +378,7 @@ impl Server {
         }
         let scope = Arc::new(scope);
         self.search_scope = Some(scope.clone());
+        self.search_word_files.clear();
         scope
     }
 
@@ -371,14 +390,28 @@ impl Server {
             .map(|(index, _)| *index)
     }
 
-    /// Populates `self.search_words` in parallel for any files in [owned]
-    /// that do not yet have cached words.
-    fn ensure_search_words(&mut self, owned: &[String]) {
+    /// Populates `self.search_sources` in parallel for any files in [owned]
+    /// that do not yet have cached sources.
+    fn ensure_search_sources(&mut self, owned: &[String]) {
         let missing: Vec<&String> = owned
             .iter()
-            .filter(|f| !self.search_words.contains_key(*f))
+            .filter(|f| !self.search_sources.contains_key(*f))
             .collect();
+        if missing.is_empty() {
+            return;
+        }
         if missing.len() <= 8 {
+            let paths: Vec<String> = missing.into_iter().cloned().collect();
+            for p in paths {
+                let s = if !self.overlays.contains_key(&p)
+                    && let Some(c) = self.session.file_content(&p)
+                {
+                    c
+                } else {
+                    Arc::<str>::from(self.content(&p).unwrap_or_default().as_str())
+                };
+                self.search_sources.insert(p, s);
+            }
             return;
         }
         use rayon::prelude::*;
@@ -393,48 +426,96 @@ impl Server {
                 (p.clone(), content)
             })
             .collect();
-        let computed: Vec<(String, Arc<HashSet<String>>)> = inputs
+        let computed: Vec<(String, Arc<str>)> = inputs
             .into_par_iter()
             .map(|(p, cached)| {
-                let w = match cached {
-                    Some(c) => words(&c),
-                    None => words(&dartr_project::fs::read_string(&p).unwrap_or_default()),
+                let s = match cached {
+                    Some(c) => c,
+                    None => Arc::<str>::from(
+                        dartr_project::fs::read_string(&p)
+                            .unwrap_or_default()
+                            .as_str(),
+                    ),
                 };
-                (p, Arc::new(w))
+                (p, s)
             })
             .collect();
-        for (p, w) in computed {
-            self.search_words.insert(p, w);
+        for (p, s) in computed {
+            self.search_sources.insert(p, s);
+        }
+    }
+
+    /// Maximum number of queried identifier words cached in `self.search_word_files`.
+    const MAX_SEARCH_WORDS: usize = 64;
+
+    /// Populates `self.search_word_files` in parallel for any words in [names]
+    /// not yet cached.
+    fn ensure_search_words_cached(&mut self, scope: &SearchScope, names: &[String]) {
+        let needed_new = names
+            .iter()
+            .filter(|w| !w.is_empty() && !self.search_word_files.contains_key(w.as_str()))
+            .count();
+        if needed_new == 0 {
+            return;
+        }
+        if self.search_word_files.len() + needed_new > Self::MAX_SEARCH_WORDS {
+            self.search_word_files.clear();
+        }
+        let missing_words: Vec<String> = names
+            .iter()
+            .filter(|w| !w.is_empty() && !self.search_word_files.contains_key(w.as_str()))
+            .cloned()
+            .collect();
+        for (_, owned) in scope {
+            self.ensure_search_sources(owned);
+        }
+        use rayon::prelude::*;
+        let sources: Vec<(&String, &Arc<str>)> = self.search_sources.iter().collect();
+        for word in missing_words {
+            let matching: HashSet<String> = sources
+                .par_iter()
+                .filter(|(_, src)| content_has_word(src, &word))
+                .map(|(path, _)| (*path).clone())
+                .collect();
+            self.search_word_files.insert(word, matching);
         }
     }
 
     /// Whether [content] of [path] has one of [names] (Dart
     /// `FileState.referencedNames`); cached until a file changes.
     pub(crate) fn mentions_any(&mut self, path: &str, names: &[String]) -> bool {
-        if let Some(w) = self.search_words.get(path) {
-            return names.iter().any(|n| w.contains(n));
+        if let Some(s) = self.search_sources.get(path) {
+            return content_mentions_any(s, names);
         }
-        let w = if !self.overlays.contains_key(path)
+        let s = if !self.overlays.contains_key(path)
             && let Some(c) = self.session.file_content(path)
         {
-            Arc::new(words(&c))
+            c
         } else {
-            Arc::new(words(&self.content(path).unwrap_or_default()))
+            Arc::<str>::from(self.content(path).unwrap_or_default().as_str())
         };
-        let found = names.iter().any(|n| w.contains(n));
-        self.search_words.insert(path.to_string(), w);
+        let found = content_mentions_any(&s, names);
+        self.search_sources.insert(path.to_string(), s);
         found
     }
 
+    /// Maximum number of `UnitIndex` entries retained in `self.indexes`.
+    const MAX_INDEXED_UNITS: usize = 4096;
+
     /// Resolves and indexes [paths] in [context] in parallel, updating
     /// `self.owned` and `self.indexes`.
-    fn ensure_units_indexed(&mut self, context: usize, paths: &[String]) {
+    fn ensure_units_indexed(
+        &mut self,
+        context: usize,
+        paths: &[String],
+        subtypes_of: Option<&[String]>,
+    ) {
         let Some(collection) = &self.collection else {
             return;
         };
         let (indexed, unit_paths) =
             self.session
-                .index_files_in(collection, context, paths, &|ctx, unit| {
+                .index_files_in(collection, context, paths, subtypes_of, &|ctx, unit| {
                     crate::index::index_unit(ctx, &unit.ast, &unit.tables, unit.unit)
                 });
         let mut grew = false;
@@ -446,8 +527,17 @@ impl Server {
         }
         if grew {
             self.search_scope = None;
+            self.search_word_files.clear();
+            self.subtypes_indexed_words.clear();
+        }
+        if self.indexes.len() + indexed.len() > Self::MAX_INDEXED_UNITS {
+            self.indexes.clear();
+            self.subtypes_indexed_words.clear();
         }
         for (key, idx) in indexed {
+            if self.indexes.len() >= Self::MAX_INDEXED_UNITS {
+                break;
+            }
             self.indexes.insert(key, Arc::new(idx));
         }
     }
@@ -472,6 +562,8 @@ impl Server {
         }
         if grew {
             self.search_scope = None;
+            self.search_word_files.clear();
+            self.subtypes_indexed_words.clear();
         }
         let sink = NoopSink;
         let ctx = resolved.ctx(&sink);
@@ -482,6 +574,10 @@ impl Server {
             &unit.tables,
             unit.unit,
         ));
+        if self.indexes.len() >= Self::MAX_INDEXED_UNITS {
+            self.indexes.clear();
+            self.subtypes_indexed_words.clear();
+        }
         self.indexes.insert(key, index.clone());
         Some(index)
     }
@@ -533,6 +629,10 @@ impl Server {
         }
         let mut results = Vec::new();
         let scope = self.search_scope();
+        if !name.starts_with('_') {
+            self.ensure_search_words_cached(&scope, &reference_names);
+        }
+        let mut context_files: Vec<(usize, Vec<String>)> = Vec::with_capacity(scope.len());
         for (context, owned) in scope.iter() {
             let mut files: Vec<String> = Vec::new();
             let mut in_files: HashSet<String> = HashSet::new();
@@ -547,27 +647,64 @@ impl Server {
                 }
             }
             if !name.starts_with('_') {
-                self.ensure_search_words(owned);
                 for f in owned {
                     if in_files.contains(f.as_str()) {
                         continue;
                     }
-                    if self.mentions_any(f, &reference_names) {
+                    let hits = reference_names.iter().any(|w| {
+                        self.search_word_files
+                            .get(w.as_str())
+                            .is_some_and(|set| set.contains(f.as_str()))
+                    });
+                    if hits {
                         in_files.insert(f.clone());
                         files.push(f.clone());
                     }
                 }
             }
-            let missing: Vec<String> = files
-                .iter()
-                .filter(|f| !self.indexes.contains_key(&(*context, (*f).clone())))
-                .cloned()
-                .collect();
+            context_files.push((*context, files));
+        }
+        for (context, files) in context_files {
+            let mut missing: Vec<String> = if kinds == SUBTYPES
+                && self
+                    .subtypes_indexed_words
+                    .contains(&(context, reference_names.clone()))
+            {
+                Vec::new()
+            } else {
+                files
+                    .iter()
+                    .filter(|f| !self.indexes.contains_key(&(context, (*f).clone())))
+                    .cloned()
+                    .collect()
+            };
             if !missing.is_empty() {
-                self.ensure_units_indexed(*context, &missing);
+                if self.indexes.len() + missing.len() > Self::MAX_INDEXED_UNITS {
+                    self.indexes.clear();
+                    self.subtypes_indexed_words.clear();
+                    missing = files.clone();
+                }
+                let subtypes_of = if kinds == SUBTYPES {
+                    Some(&reference_names[..])
+                } else {
+                    None
+                };
+                self.ensure_units_indexed(context, &missing, subtypes_of);
+                if kinds == SUBTYPES {
+                    self.subtypes_indexed_words
+                        .insert((context, reference_names.clone()));
+                }
+            } else if kinds == SUBTYPES {
+                self.subtypes_indexed_words
+                    .insert((context, reference_names.clone()));
             }
             for f in files {
-                let Some(index) = self.unit_index(&f, *context) else {
+                let index = if kinds == SUBTYPES {
+                    self.indexes.get(&(context, f.clone())).cloned()
+                } else {
+                    self.unit_index(&f, context)
+                };
+                let Some(index) = index else {
                     continue;
                 };
                 for r in index.relations_of(&key, |k| kinds.contains(&k)) {
@@ -575,7 +712,7 @@ impl Server {
                         path: f.clone(),
                         offset: r.offset,
                         length: r.length,
-                        context: *context,
+                        context,
                         kind: r.kind,
                         is_qualified: r.is_qualified,
                     });
@@ -630,7 +767,6 @@ impl Server {
         let mut pending = vec![interface.clone()];
         while let Some(element) = pending.pop() {
             let matches = self.search_index(&element, REFERENCES);
-            self.warm_match_libraries(&matches);
             for m in matches {
                 let Ok(resolved) = self.require_resolved_unit_in(&m.path, Some(m.context)) else {
                     continue;
@@ -776,6 +912,17 @@ impl Server {
             Some((path, offset))
         })?;
         let owner = self.owner_of(&path)?;
+        if owner == element.lib.context
+            && let Some(index) = element.lib.unit_index(&path)
+        {
+            return Some((
+                ResolvedUnitRef {
+                    library: element.lib.clone(),
+                    index,
+                },
+                name_offset?,
+            ));
+        }
         let resolved = self.require_resolved_unit_in(&path, Some(owner)).ok()?;
         Some((resolved, name_offset?))
     }
@@ -904,17 +1051,13 @@ impl Server {
     /// Dart `_searchReferences_Prefix`.
     fn search_prefix(&mut self, element: &SElem) -> Vec<Match> {
         let mut results = Vec::new();
-        let paths: Vec<String> = element
-            .lib
-            .inputs
-            .iter()
-            .map(|u| u.path.to_string())
-            .collect();
-        for path in paths {
-            if let Ok(resolved) = self.require_resolved_unit_in(&path, Some(element.lib.context)) {
-                let root = resolved.unit().unit.raw();
-                results.extend(self.local_references(&resolved, root, &[element.id]));
-            }
+        for index in 0..element.lib.inputs.len() {
+            let resolved = ResolvedUnitRef {
+                library: element.lib.clone(),
+                index,
+            };
+            let root = resolved.unit().unit.raw();
+            results.extend(self.local_references(&resolved, root, &[element.id]));
         }
         results
     }
@@ -967,27 +1110,6 @@ impl Server {
             .collect()
     }
 
-    fn warm_match_libraries(&mut self, matches: &[Match]) {
-        if matches.len() <= 1 {
-            return;
-        }
-        let Some(collection) = &self.collection else {
-            return;
-        };
-        let mut by_context: std::collections::HashMap<usize, Vec<String>> =
-            std::collections::HashMap::new();
-        for m in matches {
-            by_context
-                .entry(m.context)
-                .or_default()
-                .push(m.path.clone());
-        }
-        for (ctx, paths) in by_context {
-            self.session
-                .warm_resolved_libraries_in(collection, ctx, &paths);
-        }
-    }
-
     /// Dart `searchSubtypes`: the matches of [direct_subtypes] with the
     /// relation of each (extends, implements, with, on).
     pub(crate) fn direct_subtypes_with_kinds(
@@ -995,7 +1117,6 @@ impl Server {
         class: &SElem,
     ) -> Vec<(SElem, RelationKind)> {
         let matches = self.search_index(class, SUBTYPES);
-        self.warm_match_libraries(&matches);
         let mut out = Vec::new();
         for m in matches {
             let Ok(resolved) = self.require_resolved_unit_in(&m.path, Some(m.context)) else {

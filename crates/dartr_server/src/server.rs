@@ -238,18 +238,34 @@ pub struct Server {
     search_scope: Option<std::sync::Arc<search::SearchScope>>,
     /// The owner of each file of a search, until the roots change.
     owned: search::OwnedFiles,
-    /// The words of each file of a search, invalidated for the edited file
-    /// when a file changes.
-    search_words: HashMap<String, std::sync::Arc<HashSet<String>>>,
+    /// The source text of each file of a search, invalidated for the edited
+    /// file when a file changes.
+    search_sources: HashMap<String, std::sync::Arc<str>>,
+    /// Bounded cache of candidate files containing a queried identifier word.
+    search_word_files: HashMap<String, HashSet<String>>,
+    /// Contexts and `reference_names` for which `SUBTYPES` candidate files are already indexed in `indexes`.
+    subtypes_indexed_words: HashSet<(usize, Vec<String>)>,
     /// Cached `{@template}` entries per file path.
     file_templates_cache: HashMap<String, Vec<(String, String)>>,
     /// Cached merged dartdoc templates per context `(files_len, templates)`.
     dartdoc_templates_cache: HashMap<usize, (usize, std::sync::Arc<HashMap<String, String>>)>,
-    /// Cached filtered `KnownLibrary` list per `(context, package_root, in_lib)`.
+    /// Cached `(ordered_ptr, world_stores_len, filtered_libraries, filtered_indices)`
+    /// per `(context, package_root, in_lib)`.
     completion_known_cache: HashMap<
         (usize, Option<String>, bool),
-        (usize, std::sync::Arc<Vec<crate::completion::KnownLibrary>>),
+        (
+            usize,
+            usize,
+            std::sync::Arc<Vec<crate::completion::KnownLibrary>>,
+            Vec<usize>,
+        ),
     >,
+    /// Cached `.dart` file paths under each package `lib` folder, keyed by `(lib_path, skip_src)`.
+    pkg_lib_files: HashMap<(String, bool), std::sync::Arc<Vec<String>>>,
+    /// Cached `.dart` analyzed files per context index (populated in `refresh_roots`).
+    context_added_files: Vec<Vec<String>>,
+    /// Newly opened `.dart` files whose unimported completion libraries should be warmed.
+    pending_open_warm: BTreeSet<String>,
     /// Cached evaluated color hex strings per `(context, ElementId)`.
     color_hex_cache: HashMap<(usize, dartr_element::ElementId), Option<String>>,
     /// `DARTR_PARSE_ONLY=1`: the parse-only diagnostics (for comparison).
@@ -314,6 +330,7 @@ pub fn run(options: ServerOptions, input: Box<dyn Read + Send>, channel: Channel
     loop {
         if queue.is_empty() {
             if input_closed {
+                server.plugins.stop_all();
                 return 0;
             }
             match rx.recv() {
@@ -337,9 +354,39 @@ pub fn run(options: ServerOptions, input: Box<dyn Read + Send>, channel: Channel
             }
             // Take new messages after each one, so that cancellations of
             // queued requests are seen.
-            while let Ok(Some(m)) = rx.try_recv() {
-                server.enqueue(&mut queue, m);
+            loop {
+                match rx.try_recv() {
+                    Ok(Some(m)) => server.enqueue(&mut queue, m),
+                    Ok(None) => {
+                        input_closed = true;
+                        break;
+                    }
+                    Err(_) => break,
+                }
             }
+            if queue.is_empty() && !input_closed && !server.pending_open_warm.is_empty() {
+                match rx.recv_timeout(std::time::Duration::from_millis(2)) {
+                    Ok(Some(m)) => {
+                        server.enqueue(&mut queue, m);
+                        loop {
+                            match rx.try_recv() {
+                                Ok(Some(m)) => server.enqueue(&mut queue, m),
+                                Ok(None) => {
+                                    input_closed = true;
+                                    break;
+                                }
+                                Err(_) => break,
+                            }
+                        }
+                    }
+                    Ok(None) => input_closed = true,
+                    Err(_) => {}
+                }
+            }
+        }
+        if input_closed && queue.is_empty() {
+            server.plugins.stop_all();
+            return 0;
         }
         server.run_analysis();
     }
@@ -374,10 +421,15 @@ impl Server {
             indexes: HashMap::new(),
             search_scope: None,
             owned: search::OwnedFiles::default(),
-            search_words: HashMap::new(),
+            search_sources: HashMap::new(),
+            search_word_files: HashMap::new(),
+            subtypes_indexed_words: HashSet::new(),
             file_templates_cache: HashMap::new(),
             dartdoc_templates_cache: HashMap::new(),
             completion_known_cache: HashMap::new(),
+            pkg_lib_files: HashMap::new(),
+            context_added_files: Vec::new(),
+            pending_open_warm: BTreeSet::new(),
             color_hex_cache: HashMap::new(),
             parse_only: std::env::var_os("DARTR_PARSE_ONLY").is_some(),
             next_request_id: 1,
@@ -1127,6 +1179,9 @@ impl Server {
                 self.roots_dirty = true;
             }
         }
+        if path.ends_with(".dart") {
+            self.pending_open_warm.insert(path.clone());
+        }
         if !already_known {
             self.file_changed(&path);
         } else if self.analyzed.contains(&path) || path.ends_with(".dart") {
@@ -1184,6 +1239,7 @@ impl Server {
         dartr_project::fs::set_overlay(&path, None);
         self.plugins.overlay_removed(&path, changed_from_disk);
         self.priority.retain(|p| *p != path);
+        self.pending_open_warm.remove(&path);
         self.plugins.set_priority_files(&self.priority);
         self.session.set_priority_files(&self.priority);
         if changed_from_disk {
@@ -1199,18 +1255,22 @@ impl Server {
 
     fn file_changed(&mut self, path: &str) {
         self.parsed.remove(path);
+        self.server_diagnostics.remove(path);
         self.file_templates_cache.remove(path);
         self.dartdoc_templates_cache.clear();
         self.color_hex_cache.clear();
         if !path.ends_with(".dart") {
             self.completion_known_cache.clear();
+            self.pkg_lib_files.clear();
         }
         // Keep `search_scope` when the edited file is already owned; only
-        // invalidate the edited file's words and the affected unit indexes.
+        // invalidate the edited file's source text and the affected unit indexes.
         if !self.owned.contains(path) {
             self.search_scope = None;
         }
-        self.search_words.remove(path);
+        self.search_sources.remove(path);
+        self.search_word_files.clear();
+        self.subtypes_indexed_words.clear();
         if path.ends_with(".dart") && !self.parse_only {
             // Dart `AnalysisDriver.changeFile`: the units of the libraries
             // to analyze again (only the library of the file when only
@@ -1225,6 +1285,7 @@ impl Server {
             self.indexes
                 .retain(|(_, p), _| !to_remove.contains(p.as_str()));
             for affected in affected {
+                self.server_diagnostics.remove(&affected);
                 if self.analyzed.contains(&affected) || self.priority.contains(&affected) {
                     self.dirty.insert(affected);
                 }
@@ -1499,11 +1560,15 @@ impl Server {
         self.session.set_priority_files(&self.priority);
         self.indexes.clear();
         self.search_scope = None;
-        self.search_words.clear();
+        self.search_sources.clear();
+        self.search_word_files.clear();
+        self.subtypes_indexed_words.clear();
         self.file_templates_cache.clear();
         self.dartdoc_templates_cache.clear();
         self.completion_known_cache.clear();
+        self.pkg_lib_files.clear();
         self.color_hex_cache.clear();
+        self.server_diagnostics.clear();
         self.owned = search::OwnedFiles::default();
         self.collection = if included.is_empty() {
             None
@@ -1515,14 +1580,17 @@ impl Server {
         };
         let mut analyzed = BTreeSet::new();
         let mut non_dart_analyzed = BTreeSet::new();
+        let mut context_added_files = Vec::new();
         if let Some(collection) = &self.collection {
             for context in &collection.contexts {
+                let mut ctx_dart = Vec::new();
                 for file in context.root.analyzed_files() {
                     if self.is_excluded(&file) {
                         continue;
                     }
                     match FileKind::of(&file) {
                         FileKind::Dart => {
+                            ctx_dart.push(file.clone());
                             analyzed.insert(file);
                         }
                         FileKind::Other => {}
@@ -1531,11 +1599,13 @@ impl Server {
                         }
                     }
                 }
+                context_added_files.push(ctx_dart);
                 // `ContextManagerImpl._analyzeFixDataYaml`: the data files of
                 // each context root, also when they are excluded.
                 non_dart_analyzed.extend(context.fix_data_files());
             }
         }
+        self.context_added_files = context_added_files;
         // Dart `flushResults` for files that are no longer analyzed.
         let removed: Vec<String> = self.analyzed.difference(&analyzed).cloned().collect();
         for path in &removed {
@@ -1702,20 +1772,7 @@ impl Server {
         } else {
             // The driver reads open documents through the overlays of
             // `dartr_project::fs`.
-            let (diags, indexed) = self.session.diagnostics_with_index(
-                collection,
-                &files,
-                Some(
-                    &|ctx: &dartr_element::Ctx<'_>,
-                      unit: &dartr_resolver::library_analyzer::ResolvedUnit| {
-                        crate::index::index_unit(ctx, &unit.ast, &unit.tables, unit.unit)
-                    },
-                ),
-            );
-            for (key, idx) in indexed {
-                self.indexes.insert(key, std::sync::Arc::new(idx));
-            }
-            diags
+            self.session.diagnostics(collection, &files)
         };
         let global_config = self.client_configuration.global();
         let mut by_path: HashMap<String, Vec<Value>> = HashMap::new();
@@ -1751,6 +1808,7 @@ impl Server {
             self.refresh_roots();
         }
         if self.dirty.is_empty() && !self.plugins.has_pending() {
+            self.warm_pending_open_files();
             return;
         }
         self.begin_progress();
@@ -1758,6 +1816,25 @@ impl Server {
             return;
         }
         self.analyze_dirty();
+    }
+
+    fn warm_pending_open_files(&mut self) {
+        if self.pending_open_warm.is_empty() {
+            return;
+        }
+        let warm_paths: Vec<String> = std::mem::take(&mut self.pending_open_warm)
+            .into_iter()
+            .filter(|path| {
+                self.priority.contains(path) && !self.parse_only && path.ends_with(".dart")
+            })
+            .collect();
+        let warm_completion = self.analyzed.len() > 16;
+        for path in &warm_paths {
+            let _ = self.require_resolved_unit(path);
+            if warm_completion {
+                self.warm_completion_for_open_file(path);
+            }
+        }
     }
 
     fn analyze_dirty(&mut self) {
@@ -1769,12 +1846,20 @@ impl Server {
         }
         let dirty: Vec<String> = std::mem::take(&mut self.dirty).into_iter().collect();
         let options = self.client.diagnostic_options();
-        let results: Vec<(String, Vec<Value>)> = if dirty.is_empty() {
+        let mut need_diagnostics = Vec::new();
+        let mut to_publish: BTreeSet<String> = BTreeSet::new();
+        for path in &dirty {
+            if self.analyzed.contains(path) && self.server_diagnostics.contains_key(path) {
+                to_publish.insert(path.clone());
+            } else {
+                need_diagnostics.push(path.clone());
+            }
+        }
+        let results: Vec<(String, Vec<Value>)> = if need_diagnostics.is_empty() {
             Vec::new()
         } else {
-            self.dart_diagnostics(&dirty, &options)
+            self.dart_diagnostics(&need_diagnostics, &options)
         };
-        let mut to_publish: BTreeSet<String> = BTreeSet::new();
         for (path, diagnostics) in results {
             // Dart `handleFileResult`: diagnostics only for analyzed files.
             if self.analyzed.contains(&path) {
@@ -1792,6 +1877,7 @@ impl Server {
             let merged = self.merged_diagnostics(&path, &options);
             self.publish_diagnostics(&path, merged);
         }
+        self.warm_pending_open_files();
         for path in &dirty {
             if self.priority.contains(path) {
                 self.publish_open_file_notifications(path);
@@ -1924,15 +2010,15 @@ impl Server {
             );
         }
         let in_flutter = !self.parse_only && self.is_in_flutter_project(path);
-        let resolved = if in_flutter && (self.init.outline || self.init.flutter_outline) {
+        let resolved = if (self.init.outline || self.init.flutter_outline) && in_flutter {
             self.require_resolved_unit(path).ok()
         } else {
             None
         };
         if self.init.outline {
-            let outline = match &resolved {
-                Some(r) => features::outline_with_flutter(r),
-                None => features::outline(&file),
+            let outline = match (&resolved, in_flutter) {
+                (Some(r), true) => features::outline_with_flutter(r),
+                _ => features::outline(&file),
             };
             self.send_notification(
                 "dart/textDocument/publishOutline",
@@ -1940,6 +2026,7 @@ impl Server {
             );
         }
         if self.init.flutter_outline
+            && in_flutter
             && let Some(r) = &resolved
         {
             self.send_notification(

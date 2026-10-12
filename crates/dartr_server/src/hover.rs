@@ -688,6 +688,16 @@ pub fn documentation(
     element: ElementId,
     templates: &HashMap<String, String>,
 ) -> Option<String> {
+    documentation_with(ctx, element, || templates)
+}
+
+/// Like [`documentation`], but only evaluates `get_templates` when the raw
+/// documentation comment contains a `{@macro` directive.
+pub fn documentation_with<'a>(
+    ctx: &Ctx<'_>,
+    element: ElementId,
+    get_templates: impl FnOnce() -> &'a HashMap<String, String>,
+) -> Option<String> {
     let element = element_with_documentation(ctx, element)?;
     let (supers, interfaces) = find_overridden_elements(ctx, element);
     let mut candidates = vec![element];
@@ -715,6 +725,12 @@ pub fn documentation(
     }
     let documented = documented.or(documented_getter)?;
     let raw = documentation_comment(ctx, documented)?;
+    let empty_templates = HashMap::new();
+    let templates = if raw.contains("{@macro") {
+        get_templates()
+    } else {
+        &empty_templates
+    };
     let mut full = process_dartdoc(&raw, templates);
     let documented_class = ctx.element_data(documented).and_then(|d| d.enclosing);
     let element_class = ctx.element_data(element).and_then(|d| d.enclosing);

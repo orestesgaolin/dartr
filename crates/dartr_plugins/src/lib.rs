@@ -1299,9 +1299,15 @@ impl PluginManager {
                 isolate.session.analyzing = None;
                 isolate.pending_analysis = true;
             }
-            let _ = isolate
-                .session
-                .request("analysis.updateContent", params.clone());
+            if will_analyze {
+                let _ = isolate
+                    .session
+                    .request("analysis.updateContent", params.clone());
+            } else {
+                isolate
+                    .session
+                    .send("analysis.updateContent", params.clone());
+            }
         }
     }
 
@@ -1327,9 +1333,15 @@ impl PluginManager {
                 isolate.session.analyzing = None;
                 isolate.pending_analysis = true;
             }
-            let _ = isolate
-                .session
-                .request("analysis.updateContent", params.clone());
+            if will_analyze {
+                let _ = isolate
+                    .session
+                    .request("analysis.updateContent", params.clone());
+            } else {
+                isolate
+                    .session
+                    .send("analysis.updateContent", params.clone());
+            }
         }
     }
 
@@ -1355,9 +1367,15 @@ impl PluginManager {
                 isolate.session.analyzing = None;
                 isolate.pending_analysis = true;
             }
-            let _ = isolate
-                .session
-                .request("analysis.updateContent", params.clone());
+            if will_analyze {
+                let _ = isolate
+                    .session
+                    .request("analysis.updateContent", params.clone());
+            } else {
+                isolate
+                    .session
+                    .send("analysis.updateContent", params.clone());
+            }
         }
     }
 
