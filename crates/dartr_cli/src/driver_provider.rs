@@ -464,21 +464,22 @@ impl DriverSession {
         let num_contexts = by_context.len();
         let context_order: Vec<usize> = by_context.keys().copied().collect();
         let priority_files = &self.priority_files;
-        let disk_cache: Option<dartr_driver::cache_store::DiskCache> =
+        let disk_cache: Option<Arc<dartr_driver::cache_store::DiskCache>> =
             if index_fn.is_none() && priority_files.is_empty() {
                 self.cache_dir.as_deref().map(|dir| {
                     let sdk = collection
                         .sdk
                         .as_ref()
                         .or_else(|| collection.contexts.iter().find_map(|c| c.sdk.as_ref()));
-                    match self.cache_salt {
+                    let cache = match self.cache_salt {
                         Some(salt) => dartr_driver::cache_store::DiskCache::with_salt(
                             dir,
                             dartr_driver::cache_store::configured_max_size_bytes(),
                             salt,
                         ),
                         None => dartr_driver::cache_store::DiskCache::new(dir, sdk.map(|v| &**v)),
-                    }
+                    };
+                    Arc::new(cache)
                 })
             } else {
                 None
@@ -493,11 +494,12 @@ impl DriverSession {
             let mut driver = self.drivers.shift_remove(&context).unwrap_or_else(|| {
                 dartr_driver::project::context_driver(collection, context, generation.clone())
             });
+            driver.fs.disk_cache = disk_cache.clone();
             if !retain_drivers && idx + 1 == num_contexts {
                 driver.fs.sdk_cache_lookup_only = true;
                 driver.clear_sdk_cache_after_lookup = true;
             }
-            let disk_cache_ref = disk_cache.as_ref();
+            let disk_cache_ref = disk_cache.as_deref();
             let outcome = pool().install(|| {
                 catch_unwind(AssertUnwindSafe(|| {
                     analyze_context(
@@ -2259,7 +2261,9 @@ where
         );
     }
 
-    driver.link_libraries(&missing_library_ids);
+    let keep_targets = dartr_driver::analysis::keep_parsed_in_link()
+        || (disk_cache.is_some() && missing_library_ids.len() <= 256);
+    driver.link_libraries_with_keep(&missing_library_ids, keep_targets);
     let t_link = t0.elapsed() - t_before_link;
 
     // The unignorable codes of each library: the library analyzer keeps

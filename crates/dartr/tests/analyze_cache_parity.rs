@@ -134,6 +134,14 @@ fn normalize_json(mut value: Value) -> Value {
 }
 
 fn collect_resolved_cache_files(dir: &Path) -> Vec<PathBuf> {
+    collect_cache_files_with_ext(dir, "resolved")
+}
+
+fn collect_unlinked_cache_files(dir: &Path) -> Vec<PathBuf> {
+    collect_cache_files_with_ext(dir, "unlinked")
+}
+
+fn collect_cache_files_with_ext(dir: &Path, ext: &str) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let Ok(entries) = fs::read_dir(dir) else {
         return out;
@@ -142,10 +150,8 @@ fn collect_resolved_cache_files(dir: &Path) -> Vec<PathBuf> {
         let path = entry.path();
         if let Ok(meta) = entry.metadata() {
             if meta.is_dir() {
-                out.extend(collect_resolved_cache_files(&path));
-            } else if meta.is_file()
-                && path.extension().and_then(|e| e.to_str()) == Some("resolved")
-            {
+                out.extend(collect_cache_files_with_ext(&path, ext));
+            } else if meta.is_file() && path.extension().and_then(|e| e.to_str()) == Some(ext) {
                 out.push(path);
             }
         }
@@ -534,6 +540,160 @@ fn cache_invalidation_all_eight_mutations_match_dart_analyze() {
             files_salt_2.len(),
             files_salt_1.len() * 2,
             "different binary salt must miss old entries and write new salted entries"
+        );
+    }
+}
+
+#[test]
+fn partial_hit_edit_one_library_others_hit_matches_dart_analyze() {
+    let dart = find_dart();
+    let ws = TempDir::new("partial_hit");
+    let cache = TempDir::new("partial_hit_cache");
+    let pkg_dir = write_base_fixture(ws.path());
+
+    // Add an extra independent library `c.dart` that also has a lint diagnostic
+    // so multiple libraries with and without diagnostics hit Tier A and Tier B.
+    fs::write(
+        pkg_dir.join("lib").join("c.dart"),
+        "int runC() {\n  var cLocal = 7;\n  return cLocal;\n}\n",
+    )
+    .unwrap();
+
+    // Cold run: populates Tier A (.unlinked) and Tier B (.resolved) for all files/libraries.
+    let run1 = dartr_analyze_json(&pkg_dir, Some(cache.path()));
+    let expected1 = dart_analyze_json(&dart, &pkg_dir);
+    assert_eq!(run1, expected1, "cold run must match dart analyze");
+
+    let unlinked_before = collect_unlinked_cache_files(cache.path());
+    let resolved_before = collect_resolved_cache_files(cache.path());
+    assert!(
+        !unlinked_before.is_empty(),
+        "expected cold run to populate .unlinked cache entries"
+    );
+    assert_eq!(
+        resolved_before.len(),
+        4,
+        "expected 4 analyzed libraries (helper, a, b, c) in .resolved cache"
+    );
+
+    // Edit only `b.dart` (one leaf library); `helper.dart`, `a.dart`, `c.dart`,
+    // `dep.dart`, and SDK files remain unchanged and must hit Tier A & Tier B.
+    fs::write(
+        pkg_dir.join("lib").join("b.dart"),
+        "int runB() {\n  var nonFinal = 99;\n  final String bad = 123;\n  return nonFinal + bad.length;\n}\n",
+    )
+    .unwrap();
+
+    let expected2 = dart_analyze_json(&dart, &pkg_dir);
+    let run2 = dartr_analyze_json(&pkg_dir, Some(cache.path()));
+    assert_ne!(run1, run2, "editing b.dart must change diagnostics");
+    assert_eq!(
+        run2, expected2,
+        "partial-hit run after editing one library must match dart analyze"
+    );
+
+    let unlinked_after = collect_unlinked_cache_files(cache.path());
+    let resolved_after = collect_resolved_cache_files(cache.path());
+    assert_eq!(
+        unlinked_after.len(),
+        unlinked_before.len() + 1,
+        "only the edited file should write a new .unlinked entry; all other files must hit Tier A"
+    );
+    assert_eq!(
+        resolved_after.len(),
+        resolved_before.len() + 1,
+        "only the edited library should write a new .resolved entry; all other libraries must hit Tier B"
+    );
+}
+
+#[test]
+fn cached_unlinked_unit_used_when_library_misses_tier_b_matches_dart_analyze() {
+    let dart = find_dart();
+
+    // Case A: Warm Tier A (.unlinked) cache with all Tier B (.resolved) entries
+    // removed. Every file hits Tier A in `discover()` (skipping parsing for
+    // unlinked serialization), then every library misses Tier B, links and
+    // resolves using the cached `UnlinkedUnit`s + lazy parsing, and matches
+    // `dart analyze`.
+    {
+        let ws = TempDir::new("tier_a_only");
+        let cache = TempDir::new("tier_a_only_cache");
+        let pkg_dir = write_base_fixture(ws.path());
+
+        let expected = dart_analyze_json(&dart, &pkg_dir);
+        let run1 = dartr_analyze_json(&pkg_dir, Some(cache.path()));
+        assert_eq!(run1, expected);
+
+        let unlinked_before = collect_unlinked_cache_files(cache.path());
+        let resolved_before = collect_resolved_cache_files(cache.path());
+        assert!(!unlinked_before.is_empty());
+        assert!(!resolved_before.is_empty());
+
+        for path in &resolved_before {
+            fs::remove_file(path).unwrap();
+        }
+        assert!(collect_resolved_cache_files(cache.path()).is_empty());
+
+        let run2 = dartr_analyze_json(&pkg_dir, Some(cache.path()));
+        assert_eq!(
+            run2, expected,
+            "run with warm .unlinked and missing .resolved must match dart analyze"
+        );
+        let unlinked_after = collect_unlinked_cache_files(cache.path());
+        let resolved_after = collect_resolved_cache_files(cache.path());
+        assert_eq!(
+            unlinked_after, unlinked_before,
+            "all files must hit existing .unlinked entries without writing new ones"
+        );
+        assert_eq!(
+            resolved_after.len(),
+            resolved_before.len(),
+            "missing .resolved entries must be recomputed and restored"
+        );
+    }
+
+    // Case B: Dependency API change invalidates Tier B for `a.dart` while
+    // `a.dart` itself is unedited and hits its cached Tier A `UnlinkedUnit`.
+    {
+        let ws = TempDir::new("tier_a_dep_miss_b");
+        let cache = TempDir::new("tier_a_dep_miss_b_cache");
+        let pkg_dir = write_base_fixture(ws.path());
+
+        let run1 = dartr_analyze_json(&pkg_dir, Some(cache.path()));
+        assert_eq!(run1, dart_analyze_json(&dart, &pkg_dir));
+
+        let unlinked_before = collect_unlinked_cache_files(cache.path());
+        let resolved_before = collect_resolved_cache_files(cache.path());
+
+        // Edit `helper.dart`'s API without touching `a.dart`.
+        // `helper.dart` misses Tier A and Tier B; `a.dart` hits Tier A (using its
+        // cached UnlinkedUnit) and misses Tier B (because its dependency cycle's
+        // API signature changed); `b.dart` hits both Tier A and Tier B.
+        fs::write(
+            pkg_dir.join("lib").join("helper.dart"),
+            "String helperValue() => 'changed';\n",
+        )
+        .unwrap();
+
+        let expected2 = dart_analyze_json(&dart, &pkg_dir);
+        let run2 = dartr_analyze_json(&pkg_dir, Some(cache.path()));
+        assert_ne!(run1, run2);
+        assert_eq!(
+            run2, expected2,
+            "library hitting Tier A while missing Tier B due to dependency API change must match dart analyze"
+        );
+
+        let unlinked_after = collect_unlinked_cache_files(cache.path());
+        let resolved_after = collect_resolved_cache_files(cache.path());
+        assert_eq!(
+            unlinked_after.len(),
+            unlinked_before.len() + 1,
+            "only helper.dart should write a new .unlinked entry; a.dart must reuse its cached Tier A UnlinkedUnit"
+        );
+        assert_eq!(
+            resolved_after.len(),
+            resolved_before.len() + 2,
+            "both helper.dart and a.dart must miss Tier B and write new .resolved entries"
         );
     }
 }
