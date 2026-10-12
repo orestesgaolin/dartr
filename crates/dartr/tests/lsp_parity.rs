@@ -1516,3 +1516,177 @@ fn lsp_overlay_api_change_todo_and_progress_parity() {
     );
     assert_eq!(failures, 0, "LSP session differs from dart language-server");
 }
+
+fn write_multi_context_shared_project() -> std::path::PathBuf {
+    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("lsp_multi_context_shared");
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("lib")).unwrap();
+    std::fs::create_dir_all(root.join(".dart_tool")).unwrap();
+    std::fs::create_dir_all(root.join("sub/lib")).unwrap();
+    std::fs::create_dir_all(root.join("sub/.dart_tool")).unwrap();
+    let root = root.canonicalize().unwrap();
+    let write = |rel: &str, content: &str| std::fs::write(root.join(rel), content).unwrap();
+    write(
+        "pubspec.yaml",
+        "name: root_pkg\nenvironment:\n  sdk: ^3.9.0\n",
+    );
+    write(
+        ".dart_tool/package_config.json",
+        "{\"configVersion\":2,\"packages\":[{\"name\":\"root_pkg\",\"rootUri\":\"../\",\"packageUri\":\"lib/\",\"languageVersion\":\"3.7\"}]}",
+    );
+    write(
+        "lib/shared.dart",
+        "class SharedApi {\n  int compute(int x) => x + 1;\n}\n",
+    );
+    write(
+        "lib/root_caller.dart",
+        "import 'shared.dart';\n\nint callFromRoot(SharedApi api) => api.compute(10);\n",
+    );
+    write(
+        "sub/pubspec.yaml",
+        "name: sub_pkg\nenvironment:\n  sdk: ^3.9.0\n",
+    );
+    write(
+        "sub/.dart_tool/package_config.json",
+        "{\"configVersion\":2,\"packages\":[{\"name\":\"root_pkg\",\"rootUri\":\"../../\",\"packageUri\":\"lib/\",\"languageVersion\":\"3.7\"},{\"name\":\"sub_pkg\",\"rootUri\":\"../\",\"packageUri\":\"lib/\",\"languageVersion\":\"3.7\"}]}",
+    );
+    write(
+        "sub/lib/sub_local.dart",
+        "class SubLocal {\n  int value() => 5;\n}\n",
+    );
+    write(
+        "sub/lib/sub_caller.dart",
+        "import 'package:root_pkg/shared.dart';\nimport 'sub_local.dart';\n\nint callFromSub(SharedApi api, SubLocal local) => api.compute(local.value());\n",
+    );
+    root
+}
+
+fn run_multi_context_shared_session(mut c: LspClient, root: &Path) -> (Transcript, i32) {
+    let root_uri = format!("{}/", file_uri(root));
+    let uri = |rel: &str| format!("{root_uri}{rel}");
+    let read = |rel: &str| std::fs::read_to_string(root.join(rel)).unwrap();
+    let snap = |c: &LspClient| snapshot_where(c, &root_uri, |_| true);
+    let mut t: Transcript = Vec::new();
+    let init = c.request("initialize", dart_code_initialize_params(root));
+    assert!(init["result"]["capabilities"].is_object(), "{init}");
+    c.notify("initialized", json!({}));
+    c.settle(true);
+    t.push(("initial analysis".into(), snap(&c)));
+
+    for rel in [
+        "lib/shared.dart",
+        "lib/root_caller.dart",
+        "sub/lib/sub_local.dart",
+        "sub/lib/sub_caller.dart",
+    ] {
+        c.notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {"uri": uri(rel), "languageId": "dart", "version": 1, "text": read(rel)}}),
+        );
+    }
+    c.settle(true);
+    t.push(("open files".into(), snap(&c)));
+
+    // 1. Edit a file local to the `sub` context: only `sub/lib/sub_caller.dart` gets an error;
+    // the root context must not be affected.
+    let sub_local_bad =
+        read("sub/lib/sub_local.dart").replace("int value() => 5;", "String value() => 'bad';");
+    c.notify(
+        "textDocument/didChange",
+        json!({
+            "textDocument": {"uri": uri("sub/lib/sub_local.dart"), "version": 2},
+            "contentChanges": [{"text": sub_local_bad}],
+        }),
+    );
+    c.settle(true);
+    t.push(("edit sub_local.dart".into(), snap(&c)));
+
+    // 2. Restore `sub/lib/sub_local.dart`.
+    c.notify(
+        "textDocument/didChange",
+        json!({
+            "textDocument": {"uri": uri("sub/lib/sub_local.dart"), "version": 3},
+            "contentChanges": [{"text": read("sub/lib/sub_local.dart")}],
+        }),
+    );
+    c.settle(true);
+    t.push(("restore sub_local.dart".into(), snap(&c)));
+
+    // 3. Edit the shared library `lib/shared.dart`: the shared cycle must be invalidated
+    // in both contexts so both `lib/root_caller.dart` and `sub/lib/sub_caller.dart` report
+    // `undefined_method`.
+    let shared_renamed = read("lib/shared.dart").replace("int compute(", "int computeRenamed(");
+    c.notify(
+        "textDocument/didChange",
+        json!({
+            "textDocument": {"uri": uri("lib/shared.dart"), "version": 2},
+            "contentChanges": [{"text": shared_renamed}],
+        }),
+    );
+    c.settle(true);
+    t.push(("edit shared.dart".into(), snap(&c)));
+
+    // 4. Restore `lib/shared.dart`: diagnostics clear in both contexts.
+    c.notify(
+        "textDocument/didChange",
+        json!({
+            "textDocument": {"uri": uri("lib/shared.dart"), "version": 3},
+            "contentChanges": [{"text": read("lib/shared.dart")}],
+        }),
+    );
+    c.settle(true);
+    t.push(("restore shared.dart".into(), snap(&c)));
+
+    let (response, code) = c.shutdown_and_exit();
+    t.push(("shutdown".into(), response));
+    (t, code)
+}
+
+#[test]
+fn lsp_multi_context_shared_cycle_and_edit_isolation_parity() {
+    if !dart_available() {
+        eprintln!("skipped: `dart` is not on PATH");
+        return;
+    }
+    let root = write_multi_context_shared_project();
+    let mut args = vec!["language-server", "--protocol=lsp"];
+    args.extend(session_args());
+    let (dart, dart_code) =
+        run_multi_context_shared_session(LspClient::spawn("dart", &args, &[]), &root);
+    let (dartr, dartr_code) =
+        run_multi_context_shared_session(LspClient::spawn(dartr_bin(), &args, &[]), &root);
+    assert_eq!(dart_code, 0);
+    assert_eq!(dartr_code, 0);
+
+    let sub_only_diags = &dartr
+        .iter()
+        .find(|(n, _)| n == "edit sub_local.dart")
+        .unwrap()
+        .1["diagnostics"];
+    assert!(sub_only_diags.get("lib/root_caller.dart").is_none());
+    assert_eq!(
+        sub_only_diags["sub/lib/sub_caller.dart"][0]["code"],
+        json!("argument_type_not_assignable")
+    );
+
+    let shared_diags = &dartr
+        .iter()
+        .find(|(n, _)| n == "edit shared.dart")
+        .unwrap()
+        .1["diagnostics"];
+    assert_eq!(
+        shared_diags["lib/root_caller.dart"][0]["code"],
+        json!("undefined_method")
+    );
+    assert_eq!(
+        shared_diags["sub/lib/sub_caller.dart"][0]["code"],
+        json!("undefined_method")
+    );
+
+    let failures = report(
+        "multi-context shared cycle invalidation and edit isolation",
+        &dart,
+        &dartr,
+    );
+    assert_eq!(failures, 0, "LSP session differs from dart language-server");
+}

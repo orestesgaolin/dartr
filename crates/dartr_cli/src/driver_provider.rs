@@ -1528,6 +1528,7 @@ impl DriverSession {
             .find(|f| &*f.uri_str == "dart:core")
             .map(|f| f.id);
         if let Some(core) = core {
+            fs.discover_doc_imports(&[core]);
             order.insert(fs, core);
             if fs.file(core).content.is_some() {
                 let c = fs.file(core).c();
@@ -1614,6 +1615,9 @@ impl DriverSession {
     /// and invalidates what depends on it (design §4.2). Returns the paths
     /// of the units of the libraries to analyze again.
     pub fn change_file(&mut self, path: &str) -> Vec<String> {
+        if let Some(g) = &self.generation {
+            dartr_driver::driver::invalidate_cached_file(g, path);
+        }
         let mut result: Vec<String> = Vec::new();
         let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
         for (&context, driver) in self.drivers.iter_mut() {
@@ -2060,7 +2064,8 @@ impl KnownOrder {
 
     /// Dart `_LibraryWalker.evaluateScc`: the doc imports of the files of
     /// the cycle (sorted by path) are created by `addDirectivesSignature`.
-    fn evaluate_scc(&mut self, fs: &dartr_driver::file_state::FileSystemState, scc: &[FileId]) {
+    fn evaluate_scc(&mut self, fs: &mut dartr_driver::file_state::FileSystemState, scc: &[FileId]) {
+        fs.discover_doc_imports(scc);
         let mut files: Vec<FileId> = scc.iter().flat_map(|&l| fs.library_files(l)).collect();
         files.sort_by(|a, b| fs.file(*a).path.cmp(&fs.file(*b).path));
         for f in files {
@@ -2075,7 +2080,7 @@ impl KnownOrder {
     }
 
     /// Dart `DependencyWalker.walk` (Tarjan).
-    fn walk(&mut self, fs: &dartr_driver::file_state::FileSystemState, start: FileId) {
+    fn walk(&mut self, fs: &mut dartr_driver::file_state::FileSystemState, start: FileId) {
         if self.evaluated.contains(&start) {
             return;
         }
@@ -2086,7 +2091,7 @@ impl KnownOrder {
         }
         fn strong_connect(
             o: &mut KnownOrder,
-            fs: &dartr_driver::file_state::FileSystemState,
+            fs: &mut dartr_driver::file_state::FileSystemState,
             st: &mut State,
             node: FileId,
         ) {
