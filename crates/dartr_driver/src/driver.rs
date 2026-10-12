@@ -84,6 +84,11 @@ impl SdkCache {
     }
 }
 
+/// Invalidates cached parsed file data for [path] in [generation].
+pub fn invalidate_cached_file(generation: &Arc<Generation>, path: &str) {
+    SdkCache::for_generation(generation).invalidate_file(path);
+}
+
 /// The libraries linked so far, by URI (lookups only).
 #[derive(Clone, Default)]
 pub struct LinkedRegistry {
@@ -195,6 +200,7 @@ impl Driver {
     /// Links the cycles of [libraries] and of everything they depend on.
     /// The files must be discovered ([`FileSystemState::discover`]).
     pub fn link_libraries(&mut self, libraries: &[FileId]) {
+        self.fs.discover_doc_imports(libraries);
         // Library graph and cycles: sequential.
         let mut targets = Vec::new();
         for &library in libraries {
@@ -278,7 +284,15 @@ impl Driver {
             }
             remaining.push(AtomicUsize::new(count));
         }
-        let shared = Mutex::new((self.state.clone(), vec![None; order.len()]));
+        let generation = self.state.world.generation.clone();
+        let prev_state = std::mem::replace(
+            &mut self.state,
+            LinkState {
+                world: WorldSnapshot::new(generation),
+                registry: LinkedRegistry::default(),
+            },
+        );
+        let shared = Mutex::new((prev_state, vec![None; order.len()]));
         let ready: Vec<usize> = (0..order.len())
             .filter(|&i| remaining[i].load(Ordering::Relaxed) == 0)
             .collect();
@@ -568,6 +582,7 @@ impl<'a> Job<'a> {
                 &crate::link_resolver::ResolverForLinking,
                 &self.inputs[i],
             );
+            drop(state);
             let linked = Arc::new(linked);
             {
                 let mut shared = self.shared.lock().unwrap();
@@ -653,5 +668,103 @@ mod tests {
         d3.link_libraries(&[c3]);
         let cycle3 = d3.graph.cycle_of_library[&c3];
         assert!(!Arc::ptr_eq(&d1.cycles[&cycle1], &d3.cycles[&cycle3]));
+    }
+
+    #[test]
+    fn shares_package_cycles_across_drivers_and_invalidates_on_change() {
+        use dartr_project::package_config::Package;
+        let Some(sdk) = DartSdk::find() else {
+            return;
+        };
+        let generation = Arc::new(Generation::new(0));
+        let shared_path = "/tmp/dartr_xctx_test_shared/lib/shared.dart";
+        let doc_only_path = "/tmp/dartr_xctx_test_doc_only/lib/doc_only.dart";
+        dartr_project::fs::set_overlay(
+            shared_path,
+            Some("/// @docImport 'package:doc_only/doc_only.dart';\nlibrary;\nint sharedValue() => 1;\n".to_string()),
+        );
+        dartr_project::fs::set_overlay(doc_only_path, Some("class DocOnly {}\n".to_string()));
+
+        let shared_pkg = Package {
+            name: "shared".to_string(),
+            root: "/tmp/dartr_xctx_test_shared".to_string(),
+            lib: "/tmp/dartr_xctx_test_shared/lib".to_string(),
+            language_version: None,
+        };
+        let doc_only_pkg = Package {
+            name: "doc_only".to_string(),
+            root: "/tmp/dartr_xctx_test_doc_only".to_string(),
+            lib: "/tmp/dartr_xctx_test_doc_only/lib".to_string(),
+            language_version: None,
+        };
+        let make_driver = |packages: Vec<Package>| {
+            let sf = SourceFactory {
+                workspace: Workspace::basic(Packages::new(packages), "/tmp"),
+                sdk: Some(sdk.clone()),
+            };
+            let fs = FileSystemState::new(
+                sf,
+                Box::new(|_, _| FileConfig {
+                    package_language_version: (3, 7),
+                    experiments: Vec::new(),
+                }),
+            );
+            Driver::new(fs, generation.clone())
+        };
+
+        let shared_uri = Uri::try_parse("package:shared/shared.dart").unwrap();
+        // Driver 1 has `doc_only` in its package config; Driver 2 does not.
+        let mut d1 = make_driver(vec![shared_pkg.clone(), doc_only_pkg]);
+        let f1 = d1.fs.get_file_for_uri(&shared_uri).unwrap();
+        d1.fs.discover();
+        d1.link_libraries(&[f1]);
+
+        let mut d2 = make_driver(vec![shared_pkg]);
+        let f2 = d2.fs.get_file_for_uri(&shared_uri).unwrap();
+        d2.fs.discover();
+        d2.link_libraries(&[f2]);
+
+        assert!(Arc::ptr_eq(
+            &d1.fs.file(f1).c().parsed,
+            &d2.fs.file(f2).c().parsed
+        ));
+        assert!(Arc::ptr_eq(
+            &d1.fs.file(f1).c().unlinked,
+            &d2.fs.file(f2).c().unlinked
+        ));
+        let cycle1 = d1.graph.cycle_of_library[&f1];
+        let cycle2 = d2.graph.cycle_of_library[&f2];
+        let old_linked = d1.cycles[&cycle1].clone();
+        assert!(Arc::ptr_eq(&old_linked, &d2.cycles[&cycle2]));
+
+        // Edit `shared.dart` and notify d1: d1 gets a new cycle while d2 keeps the old snapshot
+        // until d2 is notified.
+        dartr_project::fs::set_overlay(
+            shared_path,
+            Some("/// @docImport 'package:doc_only/doc_only.dart';\nlibrary;\nString sharedValue() => 'x';\n".to_string()),
+        );
+        let change1 = d1.change_file(shared_path);
+        assert!(change1.api_changed);
+        d1.link_libraries(&[f1]);
+        let new_cycle1 = d1.graph.cycle_of_library[&f1];
+        assert!(!Arc::ptr_eq(&d1.cycles[&new_cycle1], &old_linked));
+        assert!(Arc::ptr_eq(&d2.cycles[&cycle2], &old_linked));
+
+        // Once d2 is notified of the file change, it reuses the new parsed unit and linked cycle.
+        let change2 = d2.change_file(shared_path);
+        assert!(change2.api_changed);
+        d2.link_libraries(&[f2]);
+        let new_cycle2 = d2.graph.cycle_of_library[&f2];
+        assert!(Arc::ptr_eq(
+            &d1.fs.file(f1).c().parsed,
+            &d2.fs.file(f2).c().parsed
+        ));
+        assert!(Arc::ptr_eq(
+            &d1.cycles[&new_cycle1],
+            &d2.cycles[&new_cycle2]
+        ));
+
+        dartr_project::fs::set_overlay(shared_path, None);
+        dartr_project::fs::set_overlay(doc_only_path, None);
     }
 }
