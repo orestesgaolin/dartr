@@ -16,13 +16,61 @@ use dartr_element::{
     Ctx, DirectiveUri, EId, FId, FeatureSet, LibraryElement, LibraryFragment, NoopSink,
 };
 use dartr_resolver::library_analyzer::{
-    ExternalUnitCache, LibraryAnalysisInput, ResolvedLibrary, UnitInput, analyze_library,
-    analyze_library_with_unignorable,
+    ExternalUnitCache, ExternalUnitSource, LibraryAnalysisInput, ResolvedLibrary, UnitInput,
+    analyze_library, analyze_library_with_unignorable,
 };
 use dartr_resolver::options::AnalysisOptions;
 
 use crate::driver::Driver;
 use crate::file_state::FileId;
+
+/// Default maximum number of libraries analyzed concurrently in parallel analysis.
+pub const DEFAULT_MAX_PARALLEL_LIBRARIES: usize = 12;
+
+/// Returns the maximum number of libraries to analyze in parallel at once.
+/// Can be overridden via `DARTR_MAX_PARALLEL_LIBS`.
+pub fn max_parallel_libraries() -> usize {
+    if let Some(val) = std::env::var_os("DARTR_MAX_PARALLEL_LIBS")
+        && let Some(s) = val.to_str()
+        && let Ok(n) = s.parse::<usize>()
+        && n >= 1
+    {
+        return n;
+    }
+    DEFAULT_MAX_PARALLEL_LIBRARIES
+}
+
+/// Mode for retaining `ParsedUnit`s across phases (`DARTR_KEEP_PARSED`):
+/// - `0` (default): drop `ParsedUnit` after `discover()` and after `link_libraries()`;
+///   only in-flight libraries hold `ParsedUnit`s.
+/// - `2`: keep `ParsedUnit` from `discover()` into `link_libraries()` (so linking
+///   does not re-parse), then consume and drop all `ParsedUnit`s during linking.
+/// - `1`: keep `ParsedUnit` from `discover()` through `link_libraries()` and into
+///   `analyze_libraries_with_lints()`.
+pub fn keep_parsed_mode() -> u8 {
+    if let Some(val) = std::env::var_os("DARTR_KEEP_PARSED")
+        && let Some(s) = val.to_str()
+    {
+        if s == "1" || s.eq_ignore_ascii_case("true") {
+            return 1;
+        }
+        if s == "2" {
+            return 2;
+        }
+        if s == "0" || s.eq_ignore_ascii_case("false") {
+            return 0;
+        }
+    }
+    0
+}
+
+pub fn keep_parsed_in_discover() -> bool {
+    keep_parsed_mode() >= 1
+}
+
+pub fn keep_parsed_in_link() -> bool {
+    keep_parsed_mode() == 1
+}
 
 impl Driver {
     /// Analyzes the library of [file] (the defining unit). The library must
@@ -44,8 +92,8 @@ impl Driver {
     ) -> Option<ResolvedLibrary> {
         let world = &self.state.world;
         let tp = dartr_link::types_builder::world_type_provider(world);
-        let (library, units) = self.library_units_with_tp(file, &tp)?;
-        let external = ExternalUnitCache::new(world, &tp, options, self.unit_sources());
+        let (library, units) = self.library_units_with_tp_inner(file, &tp, true)?;
+        let external = ExternalUnitCache::new_lazy(world, &tp, options, IndexMap::new());
         let input = LibraryAnalysisInput {
             world,
             type_provider: &tp,
@@ -58,10 +106,21 @@ impl Driver {
         let pkg_info = (!enabled.is_empty())
             .then(|| dartr_lints::LintPackageInfo::for_defining_path(&self.fs.file(file).path));
         let mut library = analyze_library(&input);
+        for u in &mut library.units {
+            u.rt.scope_lookup_result = Default::default();
+        }
         let diagnostics =
             crate::lints::compute_lints_with_package(&input, &library, enabled, pkg_info.as_ref());
         for (unit, lints) in library.units.iter_mut().zip(diagnostics) {
             unit.diagnostics.extend(lints);
+            unit.ast.shrink_to_fit();
+            unit.tables.compact();
+            let mut mutated = std::mem::take(&mut unit.rt.potentially_mutated_in_scope);
+            mutated.shrink_to_fit();
+            unit.rt = dartr_resolver::tables::ResolverTables {
+                potentially_mutated_in_scope: mutated,
+                ..Default::default()
+            };
         }
         Some(library)
     }
@@ -106,24 +165,36 @@ impl Driver {
         use rayon::prelude::*;
         use std::panic::{AssertUnwindSafe, catch_unwind};
 
+        if libraries.is_empty() {
+            self.fs.clear_all_parsed();
+            return Vec::new();
+        }
+
         let world = &self.state.world;
         let tp = dartr_link::types_builder::world_type_provider(world);
-        let external =
-            ExternalUnitCache::new(world, &tp, AnalysisOptions::default(), self.unit_sources());
         let mut pkg_cache = dartr_lints::LintPackageCache::default();
         let jobs: Vec<_> = libraries
             .iter()
             .map(|job| {
                 let pkg_info = (!job.3.is_empty())
                     .then(|| pkg_cache.for_defining_path(&self.fs.file(job.0).path));
-                (
-                    job,
-                    self.library_units_with_tp(job.0, &tp),
-                    self.doc_import_libraries(job.0),
-                    pkg_info,
-                )
+                let size_bytes: usize = self
+                    .fs
+                    .library_file_kinds(job.0)
+                    .into_iter()
+                    .map(|u| self.fs.file(u).c().source.len())
+                    .sum();
+                (job, self.doc_import_libraries(job.0), pkg_info, size_bytes)
             })
             .collect();
+        // Schedule larger libraries first (Longest Processing Time first) so
+        // multi-unit or heavy libraries start early and never become tail
+        // stragglers under bounded concurrency.
+        let mut job_order: Vec<usize> = (0..jobs.len()).collect();
+        job_order.sort_by(|&a, &b| jobs[b].3.cmp(&jobs[a].3));
+
+        let external =
+            ExternalUnitCache::new_lazy(world, &tp, AnalysisOptions::default(), IndexMap::new());
         let panic_message = |e: Box<dyn std::any::Any + Send>| {
             e.downcast_ref::<String>()
                 .cloned()
@@ -145,31 +216,65 @@ impl Driver {
         let stat_local_cap = AtomicUsize::new(0);
         let stat_peak_lib = AtomicUsize::new(0);
 
-        let out: Vec<T> = jobs
-            .par_iter()
-            .map(
-                |((file, options, unignorable, rules), job, doc_imports, pkg_info)| {
-                    let Some((library, units)) = job else {
-                        return f(
-                            *file,
-                            &[],
-                            Err("library is not linked".to_string()),
-                            Vec::new(),
-                        );
-                    };
+        let workers = max_parallel_libraries()
+            .min(rayon::current_num_threads().max(1))
+            .min(jobs.len())
+            .max(1);
+        let out_slots: Vec<std::sync::Mutex<Option<T>>> = (0..jobs.len())
+            .map(|_| std::sync::Mutex::new(None))
+            .collect();
+        let next_step = AtomicUsize::new(0);
+
+        (0..workers).into_par_iter().for_each(|_| {
+            loop {
+                let step = next_step.fetch_add(1, Ordering::Relaxed);
+                if step >= job_order.len() {
+                    break;
+                }
+                let orig_idx = job_order[step];
+                let ((file, options, unignorable, rules), doc_imports, pkg_info, _) =
+                    &jobs[orig_idx];
+                let val = if let Some((library, units)) =
+                    self.library_units_with_tp_inner(*file, &tp, true)
+                {
                     let input = LibraryAnalysisInput {
                         world,
                         type_provider: &tp,
-                        library: *library,
+                        library,
                         units: units.clone(),
                         options: *options,
                         external: Some(&external),
                         doc_import_libraries: doc_imports.clone(),
                     };
-                    let result = catch_unwind(AssertUnwindSafe(|| {
+                    let mut result = catch_unwind(AssertUnwindSafe(|| {
                         analyze_library_with_unignorable(&input, unignorable)
                     }))
                     .map_err(panic_message);
+                    if let Ok(resolved) = &mut result {
+                        for u in &mut resolved.units {
+                            u.rt.scope_lookup_result = Default::default();
+                        }
+                    }
+                    let lints = match &result {
+                        Ok(resolved) if !rules.is_empty() => {
+                            let enabled: Vec<&str> = rules.iter().map(String::as_str).collect();
+                            catch_unwind(AssertUnwindSafe(|| {
+                                crate::lints::compute_lints_unfiltered_with_package(
+                                    &input,
+                                    resolved,
+                                    &enabled,
+                                    pkg_info.as_deref(),
+                                )
+                            }))
+                            .unwrap_or_default()
+                        }
+                        _ => Vec::new(),
+                    };
+                    if let Ok(resolved) = &mut result {
+                        for u in &mut resolved.units {
+                            u.rt = Default::default();
+                        }
+                    }
                     if mem_stats && let Ok(resolved) = &result {
                         let mut lib_cap = 0usize;
                         for u in &resolved.units {
@@ -201,28 +306,30 @@ impl Driver {
                         }
                         stat_peak_lib.fetch_max(lib_cap, Ordering::Relaxed);
                     }
-                    let lints = match &result {
-                        Ok(resolved) if !rules.is_empty() => {
-                            let enabled: Vec<&str> = rules.iter().map(String::as_str).collect();
-                            catch_unwind(AssertUnwindSafe(|| {
-                                crate::lints::compute_lints_unfiltered_with_package(
-                                    &input,
-                                    resolved,
-                                    &enabled,
-                                    pkg_info.as_deref(),
-                                )
-                            }))
-                            .unwrap_or_default()
-                        }
-                        _ => Vec::new(),
-                    };
-                    f(*file, units, result, lints)
-                },
-            )
+                    drop(input);
+                    let out_val = f(*file, &units, result, lints);
+                    drop(units);
+                    out_val
+                } else {
+                    f(
+                        *file,
+                        &[],
+                        Err("library is not linked".to_string()),
+                        Vec::new(),
+                    )
+                };
+                *out_slots[orig_idx].lock().unwrap() = Some(val);
+            }
+        });
+        let out: Vec<T> = out_slots
+            .into_iter()
+            .map(|slot| slot.into_inner().unwrap().expect("analyzed library slot"))
             .collect();
+        self.fs.clear_all_parsed();
 
         if mem_stats && !libraries.is_empty() {
             let ext_units = external.resolved_units();
+            let mini_units = external.mini_units();
             let mut ext_ast_used = 0usize;
             let mut ext_ast_cap = 0usize;
             let mut ext_res_entries = 0usize;
@@ -233,7 +340,7 @@ impl Driver {
             let mut ext_rt_cap = 0usize;
             let mut ext_local_used = 0usize;
             let mut ext_local_cap = 0usize;
-            for u in &ext_units {
+            for u in ext_units.iter().chain(mini_units.iter()) {
                 let mut ast_m = u.ast.mem_stats();
                 if u.ast.tokens.is_shared() {
                     ast_m.tokens_used = 0;
@@ -257,7 +364,7 @@ impl Driver {
             }
             let mb = |b: usize| b as f64 / (1024.0 * 1024.0);
             let msg = format!(
-                "[mem:analyze_pass] analyzed_libs={} analyzed_units={} peak_single_lib={:.2} MiB | transient_cumulative(ast={:.2}/{:.2} MiB, res_tables={} entries {:.2}/{:.2} MiB, rt_tables={} entries {:.2}/{:.2} MiB, local_arena={:.2}/{:.2} MiB) | external_cache_retained(units={}, total={:.2} MiB: ast={:.2}/{:.2} MiB, res_tables={} entries {:.2}/{:.2} MiB, rt_tables={} entries {:.2}/{:.2} MiB, local_arena={:.2}/{:.2} MiB)\n",
+                "[mem:analyze_pass] analyzed_libs={} analyzed_units={} peak_single_lib={:.2} MiB | transient_cumulative(ast={:.2}/{:.2} MiB, res_tables={} entries {:.2}/{:.2} MiB, rt_tables={} entries {:.2}/{:.2} MiB, local_arena={:.2}/{:.2} MiB) | external_cache_retained(full_units={}, mini_units={}, eval_consts={}, total={:.2} MiB: ast={:.2}/{:.2} MiB, res_tables={} entries {:.2}/{:.2} MiB, rt_tables={} entries {:.2}/{:.2} MiB, local_arena={:.2}/{:.2} MiB)\n",
                 libraries.len(),
                 stat_units.load(Ordering::Relaxed),
                 mb(stat_peak_lib.load(Ordering::Relaxed)),
@@ -272,6 +379,8 @@ impl Driver {
                 mb(stat_local_used.load(Ordering::Relaxed)),
                 mb(stat_local_cap.load(Ordering::Relaxed)),
                 ext_units.len(),
+                mini_units.len(),
+                external.evaluated_count(),
                 mb(ext_ast_cap + ext_res_cap + ext_rt_cap + ext_local_cap),
                 mb(ext_ast_used),
                 mb(ext_ast_cap),
@@ -332,8 +441,30 @@ impl Driver {
             .files()
             .iter()
             .filter_map(|f| {
+                f.content.as_ref()?;
+                Some((f.path.clone(), (f.uri_str.clone(), f.parsed())))
+            })
+            .collect()
+    }
+
+    /// Lazy sources of all discovered files by path (for [`ExternalUnitCache::new_lazy`]),
+    /// without retaining pre-parsed [`ParsedUnit`] ASTs.
+    pub fn lazy_unit_sources(&self) -> IndexMap<Arc<str>, ExternalUnitSource> {
+        self.fs
+            .files()
+            .iter()
+            .filter_map(|f| {
                 let content = f.content.as_ref()?;
-                Some((f.path.clone(), (f.uri_str.clone(), content.parsed.clone())))
+                Some((
+                    f.path.clone(),
+                    ExternalUnitSource {
+                        uri: f.uri_str.clone(),
+                        source: content.source.clone(),
+                        package_language_version: f.config.package_language_version,
+                        experiments: f.config.experiments.clone(),
+                        parsed: None,
+                    },
+                ))
             })
             .collect()
     }
@@ -351,6 +482,15 @@ impl Driver {
         &self,
         file: FileId,
         tp: &dartr_element::TypeProvider,
+    ) -> Option<LibraryUnits> {
+        self.library_units_with_tp_inner(file, tp, false)
+    }
+
+    fn library_units_with_tp_inner(
+        &self,
+        file: FileId,
+        tp: &dartr_element::TypeProvider,
+        consume: bool,
     ) -> Option<LibraryUnits> {
         let world = &self.state.world;
         let uri = &self.fs.file(file).uri_str;
@@ -374,10 +514,15 @@ impl Driver {
                 continue;
             };
             let f = self.fs.file(unit_file);
+            let parsed = if consume {
+                f.take_or_parse()
+            } else {
+                f.parsed()
+            };
             units.push(UnitInput {
                 path: f.path.clone(),
                 uri: f.uri_str.clone(),
-                parsed: f.c().parsed.clone(),
+                parsed,
                 fragment,
                 directive_diagnostics: directive_diagnostics
                     .shift_remove(&unit_file)

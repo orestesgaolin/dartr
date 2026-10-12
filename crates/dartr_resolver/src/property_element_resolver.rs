@@ -252,6 +252,9 @@ pub fn ancestor_cascade(
 ) -> Option<Id<CascadeExpression>> {
     let token = rv.ast[node].token;
     let previous = rv.ast.tokens.previous(token);
+    if previous.is_none() {
+        return None;
+    }
     let ty = rv.ast.tokens.ty(previous);
     if ty == TokenType::PERIOD_PERIOD || ty == TokenType::QUESTION_PERIOD_PERIOD {
         return rv.ast.this_or_ancestor_of_type::<CascadeExpression>(node);
@@ -264,7 +267,7 @@ pub fn cascade_is_null_aware(rv: &ResolverVisitor<'_>, node: Id<CascadeExpressio
     let target = rv.ast[node].target;
     let end = rv.ast.end_token(target.raw());
     let next = rv.ast.tokens.next(end);
-    rv.ast.tokens.ty(next) == TokenType::QUESTION_PERIOD_PERIOD
+    !next.is_none() && rv.ast.tokens.ty(next) == TokenType::QUESTION_PERIOD_PERIOD
 }
 
 /// The nearest enclosing cascade of [node] (Dart `_ancestorCascade`).

@@ -53,13 +53,56 @@ use crate::library_analyzer::ResolvedUnit;
 // Units
 // ---------------------------------------------------------------------------
 
-/// Resolved units of other libraries (Dart: the linked, resolved constant
-/// expressions of their elements). Implemented by the caller of the
-/// library analysis, which caches the units.
+/// Resolved constant expressions and cached constant values of other libraries.
 pub trait ExternalUnits: Sync {
     /// The resolved unit of [fragment], a unit of a library other than the
     /// one under analysis. `None` when it cannot be resolved.
-    fn resolved_unit(&self, fragment: FId<LibraryFragment>) -> Option<Arc<ResolvedUnit>>;
+    fn resolved_unit(&self, _fragment: FId<LibraryFragment>) -> Option<Arc<ResolvedUnit>> {
+        None
+    }
+
+    /// Resolves the `constant_initializer` of external element [element] from
+    /// its linked `ElementStore::const_ast` on demand.
+    fn resolved_constant_initializer(
+        &self,
+        _element: ElementId,
+    ) -> Option<(Arc<ResolvedUnit>, EId<LibraryElement>, NodeId)> {
+        None
+    }
+
+    /// Resolves the `constant_initializers` of external constructor [constructor]
+    /// from its linked `ElementStore::const_ast` on demand.
+    fn resolved_constructor_initializers(
+        &self,
+        _constructor: ElementId,
+    ) -> Option<(Arc<ResolvedUnit>, EId<LibraryElement>, Vec<NodeId>)> {
+        None
+    }
+
+    /// Resolves the metadata annotations of external element [element] from its
+    /// linked `ElementStore::const_ast` on demand.
+    fn resolved_metadata_annotations(
+        &self,
+        _element: ElementId,
+    ) -> Option<(Arc<ResolvedUnit>, EId<LibraryElement>, Vec<NodeId>)> {
+        None
+    }
+
+    /// Cached constant value of external element [element].
+    fn evaluated_element(&self, _element: ElementId) -> Option<Constant> {
+        None
+    }
+
+    /// Stores the evaluated constant value of external element [element].
+    fn set_evaluated_element(&self, _element: ElementId, _value: Constant) {}
+
+    /// Whether external const constructor [constructor] has been evaluated as cycle-free.
+    fn is_constructor_evaluated(&self, _constructor: ElementId) -> bool {
+        false
+    }
+
+    /// Marks external const constructor [constructor] as evaluated and cycle-free.
+    fn set_constructor_evaluated(&self, _constructor: ElementId) {}
 }
 
 /// A unit of the engine: borrowed (the library under analysis) or shared
@@ -357,6 +400,31 @@ impl<'a> ConstantEvaluationEngine<'a> {
         self.declarations(e).into_iter().next()
     }
 
+    fn is_in_local_units(&self, e: ElementId) -> bool {
+        if e.store().is_local() {
+            return true;
+        }
+        let ctx = self.global_ctx();
+        let Some(data) = ctx.element_data(e) else {
+            return false;
+        };
+        let Some(lf) = dartr_element::diagnostics::library_fragment_of(&ctx, data.first_fragment)
+        else {
+            return false;
+        };
+        self.units
+            .borrow()
+            .by_fragment
+            .get(&lf)
+            .copied()
+            .flatten()
+            .is_some_and(|u| u < self.local_unit_count)
+    }
+
+    fn register_external_unit(&self, unit: Arc<ResolvedUnit>, library: EId<LibraryElement>) -> u32 {
+        self.units.borrow_mut().add_shared(unit, library)
+    }
+
     // -----------------------------------------------------------------
     // Element facts
     // -----------------------------------------------------------------
@@ -370,6 +438,11 @@ impl<'a> ConstantEvaluationEngine<'a> {
         let is_local = e.store().is_local();
         if !is_local && !element_has_any_constant_initializer(&ctx, e) {
             return None;
+        }
+        if !self.is_in_local_units(e) && ctx.store(e.store()).const_ast.try_get().is_some() {
+            let (unit, lib, node) = self.external?.resolved_constant_initializer(e)?;
+            let u = self.register_external_unit(unit, lib);
+            return Some(NodeRef { unit: u, node });
         }
         let mut result = None;
         for decl in self.declarations(e) {
@@ -411,10 +484,26 @@ impl<'a> ConstantEvaluationEngine<'a> {
 
     /// Dart `ConstructorElementImpl.constantInitializers`.
     pub fn constant_initializers(&self, constructor: ElementId) -> Vec<NodeRef> {
+        let ctx = self.global_ctx();
         if !constructor.store().is_local()
-            && !constructor_has_any_constant_initializers(&self.global_ctx(), constructor)
+            && !constructor_has_any_constant_initializers(&ctx, constructor)
         {
             return Vec::new();
+        }
+        if !self.is_in_local_units(constructor)
+            && ctx.store(constructor.store()).const_ast.try_get().is_some()
+        {
+            let Some((unit, lib, nodes)) = self
+                .external
+                .and_then(|ext| ext.resolved_constructor_initializers(constructor))
+            else {
+                return Vec::new();
+            };
+            let u = self.register_external_unit(unit, lib);
+            return nodes
+                .into_iter()
+                .map(|node| NodeRef { unit: u, node })
+                .collect();
         }
         let mut result = Vec::new();
         for decl in self.declarations(constructor) {
@@ -441,16 +530,33 @@ impl<'a> ConstantEvaluationEngine<'a> {
     /// (`SuperFormalParameterElementImpl.evaluationResult` falls back to the
     /// super constructor parameter).
     pub fn evaluation_result(&self, e: ElementId) -> Option<Constant> {
-        if e.tag() == Tag::SuperFormalParameter && self.constant_initializer(e).is_none() {
-            let ctx = self.global_ctx();
-            let super_parameter = super_constructor_parameter(&ctx, e)?;
-            let base = member::base_element(&ctx, super_parameter);
-            return self.evaluation_result(base);
+        if e.tag() == Tag::SuperFormalParameter {
+            let has_own_init = if e.store().is_local() {
+                self.constant_initializer(e).is_some()
+            } else {
+                element_has_any_constant_initializer(&self.global_ctx(), e)
+            };
+            if !has_own_init {
+                let ctx = self.global_ctx();
+                let super_parameter = super_constructor_parameter(&ctx, e)?;
+                let base = member::base_element(&ctx, super_parameter);
+                return self.evaluation_result(base);
+            }
         }
         if let Some(forwarded) = self.forwarded_parameter(e) {
             return self.evaluation_result(forwarded);
         }
-        self.values.borrow().elements.get(&e).cloned()
+        if let Some(val) = self.values.borrow().elements.get(&e).cloned() {
+            return Some(val);
+        }
+        if !self.is_in_local_units(e)
+            && self.declared_variables.is_empty()
+            && let Some(val) = self.external.and_then(|ext| ext.evaluated_element(e))
+        {
+            self.values.borrow_mut().elements.insert(e, val.clone());
+            return Some(val);
+        }
+        None
     }
 
     /// The super constructor parameter of [e] when [e] is a parameter of a
@@ -484,6 +590,13 @@ impl<'a> ConstantEvaluationEngine<'a> {
     }
 
     fn set_evaluation_result(&self, e: ElementId, value: Constant) {
+        if !self.is_in_local_units(e)
+            && self.declared_variables.is_empty()
+            && matches!(value, Constant::Value(_))
+            && let Some(ext) = self.external
+        {
+            ext.set_evaluated_element(e, value.clone());
+        }
         self.values.borrow_mut().elements.insert(e, value);
     }
 
@@ -505,9 +618,33 @@ impl<'a> ConstantEvaluationEngine<'a> {
     pub fn is_constant_evaluated(&self, target: ConstantTarget) -> bool {
         match target {
             ConstantTarget::Element(e) if e.tag() == Tag::Constructor => {
-                self.values.borrow().constructors_evaluated.contains(&e)
+                if self.values.borrow().constructors_evaluated.contains(&e) {
+                    return true;
+                }
+                if !self.is_in_local_units(e)
+                    && self.declared_variables.is_empty()
+                    && self
+                        .external
+                        .is_some_and(|ext| ext.is_constructor_evaluated(e))
+                {
+                    self.values.borrow_mut().constructors_evaluated.insert(e);
+                    return true;
+                }
+                false
             }
-            ConstantTarget::Element(e) => self.values.borrow().elements.contains_key(&e),
+            ConstantTarget::Element(e) => {
+                if self.values.borrow().elements.contains_key(&e) {
+                    return true;
+                }
+                if !self.is_in_local_units(e)
+                    && self.declared_variables.is_empty()
+                    && let Some(val) = self.external.and_then(|ext| ext.evaluated_element(e))
+                {
+                    self.values.borrow_mut().elements.insert(e, val);
+                    return true;
+                }
+                false
+            }
             ConstantTarget::Annotation(n) => self
                 .values
                 .borrow()
@@ -540,8 +677,22 @@ impl<'a> ConstantEvaluationEngine<'a> {
     /// declaration of a variable, the body of a primary constructor, the
     /// library directive (or the first directive) of a library.
     pub fn metadata_annotations(&self, e: ElementId) -> Vec<NodeRef> {
-        if !e.store().is_local() && !element_has_any_annotations(&self.global_ctx(), e) {
+        let ctx = self.global_ctx();
+        if !e.store().is_local() && !element_has_any_annotations(&ctx, e) {
             return Vec::new();
+        }
+        if !self.is_in_local_units(e) && ctx.store(e.store()).const_ast.try_get().is_some() {
+            let Some((unit, lib, nodes)) = self
+                .external
+                .and_then(|ext| ext.resolved_metadata_annotations(e))
+            else {
+                return Vec::new();
+            };
+            let u = self.register_external_unit(unit, lib);
+            return nodes
+                .into_iter()
+                .map(|node| NodeRef { unit: u, node })
+                .collect();
         }
         let mut result = Vec::new();
         for decl in self.declarations(e) {
@@ -727,10 +878,7 @@ impl<'a> ConstantEvaluationEngine<'a> {
             ConstantTarget::Element(e) if is_formal_parameter(e) => {
                 match self.constant_initializer(e) {
                     Some(default_value) => {
-                        let Some(unit) = self.unit_of_element(e) else {
-                            return;
-                        };
-                        let library = self.unit_library(unit);
+                        let library = self.unit_library(default_value.unit);
                         let visitor = ConstantVisitor::new(self, library, None);
                         let result = visitor.evaluate_constant(default_value);
                         self.set_evaluation_result(e, result);
@@ -768,6 +916,13 @@ impl<'a> ConstantEvaluationEngine<'a> {
                 let ctx = self.global_ctx();
                 if is_const_constructor(&ctx, e) {
                     self.values.borrow_mut().constructors_evaluated.insert(e);
+                    if !self.is_in_local_units(e)
+                        && self.declared_variables.is_empty()
+                        && self.is_cycle_free(e)
+                        && let Some(ext) = self.external
+                    {
+                        ext.set_constructor_evaluated(e);
+                    }
                 }
             }
             ConstantTarget::Element(e) if e.is::<VariableElement>() => {
@@ -779,25 +934,49 @@ impl<'a> ConstantEvaluationEngine<'a> {
     }
 
     fn compute_variable_value(&self, e: ElementId) {
-        let Some(unit) = self.unit_of_element(e) else {
-            return;
+        let local_handle = if self.is_in_local_units(e) {
+            let Some(unit) = self.unit_of_element(e) else {
+                return;
+            };
+            Some((unit, self.unit(unit)))
+        } else {
+            None
         };
-        let library = self.unit_library(unit);
-        let handle = self.unit(unit);
-        let ctx = self.ctx(&handle);
+        let (library, ctx) = match &local_handle {
+            Some((unit, handle)) => (self.unit_library(*unit), self.ctx(handle)),
+            None => {
+                let ctx = self.global_ctx();
+                let Some(lib) = ctx.element_data(e).and_then(|d| d.library) else {
+                    return;
+                };
+                (lib, ctx)
+            }
+        };
         let ts = TypeSystem::new(ctx);
 
         // An enum constant: Dart evaluates the synthetic initializer
         // `E<typeArguments>.name(arguments)`, with errors at the
         // `EnumConstantDeclaration`.
-        let enum_constant_decl = if is_enum_constant(&ctx, e) {
-            self.declaration(e)
-                .filter(|d| self.unit(d.unit).ast.kind(d.node) == NodeKind::EnumConstantDeclaration)
-        } else {
-            None
-        };
+        let enum_constant_decl = self.enum_constant_declaration(e);
         let is_enum_values = first_fragment_flags(&ctx, e)
             .contains(FragmentFlags::FIELD_FRAGMENT_IS_ORIGIN_ENUM_VALUES);
+
+        if enum_constant_decl.is_none()
+            && !is_enum_values
+            && is_enum_constant(&ctx, e)
+            && let Some(enclosing) = ctx.element_data(e).and_then(|d| d.enclosing)
+            && !enum_name_finds_enum(&ctx, enclosing)
+        {
+            self.set_evaluation_result(
+                e,
+                Constant::Invalid(Box::new(InvalidConstant::for_element(
+                    &ctx,
+                    e,
+                    diag::invalid_constant(),
+                ))),
+            );
+            return;
+        }
 
         let (dart_constant, initializer_type) = if let Some(decl) = enum_constant_decl {
             let visitor = ConstantVisitor::new(self, library, None);
@@ -1078,6 +1257,9 @@ impl<'a> ConstantEvaluationEngine<'a> {
         if !is_enum_constant(&ctx, e) {
             return None;
         }
+        if !self.is_in_local_units(e) && ctx.store(e.store()).const_ast.try_get().is_some() {
+            return None;
+        }
         self.declaration(e)
             .filter(|d| self.unit(d.unit).ast.kind(d.node) == NodeKind::EnumConstantDeclaration)
     }
@@ -1266,26 +1448,15 @@ impl<'a> ConstantEvaluationEngine<'a> {
     pub fn generate_cycle_error(&self, constant: ConstantTarget) {
         match constant {
             ConstantTarget::Element(e) if e.is::<VariableElement>() => {
-                let ctx = match self.unit_of_element(e) {
-                    Some(_) if e.store().is_local() => None,
-                    _ => Some(self.global_ctx()),
-                };
-                let value = match ctx {
-                    Some(ctx) => InvalidConstant::for_element(
-                        &ctx,
-                        e,
-                        diag::recursive_compile_time_constant(),
-                    ),
-                    None => {
-                        let unit = self.unit_of_element(e).unwrap();
-                        let handle = self.unit(unit);
-                        let ctx = self.ctx(&handle);
-                        InvalidConstant::for_element(
-                            &ctx,
-                            e,
-                            diag::recursive_compile_time_constant(),
-                        )
-                    }
+                let value = if e.store().is_local()
+                    && let Some(unit) = self.unit_of_element(e)
+                {
+                    let handle = self.unit(unit);
+                    let ctx = self.ctx(&handle);
+                    InvalidConstant::for_element(&ctx, e, diag::recursive_compile_time_constant())
+                } else {
+                    let ctx = self.global_ctx();
+                    InvalidConstant::for_element(&ctx, e, diag::recursive_compile_time_constant())
                 };
                 self.set_evaluation_result(e, Constant::Invalid(Box::new(value)));
             }
@@ -1319,6 +1490,18 @@ impl<'a> UnitRegistry<'a> {
         self.by_fragment.insert(unit.fragment, Some(index));
         self.by_local_store.insert(unit.local.store.id.raw(), index);
         self.units.push(unit);
+        self.libraries.push(library);
+        index
+    }
+
+    fn add_shared(&mut self, unit: Arc<ResolvedUnit>, library: EId<LibraryElement>) -> u32 {
+        let local_raw = unit.local.store.id.raw();
+        if let Some(&index) = self.by_local_store.get(&local_raw) {
+            return index;
+        }
+        let index = self.units.len() as u32;
+        self.by_local_store.insert(local_raw, index);
+        self.units.push(UnitHandle::Shared(unit));
         self.libraries.push(library);
         index
     }
@@ -1556,7 +1739,10 @@ impl ConstantEvaluationEngine<'_> {
         // redirection (`= B<int>.bar`). The linked element may be the base
         // constructor: take the type from the resolved declaration.
         let mut redirect_type = member::return_type(&ctx, redirected);
-        if let Some(decl) = self.declaration(base) {
+        if matches!(redirected, ElemRef::Base(_))
+            && self.is_in_local_units(base)
+            && let Some(decl) = self.declaration(base)
+        {
             let u = self.unit(decl.unit);
             if let Some(d) = u.ast.cast::<ConstructorDeclaration>(decl.node)
                 && let Some(name) = u.ast[d].redirected_constructor

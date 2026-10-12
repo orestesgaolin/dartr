@@ -84,7 +84,8 @@ pub use name::{Name, NamePool};
 pub use resolution::{NodeFlags, PatternInfo, ResolutionTables};
 pub use slot::{Arena, BoolSlot, ElementFlagCell, FragmentFlagCell, OnceSlot, VarSlot};
 pub use store::{
-    AnyElement, ConstAst, ElementArenas, ElementStore, FragmentStore, StoredElement, StoredFragment,
+    AnyElement, ConstAst, ConstAstSource, ElementArenas, ElementStore, FragmentStore,
+    StoredElement, StoredFragment,
 };
 pub use type_provider::TypeProvider;
 pub use types::*;

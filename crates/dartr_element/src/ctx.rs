@@ -123,6 +123,22 @@ impl WorldSnapshot {
         }
     }
 
+    /// Removes a retired [store] and its [libraries] from this snapshot.
+    pub fn remove_store<'a>(
+        &mut self,
+        store: StoreId,
+        libraries: impl IntoIterator<Item = &'a Arc<str>>,
+    ) {
+        let index = store.raw() as usize;
+        if index < self.stores.len() && self.stores[index].is_some() {
+            let stores = Arc::make_mut(&mut self.stores);
+            stores[index] = None;
+        }
+        for uri in libraries {
+            self.libraries.remove(uri);
+        }
+    }
+
     /// A new snapshot that also has the frozen [store] and its [libraries]
     /// (URI, element).
     pub fn with_store(
