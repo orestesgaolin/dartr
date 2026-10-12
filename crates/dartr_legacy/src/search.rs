@@ -1877,6 +1877,17 @@ impl<'a> SearchEngine<'a> {
             Some((path, offset))
         })?;
         let owner = self.owner_of(&path)?;
+        if owner == element.lib.context
+            && let Some(index) = element.lib.unit_index(&path)
+        {
+            return Some((
+                ResolvedUnitRef {
+                    library: element.lib.clone(),
+                    index,
+                },
+                name_offset?,
+            ));
+        }
         let resolved = self.resolved_unit_in(&path, Some(owner))?;
         Some((resolved, name_offset?))
     }
@@ -2001,17 +2012,13 @@ impl<'a> SearchEngine<'a> {
 
     fn search_prefix(&mut self, element: &SElem) -> Vec<LegacyMatch> {
         let mut results = Vec::new();
-        let paths: Vec<String> = element
-            .lib
-            .inputs
-            .iter()
-            .map(|u| u.path.to_string())
-            .collect();
-        for path in paths {
-            if let Some(resolved) = self.resolved_unit_in(&path, Some(element.lib.context)) {
-                let root = resolved.unit().unit.raw();
-                results.extend(self.local_references(&resolved, root, &[element.id]));
-            }
+        for index in 0..element.lib.inputs.len() {
+            let resolved = ResolvedUnitRef {
+                library: element.lib.clone(),
+                index,
+            };
+            let root = resolved.unit().unit.raw();
+            results.extend(self.local_references(&resolved, root, &[element.id]));
         }
         results
     }

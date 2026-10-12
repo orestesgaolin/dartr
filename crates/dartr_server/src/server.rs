@@ -243,6 +243,8 @@ pub struct Server {
     search_sources: HashMap<String, std::sync::Arc<str>>,
     /// Bounded cache of candidate files containing a queried identifier word.
     search_word_files: HashMap<String, HashSet<String>>,
+    /// Contexts and `reference_names` for which `SUBTYPES` candidate files are already indexed in `indexes`.
+    subtypes_indexed_words: HashSet<(usize, Vec<String>)>,
     /// Cached `{@template}` entries per file path.
     file_templates_cache: HashMap<String, Vec<(String, String)>>,
     /// Cached merged dartdoc templates per context `(files_len, templates)`.
@@ -328,6 +330,7 @@ pub fn run(options: ServerOptions, input: Box<dyn Read + Send>, channel: Channel
     loop {
         if queue.is_empty() {
             if input_closed {
+                server.plugins.stop_all();
                 return 0;
             }
             match rx.recv() {
@@ -351,21 +354,39 @@ pub fn run(options: ServerOptions, input: Box<dyn Read + Send>, channel: Channel
             }
             // Take new messages after each one, so that cancellations of
             // queued requests are seen.
-            while let Ok(Some(m)) = rx.try_recv() {
-                server.enqueue(&mut queue, m);
+            loop {
+                match rx.try_recv() {
+                    Ok(Some(m)) => server.enqueue(&mut queue, m),
+                    Ok(None) => {
+                        input_closed = true;
+                        break;
+                    }
+                    Err(_) => break,
+                }
             }
             if queue.is_empty() && !input_closed && !server.pending_open_warm.is_empty() {
                 match rx.recv_timeout(std::time::Duration::from_millis(2)) {
                     Ok(Some(m)) => {
                         server.enqueue(&mut queue, m);
-                        while let Ok(Some(m)) = rx.try_recv() {
-                            server.enqueue(&mut queue, m);
+                        loop {
+                            match rx.try_recv() {
+                                Ok(Some(m)) => server.enqueue(&mut queue, m),
+                                Ok(None) => {
+                                    input_closed = true;
+                                    break;
+                                }
+                                Err(_) => break,
+                            }
                         }
                     }
                     Ok(None) => input_closed = true,
                     Err(_) => {}
                 }
             }
+        }
+        if input_closed && queue.is_empty() {
+            server.plugins.stop_all();
+            return 0;
         }
         server.run_analysis();
     }
@@ -401,6 +422,7 @@ impl Server {
             owned: search::OwnedFiles::default(),
             search_sources: HashMap::new(),
             search_word_files: HashMap::new(),
+            subtypes_indexed_words: HashSet::new(),
             file_templates_cache: HashMap::new(),
             dartdoc_templates_cache: HashMap::new(),
             completion_known_cache: HashMap::new(),
@@ -1247,6 +1269,7 @@ impl Server {
         }
         self.search_sources.remove(path);
         self.search_word_files.clear();
+        self.subtypes_indexed_words.clear();
         if path.ends_with(".dart") && !self.parse_only {
             // Dart `AnalysisDriver.changeFile`: the units of the libraries
             // to analyze again (only the library of the file when only
@@ -1538,6 +1561,7 @@ impl Server {
         self.search_scope = None;
         self.search_sources.clear();
         self.search_word_files.clear();
+        self.subtypes_indexed_words.clear();
         self.file_templates_cache.clear();
         self.dartdoc_templates_cache.clear();
         self.completion_known_cache.clear();
@@ -1803,8 +1827,12 @@ impl Server {
                 self.priority.contains(path) && !self.parse_only && path.ends_with(".dart")
             })
             .collect();
+        let warm_completion = self.analyzed.len() > 16;
         for path in &warm_paths {
             let _ = self.require_resolved_unit(path);
+            if warm_completion {
+                self.warm_completion_for_open_file(path);
+            }
         }
     }
 

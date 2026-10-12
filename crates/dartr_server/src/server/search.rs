@@ -286,6 +286,7 @@ impl Server {
             return scope.clone();
         }
         self.search_word_files.clear();
+        self.subtypes_indexed_words.clear();
         let Some(collection) = &self.collection else {
             return Arc::new(Vec::new());
         };
@@ -377,6 +378,7 @@ impl Server {
         }
         let scope = Arc::new(scope);
         self.search_scope = Some(scope.clone());
+        self.search_word_files.clear();
         scope
     }
 
@@ -449,14 +451,21 @@ impl Server {
     /// Populates `self.search_word_files` in parallel for any words in [names]
     /// not yet cached.
     fn ensure_search_words_cached(&mut self, scope: &SearchScope, names: &[String]) {
+        let needed_new = names
+            .iter()
+            .filter(|w| !w.is_empty() && !self.search_word_files.contains_key(w.as_str()))
+            .count();
+        if needed_new == 0 {
+            return;
+        }
+        if self.search_word_files.len() + needed_new > Self::MAX_SEARCH_WORDS {
+            self.search_word_files.clear();
+        }
         let missing_words: Vec<String> = names
             .iter()
             .filter(|w| !w.is_empty() && !self.search_word_files.contains_key(w.as_str()))
             .cloned()
             .collect();
-        if missing_words.is_empty() {
-            return;
-        }
         for (_, owned) in scope {
             self.ensure_search_sources(owned);
         }
@@ -468,9 +477,6 @@ impl Server {
                 .filter(|(_, src)| content_has_word(src, &word))
                 .map(|(path, _)| (*path).clone())
                 .collect();
-            if self.search_word_files.len() >= Self::MAX_SEARCH_WORDS {
-                self.search_word_files.clear();
-            }
             self.search_word_files.insert(word, matching);
         }
     }
@@ -494,7 +500,7 @@ impl Server {
     }
 
     /// Maximum number of `UnitIndex` entries retained in `self.indexes`.
-    const MAX_INDEXED_UNITS: usize = 512;
+    const MAX_INDEXED_UNITS: usize = 4096;
 
     /// Resolves and indexes [paths] in [context] in parallel, updating
     /// `self.owned` and `self.indexes`.
@@ -522,9 +528,11 @@ impl Server {
         if grew {
             self.search_scope = None;
             self.search_word_files.clear();
+            self.subtypes_indexed_words.clear();
         }
         if self.indexes.len() + indexed.len() > Self::MAX_INDEXED_UNITS {
             self.indexes.clear();
+            self.subtypes_indexed_words.clear();
         }
         for (key, idx) in indexed {
             if self.indexes.len() >= Self::MAX_INDEXED_UNITS {
@@ -555,6 +563,7 @@ impl Server {
         if grew {
             self.search_scope = None;
             self.search_word_files.clear();
+            self.subtypes_indexed_words.clear();
         }
         let sink = NoopSink;
         let ctx = resolved.ctx(&sink);
@@ -567,6 +576,7 @@ impl Server {
         ));
         if self.indexes.len() >= Self::MAX_INDEXED_UNITS {
             self.indexes.clear();
+            self.subtypes_indexed_words.clear();
         }
         self.indexes.insert(key, index.clone());
         Some(index)
@@ -622,6 +632,7 @@ impl Server {
         if !name.starts_with('_') {
             self.ensure_search_words_cached(&scope, &reference_names);
         }
+        let mut context_files: Vec<(usize, Vec<String>)> = Vec::with_capacity(scope.len());
         for (context, owned) in scope.iter() {
             let mut files: Vec<String> = Vec::new();
             let mut in_files: HashSet<String> = HashSet::new();
@@ -651,24 +662,47 @@ impl Server {
                     }
                 }
             }
-            let missing: Vec<String> = files
-                .iter()
-                .filter(|f| !self.indexes.contains_key(&(*context, (*f).clone())))
-                .cloned()
-                .collect();
+            context_files.push((*context, files));
+        }
+        for (context, files) in context_files {
+            let mut missing: Vec<String> = if kinds == SUBTYPES
+                && self
+                    .subtypes_indexed_words
+                    .contains(&(context, reference_names.clone()))
+            {
+                Vec::new()
+            } else {
+                files
+                    .iter()
+                    .filter(|f| !self.indexes.contains_key(&(context, (*f).clone())))
+                    .cloned()
+                    .collect()
+            };
             if !missing.is_empty() {
+                if self.indexes.len() + missing.len() > Self::MAX_INDEXED_UNITS {
+                    self.indexes.clear();
+                    self.subtypes_indexed_words.clear();
+                    missing = files.clone();
+                }
                 let subtypes_of = if kinds == SUBTYPES {
                     Some(&reference_names[..])
                 } else {
                     None
                 };
-                self.ensure_units_indexed(*context, &missing, subtypes_of);
+                self.ensure_units_indexed(context, &missing, subtypes_of);
+                if kinds == SUBTYPES {
+                    self.subtypes_indexed_words
+                        .insert((context, reference_names.clone()));
+                }
+            } else if kinds == SUBTYPES {
+                self.subtypes_indexed_words
+                    .insert((context, reference_names.clone()));
             }
             for f in files {
                 let index = if kinds == SUBTYPES {
-                    self.indexes.get(&(*context, f.clone())).cloned()
+                    self.indexes.get(&(context, f.clone())).cloned()
                 } else {
-                    self.unit_index(&f, *context)
+                    self.unit_index(&f, context)
                 };
                 let Some(index) = index else {
                     continue;
@@ -678,7 +712,7 @@ impl Server {
                         path: f.clone(),
                         offset: r.offset,
                         length: r.length,
-                        context: *context,
+                        context,
                         kind: r.kind,
                         is_qualified: r.is_qualified,
                     });
@@ -878,6 +912,17 @@ impl Server {
             Some((path, offset))
         })?;
         let owner = self.owner_of(&path)?;
+        if owner == element.lib.context
+            && let Some(index) = element.lib.unit_index(&path)
+        {
+            return Some((
+                ResolvedUnitRef {
+                    library: element.lib.clone(),
+                    index,
+                },
+                name_offset?,
+            ));
+        }
         let resolved = self.require_resolved_unit_in(&path, Some(owner)).ok()?;
         Some((resolved, name_offset?))
     }
@@ -1006,17 +1051,13 @@ impl Server {
     /// Dart `_searchReferences_Prefix`.
     fn search_prefix(&mut self, element: &SElem) -> Vec<Match> {
         let mut results = Vec::new();
-        let paths: Vec<String> = element
-            .lib
-            .inputs
-            .iter()
-            .map(|u| u.path.to_string())
-            .collect();
-        for path in paths {
-            if let Ok(resolved) = self.require_resolved_unit_in(&path, Some(element.lib.context)) {
-                let root = resolved.unit().unit.raw();
-                results.extend(self.local_references(&resolved, root, &[element.id]));
-            }
+        for index in 0..element.lib.inputs.len() {
+            let resolved = ResolvedUnitRef {
+                library: element.lib.clone(),
+                index,
+            };
+            let root = resolved.unit().unit.raw();
+            results.extend(self.local_references(&resolved, root, &[element.id]));
         }
         results
     }

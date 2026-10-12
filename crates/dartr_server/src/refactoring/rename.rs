@@ -3094,8 +3094,16 @@ impl Engine<'_> {
         let Some(path) = target.with(|ctx| element_path(ctx, target.id)) else {
             return;
         };
-        let Ok(resolved) = self.require_resolved_unit_in(&path, Some(target.lib.context)) else {
-            return;
+        let resolved = if let Some(index) = target.lib.unit_index(&path) {
+            ResolvedUnitRef {
+                library: target.lib.clone(),
+                index,
+            }
+        } else {
+            let Ok(r) = self.require_resolved_unit_in(&path, Some(target.lib.context)) else {
+                return;
+            };
+            r
         };
         let sink = NoopSink;
         let ctx = resolved.ctx(&sink);

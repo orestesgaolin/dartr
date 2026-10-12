@@ -705,6 +705,7 @@ impl<W: Write> Server<W> {
                 let files = strings(field(params, "files")?, "params.files")?;
                 valid_paths(&files)?;
                 self.priority = files;
+                self.driver_session.set_priority_files(&self.priority);
                 self.response(id, None)?;
             }
             "analysis.setSubscriptions" => {
@@ -1842,6 +1843,7 @@ impl<W: Write> Server<W> {
                 },
             ));
             self.driver_session = DriverSession::default();
+            self.driver_session.set_priority_files(&self.priority);
             self.owned_files = OwnedFiles::default();
             self.search_scope = None;
             self.search_words.clear();

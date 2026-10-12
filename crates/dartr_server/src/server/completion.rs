@@ -307,6 +307,36 @@ impl Server {
         Some((world, filtered))
     }
 
+    /// Pre-warms `completion_known_for` for a newly opened priority `.dart` file
+    /// when `suggestFromUnimportedLibraries` is active.
+    pub(super) fn warm_completion_for_open_file(&mut self, path: &str) {
+        let apply_edit = self.bool_cap("/workspace/applyEdit");
+        let use_not_imported = self.init.suggest_from_unimported_libraries && apply_edit;
+        if !use_not_imported {
+            return;
+        }
+        let Some((context_index, package)) = self.collection.as_ref().and_then(|collection| {
+            let context = collection
+                .context_for(path)
+                .or_else(|| collection.contexts.first())?;
+            let context_index = collection
+                .contexts
+                .iter()
+                .position(|x| std::ptr::eq(x, context))?;
+            let package = match context.root.workspace.find_package_for(path) {
+                Some(dartr_project::workspace::WorkspacePackage::Pub { root, name, .. }) => {
+                    Some((root, name))
+                }
+                _ => None,
+            };
+            Some((context_index, package))
+        }) else {
+            return;
+        };
+        let _ = self.completion_known_for(context_index, package, path);
+        let _ = self.dartdoc_templates(path);
+    }
+
     /// Dart `CompletionHandler.handle`.
     pub(crate) fn completion(&mut self, params: &Value) -> ErrorOr<Value> {
         let path = self.path_of_doc(params)?;
