@@ -289,7 +289,9 @@ fn run_parsed(
     };
     let files = analyzed_dart_files(&collection);
     let t_files = start.elapsed();
-    let mut results = provider.diagnostics_for_files(&collection, &files);
+    let cache_dir = args.cache_dir();
+    let mut results =
+        provider.diagnostics_for_files_with_cache(&collection, &files, cache_dir.as_deref());
     results.extend(crate::provider::non_dart_diagnostics(&collection));
     let plugin_output = plugin_thread
         .and_then(|t| t.join().ok())

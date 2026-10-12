@@ -1,5 +1,10 @@
 # dartr
 
+> [!NOTE]
+> This project is a joke and an experiment. It tests how feasible it is today
+> to "vibe port" a huge project from one language to another with AI coding
+> agents. Do not rely on it for anything important.
+
 !["rewrite dart analyzer in rust" - ">rewrites dart analyzer in rust" - "oh my god"](docs/images/ohmygod.png)
 
 dartr is a port of the Dart analyzer to Rust. The reference version is the

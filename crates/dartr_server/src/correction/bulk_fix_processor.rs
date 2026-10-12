@@ -156,6 +156,246 @@ fn fix_order(a: &Diagnostic, b: &Diagnostic) -> std::cmp::Ordering {
     })
 }
 
+fn dart_insertion_sort<T: Copy, F: Fn(&T, &T) -> std::cmp::Ordering>(
+    a: &mut [T],
+    compare: &F,
+    left: isize,
+    right: isize,
+) {
+    let mut i = left + 1;
+    while i <= right {
+        let el = a[i as usize];
+        let mut j = i;
+        while j > left && compare(&a[(j - 1) as usize], &el) == std::cmp::Ordering::Greater {
+            a[j as usize] = a[(j - 1) as usize];
+            j -= 1;
+        }
+        a[j as usize] = el;
+        i += 1;
+    }
+}
+
+fn dart_do_sort<T: Copy, F: Fn(&T, &T) -> std::cmp::Ordering>(
+    a: &mut [T],
+    compare: &F,
+    left: isize,
+    right: isize,
+) {
+    if right - left <= 32 {
+        dart_insertion_sort(a, compare, left, right);
+    } else {
+        dart_dual_pivot_quicksort(a, compare, left, right);
+    }
+}
+
+fn dart_dual_pivot_quicksort<T: Copy, F: Fn(&T, &T) -> std::cmp::Ordering>(
+    a: &mut [T],
+    compare: &F,
+    left: isize,
+    right: isize,
+) {
+    let sixth = (right - left + 1) / 6;
+    let index1 = left + sixth;
+    let index5 = right - sixth;
+    let index3 = (left + right) / 2;
+    let index2 = index3 - sixth;
+    let index4 = index3 + sixth;
+
+    let mut el1 = a[index1 as usize];
+    let mut el2 = a[index2 as usize];
+    let mut el3 = a[index3 as usize];
+    let mut el4 = a[index4 as usize];
+    let mut el5 = a[index5 as usize];
+
+    if compare(&el1, &el2) == std::cmp::Ordering::Greater {
+        std::mem::swap(&mut el1, &mut el2);
+    }
+    if compare(&el4, &el5) == std::cmp::Ordering::Greater {
+        std::mem::swap(&mut el4, &mut el5);
+    }
+    if compare(&el1, &el3) == std::cmp::Ordering::Greater {
+        std::mem::swap(&mut el1, &mut el3);
+    }
+    if compare(&el2, &el3) == std::cmp::Ordering::Greater {
+        std::mem::swap(&mut el2, &mut el3);
+    }
+    if compare(&el1, &el4) == std::cmp::Ordering::Greater {
+        std::mem::swap(&mut el1, &mut el4);
+    }
+    if compare(&el3, &el4) == std::cmp::Ordering::Greater {
+        std::mem::swap(&mut el3, &mut el4);
+    }
+    if compare(&el2, &el5) == std::cmp::Ordering::Greater {
+        std::mem::swap(&mut el2, &mut el5);
+    }
+    if compare(&el2, &el3) == std::cmp::Ordering::Greater {
+        std::mem::swap(&mut el2, &mut el3);
+    }
+    if compare(&el4, &el5) == std::cmp::Ordering::Greater {
+        std::mem::swap(&mut el4, &mut el5);
+    }
+
+    let pivot1 = el2;
+    let pivot2 = el4;
+
+    a[index1 as usize] = el1;
+    a[index3 as usize] = el3;
+    a[index5 as usize] = el5;
+
+    a[index2 as usize] = a[left as usize];
+    a[index4 as usize] = a[right as usize];
+
+    let mut less = left + 1;
+    let mut great = right - 1;
+    let pivots_are_equal = compare(&pivot1, &pivot2) == std::cmp::Ordering::Equal;
+
+    if pivots_are_equal {
+        let pivot = pivot1;
+        let mut k = less;
+        while k <= great {
+            let ak = a[k as usize];
+            let comp = compare(&ak, &pivot);
+            if comp == std::cmp::Ordering::Equal {
+                k += 1;
+                continue;
+            }
+            if comp == std::cmp::Ordering::Less {
+                if k != less {
+                    a[k as usize] = a[less as usize];
+                    a[less as usize] = ak;
+                }
+                less += 1;
+            } else {
+                loop {
+                    let comp = compare(&a[great as usize], &pivot);
+                    if comp == std::cmp::Ordering::Greater {
+                        great -= 1;
+                        continue;
+                    } else if comp == std::cmp::Ordering::Less {
+                        a[k as usize] = a[less as usize];
+                        a[less as usize] = a[great as usize];
+                        less += 1;
+                        a[great as usize] = ak;
+                        great -= 1;
+                        break;
+                    } else {
+                        a[k as usize] = a[great as usize];
+                        a[great as usize] = ak;
+                        great -= 1;
+                        break;
+                    }
+                }
+            }
+            k += 1;
+        }
+    } else {
+        let mut k = less;
+        while k <= great {
+            let ak = a[k as usize];
+            let comp_pivot1 = compare(&ak, &pivot1);
+            if comp_pivot1 == std::cmp::Ordering::Less {
+                if k != less {
+                    a[k as usize] = a[less as usize];
+                    a[less as usize] = ak;
+                }
+                less += 1;
+            } else {
+                let comp_pivot2 = compare(&ak, &pivot2);
+                if comp_pivot2 == std::cmp::Ordering::Greater {
+                    loop {
+                        let comp = compare(&a[great as usize], &pivot2);
+                        if comp == std::cmp::Ordering::Greater {
+                            great -= 1;
+                            if great < k {
+                                break;
+                            }
+                            continue;
+                        } else {
+                            let comp = compare(&a[great as usize], &pivot1);
+                            if comp == std::cmp::Ordering::Less {
+                                a[k as usize] = a[less as usize];
+                                a[less as usize] = a[great as usize];
+                                less += 1;
+                                a[great as usize] = ak;
+                                great -= 1;
+                            } else {
+                                a[k as usize] = a[great as usize];
+                                a[great as usize] = ak;
+                                great -= 1;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            k += 1;
+        }
+    }
+
+    a[left as usize] = a[(less - 1) as usize];
+    a[(less - 1) as usize] = pivot1;
+    a[right as usize] = a[(great + 1) as usize];
+    a[(great + 1) as usize] = pivot2;
+
+    dart_do_sort(a, compare, left, less - 2);
+    dart_do_sort(a, compare, great + 2, right);
+
+    if pivots_are_equal {
+        return;
+    }
+
+    if less < index1 && great > index5 {
+        while compare(&a[less as usize], &pivot1) == std::cmp::Ordering::Equal {
+            less += 1;
+        }
+        while compare(&a[great as usize], &pivot2) == std::cmp::Ordering::Equal {
+            great -= 1;
+        }
+
+        let mut k = less;
+        while k <= great {
+            let ak = a[k as usize];
+            let comp_pivot1 = compare(&ak, &pivot1);
+            if comp_pivot1 == std::cmp::Ordering::Equal {
+                if k != less {
+                    a[k as usize] = a[less as usize];
+                    a[less as usize] = ak;
+                }
+                less += 1;
+            } else {
+                let comp_pivot2 = compare(&ak, &pivot2);
+                if comp_pivot2 == std::cmp::Ordering::Equal {
+                    loop {
+                        let comp = compare(&a[great as usize], &pivot2);
+                        if comp == std::cmp::Ordering::Equal {
+                            great -= 1;
+                            if great < k {
+                                break;
+                            }
+                            continue;
+                        } else {
+                            if compare(&a[great as usize], &pivot1) == std::cmp::Ordering::Equal {
+                                a[k as usize] = a[less as usize];
+                                a[less as usize] = a[great as usize];
+                                less += 1;
+                            } else {
+                                a[k as usize] = a[great as usize];
+                            }
+                            a[great as usize] = ak;
+                            great -= 1;
+                            break;
+                        }
+                    }
+                }
+            }
+            k += 1;
+        }
+        dart_do_sort(a, compare, less, great);
+    } else {
+        dart_do_sort(a, compare, less, great);
+    }
+}
+
 /// Dart `_filterDiagnostics`: sorted, only [codes] (lower case names) when
 /// given.
 pub fn filter_diagnostics<'d>(
@@ -166,9 +406,10 @@ pub fn filter_diagnostics<'d>(
         .iter()
         .filter(|d| codes.is_none_or(|c| c.iter().any(|x| x == d.code.lower_case_name())))
         .collect();
-    // Dart `List.sort` is not stable; the diagnostics of an offset keep the
-    // order of the unit in practice.
-    out.sort_by(|a, b| fix_order(a, b));
+    if !out.is_empty() {
+        let right = (out.len() - 1) as isize;
+        dart_do_sort(&mut out, &|a, b| fix_order(a, b), 0, right);
+    }
     out
 }
 

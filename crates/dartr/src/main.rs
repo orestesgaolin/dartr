@@ -95,10 +95,11 @@ fn main() -> anyhow::Result<()> {
             .filter(|a| *a != "--dartr-parse-only")
             .cloned()
             .collect();
+        let driver_provider = dartr_cli::DriverProvider::default();
         let provider: &dyn dartr_cli::DiagnosticsProvider = if parse_only {
             &dartr_cli::ParseOnlyProvider
         } else {
-            &dartr_cli::DriverProvider
+            &driver_provider
         };
         let code = dartr_cli::run(
             &args,

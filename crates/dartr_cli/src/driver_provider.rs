@@ -47,8 +47,16 @@ use crate::provider::{
 };
 
 /// The diagnostics of the analysis driver. See the module documentation.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct DriverProvider;
+#[derive(Clone, Debug, Default)]
+pub struct DriverProvider {
+    pub cache_dir: Option<String>,
+}
+
+impl DriverProvider {
+    pub fn new(cache_dir: Option<String>) -> Self {
+        Self { cache_dir }
+    }
+}
 
 impl DiagnosticsProvider for DriverProvider {
     fn diagnostics_for_file(
@@ -65,7 +73,20 @@ impl DiagnosticsProvider for DriverProvider {
         collection: &AnalysisContextCollection,
         files: &[AnalyzedFile],
     ) -> Vec<FileDiagnostics> {
-        DriverSession::default().diagnostics(collection, files)
+        let cache = crate::args::resolve_cache_dir(self.cache_dir.as_deref(), false);
+        self.diagnostics_for_files_with_cache(collection, files, cache.as_deref())
+    }
+
+    fn diagnostics_for_files_with_cache(
+        &self,
+        collection: &AnalysisContextCollection,
+        files: &[AnalyzedFile],
+        cache_dir: Option<&str>,
+    ) -> Vec<FileDiagnostics> {
+        let cache = cache_dir
+            .map(str::to_owned)
+            .or_else(|| self.cache_dir.clone());
+        DriverSession::with_cache_dir(cache).diagnostics(collection, files)
     }
 }
 
@@ -141,6 +162,8 @@ pub struct DriverSession {
     /// context for `link_known_libraries_ordered`.
     known_libraries_cache:
         HashMap<usize, (usize, dartr_element::WorldSnapshot, Arc<Vec<KnownLibrary>>)>,
+    /// Optional persistent result cache directory (`--cache` / `DARTR_CACHE_DIR`).
+    cache_dir: Option<String>,
 }
 
 /// A library file that a driver knows (Dart `FileSystemState.knownFiles`
@@ -230,6 +253,24 @@ enum Outcome {
 }
 
 impl DriverSession {
+    /// Creates a new session with the given optional result cache directory.
+    pub fn with_cache_dir(cache_dir: Option<String>) -> Self {
+        Self {
+            cache_dir,
+            ..Self::default()
+        }
+    }
+
+    /// Returns the configured result cache directory, if any.
+    pub fn cache_dir(&self) -> Option<&str> {
+        self.cache_dir.as_deref()
+    }
+
+    /// Sets the result cache directory.
+    pub fn set_cache_dir(&mut self, cache_dir: Option<String>) {
+        self.cache_dir = cache_dir;
+    }
+
     /// Updates the priority (open) files (Dart `AnalysisDriver.priorityFiles=`).
     /// Evicts cached resolved libraries that no longer contain any priority file.
     pub fn set_priority_files(&mut self, files: &[String]) {

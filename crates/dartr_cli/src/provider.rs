@@ -71,6 +71,17 @@ pub trait DiagnosticsProvider {
             .filter_map(|f| self.diagnostics_for_file(collection, f))
             .collect()
     }
+
+    /// Like [Self::diagnostics_for_files], with an optional result cache directory.
+    fn diagnostics_for_files_with_cache(
+        &self,
+        collection: &AnalysisContextCollection,
+        files: &[AnalyzedFile],
+        cache_dir: Option<&str>,
+    ) -> Vec<FileDiagnostics> {
+        let _ = cache_dir;
+        self.diagnostics_for_files(collection, files)
+    }
 }
 
 /// Parse diagnostics (scanner and parser), the AST-only lint rules and the
