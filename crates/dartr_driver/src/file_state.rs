@@ -213,6 +213,8 @@ pub struct FileContent {
     pub exists: bool,
     /// Dart `contentHash`: the MD5 of the content, hex.
     pub content_hash: String,
+    /// Raw 128-bit MD5 content hash bytes.
+    pub content_hash_bytes: [u8; 16],
     /// Dart `unlinkedKey` (without the `.unlinked2` suffix).
     pub unlinked_signature: [u8; 16],
     pub source: Arc<str>,
@@ -720,6 +722,7 @@ impl FileSystemState {
         self.files[id.0 as usize].content = Some(FileContent {
             exists: data.exists,
             content_hash: data.content_hash,
+            content_hash_bytes: data.content_hash_bytes,
             unlinked_signature: data.unlinked_signature,
             source: data.source,
             parsed: std::sync::Mutex::new(data.parsed),
@@ -1035,6 +1038,110 @@ impl FileSystemState {
             append(signature, &d.uris.selected);
         }
     }
+
+    /// Computes a 128-bit signature of the resolved directives and kind of unit
+    /// [kind] (covering `FileKind`, `library_exports`, `library_imports`,
+    /// `part_includes`, and `doc_library_imports` including primary,
+    /// configuration, and selected `DirectiveUri` targets and their existence /
+    /// kind). Used in Tier B `LibraryResultKey` so creating or deleting a
+    /// referenced file invalidates the library's cached diagnostics even when
+    /// `LibraryCycle.apiSignature` is unchanged.
+    pub fn unit_directives_signature(&self, kind: FileId) -> [u8; 16] {
+        let mut signature = ApiSignature::new();
+        let append_kind = |sig: &mut ApiSignature, k: &FileKind| match k {
+            FileKind::Library { name } => {
+                sig.add_int(0);
+                sig.add_bool(name.is_some());
+                if let Some(n) = name {
+                    sig.add_string(n);
+                }
+            }
+            FileKind::PartOfName { name } => {
+                sig.add_int(1);
+                sig.add_string(name);
+            }
+            FileKind::PartOfUriKnown { uri_file } => {
+                let f = self.file(*uri_file);
+                sig.add_int(2);
+                sig.add_string(&f.path);
+                sig.add_string(&f.uri_str);
+                sig.add_bool(f.exists());
+            }
+            FileKind::PartOfUriUnknown => {
+                sig.add_int(3);
+            }
+        };
+        let append_uri = |sig: &mut ApiSignature, uri: &DirectiveUri| match uri {
+            DirectiveUri::WithFile {
+                relative_uri_str,
+                relative_uri,
+                file,
+            } => {
+                let f = self.file(*file);
+                sig.add_int(0);
+                sig.add_string(relative_uri_str);
+                sig.add_string(relative_uri);
+                sig.add_string(&f.path);
+                sig.add_string(&f.uri_str);
+                sig.add_bool(f.exists());
+                sig.add_bool(crate::directives::is_generated(&f.path));
+                append_kind(sig, f.kind());
+            }
+            DirectiveUri::WithUri {
+                relative_uri_str,
+                relative_uri,
+            } => {
+                sig.add_int(2);
+                sig.add_string(relative_uri_str);
+                sig.add_string(relative_uri);
+            }
+            DirectiveUri::WithString { relative_uri_str } => {
+                sig.add_int(3);
+                sig.add_string(relative_uri_str);
+            }
+            DirectiveUri::WithoutString => sig.add_int(4),
+        };
+        let append_uris = |sig: &mut ApiSignature, uris: &DirectiveUris| {
+            append_uri(sig, &uris.primary);
+            sig.add_int(uris.configurations.len() as u32);
+            for cfg in &uris.configurations {
+                append_uri(sig, cfg);
+            }
+            append_uri(sig, &uris.selected);
+        };
+
+        let c = self.file(kind).c();
+        append_kind(&mut signature, &c.kind);
+
+        signature.add_int(c.library_exports.len() as u32);
+        for d in &c.library_exports {
+            append_uris(&mut signature, &d.uris);
+        }
+
+        signature.add_int(c.library_imports.len() as u32);
+        for d in &c.library_imports {
+            append_uris(&mut signature, &d.uris);
+        }
+
+        signature.add_int(c.part_includes.len() as u32);
+        for d in &c.part_includes {
+            append_uris(&mut signature, &d.uris);
+            match self.included_part(kind, d) {
+                Some(part) => {
+                    signature.add_bool(true);
+                    signature.add_string(&self.file(part).path);
+                }
+                None => signature.add_bool(false),
+            }
+        }
+
+        signature.add_int(c.doc_library_imports.len() as u32);
+        for d in &c.doc_library_imports {
+            append_uris(&mut signature, &d.uris);
+        }
+
+        signature.to_byte_list()
+    }
 }
 
 /// The result of reading and parsing one file (the first half of Dart
@@ -1044,6 +1151,7 @@ pub(crate) struct RefreshData {
     pub(crate) exists: bool,
     pub(crate) from_overlay: bool,
     pub(crate) content_hash: String,
+    pub(crate) content_hash_bytes: [u8; 16],
     pub(crate) unlinked_signature: [u8; 16],
     pub(crate) source: Arc<str>,
     pub(crate) parsed: Option<Arc<ParsedUnit>>,
@@ -1108,9 +1216,12 @@ fn refresh_data(path: &str, is_dart_core: bool, config: &FileConfig, salt: &[u32
         Some(rest) => rest.to_string(),
         None => content,
     };
-    let content_hash = {
+    let (content_hash_bytes, content_hash) = {
         use md5::{Digest, Md5};
-        hex(&Md5::digest(content.as_bytes()))
+        let digest = Md5::digest(content.as_bytes());
+        let mut bytes = [0u8; 16];
+        bytes.copy_from_slice(&digest);
+        (bytes, hex(&bytes))
     };
     let unlinked_signature = {
         let mut signature = ApiSignature::new();
@@ -1142,6 +1253,7 @@ fn refresh_data(path: &str, is_dart_core: bool, config: &FileConfig, salt: &[u32
         exists,
         from_overlay,
         content_hash,
+        content_hash_bytes,
         unlinked_signature,
         source,
         parsed,

@@ -30,7 +30,7 @@ use std::fs::{self, File};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use dartr_parser::experimental_flags::ExperimentalFlag;
@@ -114,9 +114,11 @@ pub fn content_hash_bytes(bytes: &[u8]) -> Hash128 {
 ///
 /// Hashes the binary's size, modification timestamp, and up to the first and
 /// last 64 KiB of the binary so recompiling `dartr` automatically invalidates
-/// cache entries from older builds.
+/// cache entries from older builds. When `DARTR_CACHE_SALT` is set to a
+/// non-empty string in the environment, it is mixed into the fingerprint to
+/// allow tests to simulate a different `dartr` build.
 pub fn executable_fingerprint() -> Hash128 {
-    match std::env::current_exe() {
+    let base = match std::env::current_exe() {
         Ok(path) => executable_fingerprint_for_path(&path),
         Err(_) => {
             let mut sig = ApiSignature::new();
@@ -124,7 +126,16 @@ pub fn executable_fingerprint() -> Hash128 {
             sig.add_string(env!("CARGO_PKG_VERSION"));
             sig.to_byte_list()
         }
+    };
+    if let Ok(extra) = std::env::var("DARTR_CACHE_SALT")
+        && !extra.is_empty()
+    {
+        let mut sig = ApiSignature::new();
+        sig.add_bytes(&base);
+        sig.add_string(&extra);
+        return sig.to_byte_list();
     }
+    base
 }
 
 /// Computes a 128-bit fingerprint for an executable file at [path].
@@ -256,6 +267,9 @@ pub struct LibraryUnitKeyInput<'a> {
     pub path: &'a str,
     pub uri_str: &'a str,
     pub content_hash: Hash128,
+    pub unlinked_signature: Hash128,
+    pub directives_signature: Hash128,
+    pub unit_options_signature: Hash128,
     pub is_generated: bool,
 }
 
@@ -269,8 +283,53 @@ pub struct LibraryOptionsKeyInput<'a> {
     pub lint_rules: &'a [&'a str],
     pub unimplemented_lint_rules: &'a [String],
     pub unignorable_names: &'a [String],
+    /// Optional precomputed signature of (`strict_*`, `experiments`,
+    /// `lint_rules`, `unimplemented_lint_rules`, `unignorable_names`) from
+    /// [`library_options_core_signature`].
+    pub precomputed_core_signature: Option<Hash128>,
     pub pubspec_content_hash: Option<Hash128>,
     pub package_names: &'a [String],
+    pub packages_signature: Hash128,
+}
+
+/// Precomputes the 128-bit signature of the analysis-options portion of
+/// [`LibraryOptionsKeyInput`] so it can be computed once per
+/// `analysis_options.yaml` folder in a context instead of re-sorting per
+/// library.
+pub fn library_options_core_signature(
+    strict_casts: bool,
+    strict_inference: bool,
+    strict_raw_types: bool,
+    experiments: &[ExperimentalFlag],
+    lint_rules: &[&str],
+    unimplemented_lint_rules: &[String],
+    unignorable_names: &[String],
+) -> Hash128 {
+    let mut sig = ApiSignature::new();
+    sig.add_bool(strict_casts);
+    sig.add_bool(strict_inference);
+    sig.add_bool(strict_raw_types);
+
+    let mut exps: Vec<&str> = experiments.iter().map(|e| e.name()).collect();
+    exps.sort_unstable();
+    sig.add_string_list(&exps);
+
+    let mut lints: Vec<&str> = lint_rules.to_vec();
+    lints.sort_unstable();
+    sig.add_string_list(&lints);
+
+    let mut unimpl: Vec<&str> = unimplemented_lint_rules
+        .iter()
+        .map(String::as_str)
+        .collect();
+    unimpl.sort_unstable();
+    sig.add_string_list(&unimpl);
+
+    let mut unignorable: Vec<&str> = unignorable_names.iter().map(String::as_str).collect();
+    unignorable.sort_unstable();
+    sig.add_string_list(&unignorable);
+
+    sig.to_byte_list()
 }
 
 /// Computes the Tier B `LibraryResultKey` (`Hash128`) for a defining library (design §4.4).
@@ -288,35 +347,23 @@ pub fn library_result_key(
         sig.add_string(u.path);
         sig.add_string(u.uri_str);
         sig.add_bytes(&u.content_hash);
+        sig.add_bytes(&u.unlinked_signature);
+        sig.add_bytes(&u.directives_signature);
+        sig.add_bytes(&u.unit_options_signature);
         sig.add_bool(u.is_generated);
     }
-    sig.add_bool(options.strict_casts);
-    sig.add_bool(options.strict_inference);
-    sig.add_bool(options.strict_raw_types);
-
-    let mut exps: Vec<&str> = options.experiments.iter().map(|e| e.name()).collect();
-    exps.sort_unstable();
-    sig.add_string_list(&exps);
-
-    let mut lints: Vec<&str> = options.lint_rules.to_vec();
-    lints.sort_unstable();
-    sig.add_string_list(&lints);
-
-    let mut unimpl: Vec<&str> = options
-        .unimplemented_lint_rules
-        .iter()
-        .map(String::as_str)
-        .collect();
-    unimpl.sort_unstable();
-    sig.add_string_list(&unimpl);
-
-    let mut unignorable: Vec<&str> = options
-        .unignorable_names
-        .iter()
-        .map(String::as_str)
-        .collect();
-    unignorable.sort_unstable();
-    sig.add_string_list(&unignorable);
+    let core_sig = options.precomputed_core_signature.unwrap_or_else(|| {
+        library_options_core_signature(
+            options.strict_casts,
+            options.strict_inference,
+            options.strict_raw_types,
+            options.experiments,
+            options.lint_rules,
+            options.unimplemented_lint_rules,
+            options.unignorable_names,
+        )
+    });
+    sig.add_bytes(&core_sig);
 
     match &options.pubspec_content_hash {
         Some(hash) => {
@@ -326,11 +373,145 @@ pub fn library_result_key(
         None => sig.add_bool(false),
     }
 
-    let mut pkgs: Vec<&str> = options.package_names.iter().map(String::as_str).collect();
-    pkgs.sort_unstable();
-    sig.add_string_list(&pkgs);
+    if !options.package_names.is_empty() {
+        let mut pkgs: Vec<&str> = options.package_names.iter().map(String::as_str).collect();
+        pkgs.sort_unstable();
+        sig.add_string_list(&pkgs);
+    } else {
+        sig.add_int(0);
+    }
+    sig.add_bytes(&options.packages_signature);
 
     sig.to_byte_list()
+}
+
+/// Cached diagnostics and line starts for one compilation unit of a library
+/// (design `docs/design/result-cache.md` §4.5).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CachedUnitDiagnostics {
+    pub path: String,
+    pub line_info: dartr_syntax::LineInfo,
+    pub diagnostics: Vec<dartr_diagnostics::Diagnostic>,
+}
+
+/// Tier B cache value (`<key>.resolved`) for a defining library and all of its
+/// compilation units (design `docs/design/result-cache.md` §4.5).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LibraryAnalysisCacheEntry {
+    pub units: Vec<CachedUnitDiagnostics>,
+}
+
+impl LibraryAnalysisCacheEntry {
+    /// Serializes this entry into a deterministic little-endian byte vector.
+    pub fn encode(&self) -> Vec<u8> {
+        let mut w = ByteWriter::new();
+        w.write_u32(self.units.len() as u32);
+        for u in &self.units {
+            w.write_str(&u.path);
+            w.write_u32_slice(&u.line_info.line_starts);
+            w.write_u32(u.diagnostics.len() as u32);
+            for d in &u.diagnostics {
+                w.write_str(d.code.unique_name);
+                w.write_u64(d.offset as u64);
+                w.write_u64(d.length as u64);
+                w.write_str(&d.message);
+                w.write_opt_str(d.correction.as_deref());
+                let sev_u8 = match d.severity {
+                    dartr_diagnostics::DiagnosticSeverity::None => 0u8,
+                    dartr_diagnostics::DiagnosticSeverity::Info => 1u8,
+                    dartr_diagnostics::DiagnosticSeverity::Warning => 2u8,
+                    dartr_diagnostics::DiagnosticSeverity::Error => 3u8,
+                };
+                w.write_u8(sev_u8);
+                w.write_u32(d.context_messages.len() as u32);
+                for cm in &d.context_messages {
+                    w.write_str(&cm.file_path);
+                    w.write_i64(cm.offset);
+                    w.write_i64(cm.length);
+                    w.write_str(&cm.message);
+                    w.write_opt_str(cm.url.as_deref());
+                }
+            }
+        }
+        w.into_bytes()
+    }
+
+    /// Deserializes a [`LibraryAnalysisCacheEntry`] from [bytes], returning
+    /// `None` if the bytes are truncated, malformed, or reference an unknown
+    /// diagnostic code.
+    pub fn decode(bytes: &[u8]) -> Option<Self> {
+        let mut r = ByteReader::new(bytes);
+        let unit_count = r.read_u32()? as usize;
+        if r.remaining() < unit_count.checked_mul(4)? {
+            return None;
+        }
+        let mut units = Vec::with_capacity(unit_count);
+        for _ in 0..unit_count {
+            let path = r.read_string()?;
+            let line_starts = r.read_u32_vec()?;
+            if line_starts.is_empty() {
+                return None;
+            }
+            let line_info = dartr_syntax::LineInfo::new(line_starts);
+            let diag_count = r.read_u32()? as usize;
+            if r.remaining() < diag_count.checked_mul(4)? {
+                return None;
+            }
+            let mut diagnostics = Vec::with_capacity(diag_count);
+            for _ in 0..diag_count {
+                let unique_name = r.read_string()?;
+                let code = dartr_diagnostics::code_by_unique_name(&unique_name)?;
+                let offset = usize::try_from(r.read_u64()?).ok()?;
+                let length = usize::try_from(r.read_u64()?).ok()?;
+                let message = r.read_string()?;
+                let correction = r.read_opt_string()?;
+                let severity = match r.read_u8()? {
+                    0 => dartr_diagnostics::DiagnosticSeverity::None,
+                    1 => dartr_diagnostics::DiagnosticSeverity::Info,
+                    2 => dartr_diagnostics::DiagnosticSeverity::Warning,
+                    3 => dartr_diagnostics::DiagnosticSeverity::Error,
+                    _ => return None,
+                };
+                let cm_count = r.read_u32()? as usize;
+                if r.remaining() < cm_count.checked_mul(4)? {
+                    return None;
+                }
+                let mut context_messages = Vec::with_capacity(cm_count);
+                for _ in 0..cm_count {
+                    let file_path = r.read_string()?;
+                    let cm_offset = r.read_i64()?;
+                    let cm_length = r.read_i64()?;
+                    let cm_message = r.read_string()?;
+                    let url = r.read_opt_string()?;
+                    context_messages.push(dartr_diagnostics::DiagnosticMessage {
+                        file_path,
+                        offset: cm_offset,
+                        length: cm_length,
+                        message: cm_message,
+                        url,
+                    });
+                }
+                diagnostics.push(dartr_diagnostics::Diagnostic {
+                    code,
+                    offset,
+                    length,
+                    message,
+                    correction,
+                    severity,
+                    context_messages,
+                });
+            }
+            units.push(CachedUnitDiagnostics {
+                path,
+                line_info,
+                diagnostics,
+            });
+        }
+        if !r.is_empty() {
+            return None;
+        }
+        Some(Self { units })
+    }
 }
 
 /// Reads `DARTR_CACHE_MAX_MB` from the environment, falling back to
@@ -351,6 +532,7 @@ pub struct DiskCache {
     v1_root: PathBuf,
     max_size_bytes: u64,
     salt: Hash128,
+    initial_sweep_done: AtomicBool,
     bytes_written_since_cleanup: AtomicU64,
     estimated_total_bytes: AtomicU64,
     cleanup_lock: Mutex<()>,
@@ -386,20 +568,17 @@ impl DiskCache {
     pub fn with_salt(cache_dir: impl AsRef<Path>, max_size_bytes: u64, salt: Hash128) -> Self {
         let root = cache_dir.as_ref().to_path_buf();
         let v1_root = root.join(format!("v{CACHE_FORMAT_VERSION}"));
-        let cache = Self {
+        Self {
             root,
             v1_root,
             max_size_bytes,
             salt,
+            initial_sweep_done: AtomicBool::new(false),
             bytes_written_since_cleanup: AtomicU64::new(0),
             estimated_total_bytes: AtomicU64::new(0),
             cleanup_lock: Mutex::new(()),
             access_times: Mutex::new(HashMap::new()),
-        };
-        // Like Dart's `EvictingFileByteStore`, perform an initial size check /
-        // sweep so pre-existing cache contents are accounted for.
-        cache.evict_if_needed();
-        cache
+        }
     }
 
     /// Root directory passed when creating this cache.
@@ -479,10 +658,38 @@ impl DiskCache {
         }
     }
 
+    /// Reads and decodes the Tier B [`LibraryAnalysisCacheEntry`] for [key].
+    /// If the payload fails to decode, the corrupted file is unlinked and `None`
+    /// is returned.
+    pub fn get_library_diagnostics(&self, key: &Hash128) -> Option<LibraryAnalysisCacheEntry> {
+        let payload = self.get(CacheKind::Resolved, key)?;
+        match LibraryAnalysisCacheEntry::decode(&payload) {
+            Some(entry) => Some(entry),
+            None => {
+                let path = self.entry_path(CacheKind::Resolved, key);
+                let _ = fs::remove_file(&path);
+                if let Ok(mut map) = self.access_times.lock() {
+                    map.remove(&path);
+                }
+                None
+            }
+        }
+    }
+
+    /// Encodes and atomically writes the Tier B [`LibraryAnalysisCacheEntry`]
+    /// for [key].
+    pub fn put_library_diagnostics(&self, key: &Hash128, entry: &LibraryAnalysisCacheEntry) {
+        let payload = entry.encode();
+        self.put(CacheKind::Resolved, key, &payload);
+    }
+
     /// Atomically writes [payload] for [kind] and [key] using a temporary file
     /// in the same shard directory and `std::fs::rename`, then triggers LRU
     /// eviction if the write threshold or size limit is exceeded.
     pub fn put(&self, kind: CacheKind, key: &Hash128, payload: &[u8]) {
+        if !self.initial_sweep_done.swap(true, Ordering::Relaxed) {
+            self.evict_if_needed();
+        }
         let key_hex = self.salted_key_hex(key);
         let shard = &key_hex[0..2];
         let shard_dir = self.v1_root.join(kind.subdir()).join(shard);
@@ -535,6 +742,7 @@ impl DiskCache {
         let Ok(_guard) = self.cleanup_lock.lock() else {
             return;
         };
+        self.initial_sweep_done.store(true, Ordering::Relaxed);
         self.bytes_written_since_cleanup.store(0, Ordering::Relaxed);
 
         if !self.v1_root.exists() {
@@ -792,6 +1000,10 @@ impl ByteWriter {
         self.buf.extend_from_slice(&v.to_le_bytes());
     }
 
+    pub fn write_i64(&mut self, v: i64) {
+        self.buf.extend_from_slice(&v.to_le_bytes());
+    }
+
     pub fn write_hash128(&mut self, v: &Hash128) {
         self.buf.extend_from_slice(v);
     }
@@ -901,6 +1113,11 @@ impl<'a> ByteReader<'a> {
     pub fn read_u64(&mut self) -> Option<u64> {
         let raw = self.read_raw_bytes(8)?;
         Some(u64::from_le_bytes(raw.try_into().ok()?))
+    }
+
+    pub fn read_i64(&mut self) -> Option<i64> {
+        let raw = self.read_raw_bytes(8)?;
+        Some(i64::from_le_bytes(raw.try_into().ok()?))
     }
 
     pub fn read_hash128(&mut self) -> Option<Hash128> {
@@ -1446,5 +1663,51 @@ mod tests {
         );
         assert!(r.is_empty());
         assert_eq!(r.read_u8(), None);
+    }
+
+    #[test]
+    fn library_analysis_cache_entry_round_trip() {
+        let tmp = TempCacheDir::new("lib_diag_rt");
+        let salt = [0x77u8; 16];
+        let cache = DiskCache::with_salt(tmp.path(), DEFAULT_MAX_SIZE_BYTES, salt);
+        let key = content_hash("lib_diag_key");
+
+        let code =
+            dartr_diagnostics::code_by_unique_name("CompileTimeErrorCode.UNDEFINED_IDENTIFIER")
+                .unwrap_or_else(|| dartr_diagnostics::all_codes()[0]);
+        let entry = LibraryAnalysisCacheEntry {
+            units: vec![
+                CachedUnitDiagnostics {
+                    path: "/pkg/lib/a.dart".to_string(),
+                    line_info: dartr_syntax::LineInfo::new(vec![0, 15, 42]),
+                    diagnostics: vec![dartr_diagnostics::Diagnostic {
+                        code,
+                        offset: 18,
+                        length: 3,
+                        message: "Undefined name 'foo'.".to_string(),
+                        correction: Some("Try correcting the name.".to_string()),
+                        severity: dartr_diagnostics::DiagnosticSeverity::Error,
+                        context_messages: vec![dartr_diagnostics::DiagnosticMessage {
+                            file_path: "/pkg/lib/a.dart".to_string(),
+                            offset: 5,
+                            length: 4,
+                            message: "See declaration here.".to_string(),
+                            url: Some(
+                                "https://dart.dev/diagnostics/undefined_identifier".to_string(),
+                            ),
+                        }],
+                    }],
+                },
+                CachedUnitDiagnostics {
+                    path: "/pkg/lib/a_part.dart".to_string(),
+                    line_info: dartr_syntax::LineInfo::new(vec![0, 20]),
+                    diagnostics: Vec::new(),
+                },
+            ],
+        };
+
+        assert_eq!(cache.get_library_diagnostics(&key), None);
+        cache.put_library_diagnostics(&key, &entry);
+        assert_eq!(cache.get_library_diagnostics(&key), Some(entry));
     }
 }
