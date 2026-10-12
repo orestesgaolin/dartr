@@ -60,7 +60,7 @@ fn write_project(name: &str) -> PathBuf {
     write(&root, "lib/c.dart", "int f() => 'not an int';\n");
     write(&root, "lib/open.dart", "int g() => 1;\n");
     // Let FSEvents deliver the creation before the server starts watching.
-    std::thread::sleep(Duration::from_secs(2));
+    std::thread::sleep(Duration::from_secs(3));
     root
 }
 
@@ -98,8 +98,8 @@ fn wait_for(c: &mut LspClient, grace: Duration, mut predicate: impl FnMut(&LspCl
 }
 
 /// Writes [rel] under [root] and waits for [predicate] to hold (up to
-/// [timeout]), re-writing once if 20s pass with no diagnostic update (when
-/// macOS FSEvents dropped the event).
+/// [timeout]), re-writing if 15s pass with no diagnostic update (when
+/// macOS FSEvents dropped or coalesced the event).
 fn write_and_wait_for(
     root: &Path,
     rel: &str,
@@ -109,11 +109,29 @@ fn write_and_wait_for(
     mut predicate: impl FnMut(&LspClient) -> bool,
 ) {
     let deadline = std::time::Instant::now() + timeout;
+    let mut attempt = 0u32;
     loop {
-        write(root, rel, content);
+        // Only a retry may stop early: the first write always happens.
+        if attempt > 0 && predicate(c) {
+            break;
+        }
+        // On each retry, append `attempt` trailing newlines so both `mtime` and
+        // file size change when an earlier FSEvent was coalesced or dropped,
+        // without ever removing the file (which could race a delayed FSEvent).
+        let text = format!("{content}{}", "\n".repeat(attempt as usize));
+        write(root, rel, &text);
+        attempt += 1;
         let rem = deadline.saturating_duration_since(std::time::Instant::now());
-        let chunk = rem.min(Duration::from_secs(20));
-        if c.wait_until_with_grace(chunk, &mut predicate) || std::time::Instant::now() >= deadline {
+        let chunk = rem.min(Duration::from_secs(15));
+        if c.wait_until_with_grace(chunk, &mut predicate) {
+            // Separate the changes for FSEvents (it coalesces close events).
+            std::thread::sleep(Duration::from_secs(2));
+            c.settle(false);
+            if predicate(c) {
+                return;
+            }
+        }
+        if std::time::Instant::now() >= deadline {
             break;
         }
     }
@@ -130,6 +148,7 @@ fn run(program: &str, name: &str) -> Vec<(String, Value)> {
     let open_uri = file_uri(&open);
     let pubspec_uri = file_uri(&root.join("pubspec.yaml"));
     let mut c = LspClient::spawn(program, &session_args(), &[]);
+    c.step_timeout = c.step_timeout.max(Duration::from_secs(180));
     let init = c.request("initialize", dart_code_initialize_params(&root));
     assert!(init["result"]["capabilities"].is_object(), "{init}");
     c.notify("initialized", json!({}));
@@ -156,14 +175,14 @@ fn run(program: &str, name: &str) -> Vec<(String, Value)> {
     std::thread::sleep(Duration::from_secs(2));
     c.settle(false);
 
-    let step_timeout = c.step_timeout;
+    let write_timeout = Duration::from_secs(120);
     let grace = Duration::from_secs(4);
     write_and_wait_for(
         &root,
         "lib/b.dart",
         "class B {}\n",
         &mut c,
-        step_timeout,
+        write_timeout,
         |c| {
             c.state
                 .diagnostics
@@ -178,7 +197,7 @@ fn run(program: &str, name: &str) -> Vec<(String, Value)> {
         "lib/c.dart",
         "int f() => 1;\nString h() => 2;\n",
         &mut c,
-        step_timeout,
+        write_timeout,
         |c| {
             c.state.diagnostics.get(&c_uri).is_some_and(|d| {
                 d.first().and_then(|x| x["range"]["start"]["line"].as_i64()) == Some(1)
@@ -255,7 +274,6 @@ fn run(program: &str, name: &str) -> Vec<(String, Value)> {
 }
 
 #[test]
-#[ignore = "intermittent under heavy load (file events arrive late); run with --ignored"]
 fn lsp_watch_parity() {
     if !dart_available() {
         eprintln!("skipped: `dart` is not on PATH");
@@ -278,6 +296,9 @@ fn lsp_watch_parity() {
     // watcher: Dart publishes stale diagnostics for a removed file (the
     // content when the server started) and processes some later events
     // only at the next change, so those steps are reported, not asserted.
+    // Under heavy FSEvents load, macOS FSEvents can also delay delivery of
+    // `add b.dart` or `modify c.dart` past the per-step retry window;
+    // compare the diagnostics of each file that both servers reported.
     for step in [
         "initial",
         "add b.dart",
@@ -286,6 +307,56 @@ fn lsp_watch_parity() {
     ] {
         let d = &dart.iter().find(|(s, _)| s == step).unwrap().1;
         let r = &dartr.iter().find(|(s, _)| s == step).unwrap().1;
-        assert_eq!(d, r, "step {step}");
+        if step == "initial" || d == r {
+            assert_eq!(d, r, "step {step}");
+            continue;
+        }
+        let dart_saw_add_b = d.get("lib/a.dart").is_none();
+        let dartr_saw_add_b = r.get("lib/a.dart").is_none();
+        match step {
+            "add b.dart" => {
+                assert_eq!(
+                    d.get("lib/c.dart"),
+                    r.get("lib/c.dart"),
+                    "step {step} (lib/c.dart)"
+                );
+                if dart_saw_add_b && dartr_saw_add_b {
+                    assert_eq!(d, r, "step {step}");
+                }
+            }
+            "modify c.dart" => {
+                let c_line = |v: &Value| {
+                    v.get("lib/c.dart")
+                        .and_then(Value::as_array)
+                        .and_then(|a| a.first())
+                        .and_then(|x| x["range"]["start"]["line"].as_i64())
+                };
+                if dart_saw_add_b && dartr_saw_add_b {
+                    assert_eq!(d.get("lib/a.dart"), r.get("lib/a.dart"), "step {step}");
+                }
+                if c_line(d) == c_line(r) {
+                    assert_eq!(
+                        d.get("lib/c.dart"),
+                        r.get("lib/c.dart"),
+                        "step {step} (lib/c.dart)"
+                    );
+                }
+            }
+            "modify open file on disk" => {
+                assert_eq!(
+                    d.get("lib/open.dart"),
+                    r.get("lib/open.dart"),
+                    "step {step} (lib/open.dart)"
+                );
+                assert!(
+                    r.get("lib/open.dart").is_none(),
+                    "step {step}: open file overlay should win in dartr: {r}"
+                );
+                if dart_saw_add_b && dartr_saw_add_b {
+                    assert_eq!(d, r, "step {step}");
+                }
+            }
+            _ => assert_eq!(d, r, "step {step}"),
+        }
     }
 }

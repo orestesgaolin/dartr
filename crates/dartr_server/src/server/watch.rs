@@ -235,6 +235,8 @@ impl Server {
                     if analyzed_by_context && !self.is_excluded(&path) {
                         self.analyzed.insert(path.clone());
                     }
+                    self.context_added_files.clear();
+                    self.session.clear_known_libraries_cache();
                     self.owned.added.clear();
                     self.search_scope = None;
                     self.file_changed(&path);
@@ -242,6 +244,8 @@ impl Server {
                 "modify" => self.file_changed(&path),
                 _ => {
                     // `driver.removeFile` and `applyFileRemoved`.
+                    self.context_added_files.clear();
+                    self.session.clear_known_libraries_cache();
                     self.file_changed(&path);
                     if self.owned.remove(&path) {
                         self.search_scope = None;

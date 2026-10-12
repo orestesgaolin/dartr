@@ -725,6 +725,9 @@ impl DeclarationHelper {
             .values()
             .filter_map(|e| e.cast::<ExtensionElement>())
             .collect();
+        if extensions.is_empty() {
+            return;
+        }
         let ts = TypeSystem::new(*ctx);
         let target = if ctx.is_dart_core_null(ty) {
             ty

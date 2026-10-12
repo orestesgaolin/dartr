@@ -419,23 +419,42 @@ pub struct KnownLibrary {
     pub element: EId<LibraryElement>,
 }
 
-/// Dart `DartCompletionManager.computeFinalizedCandidateSuggestions`.
-/// [known] is `None` when the not-imported pass does not run.
-pub fn compute(
+/// The intermediate state after the in-scope completion pass.
+pub struct InScopeResult {
+    pub out: Out,
+    pub decl: Option<declaration::DeclarationHelper>,
+    pub ops: Vec<declaration::NotImportedOp>,
+    pub is_comment_text: bool,
+}
+
+impl InScopeResult {
+    /// Whether the not-imported pass has operations to execute.
+    pub fn needs_not_imported(&self) -> bool {
+        !self.is_comment_text && self.decl.is_some() && !self.ops.is_empty()
+    }
+}
+
+/// Runs the in-scope completion pass (Dart `InScopeCompletionPass`).
+pub fn compute_in_scope(
     q: &Request<'_, '_>,
     budget_ms: u64,
     max_suggestions: i64,
-    known: Option<&dyn Fn() -> Vec<KnownLibrary>>,
-) -> CompletionResult {
+) -> InScopeResult {
     let ast = q.ast;
     let mut collector = Collector {
         max_suggestions,
         ..Collector::default()
     };
     if q.target.is_comment_text {
-        return CompletionResult {
-            candidates: Vec::new(),
-            is_incomplete: false,
+        return InScopeResult {
+            out: Out {
+                collector,
+                matcher: Matcher::NoPrefix,
+                deadline: Instant::now(),
+            },
+            decl: None,
+            ops: Vec::new(),
+            is_comment_text: true,
         };
     }
     let prefix = target::token_data_prefix(ast, q.covering, q.offset)
@@ -447,7 +466,7 @@ pub fn compute(
         Matcher::Fuzzy(Box::new(FuzzyMatcher::new(&prefix)))
     };
     collector.completion_location = None;
-    let mut out = Out {
+    let out = Out {
         collector,
         matcher,
         deadline: Instant::now() + std::time::Duration::from_millis(budget_ms),
@@ -455,8 +474,32 @@ pub fn compute(
     let mut p = pass::Pass::new(q, out, false, true, true);
     p.compute_suggestions();
     let ops = p.decl.as_ref().map(|d| d.ops.clone()).unwrap_or_default();
-    let mut decl = p.decl.take();
-    out = p.out;
+    let decl = p.decl.take();
+    InScopeResult {
+        out: p.out,
+        decl,
+        ops,
+        is_comment_text: false,
+    }
+}
+
+/// Runs the optional not-imported completion pass and finalizes candidates.
+pub fn finalize(
+    q: &Request<'_, '_>,
+    in_scope: InScopeResult,
+    max_suggestions: i64,
+    known: Option<&dyn Fn() -> Vec<KnownLibrary>>,
+) -> CompletionResult {
+    if in_scope.is_comment_text {
+        return CompletionResult {
+            candidates: Vec::new(),
+            is_incomplete: false,
+        };
+    }
+    let ast = q.ast;
+    let mut out = in_scope.out;
+    let mut decl = in_scope.decl;
+    let ops = in_scope.ops;
     let mut not_imported_incomplete = false;
     if let (Some(known), Some(d)) = (known, decl.as_mut()) {
         if !ops.is_empty() {
@@ -503,6 +546,18 @@ pub fn compute(
         candidates: collector.suggestions,
         is_incomplete: collector.is_incomplete || not_imported_incomplete || is_truncated,
     }
+}
+
+/// Dart `DartCompletionManager.computeFinalizedCandidateSuggestions`.
+/// [known] is `None` when the not-imported pass does not run.
+pub fn compute(
+    q: &Request<'_, '_>,
+    budget_ms: u64,
+    max_suggestions: i64,
+    known: Option<&dyn Fn() -> Vec<KnownLibrary>>,
+) -> CompletionResult {
+    let in_scope = compute_in_scope(q, budget_ms, max_suggestions);
+    finalize(q, in_scope, max_suggestions, known)
 }
 
 /// Dart `NotImportedCompletionPass.computeSuggestions`. Returns whether

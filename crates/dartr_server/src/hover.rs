@@ -730,33 +730,54 @@ pub fn documentation(
     element: ElementId,
     templates: &HashMap<String, String>,
 ) -> Option<String> {
+    documentation_with(ctx, element, || templates)
+}
+
+/// Like [`documentation`], but only evaluates `get_templates` when the raw
+/// documentation comment contains a `{@macro` directive.
+pub fn documentation_with<'a>(
+    ctx: &Ctx<'_>,
+    element: ElementId,
+    get_templates: impl FnOnce() -> &'a HashMap<String, String>,
+) -> Option<String> {
     let element = element_with_documentation(ctx, element)?;
-    let (supers, interfaces) = find_overridden_elements(ctx, element);
-    let mut candidates = vec![element];
-    candidates.extend(supers);
-    candidates.extend(interfaces);
-    if matches!(element.tag(), Tag::Getter | Tag::Setter)
-        && let Some(v) = dartr_resolver::element_metadata::accessor_variable_any(ctx, element)
-    {
-        candidates.push(v);
-    }
-    let mut documented = None;
-    let mut documented_getter = None;
-    for candidate in candidates {
-        if documentation_comment(ctx, candidate).is_some() {
-            documented = Some(candidate);
-            break;
-        }
-        if documented_getter.is_none()
-            && candidate.tag() == Tag::Setter
-            && let Some(getter) = corresponding_getter(ctx, candidate)
-            && documentation_comment(ctx, getter).is_some()
+    let (documented, raw) = if let Some(raw) = documentation_comment(ctx, element) {
+        (element, raw)
+    } else {
+        let (supers, interfaces) = find_overridden_elements(ctx, element);
+        let mut candidates = vec![element];
+        candidates.extend(supers);
+        candidates.extend(interfaces);
+        if matches!(element.tag(), Tag::Getter | Tag::Setter)
+            && let Some(v) = dartr_resolver::element_metadata::accessor_variable_any(ctx, element)
         {
-            documented_getter = Some(getter);
+            candidates.push(v);
         }
-    }
-    let documented = documented.or(documented_getter)?;
-    let raw = documentation_comment(ctx, documented)?;
+        let mut documented = None;
+        let mut documented_getter = None;
+        for candidate in candidates {
+            if candidate != element
+                && let Some(raw) = documentation_comment(ctx, candidate)
+            {
+                documented = Some((candidate, raw));
+                break;
+            }
+            if documented_getter.is_none()
+                && candidate.tag() == Tag::Setter
+                && let Some(getter) = corresponding_getter(ctx, candidate)
+                && let Some(raw) = documentation_comment(ctx, getter)
+            {
+                documented_getter = Some((getter, raw));
+            }
+        }
+        documented.or(documented_getter)?
+    };
+    let empty_templates = HashMap::new();
+    let templates = if raw.contains("{@macro") {
+        get_templates()
+    } else {
+        &empty_templates
+    };
     let mut full = process_dartdoc(&raw, templates);
     let documented_class = ctx.element_data(documented).and_then(|d| d.enclosing);
     let element_class = ctx.element_data(element).and_then(|d| d.enclosing);
