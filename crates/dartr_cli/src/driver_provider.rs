@@ -1128,8 +1128,7 @@ impl DriverSession {
                 let mut out = driver.analyze_libraries(&jobs, |_, units, result| {
                     result.ok().map(|library| (library, units.to_vec()))
                 });
-                let (mut library, mut inputs) = out.pop().flatten()?;
-                compact_unit_inputs(&mut inputs);
+                let (library, inputs) = out.pop().flatten()?;
                 let features = {
                     let sink = dartr_element::NoopSink;
                     let features = dartr_element::FeatureSet::default();
@@ -1147,12 +1146,6 @@ impl DriverSession {
                     .units
                     .iter()
                     .any(|u| priority_files.contains(&*u.path));
-                if !is_priority {
-                    for u in &mut library.units {
-                        u.ast.shrink_to_fit();
-                        u.rt = Default::default();
-                    }
-                }
                 let entry = Arc::new(ResolvedLibraryResult {
                     context,
                     world,
@@ -2147,8 +2140,7 @@ where
             && let Some(features) = features_opt
         {
             let key = (context, first.path.to_string());
-            let mut inputs = units.to_vec();
-            compact_unit_inputs(&mut inputs);
+            let inputs = units.to_vec();
             let entry = Arc::new(ResolvedLibraryResult {
                 context,
                 world: world.clone(),
@@ -2231,30 +2223,6 @@ where
         )));
     }
     (outcomes, priority_entry, unit_indexes)
-}
-
-fn compact_unit_inputs(inputs: &mut [UnitInput]) {
-    for u in inputs {
-        u.directive_diagnostics = Vec::new();
-        u.resolved_uris = dartr_ast::NodeMap::default();
-        if let Some(p) = Arc::get_mut(&mut u.parsed) {
-            p.ast = dartr_ast::Ast::new(p.ast.tokens.clone());
-            p.invalid_nodes = Vec::new();
-            p.dot_shorthands = Vec::new();
-        } else {
-            let p = &*u.parsed;
-            u.parsed = Arc::new(dartr_ast_builder::ParsedUnit {
-                ast: dartr_ast::Ast::new(p.ast.tokens.clone()),
-                unit: p.unit,
-                diagnostics: p.diagnostics.clone(),
-                line_info: p.line_info.clone(),
-                language_version: p.language_version,
-                feature_set: p.feature_set.clone(),
-                invalid_nodes: Vec::new(),
-                dot_shorthands: Vec::new(),
-            });
-        }
-    }
 }
 
 fn panic_message(e: &(dyn std::any::Any + Send)) -> String {

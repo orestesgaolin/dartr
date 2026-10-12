@@ -110,21 +110,10 @@ impl Driver {
         let pkg_info = (!enabled.is_empty())
             .then(|| dartr_lints::LintPackageInfo::for_defining_path(&self.fs.file(file).path));
         let mut library = analyze_library(&input);
-        for u in &mut library.units {
-            u.rt.scope_lookup_result = Default::default();
-        }
         let diagnostics =
             crate::lints::compute_lints_with_package(&input, &library, enabled, pkg_info.as_ref());
         for (unit, lints) in library.units.iter_mut().zip(diagnostics) {
             unit.diagnostics.extend(lints);
-            unit.ast.shrink_to_fit();
-            unit.tables.compact();
-            let mut mutated = std::mem::take(&mut unit.rt.potentially_mutated_in_scope);
-            mutated.shrink_to_fit();
-            unit.rt = dartr_resolver::tables::ResolverTables {
-                potentially_mutated_in_scope: mutated,
-                ..Default::default()
-            };
         }
         Some(library)
     }
@@ -250,15 +239,10 @@ impl Driver {
                         external: Some(&external),
                         doc_import_libraries: doc_imports.clone(),
                     };
-                    let mut result = catch_unwind(AssertUnwindSafe(|| {
+                    let result = catch_unwind(AssertUnwindSafe(|| {
                         analyze_library_with_unignorable(&input, unignorable)
                     }))
                     .map_err(panic_message);
-                    if let Ok(resolved) = &mut result {
-                        for u in &mut resolved.units {
-                            u.rt.scope_lookup_result = Default::default();
-                        }
-                    }
                     let lints = match &result {
                         Ok(resolved) if !rules.is_empty() => {
                             let enabled: Vec<&str> = rules.iter().map(String::as_str).collect();
@@ -274,11 +258,6 @@ impl Driver {
                         }
                         _ => Vec::new(),
                     };
-                    if let Ok(resolved) = &mut result {
-                        for u in &mut resolved.units {
-                            u.rt = Default::default();
-                        }
-                    }
                     if mem_stats && let Ok(resolved) = &result {
                         let mut lib_cap = 0usize;
                         for u in &resolved.units {
