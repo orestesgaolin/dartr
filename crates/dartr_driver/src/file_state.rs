@@ -108,7 +108,7 @@ pub enum DirectiveUri {
 }
 
 /// Dart `DirectiveUris`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DirectiveUris {
     pub primary: DirectiveUri,
     pub configurations: Vec<DirectiveUri>,
@@ -492,6 +492,13 @@ impl FileSystemState {
     pub fn clear_all_parsed(&self) {
         for f in &self.files {
             f.drop_parsed();
+        }
+    }
+
+    /// Invalidates [path] in the shared `SdkCache`, if present.
+    pub fn invalidate_cached_file(&self, path: &str) {
+        if let Some(cache) = &self.sdk_cache {
+            cache.invalidate_file(path);
         }
     }
 

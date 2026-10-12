@@ -702,13 +702,16 @@ impl Server {
         {
             return cached.clone();
         }
+        let units = self.session.uncached_template_units(collection, path, |p| {
+            self.file_templates_cache.contains_key(p)
+        });
         let mut templates = std::collections::HashMap::new();
-        for (unit_path, parsed) in self.session.known_parsed_units(collection, path) {
+        for (unit_path, parsed) in units {
             if let Some(entries) = self.file_templates_cache.get(&*unit_path) {
                 for (k, v) in entries {
                     templates.insert(k.clone(), v.clone());
                 }
-            } else {
+            } else if let Some(parsed) = parsed {
                 let mut file_map = std::collections::HashMap::new();
                 crate::hover::extract_templates_from_unit(&parsed.ast, parsed.unit, &mut file_map);
                 let mut entries: Vec<(String, String)> = file_map.into_iter().collect();
@@ -718,6 +721,9 @@ impl Server {
                 }
                 self.file_templates_cache
                     .insert(unit_path.to_string(), entries);
+            } else {
+                self.file_templates_cache
+                    .insert(unit_path.to_string(), Vec::new());
             }
         }
         let result = Arc::new(templates);

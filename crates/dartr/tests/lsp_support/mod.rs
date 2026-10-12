@@ -295,9 +295,8 @@ impl LspClient {
         while !predicate(self) && Instant::now() < deadline {
             self.next_message(Instant::now() + QUIET);
         }
-        let matched = predicate(self);
         self.settle(false);
-        matched
+        predicate(self)
     }
 
     /// The next message (handled), or `None` at [deadline].
@@ -398,14 +397,14 @@ impl LspClient {
         let response = self.request("shutdown", Value::Null);
         self.notify("exit", Value::Null);
         drop(self.stdin.take());
-        let code = wait_with_timeout(&mut self.child, Duration::from_secs(30));
+        let code = wait_with_timeout(&mut self.child, self.step_timeout);
         (response, code)
     }
 
     /// Closes stdin without `shutdown` and returns the exit code.
     pub fn close(mut self) -> i32 {
         drop(self.stdin.take());
-        wait_with_timeout(&mut self.child, Duration::from_secs(30))
+        wait_with_timeout(&mut self.child, self.step_timeout)
     }
 }
 
