@@ -29,7 +29,7 @@ pub fn has_overlays() -> bool {
     HAS_OVERLAYS.load(Ordering::Acquire)
 }
 
-/// Returns `true` if [path] currently has an active in-memory overlay.
+/// Returns `true` if [path] currently has an active in-memory file overlay.
 #[inline]
 pub fn has_overlay(path: &str) -> bool {
     if !has_overlays() {

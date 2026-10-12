@@ -292,6 +292,7 @@ struct Server<W: Write> {
 
 /// Runs line-delimited JSON until shutdown or input closure.
 pub fn run<R: BufRead, W: Write>(options: ServerOptions, input: R, channel: Channel<W>) -> i32 {
+    let cache_dir = options.cache_dir();
     let mut server = Server {
         channel,
         options,
@@ -315,7 +316,7 @@ pub fn run<R: BufRead, W: Write>(options: ServerOptions, input: R, channel: Chan
         diagnostic_listener: None,
         request_stats: FxHashMap::default(),
         collection: None,
-        driver_session: DriverSession::default(),
+        driver_session: DriverSession::with_cache_dir(cache_dir),
         owned_files: OwnedFiles::default(),
         search_scope: None,
         search_words: FxHashMap::default(),
@@ -1842,7 +1843,7 @@ impl<W: Write> Server<W> {
                     ..Default::default()
                 },
             ));
-            self.driver_session = DriverSession::default();
+            self.driver_session = DriverSession::with_cache_dir(self.options.cache_dir());
             self.driver_session.set_priority_files(&self.priority);
             self.owned_files = OwnedFiles::default();
             self.search_scope = None;

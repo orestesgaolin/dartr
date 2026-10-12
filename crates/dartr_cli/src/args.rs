@@ -55,6 +55,38 @@ impl Default for AnalyzeArgs {
     }
 }
 
+impl AnalyzeArgs {
+    /// Effective cache directory from `--cache` or `DARTR_CACHE_DIR` (`None`
+    /// when neither is set).
+    pub fn cache_dir(&self) -> Option<String> {
+        resolve_cache_dir(self.cache.as_deref(), false)
+    }
+}
+
+/// Resolves the effective result cache directory from the CLI `--cache` option,
+/// the `--disable-file-byte-store` flag, and the `DARTR_CACHE_DIR` environment
+/// variable. Returns `None` when disabled or when neither is set.
+pub fn resolve_cache_dir(cli_cache: Option<&str>, disable_file_byte_store: bool) -> Option<String> {
+    let env_cache = std::env::var("DARTR_CACHE_DIR").ok();
+    resolve_cache_dir_with_env(cli_cache, disable_file_byte_store, env_cache.as_deref())
+}
+
+/// Resolves the effective result cache directory given explicit CLI, flag, and
+/// environment values.
+pub fn resolve_cache_dir_with_env(
+    cli_cache: Option<&str>,
+    disable_file_byte_store: bool,
+    env_cache: Option<&str>,
+) -> Option<String> {
+    if disable_file_byte_store {
+        return None;
+    }
+    if let Some(dir) = cli_cache {
+        return (!dir.is_empty()).then(|| dir.to_string());
+    }
+    env_cache.filter(|dir| !dir.is_empty()).map(str::to_string)
+}
+
 /// A usage error (`UsageException`): the message, printed with the usage.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UsageError(pub String);
@@ -270,6 +302,35 @@ mod tests {
         assert_eq!(
             p(&["--fatal-infos=true"]).unwrap_err().0,
             "Flag option \"--fatal-infos\" should not be given a value."
+        );
+    }
+
+    #[test]
+    fn parses_cache_option_and_resolves_cache_dir() {
+        let a = p(&["--cache=/tmp/dartr_cache", "lib"]).unwrap();
+        assert_eq!(a.cache.as_deref(), Some("/tmp/dartr_cache"));
+        assert_eq!(a.cache_dir().as_deref(), Some("/tmp/dartr_cache"));
+
+        let b = p(&["--cache", "/tmp/dartr_cache_2"]).unwrap();
+        assert_eq!(b.cache.as_deref(), Some("/tmp/dartr_cache_2"));
+
+        assert_eq!(resolve_cache_dir_with_env(None, false, None), None);
+        assert_eq!(resolve_cache_dir_with_env(None, false, Some("")), None);
+        assert_eq!(
+            resolve_cache_dir_with_env(None, false, Some("/tmp/from_env")),
+            Some("/tmp/from_env".to_string())
+        );
+        assert_eq!(
+            resolve_cache_dir_with_env(Some("/tmp/from_cli"), false, Some("/tmp/from_env")),
+            Some("/tmp/from_cli".to_string())
+        );
+        assert_eq!(
+            resolve_cache_dir_with_env(Some("/tmp/from_cli"), true, Some("/tmp/from_env")),
+            None
+        );
+        assert_eq!(
+            resolve_cache_dir_with_env(None, true, Some("/tmp/from_env")),
+            None
         );
     }
 }

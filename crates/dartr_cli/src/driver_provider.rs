@@ -47,8 +47,16 @@ use crate::provider::{
 };
 
 /// The diagnostics of the analysis driver. See the module documentation.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct DriverProvider;
+#[derive(Clone, Debug, Default)]
+pub struct DriverProvider {
+    pub cache_dir: Option<String>,
+}
+
+impl DriverProvider {
+    pub fn new(cache_dir: Option<String>) -> Self {
+        Self { cache_dir }
+    }
+}
 
 impl DiagnosticsProvider for DriverProvider {
     fn diagnostics_for_file(
@@ -65,7 +73,20 @@ impl DiagnosticsProvider for DriverProvider {
         collection: &AnalysisContextCollection,
         files: &[AnalyzedFile],
     ) -> Vec<FileDiagnostics> {
-        DriverSession::default().diagnostics(collection, files)
+        let cache = crate::args::resolve_cache_dir(self.cache_dir.as_deref(), false);
+        self.diagnostics_for_files_with_cache(collection, files, cache.as_deref())
+    }
+
+    fn diagnostics_for_files_with_cache(
+        &self,
+        collection: &AnalysisContextCollection,
+        files: &[AnalyzedFile],
+        cache_dir: Option<&str>,
+    ) -> Vec<FileDiagnostics> {
+        let cache = cache_dir
+            .map(str::to_owned)
+            .or_else(|| self.cache_dir.clone());
+        DriverSession::with_cache_dir(cache).diagnostics(collection, files)
     }
 }
 
@@ -135,6 +156,8 @@ pub struct DriverSession {
     /// Cached `(world_valid, ordered_known_libraries)` per `(context, pkg_root)`
     /// for `link_known_libraries_ordered`.
     known_libraries_cache: HashMap<(usize, Option<String>), (bool, Arc<Vec<KnownLibrary>>)>,
+    /// Optional persistent result cache directory (`--cache` / `DARTR_CACHE_DIR`).
+    cache_dir: Option<String>,
 }
 
 /// A library file that a driver knows (Dart `FileSystemState.knownFiles`
@@ -226,6 +249,24 @@ enum Outcome {
 }
 
 impl DriverSession {
+    /// Creates a new session with the given optional result cache directory.
+    pub fn with_cache_dir(cache_dir: Option<String>) -> Self {
+        Self {
+            cache_dir,
+            ..Self::default()
+        }
+    }
+
+    /// Returns the configured result cache directory, if any.
+    pub fn cache_dir(&self) -> Option<&str> {
+        self.cache_dir.as_deref()
+    }
+
+    /// Sets the result cache directory.
+    pub fn set_cache_dir(&mut self, cache_dir: Option<String>) {
+        self.cache_dir = cache_dir;
+    }
+
     /// Updates the priority (open) files (Dart `AnalysisDriver.priorityFiles=`).
     /// Evicts cached resolved libraries that no longer contain any priority file.
     pub fn set_priority_files(&mut self, files: &[String]) {
@@ -1550,6 +1591,7 @@ impl DriverSession {
             .find(|f| &*f.uri_str == "dart:core")
             .map(|f| f.id);
         if let Some(core) = core {
+            fs.discover_doc_imports(&[core]);
             order.insert(fs, core);
             if fs.file(core).content.is_some() {
                 let c = fs.file(core).c();
@@ -1636,6 +1678,9 @@ impl DriverSession {
     /// and invalidates what depends on it (design §4.2). Returns the paths
     /// of the units of the libraries to analyze again.
     pub fn change_file(&mut self, path: &str) -> Vec<String> {
+        if let Some(g) = &self.generation {
+            dartr_driver::driver::invalidate_cached_file(g, path);
+        }
         let mut result: Vec<String> = Vec::new();
         let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
         for (&context, driver) in self.drivers.iter_mut() {
@@ -2187,7 +2232,8 @@ impl KnownOrder {
 
     /// Dart `_LibraryWalker.evaluateScc`: the doc imports of the files of
     /// the cycle (sorted by path) are created by `addDirectivesSignature`.
-    fn evaluate_scc(&mut self, fs: &dartr_driver::file_state::FileSystemState, scc: &[FileId]) {
+    fn evaluate_scc(&mut self, fs: &mut dartr_driver::file_state::FileSystemState, scc: &[FileId]) {
+        fs.discover_doc_imports(scc);
         let mut files: Vec<FileId> = scc.iter().flat_map(|&l| fs.library_files(l)).collect();
         files.sort_by(|a, b| fs.file(*a).path.cmp(&fs.file(*b).path));
         for f in files {
@@ -2202,7 +2248,7 @@ impl KnownOrder {
     }
 
     /// Dart `DependencyWalker.walk` (Tarjan).
-    fn walk(&mut self, fs: &dartr_driver::file_state::FileSystemState, start: FileId) {
+    fn walk(&mut self, fs: &mut dartr_driver::file_state::FileSystemState, start: FileId) {
         if self.evaluated.contains(&start) {
             return;
         }
@@ -2213,7 +2259,7 @@ impl KnownOrder {
         }
         fn strong_connect(
             o: &mut KnownOrder,
-            fs: &dartr_driver::file_state::FileSystemState,
+            fs: &mut dartr_driver::file_state::FileSystemState,
             st: &mut State,
             node: FileId,
         ) {
