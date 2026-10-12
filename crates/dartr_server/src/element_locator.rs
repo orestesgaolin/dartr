@@ -119,7 +119,7 @@ impl Unit<'_, '_> {
             } else if ast.is::<DottedName>(parent) {
                 let grand = ast.parent(parent);
                 if let Some(l) = grand.and_then(|g| ast.cast::<LibraryDirective>(g)) {
-                    return self.element(l);
+                    return self.library_directive_element(l.raw());
                 }
                 return None;
             } else if let Some(m) = ast.cast::<MethodInvocation>(parent) {
@@ -161,6 +161,19 @@ impl Unit<'_, '_> {
         self.element(node)
     }
 
+    /// Dart `LibraryDirective.element`: the library of the unit.
+    pub fn library_directive_element(&self, node: NodeId) -> Option<ElementId> {
+        self.element(node).or_else(|| {
+            let unit = self.ast.cast::<CompilationUnit>(self.ast.parent(node)?)?;
+            let fragment = self
+                .tables
+                .declared_fragment
+                .get(unit.raw())?
+                .cast::<dartr_element::LibraryFragment>()?;
+            Some(self.ctx.fragment(fragment).library.raw())
+        })
+    }
+
     /// Dart `ElementLocator.locate(node)`.
     pub fn locate(&self, node: NodeId) -> Option<ElementId> {
         let ast = self.ast;
@@ -191,17 +204,7 @@ impl Unit<'_, '_> {
                     return self.element(node);
                 }
                 if ast.is::<LibraryDirective>(node) {
-                    // Dart `LibraryDirective.element`: the library of the
-                    // unit.
-                    return self.element(node).or_else(|| {
-                        let unit = ast.cast::<CompilationUnit>(ast.parent(node)?)?;
-                        let fragment = self
-                            .tables
-                            .declared_fragment
-                            .get(unit.raw())?
-                            .cast::<dartr_element::LibraryFragment>()?;
-                        Some(self.ctx.fragment(fragment).library.raw())
-                    });
+                    return self.library_directive_element(node);
                 }
                 self.element(node)
             }
@@ -247,7 +250,7 @@ impl Unit<'_, '_> {
             NodeKind::DottedName => {
                 let parent = ast.parent(node)?;
                 ast.cast::<LibraryDirective>(parent)
-                    .and_then(|l| self.element(l))
+                    .and_then(|l| self.library_directive_element(l.raw()))
             }
             NodeKind::ExportDirective | NodeKind::ImportDirective => self.directive_library(node),
             NodeKind::InstanceCreationExpression => {

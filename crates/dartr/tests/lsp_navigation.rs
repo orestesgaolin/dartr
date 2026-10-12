@@ -766,3 +766,86 @@ fn lsp_navigation_corpus() {
         &dartr,
     );
 }
+
+/// Regression parity test for hover, definition, and references edge cases:
+/// - hover on local variables with default values, pattern variables in class
+///   methods, and named arguments of generic constructors/methods;
+/// - definition on `library;` and `library pkg.named;` directives, and CRLF
+///   (`\r\n`) files;
+/// - references on fields with `this.field` parameters when another constructor
+///   parameter shares the name, shadowed identifiers (`computeReferencedNames`),
+///   and closed dangling `part of` files referencing `dart:core`.
+#[test]
+fn lsp_navigation_sweep_regressions() {
+    if !dart_available() {
+        eprintln!("skipped: `dart` is not on PATH");
+        return;
+    }
+    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("lsp_nav_sweep_regressions");
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let root = root.canonicalize().unwrap();
+    let write = |rel: &str, content: &str| {
+        let path = root.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, content).unwrap();
+    };
+    write(
+        "pkg/pubspec.yaml",
+        "name: pkg\nenvironment:\n  sdk: ^3.9.0\n",
+    );
+    write(
+        "pkg/.dart_tool/package_config.json",
+        r#"{"configVersion":2,"packages":[{"name":"pkg","rootUri":"../","packageUri":"lib/","languageVersion":"3.9"}]}"#,
+    );
+    write(
+        "pkg/lib/named_lib.dart",
+        "/// A named library.\nlibrary pkg.named;\n\nclass GenericBox<T> {\n  final T item;\n  final T? tag;\n  GenericBox(this.item, {this.tag});\n}\n\nextension GenericBoxExt<T> on GenericBox<T> {\n  T get unwrapped => item;\n}\n",
+    );
+    write(
+        "pkg/lib/crlf.dart",
+        "library;\r\n\r\nimport 'named_lib.dart';\r\n\r\nclass Model {\r\n  final int sharedName;\r\n  Model(this.sharedName);\r\n\r\n  int inspect(Object input) {\r\n    final localInit = 42;\r\n    if (input case int patVar) {\r\n      return patVar + localInit + sharedName;\r\n    }\r\n    return localInit;\r\n  }\r\n}\r\n\r\nclass Unrelated {\r\n  Unrelated(int sharedName);\r\n}\r\n\r\nint useGeneric(Model m, Sink<int> sink) {\r\n  final box = GenericBox<Model>(m, tag: m);\r\n  sink.close();\r\n  return box.unwrapped.sharedName;\r\n}\r\n",
+    );
+    write(
+        "pkg/lib/shadowing.dart",
+        "class Shadowed {\n  final int token = 1;\n  String fmt(int a, int b) => '${a}\\n${b}';\n}\n\nint readToken(Shadowed s) => s.token;\n\nint localShadow(int token) {\n  final inner = token + 1;\n  return inner;\n}\n",
+    );
+    write(
+        "pkg/lib/dangling_part.dart",
+        "part of 'nonexistent_owner.dart';\n\nvoid closeDangling(Sink<int> s) {\n  s.close();\n}\n",
+    );
+
+    let files: Vec<PathBuf> = dart_files(&root)
+        .into_iter()
+        .filter(|p| p.file_name().and_then(|n| n.to_str()) != Some("dangling_part.dart"))
+        .collect();
+    let all_methods: Vec<&str> = METHODS
+        .iter()
+        .copied()
+        .chain([
+            "textDocument/signatureHelp",
+            "textDocument/semanticTokens/full",
+        ])
+        .collect();
+    let dart = run_requests("dart", &root, &files, 1, &all_methods);
+    let dartr = run_requests(dartr_bin(), &root, &files, 1, &all_methods);
+    let counts = compare(&all_methods, "sweep regressions", &dart, &dartr);
+    for &m in &all_methods {
+        let (same, total) = counts.get(m).copied().unwrap_or((0, 0));
+        // Also count responses with identical sets of locations.
+        let a = &dart[m];
+        let b = &dartr[m];
+        let same_or_reordered = a
+            .iter()
+            .zip(b)
+            .filter(|((_, _, ra), (_, _, rb))| {
+                ra == rb || (sorted_result(ra).is_some() && sorted_result(ra) == sorted_result(rb))
+            })
+            .count();
+        assert!(total > 0, "{m}: expected non-zero test positions");
+        assert_eq!(
+            same_or_reordered, total,
+            "{m}: {same} exact ({same_or_reordered} unordered) of {total} identical"
+        );
+    }
+}

@@ -427,6 +427,14 @@ impl ContextTypeVisitor<'_, '_, '_> {
         let found = match found {
             Some(f) => f,
             None => {
+                let unit = crate::element_locator::Unit {
+                    ctx: self.ctx(),
+                    ast: self.ast(),
+                    tables,
+                };
+                if let Some(p) = crate::signature::invoke_type_parameter(&unit, argument) {
+                    return Some(p.ty);
+                }
                 let ast = self.ast();
                 let parent = ast.parent(argument)?;
                 let is_operand = ast

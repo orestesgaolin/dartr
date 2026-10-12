@@ -591,12 +591,16 @@ impl Server {
             }
         } else if let Some(n) = ast.cast::<NamedArgument>(node) {
             origin = Some(token_range(ast[n].name));
-            ty = variable_type(dartr_resolver::error::support::corresponding_parameter(
-                &ctx,
-                ast,
-                &unit.tables,
-                n.raw(),
-            ));
+            ty = crate::signature::invoke_type_parameter(&u, n.raw())
+                .map(|p| p.ty)
+                .or_else(|| {
+                    variable_type(dartr_resolver::error::support::corresponding_parameter(
+                        &ctx,
+                        ast,
+                        &unit.tables,
+                        n.raw(),
+                    ))
+                });
         } else if ast.is::<Expression>(node) {
             origin = Some((ast.offset(node), ast.length(node)));
             let mut done = false;
@@ -735,7 +739,12 @@ impl Server {
             return library_uri.to_string();
         }
         let root = self.collection.as_ref().and_then(|c| {
-            let context = c.context_for(library_path)?;
+            let context = c.context_for(library_path).or_else(|| {
+                c.contexts
+                    .iter()
+                    .find(|ctx| dartr_project::paths::is_within(&ctx.root.root, library_path))
+                    .or_else(|| c.contexts.first())
+            })?;
             let root = context
                 .root
                 .workspace

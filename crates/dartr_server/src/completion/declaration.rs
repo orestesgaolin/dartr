@@ -2002,19 +2002,6 @@ impl DeclarationHelper {
     /// Dart `_bestMember`.
     fn best_member(&self, ctx: &Ctx<'_>, list: &[ElemRef]) -> ElemRef {
         let first = list[0];
-        if self.cfg.must_be_assignable {
-            for &m in list {
-                let base = member::base_element(ctx, m);
-                if base.tag() == Tag::Setter {
-                    if elem::is_origin_variable(ctx, base) {
-                        if let Some(g) = member::corresponding_getter(ctx, m) {
-                            return g;
-                        }
-                    }
-                    return m;
-                }
-            }
-        }
         if member::base_element(ctx, first).tag() == Tag::Setter {
             for &m in &list[1..] {
                 if member::base_element(ctx, m).tag() == Tag::Getter {

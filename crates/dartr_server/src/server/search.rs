@@ -160,11 +160,12 @@ pub fn dart_hash_map_order(hashes: &[u32]) -> Vec<usize> {
     buckets.into_iter().flatten().collect()
 }
 
-/// The identifier-like words of [content] (a superset of Dart
-/// `FileState.referencedNames`). A word with `$` also gives its parts: in a
-/// string, `$name` is an interpolation of `name`.
+/// The identifier-like words of [content] (a fast superset pre-filter for
+/// Dart `FileState.referencedNames`, marked with `"\0"` until upgraded to
+/// exact `compute_referenced_names`).
 fn words(content: &str) -> HashSet<String> {
     let mut out = HashSet::new();
+    out.insert("\0".to_string());
     for w in content.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$')) {
         if w.is_empty() {
             continue;
@@ -177,6 +178,318 @@ fn words(content: &str) -> HashSet<String> {
         out.insert(w.to_string());
     }
     out
+}
+
+/// Dart `computeReferencedNames(unit)` (`pkg/analyzer/lib/src/dart/analysis/referenced_names.dart`).
+fn compute_referenced_names(content: &str) -> HashSet<String> {
+    let parsed = dartr_ast_builder::parse_file(content, "", (3, 13), &[]);
+    let ast = &parsed.ast;
+    let unit = parsed.unit;
+    let mut computer = ReferencedNamesComputer {
+        names: HashSet::new(),
+        import_prefix_names: HashSet::new(),
+        scopes: Vec::new(),
+    };
+    ast.accept(unit, &mut computer);
+    computer.names
+}
+
+struct ReferencedNamesComputer {
+    names: HashSet<String>,
+    import_prefix_names: HashSet<String>,
+    scopes: Vec<HashSet<String>>,
+}
+
+impl ReferencedNamesComputer {
+    fn add_token(scope: &mut HashSet<String>, ast: &Ast, token: Option<dartr_syntax::TokenId>) {
+        if let Some(t) = token {
+            let lex = ast.tokens.lexeme(t);
+            if !lex.is_empty() {
+                scope.insert(lex.to_string());
+            }
+        }
+    }
+
+    fn add_variable_names(
+        scope: &mut HashSet<String>,
+        ast: &Ast,
+        variables: Id<VariableDeclarationList>,
+    ) {
+        for &v in ast.list(ast[variables].variables) {
+            Self::add_token(scope, ast, Some(ast[v].name));
+        }
+    }
+
+    fn add_type_parameters(
+        scope: &mut HashSet<String>,
+        ast: &Ast,
+        type_params: Option<Id<TypeParameterList>>,
+    ) {
+        if let Some(tp) = type_params {
+            for &p in ast.list(ast[tp].type_parameters) {
+                Self::add_token(scope, ast, Some(ast[p].name));
+            }
+        }
+    }
+
+    fn add_formal_parameters(
+        scope: &mut HashSet<String>,
+        ast: &Ast,
+        params: Option<Id<FormalParameterList>>,
+    ) {
+        if let Some(pl) = params {
+            for &p in ast.list_raw(ast[pl].parameters) {
+                let tok = match ast.kind(p) {
+                    NodeKind::RegularFormalParameter => {
+                        ast[Id::<RegularFormalParameter>::from_raw(p)].name
+                    }
+                    NodeKind::FieldFormalParameter => {
+                        Some(ast[Id::<FieldFormalParameter>::from_raw(p)].name)
+                    }
+                    NodeKind::SuperFormalParameter => {
+                        Some(ast[Id::<SuperFormalParameter>::from_raw(p)].name)
+                    }
+                    _ => None,
+                };
+                Self::add_token(scope, ast, tok);
+            }
+        }
+    }
+
+    fn class_name_part_info(
+        ast: &Ast,
+        name_part: Id<ClassNamePart>,
+    ) -> (dartr_syntax::TokenId, Option<Id<TypeParameterList>>) {
+        if let Some(n) = ast.cast::<NameWithTypeParameters>(name_part.raw()) {
+            (ast[n].type_name, ast[n].type_parameters)
+        } else {
+            let p = ast
+                .cast::<PrimaryConstructorDeclaration>(name_part.raw())
+                .expect("ClassNamePart");
+            (ast[p].type_name, ast[p].type_parameters)
+        }
+    }
+
+    fn add_class_body_members(scope: &mut HashSet<String>, ast: &Ast, body: Id<ClassBody>) {
+        if let Some(b) = ast.cast::<BlockClassBody>(body.raw()) {
+            for &m in ast.list_raw(ast[b].members) {
+                if let Some(f) = ast.cast::<FieldDeclaration>(m) {
+                    Self::add_variable_names(scope, ast, ast[f].fields);
+                } else if let Some(md) = ast.cast::<MethodDeclaration>(m) {
+                    Self::add_token(scope, ast, Some(ast[md].name));
+                }
+            }
+        }
+    }
+
+    fn is_shadowed(&self, name: &str) -> bool {
+        self.scopes.iter().rev().any(|s| s.contains(name))
+    }
+
+    fn add_if_not_shadowed(
+        &mut self,
+        ast: &Ast,
+        token: dartr_syntax::TokenId,
+        has_import_prefix: bool,
+    ) {
+        let name = ast.tokens.lexeme(token);
+        if self.is_shadowed(name) && !has_import_prefix {
+            return;
+        }
+        if self.import_prefix_names.contains(name) {
+            return;
+        }
+        self.names.insert(name.to_string());
+    }
+
+    fn is_qualified(ast: &Ast, node: Id<SimpleIdentifier>) -> bool {
+        let Some(parent) = ast.parent(node) else {
+            return false;
+        };
+        if let Some(p) = ast.cast::<PrefixedIdentifier>(parent) {
+            return ast[p].identifier == node;
+        }
+        if let Some(p) = ast.cast::<PropertyAccess>(parent) {
+            return ast[p].property_name == node;
+        }
+        if let Some(p) = ast.cast::<ConstructorName>(parent) {
+            return ast[p].name == Some(node);
+        }
+        if let Some(m) = ast.cast::<MethodInvocation>(parent) {
+            return ast[m].method_name == node
+                && dartr_resolver::ast_ext::method_invocation_real_target(ast, m).is_some();
+        }
+        false
+    }
+}
+
+impl AstVisitor for ReferencedNamesComputer {
+    fn visit_compilation_unit(&mut self, ast: &Ast, node: Id<CompilationUnit>) {
+        let mut scope = HashSet::new();
+        for &d in ast.list_raw(ast[node].declarations) {
+            if let Some(c) = ast.cast::<ClassDeclaration>(d) {
+                let (name, _) = Self::class_name_part_info(ast, ast[c].name_part);
+                Self::add_token(&mut scope, ast, Some(name));
+            } else if let Some(e) = ast.cast::<EnumDeclaration>(d) {
+                let (name, _) = Self::class_name_part_info(ast, ast[e].name_part);
+                Self::add_token(&mut scope, ast, Some(name));
+            } else if let Some(ext) = ast.cast::<ExtensionDeclaration>(d) {
+                Self::add_token(&mut scope, ast, ast[ext].name);
+            } else if let Some(et) = ast.cast::<ExtensionTypeDeclaration>(d) {
+                let (name, _) = Self::class_name_part_info(ast, ast[et].name_part);
+                Self::add_token(&mut scope, ast, Some(name));
+            } else if let Some(f) = ast.cast::<FunctionDeclaration>(d) {
+                Self::add_token(&mut scope, ast, Some(ast[f].name));
+            } else if let Some(m) = ast.cast::<MixinDeclaration>(d) {
+                Self::add_token(&mut scope, ast, Some(ast[m].name));
+            } else if let Some(v) = ast.cast::<TopLevelVariableDeclaration>(d) {
+                Self::add_variable_names(&mut scope, ast, ast[v].variables);
+            } else if let Some(ta) = ast.cast::<ClassTypeAlias>(d) {
+                Self::add_token(&mut scope, ast, Some(ast[ta].name));
+            } else if let Some(ta) = ast.cast::<FunctionTypeAlias>(d) {
+                Self::add_token(&mut scope, ast, Some(ast[ta].name));
+            } else if let Some(ta) = ast.cast::<GenericTypeAlias>(d) {
+                Self::add_token(&mut scope, ast, Some(ast[ta].name));
+            }
+        }
+        self.scopes.push(scope);
+        ast.visit_children(node, self);
+        self.scopes.pop();
+    }
+
+    fn visit_block(&mut self, ast: &Ast, node: Id<Block>) {
+        let mut scope = HashSet::new();
+        for &s in ast.list_raw(ast[node].statements) {
+            if let Some(fd) = ast.cast::<FunctionDeclarationStatement>(s) {
+                let f = ast[fd].function_declaration;
+                Self::add_token(&mut scope, ast, Some(ast[f].name));
+            } else if let Some(vd) = ast.cast::<VariableDeclarationStatement>(s) {
+                Self::add_variable_names(&mut scope, ast, ast[vd].variables);
+            }
+        }
+        self.scopes.push(scope);
+        ast.visit_children(node, self);
+        self.scopes.pop();
+    }
+
+    fn visit_class_declaration(&mut self, ast: &Ast, node: Id<ClassDeclaration>) {
+        let mut scope = HashSet::new();
+        let (_, tp) = Self::class_name_part_info(ast, ast[node].name_part);
+        Self::add_type_parameters(&mut scope, ast, tp);
+        Self::add_class_body_members(&mut scope, ast, ast[node].body);
+        self.scopes.push(scope);
+        ast.visit_children(node, self);
+        self.scopes.pop();
+    }
+
+    fn visit_class_type_alias(&mut self, ast: &Ast, node: Id<ClassTypeAlias>) {
+        let mut scope = HashSet::new();
+        Self::add_type_parameters(&mut scope, ast, ast[node].type_parameters);
+        self.scopes.push(scope);
+        ast.visit_children(node, self);
+        self.scopes.pop();
+    }
+
+    fn visit_constructor_declaration(&mut self, ast: &Ast, node: Id<ConstructorDeclaration>) {
+        let mut scope = HashSet::new();
+        Self::add_formal_parameters(&mut scope, ast, Some(ast[node].parameters));
+        self.scopes.push(scope);
+        ast.visit_children(node, self);
+        self.scopes.pop();
+    }
+
+    fn visit_constructor_name(&mut self, ast: &Ast, node: Id<ConstructorName>) {
+        if !ast
+            .parent(node)
+            .is_some_and(|p| ast.is::<ConstructorDeclaration>(p))
+        {
+            ast.visit_children(node, self);
+        }
+    }
+
+    fn visit_extension_type_declaration(&mut self, ast: &Ast, node: Id<ExtensionTypeDeclaration>) {
+        let mut scope = HashSet::new();
+        let (_, tp) = Self::class_name_part_info(ast, ast[node].name_part);
+        Self::add_type_parameters(&mut scope, ast, tp);
+        Self::add_class_body_members(&mut scope, ast, ast[node].body);
+        self.scopes.push(scope);
+        ast.visit_children(node, self);
+        self.scopes.pop();
+    }
+
+    fn visit_function_declaration(&mut self, ast: &Ast, node: Id<FunctionDeclaration>) {
+        let mut scope = HashSet::new();
+        let fe = ast[node].function_expression;
+        Self::add_type_parameters(&mut scope, ast, ast[fe].type_parameters);
+        Self::add_formal_parameters(&mut scope, ast, ast[fe].parameters);
+        self.scopes.push(scope);
+        ast.visit_children(node, self);
+        self.scopes.pop();
+    }
+
+    fn visit_function_type_alias(&mut self, ast: &Ast, node: Id<FunctionTypeAlias>) {
+        let mut scope = HashSet::new();
+        Self::add_type_parameters(&mut scope, ast, ast[node].type_parameters);
+        self.scopes.push(scope);
+        ast.visit_children(node, self);
+        self.scopes.pop();
+    }
+
+    fn visit_import_directive(&mut self, ast: &Ast, node: Id<ImportDirective>) {
+        if let Some(prefix) = ast[node].prefix {
+            self.import_prefix_names
+                .insert(ast.tokens.lexeme(ast[prefix].token).to_string());
+        }
+        ast.visit_children(node, self);
+    }
+
+    fn visit_method_declaration(&mut self, ast: &Ast, node: Id<MethodDeclaration>) {
+        let mut scope = HashSet::new();
+        Self::add_type_parameters(&mut scope, ast, ast[node].type_parameters);
+        Self::add_formal_parameters(&mut scope, ast, ast[node].parameters);
+        self.scopes.push(scope);
+        ast.visit_children(node, self);
+        self.scopes.pop();
+    }
+
+    fn visit_named_argument(&mut self, ast: &Ast, node: Id<NamedArgument>) {
+        self.names
+            .insert(ast.tokens.lexeme(ast[node].name).to_string());
+        ast.visit_children(node, self);
+    }
+
+    fn visit_named_type(&mut self, ast: &Ast, node: Id<NamedType>) {
+        if let Some(prefix) = ast[node].import_prefix {
+            self.add_if_not_shadowed(ast, ast[prefix].name, false);
+        }
+        self.add_if_not_shadowed(ast, ast[node].name, ast[node].import_prefix.is_some());
+        ast.visit_children(node, self);
+    }
+
+    fn visit_simple_identifier(&mut self, ast: &Ast, node: Id<SimpleIdentifier>) {
+        if support::in_declaration_context(ast, node) {
+            return;
+        }
+        if let Some(parent) = ast.parent(node)
+            && let Some(cd) = ast.cast::<ConstructorDeclaration>(parent)
+            && ast[cd].type_name == Some(node)
+        {
+            return;
+        }
+        let name = ast.tokens.lexeme(ast[node].token);
+        if !Self::is_qualified(ast, node) {
+            if self.is_shadowed(name) || self.import_prefix_names.contains(name) {
+                return;
+            }
+        }
+        self.names.insert(name.to_string());
+    }
+
+    fn visit_super_formal_parameter(&mut self, ast: &Ast, node: Id<SuperFormalParameter>) {
+        self.names
+            .insert(ast.tokens.lexeme(ast[node].name).to_string());
+        ast.visit_children(node, self);
+    }
 }
 
 /// Dart `Folder.getChildren` recursively: the Dart files under [folder], in
@@ -319,11 +632,13 @@ impl Server {
                 let sdk = context.sdk.as_ref().or(collection.sdk.as_ref());
                 let mut discovered = Vec::new();
                 if let Some(sdk) = sdk {
-                    discovered.extend(
-                        sdk.libraries()
-                            .iter()
-                            .filter_map(|l| sdk.map_dart_uri(&l.short_name)),
-                    );
+                    for lib in sdk
+                        .libraries()
+                        .iter()
+                        .filter_map(|l| sdk.map_dart_uri(&l.short_name))
+                    {
+                        discovered.push(lib);
+                    }
                 }
                 for package in context.packages.packages() {
                     dart_files_recursively(&package.lib, &mut discovered);
@@ -372,39 +687,75 @@ impl Server {
     }
 
     /// Populates `self.search_words` in parallel for any files in [owned]
-    /// that do not yet have cached words.
-    fn ensure_search_words(&mut self, owned: &[String]) {
+    /// that do not yet have cached words, and upgrades any candidate files
+    /// matching [names] to exact `compute_referenced_names` in parallel.
+    fn ensure_search_words(&mut self, owned: &[String], names: &[String]) {
+        use rayon::prelude::*;
         let missing: Vec<&String> = owned
             .iter()
             .filter(|f| !self.search_words.contains_key(*f))
             .collect();
-        if missing.len() <= 8 {
-            return;
+        if missing.len() > 8 {
+            let inputs: Vec<(String, Option<Arc<str>>)> = missing
+                .into_iter()
+                .map(|p| {
+                    let content = if let Some(d) = self.overlays.get(p.as_str()) {
+                        Some(Arc::<str>::from(d.content.as_str()))
+                    } else {
+                        self.session.file_content(p)
+                    };
+                    (p.clone(), content)
+                })
+                .collect();
+            let computed: Vec<(String, Arc<HashSet<String>>)> = inputs
+                .into_par_iter()
+                .map(|(p, cached)| {
+                    let w = match cached {
+                        Some(c) => words(&c),
+                        None => words(&dartr_project::fs::read_string(&p).unwrap_or_default()),
+                    };
+                    (p, Arc::new(w))
+                })
+                .collect();
+            for (p, w) in computed {
+                self.search_words.insert(p, w);
+            }
         }
-        use rayon::prelude::*;
-        let inputs: Vec<(String, Option<Arc<str>>)> = missing
-            .into_iter()
-            .map(|p| {
-                let content = if let Some(d) = self.overlays.get(p.as_str()) {
-                    Some(Arc::<str>::from(d.content.as_str()))
-                } else {
-                    self.session.file_content(p)
-                };
-                (p.clone(), content)
+        let upgrade: Vec<&String> = owned
+            .iter()
+            .filter(|f| {
+                self.search_words
+                    .get(*f)
+                    .is_some_and(|w| w.contains("\0") && names.iter().any(|n| w.contains(n)))
             })
             .collect();
-        let computed: Vec<(String, Arc<HashSet<String>>)> = inputs
-            .into_par_iter()
-            .map(|(p, cached)| {
-                let w = match cached {
-                    Some(c) => words(&c),
-                    None => words(&dartr_project::fs::read_string(&p).unwrap_or_default()),
-                };
-                (p, Arc::new(w))
-            })
-            .collect();
-        for (p, w) in computed {
-            self.search_words.insert(p, w);
+        if upgrade.len() > 4 {
+            let inputs: Vec<(String, Option<Arc<str>>)> = upgrade
+                .into_iter()
+                .map(|p| {
+                    let content = if let Some(d) = self.overlays.get(p.as_str()) {
+                        Some(Arc::<str>::from(d.content.as_str()))
+                    } else {
+                        self.session.file_content(p)
+                    };
+                    (p.clone(), content)
+                })
+                .collect();
+            let computed: Vec<(String, Arc<HashSet<String>>)> = inputs
+                .into_par_iter()
+                .map(|(p, cached)| {
+                    let exact = match cached {
+                        Some(c) => compute_referenced_names(&c),
+                        None => compute_referenced_names(
+                            &dartr_project::fs::read_string(&p).unwrap_or_default(),
+                        ),
+                    };
+                    (p, Arc::new(exact))
+                })
+                .collect();
+            for (p, w) in computed {
+                self.search_words.insert(p, w);
+            }
         }
     }
 
@@ -412,17 +763,24 @@ impl Server {
     /// `FileState.referencedNames`); cached until a file changes.
     pub(crate) fn mentions_any(&mut self, path: &str, names: &[String]) -> bool {
         if let Some(w) = self.search_words.get(path) {
-            return names.iter().any(|n| w.contains(n));
+            if !names.iter().any(|n| w.contains(n)) {
+                return false;
+            }
+            if !w.contains("\0") {
+                return true;
+            }
         }
-        let w = if !self.overlays.contains_key(path)
+        let exact = if !self.overlays.contains_key(path)
             && let Some(c) = self.session.file_content(path)
         {
-            Arc::new(words(&c))
+            Arc::new(compute_referenced_names(&c))
         } else {
-            Arc::new(words(&self.content(path).unwrap_or_default()))
+            Arc::new(compute_referenced_names(
+                &self.content(path).unwrap_or_default(),
+            ))
         };
-        let found = names.iter().any(|n| w.contains(n));
-        self.search_words.insert(path.to_string(), w);
+        let found = names.iter().any(|n| exact.contains(n));
+        self.search_words.insert(path.to_string(), exact);
         found
     }
 
@@ -547,7 +905,7 @@ impl Server {
                 }
             }
             if !name.starts_with('_') {
-                self.ensure_search_words(owned);
+                self.ensure_search_words(owned, &reference_names);
                 for f in owned {
                     if in_files.contains(f.as_str()) {
                         continue;
@@ -588,6 +946,14 @@ impl Server {
     /// Dart `ElementReferencesComputer.compute(element, false)`: the
     /// references to [element] and to the elements of its hierarchy.
     pub(crate) fn element_references(&mut self, element: &SElem) -> Vec<Match> {
+        self.element_references_with(element, true)
+    }
+
+    pub(crate) fn element_references_with(
+        &mut self,
+        element: &SElem,
+        include_parameters_for_fields: bool,
+    ) -> Vec<Match> {
         // Dart `_getRefElements`.
         let is_named_parameter = matches!(
             element.id.tag(),
@@ -606,7 +972,9 @@ impl Server {
             Tag::Method | Tag::Field | Tag::Constructor
         ) {
             let (mut members, parameters) = self.hierarchy_members_and_parameters(&element);
-            members.extend(parameters);
+            if include_parameters_for_fields {
+                members.extend(parameters);
+            }
             members
         } else {
             vec![element.clone()]
@@ -1223,7 +1591,7 @@ impl Server {
         let resolved = self.require_resolved_unit(&path)?;
         let line_info = resolved.line_info().clone();
         let offset = self.position_offset(&line_info, params)?;
-        let element = {
+        let (element, include_parameters_for_fields, substituted_field) = {
             let sink = NoopSink;
             let ctx = resolved.ctx(&sink);
             let unit = resolved.unit();
@@ -1239,20 +1607,64 @@ impl Server {
             {
                 node = ast.parent(n);
             }
-            node.and_then(|n| crate::element_locator::get_element(&u, n))
+            let mut substituted_field = false;
+            let element = node
+                .and_then(|n| crate::element_locator::get_element(&u, n))
                 .map(|e| match e.tag() {
                     Tag::FieldFormalParameter => match ctx.any(e) {
                         dartr_element::AnyElement::FormalParameter(p) => {
-                            p.field.get().map(|f| f.raw()).unwrap_or(e)
+                            if let Some(f) = p.field.get() {
+                                if let Some(n) = node
+                                    && ast.is::<NamedArgument>(n)
+                                    && let Some(list) = ast.parent(n)
+                                    && crate::signature::invocation_substitution(&u, list).0
+                                    && ctx.element_data(f.raw()).is_some_and(|d| {
+                                        d.flags.has(
+                                            dartr_element::ElementFlags::FIELD_ELEMENT_HAS_ENCLOSING_TYPE_PARAMETER_REFERENCE,
+                                        )
+                                    })
+                                {
+                                    substituted_field = true;
+                                }
+                                f.raw()
+                            } else {
+                                e
+                            }
                         }
                         _ => e,
                     },
                     Tag::Getter | Tag::Setter => {
-                        dartr_resolver::element_metadata::accessor_variable_any(&ctx, e)
-                            .unwrap_or(e)
+                        if let Some(v) =
+                            dartr_resolver::element_metadata::accessor_variable_any(&ctx, e)
+                        {
+                            if v.tag() == Tag::Field
+                                && let Some(n) = node
+                                && (unit
+                                    .tables
+                                    .write_element
+                                    .get(n)
+                                    .is_some_and(|r| matches!(r, ElemRef::Member(_)))
+                                    || unit
+                                        .tables
+                                        .read_element
+                                        .get(n)
+                                        .is_some_and(|r| matches!(r, ElemRef::Member(_)))
+                                    || unit
+                                        .tables
+                                        .element
+                                        .get(n)
+                                        .is_some_and(|r| matches!(r, ElemRef::Member(_))))
+                            {
+                                substituted_field = true;
+                            }
+                            v
+                        } else {
+                            e
+                        }
                     }
                     _ => e,
-                })
+                });
+            (element, !substituted_field, substituted_field)
         };
         let Some(element) = element else {
             return Ok(Value::Null);
@@ -1262,7 +1674,7 @@ impl Server {
             unit: resolved.index,
             id: element,
         };
-        let matches = self.element_references(&element);
+        let matches = self.element_references_with(&element, include_parameters_for_fields);
         let mut locations = Vec::new();
         for m in matches {
             if let Some(lines) = self.line_info_of(&m.path) {
@@ -1277,7 +1689,7 @@ impl Server {
             .and_then(Value::as_bool)
             .unwrap_or(false);
         if include_declaration {
-            for location in self.declarations(&element) {
+            for location in self.declarations(&element, substituted_field) {
                 locations.push(location);
             }
         }
@@ -1285,10 +1697,15 @@ impl Server {
     }
 
     /// Dart `_getDeclarations(element)`: `fragmentToLocation` of each
-    /// fragment of `element.nonSynthetic`.
-    fn declarations(&self, element: &SElem) -> Vec<Value> {
+    /// fragment of `element.nonSynthetic` (where `SubstitutedElementImpl.nonSynthetic`
+    /// returns `baseElement`, not `baseElement.nonSynthetic`).
+    fn declarations(&self, element: &SElem, substituted: bool) -> Vec<Value> {
         let fragments: Vec<(String, u32, u32)> = element.with(|ctx| {
-            let e = dartr_element::diagnostics::non_synthetic(ctx, element.id);
+            let e = if substituted {
+                element.id
+            } else {
+                dartr_element::diagnostics::non_synthetic(ctx, element.id)
+            };
             let mut out = Vec::new();
             let mut f = ctx.element_data(e).map(|d| d.first_fragment);
             while let Some(id) = f {

@@ -181,10 +181,55 @@ impl HoverComputer<'_, '_, '_> {
         Some((self.library_name)(&source.path, &source.uri))
     }
 
+    /// Default value source of a local formal parameter (whose expression
+    /// lives in the unit AST rather than a library store `const_ast`).
+    fn local_default_value_code(
+        &self,
+        p: dartr_element::EId<dartr_element::FormalParameterElement>,
+    ) -> Option<String> {
+        if dartr_element::display_string::default_value_code(self.ctx(), p).is_some() {
+            return None;
+        }
+        let first = self.ctx().element_data(p.raw())?.first_fragment;
+        if !first.store().is_local() {
+            return None;
+        }
+        let fragment = first.cast::<dartr_element::FormalParameterFragment>()?;
+        let expr = self.ctx().fragment(fragment).constant_initializer?;
+        Some(dartr_ast::to_source::to_source(self.ast(), expr.0))
+    }
+
     /// Dart `_elementDisplayString`.
     fn element_display_string(&self, node: NodeId, element: ElemRef) -> Option<String> {
         let mut text = display_string(self.ctx(), element, true)?;
         let ast = self.ast();
+        let base = member::base_element(self.ctx(), element);
+        if let Some(p) = base.cast::<dartr_element::FormalParameterElement>()
+            && let Some(code) = self.local_default_value_code(p)
+        {
+            if let Some(stripped) = text.strip_suffix('}') {
+                text = format!("{stripped} = {code}}}");
+            } else if let Some(stripped) = text.strip_suffix(']') {
+                text = format!("{stripped} = {code}]");
+            } else {
+                text = format!("{text} = {code}");
+            }
+        } else if base.tag() == Tag::LocalFunction
+            && let Some(exec) = base.cast::<dartr_element::ExecutableElement>()
+        {
+            for &p in &self.ctx().executable(exec).formal_params {
+                if let Some(code) = self.local_default_value_code(p)
+                    && let Some(param_str) =
+                        display_string(self.ctx(), ElemRef::Base(p.raw()), false)
+                {
+                    let inner = param_str
+                        .trim_start_matches(['{', '['])
+                        .trim_end_matches(['}', ']']);
+                    let with_default = format!("{inner} = {code}");
+                    text = text.replacen(inner, &with_default, 1);
+                }
+            }
+        }
         if let Some(i) = ast.cast::<InstanceCreationExpression>(node)
             && ast[i].keyword.is_none()
         {
@@ -461,8 +506,12 @@ impl HoverComputer<'_, '_, '_> {
         let parent = ast.parent(node);
         let is_variable = |e: ElementId| e.cast::<dartr_element::VariableElement>().is_some();
         let static_type: Option<TypeId> = if let Some(n) = ast.cast::<NamedArgument>(node) {
-            support::corresponding_parameter(ctx, ast, tables, n.raw())
-                .map(|p| dartr_resolver::element_ext::variable_type(ctx, p))
+            crate::signature::invoke_type_parameter(self.unit, n.raw())
+                .map(|p| p.ty)
+                .or_else(|| {
+                    support::corresponding_parameter(ctx, ast, tables, n.raw())
+                        .map(|p| dartr_resolver::element_ext::variable_type(ctx, p))
+                })
         } else if ast.is::<Expression>(node)
             && element
                 .is_none_or(|e| is_variable(e) || matches!(e.tag(), Tag::Getter | Tag::Setter))
@@ -564,17 +613,10 @@ fn is_operator_name(ctx: &Ctx<'_>, e: ElementId) -> bool {
     !name.is_empty() && !name.starts_with(|c: char| c.is_alphabetic() || c == '_' || c == '$')
 }
 
-/// Whether [e] is an element in a local store (a local variable, local
-/// function, label, or parameter of a local function).
+/// Whether [e] is an element without library/class hover info when its
+/// `enclosingElement` is not an `ExecutableElement`.
 fn is_local_element(e: ElementId) -> bool {
-    matches!(
-        e.tag(),
-        Tag::LocalVariable
-            | Tag::PatternVariable
-            | Tag::BindPatternVariable
-            | Tag::JoinPatternVariable
-            | Tag::Label
-    )
+    matches!(e.tag(), Tag::Label)
 }
 
 /// `element.displayString(multiline:)` for an element or a member.

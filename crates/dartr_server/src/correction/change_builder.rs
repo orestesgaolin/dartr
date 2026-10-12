@@ -101,6 +101,7 @@ pub struct FileData {
 impl FileData {
     pub fn has_edits(&self) -> bool {
         !self.file_edit.edits.is_empty()
+            || self.file_edit.file_stamp == -1
             || self
                 .dart
                 .as_ref()

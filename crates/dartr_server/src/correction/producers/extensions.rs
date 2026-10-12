@@ -80,7 +80,7 @@ fn target_type(
                 return None;
             }
             let i = e.cast::<dartr_element::InterfaceElement>()?;
-            Some(ctx.interface(i).this_type.try_get().copied()?)
+            Some(dartr_typesystem::TypeExt::interface_this_type(ctx, i))
         }
         Some(t) => static_type(c, t),
     };

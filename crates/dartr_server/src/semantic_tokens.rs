@@ -2110,9 +2110,270 @@ fn interpolation_quote(ast: &Ast, node: Id<StringInterpolation>) -> Quote {
     }
 }
 
+/// Dart `Sort.sort` (`sdk/lib/internal/sort.dart`) so equal-key tokens
+/// (e.g., an `InterpolationString` whose entire lexeme is a single escape
+/// sequence like `\n`) are ordered identically to Dart's `List.sort`.
+fn dart_sort<T: Clone>(a: &mut [T], compare: impl Fn(&T, &T) -> std::cmp::Ordering) {
+    if a.len() <= 1 {
+        return;
+    }
+    let cmp = |x: &T, y: &T| -> i32 {
+        match compare(x, y) {
+            std::cmp::Ordering::Less => -1,
+            std::cmp::Ordering::Equal => 0,
+            std::cmp::Ordering::Greater => 1,
+        }
+    };
+    do_sort(a, 0, (a.len() as isize) - 1, &cmp);
+}
+
+fn do_sort<T: Clone>(a: &mut [T], left: isize, right: isize, compare: &impl Fn(&T, &T) -> i32) {
+    const INSERTION_SORT_THRESHOLD: isize = 32;
+    if right - left <= INSERTION_SORT_THRESHOLD {
+        insertion_sort(a, left, right, compare);
+    } else {
+        dual_pivot_quicksort(a, left, right, compare);
+    }
+}
+
+fn insertion_sort<T: Clone>(
+    a: &mut [T],
+    left: isize,
+    right: isize,
+    compare: &impl Fn(&T, &T) -> i32,
+) {
+    let mut i = left + 1;
+    while i <= right {
+        let el = a[i as usize].clone();
+        let mut j = i;
+        while j > left && compare(&a[(j - 1) as usize], &el) > 0 {
+            a[j as usize] = a[(j - 1) as usize].clone();
+            j -= 1;
+        }
+        a[j as usize] = el;
+        i += 1;
+    }
+}
+
+fn dual_pivot_quicksort<T: Clone>(
+    a: &mut [T],
+    left: isize,
+    right: isize,
+    compare: &impl Fn(&T, &T) -> i32,
+) {
+    let sixth = (right - left + 1) / 6;
+    let index1 = left + sixth;
+    let index5 = right - sixth;
+    let index3 = (left + right) / 2;
+    let index2 = index3 - sixth;
+    let index4 = index3 + sixth;
+
+    let mut el1 = a[index1 as usize].clone();
+    let mut el2 = a[index2 as usize].clone();
+    let mut el3 = a[index3 as usize].clone();
+    let mut el4 = a[index4 as usize].clone();
+    let mut el5 = a[index5 as usize].clone();
+
+    if compare(&el1, &el2) > 0 {
+        std::mem::swap(&mut el1, &mut el2);
+    }
+    if compare(&el4, &el5) > 0 {
+        std::mem::swap(&mut el4, &mut el5);
+    }
+    if compare(&el1, &el3) > 0 {
+        std::mem::swap(&mut el1, &mut el3);
+    }
+    if compare(&el2, &el3) > 0 {
+        std::mem::swap(&mut el2, &mut el3);
+    }
+    if compare(&el1, &el4) > 0 {
+        std::mem::swap(&mut el1, &mut el4);
+    }
+    if compare(&el3, &el4) > 0 {
+        std::mem::swap(&mut el3, &mut el4);
+    }
+    if compare(&el2, &el5) > 0 {
+        std::mem::swap(&mut el2, &mut el5);
+    }
+    if compare(&el2, &el3) > 0 {
+        std::mem::swap(&mut el2, &mut el3);
+    }
+    if compare(&el4, &el5) > 0 {
+        std::mem::swap(&mut el4, &mut el5);
+    }
+
+    let pivot1 = el2;
+    let pivot2 = el4;
+
+    a[index1 as usize] = el1;
+    a[index3 as usize] = el3;
+    a[index5 as usize] = el5;
+
+    a[index2 as usize] = a[left as usize].clone();
+    a[index4 as usize] = a[right as usize].clone();
+
+    let mut less = left + 1;
+    let mut great = right - 1;
+
+    let pivots_are_equal = compare(&pivot1, &pivot2) == 0;
+    if pivots_are_equal {
+        let pivot = pivot1.clone();
+        let mut k = less;
+        while k <= great {
+            let ak = a[k as usize].clone();
+            let mut comp = compare(&ak, &pivot);
+            if comp == 0 {
+                k += 1;
+                continue;
+            }
+            if comp < 0 {
+                if k != less {
+                    a[k as usize] = a[less as usize].clone();
+                    a[less as usize] = ak;
+                }
+                less += 1;
+            } else {
+                loop {
+                    comp = compare(&a[great as usize], &pivot);
+                    if comp > 0 {
+                        great -= 1;
+                        continue;
+                    } else if comp < 0 {
+                        a[k as usize] = a[less as usize].clone();
+                        a[less as usize] = a[great as usize].clone();
+                        less += 1;
+                        a[great as usize] = ak;
+                        great -= 1;
+                        break;
+                    } else {
+                        a[k as usize] = a[great as usize].clone();
+                        a[great as usize] = ak;
+                        great -= 1;
+                        break;
+                    }
+                }
+            }
+            k += 1;
+        }
+    } else {
+        let mut k = less;
+        while k <= great {
+            let ak = a[k as usize].clone();
+            let comp_pivot1 = compare(&ak, &pivot1);
+            if comp_pivot1 < 0 {
+                if k != less {
+                    a[k as usize] = a[less as usize].clone();
+                    a[less as usize] = ak;
+                }
+                less += 1;
+            } else {
+                let comp_pivot2 = compare(&ak, &pivot2);
+                if comp_pivot2 > 0 {
+                    loop {
+                        let comp = compare(&a[great as usize], &pivot2);
+                        if comp > 0 {
+                            great -= 1;
+                            if great < k {
+                                break;
+                            }
+                            continue;
+                        } else {
+                            let comp = compare(&a[great as usize], &pivot1);
+                            if comp < 0 {
+                                a[k as usize] = a[less as usize].clone();
+                                a[less as usize] = a[great as usize].clone();
+                                less += 1;
+                                a[great as usize] = ak;
+                                great -= 1;
+                            } else {
+                                a[k as usize] = a[great as usize].clone();
+                                a[great as usize] = ak;
+                                great -= 1;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            k += 1;
+        }
+    }
+
+    a[left as usize] = a[(less - 1) as usize].clone();
+    a[(less - 1) as usize] = pivot1.clone();
+    a[right as usize] = a[(great + 1) as usize].clone();
+    a[(great + 1) as usize] = pivot2.clone();
+
+    do_sort(a, left, less - 2, compare);
+    do_sort(a, great + 2, compare_right(right), compare);
+
+    if pivots_are_equal {
+        return;
+    }
+
+    if less < index1 && great > index5 {
+        while compare(&a[less as usize], &pivot1) == 0 {
+            less += 1;
+        }
+        while compare(&a[great as usize], &pivot2) == 0 {
+            great -= 1;
+        }
+
+        let mut k = less;
+        while k <= great {
+            let ak = a[k as usize].clone();
+            let comp_pivot1 = compare(&ak, &pivot1);
+            if comp_pivot1 == 0 {
+                if k != less {
+                    a[k as usize] = a[less as usize].clone();
+                    a[less as usize] = ak;
+                }
+                less += 1;
+            } else {
+                let comp_pivot2 = compare(&ak, &pivot2);
+                if comp_pivot2 == 0 {
+                    loop {
+                        let comp = compare(&a[great as usize], &pivot2);
+                        if comp == 0 {
+                            great -= 1;
+                            if great < k {
+                                break;
+                            }
+                            continue;
+                        } else {
+                            let comp = compare(&a[great as usize], &pivot1);
+                            if comp < 0 {
+                                a[k as usize] = a[less as usize].clone();
+                                a[less as usize] = a[great as usize].clone();
+                                less += 1;
+                                a[great as usize] = ak;
+                                great -= 1;
+                            } else {
+                                a[k as usize] = a[great as usize].clone();
+                                a[great as usize] = ak;
+                                great -= 1;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            k += 1;
+        }
+        do_sort(a, less, great, compare);
+    } else {
+        do_sort(a, less, great, compare);
+    }
+}
+
+#[inline]
+fn compare_right(right: isize) -> isize {
+    right
+}
+
 /// Dart `SemanticTokenInfo.offsetLengthPrioritySort`.
 fn sort_tokens(tokens: &mut [SemanticTokenInfo]) {
-    tokens.sort_by(|a, b| {
+    dart_sort(tokens, |a, b| {
         a.offset
             .cmp(&b.offset)
             .then(b.length.cmp(&a.length))

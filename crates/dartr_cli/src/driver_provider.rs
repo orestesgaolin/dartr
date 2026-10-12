@@ -500,10 +500,9 @@ impl DriverSession {
                     if !driver.fs.file(id).exists() {
                         continue;
                     }
-                    if let Some(lib) = driver.fs.library_of(id) {
-                        library_ids.insert(lib);
-                    }
+                    library_ids.insert(driver.fs.library_or_as_library(id));
                 }
+                driver.fs.discover();
                 let library_ids: Vec<FileId> = library_ids.into_iter().collect();
                 if library_ids.is_empty() {
                     return (Vec::new(), Vec::new());
@@ -1027,7 +1026,8 @@ impl DriverSession {
                 if !driver.fs.file(id).exists() {
                     return None;
                 }
-                let library = driver.fs.library_of(id)?;
+                let library = driver.fs.library_or_as_library(id);
+                driver.fs.discover();
                 let library_path = driver.fs.file(library).path.to_string();
                 let key = (context, library_path.clone());
                 if let Some(r) = resolved.get(&key) {
@@ -1368,6 +1368,7 @@ impl DriverSession {
                 available.extend(
                     sdk.libraries()
                         .iter()
+                        .filter(|l| !l.is_internal())
                         .filter_map(|l| sdk.map_dart_uri(&l.short_name)),
                 );
             }
