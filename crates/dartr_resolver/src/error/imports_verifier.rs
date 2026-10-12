@@ -472,11 +472,36 @@ fn combinators_allow(ctx: &Ctx<'_>, combinators: &[NamespaceCombinator], name: &
     })
 }
 
+/// Fast check for whether [imported_library] has any `export` directive with
+/// `@deprecated` / `@Deprecated` metadata.
+pub(crate) fn library_has_deprecated_export(
+    ctx: &Ctx<'_>,
+    imported_library: EId<LibraryElement>,
+) -> bool {
+    for (unit, _) in crate::scope::library_fragments(ctx, imported_library) {
+        for export in &ctx.fragment(unit).library_exports {
+            if export.directive.metadata.is_empty() {
+                continue;
+            }
+            let flags = crate::element_metadata::metadata_flags(
+                ctx,
+                &export.directive.metadata,
+                unit.raw().store(),
+                None,
+            );
+            if flags & crate::element_metadata::flags::DEPRECATED != 0 {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 /// Dart `LibraryElementImpl.isFromDeprecatedExport(entry)`: whether [element]
 /// (exported under [name] by [imported_library]) is not declared in
 /// [imported_library] and every `export` directive of [imported_library] that
 /// provides it has `@deprecated` / `@Deprecated`.
-fn is_from_deprecated_export(
+pub(crate) fn is_from_deprecated_export(
     ctx: &Ctx<'_>,
     imported_library: EId<LibraryElement>,
     name: dartr_element::Name,
@@ -502,6 +527,9 @@ fn is_from_deprecated_export(
                 continue;
             }
             found_export = true;
+            if export.directive.metadata.is_empty() {
+                return false;
+            }
             let flags = crate::element_metadata::metadata_flags(
                 ctx,
                 &export.directive.metadata,

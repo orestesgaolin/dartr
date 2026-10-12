@@ -1,0 +1,1 @@
+class FakeDuration implements Duration {}

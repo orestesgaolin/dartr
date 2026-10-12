@@ -14,7 +14,9 @@ The harness starts the server like VS Code with Dart-Code does (the `initialize`
 
 1. Startup: from `initialize` to the end of the initial analysis (the last `$/progress` end of
    token `ANALYZING`, or `$/analyzerStatus` `isAnalyzing: false`, followed by 2 s without a new
-   analysis). Cold Dart runs use an empty temporary `--cache` directory. dartr has no disk cache.
+   analysis). Cold Dart runs use an empty temporary `--cache` directory; warm runs use the
+   benchmark's persistent `--dart-cache` directory (default `$TMPDIR/dartr-lsp-bench-cache`, not
+   `~/.dartServer`), warmed by the first uncounted start. dartr has no disk cache.
 2. Edits, 5 times each, after the initial analysis: (a) a statement with a type error in a method
    body of a file with few importers, (b) the rename of a public member that many files use. Both
    are undone. The time to the `publishDiagnostics` that shows the change (for (b): of the first

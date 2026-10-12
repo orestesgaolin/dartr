@@ -104,8 +104,20 @@ at each merge; the final process report is written from it.
 | 10-11 07:55 | 9137d50 | six parity fixes from a sweep over 65 real pub packages | Gemini 4 (Antigravity) | 59/65 -> 65/65 packages identical to `dart analyze` (14,846 diagnostics); 4 corpora identical; 5,598 tests (branch) |
 | 10-11 09:10 | f99ae51 | language-server latency: resolved units of open files reused, incremental search index, cached completion inputs | Gemini 4 (Antigravity) | flutter_tools: hover 38 -> <0.5 ms, completion after '.' 83 -> 1 ms, first references 2.9 -> 0.16 s; visible-app: hover 137 -> <0.5 ms, completion 283 -> 3 ms; 5,598 tests |
 | 10-11 10:00 | d753fb5 | six parity fixes from a sweep over 315 more real pub packages | Gemini 4 (Antigravity) | 309/315 -> 315/315 packages identical to `dart analyze` (64,953 diagnostics); 4 corpora identical; 5,598 tests |
+| 10-11 11:20 | a80a408 | four parity fixes from a sweep over the remaining pub-cache packages and 6 Flutter SDK packages | Gemini 4 (Antigravity) | 287/291 -> 291/291 packages identical (26,178 diagnostics); 671 real packages identical over three sweeps; 5,599 tests |
+| 10-11 12:00 | d41dae6 | CPU round 5: flat element-store vector, memoized constant constructor calls, fewer AST scans, scopes built once | Gemini 4 (Antigravity) | flutter: user CPU on 1 thread 14.3 -> 8.2 s, wall on all cores 4.0 -> 1.8 s; 4 corpora identical; 5,598 tests |
+| 10-11 12:50 | dd96ea7 | analyzer plugins start without blocking the language server (no 60 s wait for a past status, async start, pub upgrade only when needed) | Gemini 4 (Antigravity) | visible-app language-server startup with jaspr_lints 104-134 s -> 25-28 s (dart: 96 s cold); diagnostics identical; 5,599 tests |
+| 10-11 13:20 | 69fe06f | simpler landing page (numbers, comparison tables, known differences, guide links) and an editor-setup guide for Homebrew and the shim | Gemini 4 (Antigravity) | 522 lines removed and 203 added (page, style, guide); fits a 390 px phone without horizontal scroll |
+| 10-11 14:20 | 261158c | site: language-server charts (startup, completion, first references, memory) and peak-memory chart; bench/memory.sh | Gemini 4 (Antigravity) | dartr analyze peak RSS vs dart: app 5.5 vs 5.8 GB, flutter 1.46 vs 0.89 GB, analyzer 0.77 vs 0.48 GB, flutter_tools 0.90 vs 0.48 GB |
+| 10-11 15:45 | b6ca89e | dartr fix: 31 bulk-fix producers ported (require_trailing_commas, sort_constructors_first, unnecessary_lambdas, ...) and Dart's diagnostic sort order; format sweep | Gemini 4 (Antigravity) | fix: 11/65 -> 65/65 pub packages identical (703 files, --dry-run and --apply), 2.5-2.7x faster than dart fix; format: 220/220 packages (23,152 files) identical, 2.0x faster; 5,607 tests pass |
+| 10-12 02:08 | 65592e1 | result cache steps 1-2: --cache, --[no-]disable-file-byte-store and DARTR_CACHE_DIR settings (off by default), content-addressed disk store with checksums, atomic writes and LRU eviction | Gemini 4 (Antigravity) | store tests: corruption, two writer processes, eviction; flutter identical to `dart analyze`; 5,616 tests pass |
+| 10-12 06:04 | b6da4b0 | parsed files and linked library cycles shared across the analysis contexts of one session; @docImport resolved lazily so it does not change cycle signatures | Gemini 4 (Antigravity) | visible-app (18 contexts): link 4.76 -> 3.69 s, wall 9.7 -> 8.6 s, peak RSS 5.24 -> 4.62 GB; 4 corpora identical; 5,618 tests pass |
 
 ## Incidents and lessons
+
+- **Corpus lost its package config (10-11 15:53, found 10-12 06:05):** bench/corpus/analyzer-9.0.0/.dart_tool was
+  deleted, probably by a sweep agent's cleanup. Both dart and dartr then reported about 109,000 diagnostics (unresolved
+  imports) and differed by 4,546. `dart pub get --offline` restored it: 27,278 identical again.
 
 - **Busy-machine benchmarks (10-08):** the first baselines ran while agents used the CPU
   (load ~11–14 on 15 cores). They are marked provisional and must be repeated on an idle machine.

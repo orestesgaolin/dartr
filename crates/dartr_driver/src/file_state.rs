@@ -73,7 +73,7 @@ pub struct FileConfig {
 /// `Send + Sync`, so that a driver can move to the threads of a pool.
 pub type ConfigFor = Box<dyn Fn(&str, &str) -> FileConfig + Send + Sync>;
 
-/// Cache key for a parsed and unlinked SDK (`dart:*`) file.
+/// Cache key for a parsed and unlinked file across analysis contexts.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub(crate) struct SdkFileKey {
     pub path: Arc<str>,
@@ -217,7 +217,7 @@ pub struct FileContent {
     pub unlinked_signature: [u8; 16],
     pub source: Arc<str>,
     parsed: std::sync::Mutex<Option<Arc<ParsedUnit>>>,
-    pub unlinked: UnlinkedUnit,
+    pub unlinked: Arc<UnlinkedUnit>,
     pub kind: FileKind,
     /// Dart `FileKind.libraryImports`.
     pub library_imports: Vec<LibraryImportState>,
@@ -227,6 +227,7 @@ pub struct FileContent {
     pub part_includes: Vec<PartIncludeState>,
     /// Dart `FileKind.docLibraryImports`.
     pub doc_library_imports: Vec<LibraryImportState>,
+    pub(crate) doc_imports_discovered: bool,
 }
 
 impl FileContent {
@@ -411,9 +412,7 @@ impl FileSystemState {
     /// repeats until no file is pending. Dart does the same lazily
     /// (`refresh`, `discoverReferencedFiles`).
     pub fn discover(&mut self) {
-        let sdk_cache = (!dartr_project::fs::has_overlays())
-            .then(|| self.sdk_cache.clone())
-            .flatten();
+        let sdk_cache = self.sdk_cache.clone();
         let lookup_only = self.sdk_cache_lookup_only;
         while !self.pending.is_empty() {
             let pending = std::mem::take(&mut self.pending);
@@ -434,26 +433,18 @@ impl FileSystemState {
             let sdk_cache_ref = sdk_cache.as_deref();
             let results: Vec<(FileId, RefreshData)> = jobs
                 .into_par_iter()
-                .map(|(id, path, is_shared, is_dart_core, config, salt)| {
-                    if is_shared && let Some(cache) = sdk_cache_ref {
-                        let key = SdkFileKey {
-                            path: path.clone(),
+                .map(|(id, path, _is_shared, is_dart_core, config, salt)| {
+                    (
+                        id,
+                        refresh_data_cached(
+                            &path,
                             is_dart_core,
-                            config: config.clone(),
-                            salt: salt.clone(),
-                        };
-                        if let Some(cached) = cache.get_file(&key) {
-                            return (id, (*cached).clone());
-                        }
-                        let data = refresh_data(&path, is_dart_core, &config, &salt);
-                        if !lookup_only {
-                            let mut cached = data.clone();
-                            cached.parsed = None;
-                            cache.insert_file(key, Arc::new(cached));
-                        }
-                        return (id, data);
-                    }
-                    (id, refresh_data(&path, is_dart_core, &config, &salt))
+                            &config,
+                            &salt,
+                            sdk_cache_ref,
+                            lookup_only,
+                        ),
+                    )
                 })
                 .collect();
             for (id, data) in results {
@@ -515,16 +506,35 @@ impl FileSystemState {
             self.discover();
             return true;
         }
-        let f = self.file(file);
-        if let Some(cache) = &self.sdk_cache {
-            cache.invalidate_file(&f.path);
-        }
-        let is_dart_core = &*f.uri_str == "dart:core";
-        let data = refresh_data(&f.path, is_dart_core, &f.config, &self.salt_for_unlinked);
         let old = self.files[file.0 as usize]
             .content
             .take()
             .expect("checked above");
+        let f = self.file(file);
+        let is_dart_core = &*f.uri_str == "dart:core";
+        if let Some(cache) = &self.sdk_cache {
+            let key = SdkFileKey {
+                path: f.path.clone(),
+                is_dart_core,
+                config: f.config.clone(),
+                salt: self.salt_for_unlinked.clone(),
+            };
+            if cache
+                .get_file(&key)
+                .is_some_and(|c| Arc::ptr_eq(&c.source, &old.source))
+            {
+                cache.invalidate_file(&f.path);
+            }
+        }
+        let data = refresh_data_cached(
+            &f.path,
+            is_dart_core,
+            &f.config,
+            &self.salt_for_unlinked,
+            self.sdk_cache.as_deref(),
+            self.sdk_cache_lookup_only,
+        );
+        let had_doc_imports = old.doc_imports_discovered;
         let api_changed =
             old.exists != data.exists || old.unlinked.api_signature != data.unlinked.api_signature;
         // Undo the registrations of the old content (`_updateKind`,
@@ -552,8 +562,70 @@ impl FileSystemState {
                 .shift_remove(&file);
         }
         self.apply_refresh(file, data);
+        if had_doc_imports {
+            self.ensure_file_doc_imports(file);
+        }
         self.discover();
         api_changed
+    }
+
+    /// Resolves `@docImport` directives for [libraries] and their parts, and
+    /// discovers any newly referenced files.
+    pub fn discover_doc_imports(&mut self, libraries: &[FileId]) {
+        for &library in libraries {
+            for file in self.library_files(library) {
+                self.ensure_file_doc_imports(file);
+            }
+        }
+        if !self.pending.is_empty() {
+            self.discover();
+        }
+    }
+
+    fn ensure_file_doc_imports(&mut self, id: FileId) {
+        let Some(content) = self.files[id.0 as usize].content.as_ref() else {
+            return;
+        };
+        if content.doc_imports_discovered {
+            return;
+        }
+        let doc_imports = match (&content.kind, &*content.unlinked) {
+            (FileKind::Library { .. }, u) => u
+                .library_directive
+                .as_ref()
+                .map(|d| d.doc_imports.clone())
+                .unwrap_or_default(),
+            (FileKind::PartOfName { .. }, u) => u
+                .part_of_name_directive
+                .as_ref()
+                .map(|d| d.doc_imports.clone())
+                .unwrap_or_default(),
+            (_, u) => u
+                .part_of_uri_directive
+                .as_ref()
+                .map(|d| d.doc_imports.clone())
+                .unwrap_or_default(),
+        };
+        let doc_library_imports: Vec<LibraryImportState> = doc_imports
+            .iter()
+            .map(|u| LibraryImportState {
+                uris: self.build_configurable_directive_uris(id, u),
+                unlinked: u.clone(),
+            })
+            .collect();
+        let referenced: Vec<FileId> = doc_library_imports
+            .iter()
+            .filter_map(|s| match &s.uris.selected {
+                DirectiveUri::WithFile { file, .. } => Some(*file),
+                _ => None,
+            })
+            .collect();
+        for target in referenced {
+            self.files[target.0 as usize].referencing_files.insert(id);
+        }
+        let content = self.files[id.0 as usize].content.as_mut().unwrap();
+        content.doc_library_imports = doc_library_imports;
+        content.doc_imports_discovered = true;
     }
 
     /// The second half of Dart `refresh`: `_updateKind` and the directive
@@ -622,30 +694,6 @@ impl FileSystemState {
                 unlinked: u.clone(),
             })
             .collect();
-        let doc_imports = match (&kind, &unlinked) {
-            (FileKind::Library { .. }, u) => u
-                .library_directive
-                .as_ref()
-                .map(|d| d.doc_imports.clone())
-                .unwrap_or_default(),
-            (FileKind::PartOfName { .. }, u) => u
-                .part_of_name_directive
-                .as_ref()
-                .map(|d| d.doc_imports.clone())
-                .unwrap_or_default(),
-            (_, u) => u
-                .part_of_uri_directive
-                .as_ref()
-                .map(|d| d.doc_imports.clone())
-                .unwrap_or_default(),
-        };
-        let doc_library_imports: Vec<LibraryImportState> = doc_imports
-            .iter()
-            .map(|u| LibraryImportState {
-                uris: self.build_configurable_directive_uris(id, u),
-                unlinked: u.clone(),
-            })
-            .collect();
 
         // `referencingFiles` of the directive states with a file.
         let referenced: Vec<FileId> = library_imports
@@ -653,7 +701,6 @@ impl FileSystemState {
             .map(|s| &s.uris.selected)
             .chain(library_exports.iter().map(|s| &s.uris.selected))
             .chain(part_includes.iter().map(|s| &s.uris.selected))
-            .chain(doc_library_imports.iter().map(|s| &s.uris.selected))
             .filter_map(|u| match u {
                 DirectiveUri::WithFile { file, .. } => Some(*file),
                 _ => None,
@@ -674,7 +721,8 @@ impl FileSystemState {
             library_imports,
             library_exports,
             part_includes,
-            doc_library_imports,
+            doc_library_imports: Vec::new(),
+            doc_imports_discovered: false,
         });
     }
 
@@ -873,6 +921,7 @@ impl FileSystemState {
         content.kind = FileKind::Library { name: None };
         // `LibraryFileKind` reads doc imports from the library directive only.
         content.doc_library_imports.clear();
+        content.doc_imports_discovered = false;
         content.library_imports.extend(core);
         file
     }
@@ -947,7 +996,9 @@ impl FileSystemState {
         builder.to_byte_list()
     }
 
-    /// Dart `FileKind.addDirectivesSignature`.
+    /// Dart `FileKind.addDirectivesSignature` (without `doc_library_imports`,
+    /// which are resolved lazily only for analyzed libraries and are not
+    /// inputs to cycle linking).
     pub fn add_directives_signature(&self, kind: FileId, signature: &mut ApiSignature) {
         let append = |signature: &mut ApiSignature, uri: &DirectiveUri| match uri {
             DirectiveUri::WithFile { file, .. } => {
@@ -976,10 +1027,6 @@ impl FileSystemState {
         for d in &c.library_imports {
             append(signature, &d.uris.selected);
         }
-        signature.add_int(c.doc_library_imports.len() as u32);
-        for d in &c.doc_library_imports {
-            append(signature, &d.uris.selected);
-        }
     }
 }
 
@@ -987,12 +1034,57 @@ impl FileSystemState {
 /// `FileState.refresh`), computed in parallel.
 #[derive(Clone)]
 pub(crate) struct RefreshData {
-    exists: bool,
-    content_hash: String,
-    unlinked_signature: [u8; 16],
-    source: Arc<str>,
-    parsed: Option<Arc<ParsedUnit>>,
-    unlinked: UnlinkedUnit,
+    pub(crate) exists: bool,
+    pub(crate) from_overlay: bool,
+    pub(crate) content_hash: String,
+    pub(crate) unlinked_signature: [u8; 16],
+    pub(crate) source: Arc<str>,
+    pub(crate) parsed: Option<Arc<ParsedUnit>>,
+    pub(crate) unlinked: Arc<UnlinkedUnit>,
+}
+
+/// Reads [path] via the shared [`SdkCache`], falling back to [`refresh_data`].
+fn refresh_data_cached(
+    path: &Arc<str>,
+    is_dart_core: bool,
+    config: &FileConfig,
+    salt: &[u32],
+    sdk_cache: Option<&crate::driver::SdkCache>,
+    lookup_only: bool,
+) -> RefreshData {
+    let Some(cache) = sdk_cache else {
+        return refresh_data(path, is_dart_core, config, salt);
+    };
+    let key = SdkFileKey {
+        path: path.clone(),
+        is_dart_core,
+        config: config.clone(),
+        salt: salt.to_vec(),
+    };
+    let has_overlay = dartr_project::fs::has_overlay(path);
+    if let Some(cached) = cache.get_file(&key) {
+        if !has_overlay && !cached.from_overlay {
+            return (*cached).clone();
+        }
+        if has_overlay
+            && cached.exists
+            && let Some(text) = dartr_project::fs::read_string_strict(path)
+        {
+            let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+            if cached.source.as_ref() == text {
+                return (*cached).clone();
+            }
+        }
+    }
+    let data = refresh_data(path, is_dart_core, config, salt);
+    if !lookup_only {
+        let mut cached = data.clone();
+        if !crate::analysis::keep_parsed_in_sdk_cache() {
+            cached.parsed = None;
+        }
+        cache.insert_file(key, Arc::new(cached));
+    }
+    data
 }
 
 /// Reads [path] like Dart `FileContentCache` (a missing or unreadable file
@@ -1000,6 +1092,7 @@ pub(crate) struct RefreshData {
 /// computes the unlinked unit (`serializeAstUnlinked2`).
 fn refresh_data(path: &str, is_dart_core: bool, config: &FileConfig, salt: &[u32]) -> RefreshData {
     // Through the overlays of the language server (open documents).
+    let from_overlay = dartr_project::fs::has_overlay(path);
     let (content, exists) = match dartr_project::fs::read_string_strict(path) {
         Some(text) => (text, true),
         None => (String::new(), false),
@@ -1036,10 +1129,11 @@ fn refresh_data(path: &str, is_dart_core: bool, config: &FileConfig, salt: &[u32
         &config.experiments,
     );
     let source = parsed.ast.tokens.source.clone();
-    let unlinked = serialize_ast_unlinked2(&parsed, exists, is_dart_core);
+    let unlinked = Arc::new(serialize_ast_unlinked2(&parsed, exists, is_dart_core));
     let parsed = crate::analysis::keep_parsed_in_discover().then(|| Arc::new(parsed));
     RefreshData {
         exists,
+        from_overlay,
         content_hash,
         unlinked_signature,
         source,

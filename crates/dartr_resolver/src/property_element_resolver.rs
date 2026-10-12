@@ -599,7 +599,7 @@ pub fn resolve_simple_identifier(
         .get(node)
         .copied()
         .unwrap_or_default();
-    // Dart `reportDeprecatedExportUse(...)` (wave D).
+    rv.report_deprecated_export_use(scope_lookup_result, rv.ast[node].token, has_read, has_write);
 
     let mut read_element_requested = None;
     let mut get_type = None;
@@ -1244,7 +1244,7 @@ fn resolve_target_prefix_element(
     let name = identifier_name(rv, identifier);
     // Dart `target.scope.lookup(identifier.name)`.
     let lookup_result = rv.unit.scopes.prefix_lookup(&ctx, target, &name);
-    // Dart `reportDeprecatedExportUse(...)` (wave D).
+    rv.report_deprecated_export_use(lookup_result, rv.ast[identifier].token, has_read, has_write);
 
     let read_element = lookup_result.getter.map(ElemRef::Base);
     let write_element = lookup_result.setter.map(ElemRef::Base);

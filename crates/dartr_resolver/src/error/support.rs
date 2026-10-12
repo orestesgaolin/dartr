@@ -276,6 +276,16 @@ pub fn display_name(ctx: &Ctx<'_>, element: ElementId) -> String {
                 Some(n) => format!("{class_name}.{n}"),
             }
         }
+        Tag::Method => {
+            if name == Some("-") {
+                if let dartr_element::AnyElement::Method(m) = ctx.any(element) {
+                    if m.formal_params.is_empty() {
+                        return "unary-".to_string();
+                    }
+                }
+            }
+            name.unwrap_or("<unnamed>").to_string()
+        }
         Tag::Extension | Tag::Library => name.unwrap_or("").to_string(),
         _ => name.unwrap_or("<unnamed>").to_string(),
     }

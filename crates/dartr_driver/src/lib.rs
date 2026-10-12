@@ -5,13 +5,13 @@
 
 pub mod analysis;
 pub mod api_signature;
+pub mod cache_store;
 pub mod directives;
 pub mod driver;
 pub mod file_state;
 pub mod library_graph;
 pub mod link_resolver;
+pub mod lints;
 pub mod project;
 pub mod unlinked_data;
 pub mod uri;
-
-pub mod lints;

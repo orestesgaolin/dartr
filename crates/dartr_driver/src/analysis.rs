@@ -72,6 +72,10 @@ pub fn keep_parsed_in_link() -> bool {
     keep_parsed_mode() == 1
 }
 
+pub fn keep_parsed_in_sdk_cache() -> bool {
+    keep_parsed_mode() >= 1
+}
+
 impl Driver {
     /// Analyzes the library of [file] (the defining unit). The library must
     /// be linked ([`Driver::link_libraries`]); returns `None` otherwise.
