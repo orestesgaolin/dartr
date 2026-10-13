@@ -127,21 +127,25 @@ Open an issue at <https://github.com/orestesgaolin/dartr/issues> with:
 
 ## Known limitations
 
-- Language server: startup with analyzer plugins is slow (122 to 134 s on the 1.56 million line
-  application with `jaspr_lints`, Dart: 96 s; 36 s without plugins). Requests (hover, completion,
-  definition, references) are as fast as Dart's or faster (`bench/lsp_bench.py`, 2026-10-11).
-- Memory use is higher than Dart's: peak RSS of `dartr analyze` is 0.8 GB on `analyzer`, 1.6 GB on
-  Flutter and 6.0 GB on the 1.56 million line application (after a 40 to 48% reduction). There is no disk
-  cache yet.
+- Language server: `dartr language-server` does not use a disk cache yet, so a warm `dart language-server`
+  can start faster on packages (1.4 s vs 0.9–3.7 s on `flutter_tools`, 1.9 s vs 1.3–4.2 s on `analyzer`,
+  4.2 s vs 2.0–6.1 s on Flutter; on the 1.56 million line application with `jaspr_lints`, `dartr` starts in
+  33.0 s vs Dart's 93.0 s cold and 40.3 s warm). Requests (hover, completion, definition, references) are as
+  fast as Dart's or faster (`bench/lsp_bench.py`, 2026-10-13).
+- Memory use: peak RSS of `dartr analyze` is similar to Dart's on packages (0.53 GB vs 0.37 GB on
+  `flutter_tools`, 0.59 GB vs 0.55 GB on `analyzer`, 0.83 GB vs 0.89 GB on Flutter) and lower on the 1.56
+  million line application (2.28 GB vs 3.90 GB), or 0.10 to 0.12 GB on packages with a warm `--cache`.
+  Language-server RSS after startup is about 2 times Dart's on packages (0.53 to 0.84 GB vs 0.26 to 0.36 GB)
+  and slightly lower on the application (3.06 GB vs 3.33 GB).
 - macOS arm64 and Linux x86_64 only. No Windows or Intel macOS builds.
 
 ## Benchmarks
 
 `dartr analyze` and `dart analyze` (3.13.3) on the same machine, with the full pipeline (errors,
 warnings, lints, analyzer plugins). Both report the same diagnostics on all four projects. Wall time
-in seconds, mean of 3 runs, lower is better. dartr has no disk cache, so every run starts cold.
-`dart` was measured twice: with its normal disk cache (`~/.dartServer`), warmed by an earlier run,
-and with an empty cache.
+in seconds, mean of 3 runs, lower is better. By default `dartr analyze` runs without a disk cache;
+it also has an optional disk cache (`--cache` / `DARTR_CACHE_DIR`). `dart` was measured twice: with
+its normal disk cache (`~/.dartServer`), warmed by an earlier run, and with an empty cache.
 
 ```mermaid
 ---
@@ -156,10 +160,10 @@ xychart-beta horizontal
     %% -100 = no bar: one series per measurement gives each its own color
     title "Large projects: wall time (s), lower is better"
     x-axis ["app, dart warm", "app, dart empty", "app, dartr", "flutter, dart warm", "flutter, dart empty", "flutter, dartr"]
-    y-axis "seconds" 0 --> 100
-    bar [70.3, -100, -100, 3.7, -100, -100]
-    bar [-100, 95.1, -100, -100, 19.2, -100]
-    bar [-100, -100, 17.9, -100, -100, 3]
+    y-axis "seconds" 0 --> 86.3
+    bar [78.4, -100, -100, 7.77, -100, -100]
+    bar [-100, 77.6, -100, -100, 20.3, -100]
+    bar [-100, -100, 18.4, -100, -100, 1.82]
 ```
 
 ```mermaid
@@ -175,32 +179,32 @@ xychart-beta horizontal
     %% -100 = no bar: one series per measurement gives each its own color
     title "Smaller packages: wall time (s), lower is better"
     x-axis ["analyzer, dart warm", "analyzer, dart empty", "analyzer, dartr", "flutter_tools, dart warm", "flutter_tools, dart empty", "flutter_tools, dartr"]
-    y-axis "seconds" 0 --> 8
-    bar [3.5, -100, -100, 2, -100, -100]
-    bar [-100, 6.6, -100, -100, 7.5, -100]
-    bar [-100, -100, 0.86, -100, -100, 0.8]
+    y-axis "seconds" 0 --> 10.6
+    bar [2.32, -100, -100, 2.36, -100, -100]
+    bar [-100, 9.67, -100, -100, 8.59, -100]
+    bar [-100, -100, 0.881, -100, -100, 0.874]
 ```
 
 Dark blue: `dart analyze` with a warm cache. Light blue: `dart analyze` with an empty cache.
-Orange: `dartr analyze`. "app" is a 1.56 million line Flutter application (pub workspace with
+Orange: `dartr analyze` (cold, default). "app" is a 1.56 million line Flutter application (pub workspace with
 analyzer plugins).
 
-| project | Dart lines | `dart analyze`, warm cache | `dart analyze`, empty cache | `dartr analyze` |
-|---|---|---|---|---|
-| application (pub workspace, analyzer plugins) | 1,559,637 | 70.3 s (60.3 to 87.4) | 95.1 s | 17.9 s |
-| Flutter `packages/flutter` | 1,309,663 | 3.7 s (3.2 to 4.2) | 19.2 s | 3.0 s |
-| `analyzer` 9.0.0 (pub) | 909,249 | 3.5 s (2.8 to 4.3) | 6.6 s | 0.86 s |
-| `flutter_tools` | 455,099 | 2.0 s (1.3 to 2.4) | 7.5 s | 0.80 s |
+| project | Dart lines | `dart analyze`, warm cache | `dart analyze`, empty cache | `dartr analyze` | `dartr analyze`, warm `--cache` | peak RSS (`dart` / `dartr` / warm `--cache`) |
+|---|---|---|---|---|---|---|
+| application (pub workspace, analyzer plugins) | 1,559,637 | 78.4 s (52.2 to 107.1) | 77.6 s | 18.4 s | 16.0 s (1.32 s without plugins) | 3,989 / 2,332 / 2,258 MB |
+| Flutter `packages/flutter` | 1,309,663 | 7.8 s (5.5 to 10.2) | 20.3 s | 1.82 s | 0.21 s | 907 / 855 / 122 MB |
+| `analyzer` 9.0.0 (pub) | 909,249 | 2.3 s (2.0 to 2.7) | 9.7 s | 0.88 s | 0.21 s | 566 / 606 / 117 MB |
+| `flutter_tools` | 455,099 | 2.4 s (1.6 to 2.7) | 8.6 s | 0.87 s | 0.25 s | 378 / 543 / 103 MB |
 
-dartr is faster than `dart analyze` on all four projects, with or without Dart's cache. Most of the
-speed comes from analyzing files in parallel: on one thread dartr does about as much work as Dart (see
+dartr is faster than `dart analyze` on all four projects, with or without a disk cache. Most of the
+cold speed comes from analyzing files in parallel: on one thread dartr does about as much work as Dart (see
 the thread-scaling section in [docs/BENCHMARKS.md](docs/BENCHMARKS.md)). dartr uses more CPU time
-in total (for example 21.5 s of user time on Flutter in a 3.0 s run).
+in total on a cold run (for example 13.4 s of user time on Flutter in a 1.82 s run).
 
-**Method:** measured on 2026-10-11 between 03:00 and 03:35 with `hyperfine` (1 warm-up run, 3 measured
-runs) on an Apple M5 Pro with 15 cores, with no builds running (load average 2 to 4). Dart's warm-cache
-times vary more than dartr's. To repeat it: `bench/compare.sh` (`COLD=1` adds the empty-cache runs).
-The language server (editor use) is measured separately with `bench/lsp_bench.py`.
+**Method:** measured on 2026-10-13 with `hyperfine` (1 warm-up run, 3 measured runs) on an Apple M5 Pro with
+15 cores (load average 4 to 6). Dart's warm-cache times vary more than dartr's. To repeat it:
+`bench/compare.sh` (`COLD=1` adds the empty-cache runs) and `bench/memory.sh`. The language server (editor
+use) is measured separately with `bench/lsp_bench.py`.
 
 ## License
 

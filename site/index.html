@@ -54,115 +54,120 @@
 <section class="block" id="benchmarks" aria-labelledby="benchmarks-title">
   <div class="wrap">
     <h2 id="benchmarks-title">Benchmarks</h2>
-    <p class="section-intro">Measured on a single machine (Apple M5 Pro, 15 cores, 48 GB RAM) against Dart SDK 3.13.3. Files are analyzed in parallel on all cores. Dart caches results on disk (<code>~/.dartServer</code>); dartr does not yet.</p>
+    <p class="section-intro">Measured on a single machine (Apple M5 Pro, 15 cores, 48 GB RAM) against Dart SDK 3.13.3. Files are analyzed in parallel on all cores. Dart caches results on disk (<code>~/.dartServer</code>); dartr has an optional disk cache (<code>--cache</code> / <code>DARTR_CACHE_DIR</code>, off by default).</p>
 
     <h3><code>dartr analyze</code></h3>
-    <p class="sub-note">Wall time in seconds, lower is better. Measured while other builds ran (load average 5 to 11).</p>
+    <p class="sub-note">Wall time in seconds, lower is better. Measured at load average 4 to 6.</p>
 
     <ul class="legend" aria-label="Chart legend">
       <li><span class="sw dart" aria-hidden="true"></span><span><code>dart analyze</code>, warm disk cache</span></li>
       <li><span class="sw ref" aria-hidden="true"></span><span><code>dart analyze</code>, empty cache</span></li>
-      <li><span class="sw dartr" aria-hidden="true"></span><span><code>dartr analyze</code>, cold (no cache)</span></li>
+      <li><span class="sw dartr" aria-hidden="true"></span><span><code>dartr analyze</code> (cold or warm <code>--cache</code>)</span></li>
     </ul>
 
     <div class="charts">
       <figure class="chart" aria-labelledby="c1-t">
         <figcaption><b id="c1-t">Flutter application</b><span>1,559,637 lines · plugins · mean of 3 runs</span></figcaption>
-        <div class="bars" role="img" aria-label="Flutter application: dart analyze warm cache 62.7 seconds, dart analyze empty cache 81.7 seconds, dartr analyze 22 seconds.">
+        <div class="bars" role="img" aria-label="Flutter application: dart analyze warm cache 78.4 seconds, dart analyze empty cache 77.6 seconds, dartr analyze 18.4 seconds, dartr analyze warm cache 16.0 seconds.">
           <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
-          <div class="bar-row"><span class="lbl">dart, warm cache</span><div class="track"><div class="fill dart" style="--w:0.6270"></div><span class="val dart">62.7 s</span></div></div>
-          <div class="bar-row"><span class="lbl">dart, empty cache</span><div class="track"><div class="fill ref" style="--w:0.8170"></div><span class="val ref">81.7 s</span></div></div>
-          <div class="bar-row"><span class="lbl">dartr</span><div class="track"><div class="fill dartr" style="--w:0.2200"></div><span class="val dartr">22 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dart, warm cache</span><div class="track"><div class="fill dart" style="--w:0.7840"></div><span class="val dart">78.4 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dart, empty cache</span><div class="track"><div class="fill ref" style="--w:0.7760"></div><span class="val ref">77.6 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dartr</span><div class="track"><div class="fill dartr" style="--w:0.1840"></div><span class="val dartr">18.4 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dartr, warm cache</span><div class="track"><div class="fill dartr" style="--w:0.1600"></div><span class="val dartr">16.0 s*</span></div></div>
           <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">25</span><span style="left:50%">50</span><span style="left:75%">75</span><span style="left:100%">100</span></div><span class="axis-title">seconds</span></div>
         </div>
       </figure>
 
       <figure class="chart" aria-labelledby="c2-t">
         <figcaption><b id="c2-t">Flutter <code>packages/flutter</code></b><span>1,309,663 lines · mean of 3 runs</span></figcaption>
-        <div class="bars" role="img" aria-label="Flutter packages/flutter: dart analyze warm cache 6 seconds, dart analyze empty cache 19.8 seconds, dartr analyze 1.75 seconds.">
+        <div class="bars" role="img" aria-label="Flutter packages/flutter: dart analyze warm cache 7.8 seconds, dart analyze empty cache 20.3 seconds, dartr analyze 1.82 seconds, dartr analyze warm cache 0.21 seconds.">
           <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
-          <div class="bar-row"><span class="lbl">dart, warm cache</span><div class="track"><div class="fill dart" style="--w:0.3000"></div><span class="val dart">6 s</span></div></div>
-          <div class="bar-row"><span class="lbl">dart, empty cache</span><div class="track"><div class="fill ref" style="--w:0.9900"></div><span class="val ref">19.8 s</span></div></div>
-          <div class="bar-row"><span class="lbl">dartr</span><div class="track"><div class="fill dartr" style="--w:0.0875"></div><span class="val dartr">1.75 s</span></div></div>
-          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">5</span><span style="left:50%">10</span><span style="left:75%">15</span><span style="left:100%">20</span></div><span class="axis-title">seconds</span></div>
+          <div class="bar-row"><span class="lbl">dart, warm cache</span><div class="track"><div class="fill dart" style="--w:0.3250"></div><span class="val dart">7.8 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dart, empty cache</span><div class="track"><div class="fill ref" style="--w:0.8458"></div><span class="val ref">20.3 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dartr</span><div class="track"><div class="fill dartr" style="--w:0.0758"></div><span class="val dartr">1.82 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dartr, warm cache</span><div class="track"><div class="fill dartr" style="--w:0.0088"></div><span class="val dartr">0.21 s</span></div></div>
+          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">6</span><span style="left:50%">12</span><span style="left:75%">18</span><span style="left:100%">24</span></div><span class="axis-title">seconds</span></div>
         </div>
       </figure>
 
       <figure class="chart" aria-labelledby="c3-t">
         <figcaption><b id="c3-t"><code>analyzer</code> 9.0.0 (pub)</b><span>909,249 lines · mean of 3 runs</span></figcaption>
-        <div class="bars" role="img" aria-label="analyzer 9.0.0: dart analyze warm cache 3.1 seconds, dart analyze empty cache 8.7 seconds, dartr analyze 0.84 seconds.">
+        <div class="bars" role="img" aria-label="analyzer 9.0.0: dart analyze warm cache 2.3 seconds, dart analyze empty cache 9.7 seconds, dartr analyze 0.88 seconds, dartr analyze warm cache 0.21 seconds.">
           <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
-          <div class="bar-row"><span class="lbl">dart, warm cache</span><div class="track"><div class="fill dart" style="--w:0.3100"></div><span class="val dart">3.1 s</span></div></div>
-          <div class="bar-row"><span class="lbl">dart, empty cache</span><div class="track"><div class="fill ref" style="--w:0.8700"></div><span class="val ref">8.7 s</span></div></div>
-          <div class="bar-row"><span class="lbl">dartr</span><div class="track"><div class="fill dartr" style="--w:0.0840"></div><span class="val dartr">0.84 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dart, warm cache</span><div class="track"><div class="fill dart" style="--w:0.2300"></div><span class="val dart">2.3 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dart, empty cache</span><div class="track"><div class="fill ref" style="--w:0.9700"></div><span class="val ref">9.7 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dartr</span><div class="track"><div class="fill dartr" style="--w:0.0880"></div><span class="val dartr">0.88 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dartr, warm cache</span><div class="track"><div class="fill dartr" style="--w:0.0210"></div><span class="val dartr">0.21 s</span></div></div>
           <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">2.5</span><span style="left:50%">5</span><span style="left:75%">7.5</span><span style="left:100%">10</span></div><span class="axis-title">seconds</span></div>
         </div>
       </figure>
 
       <figure class="chart" aria-labelledby="c4-t">
         <figcaption><b id="c4-t"><code>flutter_tools</code></b><span>455,099 lines · mean of 3 runs</span></figcaption>
-        <div class="bars" role="img" aria-label="flutter_tools: dart analyze warm cache 1.6 seconds, dart analyze empty cache 12.1 seconds, dartr analyze 0.87 seconds.">
+        <div class="bars" role="img" aria-label="flutter_tools: dart analyze warm cache 2.4 seconds, dart analyze empty cache 8.6 seconds, dartr analyze 0.87 seconds, dartr analyze warm cache 0.25 seconds.">
           <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
-          <div class="bar-row"><span class="lbl">dart, warm cache</span><div class="track"><div class="fill dart" style="--w:0.1000"></div><span class="val dart">1.6 s</span></div></div>
-          <div class="bar-row"><span class="lbl">dart, empty cache</span><div class="track"><div class="fill ref" style="--w:0.7562"></div><span class="val ref">12.1 s</span></div></div>
-          <div class="bar-row"><span class="lbl">dartr</span><div class="track"><div class="fill dartr" style="--w:0.0544"></div><span class="val dartr">0.87 s</span></div></div>
-          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">4</span><span style="left:50%">8</span><span style="left:75%">12</span><span style="left:100%">16</span></div><span class="axis-title">seconds</span></div>
+          <div class="bar-row"><span class="lbl">dart, warm cache</span><div class="track"><div class="fill dart" style="--w:0.2400"></div><span class="val dart">2.4 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dart, empty cache</span><div class="track"><div class="fill ref" style="--w:0.8600"></div><span class="val ref">8.6 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dartr</span><div class="track"><div class="fill dartr" style="--w:0.0870"></div><span class="val dartr">0.87 s</span></div></div>
+          <div class="bar-row"><span class="lbl">dartr, warm cache</span><div class="track"><div class="fill dartr" style="--w:0.0250"></div><span class="val dartr">0.25 s</span></div></div>
+          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">2.5</span><span style="left:50%">5</span><span style="left:75%">7.5</span><span style="left:100%">10</span></div><span class="axis-title">seconds</span></div>
         </div>
       </figure>
     </div>
 
     <figure class="chart" aria-labelledby="c5-t">
       <figcaption><b id="c5-t">Peak memory</b><span>median of 3 runs · peak RSS</span></figcaption>
-      <div class="bars wide-val" role="img" aria-label="Peak memory of dart analyze vs dartr analyze: Flutter application dart 5,955 MB vs dartr 5,651 MB; Flutter packages/flutter dart 915 MB vs dartr 1,497 MB; analyzer 9.0.0 dart 490 MB vs dartr 790 MB; flutter_tools dart 492 MB vs dartr 918 MB.">
+      <div class="bars wide-val" role="img" aria-label="Peak memory of dart analyze vs dartr analyze: Flutter application dart 3,989 MB vs dartr 2,332 MB; Flutter packages/flutter dart 907 MB vs dartr 855 MB; analyzer 9.0.0 dart 566 MB vs dartr 606 MB; flutter_tools dart 378 MB vs dartr 543 MB.">
         <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
         <div class="bar-row multi">
           <span class="lbl">Flutter app</span>
           <div class="bar-stack">
-            <div class="track"><div class="fill dart" style="--w:0.9925"></div><span class="val dart">5,955 MB</span></div>
-            <div class="track"><div class="fill dartr" style="--w:0.9418"></div><span class="val dartr">5,651 MB</span></div>
+            <div class="track"><div class="fill dart" style="--w:0.9973"></div><span class="val dart">3,989 MB</span></div>
+            <div class="track"><div class="fill dartr" style="--w:0.5830"></div><span class="val dartr">2,332 MB</span></div>
           </div>
         </div>
         <div class="bar-row multi">
           <span class="lbl">Flutter</span>
           <div class="bar-stack">
-            <div class="track"><div class="fill dart" style="--w:0.1525"></div><span class="val dart">915 MB</span></div>
-            <div class="track"><div class="fill dartr" style="--w:0.2495"></div><span class="val dartr">1,497 MB</span></div>
+            <div class="track"><div class="fill dart" style="--w:0.2268"></div><span class="val dart">907 MB</span></div>
+            <div class="track"><div class="fill dartr" style="--w:0.2138"></div><span class="val dartr">855 MB</span></div>
           </div>
         </div>
         <div class="bar-row multi">
           <span class="lbl"><code>analyzer</code> 9.0.0</span>
           <div class="bar-stack">
-            <div class="track"><div class="fill dart" style="--w:0.0817"></div><span class="val dart">490 MB</span></div>
-            <div class="track"><div class="fill dartr" style="--w:0.1317"></div><span class="val dartr">790 MB</span></div>
+            <div class="track"><div class="fill dart" style="--w:0.1415"></div><span class="val dart">566 MB</span></div>
+            <div class="track"><div class="fill dartr" style="--w:0.1515"></div><span class="val dartr">606 MB</span></div>
           </div>
         </div>
         <div class="bar-row multi">
           <span class="lbl"><code>flutter_tools</code></span>
           <div class="bar-stack">
-            <div class="track"><div class="fill dart" style="--w:0.0820"></div><span class="val dart">492 MB</span></div>
-            <div class="track"><div class="fill dartr" style="--w:0.1530"></div><span class="val dartr">918 MB</span></div>
+            <div class="track"><div class="fill dart" style="--w:0.0945"></div><span class="val dart">378 MB</span></div>
+            <div class="track"><div class="fill dartr" style="--w:0.1358"></div><span class="val dartr">543 MB</span></div>
           </div>
         </div>
-        <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">1,500</span><span style="left:50%">3,000</span><span style="left:75%">4,500</span><span style="left:100%">6,000</span></div><span class="axis-title">MB</span></div>
+        <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">1,000</span><span style="left:50%">2,000</span><span style="left:75%">3,000</span><span style="left:100%">4,000</span></div><span class="axis-title">MB</span></div>
       </div>
     </figure>
 
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th scope="col">project</th><th scope="col" class="num">Dart lines</th><th scope="col" class="num">dart, warm cache</th><th scope="col" class="num">dart, empty cache</th><th scope="col" class="num">dartr</th><th scope="col" class="num">peak RSS (dart / dartr)</th></tr>
+          <tr><th scope="col">project</th><th scope="col" class="num">Dart lines</th><th scope="col" class="num">dart, warm cache</th><th scope="col" class="num">dart, empty cache</th><th scope="col" class="num">dartr</th><th scope="col" class="num">dartr, warm cache</th><th scope="col" class="num">peak RSS (dart / dartr / warm cache)</th></tr>
         </thead>
         <tbody>
-          <tr><th scope="row">Flutter application (pub workspace, analyzer plugins)</th><td class="num">1,559,637</td><td class="num dart">62.7 s</td><td class="num">81.7 s</td><td class="num dartr">22 s</td><td class="num"><span class="dart">5,955 MB</span> / <span class="dartr">5,651 MB</span></td></tr>
-          <tr><th scope="row">Flutter <code>packages/flutter</code></th><td class="num">1,309,663</td><td class="num dart">6 s</td><td class="num">19.8 s</td><td class="num dartr">1.75 s</td><td class="num"><span class="dart">915 MB</span> / <span class="dartr">1,497 MB</span></td></tr>
-          <tr><th scope="row"><code>analyzer</code> 9.0.0 (pub)</th><td class="num">909,249</td><td class="num dart">3.1 s</td><td class="num">8.7 s</td><td class="num dartr">0.84 s</td><td class="num"><span class="dart">490 MB</span> / <span class="dartr">790 MB</span></td></tr>
-          <tr><th scope="row"><code>flutter_tools</code></th><td class="num">455,099</td><td class="num dart">1.6 s</td><td class="num">12.1 s</td><td class="num dartr">0.87 s</td><td class="num"><span class="dart">492 MB</span> / <span class="dartr">918 MB</span></td></tr>
+          <tr><th scope="row">Flutter application (pub workspace, analyzer plugins)</th><td class="num">1,559,637</td><td class="num dart">78.4 s (52.2–107.1 s)</td><td class="num">77.6 s</td><td class="num dartr">18.4 s</td><td class="num dartr">16.0 s*</td><td class="num"><span class="dart">3,989 MB</span> / <span class="dartr">2,332 MB</span> / <span class="dartr">2,258 MB*</span></td></tr>
+          <tr><th scope="row">Flutter <code>packages/flutter</code></th><td class="num">1,309,663</td><td class="num dart">7.8 s</td><td class="num">20.3 s</td><td class="num dartr">1.82 s</td><td class="num dartr">0.21 s</td><td class="num"><span class="dart">907 MB</span> / <span class="dartr">855 MB</span> / <span class="dartr">122 MB</span></td></tr>
+          <tr><th scope="row"><code>analyzer</code> 9.0.0 (pub)</th><td class="num">909,249</td><td class="num dart">2.3 s</td><td class="num">9.7 s</td><td class="num dartr">0.88 s</td><td class="num dartr">0.21 s</td><td class="num"><span class="dart">566 MB</span> / <span class="dartr">606 MB</span> / <span class="dartr">117 MB</span></td></tr>
+          <tr><th scope="row"><code>flutter_tools</code></th><td class="num">455,099</td><td class="num dart">2.4 s</td><td class="num">8.6 s</td><td class="num dartr">0.87 s</td><td class="num dartr">0.25 s</td><td class="num"><span class="dart">378 MB</span> / <span class="dartr">543 MB</span> / <span class="dartr">103 MB</span></td></tr>
         </tbody>
       </table>
+      <p class="table-note">* 1.32 s and 274 MB without the analyzer plugin (which runs in a Dart subprocess).</p>
     </div>
 
     <h3 class="sub-head"><code>dartr language-server</code></h3>
-    <p class="sub-note">Measured on the same machine (load average 5 to 7) with <code>bench/lsp_bench.py</code>. Memory is RSS after startup.</p>
+    <p class="sub-note">Measured on the same machine (load average 4 to 6, with a short spike to 28 at the start of the Flutter run; dartr startup on Flutter and <code>analyzer</code> 9.0.0 from a separate run at load average 3) with <code>bench/lsp_bench.py</code>. Memory is RSS after startup.</p>
 
     <ul class="legend" aria-label="Language server chart legend">
       <li><span class="sw ref" aria-hidden="true"></span><span><code>dart language-server</code>, cold (empty cache)</span></li>
@@ -173,78 +178,78 @@
     <div class="charts">
       <figure class="chart" aria-labelledby="lsp-c1-t">
         <figcaption><b id="lsp-c1-t">Startup</b><span>dart cold: 1 run · dart warm, dartr: 2 runs · split scale</span></figcaption>
-        <div class="bars wide-val" role="img" aria-label="Language server startup on Flutter application: dart cold 77 seconds, dart warm 87 seconds, dartr 26 seconds.">
+        <div class="bars wide-val" role="img" aria-label="Language server startup on Flutter application: dart cold 93.0 seconds, dart warm 40.3 seconds, dartr 33.0 seconds.">
           <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
           <div class="bar-row multi">
             <span class="lbl">Flutter app</span>
             <div class="bar-stack">
-              <div class="track"><div class="fill ref" style="--w:0.7700"></div><span class="val ref">77 s</span></div>
-              <div class="track"><div class="fill dart" style="--w:0.8700"></div><span class="val dart">87 s</span></div>
-              <div class="track"><div class="fill dartr" style="--w:0.2600"></div><span class="val dartr">26 s*</span></div>
+              <div class="track"><div class="fill ref" style="--w:0.9300"></div><span class="val ref">93.0 s</span></div>
+              <div class="track"><div class="fill dart" style="--w:0.4030"></div><span class="val dart">40.3 s</span></div>
+              <div class="track"><div class="fill dartr" style="--w:0.3300"></div><span class="val dartr">33.0 s</span></div>
             </div>
           </div>
           <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">25</span><span style="left:50%">50</span><span style="left:75%">75</span><span style="left:100%">100</span></div><span class="axis-title">seconds</span></div>
         </div>
-        <div class="bars wide-val" role="img" aria-label="Language server startup on packages: Flutter dart cold 20.9 s, dart warm 4.0 s, dartr 3.6 to 4.2 s; analyzer 9.0.0 dart cold 9.0 s, dart warm 4.7 s, dartr 1.0 to 1.5 s; flutter_tools dart cold 8.5 s, dart warm 1.6 s, dartr 1.3 to 2.2 s.">
+        <div class="bars wide-val" role="img" aria-label="Language server startup on packages: Flutter dart cold 41.6 s, dart warm 4.2 s, dartr 2.0 to 6.1 s; analyzer 9.0.0 dart cold 8.1 s, dart warm 1.9 s, dartr 1.3 to 4.2 s; flutter_tools dart cold 9.3 s, dart warm 1.4 s, dartr 0.9 to 3.7 s.">
           <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
           <div class="bar-row multi">
             <span class="lbl">Flutter</span>
             <div class="bar-stack">
-              <div class="track"><div class="fill ref" style="--w:0.8708"></div><span class="val ref">20.9 s</span></div>
-              <div class="track"><div class="fill dart" style="--w:0.1667"></div><span class="val dart">4.0 s</span></div>
-              <div class="track"><div class="fill dartr" style="--w:0.1625"></div><span class="val dartr">3.6–4.2 s</span></div>
+              <div class="track"><div class="fill ref" style="--w:0.8667"></div><span class="val ref">41.6 s*</span></div>
+              <div class="track"><div class="fill dart" style="--w:0.0883"></div><span class="val dart">4.2 s</span></div>
+              <div class="track"><div class="fill dartr" style="--w:0.0844"></div><span class="val dartr">2.0–6.1 s</span></div>
             </div>
           </div>
           <div class="bar-row multi">
             <span class="lbl"><code>analyzer</code> 9.0.0</span>
             <div class="bar-stack">
-              <div class="track"><div class="fill ref" style="--w:0.3750"></div><span class="val ref">9.0 s</span></div>
-              <div class="track"><div class="fill dart" style="--w:0.1958"></div><span class="val dart">4.7 s</span></div>
-              <div class="track"><div class="fill dartr" style="--w:0.0521"></div><span class="val dartr">1.0–1.5 s</span></div>
+              <div class="track"><div class="fill ref" style="--w:0.1696"></div><span class="val ref">8.1 s</span></div>
+              <div class="track"><div class="fill dart" style="--w:0.0398"></div><span class="val dart">1.9 s</span></div>
+              <div class="track"><div class="fill dartr" style="--w:0.0573"></div><span class="val dartr">1.3–4.2 s</span></div>
             </div>
           </div>
           <div class="bar-row multi">
             <span class="lbl"><code>flutter_tools</code></span>
             <div class="bar-stack">
-              <div class="track"><div class="fill ref" style="--w:0.3542"></div><span class="val ref">8.5 s</span></div>
-              <div class="track"><div class="fill dart" style="--w:0.0667"></div><span class="val dart">1.6 s</span></div>
-              <div class="track"><div class="fill dartr" style="--w:0.0729"></div><span class="val dartr">1.3–2.2 s</span></div>
+              <div class="track"><div class="fill ref" style="--w:0.1929"></div><span class="val ref">9.3 s</span></div>
+              <div class="track"><div class="fill dart" style="--w:0.0292"></div><span class="val dart">1.4 s</span></div>
+              <div class="track"><div class="fill dartr" style="--w:0.0479"></div><span class="val dartr">0.9–3.7 s</span></div>
             </div>
           </div>
-          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">6</span><span style="left:50%">12</span><span style="left:75%">18</span><span style="left:100%">24</span></div><span class="axis-title">seconds</span></div>
+          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">12</span><span style="left:50%">24</span><span style="left:75%">36</span><span style="left:100%">48</span></div><span class="axis-title">seconds</span></div>
         </div>
       </figure>
 
       <figure class="chart" aria-labelledby="lsp-c2-t">
         <figcaption><b id="lsp-c2-t">Completion after <code>.</code></b><span>median of 20 positions</span></figcaption>
-        <div class="bars" role="img" aria-label="Completion after dot: Flutter application dart 5.8 ms vs dartr 2.3 ms; Flutter dart 2.7 ms vs dartr 1.5 ms; analyzer 9.0.0 dart 2.1 ms vs dartr 0.7 ms; flutter_tools dart 2.7 ms vs dartr 1.1 ms.">
+        <div class="bars" role="img" aria-label="Completion after dot: Flutter application dart 4.8 ms vs dartr 1.2 ms; Flutter dart 3.8 ms vs dartr 2.2 ms; analyzer 9.0.0 dart 2.1 ms vs dartr 0.95 ms; flutter_tools dart 2.8 ms vs dartr 1.5 ms.">
           <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
           <div class="bar-row multi">
             <span class="lbl">Flutter app</span>
             <div class="bar-stack">
-              <div class="track"><div class="fill dart" style="--w:0.9667"></div><span class="val dart">5.8 ms</span></div>
-              <div class="track"><div class="fill dartr" style="--w:0.3833"></div><span class="val dartr">2.3 ms</span></div>
+              <div class="track"><div class="fill dart" style="--w:0.8050"></div><span class="val dart">4.8 ms</span></div>
+              <div class="track"><div class="fill dartr" style="--w:0.1950"></div><span class="val dartr">1.2 ms</span></div>
             </div>
           </div>
           <div class="bar-row multi">
             <span class="lbl">Flutter</span>
             <div class="bar-stack">
-              <div class="track"><div class="fill dart" style="--w:0.4500"></div><span class="val dart">2.7 ms</span></div>
-              <div class="track"><div class="fill dartr" style="--w:0.2500"></div><span class="val dartr">1.5 ms</span></div>
+              <div class="track"><div class="fill dart" style="--w:0.6367"></div><span class="val dart">3.8 ms</span></div>
+              <div class="track"><div class="fill dartr" style="--w:0.3700"></div><span class="val dartr">2.2 ms</span></div>
             </div>
           </div>
           <div class="bar-row multi">
             <span class="lbl"><code>analyzer</code> 9.0.0</span>
             <div class="bar-stack">
-              <div class="track"><div class="fill dart" style="--w:0.3500"></div><span class="val dart">2.1 ms</span></div>
-              <div class="track"><div class="fill dartr" style="--w:0.1167"></div><span class="val dartr">0.7 ms</span></div>
+              <div class="track"><div class="fill dart" style="--w:0.3533"></div><span class="val dart">2.1 ms</span></div>
+              <div class="track"><div class="fill dartr" style="--w:0.1583"></div><span class="val dartr">0.95 ms</span></div>
             </div>
           </div>
           <div class="bar-row multi">
             <span class="lbl"><code>flutter_tools</code></span>
             <div class="bar-stack">
-              <div class="track"><div class="fill dart" style="--w:0.4500"></div><span class="val dart">2.7 ms</span></div>
-              <div class="track"><div class="fill dartr" style="--w:0.1833"></div><span class="val dartr">1.1 ms</span></div>
+              <div class="track"><div class="fill dart" style="--w:0.4717"></div><span class="val dart">2.8 ms</span></div>
+              <div class="track"><div class="fill dartr" style="--w:0.2550"></div><span class="val dartr">1.5 ms</span></div>
             </div>
           </div>
           <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">1.5</span><span style="left:50%">3</span><span style="left:75%">4.5</span><span style="left:100%">6</span></div><span class="axis-title">ms</span></div>
@@ -253,77 +258,77 @@
 
       <figure class="chart" aria-labelledby="lsp-c3-t">
         <figcaption><b id="lsp-c3-t">References (first request)</b><span>1 request per project · split scale</span></figcaption>
-        <div class="bars" role="img" aria-label="First references request on large projects: Flutter application dart 2.5 s vs dartr 2.0 s; Flutter dart 2.9 s vs dartr 1.2 s.">
+        <div class="bars" role="img" aria-label="First references request on large projects: Flutter application dart 6.0 s vs dartr 0.94 s; Flutter dart 13.8 s vs dartr 5.9 s.">
           <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
           <div class="bar-row multi">
             <span class="lbl">Flutter app</span>
             <div class="bar-stack">
-              <div class="track"><div class="fill dart" style="--w:0.7813"></div><span class="val dart">2.5 s</span></div>
-              <div class="track"><div class="fill dartr" style="--w:0.6250"></div><span class="val dartr">2.0 s</span></div>
+              <div class="track"><div class="fill dart" style="--w:0.3750"></div><span class="val dart">6.0 s</span></div>
+              <div class="track"><div class="fill dartr" style="--w:0.0588"></div><span class="val dartr">0.94 s</span></div>
             </div>
           </div>
           <div class="bar-row multi">
             <span class="lbl">Flutter</span>
             <div class="bar-stack">
-              <div class="track"><div class="fill dart" style="--w:0.9063"></div><span class="val dart">2.9 s</span></div>
-              <div class="track"><div class="fill dartr" style="--w:0.3750"></div><span class="val dartr">1.2 s</span></div>
+              <div class="track"><div class="fill dart" style="--w:0.8625"></div><span class="val dart">13.8 s</span></div>
+              <div class="track"><div class="fill dartr" style="--w:0.3688"></div><span class="val dartr">5.9 s</span></div>
             </div>
           </div>
-          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">0.8</span><span style="left:50%">1.6</span><span style="left:75%">2.4</span><span style="left:100%">3.2</span></div><span class="axis-title">seconds</span></div>
+          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">4</span><span style="left:50%">8</span><span style="left:75%">12</span><span style="left:100%">16</span></div><span class="axis-title">seconds</span></div>
         </div>
-        <div class="bars" role="img" aria-label="First references request on packages: analyzer 9.0.0 dart 16 ms vs dartr 34 ms; flutter_tools dart 75 ms vs dartr 181 ms.">
+        <div class="bars" role="img" aria-label="First references request on packages: analyzer 9.0.0 dart 36 ms vs dartr 85 ms; flutter_tools dart 57 ms vs dartr 288 ms.">
           <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
           <div class="bar-row multi">
             <span class="lbl"><code>analyzer</code> 9.0.0</span>
             <div class="bar-stack">
-              <div class="track"><div class="fill dart" style="--w:0.0800"></div><span class="val dart">16 ms</span></div>
-              <div class="track"><div class="fill dartr" style="--w:0.1700"></div><span class="val dartr">34 ms</span></div>
+              <div class="track"><div class="fill dart" style="--w:0.1125"></div><span class="val dart">36 ms</span></div>
+              <div class="track"><div class="fill dartr" style="--w:0.2656"></div><span class="val dartr">85 ms</span></div>
             </div>
           </div>
           <div class="bar-row multi">
             <span class="lbl"><code>flutter_tools</code></span>
             <div class="bar-stack">
-              <div class="track"><div class="fill dart" style="--w:0.3750"></div><span class="val dart">75 ms</span></div>
-              <div class="track"><div class="fill dartr" style="--w:0.9050"></div><span class="val dartr">181 ms</span></div>
+              <div class="track"><div class="fill dart" style="--w:0.1781"></div><span class="val dart">57 ms</span></div>
+              <div class="track"><div class="fill dartr" style="--w:0.9000"></div><span class="val dartr">288 ms</span></div>
             </div>
           </div>
-          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">50</span><span style="left:50%">100</span><span style="left:75%">150</span><span style="left:100%">200</span></div><span class="axis-title">ms</span></div>
+          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">80</span><span style="left:50%">160</span><span style="left:75%">240</span><span style="left:100%">320</span></div><span class="axis-title">ms</span></div>
         </div>
       </figure>
 
       <figure class="chart" aria-labelledby="lsp-c4-t">
         <figcaption><b id="lsp-c4-t">Memory after startup</b><span>process-tree RSS</span></figcaption>
-        <div class="bars wide-val" role="img" aria-label="Memory after startup: Flutter application dart 6,773 MB vs dartr 5,270 MB; Flutter dart 823 MB vs dartr 1,652 MB; analyzer 9.0.0 dart 612 MB vs dartr 910 MB; flutter_tools dart 546 MB vs dartr 962 MB.">
+        <div class="bars wide-val" role="img" aria-label="Memory after startup: Flutter application dart 3,410 MB vs dartr 3,138 MB; Flutter dart 371 MB vs dartr 858 MB; analyzer 9.0.0 dart 324 MB vs dartr 675 MB; flutter_tools dart 266 MB vs dartr 544 MB.">
           <div class="grid-lines" aria-hidden="true"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
           <div class="bar-row multi">
             <span class="lbl">Flutter app</span>
             <div class="bar-stack">
-              <div class="track"><div class="fill dart" style="--w:0.8466"></div><span class="val dart">6,773 MB</span></div>
-              <div class="track"><div class="fill dartr" style="--w:0.6588"></div><span class="val dartr">5,270 MB</span></div>
+              <div class="track"><div class="fill dart" style="--w:0.8525"></div><span class="val dart">3,410 MB</span></div>
+              <div class="track"><div class="fill dartr" style="--w:0.7845"></div><span class="val dartr">3,138 MB</span></div>
             </div>
           </div>
           <div class="bar-row multi">
             <span class="lbl">Flutter</span>
             <div class="bar-stack">
-              <div class="track"><div class="fill dart" style="--w:0.1029"></div><span class="val dart">823 MB</span></div>
-              <div class="track"><div class="fill dartr" style="--w:0.2065"></div><span class="val dartr">1,652 MB</span></div>
+              <div class="track"><div class="fill dart" style="--w:0.0928"></div><span class="val dart">371 MB</span></div>
+              <div class="track"><div class="fill dartr" style="--w:0.2145"></div><span class="val dartr">858 MB</span></div>
             </div>
           </div>
           <div class="bar-row multi">
             <span class="lbl"><code>analyzer</code> 9.0.0</span>
             <div class="bar-stack">
-              <div class="track"><div class="fill dart" style="--w:0.0765"></div><span class="val dart">612 MB</span></div>
-              <div class="track"><div class="fill dartr" style="--w:0.1138"></div><span class="val dartr">910 MB</span></div>
+              <div class="track"><div class="fill dart" style="--w:0.0810"></div><span class="val dart">324 MB</span></div>
+              <div class="track"><div class="fill dartr" style="--w:0.1688"></div><span class="val dartr">675 MB</span></div>
             </div>
           </div>
           <div class="bar-row multi">
             <span class="lbl"><code>flutter_tools</code></span>
             <div class="bar-stack">
-              <div class="track"><div class="fill dart" style="--w:0.0683"></div><span class="val dart">546 MB</span></div>
-              <div class="track"><div class="fill dartr" style="--w:0.1203"></div><span class="val dartr">962 MB</span></div>
+              <div class="track"><div class="fill dart" style="--w:0.0665"></div><span class="val dart">266 MB</span></div>
+              <div class="track"><div class="fill dartr" style="--w:0.1360"></div><span class="val dartr">544 MB</span></div>
             </div>
           </div>
-          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">2,000</span><span style="left:50%">4,000</span><span style="left:75%">6,000</span><span style="left:100%">8,000</span></div><span class="axis-title">MB</span></div>
+          <div class="axis" aria-hidden="true"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:25%">1,000</span><span style="left:50%">2,000</span><span style="left:75%">3,000</span><span style="left:100%">4,000</span></div><span class="axis-title">MB</span></div>
         </div>
       </figure>
     </div>
@@ -334,17 +339,17 @@
           <tr><th scope="col">project</th><th scope="col">server</th><th scope="col" class="num">startup cold / warm</th><th scope="col" class="num">hover</th><th scope="col" class="num">completion <code>.</code> / stmt</th><th scope="col" class="num">references repeat / first</th><th scope="col" class="num">memory</th></tr>
         </thead>
         <tbody>
-          <tr><th scope="row" rowspan="2"><code>flutter_tools</code></th><td>dart</td><td class="num dart">8.5 s / 1.6 s</td><td class="num dart">0.1 ms</td><td class="num dart">2.7 / 30 ms</td><td class="num dart">45 ms / 75 ms</td><td class="num dart">546 MB</td></tr>
-          <tr><td>dartr</td><td class="num dartr">1.3–2.2 s</td><td class="num dartr">0.0 ms</td><td class="num dartr">1.1 / 24 ms</td><td class="num dartr">17 ms / 181 ms</td><td class="num dartr">962 MB</td></tr>
-          <tr><th scope="row" rowspan="2"><code>analyzer</code> 9.0.0</th><td>dart</td><td class="num dart">9.0 s / 4.7 s</td><td class="num dart">0.1 ms</td><td class="num dart">2.1 / 19 ms</td><td class="num dart">13 ms / 16 ms</td><td class="num dart">612 MB</td></tr>
-          <tr><td>dartr</td><td class="num dartr">1.0–1.5 s</td><td class="num dartr">0.0 ms</td><td class="num dartr">0.7 / 14 ms</td><td class="num dartr">2 ms / 34 ms</td><td class="num dartr">910 MB</td></tr>
-          <tr><th scope="row" rowspan="2">Flutter <code>packages/flutter</code></th><td>dart</td><td class="num dart">20.9 s / 4.0 s</td><td class="num dart">0.1 ms</td><td class="num dart">2.7 / 45 ms</td><td class="num dart">170 ms / 2.9 s</td><td class="num dart">823 MB</td></tr>
-          <tr><td>dartr</td><td class="num dartr">3.6–4.2 s</td><td class="num dartr">0.1 ms</td><td class="num dartr">1.5 / 32 ms</td><td class="num dartr">58 ms / 1.2 s</td><td class="num dartr">1,652 MB</td></tr>
-          <tr><th scope="row" rowspan="2">Flutter application</th><td>dart</td><td class="num dart">77 s / 87 s</td><td class="num dart">0.2 ms</td><td class="num dart">5.8 / 57 ms</td><td class="num dart">90 ms / 2.5 s</td><td class="num dart">6,773 MB</td></tr>
-          <tr><td>dartr</td><td class="num dartr">26 s*</td><td class="num dartr">0.1 ms</td><td class="num dartr">2.3 / 43 ms</td><td class="num dartr">13 ms / 2.0 s</td><td class="num dartr">5,270 MB</td></tr>
+          <tr><th scope="row" rowspan="2"><code>flutter_tools</code></th><td>dart</td><td class="num dart">9.3 s / 1.4 s</td><td class="num dart">0.1 ms</td><td class="num dart">2.8 / 26 ms</td><td class="num dart">42 ms / 57 ms</td><td class="num dart">266 MB</td></tr>
+          <tr><td>dartr</td><td class="num dartr">0.9–3.7 s</td><td class="num dartr">0.0 ms</td><td class="num dartr">1.5 / 25 ms</td><td class="num dartr">1.6 ms / 288 ms</td><td class="num dartr">544 MB</td></tr>
+          <tr><th scope="row" rowspan="2"><code>analyzer</code> 9.0.0</th><td>dart</td><td class="num dart">8.1 s / 1.9 s</td><td class="num dart">0.1 ms</td><td class="num dart">2.1 / 23 ms</td><td class="num dart">20 ms / 36 ms</td><td class="num dart">324 MB</td></tr>
+          <tr><td>dartr</td><td class="num dartr">1.3–4.2 s</td><td class="num dartr">0.0 ms</td><td class="num dartr">0.95 / 12 ms</td><td class="num dartr">0.7 ms / 85 ms</td><td class="num dartr">675 MB</td></tr>
+          <tr><th scope="row" rowspan="2">Flutter <code>packages/flutter</code></th><td>dart</td><td class="num dart">41.6 s* / 4.2 s</td><td class="num dart">0.4 ms</td><td class="num dart">3.8 / 45 ms</td><td class="num dart">257 ms / 13.8 s</td><td class="num dart">371 MB</td></tr>
+          <tr><td>dartr</td><td class="num dartr">2.0–6.1 s</td><td class="num dartr">0.1 ms</td><td class="num dartr">2.2 / 62 ms</td><td class="num dartr">5.8 ms / 5.9 s</td><td class="num dartr">858 MB</td></tr>
+          <tr><th scope="row" rowspan="2">Flutter application</th><td>dart</td><td class="num dart">93.0 s / 40.3 s</td><td class="num dart">0.4 ms</td><td class="num dart">4.8 / 53 ms</td><td class="num dart">40 ms / 6.0 s</td><td class="num dart">3,410 MB</td></tr>
+          <tr><td>dartr</td><td class="num dartr">33.0 s (18.2–47.7 s)</td><td class="num dartr">0.0 ms</td><td class="num dartr">1.2 / 34 ms</td><td class="num dartr">0.4 ms / 0.94 s</td><td class="num dartr">3,138 MB</td></tr>
         </tbody>
       </table>
-      <p class="table-note">* 70 s on the first start after installing a new dartr version (the analyzer plugin is prepared once).</p>
+      <p class="table-note">* Short load spike (load average 28) at the start of the Flutter language-server run.</p>
     </div>
 
     <p class="table-note">Method: <code>hyperfine -i -N -w 1 -r 3</code> via <code>bench/compare.sh</code>, <code>/usr/bin/time -l</code> via <code>bench/memory.sh</code>, and <code>bench/lsp_bench.py</code>; see <a href="https://github.com/orestesgaolin/dartr/blob/main/docs/BENCHMARKS.md">docs/BENCHMARKS.md</a> for more charts and full results.</p>
@@ -354,7 +359,7 @@
 <section class="block" id="parity" aria-labelledby="parity-title">
   <div class="wrap">
     <h2 id="parity-title">Parity</h2>
-    <p class="section-intro"><code>dartr analyze</code> reports the same diagnostics as <code>dart analyze</code> (3.13.3) on Flutter (<code>packages/flutter</code>), <code>flutter_tools</code>, <code>analyzer</code> 9.0.0, a 1.56 million line Flutter application (with analyzer plugins) and 671 real packages from the pub cache and the Flutter SDK. <code>dartr format</code> matches <code>dart format</code> on the <code>dart_style</code> tests and 220 pub packages, <code>dartr fix</code> matches <code>dart fix</code> on 65 pub packages with 85 fixable lints enabled, and <code>dartr language-server</code> registers every capability of <code>dart language-server</code> (plus all 59 requests and 22 notifications of <code>--protocol=analyzer</code>).</p>
+    <p class="section-intro"><code>dartr analyze</code> reports the same diagnostics as <code>dart analyze</code> (3.13.3) on Flutter (<code>packages/flutter</code>), <code>flutter_tools</code>, <code>analyzer</code> 9.0.0, a 1.56 million line Flutter application (with analyzer plugins) and 671 real packages from the pub cache and the Flutter SDK. <code>dartr format</code> matches <code>dart format</code> on the <code>dart_style</code> tests and 220 pub packages, <code>dartr fix</code> matches <code>dart fix</code> on 65 pub packages with 85 fixable lints enabled, and <code>dartr language-server</code> matches <code>dart language-server</code> on 8,876 sampled requests across 42 pub packages and registers every capability (plus all 59 requests and 22 notifications of <code>--protocol=analyzer</code>).</p>
     <p class="section-intro">Correctness is checked with differential tests against the Dart SDK 3.13.3 tools on the SDK test suite and package corpora; see the <a href="https://github.com/orestesgaolin/dartr#readme">README</a>.</p>
   </div>
 </section>
@@ -363,8 +368,8 @@
   <div class="wrap">
     <h2 id="differences-title">Differences</h2>
     <ul class="plain-list">
-      <li><b>Memory:</b> 1.5 to 2 times Dart's on packages, slightly lower on the full application (see the memory charts).</li>
-      <li><b>No disk cache:</b> dartr analyzes from source on every run, so a warm <code>dart language-server</code> can start faster on packages (1.6 s vs 1.3–2.2 s on <code>flutter_tools</code>, 4.0 s vs 3.6–4.2 s on Flutter).</li>
+      <li><b>Memory:</b> similar to Dart's for <code>dartr analyze</code> on packages (lower on Flutter and the full application; 103 to 122 MB on packages with a warm <code>--cache</code>) and about 2 times Dart's for <code>dartr language-server</code> on packages (slightly lower on the full application; see the memory charts).</li>
+      <li><b>Disk cache:</b> <code>dartr analyze</code> has an optional disk cache (<code>--cache</code> / <code>DARTR_CACHE_DIR</code>, off by default); <code>dartr language-server</code> analyzes from source on every run, so a warm <code>dart language-server</code> can start faster on packages (1.4 s vs 0.9–3.7 s on <code>flutter_tools</code>, 1.9 s vs 1.3–4.2 s on <code>analyzer</code> 9.0.0, 4.2 s vs 2.0–6.1 s on Flutter).</li>
       <li><b>Remaining gaps:</b> <code>dartr fix</code> does not include <code>pubspec.yaml</code> <code>missing_dependency</code> fixes yet. <code>flutter analyze</code> and IntelliJ invoke <code>&lt;sdk&gt;/bin/dart language-server</code> directly and have no setting for another binary.</li>
       <li><b>Platforms and SDK requirement:</b> macOS arm64 and Linux x86_64 only. Requires a Dart or Flutter SDK (3.13.3) on <code>PATH</code> to read the <code>dart:</code> libraries.</li>
     </ul>

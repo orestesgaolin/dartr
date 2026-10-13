@@ -29,6 +29,7 @@ HISTORY = [
     ("10-10 19:45 (busy)", {"app": 24.945, "flutter": 7.380, "analyzer": 1.424, "flutter_tools": 3.665}),
     ("10-11 03:00 (quiet)", {"app": 17.919, "flutter": 2.975, "analyzer": 0.856, "flutter_tools": 0.805}),
     ("10-11 13:00 (busy)", {"app": 22.007, "flutter": 1.752, "analyzer": 0.840, "flutter_tools": 0.871}),
+    ("10-13 09:15 (quiet)", {"app": 18.446, "flutter": 1.818, "analyzer": 0.881, "flutter_tools": 0.874}),
 ]
 COLORS = ["#0175C2", "#9CC8EA", "#DEA584", "#8A4F2A", "#C0602A"]
 
