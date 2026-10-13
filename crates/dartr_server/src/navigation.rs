@@ -646,7 +646,12 @@ impl AstVisitor for NavigationVisitor<'_, '_> {
     }
 
     fn visit_library_directive(&mut self, ast: &Ast, node: Id<LibraryDirective>) {
-        let element = self.element(node);
+        let element = crate::element_locator::Unit {
+            ctx: self.ctx,
+            ast,
+            tables: self.tables,
+        }
+        .library_directive_element(node.raw());
         self.add_node_element(ast, ast[node].name.map(|n| n.raw()), element);
         ast.visit_children(node, self);
     }

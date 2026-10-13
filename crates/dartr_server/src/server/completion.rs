@@ -154,11 +154,13 @@ impl Server {
                         .filter(|f| f.ends_with(".dart") && !is_excluded_fn(f))
                         .collect()
                 });
+                let sdk = context.sdk.as_ref().or(coll.sdk.as_ref());
                 let mut available_files: Vec<String> = Vec::new();
-                if let Some(sdk) = context.sdk.as_ref().or(coll.sdk.as_ref()) {
+                if let Some(sdk) = sdk {
                     available_files.extend(
                         sdk.libraries()
                             .iter()
+                            .filter(|l| !l.is_internal())
                             .filter_map(|l| sdk.map_dart_uri(&l.short_name)),
                     );
                 }
@@ -209,12 +211,15 @@ impl Server {
                         None
                     };
                 for pkg in context.packages.packages() {
-                    if let Some(allowed) = &allowed_pkgs
+                    let is_embedder_sdk = sdk.is_some_and(|s| s.path() == pkg.lib);
+                    if !is_embedder_sdk
+                        && let Some(allowed) = &allowed_pkgs
                         && !allowed.contains(&pkg.name)
                     {
                         continue;
                     }
-                    let skip_src = package.as_ref().is_some_and(|(root, _)| &pkg.root != root)
+                    let skip_src = !is_embedder_sdk
+                        && package.as_ref().is_some_and(|(root, _)| &pkg.root != root)
                         && !(friend_of_analyzer && pkg.name == "analyzer");
                     let files = pkg_lib_files
                         .entry((pkg.lib.clone(), skip_src))
@@ -477,7 +482,13 @@ impl Server {
         // requests when the linked world and file set have not changed.
         // Only link and discover unimported libraries when the in-scope pass
         // actually produced not-imported operations!
-        let known = if use_not_imported && in_scope.needs_not_imported() {
+        let needs_flutter_snippets = caps.snippets
+            && enable_snippets
+            && c::snippets::snippet_context(&q) == c::snippets::SnippetContext::AtTopLevel
+            && ctx.library_by_uri("package:flutter/widgets.dart").is_none()
+            && q.packages.iter().any(|(name, _)| name == "flutter");
+        let known = if (use_not_imported && in_scope.needs_not_imported()) || needs_flutter_snippets
+        {
             self.completion_known_for(context_index, package, &path)
         } else {
             None

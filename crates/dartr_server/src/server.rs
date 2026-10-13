@@ -241,10 +241,10 @@ pub struct Server {
     /// The source text of each file of a search, invalidated for the edited
     /// file when a file changes.
     search_sources: HashMap<String, std::sync::Arc<str>>,
-    /// Bounded cache of candidate files containing a queried identifier word.
-    search_word_files: HashMap<String, HashSet<String>>,
-    /// Contexts and `reference_names` for which `SUBTYPES` candidate files are already indexed in `indexes`.
-    subtypes_indexed_words: HashSet<(usize, Vec<String>)>,
+    /// Bounded cache of candidate files containing a queried identifier word, grouped by context in scope order.
+    search_word_files: HashMap<String, HashMap<usize, Vec<String>>>,
+    /// Contexts and `reference_names` for which `SUBTYPES` candidate files are already indexed in `indexes`, mapping to the indexed file subset.
+    subtypes_indexed_words: HashMap<(usize, Vec<String>), Vec<String>>,
     /// Cached `{@template}` entries per file path.
     file_templates_cache: HashMap<String, Vec<(String, String)>>,
     /// Cached merged dartdoc templates per context `(files_len, templates)`.
@@ -423,7 +423,7 @@ impl Server {
             owned: search::OwnedFiles::default(),
             search_sources: HashMap::new(),
             search_word_files: HashMap::new(),
-            subtypes_indexed_words: HashSet::new(),
+            subtypes_indexed_words: HashMap::new(),
             file_templates_cache: HashMap::new(),
             dartdoc_templates_cache: HashMap::new(),
             completion_known_cache: HashMap::new(),
@@ -1769,6 +1769,23 @@ impl Server {
         };
         let results = if self.parse_only {
             diagnostics_with_reader(collection, &files, &reader)
+        } else if !self.server_diagnostics.is_empty() && files.len() <= 64 {
+            let (diags, indexed) = self.session.diagnostics_with_index(
+                collection,
+                &files,
+                Some(
+                    &|ctx: &dartr_element::Ctx<'_>,
+                      unit: &dartr_resolver::library_analyzer::ResolvedUnit| {
+                        crate::index::index_unit(ctx, &unit.ast, &unit.tables, unit.unit)
+                    },
+                ),
+            );
+            for (key, idx) in indexed {
+                if self.indexes.len() < Self::MAX_INDEXED_UNITS || self.indexes.contains_key(&key) {
+                    self.indexes.insert(key, std::sync::Arc::new(idx));
+                }
+            }
+            diags
         } else {
             // The driver reads open documents through the overlays of
             // `dartr_project::fs`.

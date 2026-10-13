@@ -1057,3 +1057,60 @@ transforms:
     }
     assert!(diffs.is_empty(), "YAML completion diffs: {diffs:?}");
 }
+
+/// Regression parity test for completion edge cases:
+/// - interface with both getter and setter of the same name (`best_member`);
+/// - expression-bodied closure passed to a generic method (`compute_context_type`
+///   via `FunctionExpression` parent static type);
+/// - `PrefixedIdentifier` member completion (`super_matches`).
+#[test]
+fn lsp_completion_sweep_regressions() {
+    if !dart_available() {
+        eprintln!("skipped: `dart` is not on PATH");
+        return;
+    }
+    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("lsp_completion_sweep_regressions");
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let root = root.canonicalize().unwrap();
+    let write = |rel: &str, content: &str| {
+        let path = root.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, content).unwrap();
+    };
+    write(
+        "app/pubspec.yaml",
+        "name: app\nenvironment:\n  sdk: ^3.9.0\n",
+    );
+    write(
+        "app/.dart_tool/package_config.json",
+        r#"{"configVersion":2,"packages":[{"name":"app","rootUri":"../","packageUri":"lib/","languageVersion":"3.9"}]}"#,
+    );
+    write(
+        "app/lib/regression.dart",
+        r#"class BoxedProp {
+  int _value = 0;
+  int get prop => _value;
+  set prop(int v) {
+    _value = v;
+  }
+
+  List<String> mapItems(List<int> items) {
+    return items.map((item) => item.toRadixString(10)).toList();
+  }
+}
+
+int readProp(BoxedProp box) {
+  return box.prop;
+}
+"#,
+    );
+    let files = dart_files(&root);
+    let dart = run("dart", &root, &files, 1);
+    let dartr = run(dartr_bin(), &root, &files, 1);
+    let counts = compare("completion sweep regressions", &dart, &dartr);
+    for (class, (same, total)) in counts {
+        assert!(total > 0, "{class}: expected non-zero positions");
+        assert_eq!(same, total, "{class}: {same} of {total} identical");
+    }
+}

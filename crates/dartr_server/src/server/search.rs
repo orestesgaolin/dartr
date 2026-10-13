@@ -189,6 +189,375 @@ fn content_mentions_any(content: &str, names: &[String]) -> bool {
     names.iter().any(|n| content_has_word(content, n))
 }
 
+/// Dart `computeReferencedNames(unit)` (`pkg/analyzer/lib/src/dart/analysis/referenced_names.dart`),
+/// specialized to return the bitmask of `targets` (up to 64 words) referenced by `parsed`.
+fn unit_referenced_targets_mask(parsed: &dartr_ast_builder::ParsedUnit, targets: &[&str]) -> u64 {
+    debug_assert!(targets.len() <= 64);
+    let all_mask = if targets.len() == 64 {
+        u64::MAX
+    } else {
+        (1u64 << targets.len()) - 1
+    };
+    if all_mask == 0 {
+        return 0;
+    }
+    let ast = &parsed.ast;
+    let unit = parsed.unit;
+    let mut computer = ReferencedNamesComputer {
+        targets,
+        all_mask,
+        found_mask: 0,
+        import_prefix_mask: 0,
+        shadowed_mask: 0,
+    };
+    ast.accept(unit, &mut computer);
+    computer.found_mask
+}
+
+struct ReferencedNamesComputer<'a> {
+    targets: &'a [&'a str],
+    all_mask: u64,
+    found_mask: u64,
+    import_prefix_mask: u64,
+    shadowed_mask: u64,
+}
+
+impl<'a> ReferencedNamesComputer<'a> {
+    #[inline]
+    fn target_bit(&self, lex: &str) -> u64 {
+        let mut mask = 0u64;
+        for (i, &t) in self.targets.iter().enumerate() {
+            if t == lex {
+                mask |= 1u64 << i;
+            }
+        }
+        mask
+    }
+
+    #[inline]
+    fn add_token(&mut self, ast: &Ast, token: Option<dartr_syntax::TokenId>) {
+        if let Some(t) = token {
+            let lex = ast.tokens.lexeme(t);
+            if !lex.is_empty() {
+                self.shadowed_mask |= self.target_bit(lex);
+            }
+        }
+    }
+
+    fn add_variable_names(&mut self, ast: &Ast, variables: Id<VariableDeclarationList>) {
+        for &v in ast.list(ast[variables].variables) {
+            self.add_token(ast, Some(ast[v].name));
+        }
+    }
+
+    fn add_type_parameters(&mut self, ast: &Ast, type_params: Option<Id<TypeParameterList>>) {
+        if let Some(tp) = type_params {
+            for &p in ast.list(ast[tp].type_parameters) {
+                self.add_token(ast, Some(ast[p].name));
+            }
+        }
+    }
+
+    fn add_formal_parameters(&mut self, ast: &Ast, params: Option<Id<FormalParameterList>>) {
+        if let Some(pl) = params {
+            for &p in ast.list_raw(ast[pl].parameters) {
+                let tok = match ast.kind(p) {
+                    NodeKind::RegularFormalParameter => {
+                        ast[Id::<RegularFormalParameter>::from_raw(p)].name
+                    }
+                    NodeKind::FieldFormalParameter => {
+                        Some(ast[Id::<FieldFormalParameter>::from_raw(p)].name)
+                    }
+                    NodeKind::SuperFormalParameter => {
+                        Some(ast[Id::<SuperFormalParameter>::from_raw(p)].name)
+                    }
+                    _ => None,
+                };
+                self.add_token(ast, tok);
+            }
+        }
+    }
+
+    fn class_name_part_info(
+        ast: &Ast,
+        name_part: Id<ClassNamePart>,
+    ) -> (dartr_syntax::TokenId, Option<Id<TypeParameterList>>) {
+        if let Some(n) = ast.cast::<NameWithTypeParameters>(name_part.raw()) {
+            (ast[n].type_name, ast[n].type_parameters)
+        } else {
+            let p = ast
+                .cast::<PrimaryConstructorDeclaration>(name_part.raw())
+                .expect("ClassNamePart");
+            (ast[p].type_name, ast[p].type_parameters)
+        }
+    }
+
+    fn add_class_body_members(&mut self, ast: &Ast, body: Id<ClassBody>) {
+        if let Some(b) = ast.cast::<BlockClassBody>(body.raw()) {
+            for &m in ast.list_raw(ast[b].members) {
+                if let Some(f) = ast.cast::<FieldDeclaration>(m) {
+                    self.add_variable_names(ast, ast[f].fields);
+                } else if let Some(md) = ast.cast::<MethodDeclaration>(m) {
+                    self.add_token(ast, Some(ast[md].name));
+                }
+            }
+        }
+    }
+
+    fn add_if_not_shadowed(
+        &mut self,
+        ast: &Ast,
+        token: dartr_syntax::TokenId,
+        has_import_prefix: bool,
+    ) {
+        let name = ast.tokens.lexeme(token);
+        let bit = self.target_bit(name) & !self.found_mask;
+        if bit == 0 {
+            return;
+        }
+        let mut allowed = bit & !self.import_prefix_mask;
+        if !has_import_prefix {
+            allowed &= !self.shadowed_mask;
+        }
+        self.found_mask |= allowed;
+    }
+
+    fn is_qualified(ast: &Ast, node: Id<SimpleIdentifier>) -> bool {
+        let Some(parent) = ast.parent(node) else {
+            return false;
+        };
+        if let Some(p) = ast.cast::<PrefixedIdentifier>(parent) {
+            return ast[p].identifier == node;
+        }
+        if let Some(p) = ast.cast::<PropertyAccess>(parent) {
+            return ast[p].property_name == node;
+        }
+        if let Some(p) = ast.cast::<ConstructorName>(parent) {
+            return ast[p].name == Some(node);
+        }
+        if let Some(m) = ast.cast::<MethodInvocation>(parent) {
+            return ast[m].method_name == node
+                && dartr_resolver::ast_ext::method_invocation_real_target(ast, m).is_some();
+        }
+        false
+    }
+}
+
+impl AstVisitor for ReferencedNamesComputer<'_> {
+    fn visit_compilation_unit(&mut self, ast: &Ast, node: Id<CompilationUnit>) {
+        if self.found_mask == self.all_mask {
+            return;
+        }
+        let prev = self.shadowed_mask;
+        for &d in ast.list_raw(ast[node].declarations) {
+            if let Some(c) = ast.cast::<ClassDeclaration>(d) {
+                let (name, _) = Self::class_name_part_info(ast, ast[c].name_part);
+                self.add_token(ast, Some(name));
+            } else if let Some(e) = ast.cast::<EnumDeclaration>(d) {
+                let (name, _) = Self::class_name_part_info(ast, ast[e].name_part);
+                self.add_token(ast, Some(name));
+            } else if let Some(ext) = ast.cast::<ExtensionDeclaration>(d) {
+                self.add_token(ast, ast[ext].name);
+            } else if let Some(et) = ast.cast::<ExtensionTypeDeclaration>(d) {
+                let (name, _) = Self::class_name_part_info(ast, ast[et].name_part);
+                self.add_token(ast, Some(name));
+            } else if let Some(f) = ast.cast::<FunctionDeclaration>(d) {
+                self.add_token(ast, Some(ast[f].name));
+            } else if let Some(m) = ast.cast::<MixinDeclaration>(d) {
+                self.add_token(ast, Some(ast[m].name));
+            } else if let Some(v) = ast.cast::<TopLevelVariableDeclaration>(d) {
+                self.add_variable_names(ast, ast[v].variables);
+            } else if let Some(ta) = ast.cast::<ClassTypeAlias>(d) {
+                self.add_token(ast, Some(ast[ta].name));
+            } else if let Some(ta) = ast.cast::<FunctionTypeAlias>(d) {
+                self.add_token(ast, Some(ast[ta].name));
+            } else if let Some(ta) = ast.cast::<GenericTypeAlias>(d) {
+                self.add_token(ast, Some(ast[ta].name));
+            }
+        }
+        ast.visit_children(node, self);
+        self.shadowed_mask = prev;
+    }
+
+    fn visit_block(&mut self, ast: &Ast, node: Id<Block>) {
+        if self.found_mask == self.all_mask {
+            return;
+        }
+        let prev = self.shadowed_mask;
+        for &s in ast.list_raw(ast[node].statements) {
+            if let Some(fd) = ast.cast::<FunctionDeclarationStatement>(s) {
+                let f = ast[fd].function_declaration;
+                self.add_token(ast, Some(ast[f].name));
+            } else if let Some(vd) = ast.cast::<VariableDeclarationStatement>(s) {
+                self.add_variable_names(ast, ast[vd].variables);
+            }
+        }
+        ast.visit_children(node, self);
+        self.shadowed_mask = prev;
+    }
+
+    fn visit_class_declaration(&mut self, ast: &Ast, node: Id<ClassDeclaration>) {
+        if self.found_mask == self.all_mask {
+            return;
+        }
+        let prev = self.shadowed_mask;
+        let (_, tp) = Self::class_name_part_info(ast, ast[node].name_part);
+        self.add_type_parameters(ast, tp);
+        self.add_class_body_members(ast, ast[node].body);
+        ast.visit_children(node, self);
+        self.shadowed_mask = prev;
+    }
+
+    fn visit_class_type_alias(&mut self, ast: &Ast, node: Id<ClassTypeAlias>) {
+        if self.found_mask == self.all_mask {
+            return;
+        }
+        let prev = self.shadowed_mask;
+        self.add_type_parameters(ast, ast[node].type_parameters);
+        ast.visit_children(node, self);
+        self.shadowed_mask = prev;
+    }
+
+    fn visit_constructor_declaration(&mut self, ast: &Ast, node: Id<ConstructorDeclaration>) {
+        if self.found_mask == self.all_mask {
+            return;
+        }
+        let prev = self.shadowed_mask;
+        self.add_formal_parameters(ast, Some(ast[node].parameters));
+        ast.visit_children(node, self);
+        self.shadowed_mask = prev;
+    }
+
+    fn visit_constructor_name(&mut self, ast: &Ast, node: Id<ConstructorName>) {
+        if self.found_mask == self.all_mask {
+            return;
+        }
+        if !ast
+            .parent(node)
+            .is_some_and(|p| ast.is::<ConstructorDeclaration>(p))
+        {
+            ast.visit_children(node, self);
+        }
+    }
+
+    fn visit_extension_type_declaration(&mut self, ast: &Ast, node: Id<ExtensionTypeDeclaration>) {
+        if self.found_mask == self.all_mask {
+            return;
+        }
+        let prev = self.shadowed_mask;
+        let (_, tp) = Self::class_name_part_info(ast, ast[node].name_part);
+        self.add_type_parameters(ast, tp);
+        self.add_class_body_members(ast, ast[node].body);
+        ast.visit_children(node, self);
+        self.shadowed_mask = prev;
+    }
+
+    fn visit_function_declaration(&mut self, ast: &Ast, node: Id<FunctionDeclaration>) {
+        if self.found_mask == self.all_mask {
+            return;
+        }
+        let prev = self.shadowed_mask;
+        let fe = ast[node].function_expression;
+        self.add_type_parameters(ast, ast[fe].type_parameters);
+        self.add_formal_parameters(ast, ast[fe].parameters);
+        ast.visit_children(node, self);
+        self.shadowed_mask = prev;
+    }
+
+    fn visit_function_type_alias(&mut self, ast: &Ast, node: Id<FunctionTypeAlias>) {
+        if self.found_mask == self.all_mask {
+            return;
+        }
+        let prev = self.shadowed_mask;
+        self.add_type_parameters(ast, ast[node].type_parameters);
+        ast.visit_children(node, self);
+        self.shadowed_mask = prev;
+    }
+
+    fn visit_import_directive(&mut self, ast: &Ast, node: Id<ImportDirective>) {
+        if self.found_mask == self.all_mask {
+            return;
+        }
+        if let Some(prefix) = ast[node].prefix {
+            self.import_prefix_mask |= self.target_bit(ast.tokens.lexeme(ast[prefix].token));
+        }
+        ast.visit_children(node, self);
+    }
+
+    fn visit_method_declaration(&mut self, ast: &Ast, node: Id<MethodDeclaration>) {
+        if self.found_mask == self.all_mask {
+            return;
+        }
+        let prev = self.shadowed_mask;
+        self.add_type_parameters(ast, ast[node].type_parameters);
+        self.add_formal_parameters(ast, ast[node].parameters);
+        ast.visit_children(node, self);
+        self.shadowed_mask = prev;
+    }
+
+    fn visit_named_argument(&mut self, ast: &Ast, node: Id<NamedArgument>) {
+        if self.found_mask == self.all_mask {
+            return;
+        }
+        self.found_mask |= self.target_bit(ast.tokens.lexeme(ast[node].name));
+        if self.found_mask == self.all_mask {
+            return;
+        }
+        ast.visit_children(node, self);
+    }
+
+    fn visit_named_type(&mut self, ast: &Ast, node: Id<NamedType>) {
+        if self.found_mask == self.all_mask {
+            return;
+        }
+        if let Some(prefix) = ast[node].import_prefix {
+            self.add_if_not_shadowed(ast, ast[prefix].name, false);
+        }
+        self.add_if_not_shadowed(ast, ast[node].name, ast[node].import_prefix.is_some());
+        if self.found_mask == self.all_mask {
+            return;
+        }
+        ast.visit_children(node, self);
+    }
+
+    fn visit_simple_identifier(&mut self, ast: &Ast, node: Id<SimpleIdentifier>) {
+        if self.found_mask == self.all_mask {
+            return;
+        }
+        let name = ast.tokens.lexeme(ast[node].token);
+        let bit = self.target_bit(name) & !self.found_mask;
+        if bit == 0 {
+            return;
+        }
+        if support::in_declaration_context(ast, node) {
+            return;
+        }
+        if let Some(parent) = ast.parent(node)
+            && let Some(cd) = ast.cast::<ConstructorDeclaration>(parent)
+            && ast[cd].type_name == Some(node)
+        {
+            return;
+        }
+        let allowed = if Self::is_qualified(ast, node) {
+            bit
+        } else {
+            bit & !(self.shadowed_mask | self.import_prefix_mask)
+        };
+        self.found_mask |= allowed;
+    }
+
+    fn visit_super_formal_parameter(&mut self, ast: &Ast, node: Id<SuperFormalParameter>) {
+        if self.found_mask == self.all_mask {
+            return;
+        }
+        self.found_mask |= self.target_bit(ast.tokens.lexeme(ast[node].name));
+        if self.found_mask == self.all_mask {
+            return;
+        }
+        ast.visit_children(node, self);
+    }
+}
+
 /// Dart `Folder.getChildren` recursively: the Dart files under [folder], in
 /// directory order (`discoverAvailableFiles.discoverRecursively`).
 fn dart_files_recursively(folder: &str, out: &mut Vec<String>) {
@@ -281,12 +650,47 @@ impl Server {
     /// append-only), so the files of a search depend on the earlier
     /// requests, as in Dart. The drivers are in the order of the
     /// `HashMap<Folder, AnalysisDriver>` of the context manager.
+    fn on_new_known_files(&mut self, context: usize, new_files: &[String], from_subtypes: bool) {
+        if new_files.is_empty() {
+            return;
+        }
+        self.search_scope = None;
+        if !self.search_word_files.is_empty()
+            || (!from_subtypes && !self.subtypes_indexed_words.is_empty())
+        {
+            self.ensure_search_sources(context, new_files);
+            let sources = &self.search_sources;
+            for (w, by_ctx) in &mut self.search_word_files {
+                for f in new_files {
+                    if sources.get(f).is_some_and(|src| content_has_word(src, w)) {
+                        let list = by_ctx.entry(context).or_default();
+                        if !list.contains(f) {
+                            list.push(f.clone());
+                        }
+                    }
+                }
+            }
+            if !from_subtypes {
+                self.subtypes_indexed_words.retain(|(ctx, words), _| {
+                    *ctx != context
+                        || !words.iter().any(|w| {
+                            new_files
+                                .iter()
+                                .any(|f| sources.get(f).is_some_and(|src| content_has_word(src, w)))
+                        })
+                });
+            }
+        }
+    }
+
     pub(crate) fn search_scope(&mut self) -> Arc<SearchScope> {
         if let Some(scope) = &self.search_scope {
             return scope.clone();
         }
-        self.search_word_files.clear();
-        self.subtypes_indexed_words.clear();
+        if self.owned.added.is_empty() || !self.owned.discovered {
+            self.subtypes_indexed_words.clear();
+            self.search_word_files.clear();
+        }
         let Some(collection) = &self.collection else {
             return Arc::new(Vec::new());
         };
@@ -319,9 +723,16 @@ impl Server {
                 }
             }
         }
+        let mut new_files_by_ctx: Vec<(usize, Vec<String>)> = Vec::new();
         for index in 0..count {
+            let mut new_files = Vec::new();
             for f in self.session.known_files(index) {
-                self.owned.add_known(f, index);
+                if self.owned.add_known(f.clone(), index) {
+                    new_files.push(f);
+                }
+            }
+            if self.owned.discovered && !new_files.is_empty() {
+                new_files_by_ctx.push((index, new_files));
             }
         }
         let hashes: Vec<u32> = collection
@@ -332,40 +743,45 @@ impl Server {
         let order = dart_hash_map_order(&hashes);
         if !self.owned.discovered {
             self.owned.discovered = true;
+            let mut seen_sdk_paths: HashSet<String> = HashSet::new();
+            let mut seen_pkg_libs: HashSet<String> = HashSet::new();
             for &index in &order {
                 let context = &collection.contexts[index];
                 let sdk = context.sdk.as_ref().or(collection.sdk.as_ref());
-                let mut discovered = Vec::new();
-                if let Some(sdk) = sdk {
-                    discovered.extend(
-                        sdk.libraries()
-                            .iter()
-                            .filter_map(|l| sdk.map_dart_uri(&l.short_name)),
-                    );
+                if let Some(sdk) = sdk
+                    && seen_sdk_paths.insert(sdk.path().to_string())
+                {
+                    for lib in sdk
+                        .libraries()
+                        .iter()
+                        .filter_map(|l| sdk.map_dart_uri(&l.short_name))
+                    {
+                        if !self.owned.contains(&lib) && std::path::Path::new(&lib).is_file() {
+                            self.owned.add_known(lib, index);
+                        }
+                    }
                 }
                 for package in context.packages.packages() {
+                    if !seen_pkg_libs.insert(package.lib.clone()) {
+                        continue;
+                    }
+                    let mut discovered = Vec::new();
                     dart_files_recursively(&package.lib, &mut discovered);
-                }
-                for f in discovered {
-                    if std::path::Path::new(&f).is_file() {
+                    for f in discovered {
                         self.owned.add_known(f, index);
                     }
                 }
             }
         }
+        let mut by_owner: Vec<Vec<String>> = vec![Vec::new(); count];
+        for (f, &owner) in self.owned.added.iter().chain(self.owned.known.iter()) {
+            if owner < count {
+                by_owner[owner].push(f.clone());
+            }
+        }
         let scope: SearchScope = order
             .iter()
-            .map(|&index| {
-                let files = self
-                    .owned
-                    .added
-                    .iter()
-                    .chain(self.owned.known.iter())
-                    .filter(|(_, owner)| **owner == index)
-                    .map(|(f, _)| f.clone())
-                    .collect();
-                (index, files)
-            })
+            .map(|&index| (index, std::mem::take(&mut by_owner[index])))
             .collect();
         if std::env::var_os("DARTR_DEBUG_SEARCH").is_some() {
             for (index, files) in &scope {
@@ -376,35 +792,40 @@ impl Server {
                 );
             }
         }
+        for (index, new_files) in new_files_by_ctx {
+            self.on_new_known_files(index, &new_files, false);
+        }
         let scope = Arc::new(scope);
         self.search_scope = Some(scope.clone());
-        self.search_word_files.clear();
         scope
     }
 
     /// The context that owns [path] in a search.
     pub(crate) fn owner_of(&mut self, path: &str) -> Option<usize> {
-        self.search_scope()
-            .iter()
-            .find(|(_, files)| files.iter().any(|f| f == path))
-            .map(|(index, _)| *index)
+        let _ = self.search_scope();
+        self.owned
+            .added
+            .get(path)
+            .or_else(|| self.owned.known.get(path))
+            .copied()
     }
 
     /// Populates `self.search_sources` in parallel for any files in [owned]
-    /// that do not yet have cached sources.
-    fn ensure_search_sources(&mut self, owned: &[String]) {
+    /// that do not yet have cached sources. Returns `true` if any new source
+    /// was added.
+    fn ensure_search_sources(&mut self, context: usize, owned: &[String]) -> bool {
         let missing: Vec<&String> = owned
             .iter()
             .filter(|f| !self.search_sources.contains_key(*f))
             .collect();
         if missing.is_empty() {
-            return;
+            return false;
         }
         if missing.len() <= 8 {
             let paths: Vec<String> = missing.into_iter().cloned().collect();
             for p in paths {
                 let s = if !self.overlays.contains_key(&p)
-                    && let Some(c) = self.session.file_content(&p)
+                    && let Some(c) = self.session.file_content_in(context, &p)
                 {
                     c
                 } else {
@@ -412,45 +833,45 @@ impl Server {
                 };
                 self.search_sources.insert(p, s);
             }
-            return;
+            return true;
         }
         use rayon::prelude::*;
-        let inputs: Vec<(String, Option<Arc<str>>)> = missing
-            .into_iter()
-            .map(|p| {
-                let content = if let Some(d) = self.overlays.get(p.as_str()) {
-                    Some(Arc::<str>::from(d.content.as_str()))
-                } else {
-                    self.session.file_content(p)
-                };
-                (p.clone(), content)
-            })
-            .collect();
-        let computed: Vec<(String, Arc<str>)> = inputs
+        let overlays = &self.overlays;
+        let session = &self.session;
+        let computed: Vec<(String, Arc<str>)> = missing
             .into_par_iter()
-            .map(|(p, cached)| {
-                let s = match cached {
-                    Some(c) => c,
-                    None => Arc::<str>::from(
-                        dartr_project::fs::read_string(&p)
+            .map(|p| {
+                let s = if let Some(d) = overlays.get(p.as_str()) {
+                    Arc::<str>::from(d.content.as_str())
+                } else if let Some(c) = session.file_content_in(context, p) {
+                    c
+                } else {
+                    Arc::<str>::from(
+                        dartr_project::fs::read_string(p)
                             .unwrap_or_default()
                             .as_str(),
-                    ),
+                    )
                 };
-                (p, s)
+                (p.clone(), s)
             })
             .collect();
         for (p, s) in computed {
             self.search_sources.insert(p, s);
         }
+        true
     }
 
     /// Maximum number of queried identifier words cached in `self.search_word_files`.
-    const MAX_SEARCH_WORDS: usize = 64;
+    const MAX_SEARCH_WORDS: usize = 512;
 
     /// Populates `self.search_word_files` in parallel for any words in [names]
     /// not yet cached.
     fn ensure_search_words_cached(&mut self, scope: &SearchScope, names: &[String]) {
+        if self.search_word_files.is_empty() {
+            for (context, owned) in scope {
+                self.ensure_search_sources(*context, owned);
+            }
+        }
         let needed_new = names
             .iter()
             .filter(|w| !w.is_empty() && !self.search_word_files.contains_key(w.as_str()))
@@ -466,18 +887,76 @@ impl Server {
             .filter(|w| !w.is_empty() && !self.search_word_files.contains_key(w.as_str()))
             .cloned()
             .collect();
-        for (_, owned) in scope {
-            self.ensure_search_sources(owned);
-        }
         use rayon::prelude::*;
-        let sources: Vec<(&String, &Arc<str>)> = self.search_sources.iter().collect();
-        for word in missing_words {
-            let matching: HashSet<String> = sources
+        let sources: Vec<(usize, &String, &Arc<str>)> = scope
+            .iter()
+            .flat_map(|(ctx, files)| {
+                files
+                    .iter()
+                    .filter_map(|f| self.search_sources.get(f).map(|src| (*ctx, f, src)))
+            })
+            .collect();
+        let overlays = &self.overlays;
+        let session = &self.session;
+        for chunk in missing_words.chunks(64) {
+            let candidate_files: Vec<(usize, &String, &Arc<str>, u64)> = sources
                 .par_iter()
-                .filter(|(_, src)| content_has_word(src, &word))
-                .map(|(path, _)| (*path).clone())
+                .filter_map(|(ctx, path, src)| {
+                    let mut mask = 0u64;
+                    for (i, w) in chunk.iter().enumerate() {
+                        if content_has_word(src, w) {
+                            mask |= 1u64 << i;
+                        }
+                    }
+                    (mask != 0).then_some((*ctx, *path, *src, mask))
+                })
                 .collect();
-            self.search_word_files.insert(word, matching);
+            let verified: Vec<(usize, &String, u64)> = candidate_files
+                .into_par_iter()
+                .filter_map(|(ctx, path, src, mask)| {
+                    let mut active_targets: Vec<&str> = Vec::new();
+                    let mut active_indices: Vec<usize> = Vec::new();
+                    for (i, w) in chunk.iter().enumerate() {
+                        if (mask & (1u64 << i)) != 0 {
+                            active_targets.push(w.as_str());
+                            active_indices.push(i);
+                        }
+                    }
+                    let parsed = if !overlays.contains_key(path.as_str()) {
+                        session.file_parsed(path, Some(src))
+                    } else {
+                        None
+                    };
+                    let found_sub = match parsed {
+                        Some(p) => unit_referenced_targets_mask(&p, &active_targets),
+                        None => {
+                            let p = dartr_ast_builder::parse_file(src, "", (3, 13), &[]);
+                            unit_referenced_targets_mask(&p, &active_targets)
+                        }
+                    };
+                    if found_sub == 0 {
+                        return None;
+                    }
+                    let mut out_mask = 0u64;
+                    for (sub_i, &orig_i) in active_indices.iter().enumerate() {
+                        if (found_sub & (1u64 << sub_i)) != 0 {
+                            out_mask |= 1u64 << orig_i;
+                        }
+                    }
+                    Some((ctx, path, out_mask))
+                })
+                .collect();
+            for (i, word) in chunk.iter().enumerate() {
+                let bit = 1u64 << i;
+                let mut matching: std::collections::HashMap<usize, Vec<String>> =
+                    std::collections::HashMap::new();
+                for (ctx, path, m) in &verified {
+                    if (*m & bit) != 0 {
+                        matching.entry(*ctx).or_default().push((*path).clone());
+                    }
+                }
+                self.search_word_files.insert(word.clone(), matching);
+            }
         }
     }
 
@@ -500,7 +979,7 @@ impl Server {
     }
 
     /// Maximum number of `UnitIndex` entries retained in `self.indexes`.
-    const MAX_INDEXED_UNITS: usize = 4096;
+    pub(super) const MAX_INDEXED_UNITS: usize = 4096;
 
     /// Resolves and indexes [paths] in [context] in parallel, updating
     /// `self.owned` and `self.indexes`.
@@ -518,17 +997,19 @@ impl Server {
                 .index_files_in(collection, context, paths, subtypes_of, &|ctx, unit| {
                     crate::index::index_unit(ctx, &unit.ast, &unit.tables, unit.unit)
                 });
-        let mut grew = false;
-        for p in unit_paths {
-            grew |= self.owned.add_known(p, context);
-        }
-        for f in self.session.known_files(context) {
-            grew |= self.owned.add_known(f, context);
-        }
-        if grew {
-            self.search_scope = None;
-            self.search_word_files.clear();
-            self.subtypes_indexed_words.clear();
+        if !unit_paths.is_empty() {
+            let mut new_files = Vec::new();
+            for p in unit_paths {
+                if self.owned.add_known(p.clone(), context) {
+                    new_files.push(p);
+                }
+            }
+            for f in self.session.known_files(context) {
+                if self.owned.add_known(f.clone(), context) {
+                    new_files.push(f);
+                }
+            }
+            self.on_new_known_files(context, &new_files, subtypes_of.is_some());
         }
         if self.indexes.len() + indexed.len() > Self::MAX_INDEXED_UNITS {
             self.indexes.clear();
@@ -553,18 +1034,19 @@ impl Server {
         // Dart: the resolution creates the files of the library and of the
         // libraries it depends on in the driver (known to it unless another
         // driver knows them).
-        let mut grew = false;
+        let mut new_files = Vec::new();
         for input in &resolved.library.inputs {
-            grew |= self.owned.add_known(input.path.to_string(), context);
+            let p = input.path.to_string();
+            if self.owned.add_known(p.clone(), context) {
+                new_files.push(p);
+            }
         }
         for f in self.session.known_files(context) {
-            grew |= self.owned.add_known(f, context);
+            if self.owned.add_known(f.clone(), context) {
+                new_files.push(f);
+            }
         }
-        if grew {
-            self.search_scope = None;
-            self.search_word_files.clear();
-            self.subtypes_indexed_words.clear();
-        }
+        self.on_new_known_files(context, &new_files, false);
         let sink = NoopSink;
         let ctx = resolved.ctx(&sink);
         let unit = resolved.unit();
@@ -632,71 +1114,135 @@ impl Server {
         if !name.starts_with('_') {
             self.ensure_search_words_cached(&scope, &reference_names);
         }
-        let mut context_files: Vec<(usize, Vec<String>)> = Vec::with_capacity(scope.len());
+        let word_sets: Vec<&std::collections::HashMap<usize, Vec<String>>> =
+            if !name.starts_with('_') {
+                reference_names
+                    .iter()
+                    .filter_map(|w| self.search_word_files.get(w.as_str()))
+                    .filter(|s| !s.is_empty())
+                    .collect()
+            } else {
+                Vec::new()
+            };
+        let lib_owners: Vec<(Option<usize>, &Vec<String>)> = library_files
+            .iter()
+            .map(|lib| {
+                let owner = lib.first().and_then(|f| {
+                    self.owned
+                        .added
+                        .get(f.as_str())
+                        .or_else(|| self.owned.known.get(f.as_str()))
+                        .copied()
+                });
+                (owner, lib)
+            })
+            .collect();
+        let mut context_files: Vec<(usize, usize, Vec<String>)> = Vec::with_capacity(scope.len());
         for (context, owned) in scope.iter() {
             let mut files: Vec<String> = Vec::new();
             let mut in_files: HashSet<String> = HashSet::new();
-            let owned_set: HashSet<&str> = owned.iter().map(String::as_str).collect();
-            for lib in &library_files {
-                if lib.first().is_some_and(|f| owned_set.contains(f.as_str())) {
-                    for f in lib {
+            for (owner, lib) in &lib_owners {
+                if *owner == Some(*context) {
+                    for f in *lib {
                         if in_files.insert(f.clone()) {
                             files.push(f.clone());
                         }
                     }
                 }
             }
-            if !name.starts_with('_') {
-                for f in owned {
-                    if in_files.contains(f.as_str()) {
-                        continue;
+            let lib_files_count = files.len();
+            if word_sets.len() == 1 {
+                if let Some(matched) = word_sets[0].get(context) {
+                    if files.is_empty() {
+                        files = matched.clone();
+                    } else {
+                        for f in matched {
+                            if in_files.insert(f.clone()) {
+                                files.push(f.clone());
+                            }
+                        }
                     }
-                    let hits = reference_names.iter().any(|w| {
-                        self.search_word_files
-                            .get(w.as_str())
-                            .is_some_and(|set| set.contains(f.as_str()))
-                    });
-                    if hits {
-                        in_files.insert(f.clone());
-                        files.push(f.clone());
+                }
+            } else if word_sets.len() > 1 {
+                let matching_sets: Vec<&Vec<String>> =
+                    word_sets.iter().filter_map(|s| s.get(context)).collect();
+                if matching_sets.len() == 1 {
+                    if files.is_empty() {
+                        files = matching_sets[0].clone();
+                    } else {
+                        for f in matching_sets[0] {
+                            if in_files.insert(f.clone()) {
+                                files.push(f.clone());
+                            }
+                        }
+                    }
+                } else if matching_sets.len() > 1 {
+                    let union: HashSet<&str> = matching_sets
+                        .into_iter()
+                        .flat_map(|v| v.iter().map(String::as_str))
+                        .collect();
+                    for f in owned {
+                        if union.contains(f.as_str()) && in_files.insert(f.clone()) {
+                            files.push(f.clone());
+                        }
                     }
                 }
             }
-            context_files.push((*context, files));
+            if !files.is_empty() {
+                context_files.push((*context, lib_files_count, files));
+            }
         }
-        for (context, files) in context_files {
-            let mut missing: Vec<String> = if kinds == SUBTYPES
-                && self
+        for (context, lib_files_count, mut files) in context_files {
+            if kinds == SUBTYPES
+                && let Some(cached) = self
                     .subtypes_indexed_words
-                    .contains(&(context, reference_names.clone()))
+                    .get(&(context, reference_names.clone()))
+                    .cloned()
             {
-                Vec::new()
-            } else {
-                files
+                let lib_files = &files[..lib_files_count];
+                let missing_lib: Vec<String> = lib_files
                     .iter()
                     .filter(|f| !self.indexes.contains_key(&(context, (*f).clone())))
                     .cloned()
-                    .collect()
-            };
-            if !missing.is_empty() {
-                if self.indexes.len() + missing.len() > Self::MAX_INDEXED_UNITS {
-                    self.indexes.clear();
-                    self.subtypes_indexed_words.clear();
-                    missing = files.clone();
+                    .collect();
+                if !missing_lib.is_empty() {
+                    self.ensure_units_indexed(context, &missing_lib, Some(&reference_names[..]));
                 }
-                let subtypes_of = if kinds == SUBTYPES {
-                    Some(&reference_names[..])
-                } else {
-                    None
-                };
-                self.ensure_units_indexed(context, &missing, subtypes_of);
+                let mut merged: Vec<String> = lib_files
+                    .iter()
+                    .filter(|f| self.indexes.contains_key(&(context, (*f).clone())))
+                    .cloned()
+                    .collect();
+                for f in cached {
+                    if !merged.contains(&f) {
+                        merged.push(f);
+                    }
+                }
+                files = merged;
+            } else {
+                let mut missing: Vec<String> = files
+                    .iter()
+                    .filter(|f| !self.indexes.contains_key(&(context, (*f).clone())))
+                    .cloned()
+                    .collect();
+                if !missing.is_empty() {
+                    if self.indexes.len() + missing.len() > Self::MAX_INDEXED_UNITS {
+                        self.indexes.clear();
+                        self.subtypes_indexed_words.clear();
+                        missing = files.clone();
+                    }
+                    let subtypes_of = if kinds == SUBTYPES {
+                        Some(&reference_names[..])
+                    } else {
+                        None
+                    };
+                    self.ensure_units_indexed(context, &missing, subtypes_of);
+                }
                 if kinds == SUBTYPES {
+                    files.retain(|f| self.indexes.contains_key(&(context, f.clone())));
                     self.subtypes_indexed_words
-                        .insert((context, reference_names.clone()));
+                        .insert((context, reference_names.clone()), files.clone());
                 }
-            } else if kinds == SUBTYPES {
-                self.subtypes_indexed_words
-                    .insert((context, reference_names.clone()));
             }
             for f in files {
                 let index = if kinds == SUBTYPES {
@@ -725,6 +1271,14 @@ impl Server {
     /// Dart `ElementReferencesComputer.compute(element, false)`: the
     /// references to [element] and to the elements of its hierarchy.
     pub(crate) fn element_references(&mut self, element: &SElem) -> Vec<Match> {
+        self.element_references_with(element, true)
+    }
+
+    pub(crate) fn element_references_with(
+        &mut self,
+        element: &SElem,
+        include_parameters_for_fields: bool,
+    ) -> Vec<Match> {
         // Dart `_getRefElements`.
         let is_named_parameter = matches!(
             element.id.tag(),
@@ -743,7 +1297,9 @@ impl Server {
             Tag::Method | Tag::Field | Tag::Constructor
         ) {
             let (mut members, parameters) = self.hierarchy_members_and_parameters(&element);
-            members.extend(parameters);
+            if include_parameters_for_fields {
+                members.extend(parameters);
+            }
             members
         } else {
             vec![element.clone()]
@@ -1118,7 +1674,33 @@ impl Server {
     ) -> Vec<(SElem, RelationKind)> {
         let matches = self.search_index(class, SUBTYPES);
         let mut out = Vec::new();
+        let mut world_libs: std::collections::HashMap<usize, Arc<ResolvedLibraryResult>> =
+            std::collections::HashMap::new();
         for m in matches {
+            let decl_elem = self
+                .indexes
+                .get(&(m.context, m.path.clone()))
+                .and_then(|idx| idx.subtype_declaration_at(m.offset));
+            if let Some(e) = decl_elem {
+                let lib = match world_libs.entry(m.context) {
+                    std::collections::hash_map::Entry::Occupied(o) => Some(o.get().clone()),
+                    std::collections::hash_map::Entry::Vacant(v) => self
+                        .session
+                        .world_library_in(m.context)
+                        .map(|w| v.insert(w).clone()),
+                };
+                if let Some(lib) = lib {
+                    out.push((
+                        SElem {
+                            lib,
+                            unit: 0,
+                            id: e,
+                        },
+                        m.kind,
+                    ));
+                    continue;
+                }
+            }
             let Ok(resolved) = self.require_resolved_unit_in(&m.path, Some(m.context)) else {
                 continue;
             };
@@ -1217,12 +1799,27 @@ impl Server {
         });
         let mut sub_classes: Vec<SElem> = Vec::new();
         let mut keys: Vec<(usize, ElementKey)> = Vec::new();
-        for super_class in search_classes {
-            let declares =
-                member.with(|ctx| !class_members(ctx, super_class, Some(&name)).is_empty());
-            if !declares {
-                continue;
+        let declaring_classes: Vec<(ElementId, String)> = member.with(|ctx| {
+            search_classes
+                .into_iter()
+                .filter(|&sc| !class_members(ctx, sc, Some(&name)).is_empty())
+                .map(|sc| (sc, support::display_name(ctx, sc)))
+                .collect()
+        });
+        if !declaring_classes.is_empty() {
+            let mut batch_words = Vec::with_capacity(1 + declaring_classes.len());
+            if !name.is_empty() {
+                batch_words.push(name.clone());
             }
+            for (_, sc_name) in &declaring_classes {
+                if !sc_name.is_empty() && !batch_words.contains(sc_name) {
+                    batch_words.push(sc_name.clone());
+                }
+            }
+            let scope = self.search_scope();
+            self.ensure_search_words_cached(&scope, &batch_words);
+        }
+        for (super_class, _) in declaring_classes {
             let sc = member.same(super_class);
             self.append_all_subtypes(&sc, &mut sub_classes, &mut keys);
             if let Some(key) = sc.identity()
@@ -1344,7 +1941,7 @@ impl Server {
         let resolved = self.require_resolved_unit(&path)?;
         let line_info = resolved.line_info().clone();
         let offset = self.position_offset(&line_info, params)?;
-        let element = {
+        let (element, include_parameters_for_fields, substituted_field) = {
             let sink = NoopSink;
             let ctx = resolved.ctx(&sink);
             let unit = resolved.unit();
@@ -1360,20 +1957,64 @@ impl Server {
             {
                 node = ast.parent(n);
             }
-            node.and_then(|n| crate::element_locator::get_element(&u, n))
+            let mut substituted_field = false;
+            let element = node
+                .and_then(|n| crate::element_locator::get_element(&u, n))
                 .map(|e| match e.tag() {
                     Tag::FieldFormalParameter => match ctx.any(e) {
                         dartr_element::AnyElement::FormalParameter(p) => {
-                            p.field.get().map(|f| f.raw()).unwrap_or(e)
+                            if let Some(f) = p.field.get() {
+                                if let Some(n) = node
+                                    && ast.is::<NamedArgument>(n)
+                                    && let Some(list) = ast.parent(n)
+                                    && crate::signature::invocation_substitution(&u, list).0
+                                    && ctx.element_data(f.raw()).is_some_and(|d| {
+                                        d.flags.has(
+                                            dartr_element::ElementFlags::FIELD_ELEMENT_HAS_ENCLOSING_TYPE_PARAMETER_REFERENCE,
+                                        )
+                                    })
+                                {
+                                    substituted_field = true;
+                                }
+                                f.raw()
+                            } else {
+                                e
+                            }
                         }
                         _ => e,
                     },
                     Tag::Getter | Tag::Setter => {
-                        dartr_resolver::element_metadata::accessor_variable_any(&ctx, e)
-                            .unwrap_or(e)
+                        if let Some(v) =
+                            dartr_resolver::element_metadata::accessor_variable_any(&ctx, e)
+                        {
+                            if v.tag() == Tag::Field
+                                && let Some(n) = node
+                                && (unit
+                                    .tables
+                                    .write_element
+                                    .get(n)
+                                    .is_some_and(|r| matches!(r, ElemRef::Member(_)))
+                                    || unit
+                                        .tables
+                                        .read_element
+                                        .get(n)
+                                        .is_some_and(|r| matches!(r, ElemRef::Member(_)))
+                                    || unit
+                                        .tables
+                                        .element
+                                        .get(n)
+                                        .is_some_and(|r| matches!(r, ElemRef::Member(_))))
+                            {
+                                substituted_field = true;
+                            }
+                            v
+                        } else {
+                            e
+                        }
                     }
                     _ => e,
-                })
+                });
+            (element, !substituted_field, substituted_field)
         };
         let Some(element) = element else {
             return Ok(Value::Null);
@@ -1383,13 +2024,21 @@ impl Server {
             unit: resolved.index,
             id: element,
         };
-        let matches = self.element_references(&element);
-        let mut locations = Vec::new();
+        let matches = self.element_references_with(&element, include_parameters_for_fields);
+        let mut locations = Vec::with_capacity(matches.len());
+        let mut file_cache: std::collections::HashMap<
+            String,
+            Option<(String, dartr_syntax::LineInfo)>,
+        > = std::collections::HashMap::new();
         for m in matches {
-            if let Some(lines) = self.line_info_of(&m.path) {
+            let entry = file_cache.entry(m.path.clone()).or_insert_with(|| {
+                let lines = self.line_info_of_in(m.context, &m.path)?;
+                Some((path_to_uri(&m.path), lines))
+            });
+            if let Some((uri, lines)) = entry {
                 locations.push(json!({
-                    "uri": path_to_uri(&m.path),
-                    "range": mapping::to_range(&lines, m.offset, m.length),
+                    "uri": uri,
+                    "range": mapping::to_range(lines, m.offset, m.length),
                 }));
             }
         }
@@ -1398,7 +2047,7 @@ impl Server {
             .and_then(Value::as_bool)
             .unwrap_or(false);
         if include_declaration {
-            for location in self.declarations(&element) {
+            for location in self.declarations(&element, substituted_field) {
                 locations.push(location);
             }
         }
@@ -1406,10 +2055,15 @@ impl Server {
     }
 
     /// Dart `_getDeclarations(element)`: `fragmentToLocation` of each
-    /// fragment of `element.nonSynthetic`.
-    fn declarations(&self, element: &SElem) -> Vec<Value> {
+    /// fragment of `element.nonSynthetic` (where `SubstitutedElementImpl.nonSynthetic`
+    /// returns `baseElement`, not `baseElement.nonSynthetic`).
+    fn declarations(&self, element: &SElem, substituted: bool) -> Vec<Value> {
         let fragments: Vec<(String, u32, u32)> = element.with(|ctx| {
-            let e = dartr_element::diagnostics::non_synthetic(ctx, element.id);
+            let e = if substituted {
+                element.id
+            } else {
+                dartr_element::diagnostics::non_synthetic(ctx, element.id)
+            };
             let mut out = Vec::new();
             let mut f = ctx.element_data(e).map(|d| d.first_fragment);
             while let Some(id) = f {

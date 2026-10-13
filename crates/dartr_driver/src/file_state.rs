@@ -865,7 +865,7 @@ impl FileSystemState {
             FileKind::Library { .. } => Some(file),
             FileKind::PartOfName { name } => {
                 if !self.library_name_to_files.contains_key(&name) {
-                    self.discover_libraries(file);
+                    self.discover_libraries(file, &name);
                 }
                 let mut result: Option<FileId> = None;
                 for &library in self.library_name_to_files.get(&name).into_iter().flatten() {
@@ -956,19 +956,31 @@ impl FileSystemState {
     }
 
     /// Dart `PartOfNameFileKind.discoverLibraries`.
-    fn discover_libraries(&mut self, file: FileId) {
-        let folder = paths::dirname(&self.file(file).path).to_string();
-        let mut siblings: Vec<String> = dartr_project::fs::children(&folder)
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|c| paths::extension(&c.path) == ".dart")
-            .map(|c| c.path)
-            .collect();
-        siblings.sort();
-        for sibling in siblings {
-            self.get_file_for_path(&sibling);
+    fn discover_libraries(&mut self, file: FileId, name: &str) {
+        let mut folder = paths::dirname(&self.file(file).path).to_string();
+        for _ in 0..4 {
+            let mut siblings: Vec<String> = dartr_project::fs::children(&folder)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|c| paths::extension(&c.path) == ".dart")
+                .map(|c| c.path)
+                .collect();
+            siblings.sort();
+            for sibling in siblings {
+                self.get_file_for_path(&sibling);
+            }
+            self.discover();
+            if self.library_name_to_files.contains_key(name)
+                || (!folder.contains("/lib/") && !folder.contains("\\lib\\"))
+            {
+                break;
+            }
+            let parent = paths::dirname(&folder).to_string();
+            if parent == folder {
+                break;
+            }
+            folder = parent;
         }
-        self.discover();
     }
 
     /// Dart `LibraryFileKind.fileKinds`: the library file and its parts

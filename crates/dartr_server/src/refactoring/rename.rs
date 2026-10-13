@@ -3111,7 +3111,10 @@ impl Engine<'_> {
         let ast = &unit.ast;
         let ranges = visible_ranges(&ctx, ast, &unit.tables, unit.unit);
         // The element in this resolution of the unit.
-        let target_id = if std::sync::Arc::ptr_eq(&resolved.library, &target.lib) {
+        let target_id = if std::sync::Arc::ptr_eq(&resolved.library, &target.lib)
+            || (target.lib.library.units.is_empty()
+                && resolved.library.context == target.lib.context)
+        {
             target.id
         } else {
             return;

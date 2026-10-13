@@ -1195,3 +1195,82 @@ fn apply_code_action_and_interactive_resolve_match_dart_language_server() {
         diffs.len()
     );
 }
+
+/// Regression parity test for code actions added during the LSP sweep:
+/// - `dart.fix.create.file` on `uri_does_not_exist`;
+/// - `dart.fix.organize.imports` on `directives_ordering`;
+/// - `dart.fix.create.extension.method` on unqualified and qualified `undefined_method`.
+#[test]
+fn code_actions_sweep_regressions() {
+    if !dart_available() {
+        eprintln!("skipped: `dart` is not on PATH");
+        return;
+    }
+    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("lsp_code_actions_sweep_regressions");
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("lib/src")).unwrap();
+    std::fs::create_dir_all(root.join(".dart_tool")).unwrap();
+    let root = root.canonicalize().unwrap();
+    std::fs::write(
+        root.join("pubspec.yaml"),
+        "name: fixes_reg\nenvironment:\n  sdk: ^3.9.0\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join(".dart_tool/package_config.json"),
+        r#"{"configVersion":2,"packages":[{"name":"fixes_reg","rootUri":"../","packageUri":"lib/","languageVersion":"3.9"}]}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("analysis_options.yaml"),
+        "linter:\n  rules:\n    - directives_ordering\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("lib/src/other.dart"),
+        "class Other {\n  final int x;\n  const Other(this.x);\n}\n",
+    )
+    .unwrap();
+    let path = root.join("lib/sweep_regressions.dart");
+    let content = r#"import 'src/other.dart';
+import 'dart:async';
+import 'missing_created_file.dart';
+
+int nonConstValue() => 1;
+
+class Host {
+  static const Other badConst = Other(nonConstValue());
+
+  void run() {
+    missingImplicitMethod(1);
+    Future.value(const Other(1));
+  }
+}
+"#
+    .to_string();
+    std::fs::write(&path, &content).unwrap();
+    let files = vec![OpenFile { path, content }];
+    let (tally, problems) = run_both("sweep_regressions", &root, &files);
+    assert!(
+        problems.is_empty(),
+        "unexpected codeAction problems: {problems:#?}"
+    );
+    for expected in [
+        "dart.fix.create.file",
+        "dart.fix.organize.imports",
+        "dart.fix.create.extension.method",
+        "dart.fix.remove.const",
+    ] {
+        let t = tally
+            .get(expected)
+            .unwrap_or_else(|| panic!("expected fix kind {expected} in tally"));
+        assert!(
+            t.identical > 0 && t.differing == 0 && t.missing == 0 && t.extra == 0,
+            "{expected}: identical={}, differing={}, missing={}, extra={}",
+            t.identical,
+            t.differing,
+            t.missing,
+            t.extra
+        );
+    }
+}

@@ -245,7 +245,22 @@ pub fn invoke_type_parameter(
         .parent(argument)
         .and_then(|l| ast.cast::<ArgumentList>(l))?;
     let invocation = ast.parent(list.raw())?;
-    let invoke_type = unit.tables.invoke_type.get(invocation).copied()?;
+    let invoke_type = unit
+        .tables
+        .invoke_type
+        .get(invocation)
+        .copied()
+        .or_else(|| {
+            let elem_node = if let Some(n) = ast.cast::<InstanceCreationExpression>(invocation) {
+                ast[n].constructor_name.raw()
+            } else if let Some(n) = ast.cast::<DotShorthandConstructorInvocation>(invocation) {
+                ast[n].constructor_name.raw()
+            } else {
+                invocation
+            };
+            let elem = *unit.tables.element.get(elem_node)?;
+            Some(member::type_(ctx, elem))
+        })?;
     let TypeKind::Function(f) = *ctx.ty(invoke_type) else {
         return None;
     };

@@ -230,3 +230,142 @@ impl CorrectionProducer for RemoveIgnoredDiagnostic {
         }
     }
 }
+
+/// Dart `CreateFile` (`pkg/analysis_server/lib/src/services/correction/dart/create_file.dart`).
+#[derive(Default)]
+pub struct CreateFile {
+    file_name: String,
+}
+
+impl CreateFile {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl CorrectionProducer for CreateFile {
+    fn fix_kind(&self) -> Option<&'static FixKind> {
+        Some(&k::CREATE_FILE)
+    }
+
+    fn fix_arguments(&self) -> Vec<String> {
+        vec![self.file_name.clone()]
+    }
+
+    fn applicability(&self) -> Applicability {
+        Applicability::SingleLocation
+    }
+
+    fn compute(&mut self, c: &ProducerContext<'_>, builder: &mut ChangeBuilder<'_>) {
+        let ast = c.ast;
+        if !ast.is::<SimpleStringLiteral>(c.node) {
+            return;
+        }
+        let Some(parent) = ast.parent(c.node) else {
+            return;
+        };
+        let Some(fragment) = c
+            .tables
+            .declared_fragment
+            .get(c.unit.raw())
+            .and_then(|f| f.cast::<dartr_element::LibraryFragment>())
+        else {
+            return;
+        };
+        let data = c.ctx.fragment(fragment);
+        let directives = ast.list_raw(ast[c.unit].directives);
+        if ast.is::<ImportDirective>(parent) || ast.is::<ExportDirective>(parent) {
+            let uri = if ast.is::<ImportDirective>(parent) {
+                let Some(index) = directives
+                    .iter()
+                    .filter(|d| ast.is::<ImportDirective>(**d))
+                    .position(|d| *d == parent)
+                else {
+                    return;
+                };
+                data.library_imports
+                    .iter()
+                    .filter(|i| !i.is_synthetic)
+                    .nth(index)
+                    .map(|i| &i.directive.uri)
+            } else {
+                let Some(index) = directives
+                    .iter()
+                    .filter(|d| ast.is::<ExportDirective>(**d))
+                    .position(|d| *d == parent)
+                else {
+                    return;
+                };
+                data.library_exports.get(index).map(|e| &e.directive.uri)
+            };
+            let Some(
+                dartr_element::DirectiveUri::Source { source, .. }
+                | dartr_element::DirectiveUri::Library { source, .. },
+            ) = uri
+            else {
+                return;
+            };
+            let full_name = &*source.path;
+            if full_name.starts_with('/') && full_name.ends_with(".dart") {
+                builder.add_new_dart_file_edit(full_name, &source.uri, c.resolved, |b| {
+                    b.add_simple_insertion(0, "// TODO Implement this library.");
+                });
+                self.file_name = full_name
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or(full_name)
+                    .to_string();
+            }
+        } else if ast.is::<PartDirective>(parent) {
+            let Some(index) = directives
+                .iter()
+                .filter(|d| ast.is::<PartDirective>(**d))
+                .position(|d| *d == parent)
+            else {
+                return;
+            };
+            let Some(part) = data.parts.get(index) else {
+                return;
+            };
+            let source = match &part.directive.uri {
+                dartr_element::DirectiveUri::Source { source, .. } => source,
+                dartr_element::DirectiveUri::Unit {
+                    library_fragment, ..
+                } => &c.ctx.fragment(*library_fragment).source,
+                _ => return,
+            };
+            let full_name = &*source.path;
+            if !full_name.starts_with('/') || !full_name.ends_with(".dart") {
+                return;
+            }
+            let library_path = &*data.source.path;
+            let from = match full_name.rfind('/') {
+                Some(i) => &full_name[..i],
+                None => ".",
+            };
+            let to: Vec<&str> = library_path.split('/').filter(|s| !s.is_empty()).collect();
+            let from_parts: Vec<&str> = from.split('/').filter(|s| !s.is_empty()).collect();
+            let common = to
+                .iter()
+                .zip(&from_parts)
+                .take_while(|(a, b)| a == b)
+                .count();
+            let mut parts: Vec<&str> = vec![".."; from_parts.len() - common];
+            parts.extend(&to[common..]);
+            let relative = if parts.is_empty() {
+                ".".to_string()
+            } else {
+                parts.join("/")
+            };
+            builder.add_new_dart_file_edit(full_name, &source.uri, c.resolved, |b| {
+                let eol = b.eol();
+                b.add_simple_insertion(0, &format!("part of '{relative}';{eol}{eol}"));
+            });
+            self.file_name = full_name
+                .rsplit('/')
+                .next()
+                .unwrap_or(full_name)
+                .to_string();
+        }
+    }
+}

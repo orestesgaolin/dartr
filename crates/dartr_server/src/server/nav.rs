@@ -80,6 +80,26 @@ impl Server {
         Ok(ResolvedUnitRef { library, index })
     }
 
+    /// Dart `server.getLineInfo(path)` when the owning [context] is known.
+    pub(crate) fn line_info_of_in(&self, context: usize, path: &str) -> Option<LineInfo> {
+        if let Some(p) = self.parsed.get(path) {
+            return Some(p.unit.line_info.clone());
+        }
+        if let Some(doc) = self.overlays.get(path) {
+            if let Some(info) =
+                self.session
+                    .line_info_matching_in(context, path, Some(&doc.content))
+            {
+                return Some(info);
+            }
+            return Some(LineInfo::from_content(&doc.content));
+        }
+        if let Some(info) = self.session.line_info_matching_in(context, path, None) {
+            return Some(info);
+        }
+        self.content(path).map(|c| LineInfo::from_content(&c))
+    }
+
     /// Dart `server.getLineInfo(path)`: the line info of the content of
     /// [path] (the overlay or the file).
     pub(crate) fn line_info_of(&self, path: &str) -> Option<LineInfo> {
@@ -591,12 +611,16 @@ impl Server {
             }
         } else if let Some(n) = ast.cast::<NamedArgument>(node) {
             origin = Some(token_range(ast[n].name));
-            ty = variable_type(dartr_resolver::error::support::corresponding_parameter(
-                &ctx,
-                ast,
-                &unit.tables,
-                n.raw(),
-            ));
+            ty = crate::signature::invoke_type_parameter(&u, n.raw())
+                .map(|p| p.ty)
+                .or_else(|| {
+                    variable_type(dartr_resolver::error::support::corresponding_parameter(
+                        &ctx,
+                        ast,
+                        &unit.tables,
+                        n.raw(),
+                    ))
+                });
         } else if ast.is::<Expression>(node) {
             origin = Some((ast.offset(node), ast.length(node)));
             let mut done = false;
@@ -702,20 +726,25 @@ impl Server {
         {
             return cached.clone();
         }
-        let units = self.session.uncached_template_units(collection, path, |p| {
-            self.file_templates_cache.contains_key(p)
-        });
-        let mut templates = std::collections::HashMap::new();
-        for (unit_path, parsed) in units {
-            if let Some(entries) = self.file_templates_cache.get(&*unit_path) {
-                for (k, v) in entries {
-                    templates.insert(k.clone(), v.clone());
-                }
-            } else if let Some(parsed) = parsed {
+        let units = self.session.uncached_template_units(
+            collection,
+            path,
+            |p| self.file_templates_cache.contains_key(p),
+            |parsed| {
                 let mut file_map = std::collections::HashMap::new();
                 crate::hover::extract_templates_from_unit(&parsed.ast, parsed.unit, &mut file_map);
                 let mut entries: Vec<(String, String)> = file_map.into_iter().collect();
                 entries.sort_by(|a, b| a.0.cmp(&b.0));
+                entries
+            },
+        );
+        let mut templates = std::collections::HashMap::new();
+        for (unit_path, extracted) in units {
+            if let Some(entries) = self.file_templates_cache.get(&*unit_path) {
+                for (k, v) in entries {
+                    templates.insert(k.clone(), v.clone());
+                }
+            } else if let Some(entries) = extracted {
                 for (k, v) in &entries {
                     templates.insert(k.clone(), v.clone());
                 }
@@ -741,7 +770,12 @@ impl Server {
             return library_uri.to_string();
         }
         let root = self.collection.as_ref().and_then(|c| {
-            let context = c.context_for(library_path)?;
+            let context = c.context_for(library_path).or_else(|| {
+                c.contexts
+                    .iter()
+                    .find(|ctx| dartr_project::paths::is_within(&ctx.root.root, library_path))
+                    .or_else(|| c.contexts.first())
+            })?;
             let root = context
                 .root
                 .workspace

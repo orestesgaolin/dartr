@@ -331,6 +331,8 @@ pub fn generator(name: &str) -> Option<ProducerGenerator> {
             |_: C| boxed(bulk_lints::RemoveUnnecessaryStringInterpolation)
         }
         "ReplaceWithDecoratedBox.new" => |_: C| boxed(bulk_lints::ReplaceWithDecoratedBox),
+        "CreateFile.new" => |_: C| boxed(more2::CreateFile::new()),
+        "OrganizeImports.new" => |_: C| boxed(super::bulk_fix_processor::OrganizeImports),
         _ => return None,
     };
     Some(g)

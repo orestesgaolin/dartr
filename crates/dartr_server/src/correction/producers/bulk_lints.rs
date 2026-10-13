@@ -1837,6 +1837,70 @@ pub struct RemoveConstProducer {
     pub unnecessary: bool,
 }
 
+fn expression_constant_context(
+    c: &ProducerContext<'_>,
+    start: NodeId,
+) -> Option<(NodeId, TokenId)> {
+    let ast = c.ast;
+    let mut current = Some(start);
+    while let Some(cur) = current {
+        if let Some(cp) = ast.cast::<ConstantPattern>(cur) {
+            return ast[cp].const_keyword.map(|kw| (cur, kw));
+        } else if let Some(dsci) = ast.cast::<DotShorthandConstructorInvocation>(cur) {
+            if let Some(kw) = ast[dsci].const_keyword {
+                return Some((cur, kw));
+            }
+        } else if let Some(ice) = ast.cast::<InstanceCreationExpression>(cur) {
+            if let Some(kw) = ast[ice].keyword {
+                if c.lexeme(kw) == "const" {
+                    return Some((cur, kw));
+                }
+            }
+        } else if let Some(rl) = ast.cast::<RecordLiteral>(cur) {
+            if let Some(kw) = ast[rl].const_keyword {
+                return Some((cur, kw));
+            }
+        } else if let Some(ll) = ast.cast::<ListLiteral>(cur) {
+            if let Some(kw) = ast[ll].const_keyword {
+                return Some((cur, kw));
+            }
+        } else if let Some(sml) = ast.cast::<SetOrMapLiteral>(cur) {
+            if let Some(kw) = ast[sml].const_keyword {
+                return Some((cur, kw));
+            }
+        } else if let Some(vdl) = ast.cast::<VariableDeclarationList>(cur) {
+            if let Some(kw) = ast[vdl].keyword {
+                if c.lexeme(kw) == "const" {
+                    return Some((cur, kw));
+                }
+            }
+            return None;
+        } else if ast.is::<Annotation>(cur)
+            || ast.is::<EnumConstantArguments>(cur)
+            || ast.is::<SwitchCase>(cur)
+        {
+            return None;
+        } else if ast.is::<ArgumentList>(cur)
+            || ast.is::<Expression>(cur)
+            || ast.is::<ForElement>(cur)
+            || ast.is::<IfElement>(cur)
+            || ast.is::<InterpolationExpression>(cur)
+            || ast.is::<MapLiteralEntry>(cur)
+            || ast.is::<NamedArgument>(cur)
+            || ast.is::<RecordLiteralNamedField>(cur)
+            || ast.is::<NullAwareElement>(cur)
+            || ast.is::<SpreadElement>(cur)
+            || ast.is::<VariableDeclaration>(cur)
+        {
+            // continue walking up
+        } else {
+            return None;
+        }
+        current = ast.parent(cur);
+    }
+    None
+}
+
 impl CorrectionProducer for RemoveConstProducer {
     fn fix_kind(&self) -> Option<&'static FixKind> {
         if self.unnecessary {
@@ -1879,16 +1943,20 @@ impl CorrectionProducer for RemoveConstProducer {
             ast[nh].const_keyword
         } else if let Some(pcd) = ast.cast::<PrimaryConstructorDeclaration>(node) {
             ast[pcd].const_keyword
-        } else if let Some(ice) = ast.cast::<InstanceCreationExpression>(node) {
-            ast[ice].keyword
-        } else if let Some(ll) = ast.cast::<ListLiteral>(node) {
-            ast[ll].const_keyword
-        } else if let Some(sml) = ast.cast::<SetOrMapLiteral>(node) {
-            ast[sml].const_keyword
-        } else if let Some(rl) = ast.cast::<RecordLiteral>(node) {
-            ast[rl].const_keyword
         } else if let Some(cp) = ast.cast::<ConstantPattern>(node) {
             ast[cp].const_keyword
+        } else if ast.is::<Expression>(node) {
+            let Some((ctx_node, kw)) = expression_constant_context(c, node) else {
+                return;
+            };
+            if ast.is::<VariableDeclarationList>(ctx_node) {
+                let r = c.range().token(kw);
+                builder.add_dart_file_edit(c.path, |b| {
+                    b.add_simple_replacement(r.offset, r.length, "final");
+                });
+                return;
+            }
+            Some(kw)
         } else if let Some(vdl) = ast.cast::<VariableDeclarationList>(node) {
             let Some(kw) = ast[vdl].keyword else {
                 return;
