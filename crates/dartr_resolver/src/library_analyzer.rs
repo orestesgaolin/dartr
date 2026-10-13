@@ -148,6 +148,18 @@ pub fn analyze_library_with_unignorable(
     input: &LibraryAnalysisInput<'_>,
     unignorable_names: &[String],
 ) -> ResolvedLibrary {
+    analyze_library_with_unignorable_mode(input, unignorable_names, true)
+}
+
+/// Like [`analyze_library_with_unignorable`], with [parallel_units] controlling
+/// whether units within the library use `par_iter` (disabled when multiple
+/// libraries are already being analyzed in parallel to avoid nested Rayon
+/// work-stealing stack growth).
+pub fn analyze_library_with_unignorable_mode(
+    input: &LibraryAnalysisInput<'_>,
+    unignorable_names: &[String],
+    parallel_units: bool,
+) -> ResolvedLibrary {
     let sink = NoopSink;
     let library_features = {
         let ctx = global_ctx(input, &sink);
@@ -167,12 +179,21 @@ pub fn analyze_library_with_unignorable(
         scopes
     };
 
-    // Dart `_parseAndResolve`: the units in parallel.
-    let units: Vec<ResolvedUnit> = input
-        .units
-        .par_iter()
-        .map(|unit| resolve_file(input, &scopes, &library_features, unit))
-        .collect();
+    // Dart `_parseAndResolve`: the units in parallel when analyzing a single library,
+    // or sequentially when outer library analysis is already bounded in parallel.
+    let units: Vec<ResolvedUnit> = if parallel_units && input.units.len() > 1 {
+        input
+            .units
+            .par_iter()
+            .map(|unit| resolve_file(input, &scopes, &library_features, unit))
+            .collect()
+    } else {
+        input
+            .units
+            .iter()
+            .map(|unit| resolve_file(input, &scopes, &library_features, unit))
+            .collect()
+    };
 
     let mut library = ResolvedLibrary {
         library: input.library,
@@ -735,16 +756,69 @@ fn resolve_file(
     }
 }
 
-/// [`ExternalUnits`] that resolves the units of other libraries on demand
-/// and keeps them (shared by the analyses of many libraries).
+/// Source info for a unit in [`ExternalUnitCache`], either pre-parsed or lazy.
+#[derive(Clone)]
+pub struct ExternalUnitSource {
+    pub uri: Arc<str>,
+    pub source: Arc<str>,
+    pub package_language_version: (u32, u32),
+    pub experiments: Vec<dartr_parser::experimental_flags::ExperimentalFlag>,
+    pub parsed: Option<Arc<ParsedUnit>>,
+}
+
+impl ExternalUnitSource {
+    fn parsed(&self, path: &str) -> Arc<ParsedUnit> {
+        if let Some(p) = &self.parsed {
+            return p.clone();
+        }
+        Arc::new(dartr_ast_builder::parse_file(
+            &self.source,
+            path,
+            self.package_language_version,
+            &self.experiments,
+        ))
+    }
+}
+
+/// [`ExternalUnits`] that resolves constant expressions of other libraries on
+/// demand from their linked `ElementStore::const_ast` and caches evaluated
+/// constant values (shared by the analyses of many libraries).
 pub struct ExternalUnitCache<'w> {
     world: &'w WorldSnapshot,
     tp: &'w TypeProvider,
     options: AnalysisOptions,
-    /// The parsed units by path, with their URIs.
-    sources: IndexMap<Arc<str>, (Arc<str>, Arc<ParsedUnit>)>,
+    /// The unit sources by path.
+    sources: IndexMap<Arc<str>, ExternalUnitSource>,
     scopes: Mutex<IndexMap<EId<LibraryElement>, Arc<LibraryScopes>>>,
-    units: Mutex<IndexMap<FId<LibraryFragment>, Arc<OnceLock<Option<Arc<ResolvedUnit>>>>>>,
+    units: Mutex<IndexMap<FId<LibraryFragment>, Option<Arc<ResolvedUnit>>>>,
+    const_initializers: Mutex<
+        IndexMap<
+            dartr_element::ElementId,
+            Option<(Arc<ResolvedUnit>, EId<LibraryElement>, dartr_ast::NodeId)>,
+        >,
+    >,
+    ctor_initializers: Mutex<
+        IndexMap<
+            dartr_element::ElementId,
+            Option<(
+                Arc<ResolvedUnit>,
+                EId<LibraryElement>,
+                Vec<dartr_ast::NodeId>,
+            )>,
+        >,
+    >,
+    metadata_annotations: Mutex<
+        IndexMap<
+            dartr_element::ElementId,
+            Option<(
+                Arc<ResolvedUnit>,
+                EId<LibraryElement>,
+                Vec<dartr_ast::NodeId>,
+            )>,
+        >,
+    >,
+    evaluated_elements: Mutex<IndexMap<dartr_element::ElementId, dartr_constant::Constant>>,
+    evaluated_constructors: Mutex<indexmap::IndexSet<dartr_element::ElementId>>,
 }
 
 impl<'w> ExternalUnitCache<'w> {
@@ -756,6 +830,32 @@ impl<'w> ExternalUnitCache<'w> {
         options: AnalysisOptions,
         sources: IndexMap<Arc<str>, (Arc<str>, Arc<ParsedUnit>)>,
     ) -> ExternalUnitCache<'w> {
+        let sources = sources
+            .into_iter()
+            .map(|(path, (uri, parsed))| {
+                let source = parsed.ast.tokens.source.clone();
+                (
+                    path,
+                    ExternalUnitSource {
+                        uri,
+                        source,
+                        package_language_version: (3, 7),
+                        experiments: Vec::new(),
+                        parsed: Some(parsed),
+                    },
+                )
+            })
+            .collect();
+        Self::new_lazy(world, tp, options, sources)
+    }
+
+    /// A cache over [world] that parses external units on demand from their source.
+    pub fn new_lazy(
+        world: &'w WorldSnapshot,
+        tp: &'w TypeProvider,
+        options: AnalysisOptions,
+        sources: IndexMap<Arc<str>, ExternalUnitSource>,
+    ) -> ExternalUnitCache<'w> {
         ExternalUnitCache {
             world,
             tp,
@@ -763,6 +863,11 @@ impl<'w> ExternalUnitCache<'w> {
             sources,
             scopes: Mutex::new(IndexMap::new()),
             units: Mutex::new(IndexMap::new()),
+            const_initializers: Mutex::new(IndexMap::new()),
+            ctor_initializers: Mutex::new(IndexMap::new()),
+            metadata_annotations: Mutex::new(IndexMap::new()),
+            evaluated_elements: Mutex::new(IndexMap::new()),
+            evaluated_constructors: Mutex::new(indexmap::IndexSet::new()),
         }
     }
 
@@ -819,7 +924,9 @@ impl<'w> ExternalUnitCache<'w> {
             let f = ctx.fragment(fragment);
             (f.library, f.source.path.clone())
         };
-        let (uri, parsed) = self.sources.get(&path)?.clone();
+        let entry = self.sources.get(&path)?;
+        let uri = entry.uri.clone();
+        let parsed = entry.parsed(&path);
         let scopes = self.library_scopes(library);
         let input = self.input(library);
         let features = {
@@ -840,6 +947,9 @@ impl<'w> ExternalUnitCache<'w> {
             return None;
         }
         resolved.ast.shrink_to_fit();
+        resolved.tables.compact();
+        resolved.rt = ResolverTables::new();
+        resolved.local.store.shrink_to_fit();
         resolved.diagnostics = Vec::new();
         Some(Arc::new(resolved))
     }
@@ -849,8 +959,818 @@ impl<'w> ExternalUnitCache<'w> {
             .lock()
             .unwrap()
             .values()
-            .filter_map(|cell| cell.get().and_then(|u| u.clone()))
+            .filter_map(|u| u.clone())
             .collect()
+    }
+
+    pub fn mini_units(&self) -> Vec<Arc<ResolvedUnit>> {
+        let mut out = Vec::new();
+        out.extend(
+            self.const_initializers
+                .lock()
+                .unwrap()
+                .values()
+                .filter_map(|v| v.as_ref().map(|(u, _, _)| u.clone())),
+        );
+        out.extend(
+            self.ctor_initializers
+                .lock()
+                .unwrap()
+                .values()
+                .filter_map(|v| v.as_ref().map(|(u, _, _)| u.clone())),
+        );
+        out.extend(
+            self.metadata_annotations
+                .lock()
+                .unwrap()
+                .values()
+                .filter_map(|v| v.as_ref().map(|(u, _, _)| u.clone())),
+        );
+        out
+    }
+
+    pub fn evaluated_count(&self) -> usize {
+        self.evaluated_elements.lock().unwrap().len()
+    }
+
+    fn resolve_const_initializer(
+        &self,
+        element: dartr_element::ElementId,
+    ) -> Option<(Arc<ResolvedUnit>, EId<LibraryElement>, dartr_ast::NodeId)> {
+        use dartr_ast::{Expression, NodeId, VariableDeclaration, VariableDeclarationList};
+        use dartr_element::{
+            ElementFlags, ExtensionElement, FormalParameterElement, FragmentFlags, InstanceElement,
+            InterfaceElement, Tag, TypeId,
+        };
+
+        let sink = NoopSink;
+        let gctx = Ctx {
+            world: self.world,
+            current: None,
+            local: None,
+            tp: self.tp,
+            features: &EMPTY_FEATURES,
+            req: &sink,
+        };
+        let data = gctx.element_data(element)?;
+        let library = data.library?;
+        let mut fragment_iter = Some(data.first_fragment);
+        let mut init_info = None;
+        while let Some(f) = fragment_iter {
+            if let Some(vf) = f.cast::<dartr_element::VariableFragment>()
+                && let Some(expr_id) = gctx
+                    .store(f.store())
+                    .variable_fragment(vf)
+                    .constant_initializer
+                && let Some(lf) = dartr_element::diagnostics::library_fragment_of(&gctx, f)
+            {
+                init_info = Some((f.store(), lf, expr_id));
+            }
+            fragment_iter = gctx.fragment_data(f).and_then(|d| d.next_fragment);
+        }
+        let (store_id, lf, expr_id) = init_info?;
+        let const_ast = gctx.store(store_id).const_ast.try_get()?.clone();
+        let frag_source = gctx.fragment(lf).source.clone();
+
+        let library_features = gctx.get(library).feature_set.clone();
+        let unit_features = experimental_features(&library_features);
+        let scopes = self.library_scopes(library);
+
+        let local = self.world.generation.new_local_arena();
+        let mut ast = Ast::new(dartr_syntax::Tokens::new(Arc::from("")));
+        let mut tables = ResolutionTables::new();
+        let mut rt = ResolverTables::new();
+
+        let copied_expr = copy_from_const_ast(&const_ast, expr_id.0, &mut ast, &mut rt);
+        let is_const = element.tag() == Tag::FormalParameter
+            || crate::element_ext::first_fragment_flags(&gctx, element)
+                .contains(FragmentFlags::VARIABLE_FRAGMENT_IS_CONST)
+            || crate::element_ext::is_enum_constant(&gctx, element);
+        let const_tok = is_const.then(|| {
+            ast.tokens.push_synthetic_string(
+                dartr_syntax::TokenType::IDENTIFIER,
+                "const",
+                0,
+                5,
+                Some(0),
+            )
+        });
+        let name_tok = ast.tokens.push_synthetic_string(
+            dartr_syntax::TokenType::IDENTIFIER,
+            "",
+            0,
+            0,
+            Some(0),
+        );
+        let empty_meta = ast.new_list(std::iter::empty());
+        let var_decl = ast.add(VariableDeclaration {
+            documentation_comment: None,
+            metadata: empty_meta,
+            name: name_tok,
+            equals: None,
+            initializer: Some(Id::<Expression>::from_raw(copied_expr)),
+        });
+        let vars_list = ast.new_list([var_decl]);
+        let empty_meta2 = ast.new_list(std::iter::empty());
+        let var_list = ast.add(VariableDeclarationList {
+            documentation_comment: None,
+            metadata: empty_meta2,
+            late_keyword: None,
+            keyword: const_tok,
+            type_: None,
+            variables: vars_list,
+        });
+        let dummy_unit = make_dummy_unit(&mut ast);
+
+        let ancestors = enclosing_ancestors(&gctx, element);
+        let mut enclosing_instance: Option<EId<InstanceElement>> = None;
+        let mut enclosing_class: Option<EId<InterfaceElement>> = None;
+        let mut enclosing_extension: Option<EId<ExtensionElement>> = None;
+        for &anc in &ancestors {
+            if let Some(inst) = anc.cast::<InstanceElement>() {
+                enclosing_instance = Some(inst);
+                if anc.tag() == Tag::Extension {
+                    enclosing_extension = anc.cast::<ExtensionElement>();
+                } else {
+                    enclosing_class = anc.cast::<InterfaceElement>();
+                }
+            }
+        }
+        let is_field = element.tag() == Tag::Field;
+        let is_static_field = is_field
+            && crate::element_ext::first_fragment_flags(&gctx, element)
+                .contains(FragmentFlags::VARIABLE_FRAGMENT_IS_STATIC);
+        let is_late_field = is_field
+            && crate::element_ext::first_fragment_flags(&gctx, element)
+                .contains(FragmentFlags::VARIABLE_FRAGMENT_IS_LATE);
+        let primary_ctor = if is_field && !is_static_field && !is_late_field {
+            enclosing_instance
+                .and_then(|inst| crate::scope_context::primary_constructor_of(&gctx, inst))
+        } else {
+            None
+        };
+        let primary_params: Option<Vec<EId<FormalParameterElement>>> =
+            primary_ctor.map(|c| gctx.executable(c.upcast()).formal_params.clone());
+
+        let is_inferred = element
+            .cast::<dartr_element::PropertyInducingElement>()
+            .is_some_and(|p| {
+                gctx.property_inducing(p)
+                    .flags
+                    .has(ElementFlags::PROPERTY_INDUCING_ELEMENT_IS_TYPE_INFERRED_FROM_INITIALIZER)
+            })
+            || (is_field && crate::element_ext::is_enum_constant(&gctx, element));
+        let context_type = if is_inferred {
+            TypeId::UNKNOWN
+        } else {
+            crate::element_ext::variable_type(&gctx, element)
+        };
+
+        let ctx = Ctx {
+            world: self.world,
+            current: None,
+            local: Some(&local),
+            tp: self.tp,
+            features: &library_features,
+            req: &sink,
+        };
+        let unit_ctx = UnitContext {
+            library,
+            fragment: lf,
+            scopes: &scopes,
+            options: self.options,
+            features: unit_features,
+        };
+        let mut diagnostics = Vec::new();
+
+        let resolved_node: NodeId = catch_unwind(AssertUnwindSafe(|| {
+            crate::element_binding_visitor::bind_subtree(
+                &ctx,
+                &ast,
+                lf,
+                lf.raw(),
+                copied_expr,
+                &mut tables,
+                &mut rt,
+            );
+            {
+                let mut visitor = crate::resolution_visitor::ResolutionVisitor::new(
+                    ctx,
+                    unit_ctx,
+                    &mut tables,
+                    &mut rt,
+                    &mut diagnostics,
+                );
+                push_ancestor_scopes(&ctx, &mut visitor, &ancestors, false);
+                if is_field {
+                    visitor.scope_context.set_in_static_member(is_static_field);
+                    if let Some(c) = primary_ctor {
+                        visitor.scope_context.push_constructor_initializer_scope(c);
+                    }
+                }
+                let expr_id = ast[var_decl].initializer?;
+                visitor.visit(&mut ast, expr_id);
+                for (node, result) in visitor.scope_context.finish_recorded_lookups() {
+                    visitor
+                        .rt
+                        .this_scope_lookup
+                        .insert(node, (result.getter, result.setter));
+                }
+            }
+            let expr_id = ast[var_decl].initializer?;
+            let mut resolver = ResolverVisitor::new(
+                ctx,
+                &mut ast,
+                &mut tables,
+                &mut rt,
+                &mut diagnostics,
+                unit_ctx,
+            );
+            resolver.enclosing_extension = enclosing_extension;
+            resolver.prepare_enclosing_declarations(enclosing_class, None);
+            {
+                let ast_ref = &*resolver.ast;
+                let tables_ref = &*resolver.tables;
+                resolver.flow_analysis.body_or_initializer_enter(
+                    ast_ref,
+                    tables_ref,
+                    var_list.raw(),
+                    primary_params.as_deref(),
+                    None,
+                );
+            }
+            resolver.analyze_expression_node(expr_id, context_type);
+            let rewritten = resolver.pop_rewrite().unwrap_or(expr_id);
+            resolver.flow_analysis.body_or_initializer_exit();
+            resolver.flush_type_analyzer_errors();
+            Some(rewritten.raw())
+        }))
+        .ok()
+        .flatten()?;
+
+        crate::ast_resolver::Globalizer::new(&ctx).globalize_tables(&mut tables);
+        ast.shrink_to_fit();
+        tables.compact();
+        let mut local = local;
+        local.store.shrink_to_fit();
+
+        let unit = Arc::new(ResolvedUnit {
+            path: frag_source.path,
+            uri: frag_source.uri,
+            fragment: lf,
+            ast,
+            unit: dummy_unit,
+            tables,
+            rt: ResolverTables::new(),
+            local,
+            diagnostics: Vec::new(),
+            ignored_diagnostics: Vec::new(),
+            panic: None,
+            declarations: OnceLock::new(),
+        });
+        Some((unit, library, resolved_node))
+    }
+
+    fn resolve_ctor_initializers(
+        &self,
+        constructor: dartr_element::ElementId,
+    ) -> Option<(
+        Arc<ResolvedUnit>,
+        EId<LibraryElement>,
+        Vec<dartr_ast::NodeId>,
+    )> {
+        use dartr_ast::{
+            ConstructorInitializer, EmptyFunctionBody, NodeId, PrimaryConstructorBody,
+        };
+        use dartr_element::{
+            ConstructorElement, ExecutableElement, FragmentFlags, InterfaceElement,
+        };
+
+        let sink = NoopSink;
+        let gctx = Ctx {
+            world: self.world,
+            current: None,
+            local: None,
+            tp: self.tp,
+            features: &EMPTY_FEATURES,
+            req: &sink,
+        };
+        let data = gctx.element_data(constructor)?;
+        let library = data.library?;
+        let mut fragment_iter = Some(data.first_fragment);
+        let mut inits = Vec::new();
+        let mut store_and_lf = None;
+        while let Some(f) = fragment_iter {
+            let Some(fd) = gctx.fragment_data(f) else {
+                break;
+            };
+            if fd
+                .flags
+                .get()
+                .contains(FragmentFlags::CONSTRUCTOR_FRAGMENT_IS_CONST)
+                && let Some(cf) = f.cast::<dartr_element::ConstructorFragment>()
+                && let Some(list) = gctx
+                    .store(f.store())
+                    .fragment(cf)
+                    .constant_initializers
+                    .try_get()
+                && !list.is_empty()
+                && let Some(lf) = dartr_element::diagnostics::library_fragment_of(&gctx, f)
+            {
+                store_and_lf = Some((f.store(), lf));
+                inits.extend(list.iter().copied());
+            }
+            fragment_iter = fd.next_fragment;
+        }
+        let (store_id, lf) = store_and_lf?;
+        if inits.is_empty() {
+            return None;
+        }
+        let const_ast = gctx.store(store_id).const_ast.try_get()?.clone();
+        let frag_source = gctx.fragment(lf).source.clone();
+
+        let library_features = gctx.get(library).feature_set.clone();
+        let unit_features = experimental_features(&library_features);
+        let scopes = self.library_scopes(library);
+
+        let local = self.world.generation.new_local_arena();
+        let mut ast = Ast::new(dartr_syntax::Tokens::new(Arc::from("")));
+        let mut tables = ResolutionTables::new();
+        let mut rt = ResolverTables::new();
+
+        let copied_inits: Vec<Id<ConstructorInitializer>> = inits
+            .iter()
+            .map(|id| {
+                let raw = copy_from_const_ast(&const_ast, id.0, &mut ast, &mut rt);
+                Id::<ConstructorInitializer>::from_raw(raw)
+            })
+            .collect();
+        let init_list = ast.new_list(copied_inits.iter().copied());
+        let empty_meta = ast.new_list(std::iter::empty());
+        let this_tok = ast.tokens.push_synthetic_string(
+            dartr_syntax::TokenType::IDENTIFIER,
+            "this",
+            0,
+            4,
+            Some(0),
+        );
+        let semi_tok = ast.tokens.push_synthetic_string(
+            dartr_syntax::TokenType::SEMICOLON,
+            ";",
+            0,
+            1,
+            Some(0),
+        );
+        let empty_body = ast.add(EmptyFunctionBody {
+            semicolon: semi_tok,
+        });
+        let parent_body = ast.add(PrimaryConstructorBody {
+            documentation_comment: None,
+            metadata: empty_meta,
+            this_keyword: this_tok,
+            colon: None,
+            initializers: init_list,
+            body: empty_body.upcast(),
+        });
+        let dummy_unit = make_dummy_unit(&mut ast);
+
+        let ancestors = enclosing_ancestors(&gctx, constructor);
+        let enclosing_class = ancestors
+            .iter()
+            .rev()
+            .find_map(|a| a.cast::<InterfaceElement>());
+        let ctor_eid = constructor.cast::<ConstructorElement>()?;
+        let exec_eid = constructor.cast::<ExecutableElement>()?;
+
+        let ctx = Ctx {
+            world: self.world,
+            current: None,
+            local: Some(&local),
+            tp: self.tp,
+            features: &library_features,
+            req: &sink,
+        };
+        let unit_ctx = UnitContext {
+            library,
+            fragment: lf,
+            scopes: &scopes,
+            options: self.options,
+            features: unit_features,
+        };
+        let mut diagnostics = Vec::new();
+
+        let resolved_nodes: Vec<NodeId> = catch_unwind(AssertUnwindSafe(|| {
+            for &init in &copied_inits {
+                crate::element_binding_visitor::bind_subtree(
+                    &ctx,
+                    &ast,
+                    lf,
+                    lf.raw(),
+                    init.raw(),
+                    &mut tables,
+                    &mut rt,
+                );
+            }
+            {
+                let mut visitor = crate::resolution_visitor::ResolutionVisitor::new(
+                    ctx,
+                    unit_ctx,
+                    &mut tables,
+                    &mut rt,
+                    &mut diagnostics,
+                );
+                push_ancestor_scopes(&ctx, &mut visitor, &ancestors, false);
+                let ctor_tps = crate::scope_context::element_type_parameters(&ctx, constructor);
+                if !ctor_tps.is_empty() {
+                    visitor.scope_context.push_type_parameter_scope(&ctor_tps);
+                }
+                visitor
+                    .scope_context
+                    .push_constructor_initializer_scope(ctor_eid);
+                let init_nodes: Vec<NodeId> = ast
+                    .list(ast[parent_body].initializers)
+                    .iter()
+                    .map(|i| i.raw())
+                    .collect();
+                for init in init_nodes {
+                    visitor.visit(&mut ast, init);
+                }
+                for (node, result) in visitor.scope_context.finish_recorded_lookups() {
+                    visitor
+                        .rt
+                        .this_scope_lookup
+                        .insert(node, (result.getter, result.setter));
+                }
+            }
+            let init_nodes: Vec<NodeId> = ast
+                .list(ast[parent_body].initializers)
+                .iter()
+                .map(|i| i.raw())
+                .collect();
+            let mut resolver = ResolverVisitor::new(
+                ctx,
+                &mut ast,
+                &mut tables,
+                &mut rt,
+                &mut diagnostics,
+                unit_ctx,
+            );
+            resolver.prepare_enclosing_declarations(enclosing_class, Some(exec_eid));
+            let formal_parameters = resolver.formal_parameters_of(exec_eid);
+            {
+                let ast_ref = &*resolver.ast;
+                let tables_ref = &*resolver.tables;
+                resolver.flow_analysis.body_or_initializer_enter(
+                    ast_ref,
+                    tables_ref,
+                    parent_body.raw(),
+                    Some(&formal_parameters),
+                    None,
+                );
+            }
+            resolver.flow_analysis.executable_declaration_enter(
+                parent_body.raw(),
+                Some(&formal_parameters),
+                false,
+            );
+            for init in &init_nodes {
+                resolver.visit_node(*init);
+            }
+            resolver.flow_analysis.body_or_initializer_exit();
+            resolver.flush_type_analyzer_errors();
+            let final_inits: Vec<NodeId> = resolver
+                .ast
+                .list(resolver.ast[parent_body].initializers)
+                .iter()
+                .map(|i| i.raw())
+                .collect();
+            Some(final_inits)
+        }))
+        .ok()
+        .flatten()?;
+
+        crate::ast_resolver::Globalizer::new(&ctx).globalize_tables(&mut tables);
+        ast.shrink_to_fit();
+        tables.compact();
+        let mut local = local;
+        local.store.shrink_to_fit();
+
+        let unit = Arc::new(ResolvedUnit {
+            path: frag_source.path,
+            uri: frag_source.uri,
+            fragment: lf,
+            ast,
+            unit: dummy_unit,
+            tables,
+            rt: ResolverTables::new(),
+            local,
+            diagnostics: Vec::new(),
+            ignored_diagnostics: Vec::new(),
+            panic: None,
+            declarations: OnceLock::new(),
+        });
+        Some((unit, library, resolved_nodes))
+    }
+
+    fn resolve_metadata_annotations(
+        &self,
+        element: dartr_element::ElementId,
+    ) -> Option<(
+        Arc<ResolvedUnit>,
+        EId<LibraryElement>,
+        Vec<dartr_ast::NodeId>,
+    )> {
+        use dartr_ast::{Annotation, NodeId, VariableDeclarationList};
+        use dartr_element::{ExtensionElement, InterfaceElement, Tag};
+
+        let sink = NoopSink;
+        let gctx = Ctx {
+            world: self.world,
+            current: None,
+            local: None,
+            tp: self.tp,
+            features: &EMPTY_FEATURES,
+            req: &sink,
+        };
+        let (library, store_id, lf, anns) = if element.tag() == Tag::Library {
+            let lib = element.cast::<LibraryElement>()?;
+            let lib_data = gctx.get(lib);
+            if lib_data.metadata.annotations.is_empty() {
+                return None;
+            }
+            let first = lib_data.first_fragment();
+            let anns: Vec<dartr_element::ConstExprId> = lib_data
+                .metadata
+                .annotations
+                .iter()
+                .map(|a| a.annotation_ast)
+                .collect();
+            (lib, element.store(), first, anns)
+        } else {
+            let data = gctx.element_data(element)?;
+            let lib = data.library?;
+            let mut fragment_iter = Some(data.first_fragment);
+            let mut anns = Vec::new();
+            let mut store_and_lf = None;
+            while let Some(f) = fragment_iter {
+                let Some(fd) = gctx.fragment_data(f) else {
+                    break;
+                };
+                if !fd.metadata.annotations.is_empty()
+                    && let Some(lf) = dartr_element::diagnostics::library_fragment_of(&gctx, f)
+                {
+                    if store_and_lf.is_none() {
+                        store_and_lf = Some((f.store(), lf));
+                    }
+                    anns.extend(fd.metadata.annotations.iter().map(|a| a.annotation_ast));
+                }
+                fragment_iter = fd.next_fragment;
+            }
+            let (store_id, lf) = store_and_lf?;
+            if anns.is_empty() {
+                return None;
+            }
+            (lib, store_id, lf, anns)
+        };
+
+        let const_ast = gctx.store(store_id).const_ast.try_get()?.clone();
+        let frag_source = gctx.fragment(lf).source.clone();
+
+        let library_features = gctx.get(library).feature_set.clone();
+        let unit_features = experimental_features(&library_features);
+        let scopes = self.library_scopes(library);
+
+        let local = self.world.generation.new_local_arena();
+        let mut ast = Ast::new(dartr_syntax::Tokens::new(Arc::from("")));
+        let mut tables = ResolutionTables::new();
+        let mut rt = ResolverTables::new();
+
+        let copied_anns: Vec<Id<Annotation>> = anns
+            .iter()
+            .map(|id| {
+                let raw = copy_from_const_ast(&const_ast, id.0, &mut ast, &mut rt);
+                Id::<Annotation>::from_raw(raw)
+            })
+            .collect();
+        let meta_list = ast.new_list(copied_anns.iter().copied());
+        let empty_vars = ast.new_list(std::iter::empty());
+        let parent_list = ast.add(VariableDeclarationList {
+            documentation_comment: None,
+            metadata: meta_list,
+            late_keyword: None,
+            keyword: None,
+            type_: None,
+            variables: empty_vars,
+        });
+        let dummy_unit = make_dummy_unit(&mut ast);
+
+        let ancestors = enclosing_ancestors(&gctx, element);
+        let is_type_param = element.tag() == Tag::TypeParameter;
+        let mut enclosing_class: Option<EId<InterfaceElement>> = None;
+        let mut enclosing_extension: Option<EId<ExtensionElement>> = None;
+        if !is_type_param {
+            for &anc in &ancestors {
+                if anc.tag() == Tag::Extension {
+                    enclosing_extension = anc.cast::<ExtensionElement>();
+                } else if let Some(cls) = anc.cast::<InterfaceElement>() {
+                    enclosing_class = Some(cls);
+                }
+            }
+        }
+
+        let ctx = Ctx {
+            world: self.world,
+            current: None,
+            local: Some(&local),
+            tp: self.tp,
+            features: &library_features,
+            req: &sink,
+        };
+        let unit_ctx = UnitContext {
+            library,
+            fragment: lf,
+            scopes: &scopes,
+            options: self.options,
+            features: unit_features,
+        };
+        let mut diagnostics = Vec::new();
+
+        let resolved_nodes: Vec<NodeId> = catch_unwind(AssertUnwindSafe(|| {
+            for &ann in &copied_anns {
+                crate::element_binding_visitor::bind_subtree(
+                    &ctx,
+                    &ast,
+                    lf,
+                    lf.raw(),
+                    ann.raw(),
+                    &mut tables,
+                    &mut rt,
+                );
+            }
+            {
+                let mut visitor = crate::resolution_visitor::ResolutionVisitor::new(
+                    ctx,
+                    unit_ctx,
+                    &mut tables,
+                    &mut rt,
+                    &mut diagnostics,
+                );
+                push_ancestor_scopes(&ctx, &mut visitor, &ancestors, is_type_param);
+                let ann_nodes: Vec<Id<Annotation>> = ast.list(ast[parent_list].metadata).to_vec();
+                for ann in ann_nodes {
+                    visitor.visit(&mut ast, ann);
+                }
+                for (node, result) in visitor.scope_context.finish_recorded_lookups() {
+                    visitor
+                        .rt
+                        .this_scope_lookup
+                        .insert(node, (result.getter, result.setter));
+                }
+            }
+            let ann_nodes: Vec<Id<Annotation>> = ast.list(ast[parent_list].metadata).to_vec();
+            let mut resolver = ResolverVisitor::new(
+                ctx,
+                &mut ast,
+                &mut tables,
+                &mut rt,
+                &mut diagnostics,
+                unit_ctx,
+            );
+            resolver.enclosing_extension = enclosing_extension;
+            resolver.prepare_enclosing_declarations(enclosing_class, None);
+            for ann in &ann_nodes {
+                resolver.visit_annotation(*ann);
+            }
+            resolver.flush_type_analyzer_errors();
+            let final_anns: Vec<NodeId> = resolver
+                .ast
+                .list(resolver.ast[parent_list].metadata)
+                .iter()
+                .map(|a| a.raw())
+                .collect();
+            Some(final_anns)
+        }))
+        .ok()
+        .flatten()?;
+
+        crate::ast_resolver::Globalizer::new(&ctx).globalize_tables(&mut tables);
+        ast.shrink_to_fit();
+        tables.compact();
+        let mut local = local;
+        local.store.shrink_to_fit();
+
+        let unit = Arc::new(ResolvedUnit {
+            path: frag_source.path,
+            uri: frag_source.uri,
+            fragment: lf,
+            ast,
+            unit: dummy_unit,
+            tables,
+            rt: ResolverTables::new(),
+            local,
+            diagnostics: Vec::new(),
+            ignored_diagnostics: Vec::new(),
+            panic: None,
+            declarations: OnceLock::new(),
+        });
+        Some((unit, library, resolved_nodes))
+    }
+}
+
+fn copy_from_const_ast(
+    const_ast: &dartr_element::ConstAst,
+    src_node: dartr_ast::NodeId,
+    dst: &mut Ast,
+    rt: &mut ResolverTables,
+) -> dartr_ast::NodeId {
+    let src = const_ast.ast();
+    let dst_node = dartr_ast::copy_subtree(src, src_node, dst);
+    let mut stack = vec![(src_node, dst_node)];
+    while let Some((s, d)) = stack.pop() {
+        if const_ast.is_dot_shorthand(s) {
+            rt.dot_shorthand.insert(d, ());
+        }
+        for (sc, dc) in src.children(s).into_iter().zip(dst.children(d)) {
+            stack.push((sc, dc));
+        }
+    }
+    dst_node
+}
+
+fn make_dummy_unit(ast: &mut Ast) -> Id<CompilationUnit> {
+    let eof = ast
+        .tokens
+        .push_synthetic_string(dartr_syntax::TokenType::EOF, "", 0, 0, Some(0));
+    let directives = ast.new_list(std::iter::empty());
+    let declarations = ast.new_list(std::iter::empty());
+    ast.add(CompilationUnit {
+        begin_token: eof,
+        script_tag: None,
+        directives,
+        declarations,
+        end_token: eof,
+    })
+}
+
+fn experimental_features(
+    feature_set: &dartr_element::FeatureSet,
+) -> dartr_parser::experimental_features::ExperimentalFeatures {
+    use dartr_parser::experimental_features::{ExperimentalFeatures, ExperimentalFlag};
+    let mut features = ExperimentalFeatures::none();
+    for &flag in ExperimentalFlag::VALUES {
+        if feature_set.is_enabled(flag.name()) {
+            features = features.with(flag, true);
+        }
+    }
+    features
+}
+
+fn enclosing_ancestors(
+    ctx: &Ctx<'_>,
+    element: dartr_element::ElementId,
+) -> Vec<dartr_element::ElementId> {
+    let mut ancestors = Vec::new();
+    let mut cur = ctx.element_data(element).and_then(|d| d.enclosing);
+    while let Some(enc) = cur {
+        if enc.tag() == dartr_element::Tag::Library {
+            break;
+        }
+        ancestors.push(enc);
+        cur = ctx.element_data(enc).and_then(|d| d.enclosing);
+    }
+    ancestors.reverse();
+    ancestors
+}
+
+fn push_ancestor_scopes<'a>(
+    ctx: &Ctx<'a>,
+    visitor: &mut crate::resolution_visitor::ResolutionVisitor<'_, 'a>,
+    ancestors: &[dartr_element::ElementId],
+    skip_last_instance_scope: bool,
+) {
+    use dartr_element::{FragmentFlags, InstanceElement, InterfaceElement, Tag};
+    for (idx, &anc) in ancestors.iter().enumerate() {
+        let tps = crate::scope_context::element_type_parameters(ctx, anc);
+        if !tps.is_empty() {
+            visitor.scope_context.push_type_parameter_scope(&tps);
+        }
+        if let Some(inst) = anc.cast::<InstanceElement>() {
+            if skip_last_instance_scope && idx + 1 == ancestors.len() {
+                continue;
+            }
+            if anc.tag() == Tag::Extension {
+                visitor
+                    .scope_context
+                    .push_extension_scope(EId::from_raw(anc));
+            } else {
+                visitor.named_type_resolver.enclosing_class = anc.cast::<InterfaceElement>();
+                visitor.scope_context.push_instance_scope(inst);
+            }
+        } else if matches!(anc.tag(), Tag::Method | Tag::Getter | Tag::Setter) {
+            let is_static = crate::element_ext::first_fragment_flags(ctx, anc)
+                .contains(FragmentFlags::EXECUTABLE_FRAGMENT_IS_STATIC);
+            visitor.scope_context.set_in_static_member(is_static);
+        }
     }
 }
 
@@ -859,14 +1779,109 @@ static EMPTY_FEATURES: std::sync::LazyLock<dartr_element::FeatureSet> =
 
 impl ExternalUnits for ExternalUnitCache<'_> {
     fn resolved_unit(&self, fragment: FId<LibraryFragment>) -> Option<Arc<ResolvedUnit>> {
-        let cell = self
-            .units
+        if let Some(cached) = self.units.lock().unwrap().get(&fragment) {
+            return cached.clone();
+        }
+        let resolved = self.resolve(fragment);
+        self.units
             .lock()
             .unwrap()
             .entry(fragment)
-            .or_insert_with(|| Arc::new(OnceLock::new()))
-            .clone();
-        cell.get_or_init(|| self.resolve(fragment)).clone()
+            .or_insert(resolved)
+            .clone()
+    }
+
+    fn resolved_constant_initializer(
+        &self,
+        element: dartr_element::ElementId,
+    ) -> Option<(Arc<ResolvedUnit>, EId<LibraryElement>, dartr_ast::NodeId)> {
+        if let Some(cached) = self.const_initializers.lock().unwrap().get(&element) {
+            return cached.clone();
+        }
+        let resolved = self.resolve_const_initializer(element);
+        self.const_initializers
+            .lock()
+            .unwrap()
+            .entry(element)
+            .or_insert(resolved)
+            .clone()
+    }
+
+    fn resolved_constructor_initializers(
+        &self,
+        constructor: dartr_element::ElementId,
+    ) -> Option<(
+        Arc<ResolvedUnit>,
+        EId<LibraryElement>,
+        Vec<dartr_ast::NodeId>,
+    )> {
+        if let Some(cached) = self.ctor_initializers.lock().unwrap().get(&constructor) {
+            return cached.clone();
+        }
+        let resolved = self.resolve_ctor_initializers(constructor);
+        self.ctor_initializers
+            .lock()
+            .unwrap()
+            .entry(constructor)
+            .or_insert(resolved)
+            .clone()
+    }
+
+    fn resolved_metadata_annotations(
+        &self,
+        element: dartr_element::ElementId,
+    ) -> Option<(
+        Arc<ResolvedUnit>,
+        EId<LibraryElement>,
+        Vec<dartr_ast::NodeId>,
+    )> {
+        if let Some(cached) = self.metadata_annotations.lock().unwrap().get(&element) {
+            return cached.clone();
+        }
+        let resolved = self.resolve_metadata_annotations(element);
+        self.metadata_annotations
+            .lock()
+            .unwrap()
+            .entry(element)
+            .or_insert(resolved)
+            .clone()
+    }
+
+    fn evaluated_element(
+        &self,
+        element: dartr_element::ElementId,
+    ) -> Option<dartr_constant::Constant> {
+        self.evaluated_elements
+            .lock()
+            .unwrap()
+            .get(&element)
+            .cloned()
+    }
+
+    fn set_evaluated_element(
+        &self,
+        element: dartr_element::ElementId,
+        value: dartr_constant::Constant,
+    ) {
+        self.evaluated_elements
+            .lock()
+            .unwrap()
+            .entry(element)
+            .or_insert(value);
+    }
+
+    fn is_constructor_evaluated(&self, constructor: dartr_element::ElementId) -> bool {
+        self.evaluated_constructors
+            .lock()
+            .unwrap()
+            .contains(&constructor)
+    }
+
+    fn set_constructor_evaluated(&self, constructor: dartr_element::ElementId) {
+        self.evaluated_constructors
+            .lock()
+            .unwrap()
+            .insert(constructor);
     }
 }
 

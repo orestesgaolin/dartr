@@ -291,7 +291,7 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
         for &annotation in ast.list(list) {
             metadata.annotations.push(ElementAnnotation {
                 library_fragment: self.library_fragment,
-                annotation_ast: self.core.const_exprs.copy(ast, annotation),
+                annotation_ast: self.core.const_exprs.copy_from_unit(&parsed, annotation),
             });
         }
         metadata
@@ -299,7 +299,7 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
 
     fn copy_expr(&mut self, node: impl Into<NodeId>) -> ConstExprId {
         let parsed = self.parsed.clone();
-        self.core.const_exprs.copy(&parsed.ast, node)
+        self.core.const_exprs.copy_from_unit(&parsed, node)
     }
 
     fn with_enclosing(
@@ -835,7 +835,7 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
             let initializers: Vec<ConstExprId> = ast
                 .list(n.initializers)
                 .iter()
-                .map(|&i| self.core.const_exprs.copy(ast, i))
+                .map(|&i| self.core.const_exprs.copy_from_unit(&parsed, i))
                 .collect();
             data.constant_initializers.set_once(initializers);
         }
@@ -952,8 +952,13 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
         let args = arguments.map(|a| ast.get(a));
         let type_arguments = args
             .and_then(|a| a.type_arguments)
-            .map(|t| self.core.const_exprs.copy(ast, t).0);
-        let argument_list = args.map(|a| self.core.const_exprs.copy(ast, a.argument_list).0);
+            .map(|t| self.core.const_exprs.copy_from_unit(&parsed, t).0);
+        let argument_list = args.map(|a| {
+            self.core
+                .const_exprs
+                .copy_from_unit(&parsed, a.argument_list)
+                .0
+        });
         let constructor_name = args.and_then(|a| a.constructor_selector).map(|s| {
             ast.tokens
                 .lexeme(ast.get(ast.get(s).name).token)
@@ -961,6 +966,13 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
         });
         let dst = &mut self.core.const_exprs.ast;
         let type_name = synthetic_string(dst, enum_name);
+        let mut prev_tok = type_name;
+        if let Some(ta) = type_arguments {
+            let ta_begin = dst.begin_token(ta);
+            let ta_end = dst.end_token(ta);
+            dst.tokens.set_next(prev_tok, ta_begin);
+            prev_tok = ta_end;
+        }
         let named_type = dst.add(NamedType {
             import_prefix: None,
             name: type_name,
@@ -971,6 +983,9 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
             Some(c) => {
                 let period = dst.tokens.push_synthetic(TokenType::PERIOD, 0, 0);
                 let token = synthetic_string(dst, c);
+                dst.tokens.set_next(prev_tok, period);
+                dst.tokens.set_next(period, token);
+                prev_tok = token;
                 let id = dst.add(SimpleIdentifier { token });
                 (Some(period), Some(id))
             }
@@ -982,10 +997,16 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
             name,
         });
         let argument_list = match argument_list {
-            Some(a) => Id::<ArgumentList>::from_raw(a),
+            Some(a) => {
+                let a_begin = dst.begin_token(a);
+                dst.tokens.set_next(prev_tok, a_begin);
+                Id::<ArgumentList>::from_raw(a)
+            }
             None => {
                 let open = dst.tokens.push_synthetic(TokenType::OPEN_PAREN, 0, 0);
                 let close = dst.tokens.push_synthetic(TokenType::CLOSE_PAREN, 0, 0);
+                dst.tokens.set_next(prev_tok, open);
+                dst.tokens.set_next(open, close);
                 let arguments = dst.new_list(std::iter::empty());
                 dst.add(ArgumentList {
                     left_parenthesis: open,
@@ -1011,17 +1032,21 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
         names: &[String],
     ) -> (ConstExprId, ConstExprId) {
         let dst = &mut self.core.const_exprs.ast;
-        let mut elements = Vec::new();
-        for n in names {
-            let token = synthetic_string(dst, n);
-            elements.push(dst.add(SimpleIdentifier { token }).raw());
-        }
         let open = dst
             .tokens
             .push_synthetic(TokenType::OPEN_SQUARE_BRACKET, 0, 0);
+        let mut prev_tok = open;
+        let mut elements = Vec::new();
+        for n in names {
+            let token = synthetic_string(dst, n);
+            dst.tokens.set_next(prev_tok, token);
+            prev_tok = token;
+            elements.push(dst.add(SimpleIdentifier { token }).raw());
+        }
         let close = dst
             .tokens
             .push_synthetic(TokenType::CLOSE_SQUARE_BRACKET, 0, 0);
+        dst.tokens.set_next(prev_tok, close);
         let elements = dst.new_list(elements.into_iter().map(Id::<CollectionElement>::from_raw));
         let list = dst.add(ListLiteral {
             const_keyword: None,
@@ -1031,15 +1056,18 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
             right_bracket: close,
         });
         let list_name = synthetic_string(dst, "List");
+        let lt = dst.tokens.push_synthetic(TokenType::LT, 0, 0);
         let enum_token = synthetic_string(dst, enum_name);
+        let gt = dst.tokens.push_synthetic(TokenType::GT, 0, 0);
+        dst.tokens.set_next(list_name, lt);
+        dst.tokens.set_next(lt, enum_token);
+        dst.tokens.set_next(enum_token, gt);
         let argument = dst.add(NamedType {
             import_prefix: None,
             name: enum_token,
             type_arguments: None,
             question: None,
         });
-        let lt = dst.tokens.push_synthetic(TokenType::LT, 0, 0);
-        let gt = dst.tokens.push_synthetic(TokenType::GT, 0, 0);
         let arguments = dst.new_list(std::iter::once(argument.upcast::<TypeAnnotation>()));
         let type_arguments = dst.add(TypeArgumentList {
             left_bracket: lt,
@@ -1714,7 +1742,7 @@ impl<'l, 'a> FragmentBuilder<'l, 'a> {
                 let initializers: Vec<ConstExprId> = ast
                     .list(b.initializers)
                     .iter()
-                    .map(|&i| self.core.const_exprs.copy(ast, i))
+                    .map(|&i| self.core.const_exprs.copy_from_unit(&parsed, i))
                     .collect();
                 data.constant_initializers.set_once(initializers);
             }

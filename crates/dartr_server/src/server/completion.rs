@@ -154,8 +154,9 @@ impl Server {
                         .filter(|f| f.ends_with(".dart") && !is_excluded_fn(f))
                         .collect()
                 });
+                let sdk = context.sdk.as_ref().or(coll.sdk.as_ref());
                 let mut available_files: Vec<String> = Vec::new();
-                if let Some(sdk) = context.sdk.as_ref().or(coll.sdk.as_ref()) {
+                if let Some(sdk) = sdk {
                     available_files.extend(
                         sdk.libraries()
                             .iter()
@@ -210,12 +211,15 @@ impl Server {
                         None
                     };
                 for pkg in context.packages.packages() {
-                    if let Some(allowed) = &allowed_pkgs
+                    let is_embedder_sdk = sdk.is_some_and(|s| s.path() == pkg.lib);
+                    if !is_embedder_sdk
+                        && let Some(allowed) = &allowed_pkgs
                         && !allowed.contains(&pkg.name)
                     {
                         continue;
                     }
-                    let skip_src = package.as_ref().is_some_and(|(root, _)| &pkg.root != root)
+                    let skip_src = !is_embedder_sdk
+                        && package.as_ref().is_some_and(|(root, _)| &pkg.root != root)
                         && !(friend_of_analyzer && pkg.name == "analyzer");
                     let files = pkg_lib_files
                         .entry((pkg.lib.clone(), skip_src))

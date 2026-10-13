@@ -73,6 +73,9 @@ pub struct UnitIndex {
     pub elements: Vec<ElementKey>,
     /// The relations sorted by element id (Dart order).
     pub relations: Vec<Relation>,
+    /// Enclosing type declaration `ElementId` for each subtype relation offset,
+    /// sorted by offset.
+    pub subtype_declarations: Vec<(u32, ElementId)>,
 }
 
 impl UnitIndex {
@@ -92,6 +95,15 @@ impl UnitIndex {
             .take_while(|r| r.element == id)
             .filter(|r| accept(r.kind))
             .collect()
+    }
+
+    /// Returns the declared `ElementId` of the enclosing type declaration for a
+    /// subtype relation at `offset`.
+    pub fn subtype_declaration_at(&self, offset: u32) -> Option<ElementId> {
+        self.subtype_declarations
+            .binary_search_by_key(&offset, |(o, _)| *o)
+            .ok()
+            .map(|i| self.subtype_declarations[i].1)
     }
 }
 
@@ -524,12 +536,46 @@ pub fn index_unit(
     dart_sort(&mut relations, &|a: &Relation, b: &Relation| {
         a.element as i64 - b.element as i64
     });
+    let mut subtype_declarations: Vec<(u32, ElementId)> = Vec::new();
+    for r in &relations {
+        if matches!(
+            r.kind,
+            RelationKind::IsExtendedBy
+                | RelationKind::IsImplementedBy
+                | RelationKind::IsMixedInBy
+                | RelationKind::Constrains
+        ) {
+            let mut node = ast.node_covering(unit, r.offset, 0);
+            let mut found = None;
+            while let Some(n) = node {
+                if ast.is::<ClassDeclaration>(n)
+                    || ast.is::<MixinDeclaration>(n)
+                    || ast.is::<EnumDeclaration>(n)
+                    || ast.is::<ExtensionTypeDeclaration>(n)
+                    || ast.is::<ClassTypeAlias>(n)
+                {
+                    found = Some(n);
+                    break;
+                }
+                node = ast.parent(n);
+            }
+            if let Some(declaration) = found
+                && let Some(e) = support::declared_element(ctx, tables, declaration)
+            {
+                subtype_declarations.push((r.offset, e));
+            }
+        }
+    }
+    subtype_declarations.sort_by_key(|(o, _)| *o);
+    subtype_declarations.dedup_by_key(|(o, _)| *o);
+    subtype_declarations.shrink_to_fit();
     let mut elements: Vec<ElementKey> = order.into_iter().map(|i| infos[i].clone()).collect();
     elements.shrink_to_fit();
     relations.shrink_to_fit();
     UnitIndex {
         elements,
         relations,
+        subtype_declarations,
     }
 }
 

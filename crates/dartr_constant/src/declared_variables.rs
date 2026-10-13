@@ -41,4 +41,8 @@ impl DeclaredVariables {
     pub fn get(&self, name: &str) -> Option<&str> {
         self.declared_variables.get(name).map(String::as_str)
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.declared_variables.is_empty()
+    }
 }

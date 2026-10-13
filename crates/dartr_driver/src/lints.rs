@@ -54,6 +54,33 @@ impl ElementMetadata for EngineMetadata<'_> {
 
     fn default_value_code(&self, element: dartr_element::ElementId) -> Option<String> {
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            if !element.store().is_local() {
+                let ctx = self.0.global_ctx();
+                if let Some(p) = element.cast::<dartr_element::FormalParameterElement>() {
+                    return dartr_element::display_string::default_value_code(&ctx, p);
+                }
+                if let Some(data) = ctx.element_data(element) {
+                    let mut f = Some(data.first_fragment);
+                    let mut last = None;
+                    while let Some(cur) = f {
+                        if let Some(vf) = cur.cast::<dartr_element::VariableFragment>()
+                            && let Some(expr) = ctx
+                                .store(cur.store())
+                                .variable_fragment(vf)
+                                .constant_initializer
+                        {
+                            last = Some((cur.store(), expr));
+                        }
+                        f = ctx.fragment_data(cur).and_then(|d| d.next_fragment);
+                    }
+                    if let Some((store, expr)) = last
+                        && let Some(const_ast) = ctx.store(store).const_ast.try_get()
+                    {
+                        return Some(dartr_ast::to_source::to_source(const_ast.ast(), expr.0));
+                    }
+                    return None;
+                }
+            }
             let node = self.0.constant_initializer(element)?;
             let unit = self.0.unit(node.unit);
             Some(dartr_ast::to_source::to_source(&unit.ast, node.node))

@@ -102,6 +102,27 @@ impl ResolutionTables {
         Self::default()
     }
 
+    /// Compacts all side tables by dropping hash bucket tables, sorting entries
+    /// by `NodeId`, and shrinking vectors to fit.
+    pub fn compact(&mut self) {
+        self.static_type.compact();
+        self.element.compact();
+        self.declared_fragment.compact();
+        self.invoke_type.compact();
+        self.type_arg_types.compact();
+        self.param_element.compact();
+        self.annotation_type.compact();
+        self.read_element.compact();
+        self.write_element.compact();
+        self.read_type.compact();
+        self.write_type.compact();
+        self.extended_type.compact();
+        self.method_name_type.compact();
+        self.resolved_uri.compact();
+        self.pattern_info.compact();
+        self.flags.compact();
+    }
+
     /// Returns `(total_entries, used_entry_bytes, allocated_capacity_bytes)`.
     pub fn mem_bytes(&self) -> (usize, usize, usize) {
         let mut entries = 0usize;

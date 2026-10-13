@@ -144,9 +144,9 @@ fn run() {
                     .map(|r| r.as_str().unwrap())
                     .filter(|rule| parsed_rules.contains(rule))
                     .collect();
-                let parsed = &driver.fs.file(file).c().parsed;
+                let parsed = driver.fs.file(file).parsed();
                 let ds =
-                    dartr_lints::lint(parsed, &parsed.ast.tokens.source, &paths[index], &enabled);
+                    dartr_lints::lint(&parsed, &parsed.ast.tokens.source, &paths[index], &enabled);
                 let diagnostics: Vec<_> = ds.into_iter().map(|d|json!({"code":d.code.name,"severity":d.severity.name(),"offset":d.offset,"length":d.length,"message":d.message,"correction":d.correction})).collect();
                 results.insert(
                     paths[index].clone(),

@@ -650,12 +650,47 @@ impl Server {
     /// append-only), so the files of a search depend on the earlier
     /// requests, as in Dart. The drivers are in the order of the
     /// `HashMap<Folder, AnalysisDriver>` of the context manager.
+    fn on_new_known_files(&mut self, context: usize, new_files: &[String], from_subtypes: bool) {
+        if new_files.is_empty() {
+            return;
+        }
+        self.search_scope = None;
+        if !self.search_word_files.is_empty()
+            || (!from_subtypes && !self.subtypes_indexed_words.is_empty())
+        {
+            self.ensure_search_sources(context, new_files);
+            let sources = &self.search_sources;
+            for (w, by_ctx) in &mut self.search_word_files {
+                for f in new_files {
+                    if sources.get(f).is_some_and(|src| content_has_word(src, w)) {
+                        let list = by_ctx.entry(context).or_default();
+                        if !list.contains(f) {
+                            list.push(f.clone());
+                        }
+                    }
+                }
+            }
+            if !from_subtypes {
+                self.subtypes_indexed_words.retain(|(ctx, words), _| {
+                    *ctx != context
+                        || !words.iter().any(|w| {
+                            new_files
+                                .iter()
+                                .any(|f| sources.get(f).is_some_and(|src| content_has_word(src, w)))
+                        })
+                });
+            }
+        }
+    }
+
     pub(crate) fn search_scope(&mut self) -> Arc<SearchScope> {
         if let Some(scope) = &self.search_scope {
             return scope.clone();
         }
-        self.subtypes_indexed_words.clear();
-        self.search_word_files.clear();
+        if self.owned.added.is_empty() || !self.owned.discovered {
+            self.subtypes_indexed_words.clear();
+            self.search_word_files.clear();
+        }
         let Some(collection) = &self.collection else {
             return Arc::new(Vec::new());
         };
@@ -688,9 +723,16 @@ impl Server {
                 }
             }
         }
+        let mut new_files_by_ctx: Vec<(usize, Vec<String>)> = Vec::new();
         for index in 0..count {
+            let mut new_files = Vec::new();
             for f in self.session.known_files(index) {
-                self.owned.add_known(f, index);
+                if self.owned.add_known(f.clone(), index) {
+                    new_files.push(f);
+                }
+            }
+            if self.owned.discovered && !new_files.is_empty() {
+                new_files_by_ctx.push((index, new_files));
             }
         }
         let hashes: Vec<u32> = collection
@@ -749,6 +791,9 @@ impl Server {
                     files.len()
                 );
             }
+        }
+        for (index, new_files) in new_files_by_ctx {
+            self.on_new_known_files(index, &new_files, false);
         }
         let scope = Arc::new(scope);
         self.search_scope = Some(scope.clone());
@@ -953,17 +998,18 @@ impl Server {
                     crate::index::index_unit(ctx, &unit.ast, &unit.tables, unit.unit)
                 });
         if !unit_paths.is_empty() {
-            let mut grew = false;
+            let mut new_files = Vec::new();
             for p in unit_paths {
-                grew |= self.owned.add_known(p, context);
+                if self.owned.add_known(p.clone(), context) {
+                    new_files.push(p);
+                }
             }
             for f in self.session.known_files(context) {
-                grew |= self.owned.add_known(f, context);
+                if self.owned.add_known(f.clone(), context) {
+                    new_files.push(f);
+                }
             }
-            if grew {
-                self.search_scope = None;
-                self.subtypes_indexed_words.clear();
-            }
+            self.on_new_known_files(context, &new_files, subtypes_of.is_some());
         }
         if self.indexes.len() + indexed.len() > Self::MAX_INDEXED_UNITS {
             self.indexes.clear();
@@ -988,17 +1034,19 @@ impl Server {
         // Dart: the resolution creates the files of the library and of the
         // libraries it depends on in the driver (known to it unless another
         // driver knows them).
-        let mut grew = false;
+        let mut new_files = Vec::new();
         for input in &resolved.library.inputs {
-            grew |= self.owned.add_known(input.path.to_string(), context);
+            let p = input.path.to_string();
+            if self.owned.add_known(p.clone(), context) {
+                new_files.push(p);
+            }
         }
         for f in self.session.known_files(context) {
-            grew |= self.owned.add_known(f, context);
+            if self.owned.add_known(f.clone(), context) {
+                new_files.push(f);
+            }
         }
-        if grew {
-            self.search_scope = None;
-            self.subtypes_indexed_words.clear();
-        }
+        self.on_new_known_files(context, &new_files, false);
         let sink = NoopSink;
         let ctx = resolved.ctx(&sink);
         let unit = resolved.unit();
@@ -1089,7 +1137,7 @@ impl Server {
                 (owner, lib)
             })
             .collect();
-        let mut context_files: Vec<(usize, Vec<String>)> = Vec::with_capacity(scope.len());
+        let mut context_files: Vec<(usize, usize, Vec<String>)> = Vec::with_capacity(scope.len());
         for (context, owned) in scope.iter() {
             let mut files: Vec<String> = Vec::new();
             let mut in_files: HashSet<String> = HashSet::new();
@@ -1102,6 +1150,7 @@ impl Server {
                     }
                 }
             }
+            let lib_files_count = files.len();
             if word_sets.len() == 1 {
                 if let Some(matched) = word_sets[0].get(context) {
                     if files.is_empty() {
@@ -1140,16 +1189,36 @@ impl Server {
                 }
             }
             if !files.is_empty() {
-                context_files.push((*context, files));
+                context_files.push((*context, lib_files_count, files));
             }
         }
-        for (context, mut files) in context_files {
+        for (context, lib_files_count, mut files) in context_files {
             if kinds == SUBTYPES
                 && let Some(cached) = self
                     .subtypes_indexed_words
                     .get(&(context, reference_names.clone()))
+                    .cloned()
             {
-                files = cached.clone();
+                let lib_files = &files[..lib_files_count];
+                let missing_lib: Vec<String> = lib_files
+                    .iter()
+                    .filter(|f| !self.indexes.contains_key(&(context, (*f).clone())))
+                    .cloned()
+                    .collect();
+                if !missing_lib.is_empty() {
+                    self.ensure_units_indexed(context, &missing_lib, Some(&reference_names[..]));
+                }
+                let mut merged: Vec<String> = lib_files
+                    .iter()
+                    .filter(|f| self.indexes.contains_key(&(context, (*f).clone())))
+                    .cloned()
+                    .collect();
+                for f in cached {
+                    if !merged.contains(&f) {
+                        merged.push(f);
+                    }
+                }
+                files = merged;
             } else {
                 let mut missing: Vec<String> = files
                     .iter()
@@ -1605,7 +1674,33 @@ impl Server {
     ) -> Vec<(SElem, RelationKind)> {
         let matches = self.search_index(class, SUBTYPES);
         let mut out = Vec::new();
+        let mut world_libs: std::collections::HashMap<usize, Arc<ResolvedLibraryResult>> =
+            std::collections::HashMap::new();
         for m in matches {
+            let decl_elem = self
+                .indexes
+                .get(&(m.context, m.path.clone()))
+                .and_then(|idx| idx.subtype_declaration_at(m.offset));
+            if let Some(e) = decl_elem {
+                let lib = match world_libs.entry(m.context) {
+                    std::collections::hash_map::Entry::Occupied(o) => Some(o.get().clone()),
+                    std::collections::hash_map::Entry::Vacant(v) => self
+                        .session
+                        .world_library_in(m.context)
+                        .map(|w| v.insert(w).clone()),
+                };
+                if let Some(lib) = lib {
+                    out.push((
+                        SElem {
+                            lib,
+                            unit: 0,
+                            id: e,
+                        },
+                        m.kind,
+                    ));
+                    continue;
+                }
+            }
             let Ok(resolved) = self.require_resolved_unit_in(&m.path, Some(m.context)) else {
                 continue;
             };
