@@ -54,7 +54,7 @@
 <section class="block" id="benchmarks" aria-labelledby="benchmarks-title">
   <div class="wrap">
     <h2 id="benchmarks-title">Benchmarks</h2>
-    <p class="section-intro">Measured on a single machine (Apple M5 Pro, 15 cores, 48 GB RAM) against Dart SDK 3.13.3. Files are analyzed in parallel on all cores. Dart caches results on disk (<code>~/.dartServer</code>); dartr has an optional disk cache (<code>--cache</code> / <code>DARTR_CACHE_DIR</code>, off by default).</p>
+    <p class="section-intro">Measured on a single machine (Apple M5 Pro, 15 cores, 48 GB RAM) against Dart SDK 3.13.3. <code>dart analyze</code> runs the analysis on one core (one isolate, plus the VM's own helper threads); dartr analyzes libraries in parallel on all cores, which gives most of its lead on a cold run. Dart caches results on disk (<code>~/.dartServer</code>); dartr has an optional disk cache (<code>--cache</code> / <code>DARTR_CACHE_DIR</code>, off by default).</p>
 
     <h3><code>dartr analyze</code></h3>
     <p class="sub-note">Wall time in seconds, lower is better. Measured at load average 4 to 6.</p>

@@ -196,8 +196,11 @@ analyzer plugins).
 | `analyzer` 9.0.0 (pub) | 909,249 | 2.3 s (2.0 to 2.7) | 9.7 s | 0.88 s | 0.21 s | 566 / 606 / 117 MB |
 | `flutter_tools` | 455,099 | 2.4 s (1.6 to 2.7) | 8.6 s | 0.87 s | 0.25 s | 378 / 543 / 103 MB |
 
-dartr is faster than `dart analyze` on all four projects, with or without a disk cache. Most of the
-cold speed comes from analyzing files in parallel: on one thread dartr does about as much work as Dart (see
+dartr is faster than `dart analyze` on all four projects, with or without a disk cache.
+
+**Cores:** `dart analyze` runs the whole analysis in one isolate, so it uses one core (plus the Dart VM's
+own garbage collector and compiler threads, about 1.2 cores in total). dartr analyzes libraries in parallel
+on all cores. Most of the cold speed comes from that: on one thread dartr does about as much work as Dart (see
 the thread-scaling section in [docs/BENCHMARKS.md](docs/BENCHMARKS.md)). dartr uses more CPU time
 in total on a cold run (for example 13.4 s of user time on Flutter in a 1.82 s run).
 
