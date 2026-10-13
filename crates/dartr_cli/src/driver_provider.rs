@@ -592,6 +592,7 @@ impl DriverSession {
             let mut driver = self.drivers.shift_remove(&context).unwrap_or_else(|| {
                 dartr_driver::project::context_driver(collection, context, generation.clone())
             });
+            driver.fs.disk_cache = disk_cache.clone();
             if !retain_drivers && idx + 1 == num_contexts {
                 driver.fs.sdk_cache_lookup_only = true;
                 driver.clear_sdk_cache_after_lookup = true;

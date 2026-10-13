@@ -326,6 +326,8 @@ pub struct FileSystemState {
     /// When true, `discover()` reads from `sdk_cache` without inserting new
     /// entries and clears cached `files` once `discover()` finishes.
     pub sdk_cache_lookup_only: bool,
+    /// Optional persistent on-disk result cache (Tier A unlinked units).
+    pub disk_cache: Option<Arc<crate::cache_store::DiskCache>>,
 }
 
 impl FileSystemState {
@@ -343,6 +345,7 @@ impl FileSystemState {
             pending: Vec::new(),
             sdk_cache: None,
             sdk_cache_lookup_only: false,
+            disk_cache: None,
         }
     }
 
@@ -415,6 +418,7 @@ impl FileSystemState {
     /// (`refresh`, `discoverReferencedFiles`).
     pub fn discover(&mut self) {
         let sdk_cache = self.sdk_cache.clone();
+        let disk_cache = self.disk_cache.clone();
         let lookup_only = self.sdk_cache_lookup_only;
         while !self.pending.is_empty() {
             let pending = std::mem::take(&mut self.pending);
@@ -433,6 +437,7 @@ impl FileSystemState {
                 })
                 .collect();
             let sdk_cache_ref = sdk_cache.as_deref();
+            let disk_cache_ref = disk_cache.as_deref();
             let results: Vec<(FileId, RefreshData)> = jobs
                 .into_par_iter()
                 .map(|(id, path, _is_shared, is_dart_core, config, salt)| {
@@ -444,6 +449,7 @@ impl FileSystemState {
                             &config,
                             &salt,
                             sdk_cache_ref,
+                            disk_cache_ref,
                             lookup_only,
                         ),
                     )
@@ -541,6 +547,7 @@ impl FileSystemState {
             &f.config,
             &self.salt_for_unlinked,
             self.sdk_cache.as_deref(),
+            self.disk_cache.as_deref(),
             self.sdk_cache_lookup_only,
         );
         let had_doc_imports = old.doc_imports_discovered;
@@ -1177,10 +1184,11 @@ fn refresh_data_cached(
     config: &FileConfig,
     salt: &[u32],
     sdk_cache: Option<&crate::driver::SdkCache>,
+    disk_cache: Option<&crate::cache_store::DiskCache>,
     lookup_only: bool,
 ) -> RefreshData {
     let Some(cache) = sdk_cache else {
-        return refresh_data(path, is_dart_core, config, salt);
+        return refresh_data(path, is_dart_core, config, salt, disk_cache);
     };
     let key = SdkFileKey {
         path: path.clone(),
@@ -1203,7 +1211,7 @@ fn refresh_data_cached(
             }
         }
     }
-    let data = refresh_data(path, is_dart_core, config, salt);
+    let data = refresh_data(path, is_dart_core, config, salt, disk_cache);
     if !lookup_only {
         let mut cached = data.clone();
         if !crate::analysis::keep_parsed_in_sdk_cache() {
@@ -1217,7 +1225,13 @@ fn refresh_data_cached(
 /// Reads [path] like Dart `FileContentCache` (a missing or unreadable file
 /// has empty content and `exists = false`), parses it (`parseCode`) and
 /// computes the unlinked unit (`serializeAstUnlinked2`).
-fn refresh_data(path: &str, is_dart_core: bool, config: &FileConfig, salt: &[u32]) -> RefreshData {
+fn refresh_data(
+    path: &str,
+    is_dart_core: bool,
+    config: &FileConfig,
+    salt: &[u32],
+    disk_cache: Option<&crate::cache_store::DiskCache>,
+) -> RefreshData {
     // Through the overlays of the language server (open documents).
     let from_overlay = dartr_project::fs::has_overlay(path);
     let (content, exists) = match dartr_project::fs::read_string_strict(path) {
@@ -1252,6 +1266,55 @@ fn refresh_data(path: &str, is_dart_core: bool, config: &FileConfig, salt: &[u32
         signature.add_bool(exists);
         signature.to_byte_list()
     };
+    if exists && let Some(cache) = disk_cache {
+        let mut effective_salt = *cache.salt();
+        if !salt.is_empty() {
+            let mut sig = ApiSignature::new();
+            sig.add_bytes(&effective_salt);
+            sig.add_uint32_list(salt);
+            effective_salt = sig.to_byte_list();
+        }
+        let key = crate::cache_store::unlinked_key(
+            &effective_salt,
+            &content_hash_bytes,
+            config.package_language_version,
+            &config.experiments,
+            is_dart_core,
+        );
+        if let Some(unlinked) = cache.get_unlinked(&key) {
+            return RefreshData {
+                exists,
+                from_overlay,
+                content_hash,
+                content_hash_bytes,
+                unlinked_signature,
+                source: Arc::from(content),
+                parsed: None,
+                unlinked: Arc::new(unlinked),
+            };
+        }
+        let parsed = parse_file(
+            &content,
+            path,
+            config.package_language_version,
+            &config.experiments,
+        );
+        let source = parsed.ast.tokens.source.clone();
+        let unlinked = serialize_ast_unlinked2(&parsed, exists, is_dart_core);
+        cache.put_unlinked(&key, &unlinked);
+        let unlinked = Arc::new(unlinked);
+        let parsed = crate::analysis::keep_parsed_in_discover().then(|| Arc::new(parsed));
+        return RefreshData {
+            exists,
+            from_overlay,
+            content_hash,
+            content_hash_bytes,
+            unlinked_signature,
+            source,
+            parsed,
+            unlinked,
+        };
+    }
     let parsed = parse_file(
         &content,
         path,

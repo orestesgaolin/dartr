@@ -150,7 +150,7 @@ configurable!(UnlinkedPartDirective);
 
 /// Dart `UnlinkedUnit` (without `informativeBytes` and
 /// `dartdocTemplates`: the linker reads the AST directly).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UnlinkedUnit {
     pub api_signature: [u8; 16],
     pub exports: Vec<UnlinkedLibraryExportDirective>,
