@@ -118,6 +118,7 @@ at each merge; the final process report is written from it.
 | 10-13 03:51 | 4202046 | result cache step 4: unlinked units kept on disk with --cache; files parsed only when their library misses the diagnostics cache | Gemini 4 (Antigravity) | warm cache: flutter 275 -> 210 ms, visible-app (no plugins) 1.64 -> 1.30 s; after one leaf edit: flutter 912 -> 682 ms; 4 corpora identical; 5,625 tests pass |
 | 10-13 09:05 | 108fdcf | language-server parity sweep (tools/lsp_sweep.py) over 42 pub packages: references (part-of files, field formal parameters, substituted getters), CreateFile, unqualified CreateExtensionMethod, OrganizeImports, completion, hover and semantic-token fixes | Gemini 4 (Antigravity) | 8,772 -> 8,876 of 8,876 sampled requests identical to `dart language-server` (10 request types); visible-app first references 851 -> 756 ms; 4 corpora identical; 5,628 tests pass |
 | 10-13 10:42 | 9532e6e | benchmarks rerun on main 506b161, charts, site and README updated; dartr analyze with a warm --cache measured | Gemini 4 (Antigravity) | analyze: app 78.4 / 18.4 s, flutter 7.8 / 1.82 s (dart warm / dartr); warm --cache 0.21 s on flutter; peak RSS app 3.90 / 2.28 GB, flutter 0.89 / 0.83 GB |
+| 10-13 12:17 | v0.1.0-preview.11 | release: result cache (--cache), memory round 4, cross-context sharing, language-server latency round 2 and parity sweep; Homebrew tap af69309 | coordinator | brew upgrade installs 0.1.0-preview.11; `dartr analyze` on flutter_tools: no issues (same as dart) |
 
 ## Incidents and lessons
 
