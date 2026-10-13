@@ -276,6 +276,10 @@ impl Driver {
                 .flat_map(|&l| self.fs.library_file_kinds(l))
                 .collect();
             self.fs.drop_parsed_except_ids(&keep);
+            if self.fs.disk_cache.is_some() && keep.len() <= 2500 {
+                let to_parse: Vec<FileId> = keep.iter().copied().collect();
+                self.fs.ensure_parsed(&to_parse);
+            }
         } else {
             self.fs.clear_all_parsed();
         }
@@ -369,6 +373,10 @@ impl Driver {
             }
         }
         self.fs.drop_parsed_except_ids(&needed_or_keep);
+        if self.fs.disk_cache.is_some() && needed_or_keep.len() <= 2500 {
+            let to_parse: Vec<FileId> = needed_or_keep.iter().copied().collect();
+            self.fs.ensure_parsed(&to_parse);
+        }
         let position: IndexMap<CycleId, usize> =
             order.iter().enumerate().map(|(i, &c)| (c, i)).collect();
         // Dependencies that are not linked yet, and the users of each cycle.

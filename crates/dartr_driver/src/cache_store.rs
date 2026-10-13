@@ -514,6 +514,306 @@ impl LibraryAnalysisCacheEntry {
     }
 }
 
+fn encode_combinators(w: &mut ByteWriter, list: &[crate::unlinked_data::UnlinkedCombinator]) {
+    w.write_u32(list.len() as u32);
+    for c in list {
+        w.write_u32(c.keyword_offset);
+        w.write_u32(c.end_offset);
+        w.write_bool(c.is_show);
+        w.write_string_slice(&c.names);
+    }
+}
+
+fn decode_combinators(
+    r: &mut ByteReader<'_>,
+) -> Option<Vec<crate::unlinked_data::UnlinkedCombinator>> {
+    let count = r.read_u32()? as usize;
+    if r.remaining() < count.checked_mul(4)? {
+        return None;
+    }
+    let mut out = Vec::with_capacity(count);
+    for _ in 0..count {
+        let keyword_offset = r.read_u32()?;
+        let end_offset = r.read_u32()?;
+        let is_show = r.read_bool()?;
+        let names = r.read_string_vec()?;
+        out.push(crate::unlinked_data::UnlinkedCombinator {
+            keyword_offset,
+            end_offset,
+            is_show,
+            names,
+        });
+    }
+    Some(out)
+}
+
+fn encode_configurations(w: &mut ByteWriter, list: &[crate::unlinked_data::UnlinkedConfiguration]) {
+    w.write_u32(list.len() as u32);
+    for c in list {
+        w.write_str(&c.name);
+        w.write_str(&c.value);
+        w.write_opt_str(c.uri.as_deref());
+    }
+}
+
+fn decode_configurations(
+    r: &mut ByteReader<'_>,
+) -> Option<Vec<crate::unlinked_data::UnlinkedConfiguration>> {
+    let count = r.read_u32()? as usize;
+    if r.remaining() < count.checked_mul(4)? {
+        return None;
+    }
+    let mut out = Vec::with_capacity(count);
+    for _ in 0..count {
+        let name = r.read_string()?;
+        let value = r.read_string()?;
+        let uri = r.read_opt_string()?;
+        out.push(crate::unlinked_data::UnlinkedConfiguration { name, value, uri });
+    }
+    Some(out)
+}
+
+fn encode_imports(
+    w: &mut ByteWriter,
+    list: &[crate::unlinked_data::UnlinkedLibraryImportDirective],
+) {
+    w.write_u32(list.len() as u32);
+    for imp in list {
+        encode_combinators(w, &imp.combinators);
+        encode_configurations(w, &imp.configurations);
+        w.write_i32(imp.import_keyword_offset);
+        w.write_bool(imp.is_doc_import);
+        w.write_bool(imp.is_synthetic_dart_core);
+        match &imp.prefix {
+            Some(p) => {
+                w.write_bool(true);
+                w.write_opt_u32(p.deferred_offset);
+                w.write_u32(p.as_offset);
+                w.write_u32(p.name_offset);
+                match &p.name {
+                    Some(n) => {
+                        w.write_bool(true);
+                        w.write_str(&n.name);
+                        w.write_u32(n.name_offset);
+                    }
+                    None => w.write_bool(false),
+                }
+            }
+            None => w.write_bool(false),
+        }
+        w.write_opt_str(imp.uri.as_deref());
+    }
+}
+
+fn decode_imports(
+    r: &mut ByteReader<'_>,
+) -> Option<Vec<crate::unlinked_data::UnlinkedLibraryImportDirective>> {
+    let count = r.read_u32()? as usize;
+    if r.remaining() < count.checked_mul(4)? {
+        return None;
+    }
+    let mut out = Vec::with_capacity(count);
+    for _ in 0..count {
+        let combinators = decode_combinators(r)?;
+        let configurations = decode_configurations(r)?;
+        let import_keyword_offset = r.read_i32()?;
+        let is_doc_import = r.read_bool()?;
+        let is_synthetic_dart_core = r.read_bool()?;
+        let prefix = if r.read_bool()? {
+            let deferred_offset = r.read_opt_u32()?;
+            let as_offset = r.read_u32()?;
+            let name_offset = r.read_u32()?;
+            let name = if r.read_bool()? {
+                let n = r.read_string()?;
+                let noff = r.read_u32()?;
+                Some(crate::unlinked_data::UnlinkedLibraryImportPrefixName {
+                    name: n,
+                    name_offset: noff,
+                })
+            } else {
+                None
+            };
+            Some(crate::unlinked_data::UnlinkedLibraryImportPrefix {
+                deferred_offset,
+                as_offset,
+                name_offset,
+                name,
+            })
+        } else {
+            None
+        };
+        let uri = r.read_opt_string()?;
+        out.push(crate::unlinked_data::UnlinkedLibraryImportDirective {
+            combinators,
+            configurations,
+            import_keyword_offset,
+            is_doc_import,
+            is_synthetic_dart_core,
+            prefix,
+            uri,
+        });
+    }
+    Some(out)
+}
+
+impl crate::unlinked_data::UnlinkedUnit {
+    /// Serializes this [`UnlinkedUnit`] into a deterministic little-endian byte vector.
+    pub fn encode(&self) -> Vec<u8> {
+        let mut w = ByteWriter::new();
+        w.write_hash128(&self.api_signature);
+        w.write_bool(self.has_dart_core_import);
+        w.write_bool(self.is_dart_core);
+        w.write_u32_slice(&self.line_starts);
+        w.write_u32(self.top_level_declarations.len() as u32);
+        for name in &self.top_level_declarations {
+            w.write_str(name);
+        }
+        w.write_u32(self.exports.len() as u32);
+        for exp in &self.exports {
+            encode_combinators(&mut w, &exp.combinators);
+            encode_configurations(&mut w, &exp.configurations);
+            w.write_u32(exp.export_keyword_offset);
+            w.write_opt_str(exp.uri.as_deref());
+        }
+        encode_imports(&mut w, &self.imports);
+        w.write_u32(self.parts.len() as u32);
+        for part in &self.parts {
+            encode_configurations(&mut w, &part.configurations);
+            w.write_u32(part.part_keyword_offset);
+            w.write_opt_str(part.uri.as_deref());
+        }
+        match &self.library_directive {
+            Some(lib) => {
+                w.write_bool(true);
+                encode_imports(&mut w, &lib.doc_imports);
+                w.write_opt_str(lib.name.as_deref());
+            }
+            None => w.write_bool(false),
+        }
+        match &self.part_of_name_directive {
+            Some(pon) => {
+                w.write_bool(true);
+                encode_imports(&mut w, &pon.doc_imports);
+                w.write_str(&pon.name);
+                w.write_u32(pon.name_range.offset);
+                w.write_u32(pon.name_range.length);
+            }
+            None => w.write_bool(false),
+        }
+        match &self.part_of_uri_directive {
+            Some(pou) => {
+                w.write_bool(true);
+                encode_imports(&mut w, &pou.doc_imports);
+                w.write_opt_str(pou.uri.as_deref());
+                w.write_u32(pou.uri_range.offset);
+                w.write_u32(pou.uri_range.length);
+            }
+            None => w.write_bool(false),
+        }
+        w.into_bytes()
+    }
+
+    /// Deserializes an [`UnlinkedUnit`] from [bytes], returning `None` if the
+    /// bytes are truncated or malformed.
+    pub fn decode(bytes: &[u8]) -> Option<Self> {
+        let mut r = ByteReader::new(bytes);
+        let api_signature = r.read_hash128()?;
+        let has_dart_core_import = r.read_bool()?;
+        let is_dart_core = r.read_bool()?;
+        let line_starts = r.read_u32_vec()?;
+        let top_count = r.read_u32()? as usize;
+        if r.remaining() < top_count.checked_mul(4)? {
+            return None;
+        }
+        let mut top_level_declarations = indexmap::IndexSet::with_capacity(top_count);
+        for _ in 0..top_count {
+            top_level_declarations.insert(r.read_string()?);
+        }
+        let export_count = r.read_u32()? as usize;
+        if r.remaining() < export_count.checked_mul(4)? {
+            return None;
+        }
+        let mut exports = Vec::with_capacity(export_count);
+        for _ in 0..export_count {
+            let combinators = decode_combinators(&mut r)?;
+            let configurations = decode_configurations(&mut r)?;
+            let export_keyword_offset = r.read_u32()?;
+            let uri = r.read_opt_string()?;
+            exports.push(crate::unlinked_data::UnlinkedLibraryExportDirective {
+                combinators,
+                configurations,
+                export_keyword_offset,
+                uri,
+            });
+        }
+        let imports = decode_imports(&mut r)?;
+        let part_count = r.read_u32()? as usize;
+        if r.remaining() < part_count.checked_mul(4)? {
+            return None;
+        }
+        let mut parts = Vec::with_capacity(part_count);
+        for _ in 0..part_count {
+            let configurations = decode_configurations(&mut r)?;
+            let part_keyword_offset = r.read_u32()?;
+            let uri = r.read_opt_string()?;
+            parts.push(crate::unlinked_data::UnlinkedPartDirective {
+                configurations,
+                part_keyword_offset,
+                uri,
+            });
+        }
+        let library_directive = if r.read_bool()? {
+            let doc_imports = decode_imports(&mut r)?;
+            let name = r.read_opt_string()?;
+            Some(crate::unlinked_data::UnlinkedLibraryDirective { doc_imports, name })
+        } else {
+            None
+        };
+        let part_of_name_directive = if r.read_bool()? {
+            let doc_imports = decode_imports(&mut r)?;
+            let name = r.read_string()?;
+            let offset = r.read_u32()?;
+            let length = r.read_u32()?;
+            Some(crate::unlinked_data::UnlinkedPartOfNameDirective {
+                doc_imports,
+                name,
+                name_range: crate::unlinked_data::UnlinkedSourceRange { offset, length },
+            })
+        } else {
+            None
+        };
+        let part_of_uri_directive = if r.read_bool()? {
+            let doc_imports = decode_imports(&mut r)?;
+            let uri = r.read_opt_string()?;
+            let offset = r.read_u32()?;
+            let length = r.read_u32()?;
+            Some(crate::unlinked_data::UnlinkedPartOfUriDirective {
+                doc_imports,
+                uri,
+                uri_range: crate::unlinked_data::UnlinkedSourceRange { offset, length },
+            })
+        } else {
+            None
+        };
+        if !r.is_empty() {
+            return None;
+        }
+        Some(Self {
+            api_signature,
+            exports,
+            has_dart_core_import,
+            imports,
+            is_dart_core,
+            library_directive,
+            line_starts,
+            parts,
+            part_of_name_directive,
+            part_of_uri_directive,
+            top_level_declarations,
+        })
+    }
+}
+
 /// Reads `DARTR_CACHE_MAX_MB` from the environment, falling back to
 /// [`DEFAULT_MAX_SIZE_BYTES`].
 pub fn configured_max_size_bytes() -> u64 {
@@ -658,6 +958,31 @@ impl DiskCache {
         }
     }
 
+    /// Reads and decodes the Tier A [`crate::unlinked_data::UnlinkedUnit`] for [key].
+    /// If the payload fails to decode, the corrupted file is unlinked and `None`
+    /// is returned.
+    pub fn get_unlinked(&self, key: &Hash128) -> Option<crate::unlinked_data::UnlinkedUnit> {
+        let payload = self.get(CacheKind::Unlinked, key)?;
+        match crate::unlinked_data::UnlinkedUnit::decode(&payload) {
+            Some(unit) => Some(unit),
+            None => {
+                let path = self.entry_path(CacheKind::Unlinked, key);
+                let _ = fs::remove_file(&path);
+                if let Ok(mut map) = self.access_times.lock() {
+                    map.remove(&path);
+                }
+                None
+            }
+        }
+    }
+
+    /// Encodes and atomically writes the Tier A [`crate::unlinked_data::UnlinkedUnit`]
+    /// for [key].
+    pub fn put_unlinked(&self, key: &Hash128, unit: &crate::unlinked_data::UnlinkedUnit) {
+        let payload = unit.encode();
+        self.put(CacheKind::Unlinked, key, &payload);
+    }
+
     /// Reads and decodes the Tier B [`LibraryAnalysisCacheEntry`] for [key].
     /// If the payload fails to decode, the corrupted file is unlinked and `None`
     /// is returned.
@@ -687,9 +1012,6 @@ impl DiskCache {
     /// in the same shard directory and `std::fs::rename`, then triggers LRU
     /// eviction if the write threshold or size limit is exceeded.
     pub fn put(&self, kind: CacheKind, key: &Hash128, payload: &[u8]) {
-        if !self.initial_sweep_done.swap(true, Ordering::Relaxed) {
-            self.evict_if_needed();
-        }
         let key_hex = self.salted_key_hex(key);
         let shard = &key_hex[0..2];
         let shard_dir = self.v1_root.join(kind.subdir()).join(shard);
@@ -1709,5 +2031,29 @@ mod tests {
         assert_eq!(cache.get_library_diagnostics(&key), None);
         cache.put_library_diagnostics(&key, &entry);
         assert_eq!(cache.get_library_diagnostics(&key), Some(entry));
+    }
+
+    #[test]
+    fn unlinked_unit_cache_entry_round_trip() {
+        let tmp = TempCacheDir::new("unlinked_rt");
+        let salt = [0x88u8; 16];
+        let cache = DiskCache::with_salt(tmp.path(), DEFAULT_MAX_SIZE_BYTES, salt);
+
+        let src = "/// @docImport 'dart:async';\nlibrary my.lib;\nimport 'dart:math' deferred as math show sin, cos if (dart.library.io) 'dart:io';\nexport 'src/a.dart' hide internal;\npart 'src/p.dart';\nclass Foo {}\nint topVar = 1;\n";
+        let parsed = dartr_ast_builder::parse_file(src, "/pkg/lib/my_lib.dart", (3, 7), &[]);
+        let unit = crate::unlinked_data::serialize_ast_unlinked2(&parsed, true, false);
+        let key = unlinked_key(&salt, &content_hash(src), (3, 7), &[], false);
+
+        assert_eq!(cache.get_unlinked(&key), None);
+        cache.put_unlinked(&key, &unit);
+        let decoded = cache.get_unlinked(&key).expect("decode cached unlinked");
+        assert_eq!(decoded, unit);
+        assert_eq!(
+            decoded
+                .top_level_declarations
+                .iter()
+                .collect::<Vec<&String>>(),
+            unit.top_level_declarations.iter().collect::<Vec<&String>>()
+        );
     }
 }
